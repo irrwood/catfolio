@@ -1069,15 +1069,13 @@ def lab_page(request: Request):
             for (let d = 1; d <= daysInMonth; d++) {
                 const ds = `${year}-${String(month).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
                 const v = _calByDate[ds];
-                const dow = new Date(year, month - 1, d).getDay();
                 if (v !== undefined) {
                     const pct = Math.max(8, Math.min(68, Math.abs(v) / Math.max(1, Math.abs(bestDay || worstDay || 1)) * 68));
                     const bg = `color-mix(in oklch, ${v >= 0 ? "#27a648" : "#e54d5e"} ${Math.round(pct)}%, var(--panel))`;
                     const col = v >= 0 ? "#27a648" : "#e54d5e";
                     html += `<div class="pnl-cal-day" style="background:${bg}" title="${ds}"><div class="pnl-cal-day-num">${d}</div><div class="pnl-cal-day-val" style="color:${col}">${_fmtCalVal(v)}</div></div>`;
-                } else if (dow === 0 || dow === 6) {
-                    html += `<div></div>`; // weekend: empty placeholder, markets don't trade
                 } else {
+                    // No data (weekend, holiday, or future day) — same gray cell with the date
                     html += `<div class="pnl-cal-day no-trade"><div class="pnl-cal-day-num">${d}</div></div>`;
                 }
             }
