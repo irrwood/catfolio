@@ -73,6 +73,21 @@ def lab_page(request: Request):
     .daily-pnl-note { color: var(--muted); font-size: 12px; text-align: right; max-width: 260px; line-height: 1.45; }
     .daily-pnl-chart { width: 100%; height: 420px; min-width: 0; }
     .monthly-return-chart { width: 100%; height: 440px; min-width: 0; }
+
+    /* Daily P&L Calendar */
+    .pnl-cal-nav { display: flex; align-items: center; gap: 10px; }
+    .pnl-cal-nav-btn { width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 50%; background: var(--soft); color: var(--ink); cursor: pointer; font-size: 14px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; font-family: inherit; }
+    .pnl-cal-nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .pnl-cal-month-label { font-size: 15px; font-weight: 720; min-width: 140px; text-align: center; }
+    .pnl-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-top: 4px; }
+    .pnl-cal-weekday { text-align: center; font-size: 11px; color: var(--muted); font-weight: 680; padding: 2px 0 8px; }
+    .pnl-cal-day { border-radius: 10px; padding: 7px 8px 6px; min-height: 58px; display: grid; align-content: start; gap: 1px; border: 1px solid transparent; box-sizing: border-box; }
+    .pnl-cal-day.no-trade { background: color-mix(in oklch, var(--soft) 60%, transparent); }
+    .pnl-cal-day-num { font-size: 11px; color: var(--muted); font-weight: 680; line-height: 1; }
+    .pnl-cal-day-val { font-size: 12px; font-weight: 760; margin-top: 6px; line-height: 1.2; }
+    .pnl-cal-summary { display: flex; gap: 28px; margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px; flex-wrap: wrap; }
+    .pnl-cal-stat-label { font-size: 11px; color: var(--muted); font-weight: 650; margin-bottom: 3px; }
+    .pnl-cal-stat-value { font-size: 18px; font-weight: 760; }
     .valuation-matrix-chart { width: 100%; height: 500px; min-width: 0; }
 
     /* Valuation waterline */
@@ -345,6 +360,42 @@ def lab_page(request: Request):
             <div class="daily-pnl-note">按当前仓位模型估算，不是现金流口径账户收益。</div>
         </div>
         <div id="dailyPnlChart" class="daily-pnl-chart"></div>
+    </section>
+    <section class="daily-pnl-panel">
+        <div class="daily-pnl-head">
+            <div>
+                <div class="daily-pnl-title">收益分布日历</div>
+                <div class="daily-pnl-sub">每日盈亏 · 按月浏览</div>
+            </div>
+            <div class="pnl-cal-nav">
+                <button class="pnl-cal-nav-btn" id="calPrev" title="上个月">&#8249;</button>
+                <span id="calMonthLabel" class="pnl-cal-month-label">—</span>
+                <button class="pnl-cal-nav-btn" id="calNext" title="下个月">&#8250;</button>
+            </div>
+        </div>
+        <div id="pnlCalendar" class="pnl-cal-grid"></div>
+        <div class="pnl-cal-summary">
+            <div>
+                <div class="pnl-cal-stat-label">当月盈亏</div>
+                <div id="calMonthTotal" class="pnl-cal-stat-value">—</div>
+            </div>
+            <div>
+                <div class="pnl-cal-stat-label">盈利天数</div>
+                <div id="calPosDays" class="pnl-cal-stat-value positive">—</div>
+            </div>
+            <div>
+                <div class="pnl-cal-stat-label">亏损天数</div>
+                <div id="calNegDays" class="pnl-cal-stat-value negative">—</div>
+            </div>
+            <div>
+                <div class="pnl-cal-stat-label">最大单日</div>
+                <div id="calBestDay" class="pnl-cal-stat-value positive">—</div>
+            </div>
+            <div>
+                <div class="pnl-cal-stat-label">最差单日</div>
+                <div id="calWorstDay" class="pnl-cal-stat-value negative">—</div>
+            </div>
+        </div>
     </section>
     <section class="daily-pnl-panel">
         <div class="daily-pnl-head">
@@ -983,6 +1034,75 @@ def lab_page(request: Request):
         renderSparkline(snapshotTodaySpark, (history.nav || []).slice(-40).map(row => row.return), todayPnl >= 0 ? "" : "negative");
         const dailyPnlRows = (history.nav || []).slice(-30).map(row => ({ date: row.date, value: Number(summary.market_value_usd || 0) * Number(row.return || 0) }));
         chart("#dailyPnlChart").setOption({ ...baseOption(), xAxis: { type: "category", data: dailyPnlRows.map(r => r.date), axisLabel: { formatter: v => { const p=String(v).split("-"); return p[1]+'/'+p[2]; } } }, yAxis: { type: "value", axisLabel: { formatter: v => { const a=Math.abs(v||0); return (v<0?"-$":"$")+(a>=1e3?(a/1e3).toFixed(1)+"k":a.toFixed(0)); } } }, series: [{ type: "bar", data: dailyPnlRows.map(r => ({ value: r.value, itemStyle: { color: r.value >= 0 ? "#27a648" : "#e54d5e" } })) }] }, true);
+
+        // Daily P&L Calendar
+        const _calNavRows = history.nav || [];
+        const _calMv = Number(summary.market_value_usd || 0);
+        const _calByDate = {{}};
+        _calNavRows.forEach(row => {{ _calByDate[row.date] = _calMv * Number(row.return || 0); }});
+        const _now = new Date();
+        let _calYear = _now.getFullYear(), _calMonth = _now.getMonth() + 1;
+        // Jump to the most recent month that has data
+        const _allDates = Object.keys(_calByDate).sort();
+        if (_allDates.length) {{
+            const last = _allDates[_allDates.length - 1].split("-");
+            _calYear = Number(last[0]); _calMonth = Number(last[1]);
+        }}
+        function _fmtCalVal(v) {{
+            const a = Math.abs(v);
+            return (v >= 0 ? "+" : "-") + (a >= 1000 ? "$" + (a / 1000).toFixed(1) + "k" : "$" + a.toFixed(0));
+        }}
+        function _renderCal(year, month) {{
+            const container = document.querySelector("#pnlCalendar");
+            if (!container) return;
+            const monthNames = ["一月","二月","三月","四月","五月","六月","七月","八月","九月","十月","十一月","十二月"];
+            const calMonthLabel = document.querySelector("#calMonthLabel");
+            if (calMonthLabel) calMonthLabel.textContent = `${{year}} 年 ${{monthNames[month - 1]}}`;
+            const daysInMonth = new Date(year, month, 0).getDate();
+            const startDow = new Date(year, month - 1, 1).getDay();
+            let monthTotal = 0, posCount = 0, negCount = 0, bestDay = null, worstDay = null;
+            for (let d = 1; d <= daysInMonth; d++) {{
+                const ds = `${{year}}-${{String(month).padStart(2,"0")}}-${{String(d).padStart(2,"0")}}`;
+                const v = _calByDate[ds];
+                if (v !== undefined) {{
+                    monthTotal += v;
+                    if (v >= 0) posCount++; else negCount++;
+                    if (bestDay === null || v > bestDay) bestDay = v;
+                    if (worstDay === null || v < worstDay) worstDay = v;
+                }}
+            }}
+            const weekdays = ["日","一","二","三","四","五","六"];
+            let html = weekdays.map(d => `<div class="pnl-cal-weekday">${{d}}</div>`).join("");
+            for (let i = 0; i < startDow; i++) html += `<div></div>`;
+            for (let d = 1; d <= daysInMonth; d++) {{
+                const ds = `${{year}}-${{String(month).padStart(2,"0")}}-${{String(d).padStart(2,"0")}}`;
+                const v = _calByDate[ds];
+                const dow = new Date(year, month - 1, d).getDay();
+                if (v !== undefined) {{
+                    const pct = Math.max(8, Math.min(68, Math.abs(v) / Math.max(1, Math.abs(bestDay || worstDay || 1)) * 68));
+                    const bg = `color-mix(in oklch, ${{v >= 0 ? "#27a648" : "#e54d5e"}} ${{Math.round(pct)}}%, var(--panel))`;
+                    const col = v >= 0 ? "#27a648" : "#e54d5e";
+                    html += `<div class="pnl-cal-day" style="background:${{bg}}" title="${{ds}}"><div class="pnl-cal-day-num">${{d}}</div><div class="pnl-cal-day-val" style="color:${{col}}">${{_fmtCalVal(v)}}</div></div>`;
+                }} else if (dow === 0 || dow === 6) {{
+                    html += `<div class="pnl-cal-day" style="opacity:0.3"><div class="pnl-cal-day-num">${{d}}</div></div>`;
+                }} else {{
+                    html += `<div class="pnl-cal-day no-trade"><div class="pnl-cal-day-num">${{d}}</div></div>`;
+                }}
+            }}
+            container.innerHTML = html;
+            const t = document.querySelector("#calMonthTotal"); if (t) {{ t.textContent = _fmtCalVal(monthTotal); t.className = `pnl-cal-stat-value ${{monthTotal >= 0 ? "positive" : "negative"}}`; }}
+            const p = document.querySelector("#calPosDays"); if (p) p.textContent = posCount + " 天";
+            const n = document.querySelector("#calNegDays"); if (n) n.textContent = negCount + " 天";
+            const bd = document.querySelector("#calBestDay"); if (bd) {{ bd.textContent = bestDay !== null ? _fmtCalVal(bestDay) : "—"; }}
+            const wd = document.querySelector("#calWorstDay"); if (wd) {{ wd.textContent = worstDay !== null ? _fmtCalVal(worstDay) : "—"; }}
+        }}
+        _renderCal(_calYear, _calMonth);
+        document.querySelector("#calPrev")?.addEventListener("click", () => {{
+            _calMonth--; if (_calMonth < 1) {{ _calMonth = 12; _calYear--; }} _renderCal(_calYear, _calMonth);
+        }});
+        document.querySelector("#calNext")?.addEventListener("click", () => {{
+            _calMonth++; if (_calMonth > 12) {{ _calMonth = 1; _calYear++; }} _renderCal(_calYear, _calMonth);
+        }});
 
         const monthlyModelRows = commandCenter.monthly_returns?.rows || [];
         const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
