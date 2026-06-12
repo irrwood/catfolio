@@ -88,6 +88,16 @@ def lab_page(request: Request):
     .pnl-cal-summary { display: flex; gap: 28px; margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px; flex-wrap: wrap; }
     .pnl-cal-stat-label { font-size: 11px; color: var(--muted); font-weight: 650; margin-bottom: 3px; }
     .pnl-cal-stat-value { font-size: 18px; font-weight: 760; }
+    .pnl-cal-viewtabs { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; margin-right: 4px; }
+    .pnl-cal-viewtab { padding: 5px 13px; font-size: 12px; font-weight: 680; background: var(--soft); color: var(--muted); cursor: pointer; border: none; font-family: inherit; }
+    .pnl-cal-viewtab.active { background: var(--accent); color: #fff; }
+    /* Year view — GitHub-style contribution grid */
+    .pnl-cal-year-wrap { overflow-x: auto; padding: 4px 0 2px; }
+    .pnl-cal-year { display: grid; grid-template-rows: repeat(7, 13px); grid-auto-flow: column; gap: 3px; width: max-content; }
+    .pnl-cal-ycell { width: 13px; height: 13px; border-radius: 3px; background: color-mix(in oklch, var(--soft) 60%, transparent); }
+    .pnl-cal-ycell.blank { background: transparent; }
+    .pnl-cal-ymonths { display: grid; gap: 3px; width: max-content; margin-bottom: 5px; }
+    .pnl-cal-ymlabel { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: visible; height: 13px; line-height: 13px; }
     .valuation-matrix-chart { width: 100%; height: 500px; min-width: 0; }
 
     /* Valuation waterline */
@@ -355,18 +365,22 @@ def lab_page(request: Request):
         <div class="daily-pnl-head">
             <div>
                 <div class="daily-pnl-title">收益分布日历</div>
-                <div class="daily-pnl-sub">每日盈亏 · 按月浏览</div>
+                <div class="daily-pnl-sub">每日盈亏 · 月 / 年 视图</div>
             </div>
             <div class="pnl-cal-nav">
-                <button class="pnl-cal-nav-btn" id="calPrev" title="上个月">&#8249;</button>
+                <div class="pnl-cal-viewtabs">
+                    <button class="pnl-cal-viewtab active" id="calViewMonth">月</button>
+                    <button class="pnl-cal-viewtab" id="calViewYear">年</button>
+                </div>
+                <button class="pnl-cal-nav-btn" id="calPrev" title="上一页">&#8249;</button>
                 <span id="calMonthLabel" class="pnl-cal-month-label">—</span>
-                <button class="pnl-cal-nav-btn" id="calNext" title="下个月">&#8250;</button>
+                <button class="pnl-cal-nav-btn" id="calNext" title="下一页">&#8250;</button>
             </div>
         </div>
         <div id="pnlCalendar" class="pnl-cal-grid"></div>
         <div class="pnl-cal-summary">
             <div>
-                <div class="pnl-cal-stat-label">当月盈亏</div>
+                <div id="calTotalLabel" class="pnl-cal-stat-label">当月盈亏</div>
                 <div id="calMonthTotal" class="pnl-cal-stat-value">—</div>
             </div>
             <div>
@@ -1021,12 +1035,21 @@ def lab_page(request: Request):
             const a = Math.abs(v);
             return (v >= 0 ? "+" : "-") + (a >= 1000 ? "$" + (a / 1000).toFixed(1) + "k" : "$" + a.toFixed(0));
         }
-        function _renderCal(year, month) {
+        function _setCalStats(total, pos, neg, best, worst) {
+            const t = document.querySelector("#calMonthTotal"); if (t) { t.textContent = _fmtCalVal(total); t.className = `pnl-cal-stat-value ${total >= 0 ? "positive" : "negative"}`; }
+            const p = document.querySelector("#calPosDays"); if (p) p.textContent = pos + " 天";
+            const n = document.querySelector("#calNegDays"); if (n) n.textContent = neg + " 天";
+            const bd = document.querySelector("#calBestDay"); if (bd) bd.textContent = best !== null ? _fmtCalVal(best) : "—";
+            const wd = document.querySelector("#calWorstDay"); if (wd) wd.textContent = worst !== null ? _fmtCalVal(worst) : "—";
+        }
+        function _renderMonthCal(year, month) {
             const container = document.querySelector("#pnlCalendar");
             if (!container) return;
+            container.className = "pnl-cal-grid";
             const monthNames = ["一月","二月","三月","四月","五月","六月","七月","八月","九月","十月","十一月","十二月"];
             const calMonthLabel = document.querySelector("#calMonthLabel");
             if (calMonthLabel) calMonthLabel.textContent = `${year} 年 ${monthNames[month - 1]}`;
+            const totalLabel = document.querySelector("#calTotalLabel"); if (totalLabel) totalLabel.textContent = "当月盈亏";
             const daysInMonth = new Date(year, month, 0).getDate();
             const startDow = new Date(year, month - 1, 1).getDay();
             let monthTotal = 0, posCount = 0, negCount = 0, bestDay = null, worstDay = null;
@@ -1059,19 +1082,73 @@ def lab_page(request: Request):
                 }
             }
             container.innerHTML = html;
-            const t = document.querySelector("#calMonthTotal"); if (t) { t.textContent = _fmtCalVal(monthTotal); t.className = `pnl-cal-stat-value ${monthTotal >= 0 ? "positive" : "negative"}`; }
-            const p = document.querySelector("#calPosDays"); if (p) p.textContent = posCount + " 天";
-            const n = document.querySelector("#calNegDays"); if (n) n.textContent = negCount + " 天";
-            const bd = document.querySelector("#calBestDay"); if (bd) { bd.textContent = bestDay !== null ? _fmtCalVal(bestDay) : "—"; }
-            const wd = document.querySelector("#calWorstDay"); if (wd) { wd.textContent = worstDay !== null ? _fmtCalVal(worstDay) : "—"; }
+            _setCalStats(monthTotal, posCount, negCount, bestDay, worstDay);
         }
-        _renderCal(_calYear, _calMonth);
+        function _renderYearCal(year) {
+            const container = document.querySelector("#pnlCalendar");
+            if (!container) return;
+            container.className = "";
+            const calMonthLabel = document.querySelector("#calMonthLabel");
+            if (calMonthLabel) calMonthLabel.textContent = `${year} 年`;
+            const totalLabel = document.querySelector("#calTotalLabel"); if (totalLabel) totalLabel.textContent = "全年盈亏";
+            const startDow = new Date(year, 0, 1).getDay();
+            const isLeap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+            const daysInYear = isLeap ? 366 : 365;
+            const weeks = Math.ceil((startDow + daysInYear) / 7);
+            let total = 0, pos = 0, neg = 0, best = null, worst = null, maxAbs = 1;
+            const dayInfo = [];
+            for (let i = 0; i < daysInYear; i++) {
+                const dt = new Date(year, 0, 1 + i);
+                const ds = `${year}-${String(dt.getMonth() + 1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+                const v = _calByDate[ds];
+                dayInfo.push({ dt, ds, v });
+                if (v !== undefined) { total += v; if (v >= 0) pos++; else neg++; if (best === null || v > best) best = v; if (worst === null || v < worst) worst = v; maxAbs = Math.max(maxAbs, Math.abs(v)); }
+            }
+            let cells = "";
+            for (let i = 0; i < startDow; i++) cells += `<div class="pnl-cal-ycell blank"></div>`;
+            for (let i = 0; i < daysInYear; i++) {
+                const info = dayInfo[i];
+                if (info.v !== undefined) {
+                    const pct = Math.max(12, Math.min(85, Math.abs(info.v) / maxAbs * 85));
+                    const bg = `color-mix(in oklch, ${info.v >= 0 ? "#27a648" : "#e54d5e"} ${Math.round(pct)}%, var(--panel))`;
+                    cells += `<div class="pnl-cal-ycell" style="background:${bg}" title="${info.ds}  ${_fmtCalVal(info.v)}"></div>`;
+                } else {
+                    cells += `<div class="pnl-cal-ycell" title="${info.ds}"></div>`;
+                }
+            }
+            const monthShort = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
+            let labels = "", lastMonth = -1;
+            for (let w = 0; w < weeks; w++) {
+                const firstIdx = w * 7 - startDow;
+                const idx = Math.max(0, Math.min(daysInYear - 1, firstIdx));
+                const m = dayInfo[idx].dt.getMonth();
+                if (firstIdx >= 0 && m !== lastMonth) { labels += `<div class="pnl-cal-ymlabel">${monthShort[m]}</div>`; lastMonth = m; }
+                else labels += `<div class="pnl-cal-ymlabel"></div>`;
+            }
+            const cols = `repeat(${weeks}, 13px)`;
+            container.innerHTML = `<div class="pnl-cal-year-wrap"><div class="pnl-cal-ymonths" style="grid-template-columns:${cols}">${labels}</div><div class="pnl-cal-year" style="grid-template-columns:${cols}">${cells}</div></div>`;
+            _setCalStats(total, pos, neg, best, worst);
+        }
+        let _calView = "month";
+        function _renderCurrent() { if (_calView === "year") _renderYearCal(_calYear); else _renderMonthCal(_calYear, _calMonth); }
+        _renderCurrent();
         document.querySelector("#calPrev")?.addEventListener("click", () => {
-            _calMonth--; if (_calMonth < 1) { _calMonth = 12; _calYear--; } _renderCal(_calYear, _calMonth);
+            if (_calView === "year") { _calYear--; } else { _calMonth--; if (_calMonth < 1) { _calMonth = 12; _calYear--; } }
+            _renderCurrent();
         });
         document.querySelector("#calNext")?.addEventListener("click", () => {
-            _calMonth++; if (_calMonth > 12) { _calMonth = 1; _calYear++; } _renderCal(_calYear, _calMonth);
+            if (_calView === "year") { _calYear++; } else { _calMonth++; if (_calMonth > 12) { _calMonth = 1; _calYear++; } }
+            _renderCurrent();
         });
+        const _calTabMonth = document.querySelector("#calViewMonth"), _calTabYear = document.querySelector("#calViewYear");
+        function _setCalView(view) {
+            _calView = view;
+            _calTabMonth?.classList.toggle("active", view === "month");
+            _calTabYear?.classList.toggle("active", view === "year");
+            _renderCurrent();
+        }
+        _calTabMonth?.addEventListener("click", () => _setCalView("month"));
+        _calTabYear?.addEventListener("click", () => _setCalView("year"));
 
         const monthlyModelRows = commandCenter.monthly_returns?.rows || [];
         const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
