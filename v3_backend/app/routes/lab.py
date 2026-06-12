@@ -952,7 +952,7 @@ def lab_page(request: Request):
         // 11. Fundamentals Chart (Safe guard)
         if (document.querySelector("#fundamentalsChart")) {
             chart("#fundamentalsChart").setOption({
-                title: { text: "P/E 和成长率需要 fundamentals API", left: "center", top: "middle", textStyle: { fontSize: 13, color: isLight ? "#6b7280" : "#9ca3af" } },
+                title: { text: "P/E 和成长率需要 fundamentals API", left: "center", top: "middle", textStyle: { fontSize: 13, color: isLight ? "#475569" : "#9ca3af" } },
                 xAxis: { show: false },
                 yAxis: { show: false },
                 series: []
@@ -979,13 +979,17 @@ def lab_page(request: Request):
             tooltipBg: L ? "rgba(255,255,255,.96)" : "rgba(10,14,18,.96)",
             tooltipBorder: L ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.08)",
             tooltipText: L ? "#111113" : "#ededef",
-            axis: L ? "#6b7280" : "#707580",
-            axisLine: L ? "#d1d5db" : "rgba(255,255,255,0.06)",
+            axis: L ? "#475569" : "#707580",
+            axisLine: L ? "#cbd5e1" : "rgba(255,255,255,0.06)",
             splitLine: L ? "#e5e7eb" : "rgba(255,255,255,0.05)",
-            text: L ? "#374151" : "#9ca3af",
+            text: L ? "#334155" : "#9ca3af",
         };
         return {
             backgroundColor: c.bg,
+            // Global default text color — charts that spread baseOption() and then
+            // replace xAxis/yAxis wholesale lose the per-axis label color, so this
+            // top-level textStyle keeps their labels legible (esp. in light mode).
+            textStyle: { color: c.axis },
             tooltip: { trigger: "axis", backgroundColor: c.tooltipBg, borderColor: c.tooltipBorder, textStyle: { color: c.tooltipText } },
             grid: { left: 54, right: 18, top: 30, bottom: 42 },
             xAxis: { axisLine: { lineStyle: { color: c.axisLine } }, axisLabel: { color: c.axis }, splitLine: { show: false } },
@@ -1134,10 +1138,10 @@ def lab_page(request: Request):
         valuationRows.forEach(row => { if (!sectorColor.has(row.sector)) sectorColor.set(row.sector, sectorPalette[sectorColor.size % sectorPalette.length]); });
         if (valuationRows.length) {
             renderValuationWaterline(valuationRows);
-            chart("#valuationMatrixChart").setOption({ backgroundColor: "transparent", tooltip: { trigger: "item", backgroundColor: isLight ? "rgba(255,255,255,.96)" : "rgba(10,14,18,.96)", borderColor: isLight ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.1)", textStyle: { color: isLight ? "#1a1a1a" : "#ededef" }, formatter: params => { const row = params.data.raw; return `${row.ticker}<br/>P/E ${fmtNum(row.pe)}<br/>${row.growthSource} ${fmtNum(row.growth)}%<br/>仓位 ${fmtPct(row.weight)}<br/>${row.display_name || row.name || ""}`; } }, grid: { left: 74, right: 28, top: 36, bottom: 58 }, xAxis: { type: "value", name: "P/E 倍数", nameLocation: "middle", nameGap: 36, nameTextStyle: { color: isLight ? "#6b7280" : "#9ca3af", fontSize: 14 }, splitLine: { lineStyle: { color: isLight ? "#e5e7eb" : "#1f2937" } }, axisLine: { lineStyle: { color: isLight ? "#d1d5db" : "#374151" } }, axisLabel: { color: isLight ? "#6b7280" : "#9ca3af", fontSize: 13 } }, yAxis: { type: "value", name: "成长率 %", nameLocation: "middle", nameGap: 50, nameTextStyle: { color: isLight ? "#374151" : "#9ca3af", fontSize: 14 }, splitLine: { lineStyle: { color: isLight ? "#e5e7eb" : "#1f2937" } }, axisLine: { lineStyle: { color: isLight ? "#d1d5db" : "#374151" } }, axisLabel: { color: isLight ? "#6b7280" : "#9ca3af", fontSize: 13 } }, series: [{ type: "scatter", data: valuationRows.map(row => ({ value: [row.pe, row.growth, row.weight], raw: row, itemStyle: { color: sectorColor.get(row.sector), borderColor: sectorColor.get(row.sector), borderWidth: 2, opacity: 0.72 } })), symbolSize: value => Math.max(12, Math.min(46, Math.sqrt(Number(value[2] || 0)) * 130)), label: { show: true, formatter: params => params.data.raw.ticker, position: "top", color: isLight ? "#4b5563" : "#aab4c1", fontSize: 11 } }] });
+            chart("#valuationMatrixChart").setOption({ backgroundColor: "transparent", tooltip: { trigger: "item", backgroundColor: isLight ? "rgba(255,255,255,.96)" : "rgba(10,14,18,.96)", borderColor: isLight ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.1)", textStyle: { color: isLight ? "#1a1a1a" : "#ededef" }, formatter: params => { const row = params.data.raw; return `${row.ticker}<br/>P/E ${fmtNum(row.pe)}<br/>${row.growthSource} ${fmtNum(row.growth)}%<br/>仓位 ${fmtPct(row.weight)}<br/>${row.display_name || row.name || ""}`; } }, grid: { left: 74, right: 28, top: 36, bottom: 58 }, xAxis: { type: "value", name: "P/E 倍数", nameLocation: "middle", nameGap: 36, nameTextStyle: { color: isLight ? "#475569" : "#9ca3af", fontSize: 14 }, splitLine: { lineStyle: { color: isLight ? "#e5e7eb" : "#1f2937" } }, axisLine: { lineStyle: { color: isLight ? "#d1d5db" : "#374151" } }, axisLabel: { color: isLight ? "#475569" : "#9ca3af", fontSize: 13 } }, yAxis: { type: "value", name: "成长率 %", nameLocation: "middle", nameGap: 50, nameTextStyle: { color: isLight ? "#374151" : "#9ca3af", fontSize: 14 }, splitLine: { lineStyle: { color: isLight ? "#e5e7eb" : "#1f2937" } }, axisLine: { lineStyle: { color: isLight ? "#d1d5db" : "#374151" } }, axisLabel: { color: isLight ? "#475569" : "#9ca3af", fontSize: 13 } }, series: [{ type: "scatter", data: valuationRows.map(row => ({ value: [row.pe, row.growth, row.weight], raw: row, itemStyle: { color: sectorColor.get(row.sector), borderColor: sectorColor.get(row.sector), borderWidth: 2, opacity: 0.72 } })), symbolSize: value => Math.max(12, Math.min(46, Math.sqrt(Number(value[2] || 0)) * 130)), label: { show: true, formatter: params => params.data.raw.ticker, position: "top", color: isLight ? "#4b5563" : "#aab4c1", fontSize: 11 } }] });
         } else {
             renderValuationWaterline([]);
-            chart("#valuationMatrixChart").setOption({ backgroundColor: "transparent", title: { text: "估值数据还没更新", subtext: "刷新 fundamentals 后会显示 P/E、成长率和仓位气泡", left: "center", top: "middle", textStyle: { color: isLight ? "#1a1a1a" : "#f7f8f8", fontSize: 20, fontWeight: 700 }, subtextStyle: { color: isLight ? "#6b7280" : "#9ca3af", fontSize: 13, lineHeight: 20 } }, xAxis: { show: false }, yAxis: { show: false }, series: [] });
+            chart("#valuationMatrixChart").setOption({ backgroundColor: "transparent", title: { text: "估值数据还没更新", subtext: "刷新 fundamentals 后会显示 P/E、成长率和仓位气泡", left: "center", top: "middle", textStyle: { color: isLight ? "#1a1a1a" : "#f7f8f8", fontSize: 20, fontWeight: 700 }, subtextStyle: { color: isLight ? "#475569" : "#9ca3af", fontSize: 13, lineHeight: 20 } }, xAxis: { show: false }, yAxis: { show: false }, series: [] });
         }
         renderCommandCenter(commandCenter);
         updateDrawdownRange();
