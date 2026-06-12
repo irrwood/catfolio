@@ -354,16 +354,6 @@ def lab_page(request: Request):
     <section class="daily-pnl-panel">
         <div class="daily-pnl-head">
             <div>
-                <div class="daily-pnl-title">每日盈亏</div>
-                <div class="daily-pnl-sub">过去 30 天</div>
-            </div>
-            <div class="daily-pnl-note">按当前仓位模型估算，不是现金流口径账户收益。</div>
-        </div>
-        <div id="dailyPnlChart" class="daily-pnl-chart"></div>
-    </section>
-    <section class="daily-pnl-panel">
-        <div class="daily-pnl-head">
-            <div>
                 <div class="daily-pnl-title">收益分布日历</div>
                 <div class="daily-pnl-sub">每日盈亏 · 按月浏览</div>
             </div>
@@ -440,7 +430,7 @@ def lab_page(request: Request):
     </section>
 
     <section class="command-card">
-        <div class="chart-head"><h2>个股盈亏贡献</h2><span><span class="source-badge">成本 vs 现价</span></span></div>
+        <div class="chart-head"><h2>个股盈亏贡献</h2><span><span class="source-badge">真实账户 · 美元浮盈（成本 vs 现价）</span></span></div>
         <div id="pnlChart" class="mini-chart"></div>
     </section>
 
@@ -473,18 +463,13 @@ def lab_page(request: Request):
     </section>
 
     <section class="command-card">
-        <div class="chart-head"><h2>模型归因 Waterfall</h2><span>本月当前权重贡献</span></div>
+        <div class="chart-head"><h2>模型归因 Waterfall</h2><span>模型口径 · 当月权重收益%（非真实盈亏）</span></div>
         <div id="waterfallChart" class="mini-chart"></div>
     </section>
 
     <section class="command-card">
         <div class="chart-head"><h2>累计收益对比</h2><span id="cumulativeRange">TWR / 现金流镜像</span></div>
         <div id="cumulativeChart" style="width:100%;height:280px;"></div>
-    </section>
-
-    <section class="command-card">
-        <div class="chart-head"><h2>月度收益热力图</h2><span id="monthlyRange">按日历月</span></div>
-        <div id="monthlyHeatmapChart" style="width:100%;height:340px;"></div>
     </section>
 
     <aside class="stack">
@@ -514,7 +499,6 @@ def lab_page(request: Request):
     const groupRows = document.querySelector("#groupRows");
     const percentileGrid = document.querySelector("#percentileGrid");
     const qualityBanner = document.querySelector("#qualityBanner");
-    const monthlyRange = document.querySelector("#monthlyRange");
     const cumulativeRange = document.querySelector("#cumulativeRange");
     const returnBasisNote = document.querySelector("#returnBasisNote");
     const returnBasisButtons = Array.from(document.querySelectorAll("[data-return-basis]"));
@@ -816,7 +800,6 @@ def lab_page(request: Request):
         const isLight = document.documentElement.classList.contains("light-theme");
         const quality = data.data_quality || {};
         qualityBanner.innerHTML = `<b>数据口径</b><span>持仓、现价、成本、浮盈亏是账户数据；收益热图、累计收益、相关性、回撤和 Waterfall 是当前仓位模型，非真实账户收益。样本 ${quality.history_start || "—"} 到 ${quality.history_end || "—"}，共 ${quality.history_days || 0} 个交易日。</span>`;
-        if (monthlyRange) monthlyRange.textContent = `${data.monthly_returns?.date_range?.start || "—"} 到 ${data.monthly_returns?.date_range?.end || "—"}`;
 
         // 1. Sector Concentration
         const sectorRows = data.sector_concentration?.rows || [];
@@ -840,22 +823,7 @@ def lab_page(request: Request):
             tooltip: { trigger: "axis", valueFormatter: value => usd(value) }
         });
 
-        // 3. Monthly Return Heatmap
-        const monthly = (data.monthly_returns?.rows || []).filter(row => row && typeof row.month === "string");
-        const years = [...new Set(monthly.map(row => row.month.slice(0, 4)))];
-        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        chart("#monthlyHeatmapChart").setOption({
-            ...baseOption(),
-            grid: { left: 48, right: 16, top: 18, bottom: 42 },
-            visualMap: { min: -0.08, max: 0.08, orient: "horizontal", left: "center", bottom: 2, inRange: { color: ["#e54d5e", isLight ? "#f3f4f6" : "#1f2937", "#27a648"] } },
-            xAxis: { type: "category", data: monthNames },
-            yAxis: { type: "category", data: years },
-            series: [{ type: "heatmap", data: monthly.map(row => [Number(row.month.slice(5, 7)) - 1, years.indexOf(row.month.slice(0, 4)), row.return]), label: { show: true, formatter: params => (params && params.value) ? fmtPct(params.value[2]) : "" } }],
-            tooltip: { formatter: params => {
-                if (!params || !params.value) return "";
-                return `${years[params.value[1]] || ""} ${monthNames[params.value[0]] || ""}<br/>${fmtPct(params.value[2])}`;
-            } }
-        });
+        // 3. (Monthly heatmap removed — covered by the year×month line chart above)
 
         // 4. Cumulative Return
         renderCumulativeReturnChart(data);
@@ -1036,9 +1004,6 @@ def lab_page(request: Request):
         renderSparkline(snapshotMarketSpark, (history.nav || []).slice(-60).map(row => row.nav), "muted");
         renderSparkline(snapshotPnlSpark, (history.nav || []).slice(-60).map(row => row.nav - 1), Number(summary.unrealized_usd || 0) >= 0 ? "" : "negative");
         renderSparkline(snapshotTodaySpark, (history.nav || []).slice(-40).map(row => row.return), todayPnl >= 0 ? "" : "negative");
-        const dailyPnlRows = (history.nav || []).slice(-30).map(row => ({ date: row.date, value: Number(summary.market_value_usd || 0) * Number(row.return || 0) }));
-        chart("#dailyPnlChart").setOption({ ...baseOption(), xAxis: { type: "category", data: dailyPnlRows.map(r => r.date), axisLabel: { formatter: v => { const p=String(v).split("-"); return p[1]+'/'+p[2]; } } }, yAxis: { type: "value", axisLabel: { formatter: v => { const a=Math.abs(v||0); return (v<0?"-$":"$")+(a>=1e3?(a/1e3).toFixed(1)+"k":a.toFixed(0)); } } }, series: [{ type: "bar", data: dailyPnlRows.map(r => ({ value: r.value, itemStyle: { color: r.value >= 0 ? "#27a648" : "#e54d5e" } })) }] }, true);
-
         // Daily P&L Calendar
         const _calNavRows = history.nav || [];
         const _calMv = Number(summary.market_value_usd || 0);
