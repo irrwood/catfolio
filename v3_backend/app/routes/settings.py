@@ -186,7 +186,102 @@ def settings_page(request: Request):
   </div>
 </div>
 
+<div class="v4-card" style="margin-top:24px;">
+  <div class="v4-card-header">
+    <div>
+      <h2 class="v4-card-title"><i class="fa-brands fa-telegram" style="color:#2AABEE"></i> Telegram 提醒</h2>
+      <div class="v4-card-subtitle">仓位集中度、高估值、最大回撤超阈值时自动推送到 Telegram。每条提醒最多每小时推一次。</div>
+    </div>
+    <div id="tg_status_badge">
+      { '<span class="market-status-badge" style="color:var(--positive);background:var(--positive-soft);border-color:var(--positive)"><div class="status-dot"></div> 已配置</span>' if (secret_value("TELEGRAM_BOT_TOKEN") and secret_value("TELEGRAM_CHAT_ID")) else '<span class="market-status-badge" style="color:var(--muted);background:var(--soft);border-color:var(--line)"><div class="status-dot" style="background:var(--muted)"></div> 未配置</span>' }
+    </div>
+  </div>
+  <div style="padding:0 var(--sp-xl) var(--sp-xl);display:flex;flex-direction:column;gap:16px;">
+
+    <div style="padding:var(--sp-md);background:var(--accent-soft);border-radius:var(--radius-md);font-size:var(--text-sm);">
+      <b>配置步骤：</b>
+      1. 在 Telegram 找 <code>@BotFather</code>，发 <code>/newbot</code> 创建机器人，复制 Token。
+      2. 向你的新机器人发任意消息，然后点「获取 Chat ID」。
+      3. 点「发测试消息」验证。
+    </div>
+
+    {key_row("TELEGRAM_BOT_TOKEN", "Bot Token", "从 @BotFather 获取，格式：123456:ABCdef…", secret_value("TELEGRAM_BOT_TOKEN") is not None)}
+
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+        <div>
+          <strong style="display:block;font-size:var(--text-sm)">Chat ID</strong>
+          <span style="font-size:var(--text-xs);color:var(--muted)">你的用户 ID 或频道 ID（负数为群组）</span>
+        </div>
+        <div id="badge_TELEGRAM_CHAT_ID" style="flex-shrink:0">
+          { '<span class="market-status-badge" style="color:var(--positive);background:var(--positive-soft);border-color:var(--positive);white-space:nowrap"><div class="status-dot"></div> 已设置</span>' if secret_value("TELEGRAM_CHAT_ID") else '<span class="market-status-badge" style="color:var(--negative);background:var(--negative-soft);border-color:var(--negative);white-space:nowrap"><div class="status-dot danger"></div> 未配置</span>' }
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="text" id="input_TELEGRAM_CHAT_ID"
+          placeholder="{ '已设置，留空则不修改' if secret_value('TELEGRAM_CHAT_ID') else '点右边按钮自动获取…' }"
+          autocomplete="off"
+          style="flex:1;background:var(--soft);border:1px solid var(--line);border-radius:var(--radius-md);
+                 padding:8px 12px;color:var(--ink);font-family:var(--font-mono);font-size:var(--text-sm);outline:none;"
+          onfocus="this.style.borderColor='var(--accent)'"
+          onblur="this.style.borderColor='var(--line)'"
+        />
+        <button class="btn" style="white-space:nowrap;flex-shrink:0;" onclick="getChatId()">
+          <i class="fa-solid fa-magnifying-glass"></i> 获取 Chat ID
+        </button>
+        <button class="btn primary" style="white-space:nowrap;flex-shrink:0;"
+          onclick="saveKey('TELEGRAM_CHAT_ID', this)">
+          <i class="fa-solid fa-floppy-disk"></i> 保存
+        </button>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;padding-top:4px;">
+      <button class="btn" onclick="tgTest(this)">
+        <i class="fa-solid fa-paper-plane"></i> 发测试消息
+      </button>
+      <div id="tg_test_result" style="font-size:var(--text-sm);display:flex;align-items:center;color:var(--muted);"></div>
+    </div>
+  </div>
+</div>
+
 <script>
+  async function getChatId() {{
+    const tokenInput = document.getElementById('input_TELEGRAM_BOT_TOKEN');
+    const chatInput  = document.getElementById('input_TELEGRAM_CHAT_ID');
+    // Use typed token if available, otherwise server reads from keychain
+    const token = tokenInput.value.trim() || null;
+    const res = await fetch('/api/telegram/get-chat-id' + (token ? '?token=' + encodeURIComponent(token) : ''));
+    const data = await res.json();
+    if (data.ok) {{
+      chatInput.value = data.chat_id;
+      chatInput.placeholder = data.chat_id;
+      const label = data.title ? ` (${{data.title}})` : '';
+      document.getElementById('tg_test_result').innerHTML =
+        `<span style="color:var(--positive)"><i class="fa-solid fa-check"></i> Chat ID: ${{data.chat_id}}${{label}}</span>`;
+    }} else {{
+      document.getElementById('tg_test_result').innerHTML =
+        `<span style="color:var(--negative)"><i class="fa-solid fa-xmark"></i> ${{data.error}}</span>`;
+    }}
+  }}
+
+  async function tgTest(btn) {{
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+    const res = await fetch('/api/telegram/test', {{method: 'POST'}});
+    const data = await res.json();
+    const el = document.getElementById('tg_test_result');
+    if (data.ok) {{
+      el.innerHTML = '<span style="color:var(--positive)"><i class="fa-solid fa-check"></i> 消息已发送！</span>';
+      document.getElementById('tg_status_badge').innerHTML =
+        '<span class="market-status-badge" style="color:var(--positive);background:var(--positive-soft);border-color:var(--positive)"><div class="status-dot"></div> 已配置</span>';
+    }} else {{
+      el.innerHTML = `<span style="color:var(--negative)"><i class="fa-solid fa-xmark"></i> 失败：${{data.error || '未知错误'}}</span>`;
+    }}
+    setTimeout(() => {{ btn.innerHTML = orig; btn.disabled = false; }}, 2000);
+  }}
+
   async function saveKey(envName, btn) {{
     const input = document.getElementById('input_' + envName);
     const value = input.value.trim();
@@ -278,6 +373,7 @@ def settings_page(request: Request):
 _ALLOWED_KEYS = {
     "TRADING212_API_KEY", "FMP_API_KEY", "FINNHUB_API_KEY",
     "DEEPSEEK_API_KEY", "MASSIVE_API_KEY", "FRED_API_KEY",
+    "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
 }
 
 @router.post("/api/settings/save-key")
@@ -294,3 +390,20 @@ async def save_key_api(request: Request):
         return JSONResponse({"ok": False, "error": "empty value"})
     ok = save_secret(name, value)
     return JSONResponse({"ok": ok})
+
+
+@router.post("/api/telegram/test")
+async def telegram_test():
+    from app.telegram_notify import test_connection
+    result = test_connection()
+    return JSONResponse({"ok": result.get("ok", False), "error": result.get("description") or result.get("error")})
+
+
+@router.get("/api/telegram/get-chat-id")
+async def telegram_get_chat_id(token: str = None):
+    from app.telegram_notify import get_chat_id
+    from app.data_store import secret_value
+    t = token or secret_value("TELEGRAM_BOT_TOKEN")
+    if not t:
+        return JSONResponse({"ok": False, "error": "Bot Token 未配置，请先保存 Token 再获取 Chat ID。"})
+    return JSONResponse(get_chat_id(t))

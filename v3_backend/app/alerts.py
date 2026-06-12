@@ -53,4 +53,10 @@ def check_alerts():
     except Exception:
         pass
 
+    try:
+        from .telegram_notify import maybe_push_alerts
+        maybe_push_alerts(alerts)
+    except Exception:
+        pass
+
     return alerts
