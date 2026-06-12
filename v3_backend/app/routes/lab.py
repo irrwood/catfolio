@@ -93,7 +93,7 @@ def lab_page(request: Request):
     .pnl-cal-viewtab.active { background: var(--accent); color: #fff; }
     /* Year view — GitHub-style contribution grid */
     .pnl-cal-year-wrap { overflow-x: auto; padding: 4px 0 2px; }
-    .pnl-cal-year { display: grid; grid-template-rows: repeat(7, 13px); grid-auto-flow: column; gap: 3px; width: max-content; }
+    .pnl-cal-year { display: grid; grid-template-rows: repeat(5, 13px); grid-auto-flow: column; gap: 3px; width: max-content; }
     .pnl-cal-ycell { width: 13px; height: 13px; border-radius: 3px; background: color-mix(in oklch, var(--soft) 60%, transparent); }
     .pnl-cal-ycell.blank { background: transparent; }
     .pnl-cal-ymonths { display: grid; gap: 3px; width: max-content; margin-bottom: 5px; }
@@ -1091,23 +1091,24 @@ def lab_page(request: Request):
             const calMonthLabel = document.querySelector("#calMonthLabel");
             if (calMonthLabel) calMonthLabel.textContent = `${year} 年`;
             const totalLabel = document.querySelector("#calTotalLabel"); if (totalLabel) totalLabel.textContent = "全年盈亏";
-            const startDow = new Date(year, 0, 1).getDay();
             const isLeap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
             const daysInYear = isLeap ? 366 : 365;
-            const weeks = Math.ceil((startDow + daysInYear) / 7);
+            const ROWS = 5; // weekdays only (Mon–Fri); weekends never trade, so skip them
             let total = 0, pos = 0, neg = 0, best = null, worst = null, maxAbs = 1;
-            const dayInfo = [];
+            const workdays = [];
             for (let i = 0; i < daysInYear; i++) {
                 const dt = new Date(year, 0, 1 + i);
+                const dow = dt.getDay();
+                if (dow === 0 || dow === 6) continue; // skip Sat/Sun
                 const ds = `${year}-${String(dt.getMonth() + 1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
                 const v = _calByDate[ds];
-                dayInfo.push({ dt, ds, v });
+                workdays.push({ ds, v, dow, month: dt.getMonth() });
                 if (v !== undefined) { total += v; if (v >= 0) pos++; else neg++; if (best === null || v > best) best = v; if (worst === null || v < worst) worst = v; maxAbs = Math.max(maxAbs, Math.abs(v)); }
             }
+            const leadBlanks = workdays.length ? (workdays[0].dow - 1) : 0; // Mon=row0 … Fri=row4
             let cells = "";
-            for (let i = 0; i < startDow; i++) cells += `<div class="pnl-cal-ycell blank"></div>`;
-            for (let i = 0; i < daysInYear; i++) {
-                const info = dayInfo[i];
+            for (let i = 0; i < leadBlanks; i++) cells += `<div class="pnl-cal-ycell blank"></div>`;
+            for (const info of workdays) {
                 if (info.v !== undefined) {
                     const pct = Math.max(12, Math.min(85, Math.abs(info.v) / maxAbs * 85));
                     const bg = `color-mix(in oklch, ${info.v >= 0 ? "#27a648" : "#e54d5e"} ${Math.round(pct)}%, var(--panel))`;
@@ -1117,15 +1118,16 @@ def lab_page(request: Request):
                 }
             }
             const monthShort = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
+            const weekCols = Math.ceil((leadBlanks + workdays.length) / ROWS);
             let labels = "", lastMonth = -1;
-            for (let w = 0; w < weeks; w++) {
-                const firstIdx = w * 7 - startDow;
-                const idx = Math.max(0, Math.min(daysInYear - 1, firstIdx));
-                const m = dayInfo[idx].dt.getMonth();
+            for (let w = 0; w < weekCols; w++) {
+                const firstIdx = w * ROWS - leadBlanks;
+                const idx = Math.max(0, Math.min(workdays.length - 1, firstIdx));
+                const m = workdays[idx].month;
                 if (firstIdx >= 0 && m !== lastMonth) { labels += `<div class="pnl-cal-ymlabel">${monthShort[m]}</div>`; lastMonth = m; }
                 else labels += `<div class="pnl-cal-ymlabel"></div>`;
             }
-            const cols = `repeat(${weeks}, 13px)`;
+            const cols = `repeat(${weekCols}, 13px)`;
             container.innerHTML = `<div class="pnl-cal-year-wrap"><div class="pnl-cal-ymonths" style="grid-template-columns:${cols}">${labels}</div><div class="pnl-cal-year" style="grid-template-columns:${cols}">${cells}</div></div>`;
             _setCalStats(total, pos, neg, best, worst);
         }
