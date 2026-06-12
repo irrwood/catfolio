@@ -1076,7 +1076,7 @@ def lab_page(request: Request):
                     const col = v >= 0 ? "#27a648" : "#e54d5e";
                     html += `<div class="pnl-cal-day" style="background:${bg}" title="${ds}"><div class="pnl-cal-day-num">${d}</div><div class="pnl-cal-day-val" style="color:${col}">${_fmtCalVal(v)}</div></div>`;
                 } else if (dow === 0 || dow === 6) {
-                    html += `<div class="pnl-cal-day" style="opacity:0.3"><div class="pnl-cal-day-num">${d}</div></div>`;
+                    html += `<div></div>`; // weekend: empty placeholder, markets don't trade
                 } else {
                     html += `<div class="pnl-cal-day no-trade"><div class="pnl-cal-day-num">${d}</div></div>`;
                 }
