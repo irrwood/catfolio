@@ -23,6 +23,7 @@ def wrap_v4_layout(title: str, content: str, active_page: str) -> str:
         ("/", "数据控制台", "fa-chart-pie"),
         ("/lab", "Portfolio Lab", "fa-flask"),
         ("/backtest", "回测与优化", "fa-calculator"),
+        ("/strategy", "策略回测", "fa-vials"),
         ("/returns", "收益对比", "fa-chart-line"),
         ("/heatmap", "持仓热力图", "fa-border-all"),
         ("/report", "审计报表", "fa-file-invoice-dollar"),

@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from app.routes import api, home, report, lab, backtest, heatmap, returns, ai, settings
+from app.routes import api, home, report, lab, backtest, heatmap, returns, ai, settings, strategy
 
 app = FastAPI(title="Helm", version="1.0.0")
 APP_DIR = Path(__file__).resolve().parent
@@ -32,3 +32,4 @@ app.include_router(api.router)
 app.include_router(returns.router)
 app.include_router(ai.router)
 app.include_router(settings.router)
+app.include_router(strategy.router)
