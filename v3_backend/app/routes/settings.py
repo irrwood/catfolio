@@ -27,6 +27,10 @@ def settings_page(request: Request):
     massive_set = secret_value("MASSIVE_API_KEY") is not None
     t212_set = secret_value("TRADING212_API_KEY") is not None
     deepseek_set = secret_value("DEEPSEEK_API_KEY") is not None
+    xai_set = secret_value("XAI_API_KEY") is not None
+    ai_provider = (secret_value("AI_PROVIDER") or "deepseek").strip().lower()
+    if ai_provider not in ("deepseek", "grok"):
+        ai_provider = "deepseek"
 
     market_cache = live_cache_age_seconds()
     history_cache = history_cache_age_seconds()
@@ -77,6 +81,20 @@ def settings_page(request: Request):
           </div>
         </div>"""
 
+    def provider_btn(value, label, key_set, active):
+        is_active = active == value
+        css = (
+            "background:var(--accent);color:#fff;border-color:var(--accent);"
+            if is_active else
+            "background:var(--soft);color:var(--ink);border-color:transparent;"
+        )
+        warn = "" if key_set else '<span title="该提供方的 API Key 未配置" style="color:var(--warn)">●</span> '
+        return (
+            f'<button class="ai-provider-btn" data-provider="{value}" onclick="setProvider(\'{value}\', this)" '
+            f'style="border:1px solid var(--line);padding:8px 18px;font-size:var(--text-sm);font-weight:600;'
+            f'cursor:pointer;font-family:inherit;{css}">{warn}{label}</button>'
+        )
+
     content = f"""<div class="v4-hero">
   <div class="v4-hero-text">
     <h1>系统配置与状态</h1>
@@ -97,10 +115,29 @@ def settings_page(request: Request):
       {key_row("FMP_API_KEY", "FMP API Key (Financial Modeling Prep)", "美股 P/E、P/S、EPS 成长率估值", fmp_set)}
       {key_row("FINNHUB_API_KEY", "Finnhub API Key", "备用估值接口，FMP 缺失时自动切换", finnhub_set)}
       {key_row("DEEPSEEK_API_KEY", "DeepSeek API Key", "AI 组合分析、风险诊断、策略评价", deepseek_set)}
+      {key_row("XAI_API_KEY", "xAI (Grok) API Key", "Grok 模型，作为 AI 分析的可选提供方", xai_set)}
       {key_row("MASSIVE_API_KEY", "Massive API Key", "盘后异动、期权链快照（可选）", massive_set)}
       {key_row("FRED_API_KEY", "FRED API Key (St. Louis Fed)", "宏观利率、通胀数据（可选）", fred_set, border=False)}
     </div>
     <div id="keyStatus" style="padding:0 var(--sp-xl) var(--sp-xl);font-size:var(--text-sm);display:none;"></div>
+  </div>
+
+  <div class="v4-card">
+    <div class="v4-card-header">
+      <div>
+        <h2 class="v4-card-title"><i class="fa-solid fa-robot" style="color:var(--accent)"></i> AI 提供方</h2>
+        <div class="v4-card-subtitle">选择驱动 AI 组合分析的模型。切换前请先填好对应的 API Key。</div>
+      </div>
+    </div>
+    <div style="padding:0 var(--sp-xl) var(--sp-xl);">
+      <div style="display:inline-flex;border:1px solid var(--line);border-radius:var(--radius-md);overflow:hidden;">
+        {provider_btn("deepseek", "DeepSeek", deepseek_set, ai_provider)}
+        {provider_btn("grok", "Grok (xAI)", xai_set, ai_provider)}
+      </div>
+      <div id="aiProviderStatus" style="margin-top:10px;font-size:var(--text-xs);color:var(--muted);">
+        当前：<strong style="color:var(--ink)">{"Grok (xAI)" if ai_provider == "grok" else "DeepSeek"}</strong>
+      </div>
+    </div>
   </div>
 
   <div class="v4-card">
@@ -312,6 +349,29 @@ def settings_page(request: Request):
     }}
   }}
 
+  async function setProvider(value, btn) {{
+    const status = document.getElementById('aiProviderStatus');
+    try {{
+      const res = await fetch('/api/settings/save-key', {{
+        method: 'POST',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify({{name: 'AI_PROVIDER', value}})
+      }});
+      const data = await res.json();
+      if (data.ok) {{
+        document.querySelectorAll('.ai-provider-btn').forEach(b => {{
+          b.style.background = 'var(--soft)'; b.style.color = 'var(--ink)'; b.style.borderColor = 'transparent';
+        }});
+        btn.style.background = 'var(--accent)'; btn.style.color = '#fff'; btn.style.borderColor = 'var(--accent)';
+        status.innerHTML = '当前：<strong style="color:var(--ink)">' + btn.textContent.trim() + '</strong> <span style="color:var(--positive)">已切换</span>';
+      }} else {{
+        status.innerHTML = '<span style="color:var(--negative)">切换失败：' + (data.error || '未知错误') + '</span>';
+      }}
+    }} catch(e) {{
+      status.innerHTML = '<span style="color:var(--negative)">切换失败</span>';
+    }}
+  }}
+
   async function triggerRefresh(type) {{
     const statusEl = document.getElementById("settingsStatus");
     statusEl.className = "status";
@@ -374,6 +434,7 @@ _ALLOWED_KEYS = {
     "TRADING212_API_KEY", "FMP_API_KEY", "FINNHUB_API_KEY",
     "DEEPSEEK_API_KEY", "MASSIVE_API_KEY", "FRED_API_KEY",
     "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
+    "XAI_API_KEY", "AI_PROVIDER", "DEEPSEEK_MODEL", "XAI_MODEL",
 }
 
 @router.post("/api/settings/save-key")

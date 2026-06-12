@@ -8,27 +8,61 @@ from .analytics import etf_lookthrough, holdings_detail, pnl_contribution, portf
 from .data_store import current_snapshot, secret_value
 from .lab import backtest, cumulative_multi_benchmark, cumulative_vs_benchmark, drawdown_curve, efficient_frontier, factor_analysis, lab_history_summary, monte_carlo, monthly_return_heatmap
 
-DEEPSEEK_BASE = "https://api.deepseek.com/v1"
-DEEPSEEK_CHAT = f"{DEEPSEEK_BASE}/chat/completions"
-MODEL = "deepseek-chat"
 ROOT = Path(__file__).resolve().parent.parent.parent
 
+# ── AI provider registry ────────────────────────────────────────────────────
+# DeepSeek and xAI/Grok are both OpenAI-compatible (POST /chat/completions with
+# a Bearer key and the same request/response shape), so one code path drives
+# both — only base URL, key name, and model differ. The active provider is
+# stored as the AI_PROVIDER secret; each provider's model can be overridden via
+# its *_MODEL secret, otherwise the default below is used.
+PROVIDERS = {
+    "deepseek": {
+        "label": "DeepSeek",
+        "base": "https://api.deepseek.com/v1",
+        "key": "DEEPSEEK_API_KEY",
+        "model_key": "DEEPSEEK_MODEL",
+        "default_model": "deepseek-chat",
+    },
+    "grok": {
+        "label": "Grok (xAI)",
+        "base": "https://api.x.ai/v1",
+        "key": "XAI_API_KEY",
+        "model_key": "XAI_MODEL",
+        "default_model": "grok-4",
+    },
+}
+DEFAULT_PROVIDER = "deepseek"
 
-def _deepseek(messages, temperature=0.3, max_tokens=2048):
-    """Send a chat completion request to DeepSeek, return the text response."""
-    api_key = secret_value("DEEPSEEK_API_KEY")
+
+def active_provider():
+    """Return (name, config) of the currently selected AI provider."""
+    name = (secret_value("AI_PROVIDER") or DEFAULT_PROVIDER).strip().lower()
+    if name not in PROVIDERS:
+        name = DEFAULT_PROVIDER
+    return name, PROVIDERS[name]
+
+
+def _chat(messages, temperature=0.3, max_tokens=2048):
+    """Send a chat completion to the active provider, return the text response."""
+    _name, cfg = active_provider()
+    api_key = secret_value(cfg["key"])
     if not api_key:
-        raise RuntimeError("DEEPSEEK_API_KEY 未设置。请设置环境变量或存入 Keychain (service=portfolio-analysis-v3, account=DEEPSEEK_API_KEY)。")
+        raise RuntimeError(
+            f"{cfg['key']} 未设置（当前 AI 提供方：{cfg['label']}）。"
+            f"请在设置页填入 {cfg['label']} 的 API Key，或切换到已配置好的提供方。"
+        )
+    model = secret_value(cfg["model_key"]) or cfg["default_model"]
 
     body = json.dumps({
-        "model": MODEL,
+        "model": model,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
     }, ensure_ascii=False).encode("utf-8")
 
     req = urllib.request.Request(
-        DEEPSEEK_CHAT,
+        f"{cfg['base']}/chat/completions",
         data=body,
         headers={
             "Authorization": f"Bearer {api_key}",
@@ -48,7 +82,12 @@ def _deepseek(messages, temperature=0.3, max_tokens=2048):
 
     if "choices" in data and len(data["choices"]) > 0:
         return data["choices"][0]["message"]["content"]
-    raise RuntimeError(f"DeepSeek 返回异常: {json.dumps(data, ensure_ascii=False)[:300]}")
+    raise RuntimeError(f"{cfg['label']} 返回异常: {json.dumps(data, ensure_ascii=False)[:300]}")
+
+
+# Backwards-compatible alias: existing call sites and strategy.py use _deepseek,
+# which now routes through whichever provider is active.
+_deepseek = _chat
 
 
 def _fmt_pct(value):
