@@ -1,7 +1,21 @@
 import os
+import sys
 from pathlib import Path
 
-ROOT = Path(os.environ.get("HELM_ROOT", str(Path(__file__).resolve().parent.parent.parent)))
+
+def _compute_root() -> Path:
+    """Return the project root.
+
+    In a PyInstaller bundle sys._MEIPASS is the extraction directory that
+    contains app/, scripts/, etc. — use it as ROOT so all relative paths work.
+    In normal dev mode walk up three levels from this file.
+    """
+    if hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS)
+    return Path(__file__).resolve().parent.parent.parent
+
+
+ROOT = Path(os.environ.get("HELM_ROOT", str(_compute_root())))
 # Writable data directory. Defaults to <repo>/outputs for dev; the packaged desktop
 # app points HELM_DATA_DIR at ~/Library/Application Support/Helm so it never writes
 # into a read-only app bundle. All caches/DB/report derive from here.

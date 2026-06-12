@@ -2,4 +2,4 @@
 # needs requirements.txt; these are extra for building the native macOS app.
 -r requirements.txt
 pywebview==6.2.1
-pyinstaller==6.11.1
+pyinstaller>=6.15.0
