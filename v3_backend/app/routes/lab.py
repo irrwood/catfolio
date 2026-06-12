@@ -1038,71 +1038,71 @@ def lab_page(request: Request):
         // Daily P&L Calendar
         const _calNavRows = history.nav || [];
         const _calMv = Number(summary.market_value_usd || 0);
-        const _calByDate = {{}};
-        _calNavRows.forEach(row => {{ _calByDate[row.date] = _calMv * Number(row.return || 0); }});
+        const _calByDate = {};
+        _calNavRows.forEach(row => { _calByDate[row.date] = _calMv * Number(row.return || 0); });
         const _now = new Date();
         let _calYear = _now.getFullYear(), _calMonth = _now.getMonth() + 1;
         // Jump to the most recent month that has data
         const _allDates = Object.keys(_calByDate).sort();
-        if (_allDates.length) {{
+        if (_allDates.length) {
             const last = _allDates[_allDates.length - 1].split("-");
             _calYear = Number(last[0]); _calMonth = Number(last[1]);
-        }}
-        function _fmtCalVal(v) {{
+        }
+        function _fmtCalVal(v) {
             const a = Math.abs(v);
             return (v >= 0 ? "+" : "-") + (a >= 1000 ? "$" + (a / 1000).toFixed(1) + "k" : "$" + a.toFixed(0));
-        }}
-        function _renderCal(year, month) {{
+        }
+        function _renderCal(year, month) {
             const container = document.querySelector("#pnlCalendar");
             if (!container) return;
             const monthNames = ["一月","二月","三月","四月","五月","六月","七月","八月","九月","十月","十一月","十二月"];
             const calMonthLabel = document.querySelector("#calMonthLabel");
-            if (calMonthLabel) calMonthLabel.textContent = `${{year}} 年 ${{monthNames[month - 1]}}`;
+            if (calMonthLabel) calMonthLabel.textContent = `${year} 年 ${monthNames[month - 1]}`;
             const daysInMonth = new Date(year, month, 0).getDate();
             const startDow = new Date(year, month - 1, 1).getDay();
             let monthTotal = 0, posCount = 0, negCount = 0, bestDay = null, worstDay = null;
-            for (let d = 1; d <= daysInMonth; d++) {{
-                const ds = `${{year}}-${{String(month).padStart(2,"0")}}-${{String(d).padStart(2,"0")}}`;
+            for (let d = 1; d <= daysInMonth; d++) {
+                const ds = `${year}-${String(month).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
                 const v = _calByDate[ds];
-                if (v !== undefined) {{
+                if (v !== undefined) {
                     monthTotal += v;
                     if (v >= 0) posCount++; else negCount++;
                     if (bestDay === null || v > bestDay) bestDay = v;
                     if (worstDay === null || v < worstDay) worstDay = v;
-                }}
-            }}
+                }
+            }
             const weekdays = ["日","一","二","三","四","五","六"];
-            let html = weekdays.map(d => `<div class="pnl-cal-weekday">${{d}}</div>`).join("");
+            let html = weekdays.map(d => `<div class="pnl-cal-weekday">${d}</div>`).join("");
             for (let i = 0; i < startDow; i++) html += `<div></div>`;
-            for (let d = 1; d <= daysInMonth; d++) {{
-                const ds = `${{year}}-${{String(month).padStart(2,"0")}}-${{String(d).padStart(2,"0")}}`;
+            for (let d = 1; d <= daysInMonth; d++) {
+                const ds = `${year}-${String(month).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
                 const v = _calByDate[ds];
                 const dow = new Date(year, month - 1, d).getDay();
-                if (v !== undefined) {{
+                if (v !== undefined) {
                     const pct = Math.max(8, Math.min(68, Math.abs(v) / Math.max(1, Math.abs(bestDay || worstDay || 1)) * 68));
-                    const bg = `color-mix(in oklch, ${{v >= 0 ? "#27a648" : "#e54d5e"}} ${{Math.round(pct)}}%, var(--panel))`;
+                    const bg = `color-mix(in oklch, ${v >= 0 ? "#27a648" : "#e54d5e"} ${Math.round(pct)}%, var(--panel))`;
                     const col = v >= 0 ? "#27a648" : "#e54d5e";
-                    html += `<div class="pnl-cal-day" style="background:${{bg}}" title="${{ds}}"><div class="pnl-cal-day-num">${{d}}</div><div class="pnl-cal-day-val" style="color:${{col}}">${{_fmtCalVal(v)}}</div></div>`;
-                }} else if (dow === 0 || dow === 6) {{
-                    html += `<div class="pnl-cal-day" style="opacity:0.3"><div class="pnl-cal-day-num">${{d}}</div></div>`;
-                }} else {{
-                    html += `<div class="pnl-cal-day no-trade"><div class="pnl-cal-day-num">${{d}}</div></div>`;
-                }}
-            }}
+                    html += `<div class="pnl-cal-day" style="background:${bg}" title="${ds}"><div class="pnl-cal-day-num">${d}</div><div class="pnl-cal-day-val" style="color:${col}">${_fmtCalVal(v)}</div></div>`;
+                } else if (dow === 0 || dow === 6) {
+                    html += `<div class="pnl-cal-day" style="opacity:0.3"><div class="pnl-cal-day-num">${d}</div></div>`;
+                } else {
+                    html += `<div class="pnl-cal-day no-trade"><div class="pnl-cal-day-num">${d}</div></div>`;
+                }
+            }
             container.innerHTML = html;
-            const t = document.querySelector("#calMonthTotal"); if (t) {{ t.textContent = _fmtCalVal(monthTotal); t.className = `pnl-cal-stat-value ${{monthTotal >= 0 ? "positive" : "negative"}}`; }}
+            const t = document.querySelector("#calMonthTotal"); if (t) { t.textContent = _fmtCalVal(monthTotal); t.className = `pnl-cal-stat-value ${monthTotal >= 0 ? "positive" : "negative"}`; }
             const p = document.querySelector("#calPosDays"); if (p) p.textContent = posCount + " 天";
             const n = document.querySelector("#calNegDays"); if (n) n.textContent = negCount + " 天";
-            const bd = document.querySelector("#calBestDay"); if (bd) {{ bd.textContent = bestDay !== null ? _fmtCalVal(bestDay) : "—"; }}
-            const wd = document.querySelector("#calWorstDay"); if (wd) {{ wd.textContent = worstDay !== null ? _fmtCalVal(worstDay) : "—"; }}
-        }}
+            const bd = document.querySelector("#calBestDay"); if (bd) { bd.textContent = bestDay !== null ? _fmtCalVal(bestDay) : "—"; }
+            const wd = document.querySelector("#calWorstDay"); if (wd) { wd.textContent = worstDay !== null ? _fmtCalVal(worstDay) : "—"; }
+        }
         _renderCal(_calYear, _calMonth);
-        document.querySelector("#calPrev")?.addEventListener("click", () => {{
-            _calMonth--; if (_calMonth < 1) {{ _calMonth = 12; _calYear--; }} _renderCal(_calYear, _calMonth);
-        }});
-        document.querySelector("#calNext")?.addEventListener("click", () => {{
-            _calMonth++; if (_calMonth > 12) {{ _calMonth = 1; _calYear++; }} _renderCal(_calYear, _calMonth);
-        }});
+        document.querySelector("#calPrev")?.addEventListener("click", () => {
+            _calMonth--; if (_calMonth < 1) { _calMonth = 12; _calYear--; } _renderCal(_calYear, _calMonth);
+        });
+        document.querySelector("#calNext")?.addEventListener("click", () => {
+            _calMonth++; if (_calMonth > 12) { _calMonth = 1; _calYear++; } _renderCal(_calYear, _calMonth);
+        });
 
         const monthlyModelRows = commandCenter.monthly_returns?.rows || [];
         const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
