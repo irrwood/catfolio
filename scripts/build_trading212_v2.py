@@ -5,8 +5,9 @@ from collections import defaultdict
 from pathlib import Path
 
 import os; ROOT = Path(os.environ.get("HELM_ROOT", str(Path(__file__).resolve().parent.parent)))
-V1_DIR = ROOT / "outputs/portfolio_analysis"
-V2_DIR = ROOT / "outputs/portfolio_analysis_v2"
+DATA_DIR = Path(os.environ.get("HELM_DATA_DIR", str(ROOT / "outputs")))
+V1_DIR = DATA_DIR / "portfolio_analysis"
+V2_DIR = DATA_DIR / "portfolio_analysis_v2"
 V2_HTML = V2_DIR / "portfolio_cost_basis_v2.html"
 GBP_TO_USD = 1.3460
 YAHOO_SYMBOL_OVERRIDES = {

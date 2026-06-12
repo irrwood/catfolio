@@ -1,13 +1,14 @@
 """Page route: ai."""
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from app.components import wrap_v4_layout
+from app.i18n import get_lang
 
 router = APIRouter(tags=["pages"])
 
 
 @router.get("/ai")
-def ai_page():
+def ai_page(request: Request):
     content = """<div class="v4-hero">
   <div class="v4-hero-text">
     <h1><i class="fa-solid fa-robot"></i> AI 分析面板</h1>
@@ -281,5 +282,5 @@ def ai_page():
   // Init
   showCachedBriefing();
 </script>"""
-    return HTMLResponse(wrap_v4_layout("AI 分析", content, "/ai"))
+    return HTMLResponse(wrap_v4_layout("AI 分析", content, "/ai", get_lang(request)))
 

@@ -408,8 +408,8 @@ def holdings_heatmap(snapshot):
     valuation_as_of_unix = fundamentals.get("as_of_unix")
 
     try:
-        from .lab import get_history
-        history = get_history()
+        from .lab import get_history_cached
+        history = get_history_cached()  # never fetch from this shared view (keeps home/heatmap fast)
     except Exception:
         history = {"prices": {}}
     prices_map = history.get("prices", {})

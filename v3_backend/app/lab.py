@@ -282,6 +282,15 @@ def get_history():
     return refresh_history(force=True)["history"]
 
 
+def get_history_cached():
+    """Cached lab history only — never triggers a network fetch (empty if no cache).
+
+    Used by views that must stay fast on a cold cache (home alerts, heatmap),
+    where a synchronous fetch of ~35 symbols would block the page for seconds.
+    """
+    return load_json(LAB_HISTORY_CACHE, None) or {"prices": {}}
+
+
 def ensure_history_symbols(symbols, years=5, max_fetch=180):
     history = get_history()
     prices = history.setdefault("prices", {})

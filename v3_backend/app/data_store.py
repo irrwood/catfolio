@@ -24,6 +24,8 @@ from pathlib import Path
 from .cache import cached
 from .settings import FUNDAMENTALS_CACHE, LIVE_MARKET_CACHE, MARKET_REFRESH_TTL_SECONDS, ROOT, V2_DIR
 
+_DEMO_MODE = os.environ.get("HELM_DEMO", "").lower() in ("1", "true", "yes")
+
 FX_TO_USD = {
     "USD": 1.0,
     "GBP": 1.3460,
@@ -45,6 +47,9 @@ def current_snapshot():
     # load fires — without this, every widget re-reads the same 4 JSON files from
     # disk. Every data-refresh path calls cache.clear_all(), so this never serves
     # stale data; callers must treat the returned dict as read-only (it is shared).
+    if _DEMO_MODE:
+        from .demo_data import DEMO_SNAPSHOT
+        return DEMO_SNAPSHOT
     portfolio = load_json(V2_DIR / "portfolio_analysis.json", {"summary": {}, "holdings": [], "holdings_by_account": []})
     market = load_json(LIVE_MARKET_CACHE, None) or load_json(V2_DIR / "market_data.json", {"rows": [], "warnings": []})
     fundamentals = load_json(FUNDAMENTALS_CACHE, {"rows": [], "warnings": ["Fundamentals cache not available."]})
@@ -86,23 +91,51 @@ def open_json(url):
 
 
 def secret_value(name):
-    """Read a secret from environment, .env file, or macOS Keychain.
+    """Read a secret from environment, system keychain, or keyring library.
 
-    Priority: env var > Keychain (new service) > Keychain (old service, auto-migrate)
+    On macOS the security CLI is used directly — it was already granted Keychain
+    access and never triggers a prompt. The keyring library is only used on
+    Linux / Windows where the security CLI is unavailable.
     """
+    import platform
     value = os.environ.get(name)
     if value:
         return value
-    # Try Keychain with new service name
-    value = _keychain_get(name, "com.helm.portfolio")
-    if value:
-        return value
-    # Fallback: try old service and migrate if found
-    value = _keychain_get(name, "portfolio-analysis-v3")
-    if value:
-        _keychain_save(name, value, "com.helm.portfolio")
-        return value
+    if platform.system() == "Darwin":
+        # macOS: security CLI — no UI prompts for already-trusted items
+        value = _keychain_get(name, "com.helm.portfolio")
+        if value:
+            return value
+        # Legacy service name migration
+        value = _keychain_get(name, "portfolio-analysis-v3")
+        if value:
+            _keychain_save(name, value, "com.helm.portfolio")
+            return value
+    else:
+        # Linux / Windows: use keyring library (Credential Manager / libsecret / etc.)
+        try:
+            import keyring as _kr
+            value = _kr.get_password("com.helm.portfolio", name)
+            if value:
+                return value
+        except Exception:
+            pass
     return None
+
+
+def save_secret(name: str, value: str) -> bool:
+    """Persist a secret to the system keychain (macOS) or keyring library (Linux/Windows)."""
+    import platform
+    if platform.system() == "Darwin":
+        _keychain_save(name, value, "com.helm.portfolio")
+        return True
+    else:
+        try:
+            import keyring as _kr
+            _kr.set_password("com.helm.portfolio", name, value)
+            return True
+        except Exception:
+            return False
 
 
 def _keychain_get(account, service):

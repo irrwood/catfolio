@@ -9,7 +9,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from app.routes import api, home, report, lab, backtest, heatmap, returns, ai, settings, strategy
+from app.routes import api, home, report, lab, backtest, heatmap, returns, ai, settings, strategy, import_csv
+from app import i18n
 
 app = FastAPI(title="Helm", version="1.0.0")
 APP_DIR = Path(__file__).resolve().parent
@@ -33,3 +34,5 @@ app.include_router(returns.router)
 app.include_router(ai.router)
 app.include_router(settings.router)
 app.include_router(strategy.router)
+app.include_router(import_csv.router)
+app.include_router(i18n.router)

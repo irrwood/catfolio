@@ -1,15 +1,16 @@
 """Page route: returns."""
 import json
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from app.components import wrap_v4_layout
+from app.i18n import get_lang
 from app.lab import BENCHMARKS, cash_flow_mirror_vs_benchmark, cumulative_multi_benchmark, cumulative_vs_benchmark, monthly_return_heatmap, drawdown_curve, return_distribution, monthly_contribution_waterfall
 
 router = APIRouter(tags=["pages"])
 
 
 @router.get("/returns")
-def returns_page():
+def returns_page(request: Request):
     twr_returns = cumulative_vs_benchmark()
     multi_benchmark = cumulative_multi_benchmark()
     cash_flow_benchmarks = {symbol: cash_flow_mirror_vs_benchmark(symbol) for symbol in BENCHMARKS}
@@ -465,4 +466,4 @@ def returns_page():
     }}
   }}
 </script>"""
-    return HTMLResponse(wrap_v4_layout("收益对比", content, "/returns"))
+    return HTMLResponse(wrap_v4_layout("收益对比", content, "/returns", get_lang(request)))

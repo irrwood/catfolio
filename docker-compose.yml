@@ -1,0 +1,18 @@
+services:
+  helm:
+    build: .
+    ports:
+      - "8787:8787"
+    volumes:
+      - helm_data:/data
+    environment:
+      # Set HELM_DEMO=1 for a fully-populated demo dashboard (no API keys needed)
+      - HELM_DEMO=1
+      # Uncomment to add your API keys for live data:
+      # - TRADING212_API_KEY=your_key
+      # - FMP_API_KEY=your_key
+      # - DEEPSEEK_API_KEY=your_key
+    restart: unless-stopped
+
+volumes:
+  helm_data:

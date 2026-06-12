@@ -8,8 +8,9 @@ import urllib.request
 from pathlib import Path
 
 import os; ROOT = Path(os.environ.get("HELM_ROOT", str(Path(__file__).resolve().parent.parent)))
-OUTPUT = ROOT / "outputs/portfolio_analysis/trading212_data.json"
-PORTFOLIO_ANALYSIS = ROOT / "outputs/portfolio_analysis/portfolio_analysis.json"
+DATA_DIR = Path(os.environ.get("HELM_DATA_DIR", str(ROOT / "outputs")))
+OUTPUT = DATA_DIR / "portfolio_analysis/trading212_data.json"
+PORTFOLIO_ANALYSIS = DATA_DIR / "portfolio_analysis/portfolio_analysis.json"
 
 BASE_URL = os.environ.get("TRADING212_API_BASE", "https://live.trading212.com/api/v0").rstrip("/")
 READ_ONLY_ENDPOINTS = {
@@ -255,6 +256,7 @@ def main():
         account["account"]: account.get("account_cash", {})
         for account in account_rows
     }
+    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(
         json.dumps(
             {

@@ -54,18 +54,20 @@
 > 注：这一步无论桌面还是 SaaS 都要做，是最有复用价值的重构。
 
 ### 2. 套桌面外壳 + 打包
-- [ ] 加 `desktop.py` 入口：后台线程起 uvicorn（随机端口）→ `webview.create_window("Helm", f"http://127.0.0.1:{port}")` → `webview.start()`。
-- [ ] 处理生命周期：等 uvicorn 就绪再开窗口；窗口关闭触发 uvicorn shutdown。
-- [ ] 写 PyInstaller spec：把 `app/static/`（含 vendor 的 echarts/lightweight-charts）、模板、`scripts/` 作为 `datas` 打进包；隐藏导入补全（uvicorn/fastapi 常需手动加 `hiddenimports`）。
+- [x] 加 `v3_backend/desktop.py` 入口：后台线程起 uvicorn（随机空闲端口）→ 等端口就绪 → `webview.create_window("Helm", url)` → `webview.start()`；窗口关闭后 `server.should_exit`。带 `HELM_DESKTOP_SELFTEST=1` 无头自测开关。
+- [x] 生命周期：`wait_for_port()` 等服务就绪再开窗；关闭窗口停服务。
+- [x] 依赖记录在 `v3_backend/requirements-desktop.txt`（pywebview 6.2.1 + pyinstaller）。dev 验证：selftest 通过、真实窗口启动 6s 无崩溃。
+- [ ] 写 PyInstaller spec：把 `app/static/`（含 vendor 的 echarts/lightweight-charts）、`scripts/` 作为 `datas` 打进包；`hiddenimports` 补 uvicorn/fastapi/pywebview cocoa 后端。
 - [ ] 产出 `Helm.app`，本机双击验证。
 
-### 3. 数据目录改到 macOS 标准位置
-- [ ] 当前数据写在仓库 `outputs/`（`settings.ROOT` / `V2_DIR`）。打包后仓库目录只读，必须迁出。
-- [ ] 默认数据目录改为 `~/Library/Application Support/Helm/`（已有 `HELM_ROOT` 环境变量，改默认值 + 首次运行自动建目录即可）。
-- [ ] 首次启动若目录为空，给空状态引导（让用户去设置页填 key、点同步）。
+### 3. 数据目录改到 macOS 标准位置 ✅
+- [x] 引入 `HELM_DATA_DIR`（`settings.DATA_DIR`，默认 `<repo>/outputs`，dev 行为不变）；`V2_DIR` 及所有缓存/DB/报表从它派生。运行时脚本（`build_trading212_v2.py` / `enrich_trading212_data.py`）也读 `HELM_DATA_DIR`，并自动建子目录。
+- [x] `desktop.py` 默认把 `HELM_DATA_DIR` 指向 `~/Library/Application Support/Helm/` 并创建。验证：设临时目录跑刷新，全部文件落在该目录、仓库 outputs 未被碰。
+- [x] 修冷启动慢：全新数据目录首次加载 home 原本 17s（`check_alerts`→`holdings_heatmap`/`lab_history_summary` 同步拉 35+ 标的历史）。改为只读缓存的 `get_history_cached()` + 历史缓存存在才算回撤告警 → 冷缓存 home **17s → 0.02s**。Lab 页自身仍自动拉取。
+- [ ] 首次启动空目录的空状态引导（去设置页填 key、点同步）。
 
 ### 4. 静态资源 / 路径鲁棒性
-- [ ] `StaticFiles(directory=APP_DIR/"static")`、模板路径等，在 PyInstaller 下 `__file__` 会变成临时解包目录 `sys._MEIPASS`。统一用一个 `resource_path()` 辅助函数解析，确保打包后能找到资源。
+- [ ] `StaticFiles(directory=APP_DIR/"static")`、模板路径等，在 PyInstaller 下 `__file__` 会变成临时解包目录 `sys._MEIPASS`。统一用一个 `resource_path()` 辅助函数解析，确保打包后能找到资源。（dev 直接跑 desktop.py 不受影响，打包时再处理。）
 
 ---
 

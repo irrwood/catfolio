@@ -1,8 +1,9 @@
 """Page route: lab."""
 import json
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Request, Query
 from fastapi.responses import HTMLResponse
 from app.components import wrap_v4_layout, data_health_bar
+from app.i18n import get_lang
 from app.data_store import current_snapshot, refresh_market_quotes, refresh_trading212, refresh_fundamentals
 from app.analytics import holdings_detail, holdings_heatmap, pnl_contribution, portfolio_summary, sector_concentration
 from app.lab import lab_history_summary
@@ -11,7 +12,7 @@ router = APIRouter(tags=["pages"])
 
 
 @router.get("/lab")
-def lab_page():
+def lab_page(request: Request):
     content = """<style>
     /* Lab Dashboard — v4 Dark Theme */
     .lab-hero { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; margin-bottom: 16px; }
@@ -1069,4 +1070,4 @@ def lab_page():
 
 
 </script>"""
-    return HTMLResponse(wrap_v4_layout("Portfolio Lab", content, "/lab"))
+    return HTMLResponse(wrap_v4_layout("Portfolio Lab", content, "/lab", get_lang(request)))

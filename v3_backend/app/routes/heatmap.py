@@ -1,14 +1,15 @@
 """Page route: heatmap."""
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from app.components import wrap_v4_layout, data_health_bar
 from app.data_store import current_snapshot
+from app.i18n import get_lang
 
 router = APIRouter(tags=["pages"])
 
 
 @router.get("/heatmap")
-def heatmap_page():
+def heatmap_page(request: Request):
     return HTMLResponse(
         wrap_v4_layout(
             "持仓热力图",
@@ -924,5 +925,6 @@ def heatmap_page():
   </script>
 """,
             "/heatmap",
+            get_lang(request),
         )
     )

@@ -1,8 +1,9 @@
 """Strategy Lab: free-Python strategy backtesting with saved run history."""
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse
 
 from app.components import wrap_v4_layout
+from app.i18n import get_lang
 from app.strategy_engine import run_backtest
 from app import strategy_store
 
@@ -177,7 +178,7 @@ def api_holdings_universe(top: int = 10):
 # ── Page ─────────────────────────────────────────────────────────────────────
 
 @router.get("/strategy")
-def strategy_page():
+def strategy_page(request: Request):
     content = """
 <div class="v4-hero">
   <div class="v4-hero-text">
@@ -474,7 +475,7 @@ def strategy_page():
   loadRuns();
 </script>
 """.replace("__TEMPLATES__", _js_templates())
-    return HTMLResponse(wrap_v4_layout("策略回测", content, "/strategy"))
+    return HTMLResponse(wrap_v4_layout("策略回测", content, "/strategy", get_lang(request)))
 
 
 def _js_templates():

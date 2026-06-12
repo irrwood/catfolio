@@ -344,6 +344,51 @@ body {
   color: var(--ink);
 }
 
+.language-switcher {
+  display: flex;
+  gap: 4px;
+  width: 36px;
+  margin: 8px auto 0;
+  overflow: hidden;
+  transition: width 0.18s ease, margin 0.18s ease;
+}
+
+.v4-sidebar:hover .language-switcher,
+.v4-sidebar.open .language-switcher {
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.language-option {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.language-option.active {
+  display: inline-flex;
+  background: var(--accent-soft);
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.v4-sidebar:hover .language-option,
+.v4-sidebar.open .language-option {
+  display: inline-flex;
+}
+
 .sidebar-status-card {
   border: 1px solid var(--line);
   border-radius: 10px;

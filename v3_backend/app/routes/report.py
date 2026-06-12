@@ -1,15 +1,16 @@
 """Page route: report."""
 import re
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse
 from app.components import wrap_v4_layout
+from app.i18n import get_lang
 from app.settings import V2_HTML
 
 router = APIRouter(tags=["pages"])
 
 
 @router.get("/report")
-def report():
+def report(request: Request):
     if not V2_HTML.exists():
         raise HTTPException(status_code=404, detail="v2 report has not been generated yet")
     raw = V2_HTML.read_text(encoding="utf-8")
@@ -171,7 +172,7 @@ def report():
 <div class="audit-note">这是审计报表：保留完整成本、账户对账、收入统计和导出。组合决策、风险、估值和模型分析请使用 Portfolio Lab。</div>
 {body}
 """
-    return HTMLResponse(wrap_v4_layout("审计报表", content, "/report"))
+    return HTMLResponse(wrap_v4_layout("审计报表", content, "/report", get_lang(request)))
 
 
 @router.post("/api/log-error")

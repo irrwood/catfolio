@@ -2,7 +2,11 @@ import os
 from pathlib import Path
 
 ROOT = Path(os.environ.get("HELM_ROOT", str(Path(__file__).resolve().parent.parent.parent)))
-V2_DIR = ROOT / "outputs/portfolio_analysis_v2"
+# Writable data directory. Defaults to <repo>/outputs for dev; the packaged desktop
+# app points HELM_DATA_DIR at ~/Library/Application Support/Helm so it never writes
+# into a read-only app bundle. All caches/DB/report derive from here.
+DATA_DIR = Path(os.environ.get("HELM_DATA_DIR", str(ROOT / "outputs")))
+V2_DIR = DATA_DIR / "portfolio_analysis_v2"
 V2_HTML = V2_DIR / "portfolio_cost_basis_v2.html"
 LIVE_MARKET_CACHE = V2_DIR / "live_market_data.json"
 FUNDAMENTALS_CACHE = V2_DIR / "fundamentals_data.json"

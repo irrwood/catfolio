@@ -4,8 +4,9 @@ import time as _time
 from datetime import datetime, timezone
 from pathlib import Path
 from app.data_store import current_snapshot
+from app.i18n import t_block
 
-def wrap_v4_layout(title: str, content: str, active_page: str) -> str:
+def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh") -> str:
     try:
         snapshot = current_snapshot()
         trading_unix = snapshot["trading212"].get("as_of_unix")
@@ -28,6 +29,7 @@ def wrap_v4_layout(title: str, content: str, active_page: str) -> str:
         ("/heatmap", "持仓热力图", "fa-border-all"),
         ("/report", "审计报表", "fa-file-invoice-dollar"),
         ("/ai", "AI 分析", "fa-robot"),
+        ("/import", "导入数据", "fa-file-import"),
         ("/settings", "系统设置", "fa-sliders")
     ]
     
@@ -36,8 +38,11 @@ def wrap_v4_layout(title: str, content: str, active_page: str) -> str:
         is_active = "active" if href == active_page else ""
         links_html += f'<a class="nav-link {is_active}" href="{href}"><span class="nav-link-icon"><i class="fa-solid {icon}"></i></span>{label}</a>'
 
+    zh_lang_class = "active" if lang == "zh" else ""
+    en_lang_class = "active" if lang == "en" else ""
+
     html = f"""<!doctype html>
-<html lang="zh-CN">
+<html lang="{'en' if lang == 'en' else 'zh-CN'}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -70,7 +75,12 @@ def wrap_v4_layout(title: str, content: str, active_page: str) -> str:
         <button class="theme-toggle-btn" id="themeToggleBtn">
           <i class="fa-solid fa-moon"></i> <span>深色模式</span>
         </button>
-        
+
+        <div class="language-switcher" aria-label="Language">
+          <a class="language-option {zh_lang_class}" href="/set-lang/zh">中文</a>
+          <a class="language-option {en_lang_class}" href="/set-lang/en">EN</a>
+        </div>
+
         <div class="sidebar-status-card">
           <div style="font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
             <div class="status-dot"></div> 数据同步状态
@@ -139,7 +149,7 @@ def wrap_v4_layout(title: str, content: str, active_page: str) -> str:
   </script>
 </body>
 </html>"""
-    return html
+    return t_block(html, lang)
 
 
 

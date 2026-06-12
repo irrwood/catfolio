@@ -1,7 +1,8 @@
 """Page route: backtest."""
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from app.components import wrap_v4_layout
+from app.i18n import get_lang
 from app.data_store import current_snapshot
 from app.lab import lab_history_summary
 
@@ -9,7 +10,7 @@ router = APIRouter(tags=["pages"])
 
 
 @router.get("/backtest")
-def backtest_page():
+def backtest_page(request: Request):
     content = """<div class="v4-hero">
   <div class="v4-hero-text">
     <h1>回测与优化</h1>
@@ -543,4 +544,4 @@ def backtest_page():
     btStatus.innerHTML = `<span style="color:var(--muted)">点击 <i class="fa-solid fa-arrows-rotate"></i> 刷新数据 加载分析</span>`;
   })();
 </script>"""
-    return HTMLResponse(wrap_v4_layout("回测与优化", content, "/backtest"))
+    return HTMLResponse(wrap_v4_layout("回测与优化", content, "/backtest", get_lang(request)))

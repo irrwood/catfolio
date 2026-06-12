@@ -1,9 +1,10 @@
 """Page route: home."""
 import json
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from datetime import datetime, timezone
 from app.components import wrap_v4_layout
+from app.i18n import get_lang
 from app.data_store import current_snapshot
 from app.analytics import portfolio_summary
 from app.alerts import check_alerts
@@ -58,7 +59,7 @@ try {
 
 
 @router.get("/")
-def index():
+def index(request: Request):
     snapshot = current_snapshot()
     alerts = check_alerts()
 
@@ -409,7 +410,8 @@ def index():
   }}
 </script>
 """,
-            "/"
+            "/",
+            get_lang(request),
         )
     )
 

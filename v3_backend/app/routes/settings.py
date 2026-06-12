@@ -1,8 +1,9 @@
 """Page route: settings."""
-from fastapi import APIRouter
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from app.data_store import (
     secret_value,
+    save_secret,
     live_cache_age_seconds,
     fundamentals_cache_age_seconds,
     after_hours_cache_age_seconds,
@@ -11,6 +12,7 @@ from app.data_store import (
 from app.lab import history_cache_age_seconds
 from app.settings import ROOT, V2_DIR
 from app.components import wrap_v4_layout
+from app.i18n import get_lang
 from datetime import datetime, timezone
 import json
 
@@ -18,7 +20,7 @@ router = APIRouter(tags=["pages"])
 
 
 @router.get("/settings")
-def settings_page():
+def settings_page(request: Request):
     fmp_set = secret_value("FMP_API_KEY") is not None
     finnhub_set = secret_value("FINNHUB_API_KEY") is not None
     fred_set = secret_value("FRED_API_KEY") is not None
@@ -43,6 +45,38 @@ def settings_page():
         if sec < 3600: return f"{sec // 60} 分钟前"
         return f"{sec // 3600} 小时前"
 
+    def key_row(env_name, label, description, is_set, border=True):
+        badge = (
+            '<span class="market-status-badge" style="color:var(--positive);background:var(--positive-soft);border-color:var(--positive);white-space:nowrap"><div class="status-dot"></div> 已设置</span>'
+            if is_set else
+            '<span class="market-status-badge" style="color:var(--negative);background:var(--negative-soft);border-color:var(--negative);white-space:nowrap"><div class="status-dot danger"></div> 未配置</span>'
+        )
+        ph = "已设置，留空则不修改" if is_set else "粘贴 API Key…"
+        border_style = "padding-bottom:14px;border-bottom:1px solid var(--line);" if border else ""
+        return f"""<div style="display:flex;flex-direction:column;gap:8px;{border_style}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+            <div>
+              <strong style="display:block;font-size:var(--text-sm)">{label}</strong>
+              <span style="font-size:var(--text-xs);color:var(--muted)">{description}</span>
+            </div>
+            <div id="badge_{env_name}" style="flex-shrink:0">{badge}</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="password" id="input_{env_name}"
+              placeholder="{ph}"
+              autocomplete="off"
+              style="flex:1;background:var(--soft);border:1px solid var(--line);border-radius:var(--radius-md);
+                     padding:8px 12px;color:var(--ink);font-family:var(--font-mono);font-size:var(--text-sm);outline:none;"
+              onfocus="this.style.borderColor='var(--accent)'"
+              onblur="this.style.borderColor='var(--line)'"
+            />
+            <button class="btn primary" style="white-space:nowrap;flex-shrink:0;"
+              onclick="saveKey('{env_name}', this)">
+              <i class="fa-solid fa-floppy-disk"></i> 保存
+            </button>
+          </div>
+        </div>"""
+
     content = f"""<div class="v4-hero">
   <div class="v4-hero-text">
     <h1>系统配置与状态</h1>
@@ -54,66 +88,19 @@ def settings_page():
   <div class="v4-card">
     <div class="v4-card-header">
       <div>
-        <h2 class="v4-card-title"><i class="fa-solid fa-key text-accent" style="color:var(--accent)"></i> 外部 API 凭证状态</h2>
-        <div class="v4-card-subtitle">系统从环境变量或 macOS Keychain 中安全读取秘钥，不保存在本地文件中。</div>
+        <h2 class="v4-card-title"><i class="fa-solid fa-key" style="color:var(--accent)"></i> 外部 API 凭证</h2>
+        <div class="v4-card-subtitle">Key 保存至系统密钥库，不写入任何文件。留空点保存 = 不修改。</div>
       </div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:14px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:1px solid var(--line);">
-        <div>
-          <strong style="display:block;">FMP API Key (Financial Modeling Prep)</strong>
-          <span style="font-size:12px;color:var(--muted)">用于获取美股 P/E, P/S 等估值及 EPS 同比成长率数据。</span>
-        </div>
-        <div>
-          { '<span class="market-status-badge" style="color:var(--positive);background:var(--positive-soft);border-color:var(--positive);"><div class="status-dot"></div> 已设置</span>' if fmp_set else '<span class="market-status-badge" style="color:var(--negative);background:var(--negative-soft);border-color:var(--negative);"><div class="status-dot danger"></div> 未配置</span>' }
-        </div>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:1px solid var(--line);">
-        <div>
-          <strong style="display:block;">Finnhub API Key</strong>
-          <span style="font-size:12px;color:var(--muted)">备用美股基本面接口。在 FMP Key 缺失或失效时使用。</span>
-        </div>
-        <div>
-          { '<span class="market-status-badge" style="color:var(--positive);background:var(--positive-soft);border-color:var(--positive);"><div class="status-dot"></div> 已设置</span>' if finnhub_set else '<span class="market-status-badge" style="color:var(--negative);background:var(--negative-soft);border-color:var(--negative);"><div class="status-dot danger"></div> 未配置</span>' }
-        </div>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <strong style="display:block;">FRED API Key (St. Louis Fed)</strong>
-          <span style="font-size:12px;color:var(--muted)">用于获取宏观国债利率、联邦基金基准利率及通胀率。</span>
-        </div>
-        <div>
-          { '<span class="market-status-badge" style="color:var(--positive);background:var(--positive-soft);border-color:var(--positive);"><div class="status-dot"></div> 已设置</span>' if fred_set else '<span class="market-status-badge" style="color:var(--negative);background:var(--negative-soft);border-color:var(--negative);"><div class="status-dot danger"></div> 未配置</span>' }
-        </div>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <strong style="display:block;">Massive API Key (盘后数据)</strong>
-          <span style="font-size:12px;color:var(--muted)">用于获取盘后异动、期权链快照和市值参考数据。</span>
-        </div>
-        <div>
-          { '<span class="market-status-badge" style="color:var(--positive);background:var(--positive-soft);border-color:var(--positive);"><div class="status-dot"></div> 已设置</span>' if massive_set else '<span class="market-status-badge" style="color:var(--negative);background:var(--negative-soft);border-color:var(--negative);"><div class="status-dot danger"></div> 未配置</span>' }
-        </div>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:1px solid var(--line);">
-        <div>
-          <strong style="display:block;">Trading 212 API Key (交易账户)</strong>
-          <span style="font-size:12px;color:var(--muted)">用于同步持仓数据、平均买入成本和账户现金快照。</span>
-        </div>
-        <div>
-          { '<span class="market-status-badge" style="color:var(--positive);background:var(--positive-soft);border-color:var(--positive);"><div class="status-dot"></div> 已设置</span>' if t212_set else '<span class="market-status-badge" style="color:var(--negative);background:var(--negative-soft);border-color:var(--negative);"><div class="status-dot danger"></div> 未配置</span>' }
-        </div>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <strong style="display:block;">DeepSeek API Key (AI 分析)</strong>
-          <span style="font-size:12px;color:var(--muted)">用于 AI 组合总结、风险诊断、收益归因和情景分析。</span>
-        </div>
-        <div>
-          { '<span class="market-status-badge" style="color:var(--positive);background:var(--positive-soft);border-color:var(--positive);"><div class="status-dot"></div> 已设置</span>' if deepseek_set else '<span class="market-status-badge" style="color:var(--negative);background:var(--negative-soft);border-color:var(--negative);"><div class="status-dot danger"></div> 未配置</span>' }
-        </div>
-      </div>
+    <div style="display:flex;flex-direction:column;gap:16px;padding:0 var(--sp-xl) var(--sp-xl);">
+      {key_row("TRADING212_API_KEY", "Trading 212 API Key", "同步持仓、平均成本、账户现金", t212_set)}
+      {key_row("FMP_API_KEY", "FMP API Key (Financial Modeling Prep)", "美股 P/E、P/S、EPS 成长率估值", fmp_set)}
+      {key_row("FINNHUB_API_KEY", "Finnhub API Key", "备用估值接口，FMP 缺失时自动切换", finnhub_set)}
+      {key_row("DEEPSEEK_API_KEY", "DeepSeek API Key", "AI 组合分析、风险诊断、策略评价", deepseek_set)}
+      {key_row("MASSIVE_API_KEY", "Massive API Key", "盘后异动、期权链快照（可选）", massive_set)}
+      {key_row("FRED_API_KEY", "FRED API Key (St. Louis Fed)", "宏观利率、通胀数据（可选）", fred_set, border=False)}
     </div>
+    <div id="keyStatus" style="padding:0 var(--sp-xl) var(--sp-xl);font-size:var(--text-sm);display:none;"></div>
   </div>
 
   <div class="v4-card">
@@ -200,6 +187,36 @@ def settings_page():
 </div>
 
 <script>
+  async function saveKey(envName, btn) {{
+    const input = document.getElementById('input_' + envName);
+    const value = input.value.trim();
+    if (!value) return;
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+    try {{
+      const res = await fetch('/api/settings/save-key', {{
+        method: 'POST',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify({{name: envName, value}})
+      }});
+      const data = await res.json();
+      if (data.ok) {{
+        input.value = '';
+        input.placeholder = '已设置，留空则不修改';
+        const badge = document.getElementById('badge_' + envName);
+        badge.innerHTML = '<span class="market-status-badge" style="color:var(--positive);background:var(--positive-soft);border-color:var(--positive);white-space:nowrap"><div class="status-dot"></div> 已设置</span>';
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> 已保存';
+        setTimeout(() => {{ btn.innerHTML = orig; btn.disabled = false; }}, 2000);
+      }} else {{
+        btn.innerHTML = '<i class="fa-solid fa-xmark"></i> 失败';
+        setTimeout(() => {{ btn.innerHTML = orig; btn.disabled = false; }}, 2000);
+      }}
+    }} catch(e) {{
+      btn.innerHTML = orig; btn.disabled = false;
+    }}
+  }}
+
   async function triggerRefresh(type) {{
     const statusEl = document.getElementById("settingsStatus");
     statusEl.className = "status";
@@ -255,4 +272,25 @@ def settings_page():
   }}
 </script>
 """
-    return HTMLResponse(wrap_v4_layout("系统设置", content, "/settings"))
+    return HTMLResponse(wrap_v4_layout("系统设置", content, "/settings", get_lang(request)))
+
+
+_ALLOWED_KEYS = {
+    "TRADING212_API_KEY", "FMP_API_KEY", "FINNHUB_API_KEY",
+    "DEEPSEEK_API_KEY", "MASSIVE_API_KEY", "FRED_API_KEY",
+}
+
+@router.post("/api/settings/save-key")
+async def save_key_api(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "invalid JSON"}, status_code=400)
+    name = str(body.get("name", "")).strip()
+    value = str(body.get("value", "")).strip()
+    if name not in _ALLOWED_KEYS:
+        return JSONResponse({"ok": False, "error": "unknown key"}, status_code=400)
+    if not value:
+        return JSONResponse({"ok": False, "error": "empty value"})
+    ok = save_secret(name, value)
+    return JSONResponse({"ok": ok})
