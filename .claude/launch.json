@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "helm",
+      "runtimeExecutable": "v3_backend/.venv/bin/uvicorn",
+      "runtimeArgs": ["app.main:app", "--app-dir", "v3_backend", "--host", "127.0.0.1", "--port", "8799"],
+      "port": 8799
+    }
+  ]
+}

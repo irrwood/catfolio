@@ -1,0 +1,52 @@
+# Portfolio Analysis v3 Backend
+
+本地 FastAPI 后端，第一版先把 v2 的核心数据服务化。
+
+## 启动
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --host 127.0.0.1 --port 8787 --reload
+```
+
+## 常用接口
+
+- `GET /api/portfolio/summary`
+- `GET /api/holdings`
+- `GET /api/etf-lookthrough?basis=cost`
+- `GET /api/etf-lookthrough?basis=market`
+- `GET /api/chart/exposure`
+- `GET /api/chart/pnl`
+- `GET /api/market/live`
+- `POST /api/refresh/market`
+- `POST /api/refresh/trading212`
+- `GET /lab`
+- `GET /api/lab/history`
+- `POST /api/lab/refresh-history`
+- `GET /api/lab/efficient-frontier`
+- `GET /api/lab/monte-carlo`
+- `GET /api/lab/backtest`
+- `GET /api/lab/factor-analysis`
+- `GET /report`
+
+Trading 212 凭证继续从 macOS Keychain 或环境变量读取，不写入 HTML 或 JSON 输出。
+
+## 刷新策略
+
+- Trading 212：手动刷新，更新持仓、现金、平均成本和账户快照。
+- 行情价格：可更频繁刷新，默认写入 `outputs/portfolio_analysis_v2/live_market_data.json` 缓存。
+- 行情缓存默认 60 秒内复用，避免过度请求外部行情接口。
+
+## Portfolio Lab
+
+`/lab` 提供第一版 Portfolio Visualizer 类功能：
+
+- 历史净值和基准回测
+- Efficient Frontier
+- Monte Carlo
+- Factor Analysis
+- Max Sharpe / Min Volatility 优化组合
+
+当前版本用 Yahoo Finance 日线历史价格，并缓存到 `outputs/portfolio_analysis_v2/lab_history_data.json`。因子分析使用 ETF proxy（SPY、QQQ、IWM、VEU、GLD）做近似单因子回归。

@@ -1,0 +1,182 @@
+"""Shared UI components used across route modules."""
+
+import time as _time
+from datetime import datetime, timezone
+from pathlib import Path
+from app.data_store import current_snapshot
+
+def wrap_v4_layout(title: str, content: str, active_page: str) -> str:
+    try:
+        snapshot = current_snapshot()
+        trading_unix = snapshot["trading212"].get("as_of_unix")
+        market_unix = snapshot["market"].get("as_of_unix")
+        fundamentals_unix = snapshot["fundamentals"].get("as_of_unix")
+    except Exception:
+        trading_unix = market_unix = fundamentals_unix = None
+
+    def fmt_time(val):
+        if not val:
+            return "未刷新"
+        return datetime.fromtimestamp(int(val), tz=timezone.utc).astimezone().strftime("%H:%M")
+
+    nav_links = [
+        ("/", "数据控制台", "fa-chart-pie"),
+        ("/lab", "Portfolio Lab", "fa-flask"),
+        ("/backtest", "回测与优化", "fa-calculator"),
+        ("/returns", "收益对比", "fa-chart-line"),
+        ("/heatmap", "持仓热力图", "fa-border-all"),
+        ("/report", "审计报表", "fa-file-invoice-dollar"),
+        ("/ai", "AI 分析", "fa-robot"),
+        ("/settings", "系统设置", "fa-sliders")
+    ]
+    
+    links_html = ""
+    for href, label, icon in nav_links:
+        is_active = "active" if href == active_page else ""
+        links_html += f'<a class="nav-link {is_active}" href="{href}"><span class="nav-link-icon"><i class="fa-solid {icon}"></i></span>{label}</a>'
+
+    html = f"""<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{title} · Helm</title>
+  <script>
+    // Apply saved theme BEFORE page renders to prevent flash
+    if (localStorage.getItem("theme") === "light") {{
+      document.documentElement.classList.add("light-theme");
+    }}
+  </script>
+  <link rel="stylesheet" href="/static/v4.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+  <div class="v4-shell">
+    <aside class="v4-sidebar">
+      <a class="sidebar-brand" href="/">
+        <div class="brand-icon"><i class="fa-solid fa-compass"></i></div>
+        <div class="brand-text">
+          <span class="brand-name">Helm</span>
+          <span class="brand-version">投资指挥中心</span>
+        </div>
+      </a>
+      
+      <nav class="sidebar-nav">
+        {links_html}
+      </nav>
+      
+      <div class="sidebar-footer">
+        <button class="theme-toggle-btn" id="themeToggleBtn">
+          <i class="fa-solid fa-moon"></i> <span>深色模式</span>
+        </button>
+        
+        <div class="sidebar-status-card">
+          <div style="font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+            <div class="status-dot"></div> 数据同步状态
+          </div>
+          <div class="sidebar-status-item"><span>Trading 212:</span> <strong>{fmt_time(trading_unix)}</strong></div>
+          <div class="sidebar-status-item"><span>Yahoo 行情:</span> <strong>{fmt_time(market_unix)}</strong></div>
+          <div class="sidebar-status-item"><span>FMP 估值:</span> <strong>{fmt_time(fundamentals_unix)}</strong></div>
+        </div>
+      </div>
+    </aside>
+    
+    <div class="v4-main">
+      <header class="v4-topbar">
+        <div class="topbar-left">
+          <button class="menu-toggle" id="menuToggleBtn" aria-label="Toggle Navigation"><i class="fa-solid fa-bars"></i></button>
+          <div class="topbar-page-title">{title}</div>
+        </div>
+        <div class="topbar-right">
+          <span class="market-status-badge">
+            <div class="status-dot"></div> 账户已连接
+          </span>
+        </div>
+      </header>
+      
+      <div class="v4-content">
+        {content}
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    const html = document.documentElement;
+    const themeToggleBtn = document.getElementById("themeToggleBtn");
+
+    if (localStorage.getItem("theme") === "light") {{
+      html.classList.add("light-theme");
+      themeToggleBtn.innerHTML = '<i class="fa-solid fa-sun"></i> <span>浅色模式</span>';
+    }} else {{
+      themeToggleBtn.innerHTML = '<i class="fa-solid fa-moon"></i> <span>深色模式</span>';
+    }}
+
+    themeToggleBtn.addEventListener("click", () => {{
+      html.classList.toggle("light-theme");
+      if (html.classList.contains("light-theme")) {{
+        localStorage.setItem("theme", "light");
+        themeToggleBtn.innerHTML = '<i class="fa-solid fa-sun"></i> <span>浅色模式</span>';
+      }} else {{
+        localStorage.setItem("theme", "dark");
+        themeToggleBtn.innerHTML = '<i class="fa-solid fa-moon"></i> <span>深色模式</span>';
+      }}
+    }});
+    
+    const menuToggleBtn = document.getElementById("menuToggleBtn");
+    const sidebar = document.querySelector(".v4-sidebar");
+    
+    menuToggleBtn?.addEventListener("click", (e) => {{
+      e.stopPropagation();
+      sidebar.classList.toggle("open");
+    }});
+    
+    document.addEventListener("click", (e) => {{
+      if (sidebar.classList.contains("open") && !sidebar.contains(e.target) && e.target !== menuToggleBtn) {{
+        sidebar.classList.remove("open");
+      }}
+    }});
+  </script>
+</body>
+</html>"""
+    return html
+
+
+
+
+
+def data_health_bar(snapshot) -> str:
+    """Render a compact data-health indicator bar."""
+    trading_unix = snapshot["trading212"].get("as_of_unix")
+    market_unix = snapshot["market"].get("as_of_unix")
+    fundamentals_unix = snapshot["fundamentals"].get("as_of_unix")
+    fund_rows = len(snapshot["fundamentals"].get("rows", []))
+    market_rows = len(snapshot["market"].get("rows", []))
+    trading_positions = len(snapshot["trading212"].get("positions", []))
+
+    def age_class(unix_val, max_age_sec):
+        if not unix_val:
+            return "stale"
+        age = max(0, int(_time.time()) - int(unix_val))
+        if age < max_age_sec:
+            return "fresh"
+        return "stale"
+
+    t212_class = age_class(trading_unix, 3600)
+    market_class = age_class(market_unix, 120)
+    fund_class = age_class(fundamentals_unix, 12 * 3600)
+
+    def fmt_age(val):
+        if not val:
+            return "未刷新"
+        age = max(0, int(_time.time()) - int(val))
+        if age < 60:
+            return f"{age}秒"
+        if age < 3600:
+            return f"{age//60}分钟"
+        return f"{age//3600}小时"
+
+    return f"""<div class="data-health-bar">
+  <span class="dh-item {t212_class}"><span class="dh-dot"></span> 持仓 ({trading_positions}个, {fmt_age(trading_unix)})</span>
+  <span class="dh-item {market_class}"><span class="dh-dot"></span> 行情 ({market_rows}只, {fmt_age(market_unix)})</span>
+  <span class="dh-item {fund_class}"><span class="dh-dot"></span> 估值 ({fund_rows}只, {fmt_age(fundamentals_unix)})</span>
+</div>"""

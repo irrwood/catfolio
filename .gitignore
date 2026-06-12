@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Data outputs (contains personal portfolio data)
+outputs/
+
+# Environment secrets
+.env
+
+# Node (node_modules here is a machine-local symlink)
+node_modules
+
+# Claude Code local per-user settings
+**/settings.local.json
+
+# Logs
+*.log
+/tmp/
