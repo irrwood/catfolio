@@ -1,0 +1,14 @@
+  .ai-compare-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .ai-compare-card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .ai-compare-head { padding: 10px 14px; font-weight: 700; font-size: 13px; border-bottom: 1px solid var(--line); background: var(--bg); }
+  .ai-compare-head span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .ai-compare-body { display: grid; grid-template-rows: auto auto; }
+  .ai-col { padding: 10px 14px; }
+  .ai-col + .ai-col { border-top: 1px solid var(--line); }
+  .ai-col-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+  .ai-col p { font-size: 13px; line-height: 1.5; color: var(--text); margin: 0; }
+  .ai-review-box { background: var(--surface); border: 1px solid var(--accent); border-radius: 10px; padding: 16px; margin-top: 4px; }
+  .ai-review-head { font-weight: 700; font-size: 13px; margin-bottom: 8px; color: var(--accent); }
+  .ai-review-box p { font-size: 13px; line-height: 1.6; color: var(--text); margin: 0; }
+  @media (max-width: 900px) { .ai-compare-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 500px) { .ai-compare-grid { grid-template-columns: 1fr; } }
