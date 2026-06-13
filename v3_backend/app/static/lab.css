@@ -274,15 +274,16 @@
 
 /* ── Per-card AI 解读 ─────────────────────────────────────────── */
 .ai-card-btn {
-    display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 11px;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; padding: 0; flex: none;
     border: 1px solid var(--line); border-radius: 999px; background: var(--soft);
-    color: var(--muted); font-size: 11px; font-weight: 650; cursor: pointer;
-    font-family: inherit; white-space: nowrap; flex: none;
+    color: var(--muted); cursor: pointer; font-family: inherit;
     transition: border-color .12s, color .12s, background .12s;
 }
-.ai-card-btn:hover { border-color: var(--accent); color: var(--accent); }
-.ai-card-btn i { font-size: 11px; }
+.ai-card-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.ai-card-btn i { font-size: 13px; }
 .ai-card-btn:disabled { opacity: .6; cursor: wait; }
+.ai-card-result .ai-card-tag i { font-size: 13px; }
 .ai-card-result {
     margin-top: 12px; border: 1px solid var(--line); border-radius: 12px;
     padding: 12px 14px; font-size: 12.5px; line-height: 1.6; color: var(--ink-secondary);

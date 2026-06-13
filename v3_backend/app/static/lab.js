@@ -757,7 +757,9 @@
     const btn = document.createElement("button");
     btn.className = "ai-card-btn";
     btn.style.marginLeft = "auto";
-    btn.innerHTML = '<i class="fa-solid fa-robot"></i> AI 解读';
+    btn.title = "AI 解读";
+    btn.setAttribute("aria-label", "AI 解读");
+    btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i>';
     head.appendChild(btn);
 
     const result = document.createElement("div");
@@ -774,7 +776,7 @@
       btn.disabled = true;
       try {
         const data = await ask(`请解读我投资组合页面上的「${title}」这张图表，结合我的实际持仓数据，指出关键发现和需要注意的点。3-4 句话，直接说结论，不要客套。`);
-        result.innerHTML = '<span class="ai-card-tag"><i class="fa-solid fa-robot"></i> AI 解读</span>' + esc(data.answer);
+        result.innerHTML = '<span class="ai-card-tag"><i class="fa-solid fa-wand-magic-sparkles"></i></span>' + esc(data.answer);
         loaded = true;
       } catch (e) {
         result.classList.add("err");
