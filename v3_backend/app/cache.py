@@ -13,32 +13,44 @@ Usage:
     clear_all()
 """
 
+import threading
 import time
 from functools import wraps
 
 _store: dict[str, tuple[float, object]] = {}
+# Sync routes run in Starlette's threadpool, so _store can be touched by
+# concurrent threads. Dict ops are atomic under the GIL, but the lock guards
+# the read/expiry/write critical section. Function execution happens OUTSIDE
+# the lock, so parallel cache misses still compute in parallel (a brief double
+# compute on a miss is harmless and far cheaper than serializing all work).
+_lock = threading.Lock()
 
 
-def cached(ttl: float = 300):
-    """Decorator: cache function result for `ttl` seconds."""
+def cached(ttl: float = 300, key=None):
+    """Decorator: cache function result for `ttl` seconds.
+
+    Pass `key=lambda *a, **kw: ...` to derive the cache key from the arguments —
+    use this when an arg is large/unhashable (e.g. the snapshot dict) so the key
+    stays small instead of stringifying the whole object.
+    """
 
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            # Build a cache key from function name + args + kwargs
-            key_parts = [func.__name__]
-            key_parts.append(str(args))
-            key_parts.append(str(sorted(kwargs.items())))
-            key = ":".join(key_parts)
+            if key is not None:
+                cache_key = f"{func.__name__}:{key(*args, **kwargs)}"
+            else:
+                cache_key = ":".join([func.__name__, str(args), str(sorted(kwargs.items()))])
 
             now = time.time()
-            if key in _store:
-                expiry, value = _store[key]
-                if now < expiry:
-                    return value
+            with _lock:
+                hit = _store.get(cache_key)
+                if hit is not None and now < hit[0]:
+                    return hit[1]
 
             result = func(*args, **kwargs)
-            _store[key] = (now + ttl, result)
+            with _lock:
+                _store[cache_key] = (now + ttl, result)
             return result
 
         wrapper.cache_clear = lambda: _clear_prefix(func.__name__)
@@ -49,14 +61,16 @@ def cached(ttl: float = 300):
 
 def _clear_prefix(prefix: str) -> None:
     """Clear all cache entries whose key starts with a given prefix."""
-    to_delete = [k for k in _store if k.startswith(prefix)]
-    for k in to_delete:
-        del _store[k]
+    with _lock:
+        to_delete = [k for k in _store if k.startswith(prefix)]
+        for k in to_delete:
+            del _store[k]
 
 
 def clear_all() -> None:
     """Clear the entire cache. Call after any data refresh."""
-    _store.clear()
+    with _lock:
+        _store.clear()
 
 
 def cache_size() -> int:

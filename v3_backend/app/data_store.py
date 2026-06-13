@@ -15,6 +15,7 @@ del _env_path
 
 import ssl
 import subprocess
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -90,7 +91,29 @@ def open_json(url):
             return json.loads(response.read().decode("utf-8"))
 
 
+_secret_cache: dict = {}
+_secret_lock = threading.Lock()
+
+
 def secret_value(name):
+    """Read a secret, memoized in-process.
+
+    The underlying read forks a `security` subprocess on macOS (~33 ms each),
+    so without this cache a single page render that checks several keys (e.g.
+    Settings reads ~10, the home-page alert check reads 2 even when Telegram is
+    unconfigured) pays that cost repeatedly. Both found values and misses (None)
+    are cached; save_secret() updates the cache so newly-saved keys are seen.
+    """
+    with _secret_lock:
+        if name in _secret_cache:
+            return _secret_cache[name]
+    value = _read_secret(name)
+    with _secret_lock:
+        _secret_cache[name] = value
+    return value
+
+
+def _read_secret(name):
     """Read a secret from environment, system keychain, or keyring library.
 
     On macOS the security CLI is used directly — it was already granted Keychain
@@ -126,16 +149,21 @@ def secret_value(name):
 def save_secret(name: str, value: str) -> bool:
     """Persist a secret to the system keychain (macOS) or keyring library (Linux/Windows)."""
     import platform
+    ok = False
     if platform.system() == "Darwin":
         _keychain_save(name, value, "com.helm.portfolio")
-        return True
+        ok = True
     else:
         try:
             import keyring as _kr
             _kr.set_password("com.helm.portfolio", name, value)
-            return True
+            ok = True
         except Exception:
-            return False
+            ok = False
+    if ok:
+        with _secret_lock:
+            _secret_cache[name] = value
+    return ok
 
 
 def _keychain_get(account, service):

@@ -1,3 +1,12 @@
+from .cache import cached
+
+# These analytics are pure functions of the snapshot. The snapshot is itself
+# cached (~10s) and re-keyed by its loaded_at timestamp, so caching on that
+# timestamp lets the parallel /api/* calls a single page fires — plus the home
+# alert check and every AI call — reuse one computation instead of rebuilding
+# the same result. clear_all() on any data refresh invalidates these too.
+_snap_key = lambda snapshot, *a, **kw: snapshot.get("loaded_at", "")
+
 SP500_ETF_TICKERS = {"VUAG", "VUSA"}
 
 SECTOR_BY_TICKER = {
@@ -320,6 +329,7 @@ def display_name(ticker, name):
     return name or ticker
 
 
+@cached(ttl=30, key=_snap_key)
 def sector_concentration(snapshot):
     market = market_by_ticker(snapshot)
     total = sum(_num(row.get("market_value_usd")) for row in market.values())
@@ -335,6 +345,7 @@ def sector_concentration(snapshot):
     return {"rows": rows, "coverage_note": "Sector map is local and approximate for MVP."}
 
 
+@cached(ttl=30, key=_snap_key)
 def holdings_detail(snapshot):
     holdings = holdings_by_ticker(snapshot)
     market = market_by_ticker(snapshot)
@@ -366,6 +377,7 @@ def holdings_detail(snapshot):
     return {"rows": rows}
 
 
+@cached(ttl=30, key=_snap_key)
 def pnl_contribution(snapshot):
     rows = chart_pnl(snapshot)["rows"]
     total_abs = sum(abs(_num(row.get("unrealized_usd"))) for row in rows)
@@ -400,6 +412,7 @@ def _calc_ytd_return(prices):
     return (latest / past - 1) * 100 if past else None
 
 
+@cached(ttl=30, key=_snap_key)
 def holdings_heatmap(snapshot):
     detail = holdings_detail(snapshot)["rows"]
     holdings = holdings_by_ticker(snapshot)
