@@ -724,3 +724,64 @@
             body: JSON.stringify({ message: error.message, stack: error.stack })
         }).catch(() => {});
     });
+
+// ── Per-card AI 解读 ────────────────────────────────────────────────────────
+// Injects an "AI 解读" button into every analysis card's header. Clicking asks
+// the AI to interpret that specific chart (grounded in the live portfolio data
+// via /api/ai/ask). Results render inline in the card; re-clicking toggles.
+(function () {
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+  async function ask(question) {
+    const res = await fetch("/api/ai/ask", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    });
+    if (!res.ok) {
+      throw new Error(res.status === 500
+        ? "请先在「设置」页配置 AI API Key（DeepSeek 或 Grok）"
+        : `HTTP ${res.status}`);
+    }
+    return res.json();
+  }
+
+  const cards = Array.from(document.querySelectorAll(".command-card, .daily-pnl-panel"));
+  cards.forEach((card) => {
+    if (card.querySelector("#pnlCalendar")) return;            // calendar has its own controls
+    const head = card.querySelector(".chart-head, .daily-pnl-head");
+    if (!head || head.querySelector(".ai-card-btn")) return;
+    const titleEl = head.querySelector("h2, .daily-pnl-title");
+    const title = (titleEl?.textContent || "").trim();
+    if (!title) return;
+
+    const btn = document.createElement("button");
+    btn.className = "ai-card-btn";
+    btn.style.marginLeft = "auto";
+    btn.innerHTML = '<i class="fa-solid fa-robot"></i> AI 解读';
+    head.appendChild(btn);
+
+    const result = document.createElement("div");
+    result.className = "ai-card-result";
+    result.hidden = true;
+    card.appendChild(result);
+
+    let loaded = false;
+    btn.addEventListener("click", async () => {
+      if (loaded) { result.hidden = !result.hidden; return; }   // toggle once loaded
+      result.hidden = false;
+      result.classList.remove("err");
+      result.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> AI 正在解读…';
+      btn.disabled = true;
+      try {
+        const data = await ask(`请解读我投资组合页面上的「${title}」这张图表，结合我的实际持仓数据，指出关键发现和需要注意的点。3-4 句话，直接说结论，不要客套。`);
+        result.innerHTML = '<span class="ai-card-tag"><i class="fa-solid fa-robot"></i> AI 解读</span>' + esc(data.answer);
+        loaded = true;
+      } catch (e) {
+        result.classList.add("err");
+        result.innerHTML = "AI 解读失败：" + esc(e.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+})();
