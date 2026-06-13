@@ -1,0 +1,40 @@
+  #twrMode.active, #cfMirrorMode.active, #costValueMode.active { background: var(--panel); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  .returns-page {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .returns-page .v4-hero {
+    align-items: center;
+    gap: 16px;
+  }
+  .returns-page .v4-hero-text h1 {
+    margin-bottom: 4px;
+  }
+  .returns-page .v4-hero-text p {
+    line-height: 1.45;
+  }
+  .returns-page .returns-summary-grid {
+    row-gap: 8px;
+  }
+  .returns-page .metric-card {
+    padding: 14px 18px;
+    gap: 6px;
+  }
+  .returns-page .returns-mode-card {
+    padding: 10px 14px !important;
+  }
+  .returns-page .v4-card {
+    padding: 16px 18px;
+  }
+  .returns-page .v4-card-header {
+    margin-bottom: 12px;
+  }
+  .returns-page .grid-2 {
+    gap: 12px;
+  }
+  .returns-page .table-wrap th,
+  .returns-page .table-wrap td {
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
