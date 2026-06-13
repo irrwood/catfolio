@@ -1,0 +1,116 @@
+{v2_css}
+
+    /* V2 compatibility — map to v4 variables */
+    :root {
+      --positive-bg: var(--positive-soft);
+      --negative-bg: var(--negative-soft);
+      --caution: var(--warn); --caution-bg: var(--warn-soft);
+      --info: var(--accent); --info-bg: var(--accent-soft);
+    }
+    /* Dark theme overrides for V2 elements */
+    .pill { background: var(--soft) !important; color: var(--muted) !important; border-color: var(--line) !important; }
+    .source-yahoo { background: var(--accent-soft) !important; color: var(--accent) !important; border-color: var(--accent) !important; }
+    .source-finnhub { background: var(--accent-soft) !important; color: var(--accent) !important; border-color: var(--accent) !important; }
+    .source-massive { background: var(--positive-soft) !important; color: var(--positive) !important; border-color: var(--positive) !important; }
+    .source-option { background: var(--warn-soft) !important; color: var(--warn) !important; border-color: var(--warn) !important; }
+    
+    .section-head {
+      background: var(--panel-raised) !important;
+      border-bottom: 1px solid var(--line) !important;
+    }
+    .section-head h2 { color: var(--ink) !important; }
+    
+    table { color: var(--ink) !important; }
+    th {
+      color: var(--muted) !important;
+      background: var(--panel-raised) !important;
+      border-bottom: 1px solid var(--line) !important;
+    }
+    td {
+      border-color: var(--line) !important;
+      color: var(--ink) !important;
+    }
+    tr:hover td { background: var(--panel-hover) !important; }
+    .num-muted { color: var(--muted) !important; }
+    
+    .insight { background: var(--panel) !important; border-color: var(--line) !important; }
+    .insight.positive { background: var(--positive-soft) !important; border-color: var(--positive) !important; }
+    .insight.info { background: var(--accent-soft) !important; border-color: var(--accent) !important; }
+    .insight.caution { background: var(--warn-soft) !important; border-color: var(--warn) !important; }
+    .insight.negative { background: var(--negative-soft) !important; border-color: var(--negative) !important; }
+    .insight b { color: var(--ink) !important; }
+    .insight ul { color: var(--muted) !important; }
+    .note { color: var(--muted) !important; }
+    .warn { color: var(--warn) !important; background: var(--warn-soft) !important; border-color: var(--warn) !important; }
+    
+    input, select {
+      border: 1px solid var(--line) !important;
+      background: var(--panel) !important;
+      color: var(--ink) !important;
+    }
+    input:focus, select:focus {
+      border-color: var(--accent) !important;
+      outline: none !important;
+    }
+    
+    section {
+      background: var(--panel) !important;
+      border: 1px solid var(--line) !important;
+      box-shadow: var(--shadow-sm) !important;
+      border-radius: var(--radius-xl) !important;
+      /* Was capped at 1180px — let it fill the same 1520px column as every other
+         page (.v4-content) so the report aligns in width with the rest of the app. */
+      max-width: none !important;
+      margin: 0 0 16px !important;
+    }
+
+    /* Fix: .insights is a 3-col grid that defaults to align-items:stretch, so a
+       single long card (e.g. the per-ticker valuation list) forced its short
+       neighbours to stretch into tall empty bordered columns. Size to content. */
+    .insights { align-items: start !important; }
+    /* Give the cramped per-ticker valuation lines room to breathe. */
+    .insight li { line-height: 1.7 !important; padding: 1px 0 !important; }
+    
+    .currency-box {
+      border-right: 1px solid var(--line) !important;
+      background: var(--panel-raised) !important;
+    }
+    .currency-box span { color: var(--muted) !important; }
+    .currency-box b { color: var(--ink) !important; }
+    
+    .top-item {
+      border: 1px solid var(--line) !important;
+      background: var(--panel) !important;
+      border-radius: var(--radius-md) !important;
+    }
+    .ticker { color: var(--ink) !important; }
+    .name { color: var(--muted) !important; }
+    
+    .bar-track {
+      background: var(--panel-hover) !important;
+      border: 1px solid var(--line) !important;
+    }
+    .bar-fill {
+      background: var(--accent) !important;
+    }
+    
+    .report-nav {
+      background: var(--panel) !important;
+      border-bottom: 1px solid var(--line) !important;
+    }
+    .nav-wrap a {
+      border: 1px solid var(--line) !important;
+      color: var(--muted) !important;
+      background: var(--soft) !important;
+    }
+    .nav-wrap a:hover {
+      color: var(--ink) !important;
+      border-color: var(--line-strong) !important;
+    }
+
+    .audit-note {
+      margin: 0 0 16px; padding: 12px 16px;
+      border: 1px solid var(--line); border-radius: var(--radius-lg);
+      color: var(--muted); background: var(--panel-raised);
+      font-size: 13px; line-height: 1.5;
+    }
