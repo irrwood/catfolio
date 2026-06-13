@@ -1,0 +1,20 @@
+  .strat-field { display:flex; flex-direction:column; gap:4px; font-size:11px; color:var(--muted); font-weight:600; }
+  .strat-field input, .strat-field select {
+    height:34px; padding:0 10px; border:1px solid var(--line); border-radius:var(--radius-md);
+    background:var(--soft); color:var(--ink); font-size:13px; font-family:var(--font-sans);
+  }
+  #f_code {
+    width:100%; min-height:300px; box-sizing:border-box; resize:vertical;
+    background:var(--bg); color:var(--ink); border:1px solid var(--line); border-radius:var(--radius-md);
+    padding:14px; font-family:var(--font-mono); font-size:13px; line-height:1.6; tab-size:4;
+  }
+  .run-item { padding:8px 10px; border:1px solid var(--line); border-radius:var(--radius-md); cursor:pointer; background:var(--soft); }
+  .run-item:hover { border-color:var(--line-strong); }
+  .run-item.active { border-color:var(--accent); background:var(--accent-soft); }
+  .run-item .rn { font-size:12px; font-weight:650; color:var(--ink); display:flex; justify-content:space-between; gap:6px; }
+  .run-item .rm { font-size:11px; color:var(--muted); margin-top:3px; }
+  .run-del { color:var(--muted); cursor:pointer; }
+  .run-del:hover { color:var(--negative); }
+  .metric-box { background:var(--soft); border:1px solid var(--line); border-radius:var(--radius-lg); padding:12px 14px; }
+  .metric-box .ml { font-size:11px; color:var(--muted); font-weight:650; }
+  .metric-box .mv { font-size:20px; font-weight:720; margin-top:4px; font-family:var(--font-mono); }
