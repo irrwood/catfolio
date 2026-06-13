@@ -148,18 +148,74 @@ def report(request: Request):
       background: var(--accent) !important;
     }}
     
+    /* Claude-style vertical table-of-contents rail */
     .report-nav {{
+      position: fixed !important;
+      top: 84px; left: 72px;
+      width: 184px;
+      max-height: calc(100vh - 108px);
+      overflow-y: auto;
       background: var(--panel) !important;
-      border-bottom: 1px solid var(--line) !important;
+      border: 1px solid var(--line) !important;
+      border-radius: 14px;
+      backdrop-filter: none !important;
+      padding: 8px;
+      z-index: 30;
+    }}
+    .nav-wrap {{
+      max-width: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 2px !important;
+      overflow: visible !important;
     }}
     .nav-wrap a {{
-      border: 1px solid var(--line) !important;
+      flex: none !important;
+      display: flex !important;
+      align-items: center;
+      gap: 10px;
+      height: auto !important;
+      padding: 8px 10px !important;
+      border: 0 !important;
+      border-radius: 8px !important;
+      background: transparent !important;
       color: var(--muted) !important;
-      background: var(--soft) !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+    }}
+    .nav-wrap a::before {{
+      content: "";
+      flex: none;
+      width: 14px;
+      height: 2px;
+      border-radius: 2px;
+      background: currentColor;
+      opacity: 0.45;
     }}
     .nav-wrap a:hover {{
+      background: var(--soft) !important;
       color: var(--ink) !important;
-      border-color: var(--line-strong) !important;
+    }}
+    .nav-wrap a:hover::before {{ opacity: 0.85; }}
+    .nav-wrap a.active {{
+      background: var(--soft) !important;
+      color: var(--ink) !important;
+      font-weight: 700 !important;
+    }}
+    .nav-wrap a.active::before {{ width: 16px; opacity: 1; }}
+    main {{ padding-left: 232px !important; }}
+    @media (max-width: 1024px) {{
+      .report-nav {{
+        position: static !important;
+        width: auto; max-height: none;
+        border-radius: 0; border: 0 !important;
+        border-bottom: 1px solid var(--line) !important;
+      }}
+      .nav-wrap {{ flex-direction: row !important; flex-wrap: wrap; }}
+      .nav-wrap a::before {{ display: none; }}
+      main {{ padding-left: 28px !important; }}
     }}
 
     .audit-note {{
@@ -171,6 +227,7 @@ def report(request: Request):
 </style>
 <div class="audit-note">这是审计报表：保留完整成本、账户对账、收入统计和导出。组合决策、风险、估值和模型分析请使用 Portfolio Lab。</div>
 {body}
+<script src="/static/report_nav.js"></script>
 """
     return HTMLResponse(wrap_v4_layout("审计报表", content, "/report", get_lang(request)))
 
