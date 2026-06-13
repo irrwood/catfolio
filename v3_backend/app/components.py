@@ -6,7 +6,7 @@ from pathlib import Path
 from app.data_store import current_snapshot
 from app.i18n import t_block
 
-def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh") -> str:
+def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh", head_extra: str = "") -> str:
     try:
         snapshot = current_snapshot()
         trading_unix = snapshot["trading212"].get("as_of_unix")
@@ -55,6 +55,7 @@ def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh")
   </script>
   <link rel="stylesheet" href="/static/v4.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  {head_extra}
 </head>
 <body>
   <div class="v4-shell">
