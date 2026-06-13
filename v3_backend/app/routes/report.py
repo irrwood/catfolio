@@ -148,19 +148,26 @@ def report(request: Request):
       background: var(--accent) !important;
     }}
     
-    /* Claude-style vertical table-of-contents rail */
+    /* Floating Claude-style TOC — collapsed to dashes, expands on hover */
     .report-nav {{
       position: fixed !important;
-      top: 84px; left: 72px;
-      width: 184px;
-      max-height: calc(100vh - 108px);
-      overflow-y: auto;
-      background: var(--panel) !important;
-      border: 1px solid var(--line) !important;
+      top: 50%; left: 64px;
+      transform: translateY(-50%);
+      z-index: 40;
+      width: auto !important;
+      max-height: calc(100vh - 120px);
+      overflow: visible !important;
+      background: transparent !important;
+      border: 0 !important;
       border-radius: 14px;
       backdrop-filter: none !important;
-      padding: 8px;
-      z-index: 30;
+      padding: 8px 6px;
+      transition: background .15s ease, box-shadow .15s ease, border-color .15s ease;
+    }}
+    .report-nav:hover {{
+      background: var(--panel) !important;
+      border: 1px solid var(--line) !important;
+      box-shadow: var(--shadow-md);
     }}
     .nav-wrap {{
       max-width: none !important;
@@ -168,52 +175,56 @@ def report(request: Request):
       padding: 0 !important;
       display: flex !important;
       flex-direction: column !important;
-      gap: 2px !important;
+      gap: 4px !important;
       overflow: visible !important;
     }}
     .nav-wrap a {{
       flex: none !important;
       display: flex !important;
       align-items: center;
-      gap: 10px;
+      gap: 0 !important;
       height: auto !important;
-      padding: 8px 10px !important;
+      padding: 7px 8px !important;
       border: 0 !important;
       border-radius: 8px !important;
       background: transparent !important;
       color: var(--muted) !important;
-      font-size: 13px !important;
+      font-size: 0 !important;            /* collapsed: label hidden */
       font-weight: 600 !important;
+      white-space: nowrap;
+      text-decoration: none !important;
+      transition: color .12s ease, background .12s ease;
     }}
     .nav-wrap a::before {{
       content: "";
       flex: none;
-      width: 14px;
+      width: 18px;
       height: 2px;
       border-radius: 2px;
       background: currentColor;
-      opacity: 0.45;
+      opacity: 0.4;
+      transition: width .15s ease, opacity .15s ease, background .15s ease;
     }}
-    .nav-wrap a:hover {{
-      background: var(--soft) !important;
-      color: var(--ink) !important;
-    }}
+    .report-nav:hover .nav-wrap a {{ font-size: 13px !important; gap: 10px !important; }}
+    .nav-wrap a:hover {{ background: var(--soft) !important; color: var(--ink) !important; }}
     .nav-wrap a:hover::before {{ opacity: 0.85; }}
-    .nav-wrap a.active {{
-      background: var(--soft) !important;
-      color: var(--ink) !important;
-      font-weight: 700 !important;
-    }}
-    .nav-wrap a.active::before {{ width: 16px; opacity: 1; }}
-    main {{ padding-left: 232px !important; }}
+    .nav-wrap a.active {{ color: var(--ink) !important; font-weight: 700 !important; }}
+    .report-nav:hover .nav-wrap a.active {{ background: var(--soft) !important; }}
+    .nav-wrap a.active::before {{ width: 26px; opacity: 1; background: var(--ink); }}
+    main {{ padding-left: 52px !important; }}
     @media (max-width: 1024px) {{
       .report-nav {{
         position: static !important;
-        width: auto; max-height: none;
-        border-radius: 0; border: 0 !important;
+        transform: none !important;
+        top: auto; left: auto; max-height: none;
+        background: var(--panel) !important;
+        border: 0 !important;
         border-bottom: 1px solid var(--line) !important;
+        border-radius: 0; box-shadow: none !important;
+        padding: 9px 16px;
       }}
-      .nav-wrap {{ flex-direction: row !important; flex-wrap: wrap; }}
+      .nav-wrap {{ flex-direction: row !important; flex-wrap: wrap; gap: 8px !important; }}
+      .nav-wrap a {{ font-size: 12px !important; gap: 8px !important; padding: 6px 10px !important; background: var(--soft) !important; border-radius: 999px !important; }}
       .nav-wrap a::before {{ display: none; }}
       main {{ padding-left: 28px !important; }}
     }}
