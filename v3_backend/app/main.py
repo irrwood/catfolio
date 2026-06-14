@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
@@ -22,6 +22,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
+
+
+@app.middleware("http")
+async def revalidate_static(request: Request, call_next):
+    """Force browsers to revalidate /static assets (ETag/304) instead of using a
+    stale heuristic cache. Without this, extracted CSS/JS get cached and updates
+    don't reach users until the cache expires."""
+    response = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 # Register route modules
 app.include_router(home.router)

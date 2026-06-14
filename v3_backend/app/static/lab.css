@@ -271,18 +271,19 @@
         .valuation-waterline-summary { grid-template-columns: minmax(0, 1fr); padding: 18px 16px; }
         .valuation-waterline-row { grid-template-columns: 54px minmax(0, 1fr) 68px; gap: 10px; min-height: 70px; padding: 0 16px; }
         .valuation-waterline-summary .kicker { font-size: 18px; }
+    }
 
 /* ── Per-card AI 解读 ─────────────────────────────────────────── */
 .ai-card-btn {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 28px; height: 28px; padding: 0; flex: none;
-    border: 1px solid var(--line); border-radius: 999px; background: var(--soft);
-    color: var(--muted); cursor: pointer; font-family: inherit;
-    transition: border-color .12s, color .12s, background .12s;
+    width: 26px; height: 26px; padding: 0; flex: none;
+    border: 0; border-radius: 8px; background: transparent;
+    color: var(--muted); opacity: .6; cursor: pointer; font-family: inherit;
+    transition: color .12s, background .12s, opacity .12s;
 }
-.ai-card-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
-.ai-card-btn i { font-size: 13px; }
-.ai-card-btn:disabled { opacity: .6; cursor: wait; }
+.ai-card-btn:hover { color: var(--accent); background: var(--accent-soft); opacity: 1; }
+.ai-card-btn:disabled { opacity: .35; cursor: wait; }
+.ai-card-btn i { font-size: 14px; }
 .ai-card-result .ai-card-tag i { font-size: 13px; }
 .ai-card-result {
     margin-top: 12px; border: 1px solid var(--line); border-radius: 12px;

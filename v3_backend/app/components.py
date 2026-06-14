@@ -1,10 +1,29 @@
 """Shared UI components used across route modules."""
 
+import re as _re
 import time as _time
 from datetime import datetime, timezone
 from pathlib import Path
 from app.data_store import current_snapshot
 from app.i18n import t_block
+
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+def _version_assets(html: str) -> str:
+    """Append ?v=<mtime> to every local /static/*.css|js URL so browsers refetch
+    whenever a file changes (cache-busting). Without this, extracted CSS/JS stay
+    cached and edits never reach users."""
+    def repl(match):
+        path = match.group(1)
+        rel = path[len("/static/"):]
+        try:
+            mtime = int((_STATIC_DIR / rel).stat().st_mtime)
+            return f"{path}?v={mtime}"
+        except OSError:
+            return path
+    return _re.sub(r'(/static/[^"?\s>]+\.(?:css|js))', repl, html)
+
 
 def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh", head_extra: str = "") -> str:
     try:
@@ -150,7 +169,7 @@ def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh",
   </script>
 </body>
 </html>"""
-    return t_block(html, lang)
+    return t_block(_version_assets(html), lang)
 
 
 
