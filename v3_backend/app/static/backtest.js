@@ -359,6 +359,22 @@
     return res.json();
   }
 
+  // Per-card focus so each card's AI answer addresses its own topic.
+  const AI_BASE = "用中文回答，3-4 句话，直接给结论、不要客套；只围绕本卡片的主题展开，避免重复其他卡片已讲过的仓位集中度/单票占比等泛泛内容。";
+  const AI_FOCUS = [
+    ["历史回测", "聚焦回测表现 vs 基准：年化收益、波动、夏普、最大回撤相比 SPY/QQQ 等是否划算，风险调整后收益如何"],
+    ["组合重建", "聚焦优化方向：当前组合相对优化组合的差距、哪些该加/该减、调仓是否值得"],
+    ["蒙特卡洛", "聚焦未来收益情景：乐观/中性/悲观区间有多宽、极端下行风险有多大"],
+    ["决策摘要", "给出总体决策建议：当前组合最该关注、最该采取行动的 1-2 件事"],
+    ["因子分析", "聚焦因子暴露：组合主要受哪些因子驱动（Beta、成长、动量等）、是否存在隐性的因子集中"],
+    ["优化组合", "聚焦优化结果：优化后组合相比当前的收益/风险改善、权重调整背后的逻辑"],
+  ];
+  function aiPrompt(title) {
+    const hit = AI_FOCUS.find(([k]) => title.includes(k));
+    const focus = hit ? hit[1] : `解读「${title}」中的关键信息`;
+    return `请基于我的真实持仓数据，${focus}。${AI_BASE}`;
+  }
+
   const panels = Array.from(document.querySelectorAll("section.panel"));
   panels.forEach((panel) => {
     if (panel.id === "aiComparisonSection") return;             // already AI
@@ -389,7 +405,7 @@
       result.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> AI 正在解读…';
       btn.disabled = true;
       try {
-        const data = await ask(`请解读我回测与优化页面上的「${title}」，结合我的实际持仓数据，指出关键发现和需要注意的点。3-4 句话，直接说结论，不要客套。`);
+        const data = await ask(aiPrompt(title));
         result.innerHTML = '<span class="ai-card-tag"><i class="fa-solid fa-wand-magic-sparkles"></i></span>' + esc(data.answer);
         loaded = true;
       } catch (e) {

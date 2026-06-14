@@ -745,6 +745,28 @@
     return res.json();
   }
 
+  // Per-card focus: steer the AI to THIS card's topic so answers don't all
+  // converge on the same generic concentration/NVDA summary.
+  const AI_BASE = "用中文回答，3-4 句话，直接给结论、不要客套；只围绕本图表的主题展开，避免重复其他图表已讲过的仓位集中度/单票占比等泛泛内容。";
+  const AI_FOCUS = [
+    ["集中度", "聚焦行业/板块集中度：最大的板块敞口是什么、是否过度集中于某行业、板块分散性如何"],
+    ["盈亏贡献", "聚焦盈亏来源：主要盈利来自哪几只、谁在拖累、盈亏是否集中在少数标的"],
+    ["估值矩阵", "聚焦估值：哪些持仓偏贵（高 P/E、低成长）、哪些便宜（低 P/E、高成长）、组合整体估值是否健康"],
+    ["相关性", "聚焦相关性与真实分散度：哪些标的高度同涨同跌、是否存在“假分散”"],
+    ["回撤", "聚焦下行风险：最大回撤幅度与持续时间、当前是否仍处于回撤、回撤控制是否合理"],
+    ["收益率分布", "聚焦日收益分布形态：日波动幅度、上涨/下跌天数比例、是否存在肥尾或极端单日"],
+    ["月度收益", "聚焦月度收益节奏：哪些月份强/弱、是否存在季节性、波动是否集中在特定月份"],
+    ["Waterfall", "聚焦当月收益归因：哪几只标的拉高、哪几只拖累了当月收益"],
+    ["归因", "聚焦当月收益归因：哪几只标的拉高、哪几只拖累了当月收益"],
+    ["累计收益", "聚焦相对基准的累计表现：跑赢还是跑输、主要发生在哪些阶段、超额收益是否稳定"],
+    ["持仓明细", "聚焦个股层面：仓位最大的几只、成本与现价偏离最大的、今日异动明显的标的"],
+  ];
+  function aiPrompt(title) {
+    const hit = AI_FOCUS.find(([k]) => title.includes(k));
+    const focus = hit ? hit[1] : `解读「${title}」中的关键信息`;
+    return `请基于我的真实持仓数据，${focus}。${AI_BASE}`;
+  }
+
   const cards = Array.from(document.querySelectorAll(".command-card, .daily-pnl-panel"));
   cards.forEach((card) => {
     if (card.querySelector("#pnlCalendar")) return;            // calendar has its own controls
@@ -775,7 +797,7 @@
       result.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> AI 正在解读…';
       btn.disabled = true;
       try {
-        const data = await ask(`请解读我投资组合页面上的「${title}」这张图表，结合我的实际持仓数据，指出关键发现和需要注意的点。3-4 句话，直接说结论，不要客套。`);
+        const data = await ask(aiPrompt(title));
         result.innerHTML = '<span class="ai-card-tag"><i class="fa-solid fa-wand-magic-sparkles"></i></span>' + esc(data.answer);
         loaded = true;
       } catch (e) {
