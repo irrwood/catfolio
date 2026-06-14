@@ -343,3 +343,61 @@
     } catch(_) {}
     btStatus.innerHTML = `<span style="color:var(--muted)">点击 <i class="fa-solid fa-arrows-rotate"></i> 刷新数据 加载分析</span>`;
   })();
+
+// ── Per-card AI 解读 (magic-wand) ──────────────────────────────────────────
+(function () {
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+  async function ask(question) {
+    const res = await fetch("/api/ai/ask", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    });
+    if (!res.ok) throw new Error(res.status === 500
+      ? "请先在「设置」页配置 AI API Key（DeepSeek 或 Grok）"
+      : `HTTP ${res.status}`);
+    return res.json();
+  }
+
+  const panels = Array.from(document.querySelectorAll("section.panel"));
+  panels.forEach((panel) => {
+    if (panel.id === "aiComparisonSection") return;             // already AI
+    const chartHead = panel.querySelector(".chart-head");
+    const h2 = (chartHead || panel).querySelector("h2");
+    if (!h2 || panel.querySelector(".ai-card-btn")) return;
+    const title = h2.textContent.trim();
+    if (!title || title.includes("今天先回答")) return;          // skip the 4-question summary
+
+    const btn = document.createElement("button");
+    btn.className = "ai-card-btn" + (chartHead ? "" : " abs");
+    btn.title = "AI 解读";
+    btn.setAttribute("aria-label", "AI 解读");
+    btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i>';
+    if (chartHead) { btn.style.marginLeft = "auto"; chartHead.appendChild(btn); }
+    else { panel.appendChild(btn); }
+
+    const result = document.createElement("div");
+    result.className = "ai-card-result";
+    result.hidden = true;
+    panel.appendChild(result);
+
+    let loaded = false;
+    btn.addEventListener("click", async () => {
+      if (loaded) { result.hidden = !result.hidden; return; }
+      result.hidden = false;
+      result.classList.remove("err");
+      result.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> AI 正在解读…';
+      btn.disabled = true;
+      try {
+        const data = await ask(`请解读我回测与优化页面上的「${title}」，结合我的实际持仓数据，指出关键发现和需要注意的点。3-4 句话，直接说结论，不要客套。`);
+        result.innerHTML = '<span class="ai-card-tag"><i class="fa-solid fa-wand-magic-sparkles"></i></span>' + esc(data.answer);
+        loaded = true;
+      } catch (e) {
+        result.classList.add("err");
+        result.innerHTML = "AI 解读失败：" + esc(e.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+})();

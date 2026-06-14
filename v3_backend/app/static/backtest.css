@@ -12,3 +12,25 @@
   .ai-review-box p { font-size: 13px; line-height: 1.6; color: var(--text); margin: 0; }
   @media (max-width: 900px) { .ai-compare-grid { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 500px) { .ai-compare-grid { grid-template-columns: 1fr; } }
+
+/* ── Per-card AI 解读 (magic-wand) ───────────────────────────── */
+.panel { position: relative; }
+.ai-card-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; padding: 0; flex: none;
+    border: 0; border-radius: 8px; background: transparent;
+    color: var(--muted); opacity: .6; cursor: pointer; font-family: inherit;
+    transition: color .12s, background .12s, opacity .12s;
+}
+.ai-card-btn:hover { color: var(--accent); background: var(--accent-soft); opacity: 1; }
+.ai-card-btn:disabled { opacity: .35; cursor: wait; }
+.ai-card-btn i { font-size: 14px; }
+.ai-card-btn.abs { position: absolute; top: 16px; right: 18px; }
+.ai-card-result {
+    margin-top: 14px; border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; font-size: 12.5px; line-height: 1.6; color: var(--ink-secondary);
+    background: radial-gradient(120% 160% at 0% 0%, var(--accent-soft) 0%, transparent 46%), var(--soft);
+}
+.ai-card-result .ai-card-tag { display: inline-flex; align-items: center; color: var(--accent); margin-bottom: 6px; }
+.ai-card-result .ai-card-tag i { font-size: 13px; }
+.ai-card-result.err { color: var(--negative); }
