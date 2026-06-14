@@ -30,3 +30,6 @@ node_modules
 # Logs
 *.log
 /tmp/
+
+# PyInstaller build artifacts
+build/
