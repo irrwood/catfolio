@@ -241,6 +241,9 @@ body {
   flex-direction: column;
   gap: 2px;
   flex: 1;
+  min-height: 0;        /* allow the nav to shrink so the footer never clips */
+  overflow-y: auto;     /* scroll the links if the viewport is short */
+  overflow-x: hidden;
 }
 
 .nav-link {
@@ -293,7 +296,8 @@ body {
   margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
+  padding-top: 10px;
 }
 
 .theme-toggle-btn {
@@ -348,7 +352,7 @@ body {
   display: flex;
   gap: 4px;
   width: 36px;
-  margin: 8px auto 0;
+  margin: 0 auto;
   overflow: hidden;
   transition: width 0.18s ease, margin 0.18s ease;
 }
