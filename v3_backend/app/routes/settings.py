@@ -13,6 +13,7 @@ from app.lab import history_cache_age_seconds
 from app.settings import ROOT, V2_DIR
 from app.components import wrap_v4_layout
 from app.i18n import get_lang
+from app.ai import PROVIDERS as AI_PROVIDERS, DEFAULT_PROVIDER as AI_DEFAULT
 from datetime import datetime, timezone
 import json
 
@@ -26,11 +27,9 @@ def settings_page(request: Request):
     fred_set = secret_value("FRED_API_KEY") is not None
     massive_set = secret_value("MASSIVE_API_KEY") is not None
     t212_set = secret_value("TRADING212_API_KEY") is not None
-    deepseek_set = secret_value("DEEPSEEK_API_KEY") is not None
-    xai_set = secret_value("XAI_API_KEY") is not None
-    ai_provider = (secret_value("AI_PROVIDER") or "deepseek").strip().lower()
-    if ai_provider not in ("deepseek", "grok"):
-        ai_provider = "deepseek"
+    ai_provider = (secret_value("AI_PROVIDER") or AI_DEFAULT).strip().lower()
+    if ai_provider not in AI_PROVIDERS:
+        ai_provider = AI_DEFAULT
 
     market_cache = live_cache_age_seconds()
     history_cache = history_cache_age_seconds()
@@ -86,14 +85,27 @@ def settings_page(request: Request):
         css = (
             "background:var(--accent);color:#fff;border-color:var(--accent);"
             if is_active else
-            "background:var(--soft);color:var(--ink);border-color:transparent;"
+            "background:var(--soft);color:var(--ink);border-color:var(--line);"
         )
         warn = "" if key_set else '<span title="该提供方的 API Key 未配置" style="color:var(--warn)">●</span> '
         return (
             f'<button class="ai-provider-btn" data-provider="{value}" onclick="setProvider(\'{value}\', this)" '
-            f'style="border:1px solid var(--line);padding:8px 18px;font-size:var(--text-sm);font-weight:600;'
-            f'cursor:pointer;font-family:inherit;{css}">{warn}{label}</button>'
+            f'style="border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:var(--text-sm);'
+            f'font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;{css}">{warn}{label}</button>'
         )
+
+    # Generate AI provider key rows + switcher buttons from the registry so new
+    # providers added in ai.py appear here automatically.
+    ai_set = {name: secret_value(p["key"]) is not None for name, p in AI_PROVIDERS.items()}
+    ai_key_rows = "".join(
+        key_row(p["key"], f"{p['label']} API Key", p.get("hint", "AI 分析提供方"), ai_set[name])
+        for name, p in AI_PROVIDERS.items()
+    )
+    ai_switch_btns = "".join(
+        provider_btn(name, p["label"], ai_set[name], ai_provider)
+        for name, p in AI_PROVIDERS.items()
+    )
+    ai_current_label = AI_PROVIDERS[ai_provider]["label"]
 
     content = f"""<div class="v4-hero">
   <div class="v4-hero-text">
@@ -114,8 +126,7 @@ def settings_page(request: Request):
       {key_row("TRADING212_API_KEY", "Trading 212 API Key", "同步持仓、平均成本、账户现金", t212_set)}
       {key_row("FMP_API_KEY", "FMP API Key (Financial Modeling Prep)", "美股 P/E、P/S、EPS 成长率估值", fmp_set)}
       {key_row("FINNHUB_API_KEY", "Finnhub API Key", "备用估值接口，FMP 缺失时自动切换", finnhub_set)}
-      {key_row("DEEPSEEK_API_KEY", "DeepSeek API Key", "AI 组合分析、风险诊断、策略评价", deepseek_set)}
-      {key_row("XAI_API_KEY", "xAI (Grok) API Key", "Grok 模型，作为 AI 分析的可选提供方", xai_set)}
+      {ai_key_rows}
       {key_row("MASSIVE_API_KEY", "Massive API Key", "盘后异动、期权链快照（可选）", massive_set)}
       {key_row("FRED_API_KEY", "FRED API Key (St. Louis Fed)", "宏观利率、通胀数据（可选）", fred_set, border=False)}
     </div>
@@ -126,16 +137,15 @@ def settings_page(request: Request):
     <div class="v4-card-header">
       <div>
         <h2 class="v4-card-title"><i class="fa-solid fa-robot" style="color:var(--accent)"></i> AI 提供方</h2>
-        <div class="v4-card-subtitle">选择驱动 AI 组合分析的模型。切换前请先填好对应的 API Key。</div>
+        <div class="v4-card-subtitle">选择驱动 AI 组合分析的模型。切换前请先填好对应的 API Key（● 表示未配置）。</div>
       </div>
     </div>
     <div style="padding:0 var(--sp-xl) var(--sp-xl);">
-      <div style="display:inline-flex;border:1px solid var(--line);border-radius:var(--radius-md);overflow:hidden;">
-        {provider_btn("deepseek", "DeepSeek", deepseek_set, ai_provider)}
-        {provider_btn("grok", "Grok (xAI)", xai_set, ai_provider)}
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        {ai_switch_btns}
       </div>
       <div id="aiProviderStatus" style="margin-top:10px;font-size:var(--text-xs);color:var(--muted);">
-        当前：<strong style="color:var(--ink)">{"Grok (xAI)" if ai_provider == "grok" else "DeepSeek"}</strong>
+        当前：<strong style="color:var(--ink)">{ai_current_label}</strong>
       </div>
     </div>
   </div>
@@ -289,9 +299,12 @@ def settings_page(request: Request):
 
 _ALLOWED_KEYS = {
     "TRADING212_API_KEY", "FMP_API_KEY", "FINNHUB_API_KEY",
-    "DEEPSEEK_API_KEY", "MASSIVE_API_KEY", "FRED_API_KEY",
+    "MASSIVE_API_KEY", "FRED_API_KEY",
     "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
-    "XAI_API_KEY", "AI_PROVIDER", "DEEPSEEK_MODEL", "XAI_MODEL",
+    "AI_PROVIDER",
+    # Every AI provider's API-key and model-override names, from the registry.
+    *(p["key"] for p in AI_PROVIDERS.values()),
+    *(p["model_key"] for p in AI_PROVIDERS.values()),
 }
 
 @router.post("/api/settings/save-key")
