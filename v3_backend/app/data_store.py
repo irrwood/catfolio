@@ -25,7 +25,33 @@ from pathlib import Path
 from .cache import cached
 from .settings import FUNDAMENTALS_CACHE, LIVE_MARKET_CACHE, MARKET_REFRESH_TTL_SECONDS, ROOT, V2_DIR
 
-_DEMO_MODE = os.environ.get("HELM_DEMO", "").lower() in ("1", "true", "yes")
+_DEMO_FLAG = V2_DIR / "demo_mode.flag"
+
+
+def demo_mode() -> bool:
+    """Demo (sample-data) mode. Forced on by HELM_DEMO=1; otherwise toggled at
+    runtime from Settings (persisted as a flag file)."""
+    if os.environ.get("HELM_DEMO", "").lower() in ("1", "true", "yes"):
+        return True
+    try:
+        return _DEMO_FLAG.exists()
+    except Exception:
+        return False
+
+
+def set_demo_mode(on: bool) -> bool:
+    """Persist the demo-mode toggle and clear caches so it takes effect now."""
+    try:
+        if on:
+            _DEMO_FLAG.parent.mkdir(parents=True, exist_ok=True)
+            _DEMO_FLAG.write_text("1")
+        else:
+            _DEMO_FLAG.unlink(missing_ok=True)
+        from .cache import clear_all
+        clear_all()
+        return True
+    except Exception:
+        return False
 
 FX_TO_USD = {
     "USD": 1.0,
@@ -48,7 +74,7 @@ def current_snapshot():
     # load fires — without this, every widget re-reads the same 4 JSON files from
     # disk. Every data-refresh path calls cache.clear_all(), so this never serves
     # stale data; callers must treat the returned dict as read-only (it is shared).
-    if _DEMO_MODE:
+    if demo_mode():
         from .demo_data import DEMO_SNAPSHOT
         return DEMO_SNAPSHOT
     portfolio = load_json(V2_DIR / "portfolio_analysis.json", {"summary": {}, "holdings": [], "holdings_by_account": []})

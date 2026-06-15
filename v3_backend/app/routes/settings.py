@@ -8,6 +8,8 @@ from app.data_store import (
     fundamentals_cache_age_seconds,
     after_hours_cache_age_seconds,
     load_json,
+    demo_mode,
+    set_demo_mode,
 )
 from app.lab import history_cache_age_seconds
 from app.settings import ROOT, V2_DIR
@@ -30,6 +32,7 @@ def settings_page(request: Request):
     ai_provider = (secret_value("AI_PROVIDER") or AI_DEFAULT).strip().lower()
     if ai_provider not in AI_PROVIDERS:
         ai_provider = AI_DEFAULT
+    demo_on = demo_mode()
 
     market_cache = live_cache_age_seconds()
     history_cache = history_cache_age_seconds()
@@ -153,6 +156,24 @@ def settings_page(request: Request):
   <div class="v4-card">
     <div class="v4-card-header">
       <div>
+        <h2 class="v4-card-title"><i class="fa-solid fa-flask" style="color:var(--accent)"></i> 演示数据模式</h2>
+        <div class="v4-card-subtitle">开启后用内置样例组合替代真实数据，适合截图、演示或分享，不暴露你的真实持仓。</div>
+      </div>
+    </div>
+    <div style="padding:0 var(--sp-xl) var(--sp-xl);display:flex;justify-content:space-between;align-items:center;gap:12px;">
+      <div>
+        <strong style="display:block;">假数据模式</strong>
+        <span id="demoModeState" style="font-size:var(--text-xs);color:var(--muted)">当前：{"已开启 — 显示样例数据" if demo_on else "已关闭 — 显示真实数据"}</span>
+      </div>
+      <button class="btn {"primary" if demo_on else ""}" id="demoModeBtn" data-on="{"1" if demo_on else "0"}" onclick="toggleDemoMode()">
+        {"关闭假数据" if demo_on else "开启假数据"}
+      </button>
+    </div>
+  </div>
+
+  <div class="v4-card">
+    <div class="v4-card-header">
+      <div>
         <h2 class="v4-card-title"><i class="fa-solid fa-database"></i> 数据缓存生命周期</h2>
         <div class="v4-card-subtitle">系统采用增量与缓存机制，避免频繁调用外部接口导致封禁。</div>
       </div>
@@ -164,13 +185,6 @@ def settings_page(request: Request):
           <span style="font-size:12px;color:var(--muted)">重新拉取持仓与平均成本，并验证 API 凭证。</span>
         </div>
         <button class="btn" onclick="triggerRefresh('trading212')">立即同步</button>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:1px solid var(--line);">
-        <div>
-          <strong style="display:block;">Yahoo 实时现价缓存</strong>
-          <span style="font-size:12px;color:var(--muted)">当前缓存年龄：{fmt_age(market_cache)}。过期时间：60 秒。</span>
-        </div>
-        <button class="btn" onclick="triggerRefresh('market')">强制刷新</button>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:1px solid var(--line);">
         <div>
@@ -237,6 +251,50 @@ def settings_page(request: Request):
         </tr>
       </tbody>
     </table>
+  </div>
+</div>
+
+<div class="v4-card" style="margin-top:24px;">
+  <div class="v4-card-header" style="margin-bottom:12px;cursor:pointer;" onclick="document.getElementById('settingsDeveloperAccordion').classList.toggle('hide')">
+    <div>
+      <h2 class="v4-card-title"><i class="fa-solid fa-code"></i> 本地 REST API 数据接口 (折叠)</h2>
+      <div class="v4-card-subtitle">提供 JSON 接口供外部脚本或报表工具进行数据对接</div>
+    </div>
+  </div>
+  <div id="settingsDeveloperAccordion" class="hide" style="display:flex;flex-direction:column;gap:12px;">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>接口名称</th>
+            <th>请求路径</th>
+            <th>核心字段说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>组合汇总数据</td>
+            <td><a href="/api/portfolio/summary" class="font-mono" style="color:var(--accent);">/api/portfolio/summary</a></td>
+            <td>成本、市值、未实现盈亏、按账户统计现金及货币分布</td>
+          </tr>
+          <tr>
+            <td>当前持仓明细</td>
+            <td><a href="/api/holdings" class="font-mono" style="color:var(--accent);">/api/holdings</a></td>
+            <td>持股数、均价、买入成本（原币种）、本地现价和市值比重</td>
+          </tr>
+          <tr>
+            <td>ETF 穿透 (Look-through)</td>
+            <td><a href="/api/etf-lookthrough" class="font-mono" style="color:var(--accent);">/api/etf-lookthrough</a></td>
+            <td>将 S&P 500 等 ETF 穿透到底层股票暴露，支持 cost / market 口径</td>
+          </tr>
+          <tr>
+            <td>相关性矩阵</td>
+            <td><a href="/api/chart/exposure" class="font-mono" style="color:var(--accent);">/api/chart/exposure</a></td>
+            <td>返回供前端渲染集中度与归因子相关的格式化数据</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -328,6 +386,17 @@ async def save_key_api(request: Request):
         return JSONResponse({"ok": False, "error": "empty value"})
     ok = save_secret(name, value)
     return JSONResponse({"ok": ok})
+
+
+@router.post("/api/settings/demo-mode")
+async def demo_mode_api(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "invalid JSON"}, status_code=400)
+    on = bool(body.get("on"))
+    ok = set_demo_mode(on)
+    return JSONResponse({"ok": ok, "demo": demo_mode()})
 
 
 @router.post("/api/telegram/test")

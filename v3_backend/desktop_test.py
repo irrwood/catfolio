@@ -1,16 +1,17 @@
-"""Demo/test launcher for Helm-test.
+"""Clean/shareable launcher for Helm-test.
 
-Forces HELM_DEMO=1 (built-in sample portfolio, no real user data) and an
-isolated data directory, then runs the normal desktop app. Produces a
-shareable build that never reads or writes the user's real Helm data.
+Runs the normal desktop app against an isolated, initially-empty data directory
+so it shows neither the user's real data nor any sample/demo data. The recipient
+starts from an empty dashboard and brings their own data (Trading 212 sync or
+CSV import).
 """
 
 import os
 from pathlib import Path
 
-# Must be set before the app package is imported (data_store reads HELM_DEMO and
-# HELM_DATA_DIR at import time). desktop.main() uses setdefault, so these win.
-os.environ["HELM_DEMO"] = "1"
+# Isolated data dir, set before the app imports (data_store reads HELM_DATA_DIR at
+# import time; desktop.main() uses setdefault so this wins). HELM_DEMO is left
+# unset, so there is no sample/fake portfolio — the app starts empty.
 os.environ.setdefault(
     "HELM_DATA_DIR",
     str(Path.home() / "Library" / "Application Support" / "Helm-test"),

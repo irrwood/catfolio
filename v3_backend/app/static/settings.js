@@ -1,3 +1,30 @@
+  async function toggleDemoMode() {
+    const btn = document.getElementById('demoModeBtn');
+    const state = document.getElementById('demoModeState');
+    const turnOn = btn.dataset.on !== '1';
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+    try {
+      const res = await fetch('/api/settings/demo-mode', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ on: turnOn })
+      });
+      const data = await res.json();
+      const on = !!data.demo;
+      btn.dataset.on = on ? '1' : '0';
+      btn.classList.toggle('primary', on);
+      btn.innerHTML = on ? '关闭假数据' : '开启假数据';
+      state.textContent = on ? '当前：已开启 — 显示样例数据' : '当前：已关闭 — 显示真实数据';
+      // reload so every page picks up the switched data source
+      setTimeout(() => location.reload(), 600);
+    } catch (e) {
+      btn.innerHTML = orig;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   async function getChatId() {
     const tokenInput = document.getElementById('input_TELEGRAM_BOT_TOKEN');
     const chatInput  = document.getElementById('input_TELEGRAM_CHAT_ID');
