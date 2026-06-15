@@ -140,29 +140,40 @@ def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh",
     const html = document.documentElement;
     const themeToggleBtn = document.getElementById("themeToggleBtn");
 
-    function syncThemeLabel() {{
-      if (html.classList.contains("light-theme")) {{
-        themeToggleBtn.innerHTML = '<i class="fa-solid fa-sun"></i> <span>浅色模式</span>';
-      }} else {{
-        themeToggleBtn.innerHTML = '<i class="fa-solid fa-moon"></i> <span>深色模式</span>';
-      }}
+    // Three-state theme: 跟随系统 → 浅色 → 深色 → 跟随系统.
+    // "system" = no stored override, follows prefers-color-scheme.
+    const THEME_MODES = ["system", "light", "dark"];
+    const THEME_META = {{
+      system: ["fa-circle-half-stroke", "跟随系统"],
+      light: ["fa-sun", "浅色模式"],
+      dark: ["fa-moon", "深色模式"],
+    }};
+    function sysLight() {{
+      return window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
     }}
-    syncThemeLabel();
+    function currentMode() {{
+      const s = localStorage.getItem("theme");
+      return (s === "light" || s === "dark") ? s : "system";
+    }}
+    function applyMode(mode) {{
+      if (mode === "system") localStorage.removeItem("theme");
+      else localStorage.setItem("theme", mode);
+      const light = mode === "light" || (mode === "system" && sysLight());
+      html.classList.toggle("light-theme", light);
+      const meta = THEME_META[mode];
+      themeToggleBtn.innerHTML = '<i class="fa-solid ' + meta[0] + '"></i> <span>' + meta[1] + '</span>';
+    }}
+    applyMode(currentMode());
 
-    // Manual toggle overrides the system preference (persisted).
     themeToggleBtn.addEventListener("click", () => {{
-      html.classList.toggle("light-theme");
-      localStorage.setItem("theme", html.classList.contains("light-theme") ? "light" : "dark");
-      syncThemeLabel();
+      const next = THEME_MODES[(THEME_MODES.indexOf(currentMode()) + 1) % THEME_MODES.length];
+      applyMode(next);
     }});
 
-    // Live-follow OS theme changes while the user hasn't set an explicit choice.
+    // Live-follow OS theme changes while in 跟随系统 mode.
     if (window.matchMedia) {{
       window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", (e) => {{
-        if (!localStorage.getItem("theme")) {{
-          html.classList.toggle("light-theme", e.matches);
-          syncThemeLabel();
-        }}
+        if (currentMode() === "system") html.classList.toggle("light-theme", e.matches);
       }});
     }}
     
