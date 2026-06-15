@@ -144,16 +144,30 @@ def index(request: Request):
     <div class="v4-card-header">
       <div>
         <h2 class="v4-card-title"><i class="fa-solid fa-arrows-rotate text-accent"></i> 同步持仓</h2>
-        <div class="v4-card-subtitle">从券商拉取最新持仓。行情、估值、历史等刷新已统一到「系统设置」。</div>
+        <div class="v4-card-subtitle">从券商拉取最新持仓，并刷新 Yahoo 实时现价。估值、历史等刷新在「系统设置」。</div>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:16px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:1px solid var(--line);">
         <div style="flex:1;padding-right:16px;">
           <strong style="display:block;margin-bottom:4px;">同步 Trading 212 数据</strong>
           <span style="font-size:12px;color:var(--muted)">重新拉取持仓和平均买入成本。此操作会验证 API 凭证。</span>
         </div>
         <button class="btn primary" id="refreshButton">立即同步</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:1px solid var(--line);">
+        <div style="flex:1;padding-right:16px;">
+          <strong style="display:block;margin-bottom:4px;">Yahoo 实时现价刷新</strong>
+          <span style="font-size:12px;color:var(--muted)">拉取最新 Yahoo 现价，用于更新总市值、今日涨跌和浮盈亏。</span>
+        </div>
+        <button class="btn" id="marketRefreshButton"><i class="fa-solid fa-arrows-rotate"></i> 刷新行情</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="flex:1;padding-right:16px;">
+          <strong style="display:block;margin-bottom:4px;">手动导入数据 (CSV)</strong>
+          <span style="font-size:12px;color:var(--muted)">没有 API key？上传任意券商的交易记录 CSV，自动计算持仓与平均成本。</span>
+        </div>
+        <a class="btn" href="/import"><i class="fa-solid fa-file-import"></i> 手动导入数据</a>
       </div>
     </div>
     <div id="refreshStatus" class="status" style="margin-top:16px;"></div>
@@ -199,50 +213,6 @@ def index(request: Request):
   </div>
 </div>
 
-<div class="v4-card" style="margin-top:0px;">
-  <div class="v4-card-header" style="margin-bottom:12px;cursor:pointer;" onclick="document.getElementById('developerAccordion').classList.toggle('hide')">
-    <div>
-      <h2 class="v4-card-title"><i class="fa-solid fa-code"></i> 本地 REST API 数据接口 (折叠)</h2>
-      <div class="v4-card-subtitle">提供 JSON 接口供外部脚本或报表工具进行数据对接</div>
-    </div>
-  </div>
-  <div id="developerAccordion" class="hide" style="display:flex;flex-direction:column;gap:12px;">
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>接口名称</th>
-            <th>请求路径</th>
-            <th>核心字段说明</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>组合汇总数据</td>
-            <td><a href="/api/portfolio/summary" class="font-mono" style="color:var(--accent);">/api/portfolio/summary</a></td>
-            <td>成本、市值、未实现盈亏、按账户统计现金及货币分布</td>
-          </tr>
-          <tr>
-            <td>当前持仓明细</td>
-            <td><a href="/api/holdings" class="font-mono" style="color:var(--accent);">/api/holdings</a></td>
-            <td>持股数、均价、买入成本（原币种）、本地现价和市值比重</td>
-          </tr>
-          <tr>
-            <td>ETF 穿透 (Look-through)</td>
-            <td><a href="/api/etf-lookthrough" class="font-mono" style="color:var(--accent);">/api/etf-lookthrough</a></td>
-            <td>将 S&P 500 等 ETF 穿透到底层股票暴露，支持 cost / market 口径</td>
-          </tr>
-          <tr>
-            <td>相关性矩阵</td>
-            <td><a href="/api/chart/exposure" class="font-mono" style="color:var(--accent);">/api/chart/exposure</a></td>
-            <td>返回供前端渲染集中度与归因子相关的格式化数据</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
 <!-- ── After-Hours Unusual Activity ── -->
 <section class="panel" style="margin-top:16px;">
   <div class="chart-head" style="display:flex;justify-content:space-between;align-items:center;">
@@ -278,4 +248,3 @@ def index(request: Request):
             head_extra='<link rel="stylesheet" href="/static/home.css" />',
         )
     )
-
