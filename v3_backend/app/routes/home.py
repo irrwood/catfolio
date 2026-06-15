@@ -109,43 +109,12 @@ def index(request: Request):
             f"""<div class="v4-hero">
   <div class="v4-hero-text">
     <h1>数据与控制中心</h1>
-    <p>管理您的个人投资组合数据源。您可以同步 Trading 212 账户，刷新最新的 Yahoo 行情价格，并验证 API key 状态。</p>
+    <p>组合总览与持仓同步。数据源刷新、API key、AI 提供方等配置请前往「系统设置」。</p>
   </div>
   <div class="btn" style="pointer-events:none"><i class="fa-solid fa-calendar-day"></i> 数据时间：{as_of}</div>
 </div>
 
 <div class="dashboard-stack">
-<div class="v4-card" style="margin-top:0px;">
-  <div class="v4-card-header">
-    <div>
-      <h2 class="v4-card-title"><i class="fa-solid fa-heart-pulse text-accent" style="color:var(--accent)"></i> 数据新鲜度监控</h2>
-      <div class="v4-card-subtitle">监控各数据源同步状态，确保模型计算的有效性。</div>
-    </div>
-  </div>
-  <div class="metrics-grid">
-    <div class="metric-card">
-      <span class="metric-label">Trading 212 同步</span>
-      <div class="metric-value">{trading_positions} <span style="font-size:14px;color:var(--muted)">个持仓</span></div>
-      <span class="metric-subtext"><i class="fa-solid fa-clock"></i> {fmt_unix(trading_unix)}</span>
-    </div>
-    <div class="metric-card">
-      <span class="metric-label">Yahoo 实时行情</span>
-      <div class="metric-value">{market_rows} <span style="font-size:14px;color:var(--muted)">个行情</span></div>
-      <span class="metric-subtext"><i class="fa-solid fa-clock"></i> {fmt_unix(market_unix)}</span>
-    </div>
-    <div class="metric-card">
-      <span class="metric-label">FMP 估值覆盖</span>
-      <div class="metric-value">{fundamentals_rows}/{positions} <span style="font-size:14px;color:var(--muted)">已匹配</span></div>
-      <span class="metric-subtext"><i class="fa-solid fa-triangle-exclamation warn" style="color:var(--warn)"></i> 告警数: {fundamentals_warnings}</span>
-    </div>
-    <div class="metric-card">
-      <span class="metric-label">账户现金估算</span>
-      <div class="metric-value">${cash_total:,.0f}</div>
-      <span class="metric-subtext"><i class="fa-solid fa-wallet"></i> 现金占比: {(cash_total/(market+cash_total)*100) if (market+cash_total) else 0:.1f}%</span>
-    </div>
-  </div>
-</div>
-
 <div class="metrics-grid" style="margin-top:0px;">
   <div class="metric-card">
     <span class="metric-label">当前持仓数</span>
@@ -163,37 +132,28 @@ def index(request: Request):
     <span class="metric-label">未实现浮盈亏</span>
     <div class="metric-value {pnl_class}">${pnl:,.0f} <span style="font-size:14px">({pnl_pct:,.1f}%)</span></div>
   </div>
+  <div class="metric-card">
+    <span class="metric-label">账户现金估算</span>
+    <div class="metric-value">${cash_total:,.0f}</div>
+    <span class="metric-subtext"><i class="fa-solid fa-wallet"></i> 现金占比: {(cash_total/(market+cash_total)*100) if (market+cash_total) else 0:.1f}%</span>
+  </div>
 </div>
 
 <div class="grid-2" style="margin-top:0px;">
   <div class="v4-card">
     <div class="v4-card-header">
       <div>
-        <h2 class="v4-card-title"><i class="fa-solid fa-arrows-rotate text-accent"></i> 核心同步动作</h2>
-        <div class="v4-card-subtitle">手动触发与外部接口同步，过程为后台异步执行。</div>
+        <h2 class="v4-card-title"><i class="fa-solid fa-arrows-rotate text-accent"></i> 同步持仓</h2>
+        <div class="v4-card-subtitle">从券商拉取最新持仓。行情、估值、历史等刷新已统一到「系统设置」。</div>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:16px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:1px solid var(--line);">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
         <div style="flex:1;padding-right:16px;">
           <strong style="display:block;margin-bottom:4px;">同步 Trading 212 数据</strong>
           <span style="font-size:12px;color:var(--muted)">重新拉取持仓和平均买入成本。此操作会验证 API 凭证。</span>
         </div>
         <button class="btn primary" id="refreshButton">立即同步</button>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:1px solid var(--line);">
-        <div style="flex:1;padding-right:16px;">
-          <strong style="display:block;margin-bottom:4px;">刷新行情最新现价</strong>
-          <span style="font-size:12px;color:var(--muted)">拉取 Yahoo 现价以更新当前总市值与未实现浮盈亏。</span>
-        </div>
-        <button class="btn primary" id="marketRefreshButton">刷新行情</button>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div style="flex:1;padding-right:16px;">
-          <strong style="display:block;margin-bottom:4px;">重新加载估值数据</strong>
-          <span style="font-size:12px;color:var(--muted)">重新拉取 FMP 估值指标，刷新 PE vs 成长矩阵及水位曲线。</span>
-        </div>
-        <button class="btn" id="fundamentalsRefreshButton">刷新估值</button>
       </div>
     </div>
     <div id="refreshStatus" class="status" style="margin-top:16px;"></div>

@@ -160,6 +160,13 @@ def settings_page(request: Request):
     <div style="display:flex;flex-direction:column;gap:14px;">
       <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:1px solid var(--line);">
         <div>
+          <strong style="display:block;">Trading 212 持仓同步</strong>
+          <span style="font-size:12px;color:var(--muted)">重新拉取持仓与平均成本，并验证 API 凭证。</span>
+        </div>
+        <button class="btn" onclick="triggerRefresh('trading212')">立即同步</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:1px solid var(--line);">
+        <div>
           <strong style="display:block;">Yahoo 实时现价缓存</strong>
           <span style="font-size:12px;color:var(--muted)">当前缓存年龄：{fmt_age(market_cache)}。过期时间：60 秒。</span>
         </div>

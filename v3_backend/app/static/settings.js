@@ -90,7 +90,19 @@
   async function triggerRefresh(type) {
     const statusEl = document.getElementById("settingsStatus");
     statusEl.className = "status";
-    if (type === 'market') {
+    if (type === 'trading212') {
+      statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在同步 Trading 212 持仓...';
+      try {
+        const response = await fetch("/api/refresh/trading212", { method: "POST" });
+        if (!response.ok) throw new Error("HTTP error");
+        statusEl.className = "status positive";
+        statusEl.innerHTML = '<i class="fa-solid fa-check"></i> Trading 212 同步完成！';
+        setTimeout(() => location.reload(), 1000);
+      } catch (err) {
+        statusEl.className = "status negative";
+        statusEl.innerHTML = '<i class="fa-solid fa-xmark"></i> 同步失败，请检查 API Key。';
+      }
+    } else if (type === 'market') {
       statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在强制拉取最新行情...';
       try {
         const response = await fetch("/api/refresh/market?force=true", { method: "POST" });
