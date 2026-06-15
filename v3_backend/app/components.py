@@ -67,10 +67,15 @@ def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh",
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{title} · Helm</title>
   <script>
-    // Apply saved theme BEFORE page renders to prevent flash
-    if (localStorage.getItem("theme") === "light") {{
-      document.documentElement.classList.add("light-theme");
-    }}
+    // Theme follows the OS unless the user has explicitly chosen one.
+    // Applied before render to prevent a flash.
+    (function () {{
+      var saved = localStorage.getItem("theme");
+      var sysLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
+      if (saved ? saved === "light" : sysLight) {{
+        document.documentElement.classList.add("light-theme");
+      }}
+    }})();
   </script>
   <link rel="stylesheet" href="/static/v4.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -135,23 +140,31 @@ def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh",
     const html = document.documentElement;
     const themeToggleBtn = document.getElementById("themeToggleBtn");
 
-    if (localStorage.getItem("theme") === "light") {{
-      html.classList.add("light-theme");
-      themeToggleBtn.innerHTML = '<i class="fa-solid fa-sun"></i> <span>浅色模式</span>';
-    }} else {{
-      themeToggleBtn.innerHTML = '<i class="fa-solid fa-moon"></i> <span>深色模式</span>';
-    }}
-
-    themeToggleBtn.addEventListener("click", () => {{
-      html.classList.toggle("light-theme");
+    function syncThemeLabel() {{
       if (html.classList.contains("light-theme")) {{
-        localStorage.setItem("theme", "light");
         themeToggleBtn.innerHTML = '<i class="fa-solid fa-sun"></i> <span>浅色模式</span>';
       }} else {{
-        localStorage.setItem("theme", "dark");
         themeToggleBtn.innerHTML = '<i class="fa-solid fa-moon"></i> <span>深色模式</span>';
       }}
+    }}
+    syncThemeLabel();
+
+    // Manual toggle overrides the system preference (persisted).
+    themeToggleBtn.addEventListener("click", () => {{
+      html.classList.toggle("light-theme");
+      localStorage.setItem("theme", html.classList.contains("light-theme") ? "light" : "dark");
+      syncThemeLabel();
     }});
+
+    // Live-follow OS theme changes while the user hasn't set an explicit choice.
+    if (window.matchMedia) {{
+      window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", (e) => {{
+        if (!localStorage.getItem("theme")) {{
+          html.classList.toggle("light-theme", e.matches);
+          syncThemeLabel();
+        }}
+      }});
+    }}
     
     const menuToggleBtn = document.getElementById("menuToggleBtn");
     const sidebar = document.querySelector(".v4-sidebar");
