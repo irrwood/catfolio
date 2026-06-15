@@ -512,6 +512,17 @@ def refresh_trading212():
     if scripts_dir not in sys.path:
         sys.path.insert(0, scripts_dir)
 
+    # Bridge UI-saved secrets into the environment the standalone fetch script
+    # reads. The Settings page saves keys to the keychain (com.helm.portfolio),
+    # but enrich_trading212_data.py looks them up via os.environ / its own
+    # keychain service — so without this bridge a key entered in the UI is never
+    # used and the sync silently returns 0 positions.
+    for _name in ("TRADING212_API_KEY", "TRADING212_API_SECRET", "TRADING212_ACCOUNTS"):
+        if not os.environ.get(_name):
+            _val = secret_value(_name)
+            if _val:
+                os.environ[_name] = _val
+
     try:
         import build_trading212_v2
         summary = build_trading212_v2.build_and_write()
