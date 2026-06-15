@@ -36,6 +36,13 @@ a = Analysis(
         "app.routes.report",
         "app.routes.import_csv",
         "app.i18n",
+        # ── modules imported lazily inside functions (PyInstaller can miss these) ──
+        "app.alert_rules",
+        "app.alerts",
+        "app.ai",
+        "app.analytics",
+        "app.lab",
+        "app.telegram_notify",
         # ── scripts imported at runtime via sys.path ──
         "build_trading212_v2",
         "enrich_trading212_data",
@@ -129,8 +136,8 @@ app = BUNDLE(
     info_plist={
         "CFBundleName": "Helm",
         "CFBundleDisplayName": "Helm",
-        "CFBundleVersion": "1.1.0",
-        "CFBundleShortVersionString": "1.1.0",
+        "CFBundleVersion": "1.2.0",
+        "CFBundleShortVersionString": "1.2.0",
         "NSHighResolutionCapable": True,
         "NSRequiresAquaSystemAppearance": False,  # supports dark mode
         "LSMinimumSystemVersion": "12.0",
