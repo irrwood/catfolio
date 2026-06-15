@@ -54,6 +54,12 @@ def check_alerts():
         pass
 
     try:
+        from .alert_rules import evaluate_rules
+        alerts.extend(evaluate_rules(snapshot))
+    except Exception:
+        pass
+
+    try:
         from .telegram_notify import maybe_push_alerts
         maybe_push_alerts(alerts)
     except Exception:

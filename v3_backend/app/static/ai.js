@@ -150,6 +150,14 @@
       const answerEl = document.querySelector(`#${itemId} .conv-a`);
       answerEl.textContent = data.answer;
       answerEl.classList.remove("loading");
+      answerEl.insertAdjacentHTML("afterend", `
+        <div class="ai-reminder-actions">
+          <button class="btn" onclick="previewReminderFromAnswer('${itemId}')">
+            <i class="fa-solid fa-bell"></i> 创建提醒
+          </button>
+        </div>
+        <div class="ai-reminder-draft" id="${itemId}-reminder"></div>
+      `);
       status.innerHTML = "";
     } catch(e) {
       const answerEl = document.querySelector(`#${itemId} .conv-a`);
@@ -159,6 +167,63 @@
       status.innerHTML = `<span style="color:var(--negative)">失败: ${e.message}</span>`;
     } finally {
       btn.disabled = false;
+    }
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]));
+  }
+
+  async function previewReminderFromAnswer(itemId) {
+    const answer = document.querySelector(`#${itemId} .conv-a`)?.textContent || "";
+    const box = document.querySelector(`#${itemId}-reminder`);
+    box.innerHTML = `<div class="ai-reminder-box"><i class="fa-solid fa-spinner fa-spin"></i> 正在生成提醒草稿...</div>`;
+    try {
+      const data = await aiPost("/api/alerts/preview-ai-reminders", { text: answer });
+      const draft = (data.drafts || [])[0];
+      if (!draft) {
+        box.innerHTML = `<div class="ai-reminder-box muted">这条回答里没有可监控的数字条件。</div>`;
+        return;
+      }
+      box.dataset.draft = JSON.stringify(draft);
+      box.innerHTML = `
+        <div class="ai-reminder-box">
+          <div class="ai-reminder-head">
+            <b>${escapeHtml(draft.title)}</b>
+            <span>AI 提醒草稿</span>
+          </div>
+          <div class="ai-reminder-rule-list">
+            ${draft.conditions.map((c, index) => `
+              <label class="ai-reminder-rule">
+                <input type="checkbox" checked data-condition-index="${index}">
+                <span>${escapeHtml(c.label || c.metric)}</span>
+              </label>
+            `).join("")}
+          </div>
+          <div class="ai-reminder-footer">
+            <button class="btn primary" onclick="saveReminderDraft('${itemId}')"><i class="fa-solid fa-check"></i> 创建提醒</button>
+            <button class="btn" onclick="document.querySelector('#${itemId}-reminder').innerHTML=''">取消</button>
+          </div>
+        </div>`;
+    } catch (error) {
+      box.innerHTML = `<div class="ai-reminder-box negative">提醒草稿生成失败：${escapeHtml(error.message)}</div>`;
+    }
+  }
+
+  async function saveReminderDraft(itemId) {
+    const box = document.querySelector(`#${itemId}-reminder`);
+    const draft = JSON.parse(box.dataset.draft || "{}");
+    const checked = [...box.querySelectorAll("input[data-condition-index]:checked")].map(input => Number(input.dataset.conditionIndex));
+    draft.conditions = (draft.conditions || []).filter((_, index) => checked.includes(index));
+    if (!draft.conditions.length) {
+      box.querySelector(".ai-reminder-footer").insertAdjacentHTML("beforebegin", `<div class="negative">至少保留一个触发条件。</div>`);
+      return;
+    }
+    try {
+      const data = await aiPost("/api/alerts", draft);
+      box.innerHTML = `<div class="ai-reminder-box positive"><i class="fa-solid fa-circle-check"></i> 已创建提醒：${escapeHtml(data.rule.title)}</div>`;
+    } catch (error) {
+      box.innerHTML = `<div class="ai-reminder-box negative">创建失败：${escapeHtml(error.message)}</div>`;
     }
   }
 

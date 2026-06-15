@@ -279,3 +279,30 @@ def api_exposure(basis: str = "market"):
     snapshot = current_snapshot()
     return unified_exposure(snapshot, basis=basis)
 
+
+
+@router.post("/alerts/preview-ai-reminders")
+async def api_preview_ai_reminders(req: dict = Body(...)):
+    from app.alert_rules import preview_ai_reminders
+    return {"drafts": preview_ai_reminders(req.get("text", ""))}
+
+
+@router.get("/alerts")
+def api_list_alert_rules():
+    from app.alert_rules import list_rules
+    return {"rules": list_rules()}
+
+
+@router.post("/alerts")
+async def api_create_alert_rule(req: dict = Body(...)):
+    from app.alert_rules import create_rule
+    try:
+        return {"rule": create_rule(req)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.delete("/alerts/{rule_id}")
+def api_delete_alert_rule(rule_id: str):
+    from app.alert_rules import delete_rule
+    return {"ok": delete_rule(rule_id)}
