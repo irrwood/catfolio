@@ -1,8 +1,11 @@
 const BENCH_CN = { "SPY": "标普500", "QQQ": "纳斯达克100", "VTI": "美国全市场", "VOO": "先锋标普500", "DIA": "道琼斯30", "IWM": "罗素2000", "VEU": "全球除美", "GLD": "黄金" };
 
-  let currentMode = 'twr';
+  let returnsMode = 'twr';
   let chart = null;
   let chartSeries = [];
+  const currentLang = () => (document.documentElement.lang || "zh").startsWith("en") ? "en" : "zh";
+  const isEn = () => currentLang() === "en";
+  const tr = (zh, en) => isEn() ? en : zh;
 
   const CF_COLORS = ['#f97316','#8b5cf6','#06b6d4','#eab308','#ec4899','#a855f7','#22c55e','#ef4444'];
   const TWR_COLORS = ['#888','#f97316','#8b5cf6','#ec4899','#06b6d4','#eab308','#ef4444','#a855f7'];
@@ -41,7 +44,7 @@ const BENCH_CN = { "SPY": "标普500", "QQQ": "纳斯达克100", "VTI": "美国�
   }
 
   function getActiveData() {
-    if (currentMode === 'cf') {
+    if (returnsMode === 'cf') {
       const raw = cfData.rows || [];
       if (!raw.length) return { rows: [], unit: '$' };
       const mapped = raw.map(r => ({
@@ -49,7 +52,7 @@ const BENCH_CN = { "SPY": "标普500", "QQQ": "纳斯达克100", "VTI": "美国�
         portfolio: numValue(r, ['adjusted_portfolio_value', 'portfolio_value', 'portfolio'], 0),
       }));
       return { rows: filterRows(mapped), unit: '$' };
-    } else if (currentMode === 'cv') {
+    } else if (returnsMode === 'cv') {
       const raw = cfData.rows || [];
       if (!raw.length) return { rows: [], unit: '$' };
       const mapped = raw.map(r => ({
@@ -111,7 +114,7 @@ const BENCH_CN = { "SPY": "标普500", "QQQ": "纳斯达克100", "VTI": "美国�
       color: color,
       lineWidth: opts.lineWidth || 1,
       lineStyle: opts.dashed ? 2 : 0,
-      priceFormat: opts.priceFormat || ((currentMode === 'cf' || currentMode === 'cv') ? { type: 'custom', formatter: fmtDollar } : { type: 'custom', formatter: fmtPct }),
+      priceFormat: opts.priceFormat || ((returnsMode === 'cf' || returnsMode === 'cv') ? { type: 'custom', formatter: fmtDollar } : { type: 'custom', formatter: fmtPct }),
       title: label,
       visible: opts.visible !== undefined ? opts.visible : true,
     });
@@ -136,9 +139,11 @@ const BENCH_CN = { "SPY": "标普500", "QQQ": "纳斯达克100", "VTI": "美国�
       container.innerHTML = `
         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--muted); padding: 40px; text-align: center;">
           <i class="fa-solid fa-circle-exclamation" style="font-size: 32px; margin-bottom: 12px; color: var(--accent);"></i>
-          <div style="font-size: 15px; font-weight: 600; margin-bottom: 6px; color: var(--ink);">需要交易流水数据</div>
+          <div style="font-size: 15px; font-weight: 600; margin-bottom: 6px; color: var(--ink);">${tr("需要交易流水数据", "Transaction history required")}</div>
           <div style="font-size: 12px; max-width: 320px; line-height: 1.6;">
-            ${currentMode === 'cf' || currentMode === 'cv' ? '此模式依赖交易流水。请在环境配置中设置 HELM_DATA_DIR 目录以导入 Trading 212 交易历史 CSV 文件。' : '暂无可用收益数据。'}
+            ${returnsMode === 'cf' || returnsMode === 'cv'
+              ? tr('此模式依赖交易流水。请在环境配置中设置 CATFOLIO_DATA_DIR 目录以导入 Trading 212 交易历史 CSV 文件。', 'This mode requires transaction history. Set CATFOLIO_DATA_DIR to import Trading 212 transaction CSV files.')
+              : tr('暂无可用收益数据。', 'No return data is available.')}
           </div>
         </div>
       `;
@@ -148,15 +153,15 @@ const BENCH_CN = { "SPY": "标普500", "QQQ": "纳斯达克100", "VTI": "美国�
     const isDollar = data.unit === '$';
     buildChart();
 
-      if (currentMode === 'cv') {
+      if (returnsMode === 'cv') {
       // Cost vs Market Value mode: Plot Current Market Value and Cumulative Investment Cost
-      addLine('当前总市值 (USD)', rows.map(r => ({ date: r.date, value: r.portfolio })), '#27a648', { lineWidth: 3 });
-      addLine('净投入成本 (USD)', rows.map(r => ({ date: r.date, value: r.buy_total })), '#e54d5e', { lineWidth: 2 });
+      addLine(tr('当前总市值 (USD)', 'Current Market Value (USD)'), rows.map(r => ({ date: r.date, value: r.portfolio })), '#27a648', { lineWidth: 3 });
+      addLine(tr('净投入成本 (USD)', 'Net Invested Cost (USD)'), rows.map(r => ({ date: r.date, value: r.buy_total })), '#e54d5e', { lineWidth: 2 });
     } else {
       // Portfolio line (always first, thick blue)
       addLine('Portfolio', rows.map(r => ({ date: r.date, value: isDollar ? r.portfolio : ((r.portfolio||1)-1)*100 })), '#4C72FF', { lineWidth: 3 });
 
-      if (currentMode === 'cf') {
+      if (returnsMode === 'cf') {
         // Cash flow mirror: all benchmark lines in dollars
         let ci = 0;
         Object.entries(cfBenchmarks).forEach(([symbol, bm]) => {
@@ -167,7 +172,7 @@ const BENCH_CN = { "SPY": "标普500", "QQQ": "纳斯达克100", "VTI": "美国�
           });
           const lineData = rows.map(r => ({ date: r.date, value: bmByDate[r.date] || null }));
           const isSpy = symbol === 'SPY';
-          addLine(BENCH_CN[symbol] || symbol, lineData, isSpy ? '#f97316' : CF_COLORS[ci % CF_COLORS.length], {
+          addLine(isEn() ? symbol : (BENCH_CN[symbol] || symbol), lineData, isSpy ? '#f97316' : CF_COLORS[ci % CF_COLORS.length], {
             lineWidth: isSpy ? 2 : 1,
             dashed: isSpy,
           });
@@ -188,30 +193,36 @@ const BENCH_CN = { "SPY": "标普500", "QQQ": "纳斯达克100", "VTI": "美国�
     }  }
 
   document.getElementById('twrMode').addEventListener('click', () => {
-    currentMode = 'twr';
+    returnsMode = 'twr';
     document.getElementById('twrMode').classList.add('active');
     document.getElementById('cfMirrorMode').classList.remove('active');
     document.getElementById('costValueMode').classList.remove('active');
     document.getElementById('chartModeLabel').textContent = 'TWR';
-    document.getElementById('chartSubtitle').textContent = '剔除现金流影响，衡量策略本身表现。';
+    document.getElementById('chartSubtitle').textContent = tr('剔除现金流影响，衡量策略本身表现。', 'Removes cash-flow effects to measure strategy performance.');
     renderChart();
   });
   document.getElementById('cfMirrorMode').addEventListener('click', () => {
-    currentMode = 'cf';
+    returnsMode = 'cf';
     document.getElementById('cfMirrorMode').classList.add('active');
     document.getElementById('twrMode').classList.remove('active');
     document.getElementById('costValueMode').classList.remove('active');
-    document.getElementById('chartModeLabel').textContent = '现金流镜像';
-    document.getElementById('chartSubtitle').textContent = '按你的真实买卖日期和金额重放：Portfolio=持仓市值+累计卖出现金；各基准=同日买入/卖出等额基准。纵轴为 USD 总价值，不是收益率。';
+    document.getElementById('chartModeLabel').textContent = tr('现金流镜像', 'Cash-Flow Mirror');
+    document.getElementById('chartSubtitle').textContent = tr(
+      '按你的真实买卖日期和金额重放：Portfolio=持仓市值+累计卖出现金；各基准=同日买入/卖出等额基准。纵轴为 USD 总价值，不是收益率。',
+      'Replays your actual trade dates and amounts: Portfolio = holding value plus cumulative sale proceeds; each benchmark buys/sells the same amount on the same date. The y-axis is total USD value, not return percentage.'
+    );
     renderChart();
   });
   document.getElementById('costValueMode').addEventListener('click', () => {
-    currentMode = 'cv';
+    returnsMode = 'cv';
     document.getElementById('costValueMode').classList.add('active');
     document.getElementById('twrMode').classList.remove('active');
     document.getElementById('cfMirrorMode').classList.remove('active');
-    document.getElementById('chartModeLabel').textContent = '投入成本 vs 总市值';
-    document.getElementById('chartSubtitle').textContent = '净投入成本(买入-卖出)与当前持仓总市值的对比线图。纵轴为美元(USD)。';
+    document.getElementById('chartModeLabel').textContent = tr('投入成本 vs 总市值', 'Cost vs Market Value');
+    document.getElementById('chartSubtitle').textContent = tr(
+      '净投入成本(买入-卖出)与当前持仓总市值的对比线图。纵轴为美元(USD)。',
+      'Line chart comparing net invested cost (buys minus sells) with current holding market value. The y-axis is USD.'
+    );
     renderChart();
   });
 
@@ -230,21 +241,26 @@ const BENCH_CN = { "SPY": "标普500", "QQQ": "纳斯达克100", "VTI": "美国�
     const status = document.querySelector("#aiReturnsStatus");
     const result = document.querySelector("#aiReturnsResult");
     btn.disabled = true;
-    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> AI 分析中...`;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${tr('AI 分析中...', 'AI analyzing...')}`;
     status.innerHTML = "";
     result.style.display = "none";
     try {
-      const resp = await fetch("/api/ai/returns-explanation", { method: "POST" });
+      const lang = currentLang();
+      const resp = await fetch("/api/ai/returns-explanation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lang }),
+      });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
       document.querySelector("#aiReturnsText").textContent = data.explanation;
       document.querySelector("#aiReturnsPeriod").textContent = data.period || "";
-      btn.innerHTML = `<i class="fa-solid fa-robot"></i> AI 解读`;
+      btn.innerHTML = `<i class="fa-solid fa-robot"></i> ${tr('AI 解读', 'AI Analysis')}`;
       status.innerHTML = "";
       result.style.display = "block";
     } catch(e) {
-      status.innerHTML = `<span style="color:var(--negative)">AI 分析失败: ${e.message}</span>`;
-      btn.innerHTML = `<i class="fa-solid fa-robot"></i> AI 解读`;
+      status.innerHTML = `<span style="color:var(--negative)">${tr('AI 分析失败: ', 'AI analysis failed: ')}${e.message}</span>`;
+      btn.innerHTML = `<i class="fa-solid fa-robot"></i> ${tr('AI 解读', 'AI Analysis')}`;
     } finally {
       btn.disabled = false;
     }

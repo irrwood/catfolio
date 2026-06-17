@@ -71,6 +71,6 @@ function downloadSample() {
   const blob = new Blob([csv], {type: 'text/csv'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'helm_import_sample.csv';
+  a.download = 'catfolio_import_sample.csv';
   a.click();
 }

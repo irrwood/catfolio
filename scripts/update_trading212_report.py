@@ -2,7 +2,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-import os; ROOT = Path(os.environ.get("HELM_ROOT", str(Path(__file__).resolve().parent.parent)))
+import os; ROOT = Path(os.environ.get("CATFOLIO_ROOT") or os.environ.get("HELM_ROOT") or str(Path(__file__).resolve().parent.parent))
 
 STEPS = [
     ["python3", str(ROOT / "scripts/enrich_trading212_data.py")],

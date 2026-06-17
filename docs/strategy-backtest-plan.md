@@ -51,7 +51,7 @@
 ### 4. 运行持久化（一次运行=一条记录）
 - 用 **SQLite**（`sqlite3` 标准库，零新依赖，单文件 `strategy_runs.db`）——天然适合"列表+回看"，也为将来 DB 迁移埋种子。
 - 每条运行记录字段：`id, created_at, name, code, config(json), metrics(json: CAGR/Sharpe/MaxDD/Vol/总收益/胜率), equity_curve(json), trades(json), warnings`。
-- 数据写入用户数据目录（`~/Library/Application Support/Helm/`，与桌面 App 计划一致）。
+- 数据写入用户数据目录（`~/Library/Application Support/Catfolio/`，与桌面 App 计划一致）。
 
 ### 5. UI（运行记录式，借鉴 AI 聊天页布局）
 - **左侧栏**：运行历史列表，每条显示名称 + 关键指标（如 CAGR）+ 日期；点击载入该次的代码+参数+结果。顶部"新建回测"。

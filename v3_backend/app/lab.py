@@ -13,7 +13,7 @@ from pathlib import Path
 
 from .analytics import _num, exposure_value_usd, holdings_by_ticker, market_by_ticker
 from .cache import cached
-from .data_store import current_snapshot, load_json
+from .data_store import current_snapshot, demo_mode, load_json
 from .settings import LAB_HISTORY_CACHE, LAB_HISTORY_TTL_SECONDS, ROOT, V2_DIR
 
 BENCHMARKS = {
@@ -46,7 +46,7 @@ ASSET_ALIASES = {
 SOURCE_FILES = []
 
 def _init_source_files():
-    """Load transaction CSV files from HELM_DATA_DIR or default locations."""
+    """Load transaction CSV files from CATFOLIO_DATA_DIR or default locations."""
     import os
     import glob as _glob
 
@@ -62,7 +62,7 @@ def _init_source_files():
             result.append((account, f))
         return result
 
-    env_keys = ("HELM_DATA_DIR", "PORTFOLIO_DATA_DIR", "TRADING212_DATA_DIR", "STOCK_DATA_DIR")
+    env_keys = ("CATFOLIO_DATA_DIR", "HELM_DATA_DIR", "PORTFOLIO_DATA_DIR", "TRADING212_DATA_DIR", "STOCK_DATA_DIR")
     for key in env_keys:
         result = csv_sources(os.environ.get(key, ""))
         if result:
@@ -242,6 +242,10 @@ def lab_symbols(snapshot, max_symbols=35):
 
 
 def refresh_history(force=False, years=5):
+    if demo_mode():
+        from .demo_data import DEMO_LAB_HISTORY
+        return {"ok": True, "cached": True, "age_seconds": 0, "history": DEMO_LAB_HISTORY}
+
     age = history_cache_age_seconds()
     if not force and age is not None and age < LAB_HISTORY_TTL_SECONDS:
         return {"ok": True, "cached": True, "age_seconds": age, "history": load_json(LAB_HISTORY_CACHE, {})}
@@ -271,11 +275,16 @@ def refresh_history(force=False, years=5):
         "warnings": warnings,
         "source": "Yahoo Finance chart endpoint",
     }
+    LAB_HISTORY_CACHE.parent.mkdir(parents=True, exist_ok=True)
     LAB_HISTORY_CACHE.write_text(json.dumps(history, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"ok": True, "cached": False, "age_seconds": 0, "history": history}
 
 
 def get_history():
+    if demo_mode():
+        from .demo_data import DEMO_LAB_HISTORY
+        return DEMO_LAB_HISTORY
+
     data = load_json(LAB_HISTORY_CACHE, None)
     if data:
         return data
@@ -766,6 +775,19 @@ def cumulative_multi_benchmark():
 
 @cached(ttl=300)
 def cash_flow_mirror_vs_benchmark(symbol="SPY"):
+    if demo_mode():
+        return {
+            "benchmark": symbol,
+            "available": False,
+            "status": "demo_no_trade_history",
+            "basis": "buy and sell trades mirrored into the benchmark",
+            "label": "现金流镜像",
+            "note": "Demo data includes holdings, prices, and model history, but not private transaction CSVs.",
+            "message": "Demo mode does not include real trade history, so cash-flow mirror is disabled.",
+            "date_range": None,
+            "rows": [],
+        }
+
     trades = _read_trade_transactions()
     if not trades:
         return {

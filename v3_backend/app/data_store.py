@@ -29,24 +29,29 @@ _DEMO_FLAG = V2_DIR / "demo_mode.flag"
 
 
 def demo_mode() -> bool:
-    """Demo (sample-data) mode. Forced on by HELM_DEMO=1; otherwise toggled at
-    runtime from Settings (persisted as a flag file)."""
-    if os.environ.get("HELM_DEMO", "").lower() in ("1", "true", "yes"):
-        return True
+    """Demo (sample-data) mode.
+
+    CATFOLIO_DEMO/HELM_DEMO provides the startup default, while the Settings
+    toggle writes an explicit runtime override so demo mode can be turned off
+    even when the app was launched with CATFOLIO_DEMO=1.
+    """
     try:
-        return _DEMO_FLAG.exists()
+        if _DEMO_FLAG.exists():
+            flag = _DEMO_FLAG.read_text(encoding="utf-8").strip().lower()
+            return flag in ("1", "true", "yes", "on")
     except Exception:
-        return False
+        pass
+    demo_flag = os.environ.get("CATFOLIO_DEMO") or os.environ.get("HELM_DEMO") or ""
+    if demo_flag.lower() in ("1", "true", "yes"):
+        return True
+    return False
 
 
 def set_demo_mode(on: bool) -> bool:
     """Persist the demo-mode toggle and clear caches so it takes effect now."""
     try:
-        if on:
-            _DEMO_FLAG.parent.mkdir(parents=True, exist_ok=True)
-            _DEMO_FLAG.write_text("1")
-        else:
-            _DEMO_FLAG.unlink(missing_ok=True)
+        _DEMO_FLAG.parent.mkdir(parents=True, exist_ok=True)
+        _DEMO_FLAG.write_text("1" if on else "0", encoding="utf-8")
         from .cache import clear_all
         clear_all()
         return True
@@ -152,20 +157,22 @@ def _read_secret(name):
         return value
     if platform.system() == "Darwin":
         # macOS: security CLI — no UI prompts for already-trusted items
-        value = _keychain_get(name, "com.helm.portfolio")
-        if value:
-            return value
-        # Legacy service name migration
-        value = _keychain_get(name, "portfolio-analysis-v3")
-        if value:
-            _keychain_save(name, value, "com.helm.portfolio")
-            return value
+        for service in ("com.catfolio.portfolio", "com.helm.portfolio", "portfolio-analysis-v3"):
+            value = _keychain_get(name, service)
+            if value:
+                if service != "com.catfolio.portfolio":
+                    _keychain_save(name, value, "com.catfolio.portfolio")
+                return value
     else:
         # Linux / Windows: use keyring library (Credential Manager / libsecret / etc.)
         try:
             import keyring as _kr
+            value = _kr.get_password("com.catfolio.portfolio", name)
+            if value:
+                return value
             value = _kr.get_password("com.helm.portfolio", name)
             if value:
+                _kr.set_password("com.catfolio.portfolio", name, value)
                 return value
         except Exception:
             pass
@@ -177,12 +184,12 @@ def save_secret(name: str, value: str) -> bool:
     import platform
     ok = False
     if platform.system() == "Darwin":
-        _keychain_save(name, value, "com.helm.portfolio")
+        _keychain_save(name, value, "com.catfolio.portfolio")
         ok = True
     else:
         try:
             import keyring as _kr
-            _kr.set_password("com.helm.portfolio", name, value)
+            _kr.set_password("com.catfolio.portfolio", name, value)
             ok = True
         except Exception:
             ok = False
@@ -539,7 +546,7 @@ def refresh_trading212():
         sys.path.insert(0, scripts_dir)
 
     # Bridge UI-saved secrets into the environment the standalone fetch script
-    # reads. The Settings page saves keys to the keychain (com.helm.portfolio),
+    # reads. The Settings page saves keys to the keychain (com.catfolio.portfolio),
     # but enrich_trading212_data.py looks them up via os.environ / its own
     # keychain service — so without this bridge a key entered in the UI is never
     # used and the sync silently returns 0 positions.

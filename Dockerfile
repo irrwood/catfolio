@@ -12,8 +12,8 @@ COPY v3_backend/ v3_backend/
 
 WORKDIR /app/v3_backend
 
-ENV HELM_DATA_DIR=/data
-ENV HELM_DEMO=0
+ENV CATFOLIO_DATA_DIR=/data
+ENV CATFOLIO_DEMO=0
 
 EXPOSE 8787
 

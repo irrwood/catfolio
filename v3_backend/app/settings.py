@@ -15,17 +15,17 @@ def _compute_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
-ROOT = Path(os.environ.get("HELM_ROOT", str(_compute_root())))
+ROOT = Path(os.environ.get("CATFOLIO_ROOT") or os.environ.get("HELM_ROOT") or str(_compute_root()))
 # Writable data directory. Defaults to <repo>/outputs for dev; the packaged desktop
-# app points HELM_DATA_DIR at ~/Library/Application Support/Helm so it never writes
+# app points CATFOLIO_DATA_DIR at ~/Library/Application Support/Catfolio so it never writes
 # into a read-only app bundle. All caches/DB/report derive from here.
-DATA_DIR = Path(os.environ.get("HELM_DATA_DIR", str(ROOT / "outputs")))
+DATA_DIR = Path(os.environ.get("CATFOLIO_DATA_DIR") or os.environ.get("HELM_DATA_DIR") or str(ROOT / "outputs"))
 V2_DIR = DATA_DIR / "portfolio_analysis_v2"
 V2_HTML = V2_DIR / "portfolio_cost_basis_v2.html"
 LIVE_MARKET_CACHE = V2_DIR / "live_market_data.json"
 FUNDAMENTALS_CACHE = V2_DIR / "fundamentals_data.json"
 LAB_HISTORY_CACHE = V2_DIR / "lab_history_data.json"
 BUILD_V2_SCRIPT = ROOT / "scripts/build_trading212_v2.py"
-GBP_TO_USD = float(os.environ.get("HELM_GBP_TO_USD", "1.3460"))
+GBP_TO_USD = float(os.environ.get("CATFOLIO_GBP_TO_USD") or os.environ.get("HELM_GBP_TO_USD") or "1.3460")
 MARKET_REFRESH_TTL_SECONDS = 60
 LAB_HISTORY_TTL_SECONDS = 60 * 60 * 12

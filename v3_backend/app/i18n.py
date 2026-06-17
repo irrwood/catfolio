@@ -1,6 +1,6 @@
 """Server-side internationalization.
 
-Chinese is the source language. The active language lives in the `helm_lang` cookie.
+Chinese is the source language. The active language lives in the `catfolio_lang` cookie.
 `t(text, lang)` translates a single string; `t_block(html, lang)` translates a whole
 rendered HTML block by replacing every known Chinese phrase (longest first, to avoid
 substring collisions). `wrap_v4_layout` calls `t_block` on the full page, so a route
@@ -31,7 +31,7 @@ EN = {
     "手动导入数据 (CSV)": "Manual Import (CSV)",
     "导入持仓数据": "Import Portfolio Data",
     "没有 API key？上传任意券商的交易记录 CSV，自动计算持仓与平均成本。": "No API key? Upload a transaction CSV from any broker to calculate holdings and average cost automatically.",
-    "上传任意券商的交易记录 CSV，Helm 自动计算加权平均成本和当前持仓。无需 Trading 212 账号。": "Upload a transaction CSV from any broker. Helm computes weighted-average cost basis and current positions automatically. No Trading 212 account needed.",
+    "上传任意券商的交易记录 CSV，Catfolio 自动计算加权平均成本和当前持仓。无需 Trading 212 账号。": "Upload a transaction CSV from any broker. Catfolio computes weighted-average cost basis and current positions automatically. No Trading 212 account needed.",
     "上传交易记录": "Upload Transactions",
     "支持 CSV 格式，列名不区分大小写": "CSV format, column names are case-insensitive",
     "点击选择 CSV 文件": "Click to select a CSV file",
@@ -47,13 +47,81 @@ EN = {
     "导入成功": "Import Successful",
     "重新导入": "Re-import",
     "前往控制台": "Go to Dashboard",
-    "投资指挥中心": "Investment Command Center",
+    "投资组合": "Portfolio",
     "深色模式": "Dark Mode",
     "浅色模式": "Light Mode",
     "跟随系统": "System",
     "数据同步状态": "Data Sync Status",
     "账户已连接": "Account Connected",
+    "假数据": "Demo data",
     "未刷新": "—",
+    "读取中...": "Loading...",
+    "刷新历史价格": "Refresh History Prices",
+
+    # ── portfolio lab page ──
+    "组合分析、量化回测与优化": "Portfolio analytics, quantitative backtesting, and optimization",
+    "历史价格": "Historical Prices",
+    "总市值": "Market Value",
+    "总浮盈": "Total P/L",
+    "今日盈亏": "Today P/L",
+    "持仓股数": "Holdings",
+    "夏普比率": "Sharpe Ratio",
+    "最大回撤统计时间": "Max drawdown window",
+    "全部": "All",
+    "样本期": "Sample period",
+    "收益分布日历": "Return Distribution Calendar",
+    "每日盈亏 · 月 / 年 视图": "Daily P/L · Month / Year View",
+    "月": "Month",
+    "年": "Year",
+    "上一页": "Previous",
+    "下一页": "Next",
+    "当月盈亏": "Monthly P/L",
+    "全年盈亏": "Yearly P/L",
+    "盈利天数": "Winning Days",
+    "亏损天数": "Losing Days",
+    "最大单日": "Best Day",
+    "最差单日": "Worst Day",
+    "月度收益热图": "Monthly Return Heatmap",
+    "年 × 月盈亏%": "Year × Month P/L %",
+    "按当前仓位模型估算，适合看月份节奏和波动，不代表完整账户现金流收益。": "Estimated from the current-position model; useful for monthly rhythm and volatility, not full account cash-flow return.",
+    "估值矩阵 (P/E vs 成长)": "Valuation Matrix (P/E vs Growth)",
+    "气泡大小 = 仓位权重": "Bubble size = position weight",
+    "优先使用 EPS 成长率；缺失时使用营收同比成长率。需要 fundamentals 数据源刷新。": "Uses EPS growth first; falls back to revenue growth. Requires refreshed fundamentals data.",
+    "估值水位": "Valuation Level",
+    "刷新 FMP fundamentals 后，显示持仓相对同板块/组合中位估值的 premium 或 discount。": "After refreshing FMP fundamentals, shows each holding's premium or discount versus sector or portfolio median valuation.",
+    "集中度、盈亏、收益和风险": "Concentration, P/L, returns, and risk",
+    "数据口径": "Data Basis",
+    "正在读取数据说明...": "Reading data notes...",
+    "真实持仓数据": "Real Holding Data",
+    "持仓分类集中度": "Holding Category Concentration",
+    "真实持仓 + 本地分类": "Real holdings + local classification",
+    "个股盈亏贡献": "Holding P/L Contribution",
+    "真实账户 · 美元浮盈（成本 vs 现价）": "Real account · USD unrealized P/L (cost vs current price)",
+    "持仓明细": "Holding Details",
+    "成本、现价、今日涨跌、浮盈和仓位": "Cost, current price, today change, P/L, and weight",
+    "代码": "Ticker",
+    "成本": "Cost",
+    "现价": "Current Price",
+    "今日": "Today",
+    "浮盈%": "P/L %",
+    "仓位": "Weight",
+    "模型分析，按当前仓位回看历史，不是现金流口径真实收益": "Model analysis based on current weights, not real cash-flow returns",
+    "收益率分布": "Return Distribution",
+    "模型日收益": "Model daily returns",
+    "回撤水下曲线": "Drawdown Underwater Curve",
+    "模型组合跌离高点": "Model portfolio decline from peak",
+    "持仓相关性矩阵": "Holding Correlation Matrix",
+    "颜色越深，越容易同涨同跌": "Darker colors mean holdings move together more",
+    "模型归因 Waterfall": "Model Attribution Waterfall",
+    "模型口径 · 当月权重收益%（非真实盈亏）": "Model basis · current-month weighted return % (not real P/L)",
+    "累计收益对比": "Cumulative Return Comparison",
+    "现金流镜像": "Cash-Flow Mirror",
+    "资产归并": "Exposure Merge",
+    "底层暴露": "Underlying Exposure",
+    "成员": "Members",
+    "权重": "Weight",
+    "状态": "Status",
+    "正在加载 Portfolio Lab...": "Loading Portfolio Lab...",
 
     # ── strategy lab page ──
     "用 Python 写策略，对任意股票回测，每次运行自动保存为一条记录，可随时回看对比。":
@@ -110,6 +178,7 @@ EN = {
     "Yahoo 行情": "Yahoo Quotes",
     "FMP 估值": "FMP Valuation",
     "已设置": "Configured",
+    "未配置": "Not configured",
     "强制刷新": "Force Refresh",
     "刷新": "Refresh",
     "保存": "Save",
@@ -144,6 +213,7 @@ EN = {
     "完成": "Done",
     "已缓存": "Cached",
     "已开启": "On",
+    "无缓存": "No cache",
     "关闭": "Off",
     "无明显信号": "No clear signal",
     "覆盖": "Coverage",
@@ -154,6 +224,24 @@ EN = {
     # ── settings page ──
     "系统配置与状态": "System Configuration & Status",
     "管理本地量化分析服务的外部凭证状态、数据刷新策略及缓存生命周期。": "Manage external credential status, data refresh policy, and cache lifecycle for the local analytics service.",
+    "外部 API 凭证": "External API Credentials",
+    "Key 保存至系统密钥库，不写入任何文件。留空点保存 = 不修改。": "Keys are stored in the system keychain and are never written to files. Saving an empty field leaves the value unchanged.",
+    "当前是演示数据模式。为了方便开源演示和截图，此页面不会读取或显示本机 Keychain / 环境变量里的凭证状态。\n        关闭演示模式后才会显示 API Key 配置。": "Demo data mode is on. For open-source demos and screenshots, this page does not read or display local Keychain or environment credential status. Turn off demo mode to show API key configuration.",
+    "当前是演示数据模式。为了方便开源演示和截图，此页面不会读取或显示本机 Keychain / 环境变量里的凭证状态。": "Demo data mode is on. For open-source demos and screenshots, this page does not read or display local Keychain or environment credential status.",
+    "关闭演示模式后才会显示 API Key 配置。": "Turn off demo mode to show API key configuration.",
+    "AI 提供方": "AI Provider",
+    "选择驱动 AI 组合分析的模型。切换前请先填好对应的 API Key（● 表示未配置）。": "Choose the model provider for AI portfolio analysis. Configure the matching API key before switching (● means not configured).",
+    "演示数据模式下 AI 提供方配置已隐藏。": "AI provider configuration is hidden in demo data mode.",
+    "演示数据模式": "Demo Data Mode",
+    "开启后用内置样例组合替代真实数据，适合截图、演示或分享，不暴露你的真实持仓。": "When enabled, built-in sample data replaces real data for screenshots, demos, and sharing without exposing real holdings.",
+    "假数据模式": "Demo Data Mode",
+    "当前：已开启 — 显示样例数据": "Current: On — showing sample data",
+    "当前：已关闭 — 显示真实数据": "Current: Off — showing real data",
+    "重新拉取持仓与平均成本，并验证 API 凭证。": "Refetch holdings and average cost, and validate API credentials.",
+    "隐藏（演示数据模式）": "Hidden (demo data mode)",
+    "Telegram 提醒": "Telegram Alerts",
+    "仓位集中度、高估值、最大回撤超阈值时自动推送到 Telegram。每条提醒最多每小时推一次。": "Automatically push Telegram alerts when concentration, valuation, or max drawdown thresholds are crossed. Each alert is sent at most once per hour.",
+    "演示数据模式下 Telegram 凭证配置已隐藏。": "Telegram credential configuration is hidden in demo data mode.",
     "外部 API 凭证状态": "External API Credential Status",
     "系统从环境变量或 macOS Keychain 中安全读取秘钥，不保存在本地文件中。": "The system securely reads secrets from environment variables or macOS Keychain and does not store them in local files.",
     "用于获取美股 P/E, P/S 等估值及 EPS 同比成长率数据。": "Used to fetch US equity valuation data such as P/E, P/S, and EPS year-over-year growth.",
@@ -203,6 +291,21 @@ EN = {
     "正在拉取 Massive 盘后数据...": "Fetching Massive after-hours data...",
     "盘后数据刷新Done！": "After-hours refresh done.",
     "盘后数据刷新完成！": "After-hours refresh done.",
+
+    # ── import page ──
+    "列名": "Column",
+    "必填": "Required",
+    "YYYY-MM-DD 或 MM/DD/YYYY": "YYYY-MM-DD or MM/DD/YYYY",
+    "Shares（正数）": "Shares (positive number)",
+    "股数（正数）": "Shares (positive number)",
+    "USD / GBP / GBX / EUR（默认 USD）": "USD / GBP / GBX / EUR (default USD)",
+    "示例": "Example",
+    "下载示例 CSV": "Download Sample CSV",
+    "平均成本": "Average Cost",
+    "货币": "Currency",
+
+    # ── remaining dynamic/server labels ──
+    "AI 评价": "AI Evaluation",
 
     # ── returns page ──
     "收益对比 · Benchmark Comparison": "Returns · Benchmark Comparison",
@@ -260,7 +363,7 @@ EN = {
     "全球除美": "Global ex-US",
     "黄金": "Gold",
     "需要交易流水数据": "Trade history is required",
-    "此模式依赖交易流水。请在环境配置中设置 HELM_DATA_DIR 目录以导入 Trading 212 交易历史 CSV 文件。": "This mode depends on trade history. Set HELM_DATA_DIR in the environment to import Trading 212 trade-history CSV files.",
+    "此模式依赖交易流水。请在环境配置中设置 CATFOLIO_DATA_DIR 目录以导入 Trading 212 交易历史 CSV 文件。": "This mode depends on trade history. Set CATFOLIO_DATA_DIR in the environment to import Trading 212 trade-history CSV files.",
     "暂无可用收益数据。": "No return data is available.",
     "当前总市值 (USD)": "Current Market Value (USD)",
     "净投入成本 (USD)": "Net Invested Cost (USD)",
@@ -769,7 +872,7 @@ EN = {
 
 
 def get_lang(request: Request) -> str:
-    lang = request.cookies.get("helm_lang")
+    lang = request.cookies.get("catfolio_lang") or request.cookies.get("helm_lang")
     if lang in LANGS:
         return lang
     # No cookie — auto-detect from browser Accept-Language header
@@ -803,5 +906,6 @@ def set_lang(lang: str, request: Request):
     target = lang if lang in LANGS else "zh"
     referer = request.headers.get("referer") or "/"
     resp = RedirectResponse(url=referer, status_code=303)
-    resp.set_cookie("helm_lang", target, max_age=60 * 60 * 24 * 365, samesite="lax")
+    resp.set_cookie("catfolio_lang", target, max_age=60 * 60 * 24 * 365, samesite="lax")
+    resp.delete_cookie("helm_lang")
     return resp

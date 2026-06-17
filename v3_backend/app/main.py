@@ -1,4 +1,4 @@
-"""Helm — FastAPI Application."""
+"""Catfolio — FastAPI Application."""
 
 from pathlib import Path
 
@@ -12,7 +12,7 @@ load_dotenv()
 from app.routes import api, home, report, lab, backtest, heatmap, returns, ai, settings, strategy, import_csv
 from app import i18n
 
-app = FastAPI(title="Helm", version="1.0.0")
+app = FastAPI(title="Catfolio", version="1.0.0")
 APP_DIR = Path(__file__).resolve().parent
 
 app.add_middleware(

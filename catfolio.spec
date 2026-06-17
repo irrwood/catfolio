@@ -1,10 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for Helm.app (macOS desktop build).
+"""PyInstaller spec for Catfolio.app (macOS desktop build).
 
 Run from the repo root:
-    v3_backend/.venv/bin/pyinstaller helm.spec --clean
+    v3_backend/.venv/bin/pyinstaller catfolio.spec --clean
 
-Output: dist/Helm.app
+Output: dist/Catfolio.app
 """
 
 import os
@@ -106,7 +106,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="Helm",
+    name="Catfolio",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -125,17 +125,17 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=False,
-    name="Helm",
+    name="Catfolio",
 )
 
 app = BUNDLE(
     coll,
-    name="Helm.app",
-    icon=None,            # TODO: add Helm.icns for a proper dock icon
-    bundle_identifier="com.helm.portfolio",
+    name="Catfolio.app",
+    icon=os.path.join(_here, "assets", "Catfolio.icns"),
+    bundle_identifier="com.catfolio.portfolio",
     info_plist={
-        "CFBundleName": "Helm",
-        "CFBundleDisplayName": "Helm",
+        "CFBundleName": "Catfolio",
+        "CFBundleDisplayName": "Catfolio",
         "CFBundleVersion": "1.2.0",
         "CFBundleShortVersionString": "1.2.0",
         "NSHighResolutionCapable": True,

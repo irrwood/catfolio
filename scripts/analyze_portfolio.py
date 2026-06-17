@@ -10,7 +10,7 @@ getcontext().prec = 28
 
 import os, glob as _glob
 def _init_source_files():
-    data_dir = os.environ.get("HELM_DATA_DIR", "")
+    data_dir = os.environ.get("CATFOLIO_DATA_DIR") or os.environ.get("HELM_DATA_DIR") or ""
     if data_dir and os.path.isdir(data_dir):
         csv_files = sorted(_glob.glob(os.path.join(data_dir, "*.csv")))
         result = []

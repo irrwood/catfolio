@@ -3,7 +3,6 @@
     const statusEl = document.querySelector("#status");
     const groupRows = document.querySelector("#groupRows");
     const percentileGrid = document.querySelector("#percentileGrid");
-    const qualityBanner = document.querySelector("#qualityBanner");
     const cumulativeRange = document.querySelector("#cumulativeRange");
     const returnBasisNote = document.querySelector("#returnBasisNote");
     const returnBasisButtons = Array.from(document.querySelectorAll("[data-return-basis]"));
@@ -39,20 +38,20 @@
     // ---- Chart engine: ECharts ----
     const chartById = new Map();
     const chartInstances = [];
-    let helmThemeRegistered = false;
-    function ensureHelmTheme() {
+    let catfolioThemeRegistered = false;
+    function ensureCatfolioTheme() {
         // ECharts' built-in default splitLine is "#E0E6F1" (near-white), designed for
         // light backgrounds. Charts that override yAxis without re-setting splitLine fall
         // back to it, producing glaring white gridlines on the dark theme. Register a
         // theme whose default axis/grid lines are semi-transparent grey — subtle on both
         // dark and light backgrounds — so every chart inits safely regardless.
-        if (helmThemeRegistered || !window.echarts) return;
+        if (catfolioThemeRegistered || !window.echarts) return;
         const axisDef = {
             axisLine: { lineStyle: { color: "rgba(128,128,128,0.28)" } },
             splitLine: { lineStyle: { color: "rgba(128,128,128,0.14)" } },
         };
-        window.echarts.registerTheme("helm", { categoryAxis: axisDef, valueAxis: axisDef });
-        helmThemeRegistered = true;
+        window.echarts.registerTheme("catfolio", { categoryAxis: axisDef, valueAxis: axisDef });
+        catfolioThemeRegistered = true;
     }
 
     function isDark() { return !document.documentElement.classList.contains('light-theme'); }
@@ -72,8 +71,8 @@
         const node = document.querySelector(id);
         if (!node) return { setOption() {}, resize() {} };
         if (chartById.has(id)) return chartById.get(id);
-        ensureHelmTheme();
-        const instance = window.echarts.init(node, "helm");
+        ensureCatfolioTheme();
+        const instance = window.echarts.init(node, "catfolio");
         chartInstances.push(instance);
         chartById.set(id, instance);
         return instance;
@@ -304,8 +303,6 @@
         latestCommandCenter = data;
         const isLight = document.documentElement.classList.contains("light-theme");
         const quality = data.data_quality || {};
-        qualityBanner.innerHTML = `<b>数据口径</b><span>持仓、现价、成本、浮盈亏是账户数据；收益热图、累计收益、相关性、回撤和 Waterfall 是当前仓位模型，非真实账户收益。样本 ${quality.history_start || "—"} 到 ${quality.history_end || "—"}，共 ${quality.history_days || 0} 个交易日。</span>`;
-
         // 1. Sector Concentration
         const sectorRows = data.sector_concentration?.rows || [];
         chart("#sectorChart").setOption({
@@ -731,11 +728,12 @@
 // via /api/ai/ask). Results render inline in the card; re-clicking toggles.
 (function () {
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const currentLang = () => (document.documentElement.lang || "zh").startsWith("en") ? "en" : "zh";
 
   async function ask(question) {
     const res = await fetch("/api/ai/ask", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question, lang: currentLang() }),
     });
     if (!res.ok) {
       throw new Error(res.status === 500

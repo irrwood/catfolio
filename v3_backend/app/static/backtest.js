@@ -26,30 +26,41 @@
     const contributorList = document.querySelector("#contributorList");
     const riskConcentratorList = document.querySelector("#riskConcentratorList");
     const riskTabs = Array.from(document.querySelectorAll(".risk-tab"));
+    const currentLang = () => (document.documentElement.lang || "zh").startsWith("en") ? "en" : "zh";
+    const isEn = () => currentLang() === "en";
+    const ui = {
+        analyzing: () => isEn() ? "AI analyzing..." : "AI 分析中...",
+        done: () => isEn() ? "AI analysis complete" : "AI 分析完成",
+        failed: () => isEn() ? "AI analysis failed" : "AI 分析失败",
+        analyzeCard: () => isEn() ? "AI is analyzing..." : "AI 正在解读…",
+        cardFailed: () => isEn() ? "AI analysis failed: " : "AI 解读失败：",
+        configureKey: () => isEn() ? "Configure an AI API key in Settings first." : "请先在「设置」页配置 AI API Key（DeepSeek 或 Grok）",
+        loadFailed: () => isEn() ? "Analysis failed: " : "分析失败: ",
+    };
 
     const chartById = new Map();
     const chartInstances = [];
-    let helmThemeRegistered = false;
-    function ensureHelmTheme() {
+    let catfolioThemeRegistered = false;
+    function ensureCatfolioTheme() {
         // ECharts' default splitLine "#E0E6F1" is near-white (built for light backgrounds).
         // Charts that override yAxis without re-setting splitLine fall back to it, giving
         // glaring white gridlines on the dark theme. Register a theme whose default axis/
         // grid lines are semi-transparent grey — subtle on both dark and light backgrounds.
-        if (helmThemeRegistered || !window.echarts) return;
+        if (catfolioThemeRegistered || !window.echarts) return;
         const axisDef = {
             axisLine: { lineStyle: { color: "rgba(128,128,128,0.28)" } },
             splitLine: { lineStyle: { color: "rgba(128,128,128,0.14)" } },
         };
-        window.echarts.registerTheme("helm", { categoryAxis: axisDef, valueAxis: axisDef });
-        helmThemeRegistered = true;
+        window.echarts.registerTheme("catfolio", { categoryAxis: axisDef, valueAxis: axisDef });
+        catfolioThemeRegistered = true;
     }
     function isDark() { return !document.documentElement.classList.contains('light-theme'); }
     function chart(id) {
         const node = document.querySelector(id);
         if (!node) return { setOption() {}, resize() {} };
         if (chartById.has(id)) return chartById.get(id);
-        ensureHelmTheme();
-        const instance = window.echarts.init(node, "helm");
+        ensureCatfolioTheme();
+        const instance = window.echarts.init(node, "catfolio");
         chartInstances.push(instance);
         chartById.set(id, instance);
         return instance;
@@ -293,11 +304,16 @@
     const reviewBox = document.querySelector("#aiReviewBox");
     _aiRunning = true;
     btn.disabled = true;
-    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> AI 分析中...`;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${ui.analyzing()}`;
     section.style.display = "block";
     reviewBox.style.display = "none";
     try {
-      const resp = await fetch("/api/lab/ai-analysis", { method: "POST" });
+      const lang = (document.documentElement.lang || "zh").startsWith("en") ? "en" : "zh";
+      const resp = await fetch("/api/lab/ai-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lang }),
+      });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
       const prog = data.programmatic || {};
@@ -317,10 +333,10 @@
         reviewBox.style.display = "block";
         document.querySelector("#aiReviewText").textContent = data.ai_review;
       }
-      btn.innerHTML = `<i class="fa-solid fa-circle-check" style="color:var(--positive)"></i> AI 分析完成`;
+      btn.innerHTML = `<i class="fa-solid fa-circle-check" style="color:var(--positive)"></i> ${ui.done()}`;
     } catch (e) {
-      document.querySelector("#aiAiBacktest").textContent = `分析失败: ${e.message}`;
-      btn.innerHTML = `<i class="fa-solid fa-circle-xmark" style="color:var(--negative)"></i> AI 分析失败`;
+      document.querySelector("#aiAiBacktest").textContent = `${ui.loadFailed()}${e.message}`;
+      btn.innerHTML = `<i class="fa-solid fa-circle-xmark" style="color:var(--negative)"></i> ${ui.failed()}`;
       console.error(e);
     } finally {
       _aiRunning = false;
@@ -347,32 +363,34 @@
 // ── Per-card AI 解读 (magic-wand) ──────────────────────────────────────────
 (function () {
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-
   async function ask(question) {
     const res = await fetch("/api/ai/ask", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question, lang: currentLang() }),
     });
-    if (!res.ok) throw new Error(res.status === 500
-      ? "请先在「设置」页配置 AI API Key（DeepSeek 或 Grok）"
-      : `HTTP ${res.status}`);
+    if (!res.ok) throw new Error(res.status === 500 ? ui.configureKey() : `HTTP ${res.status}`);
     return res.json();
   }
 
   // Per-card focus so each card's AI answer addresses its own topic.
-  const AI_BASE = "用中文回答，3-4 句话，直接给结论、不要客套；只围绕本卡片的主题展开，避免重复其他卡片已讲过的仓位集中度/单票占比等泛泛内容。";
+  const AI_BASE_ZH = "用中文回答，3-4 句话，直接给结论、不要客套；只围绕本卡片的主题展开，避免重复其他卡片已讲过的仓位集中度/单票占比等泛泛内容。";
+  const AI_BASE_EN = "Answer in English in 3-4 sentences. Give direct conclusions, no pleasantries. Focus only on this card's topic and avoid repeating generic concentration comments from other cards.";
   const AI_FOCUS = [
-    ["历史回测", "聚焦回测表现 vs 基准：年化收益、波动、夏普、最大回撤相比 SPY/QQQ 等是否划算，风险调整后收益如何"],
-    ["组合重建", "聚焦优化方向：当前组合相对优化组合的差距、哪些该加/该减、调仓是否值得"],
-    ["蒙特卡洛", "聚焦未来收益情景：乐观/中性/悲观区间有多宽、极端下行风险有多大"],
-    ["决策摘要", "给出总体决策建议：当前组合最该关注、最该采取行动的 1-2 件事"],
-    ["因子分析", "聚焦因子暴露：组合主要受哪些因子驱动（Beta、成长、动量等）、是否存在隐性的因子集中"],
-    ["优化组合", "聚焦优化结果：优化后组合相比当前的收益/风险改善、权重调整背后的逻辑"],
+    ["历史回测", "Historical Backtest", "聚焦回测表现 vs 基准：年化收益、波动、夏普、最大回撤相比 SPY/QQQ 等是否划算，风险调整后收益如何", "Focus on backtest performance versus benchmarks: annual return, volatility, Sharpe, max drawdown, and whether risk-adjusted return is worthwhile versus SPY/QQQ."],
+    ["组合重建", "Portfolio Reconstruction", "聚焦优化方向：当前组合相对优化组合的差距、哪些该加/该减、调仓是否值得", "Focus on optimization direction: the gap between the current and optimized portfolios, what changed, and whether the rebalance is meaningful."],
+    ["蒙特卡洛", "Monte Carlo", "聚焦未来收益情景：乐观/中性/悲观区间有多宽、极端下行风险有多大", "Focus on future return scenarios: optimistic/base/pessimistic ranges and extreme downside risk."],
+    ["决策摘要", "Decision Summary", "给出总体决策建议：当前组合最该关注、最该采取行动的 1-2 件事", "Summarize the 1-2 most important portfolio issues to watch or act on."],
+    ["因子分析", "Factor Analysis", "聚焦因子暴露：组合主要受哪些因子驱动（Beta、成长、动量等）、是否存在隐性的因子集中", "Focus on factor exposure: beta, growth, momentum, and hidden factor concentration."],
+    ["优化组合", "Optimized Portfolio", "聚焦优化结果：优化后组合相比当前的收益/风险改善、权重调整背后的逻辑", "Focus on optimization results: return/risk improvement versus the current portfolio and the logic behind weight changes."],
   ];
   function aiPrompt(title) {
-    const hit = AI_FOCUS.find(([k]) => title.includes(k));
-    const focus = hit ? hit[1] : `解读「${title}」中的关键信息`;
-    return `请基于我的真实持仓数据，${focus}。${AI_BASE}`;
+    const hit = AI_FOCUS.find(([zh, en]) => title.includes(zh) || title.includes(en));
+    if (isEn()) {
+      const focus = hit ? hit[3] : `Interpret the key information in "${title}".`;
+      return `Based on my portfolio data, ${focus} ${AI_BASE_EN}`;
+    }
+    const focus = hit ? hit[2] : `解读「${title}」中的关键信息`;
+    return `请基于我的真实持仓数据，${focus}。${AI_BASE_ZH}`;
   }
 
   const panels = Array.from(document.querySelectorAll("section.panel"));
@@ -402,7 +420,7 @@
       if (loaded) { result.hidden = !result.hidden; return; }
       result.hidden = false;
       result.classList.remove("err");
-      result.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> AI 正在解读…';
+      result.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${ui.analyzeCard()}`;
       btn.disabled = true;
       try {
         const data = await ask(aiPrompt(title));
@@ -410,7 +428,7 @@
         loaded = true;
       } catch (e) {
         result.classList.add("err");
-        result.innerHTML = "AI 解读失败：" + esc(e.message);
+        result.innerHTML = ui.cardFailed() + esc(e.message);
       } finally {
         btn.disabled = false;
       }

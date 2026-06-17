@@ -1,16 +1,176 @@
 """Page route: report."""
 import re
+from html import escape
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse
+from app.analytics import portfolio_summary
 from app.components import wrap_v4_layout
+from app.data_store import current_snapshot, demo_mode
 from app.i18n import get_lang
 from app.settings import V2_HTML
 
 router = APIRouter(tags=["pages"])
 
 
+def _fmt_number(value, digits=2):
+    try:
+        return f"{float(value):,.{digits}f}"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _money(value, currency="USD", digits=2):
+    symbol = {"USD": "$", "GBP": "£", "EUR": "€", "GBX": ""}.get(currency, "")
+    suffix = "p" if currency == "GBX" else (f" {currency}" if not symbol else "")
+    return f"{symbol}{_fmt_number(value, digits)}{suffix}"
+
+
+def _demo_report_content():
+    """Render a self-contained audit report from the static demo snapshot.
+
+    Demo mode must never read generated HTML from CATFOLIO_DATA_DIR because that
+    file can contain a user's real account data from a previous live refresh.
+    """
+    snapshot = current_snapshot()
+    summary = portfolio_summary(snapshot)
+    holdings = snapshot["portfolio"].get("holdings", [])
+    market_by_ticker = {
+        (row.get("ticker") or "").upper(): row
+        for row in snapshot["market"].get("rows", [])
+    }
+    t212_by_ticker = {
+        (row.get("normalized_ticker") or row.get("ticker") or "").upper(): row
+        for row in snapshot["trading212"].get("positions", [])
+    }
+
+    cost_rows = []
+    reconcile_rows = []
+    for row in sorted(holdings, key=lambda item: item.get("ticker", "")):
+        ticker = (row.get("ticker") or "").upper()
+        market = market_by_ticker.get(ticker, {})
+        t212 = t212_by_ticker.get(ticker, {})
+        shares = row.get("shares")
+        api_shares = t212.get("quantity", shares)
+        diff = (float(api_shares or 0) - float(shares or 0)) if shares is not None else 0
+        status = "匹配" if abs(diff) < 0.0001 else "数量差异"
+        currency = row.get("cost_currency") or "USD"
+        cost_rows.append(
+            f"<tr>"
+            f"<td>{escape(ticker)}</td>"
+            f"<td>{escape(row.get('name') or ticker)}</td>"
+            f"<td>{_fmt_number(shares, 4)}</td>"
+            f"<td>{escape(currency)}</td>"
+            f"<td>{_money(row.get('avg_cost_native'), currency, 4)}</td>"
+            f"<td>{_money(row.get('cost_usd_standard'), 'USD')}</td>"
+            f"<td>{_money(market.get('market_value_usd'), 'USD')}</td>"
+            f"</tr>"
+        )
+        reconcile_rows.append(
+            f"<tr>"
+            f"<td>{escape(ticker)}</td>"
+            f"<td><span class=\"pill source-finnhub\">{status}</span></td>"
+            f"<td>{_fmt_number(shares, 6)}</td>"
+            f"<td>{_fmt_number(api_shares, 6)}</td>"
+            f"<td>{_fmt_number(diff, 6)}</td>"
+            f"<td>{_money(t212.get('current_price') or row.get('last_trade_price'), t212.get('currency') or currency, 4)}</td>"
+            f"<td>{_money(t212.get('market_value_gbp_estimated'), 'GBP')}</td>"
+            f"</tr>"
+        )
+
+    return f"""
+<style>
+  .demo-report-grid {{
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 16px;
+  }}
+  .demo-report-card {{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+  }}
+  .demo-report-card span {{
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 8px;
+  }}
+  .demo-report-card b {{
+    color: var(--ink);
+    font-size: 24px;
+    letter-spacing: 0;
+  }}
+  .audit-note {{
+    margin: 0 0 16px; padding: 12px 16px;
+    border: 1px solid var(--line); border-radius: var(--radius-lg);
+    color: var(--muted); background: var(--panel-raised);
+    font-size: 13px; line-height: 1.5;
+  }}
+  .demo-report-section {{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-xl);
+    margin: 0 0 16px;
+    overflow: hidden;
+  }}
+  .demo-report-section h2 {{
+    margin: 0;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--line);
+    font-size: 16px;
+  }}
+  .demo-report-section table {{
+    width: 100%;
+    border-collapse: collapse;
+  }}
+  .demo-report-section th,
+  .demo-report-section td {{
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    font-size: 13px;
+  }}
+  .demo-report-section th {{
+    color: var(--muted);
+    background: var(--panel-raised);
+    font-weight: 650;
+  }}
+  @media (max-width: 900px) {{
+    .demo-report-grid {{ grid-template-columns: 1fr; }}
+    .demo-report-section {{ overflow-x: auto; }}
+  }}
+</style>
+<div class="audit-note">
+  Demo mode is using Catfolio's built-in sample portfolio. No generated report file from your local data directory is read on this page.
+</div>
+<div class="demo-report-grid">
+  <div class="demo-report-card"><span>Market Value</span><b>{_money(summary.get("market_value_usd"), "USD")}</b></div>
+  <div class="demo-report-card"><span>Cost Basis</span><b>{_money(summary.get("total_cost_usd_standard"), "USD")}</b></div>
+  <div class="demo-report-card"><span>Open Positions</span><b>{_fmt_number(summary.get("open_positions"), 0)}</b></div>
+</div>
+<section class="demo-report-section">
+  <h2>Trading 212 API Reconciliation</h2>
+  <table>
+    <thead><tr><th>Ticker</th><th>Status</th><th>CSV Shares</th><th>API Shares</th><th>Difference</th><th>API Price</th><th>Estimated GBP Value</th></tr></thead>
+    <tbody>{''.join(reconcile_rows)}</tbody>
+  </table>
+</section>
+<section class="demo-report-section">
+  <h2>Cost Basis by Stock</h2>
+  <table>
+    <thead><tr><th>Ticker</th><th>Name</th><th>Shares</th><th>Currency</th><th>Avg Cost</th><th>USD Cost</th><th>Market Value</th></tr></thead>
+    <tbody>{''.join(cost_rows)}</tbody>
+  </table>
+</section>
+"""
+
+
 @router.get("/report")
 def report(request: Request):
+    if demo_mode():
+        return HTMLResponse(wrap_v4_layout("审计报表", _demo_report_content(), "/report", get_lang(request)))
     if not V2_HTML.exists():
         raise HTTPException(status_code=404, detail="v2 report has not been generated yet")
     raw = V2_HTML.read_text(encoding="utf-8")
@@ -250,4 +410,3 @@ def log_error_endpoint(data: dict):
     print(data.get("stack"))
     print("========================")
     return {"status": "ok"}
-

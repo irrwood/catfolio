@@ -3,7 +3,7 @@ import re
 import subprocess
 from pathlib import Path
 
-import os; ROOT = Path(os.environ.get("HELM_ROOT", str(Path(__file__).resolve().parent.parent)))
+import os; ROOT = Path(os.environ.get("CATFOLIO_ROOT") or os.environ.get("HELM_ROOT") or str(Path(__file__).resolve().parent.parent))
 OUT = ROOT / "outputs/portfolio_analysis"
 
 

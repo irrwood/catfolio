@@ -25,7 +25,7 @@ def import_page(request: Request):
 <div class="v4-hero">
   <div class="v4-hero-text">
     <h1>导入持仓数据</h1>
-    <p>上传任意券商的交易记录 CSV，Helm 自动计算加权平均成本和当前持仓。无需 Trading 212 账号。</p>
+    <p>上传任意券商的交易记录 CSV，Catfolio 自动计算加权平均成本和当前持仓。无需 Trading 212 账号。</p>
   </div>
 </div>
 

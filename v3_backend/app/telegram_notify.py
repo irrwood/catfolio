@@ -1,4 +1,4 @@
-"""Telegram bot notification for Helm portfolio alerts.
+"""Telegram bot notification for Catfolio portfolio alerts.
 
 Uses only stdlib urllib — no extra dependencies.
 
@@ -46,7 +46,7 @@ def send_message(text: str, parse_mode: str = "HTML") -> dict:
 
 def test_connection() -> dict:
     """Send a test message. Returns {ok, error?}."""
-    result = send_message("✅ <b>Helm</b> 已连接。Telegram 提醒工作正常。")
+    result = send_message("✅ <b>Catfolio</b> 已连接。Telegram 提醒工作正常。")
     return result
 
 
@@ -119,7 +119,7 @@ def maybe_push_alerts(alerts: list[dict]):
     _save_log(log)
 
     severity_icon = {"warn": "⚠️", "info": "ℹ️", "danger": "🔴"}
-    lines = ["🔔 <b>Helm 投资提醒</b>", ""]
+    lines = ["🔔 <b>Catfolio 投资提醒</b>", ""]
     for a in new_alerts:
         icon = severity_icon.get(a.get("severity", "info"), "ℹ️")
         lines.append(f"{icon} {a.get('message', '')}")

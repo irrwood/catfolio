@@ -15,6 +15,10 @@ from app.ai import ai_analysis, ask, overlap_analysis, performance_explanation, 
 router = APIRouter(prefix="/api", tags=["api"])
 
 
+def _req_lang(req: dict | None) -> str:
+    return "en" if str((req or {}).get("lang", "")).lower().startswith("en") else "zh"
+
+
 @router.get("/portfolio/summary")
 def api_summary():
     return portfolio_summary(current_snapshot())
@@ -230,43 +234,43 @@ def api_lab_factor_analysis():
 
 
 @router.post("/lab/ai-analysis")
-def api_lab_ai_analysis():
-    return ai_analysis()
+def api_lab_ai_analysis(req: dict | None = Body(None)):
+    return ai_analysis(_req_lang(req))
 
 
 @router.post("/ai/briefing")
-def api_ai_briefing():
-    return portfolio_briefing()
+def api_ai_briefing(req: dict | None = Body(None)):
+    return portfolio_briefing(_req_lang(req))
 
 
 @router.post("/ai/risk-diagnosis")
-def api_ai_risk_diagnosis():
-    return risk_diagnosis()
+def api_ai_risk_diagnosis(req: dict | None = Body(None)):
+    return risk_diagnosis(_req_lang(req))
 
 
 @router.post("/ai/performance-explanation")
 async def api_ai_performance_explanation(req: dict = Body(...)):
-    return performance_explanation(req.get("question", ""))
+    return performance_explanation(req.get("question", ""), _req_lang(req))
 
 
 @router.post("/ai/overlap-analysis")
-def api_ai_overlap_analysis():
-    return overlap_analysis()
+def api_ai_overlap_analysis(req: dict | None = Body(None)):
+    return overlap_analysis(_req_lang(req))
 
 
 @router.post("/ai/what-if")
 async def api_ai_what_if(req: dict = Body(...)):
-    return what_if(req.get("scenario", ""))
+    return what_if(req.get("scenario", ""), _req_lang(req))
 
 
 @router.post("/ai/ask")
 async def api_ai_ask(req: dict = Body(...)):
-    return ask(req.get("question", ""))
+    return ask(req.get("question", ""), _req_lang(req))
 
 
 @router.post("/ai/returns-explanation")
-def api_ai_returns_explanation():
-    return returns_explanation()
+def api_ai_returns_explanation(req: dict | None = Body(None)):
+    return returns_explanation(_req_lang(req))
 @router.get("/returns/twr")
 def api_returns_twr():
     """Simplified TWR calculation from transaction history."""

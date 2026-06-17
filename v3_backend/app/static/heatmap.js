@@ -1,5 +1,68 @@
     const heatmap = document.querySelector("#heatmap");
     const statusEl = document.querySelector("#status");
+    const isEnglish = () => (document.documentElement.lang || "").startsWith("en");
+    const EN = {
+      "无估值": "No valuation",
+      "刚才": "just now",
+      "分钟前": " min ago",
+      "小时前": " hr ago",
+      "高估": "Premium",
+      "低估": "Discount",
+      "估值 P/E": "Valuation P/E",
+      "浮动盈亏 %": "Unrealized P/L %",
+      "浮动盈亏, %": "Unrealized P/L, %",
+      "相对成交量": "Relative Volume",
+      "相对成交量(量/均量)": "Relative Volume (volume/average)",
+      "涨跌1天, %": "Change 1D, %",
+      "今日涨跌 %": "Today Change %",
+      "板块": "Sector",
+      "仓位": "Weight",
+      "今日": "Today",
+      "估值更新": "Valuation Updated",
+      "市值": "Market Value",
+      "浮盈亏": "Unrealized P/L",
+      "成本": "Cost",
+      "现价": "Current Price",
+      "来源": "Source",
+      "全部来自 ETF": "All from ETF",
+      "含 ETF": "Includes ETF",
+      "历史表现": "Historical Performance",
+      "持仓数": "Holdings",
+      "总市值": "Total Market Value",
+      "今日盈亏": "Today's P/L",
+      "涨跌比": "Advance/Decline",
+      "日涨跌%": "Daily Change %",
+      "ETF穿透": "ETF Look-Through",
+      "已开启": "On",
+      "关闭": "Off",
+      "ETF穿透板块": "ETF Look-Through",
+      "图表库加载失败": "Chart library failed to load",
+      "按板块": "By Sector",
+      "按大小": "By Size",
+      "成交量1天": "Volume 1D",
+      "成交额1天": "Turnover 1D",
+      "相同大小": "Equal Size",
+      "涨跌1周, %": "Change 1W, %",
+      "涨跌1月, %": "Change 1M, %",
+      "涨跌3月, %": "Change 3M, %",
+      "涨跌6月, %": "Change 6M, %",
+      "今年以来 YTD, %": "YTD Change, %",
+      "涨跌1年, %": "Change 1Y, %",
+      "中文": "Chinese",
+      "英文": "English",
+      "隐藏": "Hidden",
+      "已就绪": "Ready",
+      "ETF已穿透": "ETF look-through enabled",
+      "没有持仓热力图数据": "No holdings heatmap data",
+      "没有可用数据": "No available data",
+      "刷新行情": "Refresh Quotes",
+      "刷新估值": "Refresh Valuation",
+      "同步持仓": "Sync Holdings",
+      "中...": "...",
+      "失败：": " failed: ",
+      "加载失败：": "Load failed: ",
+    };
+    const tr = (value) => isEnglish() ? (EN[value] || value) : value;
     let statusTimeout = null;
     function setStatus(html, autoHide = false) {
       if (statusTimeout) { clearTimeout(statusTimeout); statusTimeout = null; }
@@ -55,6 +118,21 @@
     if (localStorage.getItem("theme") === "light") {
       document.documentElement.classList.add("light-theme");
     }
+    const layoutLabels = { size: "按大小", sector: "按板块" };
+    const sizeLabels = { marketcap: "市值", equal: "相同大小", vol1d: "成交量1天", turnover1d: "成交额1天" };
+    const colorLabels = {
+      day: "涨跌1天, %",
+      week: "涨跌1周, %",
+      month: "涨跌1月, %",
+      quarter: "涨跌3月, %",
+      halfyear: "涨跌6月, %",
+      ytd: "今年以来 YTD, %",
+      year: "涨跌1年, %",
+      valuation: "估值 P/E",
+      pnl: "浮动盈亏, %",
+      relvolume: "相对成交量",
+    };
+    const nameLabels = { cn: "中文", en: "英文", hidden: "隐藏" };
     function cssVar(name) {
       return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
     }
@@ -72,11 +150,11 @@
     const fmtRatio = val => val === null || val === undefined ? "—" : val.toFixed(1);
     const fmtNum = val => val === null || val === undefined ? "—" : Number(val).toFixed(2);
     function fmtAge(unix) {
-      if (!unix) return "无估值";
+      if (!unix) return tr("无估值");
       const seconds = Math.floor(Date.now() / 1000 - Number(unix));
-      if (seconds < 60) return "刚才";
-      if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟前`;
-      return `${Math.floor(seconds / 3600)}小时前`;
+      if (seconds < 60) return tr("刚才");
+      if (seconds < 3600) return isEnglish() ? `${Math.floor(seconds / 60)}${tr("分钟前")}` : `${Math.floor(seconds / 60)}分钟前`;
+      return isEnglish() ? `${Math.floor(seconds / 3600)}${tr("小时前")}` : `${Math.floor(seconds / 3600)}小时前`;
     }
     function colorMetric(row) {
       if (colorMode === "valuation") { const pe = valuationPe(row); if (pe === null) return 0; return pe > 22 ? -1.5 : 1.5; }
@@ -238,8 +316,9 @@
       return groupRows(rows).map(group => {
         const children = group.holdings.map(leafNode);
         const childrenSum = children.reduce((sum, child) => sum + child.value, 0);
+        const holdingsLabel = isEnglish() ? `${group.count} holdings` : `${group.count}只`;
         return {
-          name: `${group.sector}\n${group.count}只 · ${fmtMoney(group.holdings.reduce((s, r) => s + Number(r.market_value_usd || 0), 0))}\n${colorMode === "valuation" ? (group.weightedPe ? `P/E ${group.weightedPe.toFixed(1)}` : "P/E —") : colorMode === "pnl" ? fmtDay(group.weightedPnl) : (colorMode === "day" ? fmtDay(group.weightedChange) : fmtDay(group.weightedValue))}`,
+          name: `${group.sector}\n${holdingsLabel} · ${fmtMoney(group.holdings.reduce((s, r) => s + Number(r.market_value_usd || 0), 0))}\n${colorMode === "valuation" ? (group.weightedPe ? `P/E ${group.weightedPe.toFixed(1)}` : "P/E —") : colorMode === "pnl" ? fmtDay(group.weightedPnl) : (colorMode === "day" ? fmtDay(group.weightedChange) : fmtDay(group.weightedValue))}`,
           value: childrenSum,
           itemStyle: { borderColor: cssVar("--line"), borderWidth: 2, gapWidth: 3 },
           upperLabel: {
@@ -256,7 +335,7 @@
       let stops, labels;
       if (colorMode === "valuation") {
         stops = ["#ef4444", "#22c55e"];
-        labels = ["高估", "低估"];
+        labels = [tr("高估"), tr("低估")];
       } else {
         const steps = 7;
         stops = [];
@@ -274,7 +353,7 @@
       }
       legendBar.innerHTML = stops.map(s => `<div class="legend-stop" style="background:${s}"></div>`).join("");
       legendLabels.innerHTML = labels.map(l => `<span>${l}</span>`).join("");
-      const label = colorMode === "valuation" ? "估值 P/E" : colorMode === "pnl" ? "浮动盈亏 %" : colorMode === "relvolume" ? "相对成交量(量/均量)" : "今日涨跌 %";
+      const label = colorMode === "valuation" ? tr("估值 P/E") : colorMode === "pnl" ? tr("浮动盈亏 %") : colorMode === "relvolume" ? tr("相对成交量(量/均量)") : tr("今日涨跌 %");
       legendNote.textContent = label;
     }
     function tooltipHtml(row) {
@@ -293,6 +372,7 @@
         const num = Number(val);
         return `<span style="color:${num >= 0 ? up : down}; font-weight: 700;">${num >= 0 ? "+" : ""}${num.toFixed(2)}%</span>`;
       };
+      const period = (zh, en) => isEnglish() ? en : zh;
       return `<div style="width:260px;border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:0 8px 32px rgba(0,0,0,0.5);padding:10px 11px;color:${text};">
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding-bottom:7px;margin-bottom:7px;">
           <div style="min-width:0;">
@@ -302,27 +382,27 @@
           <div style="font-weight:850;font-size:13px;color:${metric >= 0 ? up : down};">${metricLabel(row)}</div>
         </div>
         <div style="display:grid;gap:5px;font-size:11px;line-height:1.25;">
-          <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">板块</span><b style="font-weight:650;text-align:right;">${htmlEscape(row.sector || "Other")}</b></div>
-          <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">仓位</span><b style="font-weight:750;">${fmtPct(row.weight)}</b></div>
-          <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">今日</span><b style="font-weight:750;color:${day >= 0 ? up : down};">${fmtDay(day)}</b></div>
+          <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">${tr("板块")}</span><b style="font-weight:650;text-align:right;">${htmlEscape(row.sector || "Other")}</b></div>
+          <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">${tr("仓位")}</span><b style="font-weight:750;">${fmtPct(row.weight)}</b></div>
+          <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">${tr("今日")}</span><b style="font-weight:750;color:${day >= 0 ? up : down};">${fmtDay(day)}</b></div>
           <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">P/E</span><b style="font-weight:750;color:${pe === null ? muted : pe <= 22 ? up : down};">${fmtRatio(pe)}</b></div>
           <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">Forward P/E</span><b style="font-weight:750;">${fmtRatio(forwardPe)}</b></div>
           <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">P/S</span><b style="font-weight:750;">${fmtRatio(sales)}</b></div>
-          <div style="display:flex;justify-content:space-between;gap:14px;border-top:1px solid var(--line);padding-top:5px;margin-top:2px;"><span style="color:${muted};">估值更新</span><b style="font-weight:650;color:${muted};">${valuationAge}</b></div>
-          <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">市值</span><b style="font-weight:750;">${fmtMoney(row.market_value_usd)}</b></div>
-          <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">浮盈亏</span><b style="font-weight:750;color:${pnl >= 0 ? up : down};">${fmtMoney(pnl)} / ${pnlPct}</b></div>
-          <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">成本</span><b style="font-weight:750;">${fmtMoney(row.cost_usd)}</b></div>
-          <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">现价</span><b style="font-weight:750;">${fmtNum(row.quote_price)} ${htmlEscape(row.quote_currency || "")}</b></div>
-          ${row._etf_only ? `<div style="display:flex;justify-content:space-between;gap:14px;border-top:1px solid var(--line);padding-top:5px;margin-top:2px;"><span style="color:var(--accent);">来源</span><b style="font-weight:650;color:var(--accent);">全部来自 ETF</b></div>` : row._etf_portion ? `<div style="display:flex;justify-content:space-between;gap:14px;border-top:1px solid var(--line);padding-top:5px;margin-top:2px;"><span style="color:var(--accent);">含 ETF</span><b style="font-weight:650;color:var(--accent);">+${fmtMoney(row._etf_portion)}</b></div>` : ""}
+          <div style="display:flex;justify-content:space-between;gap:14px;border-top:1px solid var(--line);padding-top:5px;margin-top:2px;"><span style="color:${muted};">${tr("估值更新")}</span><b style="font-weight:650;color:${muted};">${valuationAge}</b></div>
+          <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">${tr("市值")}</span><b style="font-weight:750;">${fmtMoney(row.market_value_usd)}</b></div>
+          <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">${tr("浮盈亏")}</span><b style="font-weight:750;color:${pnl >= 0 ? up : down};">${fmtMoney(pnl)} / ${pnlPct}</b></div>
+          <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">${tr("成本")}</span><b style="font-weight:750;">${fmtMoney(row.cost_usd)}</b></div>
+          <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">${tr("现价")}</span><b style="font-weight:750;">${fmtNum(row.quote_price)} ${htmlEscape(row.quote_currency || "")}</b></div>
+          ${row._etf_only ? `<div style="display:flex;justify-content:space-between;gap:14px;border-top:1px solid var(--line);padding-top:5px;margin-top:2px;"><span style="color:var(--accent);">${tr("来源")}</span><b style="font-weight:650;color:var(--accent);">${tr("全部来自 ETF")}</b></div>` : row._etf_portion ? `<div style="display:flex;justify-content:space-between;gap:14px;border-top:1px solid var(--line);padding-top:5px;margin-top:2px;"><span style="color:var(--accent);">${tr("含 ETF")}</span><b style="font-weight:650;color:var(--accent);">+${fmtMoney(row._etf_portion)}</b></div>` : ""}
           
-          <div style="display:flex;justify-content:space-between;gap:14px;border-top:1px solid var(--line);padding-top:5px;margin-top:2px;"><span style="color:${muted}; font-weight:700;">历史表现</span></div>
+          <div style="display:flex;justify-content:space-between;gap:14px;border-top:1px solid var(--line);padding-top:5px;margin-top:2px;"><span style="color:${muted}; font-weight:700;">${tr("历史表现")}</span></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:10px;margin-top:2px;">
-            <div style="display:flex;justify-content:space-between;"><span style="color:${muted};">1周</span><b>${fmtReturn(row.return_1w)}</b></div>
-            <div style="display:flex;justify-content:space-between;"><span style="color:${muted};">1月</span><b>${fmtReturn(row.return_1m)}</b></div>
-            <div style="display:flex;justify-content:space-between;"><span style="color:${muted};">3月</span><b>${fmtReturn(row.return_3m)}</b></div>
-            <div style="display:flex;justify-content:space-between;"><span style="color:${muted};">6月</span><b>${fmtReturn(row.return_6m)}</b></div>
+            <div style="display:flex;justify-content:space-between;"><span style="color:${muted};">${period("1周", "1W")}</span><b>${fmtReturn(row.return_1w)}</b></div>
+            <div style="display:flex;justify-content:space-between;"><span style="color:${muted};">${period("1月", "1M")}</span><b>${fmtReturn(row.return_1m)}</b></div>
+            <div style="display:flex;justify-content:space-between;"><span style="color:${muted};">${period("3月", "3M")}</span><b>${fmtReturn(row.return_3m)}</b></div>
+            <div style="display:flex;justify-content:space-between;"><span style="color:${muted};">${period("6月", "6M")}</span><b>${fmtReturn(row.return_6m)}</b></div>
             <div style="display:flex;justify-content:space-between;"><span style="color:${muted};">YTD</span><b>${fmtReturn(row.return_ytd)}</b></div>
-            <div style="display:flex;justify-content:space-between;"><span style="color:${muted};">1年</span><b>${fmtReturn(row.return_1y)}</b></div>
+            <div style="display:flex;justify-content:space-between;"><span style="color:${muted};">${period("1年", "1Y")}</span><b>${fmtReturn(row.return_1y)}</b></div>
           </div>
         </div>
       </div>`;
@@ -336,12 +416,12 @@
       const up = rows.filter(r => Number(r.today_change_percent||0) > 0).length;
       const down = rows.filter(r => Number(r.today_change_percent||0) < 0).length;
       const upColor = dayPnl >= 0 ? "var(--positive)" : "var(--negative)";
-      el.innerHTML = `<div class="detail" style="padding:10px 14px;"><span>持仓数</span><b>${rows.length}</b></div>
-        <div class="detail" style="padding:10px 14px;"><span>总市值</span><b>${fmtMoney(total)}</b></div>
-        <div class="detail" style="padding:10px 14px;"><span>今日盈亏</span><b style="color:${upColor}">${fmtMoney(dayPnl)}</b></div>
-        <div class="detail" style="padding:10px 14px;"><span>涨跌比</span><b>↑${up} / ↓${down}</b></div>
-        <div class="detail" style="padding:10px 14px;"><span>日涨跌%</span><b style="color:${upColor}">${total ? (dayPnl/(total-dayPnl)*100).toFixed(2) : "—"}%</b></div>
-        <div class="detail" style="padding:10px 14px;"><span>ETF穿透</span><b>${etfUnwrap ? "已开启" : "关闭"}</b></div>`;
+      el.innerHTML = `<div class="detail" style="padding:10px 14px;"><span>${tr("持仓数")}</span><b>${rows.length}</b></div>
+        <div class="detail" style="padding:10px 14px;"><span>${tr("总市值")}</span><b>${fmtMoney(total)}</b></div>
+        <div class="detail" style="padding:10px 14px;"><span>${tr("今日盈亏")}</span><b style="color:${upColor}">${fmtMoney(dayPnl)}</b></div>
+        <div class="detail" style="padding:10px 14px;"><span>${tr("涨跌比")}</span><b>↑${up} / ↓${down}</b></div>
+        <div class="detail" style="padding:10px 14px;"><span>${tr("日涨跌%")}</span><b style="color:${upColor}">${total ? (dayPnl/(total-dayPnl)*100).toFixed(2) : "—"}%</b></div>
+        <div class="detail" style="padding:10px 14px;"><span>${tr("ETF穿透")}</span><b>${etfUnwrap ? tr("已开启") : tr("关闭")}</b></div>`;
     }
 
     function renderDailyTrend(rows) {
@@ -391,7 +471,7 @@
             ticker: lt.ticker,
             name: lt.name,
             display_name: lt.name,
-            sector: "ETF穿透",
+            sector: tr("ETF穿透板块"),
             market_value_usd: lt.total_usd || 0,
             today_change_percent: null,
             unrealized_percent: null,
@@ -413,12 +493,12 @@
     function render() {
       const rows = getActiveRows();
       if (!window.echarts) {
-        setStatus('<div class="status-dot danger"></div> 图表库加载失败');
-        heatmap.innerHTML = '<div style="padding:24px;color:#a9364b;font-weight:800;">图表库加载失败</div>';
+        setStatus(`<div class="status-dot danger"></div> ${tr("图表库加载失败")}`);
+        heatmap.innerHTML = `<div style="padding:24px;color:#a9364b;font-weight:800;">${tr("图表库加载失败")}</div>`;
         return;
       }
       currentRows = rows;
-      layoutLabel.textContent = layoutMode === "sector" ? "按板块" : "按大小";
+      layoutLabel.textContent = tr(layoutLabels[layoutMode] || "按大小");
       layoutMenu.querySelectorAll(".menu-item").forEach(el => {
         el.classList.toggle("active", el.dataset.layout === layoutMode);
       });
@@ -426,14 +506,15 @@
       currencyMenu.querySelectorAll(".menu-item").forEach(el => {
         el.classList.toggle("active", el.dataset.currency === currencyMode);
       });
-      colorLabel.textContent = colorMode === "valuation" ? "估值 P/E" : colorMode === "pnl" ? "浮动盈亏, %" : colorMode === "relvolume" ? "相对成交量" : "涨跌1天, %";
+      colorLabel.textContent = tr(colorLabels[colorMode] || "涨跌1天, %");
       colorMenu.querySelectorAll(".menu-item").forEach(el => {
         el.classList.toggle("active", el.dataset.color === colorMode);
       });
       sizeMenu.querySelectorAll(".menu-item").forEach(el => {
         el.classList.toggle("active", el.dataset.size === sizeMode_value);
       });
-      nameLabel.textContent = nameMode === "cn" ? "中文" : nameMode === "en" ? "英文" : "隐藏";
+      sizeLabel.textContent = tr(sizeLabels[sizeMode_value] || "市值");
+      nameLabel.textContent = tr(nameLabels[nameMode] || "中文");
       nameMenu.querySelectorAll(".menu-item").forEach(el => {
         el.classList.toggle("active", el.dataset.name === nameMode);
       });
@@ -462,8 +543,8 @@
       const valuationRows = rows.filter(row => valuationPe(row) !== null);
       const coverage = `${valuationRows.length}/${rows.length}`;
       const totalValue = rows.reduce((s, r) => s + Number(r.market_value_usd || 0), 0);
-      const etfTag = etfUnwrap ? " · ETF已穿透" : "";
-      setStatus('<div class="status-dot"></div> 已就绪', true);
+      const etfTag = etfUnwrap ? ` · ${tr("ETF已穿透")}` : "";
+      setStatus(`<div class="status-dot"></div> ${tr("已就绪")}`, true);
       buildLegend();
       renderSummary(rows);
     }
@@ -548,18 +629,18 @@
     }
     async function refreshAndReload(button, label, url) {
       button.disabled = true;
-      setStatus(`<div class="status-dot"></div> ${label}中...`);
+      setStatus(`<div class="status-dot"></div> ${tr(label)}${tr("中...")}`);
       try {
         const r = await fetch(url, { method: "POST" });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const p = await r.json();
-        if (p.refresh?.ok === false) throw new Error(p.refresh?.warning || "没有可用数据");
+        if (p.refresh?.ok === false) throw new Error(p.refresh?.warning || tr("没有可用数据"));
         await boot();
       } catch (e) {
-        setStatus(`<div class="status-dot danger"></div> ${label}失败：${e.message}`);
+        setStatus(`<div class="status-dot danger"></div> ${tr(label)}${tr("失败：")}${e.message}`);
         if (currentRows.length) {
           setTimeout(() => {
-            setStatus('<div class="status-dot"></div> 已就绪', true);
+            setStatus(`<div class="status-dot"></div> ${tr("已就绪")}`, true);
           }, 2200);
         }
       }
@@ -569,7 +650,8 @@
     refreshValuationButton.addEventListener("click", () => refreshAndReload(refreshValuationButton, "刷新估值", "/api/refresh/fundamentals?force=true"));
     refreshHoldingsButton.addEventListener("click", () => refreshAndReload(refreshHoldingsButton, "同步持仓", "/api/refresh/trading212"));
     boot().catch(error => {
-      setStatus(`<div class="status-dot danger"></div> 加载失败：${error.message}`);
-      heatmap.innerHTML = `<div style="color:#a9364b;font-weight:700;">${htmlEscape(error.message)}</div>`;
+      const message = tr(error.message);
+      setStatus(`<div class="status-dot danger"></div> ${tr("加载失败：")}${message}`);
+      heatmap.innerHTML = `<div style="color:#a9364b;font-weight:700;">${htmlEscape(message)}</div>`;
     });
   

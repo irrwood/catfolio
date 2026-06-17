@@ -1,7 +1,7 @@
-# Helm 翻译工作手册（i18n 增量翻译）
+# Catfolio 翻译工作手册（i18n 增量翻译）
 
 > 给接手翻译的 AI / 协作者。读完即可独立工作，无需其它上下文。
-> 任务：把 Helm 的 UI 文案从中文翻译成英文，做法是往**一个字典**里加词条。
+> 任务：把 Catfolio 的 UI 文案从中文翻译成英文，做法是往**一个字典**里加词条。
 
 ---
 
@@ -22,7 +22,7 @@
 - ❌ 用户数据：回测名称、股票代码、公司名（这些是运行时动态数据，本来就不该进字典）。
 - ❌ 策略编辑器里的 Python 代码和代码里的中文注释（那是用户代码）。
 - ❌ Python 源码里的 `#` 注释（不渲染给用户）。
-- ❌ 已经是英文的（如 `Portfolio Lab`、`Helm`、`CAGR`、ticker）。
+- ❌ 已经是英文的（如 `Portfolio Lab`、`Catfolio`、`CAGR`、ticker）。
 - ✅ 只翻**用户在界面上看得到的文案**：标题、按钮、标签、下拉项、表头、占位符、状态提示等。
 
 ---
@@ -36,11 +36,11 @@ cd v3_backend
 ```
 
 ### 第 2 步：抓出该页「切英文后仍残留的中文」
-直接请求英文版页面（带 cookie `helm_lang=en`），提取 HTML 里剩下的中文 —— 这些**正是**还没翻译的 UI 文案（已翻的会显示成英文）：
+直接请求英文版页面（带 cookie `catfolio_lang=en`），提取 HTML 里剩下的中文 —— 这些**正是**还没翻译的 UI 文案（已翻的会显示成英文）：
 
 ```bash
 # <path> 换成页面路由，如 / 或 /lab 或 /settings
-curl -s --cookie "helm_lang=en" "http://127.0.0.1:8799/<path>" > /tmp/page.html
+curl -s --cookie "catfolio_lang=en" "http://127.0.0.1:8799/<path>" > /tmp/page.html
 
 # 提取残留中文短语（用 Python，跨平台可靠）：
 python3 - <<'PY'

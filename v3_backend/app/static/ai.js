@@ -1,3 +1,7 @@
+  function currentLang() {
+    return (document.documentElement.lang || "zh").startsWith("en") ? "en" : "zh";
+  }
+
   // ── Question Bank ──
   const Q = {
     quick: [
@@ -76,13 +80,15 @@
 
   // ── Core API ──
   async function aiPost(url, body) {
-    const resp = await fetch(url, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {}) });
+    const payload = { ...(body || {}) };
+    if (url.startsWith("/api/ai/")) payload.lang = currentLang();
+    const resp = await fetch(url, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload) });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     return resp.json();
   }
 
   // ── Briefing (cached, manual refresh) ──
-  const BRIEFING_KEY = "ai_briefing_v1";
+  const BRIEFING_KEY = "ai_briefing_v1_" + currentLang();
   function showCachedBriefing() {
     const cached = localStorage.getItem(BRIEFING_KEY);
     const status = document.querySelector("#briefingStatus");

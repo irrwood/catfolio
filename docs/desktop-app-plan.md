@@ -1,4 +1,4 @@
-# Helm 桌面 App 改造计划（macOS）
+# Catfolio 桌面 App 改造计划（macOS）
 
 更新时间：2026-06-12
 目标：把当前「本地 Web 服务（uvicorn + 浏览器）」打包成 **可双击运行的 macOS 桌面 App**，用户无需装 Python、无需命令行。
@@ -54,15 +54,15 @@
 > 注：这一步无论桌面还是 SaaS 都要做，是最有复用价值的重构。
 
 ### 2. 套桌面外壳 + 打包
-- [x] 加 `v3_backend/desktop.py` 入口：后台线程起 uvicorn（随机空闲端口）→ 等端口就绪 → `webview.create_window("Helm", url)` → `webview.start()`；窗口关闭后 `server.should_exit`。带 `HELM_DESKTOP_SELFTEST=1` 无头自测开关。
+- [x] 加 `v3_backend/desktop.py` 入口：后台线程起 uvicorn（随机空闲端口）→ 等端口就绪 → `webview.create_window("Catfolio", url)` → `webview.start()`；窗口关闭后 `server.should_exit`。带 `CATFOLIO_DESKTOP_SELFTEST=1` 无头自测开关。
 - [x] 生命周期：`wait_for_port()` 等服务就绪再开窗；关闭窗口停服务。
 - [x] 依赖记录在 `v3_backend/requirements-desktop.txt`（pywebview 6.2.1 + pyinstaller）。dev 验证：selftest 通过、真实窗口启动 6s 无崩溃。
 - [ ] 写 PyInstaller spec：把 `app/static/`（含 vendor 的 echarts/lightweight-charts）、`scripts/` 作为 `datas` 打进包；`hiddenimports` 补 uvicorn/fastapi/pywebview cocoa 后端。
-- [ ] 产出 `Helm.app`，本机双击验证。
+- [ ] 产出 `Catfolio.app`，本机双击验证。
 
 ### 3. 数据目录改到 macOS 标准位置 ✅
-- [x] 引入 `HELM_DATA_DIR`（`settings.DATA_DIR`，默认 `<repo>/outputs`，dev 行为不变）；`V2_DIR` 及所有缓存/DB/报表从它派生。运行时脚本（`build_trading212_v2.py` / `enrich_trading212_data.py`）也读 `HELM_DATA_DIR`，并自动建子目录。
-- [x] `desktop.py` 默认把 `HELM_DATA_DIR` 指向 `~/Library/Application Support/Helm/` 并创建。验证：设临时目录跑刷新，全部文件落在该目录、仓库 outputs 未被碰。
+- [x] 引入 `CATFOLIO_DATA_DIR`（`settings.DATA_DIR`，默认 `<repo>/outputs`，dev 行为不变）；`V2_DIR` 及所有缓存/DB/报表从它派生。运行时脚本（`build_trading212_v2.py` / `enrich_trading212_data.py`）也读 `CATFOLIO_DATA_DIR`，并自动建子目录。
+- [x] `desktop.py` 默认把 `CATFOLIO_DATA_DIR` 指向 `~/Library/Application Support/Catfolio/` 并创建。验证：设临时目录跑刷新，全部文件落在该目录、仓库 outputs 未被碰。
 - [x] 修冷启动慢：全新数据目录首次加载 home 原本 17s（`check_alerts`→`holdings_heatmap`/`lab_history_summary` 同步拉 35+ 标的历史）。改为只读缓存的 `get_history_cached()` + 历史缓存存在才算回撤告警 → 冷缓存 home **17s → 0.02s**。Lab 页自身仍自动拉取。
 - [ ] 首次启动空目录的空状态引导（去设置页填 key、点同步）。
 
@@ -83,7 +83,7 @@
 ## 建议的最小可行路径
 
 ```
-解 subprocess 链  →  数据目录迁到 Application Support  →  pywebview 包一层  →  PyInstaller 出 Helm.app
+解 subprocess 链  →  数据目录迁到 Application Support  →  pywebview 包一层  →  PyInstaller 出 Catfolio.app
 ```
 
 预计 1–2 周内可得一个能双击运行、写入用户数据目录、自用无需命令行的 macOS App。代码签名/公证留到要分发给别人时再做。

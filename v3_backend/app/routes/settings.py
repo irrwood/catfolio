@@ -24,15 +24,19 @@ router = APIRouter(tags=["pages"])
 
 @router.get("/settings")
 def settings_page(request: Request):
-    fmp_set = secret_value("FMP_API_KEY") is not None
-    finnhub_set = secret_value("FINNHUB_API_KEY") is not None
-    fred_set = secret_value("FRED_API_KEY") is not None
-    massive_set = secret_value("MASSIVE_API_KEY") is not None
-    t212_set = secret_value("TRADING212_API_KEY") is not None
-    ai_provider = (secret_value("AI_PROVIDER") or AI_DEFAULT).strip().lower()
+    demo_on = demo_mode()
+    if demo_on:
+        fmp_set = finnhub_set = fred_set = massive_set = t212_set = False
+        ai_provider = AI_DEFAULT
+    else:
+        fmp_set = secret_value("FMP_API_KEY") is not None
+        finnhub_set = secret_value("FINNHUB_API_KEY") is not None
+        fred_set = secret_value("FRED_API_KEY") is not None
+        massive_set = secret_value("MASSIVE_API_KEY") is not None
+        t212_set = secret_value("TRADING212_API_KEY") is not None
+        ai_provider = (secret_value("AI_PROVIDER") or AI_DEFAULT).strip().lower()
     if ai_provider not in AI_PROVIDERS:
         ai_provider = AI_DEFAULT
-    demo_on = demo_mode()
 
     market_cache = live_cache_age_seconds()
     history_cache = history_cache_age_seconds()
@@ -99,7 +103,9 @@ def settings_page(request: Request):
 
     # Generate AI provider key rows + switcher buttons from the registry so new
     # providers added in ai.py appear here automatically.
-    ai_set = {name: secret_value(p["key"]) is not None for name, p in AI_PROVIDERS.items()}
+    ai_set = {name: False for name in AI_PROVIDERS}
+    if not demo_on:
+        ai_set = {name: secret_value(p["key"]) is not None for name, p in AI_PROVIDERS.items()}
     ai_key_rows = "".join(
         key_row(p["key"], f"{p['label']} API Key", p.get("hint", "AI 分析提供方"), ai_set[name])
         for name, p in AI_PROVIDERS.items()
@@ -109,6 +115,96 @@ def settings_page(request: Request):
         for name, p in AI_PROVIDERS.items()
     )
     ai_current_label = AI_PROVIDERS[ai_provider]["label"]
+    credential_panel = (
+        """<div style="padding:0 var(--sp-xl) var(--sp-xl);">
+      <div style="padding:var(--sp-md);background:var(--accent-soft);border:1px solid var(--line);border-radius:var(--radius-md);font-size:var(--text-sm);color:var(--ink);">
+        当前是演示数据模式。为了方便开源演示和截图，此页面不会读取或显示本机 Keychain / 环境变量里的凭证状态。
+        关闭演示模式后才会显示 API Key 配置。
+      </div>
+    </div>"""
+        if demo_on else
+        f"""<div style="display:flex;flex-direction:column;gap:16px;padding:0 var(--sp-xl) var(--sp-xl);">
+      {key_row("TRADING212_API_KEY", "Trading 212 API Key", "同步持仓、平均成本、账户现金", t212_set)}
+      {key_row("FMP_API_KEY", "FMP API Key (Financial Modeling Prep)", "美股 P/E、P/S、EPS 成长率估值", fmp_set)}
+      {key_row("FINNHUB_API_KEY", "Finnhub API Key", "备用估值接口，FMP 缺失时自动切换", finnhub_set)}
+      {ai_key_rows}
+      {key_row("MASSIVE_API_KEY", "Massive API Key", "盘后异动、期权链快照（可选）", massive_set)}
+      {key_row("FRED_API_KEY", "FRED API Key (St. Louis Fed)", "宏观利率、通胀数据（可选）", fred_set, border=False)}
+    </div>"""
+    )
+    ai_panel = (
+        """<div style="padding:0 var(--sp-xl) var(--sp-xl);">
+      <div style="font-size:var(--text-sm);color:var(--muted);">演示数据模式下 AI 提供方配置已隐藏。</div>
+    </div>"""
+        if demo_on else
+        f"""<div style="padding:0 var(--sp-xl) var(--sp-xl);">
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        {ai_switch_btns}
+      </div>
+      <div id="aiProviderStatus" style="margin-top:10px;font-size:var(--text-xs);color:var(--muted);">
+        当前：<strong style="color:var(--ink)">{ai_current_label}</strong>
+      </div>
+    </div>"""
+    )
+    telegram_configured = False
+    telegram_key_rows = (
+        """<div style="padding:0 var(--sp-xl) var(--sp-xl);">
+      <div style="padding:var(--sp-md);background:var(--accent-soft);border:1px solid var(--line);border-radius:var(--radius-md);font-size:var(--text-sm);">
+        演示数据模式下 Telegram 凭证配置已隐藏。
+      </div>
+    </div>"""
+        if demo_on else
+        f"""<div style="padding:0 var(--sp-xl) var(--sp-xl);display:flex;flex-direction:column;gap:16px;">
+
+    <div style="padding:var(--sp-md);background:var(--accent-soft);border-radius:var(--radius-md);font-size:var(--text-sm);">
+      <b>配置步骤：</b>
+      1. 在 Telegram 找 <code>@BotFather</code>，发 <code>/newbot</code> 创建机器人，复制 Token。
+      2. 向你的新机器人发任意消息，然后点「获取 Chat ID」。
+      3. 点「发测试消息」验证。
+    </div>
+
+    {key_row("TELEGRAM_BOT_TOKEN", "Bot Token", "从 @BotFather 获取，格式：123456:ABCdef…", secret_value("TELEGRAM_BOT_TOKEN") is not None)}
+
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+        <div>
+          <strong style="display:block;font-size:var(--text-sm)">Chat ID</strong>
+          <span style="font-size:var(--text-xs);color:var(--muted)">你的用户 ID 或频道 ID（负数为群组）</span>
+        </div>
+        <div id="badge_TELEGRAM_CHAT_ID" style="flex-shrink:0">
+          { '<span class="market-status-badge" style="color:var(--positive);background:var(--positive-soft);border-color:var(--positive);white-space:nowrap"><div class="status-dot"></div> 已设置</span>' if secret_value("TELEGRAM_CHAT_ID") else '<span class="market-status-badge" style="color:var(--negative);background:var(--negative-soft);border-color:var(--negative);white-space:nowrap"><div class="status-dot danger"></div> 未配置</span>' }
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="text" id="input_TELEGRAM_CHAT_ID"
+          placeholder="{ '已设置，留空则不修改' if secret_value('TELEGRAM_CHAT_ID') else '点右边按钮自动获取…' }"
+          autocomplete="off"
+          style="flex:1;background:var(--soft);border:1px solid var(--line);border-radius:var(--radius-md);
+                 padding:8px 12px;color:var(--ink);font-family:var(--font-mono);font-size:var(--text-sm);outline:none;"
+          onfocus="this.style.borderColor='var(--accent)'"
+          onblur="this.style.borderColor='var(--line)'"
+        />
+        <button class="btn" style="white-space:nowrap;flex-shrink:0;" onclick="getChatId()">
+          <i class="fa-solid fa-magnifying-glass"></i> 获取 Chat ID
+        </button>
+        <button class="btn primary" style="white-space:nowrap;flex-shrink:0;"
+          onclick="saveKey('TELEGRAM_CHAT_ID', this)">
+          <i class="fa-solid fa-floppy-disk"></i> 保存
+        </button>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;padding-top:4px;">
+      <button class="btn" onclick="tgTest(this)">
+        <i class="fa-solid fa-paper-plane"></i> 发测试消息
+      </button>
+      <div id="tg_test_result" style="font-size:var(--text-sm);display:flex;align-items:center;color:var(--muted);"></div>
+    </div>
+  </div>"""
+    )
+    if not demo_on:
+        telegram_configured = bool(secret_value("TELEGRAM_BOT_TOKEN") and secret_value("TELEGRAM_CHAT_ID"))
+    root_display = "隐藏（演示数据模式）" if demo_on else str(ROOT)
 
     content = f"""<div class="v4-hero">
   <div class="v4-hero-text">
@@ -125,14 +221,7 @@ def settings_page(request: Request):
         <div class="v4-card-subtitle">Key 保存至系统密钥库，不写入任何文件。留空点保存 = 不修改。</div>
       </div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:16px;padding:0 var(--sp-xl) var(--sp-xl);">
-      {key_row("TRADING212_API_KEY", "Trading 212 API Key", "同步持仓、平均成本、账户现金", t212_set)}
-      {key_row("FMP_API_KEY", "FMP API Key (Financial Modeling Prep)", "美股 P/E、P/S、EPS 成长率估值", fmp_set)}
-      {key_row("FINNHUB_API_KEY", "Finnhub API Key", "备用估值接口，FMP 缺失时自动切换", finnhub_set)}
-      {ai_key_rows}
-      {key_row("MASSIVE_API_KEY", "Massive API Key", "盘后异动、期权链快照（可选）", massive_set)}
-      {key_row("FRED_API_KEY", "FRED API Key (St. Louis Fed)", "宏观利率、通胀数据（可选）", fred_set, border=False)}
-    </div>
+    {credential_panel}
     <div id="keyStatus" style="padding:0 var(--sp-xl) var(--sp-xl);font-size:var(--text-sm);display:none;"></div>
   </div>
 
@@ -143,14 +232,7 @@ def settings_page(request: Request):
         <div class="v4-card-subtitle">选择驱动 AI 组合分析的模型。切换前请先填好对应的 API Key（● 表示未配置）。</div>
       </div>
     </div>
-    <div style="padding:0 var(--sp-xl) var(--sp-xl);">
-      <div style="display:flex;flex-wrap:wrap;gap:6px;">
-        {ai_switch_btns}
-      </div>
-      <div id="aiProviderStatus" style="margin-top:10px;font-size:var(--text-xs);color:var(--muted);">
-        当前：<strong style="color:var(--ink)">{ai_current_label}</strong>
-      </div>
-    </div>
+    {ai_panel}
   </div>
 
   <div class="v4-card">
@@ -231,7 +313,7 @@ def settings_page(request: Request):
       <tbody>
         <tr>
           <td>项目根路径 (Root)</td>
-          <td class="font-mono">{ROOT}</td>
+          <td class="font-mono">{root_display}</td>
           <td>数据保存与脚本执行的工作区</td>
         </tr>
         <tr>
@@ -305,56 +387,10 @@ def settings_page(request: Request):
       <div class="v4-card-subtitle">仓位集中度、高估值、最大回撤超阈值时自动推送到 Telegram。每条提醒最多每小时推一次。</div>
     </div>
     <div id="tg_status_badge">
-      { '<span class="market-status-badge" style="color:var(--positive);background:var(--positive-soft);border-color:var(--positive)"><div class="status-dot"></div> 已配置</span>' if (secret_value("TELEGRAM_BOT_TOKEN") and secret_value("TELEGRAM_CHAT_ID")) else '<span class="market-status-badge" style="color:var(--muted);background:var(--soft);border-color:var(--line)"><div class="status-dot" style="background:var(--muted)"></div> 未配置</span>' }
+      { '<span class="market-status-badge" style="color:var(--positive);background:var(--positive-soft);border-color:var(--positive)"><div class="status-dot"></div> 已配置</span>' if telegram_configured else '<span class="market-status-badge" style="color:var(--muted);background:var(--soft);border-color:var(--line)"><div class="status-dot" style="background:var(--muted)"></div> 未配置</span>' }
     </div>
   </div>
-  <div style="padding:0 var(--sp-xl) var(--sp-xl);display:flex;flex-direction:column;gap:16px;">
-
-    <div style="padding:var(--sp-md);background:var(--accent-soft);border-radius:var(--radius-md);font-size:var(--text-sm);">
-      <b>配置步骤：</b>
-      1. 在 Telegram 找 <code>@BotFather</code>，发 <code>/newbot</code> 创建机器人，复制 Token。
-      2. 向你的新机器人发任意消息，然后点「获取 Chat ID」。
-      3. 点「发测试消息」验证。
-    </div>
-
-    {key_row("TELEGRAM_BOT_TOKEN", "Bot Token", "从 @BotFather 获取，格式：123456:ABCdef…", secret_value("TELEGRAM_BOT_TOKEN") is not None)}
-
-    <div style="display:flex;flex-direction:column;gap:8px;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
-        <div>
-          <strong style="display:block;font-size:var(--text-sm)">Chat ID</strong>
-          <span style="font-size:var(--text-xs);color:var(--muted)">你的用户 ID 或频道 ID（负数为群组）</span>
-        </div>
-        <div id="badge_TELEGRAM_CHAT_ID" style="flex-shrink:0">
-          { '<span class="market-status-badge" style="color:var(--positive);background:var(--positive-soft);border-color:var(--positive);white-space:nowrap"><div class="status-dot"></div> 已设置</span>' if secret_value("TELEGRAM_CHAT_ID") else '<span class="market-status-badge" style="color:var(--negative);background:var(--negative-soft);border-color:var(--negative);white-space:nowrap"><div class="status-dot danger"></div> 未配置</span>' }
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <input type="text" id="input_TELEGRAM_CHAT_ID"
-          placeholder="{ '已设置，留空则不修改' if secret_value('TELEGRAM_CHAT_ID') else '点右边按钮自动获取…' }"
-          autocomplete="off"
-          style="flex:1;background:var(--soft);border:1px solid var(--line);border-radius:var(--radius-md);
-                 padding:8px 12px;color:var(--ink);font-family:var(--font-mono);font-size:var(--text-sm);outline:none;"
-          onfocus="this.style.borderColor='var(--accent)'"
-          onblur="this.style.borderColor='var(--line)'"
-        />
-        <button class="btn" style="white-space:nowrap;flex-shrink:0;" onclick="getChatId()">
-          <i class="fa-solid fa-magnifying-glass"></i> 获取 Chat ID
-        </button>
-        <button class="btn primary" style="white-space:nowrap;flex-shrink:0;"
-          onclick="saveKey('TELEGRAM_CHAT_ID', this)">
-          <i class="fa-solid fa-floppy-disk"></i> 保存
-        </button>
-      </div>
-    </div>
-
-    <div style="display:flex;gap:8px;padding-top:4px;">
-      <button class="btn" onclick="tgTest(this)">
-        <i class="fa-solid fa-paper-plane"></i> 发测试消息
-      </button>
-      <div id="tg_test_result" style="font-size:var(--text-sm);display:flex;align-items:center;color:var(--muted);"></div>
-    </div>
-  </div>
+  {telegram_key_rows}
 </div>
 
 <script src="/static/settings.js"></script>
@@ -374,6 +410,8 @@ _ALLOWED_KEYS = {
 
 @router.post("/api/settings/save-key")
 async def save_key_api(request: Request):
+    if demo_mode():
+        return JSONResponse({"ok": False, "error": "demo mode hides credential storage"}, status_code=403)
     try:
         body = await request.json()
     except Exception:

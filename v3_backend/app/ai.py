@@ -5,7 +5,7 @@ import urllib.request
 from pathlib import Path
 
 from .analytics import etf_lookthrough, holdings_detail, pnl_contribution, portfolio_summary, sector_concentration
-from .data_store import current_snapshot, secret_value
+from .data_store import current_snapshot, demo_mode, secret_value
 from .lab import backtest, cumulative_multi_benchmark, cumulative_vs_benchmark, drawdown_curve, efficient_frontier, factor_analysis, lab_history_summary, monte_carlo, monthly_return_heatmap
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -85,6 +85,61 @@ PROVIDERS = {
 DEFAULT_PROVIDER = "deepseek"
 
 
+def _normalize_lang(lang: str | None = None) -> str:
+    return "en" if str(lang or "").lower().startswith("en") else "zh"
+
+
+def _language_system_message(lang: str | None = None) -> str | None:
+    if _normalize_lang(lang) != "en":
+        return None
+    return (
+        "Respond in English. If the user asks for JSON, keep the requested JSON keys "
+        "exactly as specified, but write all human-readable string values in English."
+    )
+
+
+def _demo_ai_text(messages, lang: str | None = None):
+    """Deterministic demo-mode response.
+
+    Demo mode must not read local secrets or call external AI providers. This
+    keeps the UI usable for screenshots/open-source demos while making it clear
+    that real AI analysis requires leaving demo mode and configuring a key.
+    """
+    joined = "\n".join(str(m.get("content", "")) for m in messages if isinstance(m, dict))
+    is_en = _normalize_lang(lang) == "en"
+    if '"risk_level"' in joined or "risk_level" in joined:
+        if is_en:
+            return json.dumps({
+                "risk_level": "Demo",
+                "risk_tags": ["sample data", "no external AI call"],
+                "findings": [
+                    "Demo data mode is active. Catfolio did not read a local AI key or call an external model.",
+                    "This is a fixed sample response for open-source demos and screenshots.",
+                    "Turn off demo data mode and configure an AI provider to generate real AI analysis.",
+                ],
+            }, ensure_ascii=False)
+        else:
+            return json.dumps({
+                "risk_level": "Demo",
+                "risk_tags": ["示例数据", "未调用外部 AI"],
+                "findings": [
+                    "当前处于假数据模式，Catfolio 没有读取本机 AI Key，也没有调用外部模型。",
+                    "这里展示的是固定示例说明，用于开源演示和截图。",
+                    "关闭假数据模式并配置 AI Provider 后，才会生成真实 AI 分析。",
+                ],
+            }, ensure_ascii=False)
+    if is_en:
+        return (
+            "Demo data mode is active. This is a fixed sample analysis. Catfolio did not read a local AI key "
+            "or call an external AI provider. Turn off demo data mode and configure an AI key in Settings to "
+            "generate real portfolio analysis."
+        )
+    return (
+        "当前处于假数据模式：这是一段固定示例分析，没有读取本机 AI Key，也没有调用外部 AI Provider。"
+        "关闭假数据模式并在设置里配置 AI Key 后，Catfolio 才会根据真实组合生成 AI 分析。"
+    )
+
+
 def active_provider():
     """Return (name, config) of the currently selected AI provider."""
     name = (secret_value("AI_PROVIDER") or DEFAULT_PROVIDER).strip().lower()
@@ -93,8 +148,10 @@ def active_provider():
     return name, PROVIDERS[name]
 
 
-def _chat(messages, temperature=0.3, max_tokens=2048):
+def _chat(messages, temperature=0.3, max_tokens=2048, lang: str | None = None):
     """Send a chat completion to the active provider, return the text response."""
+    if demo_mode():
+        return _demo_ai_text(messages, lang)
     _name, cfg = active_provider()
     api_key = secret_value(cfg["key"])
     if not api_key:
@@ -103,6 +160,9 @@ def _chat(messages, temperature=0.3, max_tokens=2048):
             f"请在设置页填入 {cfg['label']} 的 API Key，或切换到已配置好的提供方。"
         )
     model = secret_value(cfg["model_key"]) or cfg["default_model"]
+    language_message = _language_system_message(lang)
+    if language_message:
+        messages = [{"role": "system", "content": language_message}] + list(messages)
 
     body = json.dumps({
         "model": model,
@@ -160,8 +220,9 @@ def _fmt_num(value):
     return f"{float(value):.3f}"
 
 
-def _build_data_summary():
+def _build_data_summary(lang: str | None = None):
     """Collect raw analysis data (numbers only, no programmatic conclusions)."""
+    is_en = _normalize_lang(lang) == "en"
     bt = backtest()
     ef = efficient_frontier()
     mc = monte_carlo(years=5, paths=500)
@@ -239,15 +300,22 @@ def _build_data_summary():
 ## {chr(10).join(factor_lines)}
 """
 
-    return {
-        "data_summary": summary,
-        "programmatic": {
+    if is_en:
+        programmatic = {
+            "backtest": f"Portfolio annualized return is {_fmt_pct(pf_stats.get('annual_return'))}; max drawdown is {_fmt_pct(pf_stats.get('max_drawdown'))}.",
+            "frontier": f"The portfolio ranks above about {_compute_sharpe_rank(points, current)}% of simulated portfolios. The max-Sharpe portfolio has return {_fmt_pct(max_sharpe.get('annual_return'))} and volatility {_fmt_pct(max_sharpe.get('annual_volatility'))}.",
+            "monte_carlo": f"The 5-year simulation median is about {_fmt_num(fp.get('p50'))}x; the pessimistic p5 case is about {_fmt_num(fp.get('p5'))}x.",
+            "factors": f"Closest factor is {factor_rows[0].get('label')} with beta {_fmt_num(factor_rows[0].get('beta'))} and correlation {_fmt_num(factor_rows[0].get('correlation'))}." if factor_rows else "Factor sample is insufficient.",
+        }
+    else:
+        programmatic = {
             "backtest": f"组合年化 {_fmt_pct(pf_stats.get('annual_return'))}，最大回撤 {_fmt_pct(pf_stats.get('max_drawdown'))}。",
             "frontier": f"组合好于约 {_compute_sharpe_rank(points, current)}% 的模拟组合。最大夏普组合收益={_fmt_pct(max_sharpe.get('annual_return'))}，波动={_fmt_pct(max_sharpe.get('annual_volatility'))}。",
             "monte_carlo": f"5年模拟中位数约 {_fmt_num(fp.get('p50'))}x，悲观 p5 约 {_fmt_num(fp.get('p5'))}x。",
             "factors": f"最接近 {factor_rows[0].get('label')}，beta {_fmt_num(factor_rows[0].get('beta'))}，相关 {_fmt_num(factor_rows[0].get('correlation'))}。" if factor_rows else "因子样本不足。",
-        },
-    }
+        }
+
+    return {"data_summary": summary, "programmatic": programmatic}
 
 
 def _compute_sharpe_rank(points, current):
@@ -261,13 +329,13 @@ def _compute_sharpe_rank(points, current):
         return "—"
 
 
-def ai_analysis():
+def ai_analysis(lang: str | None = None):
     """Run AI analysis on backtest, frontier, monte carlo, and factor results.
 
     Returns a dict with 'ai' (AI's independent analysis) and 'programmatic'
     (the current programmatic conclusions) for frontend comparison.
     """
-    summary = _build_data_summary()
+    summary = _build_data_summary(lang)
     data_text = summary["data_summary"]
     prog = summary["programmatic"]
 
@@ -294,7 +362,7 @@ def ai_analysis():
     ai_text = _deepseek([
         {"role": "system", "content": "你是量化投资分析师。请严格按照要求的 JSON 格式回复，只输出 JSON。"},
         {"role": "user", "content": analysis_prompt},
-    ], temperature=0.3, max_tokens=1024)
+    ], temperature=0.3, max_tokens=1024, lang=lang)
 
     # Parse AI's JSON response
     ai_json = _parse_ai_json(ai_text)
@@ -318,7 +386,7 @@ def ai_analysis():
     review_text = _deepseek([
         {"role": "system", "content": "你是量化投资分析师。请直接给出评议，不要客套。"},
         {"role": "user", "content": review_prompt},
-    ], temperature=0.3, max_tokens=512)
+    ], temperature=0.3, max_tokens=512, lang=lang)
 
     return {
         "ai": ai_json,
@@ -383,7 +451,7 @@ def _snapshot_data():
 # ── MVP Phase 1 Functions ──────────────────────────────────────────
 
 
-def portfolio_briefing():
+def portfolio_briefing(lang: str | None = None):
     """AI Portfolio Briefing — 组合每日总结."""
     d = _snapshot_data()
     ps = d["summary"]
@@ -457,12 +525,12 @@ SPY年化收益: {_fmt_pct(spy_stats.get('annual_return'))}
     text = _deepseek([
         {"role": "system", "content": "你是资深投资组合分析师。请直接给出分析，4-5句话，中文。"},
         {"role": "user", "content": prompt},
-    ], temperature=0.4, max_tokens=600)
+    ], temperature=0.4, max_tokens=600, lang=lang)
 
     return {"briefing": text.strip()}
 
 
-def risk_diagnosis():
+def risk_diagnosis(lang: str | None = None):
     """AI Risk Diagnosis — 组合风险诊断."""
     d = _snapshot_data()
     hd = d["holdings"]
@@ -538,7 +606,7 @@ ETF持仓市值: ${etf_total:,.0f}
     text = _deepseek([
         {"role": "system", "content": "你是风险管理专家。请严格按JSON格式回复。"},
         {"role": "user", "content": prompt},
-    ], temperature=0.3, max_tokens=800)
+    ], temperature=0.3, max_tokens=800, lang=lang)
 
     result = _parse_ai_json(text)
     return result if isinstance(result, dict) and "risk_level" in result else {
@@ -548,7 +616,7 @@ ETF持仓市值: ${etf_total:,.0f}
     }
 
 
-def performance_explanation(question: str = ""):
+def performance_explanation(question: str = "", lang: str | None = None):
     """AI Performance Explanation — 收益归因解释."""
     d = _snapshot_data()
     ps = d["summary"]
@@ -610,12 +678,12 @@ def performance_explanation(question: str = ""):
     text = _deepseek([
         {"role": "system", "content": "你是业绩归因分析师。请直接回答用户问题，简短有力。"},
         {"role": "user", "content": prompt},
-    ], temperature=0.3, max_tokens=500)
+    ], temperature=0.3, max_tokens=500, lang=lang)
 
     return {"explanation": text.strip(), "question": q}
 
 
-def overlap_analysis():
+def overlap_analysis(lang: str | None = None):
     """AI Holding Overlap Analysis — 持仓重叠分析."""
     d = _snapshot_data()
     etf = d["etf"]
@@ -668,12 +736,12 @@ ETF标的: {', '.join(etf.get('etf_tickers', []))}
     text = _deepseek([
         {"role": "system", "content": "你是投资组合构建专家。请直接分析持仓重叠问题。"},
         {"role": "user", "content": prompt},
-    ], temperature=0.3, max_tokens=600)
+    ], temperature=0.3, max_tokens=600, lang=lang)
 
     return {"overlap_analysis": text.strip()}
 
 
-def what_if(scenario: str):
+def what_if(scenario: str, lang: str | None = None):
     """AI What-if Scenario — 情景分析. Programmatic calculation + AI explanation."""
     d = _snapshot_data()
     hd = d["holdings"]
@@ -727,12 +795,12 @@ def what_if(scenario: str):
     text = _deepseek([
         {"role": "system", "content": "你是量化情景分析师。请基于数据给出具体的情景影响分析，不推荐买卖。"},
         {"role": "user", "content": prompt},
-    ], temperature=0.3, max_tokens=600)
+    ], temperature=0.3, max_tokens=600, lang=lang)
 
     return {"what_if_analysis": text.strip(), "scenario": scenario}
 
 
-def ask(question: str):
+def ask(question: str, lang: str | None = None):
     """Generic AI Q&A — answer any portfolio question by feeding all relevant data to DeepSeek."""
     if not question or not question.strip():
         return {"answer": "请先输入一个问题。", "question": question}
@@ -836,12 +904,12 @@ Sharpe: {_fmt_num(pf_stats.get('sharpe') or hist_stats.get('sharpe'))}
     text = _deepseek([
         {"role": "system", "content": "你是投资组合分析师。基于数据回答用户问题，直接给结论，不推荐买卖。中文，简短有力。"},
         {"role": "user", "content": prompt},
-    ], temperature=0.3, max_tokens=700)
+    ], temperature=0.3, max_tokens=700, lang=lang)
 
     return {"answer": text.strip(), "question": question.strip()}
 
 
-def returns_explanation():
+def returns_explanation(lang: str | None = None):
     """AI Benchmark Comparison — 用简单的话解释收益对比数据."""
     twr = cumulative_vs_benchmark("SPY")
     multi = cumulative_multi_benchmark()
@@ -901,6 +969,6 @@ SPY累计收益: {_fmt_pct(twr_end.get('benchmark'))}
     text = _deepseek([
         {"role": "system", "content": "你是投资顾问，用简单直白的中文解释数据，不堆砌数字，直接给结论。"},
         {"role": "user", "content": prompt},
-    ], temperature=0.4, max_tokens=500)
+    ], temperature=0.4, max_tokens=500, lang=lang)
 
     return {"explanation": text.strip(), "period": f"{twr_start_date} ~ {twr_end_date}"}

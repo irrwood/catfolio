@@ -27,9 +27,15 @@ node_modules
 # Claude Code local per-user settings
 **/settings.local.json
 
+# Local planning artifacts
+docs/superpowers/
+
 # Logs
 *.log
 /tmp/
 
 # PyInstaller build artifacts
 build/
+
+# Local release archives
+releases/

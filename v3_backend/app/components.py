@@ -4,14 +4,14 @@ import re as _re
 import time as _time
 from datetime import datetime, timezone
 from pathlib import Path
-from app.data_store import current_snapshot
+from app.data_store import current_snapshot, demo_mode
 from app.i18n import t_block
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 def _version_assets(html: str) -> str:
-    """Append ?v=<mtime> to every local /static/*.css|js URL so browsers refetch
+    """Append ?v=<mtime> to every local /static asset URL so browsers refetch
     whenever a file changes (cache-busting). Without this, extracted CSS/JS stay
     cached and edits never reach users."""
     def repl(match):
@@ -22,10 +22,11 @@ def _version_assets(html: str) -> str:
             return f"{path}?v={mtime}"
         except OSError:
             return path
-    return _re.sub(r'(/static/[^"?\s>]+\.(?:css|js))', repl, html)
+    return _re.sub(r'(/static/[^"?\s>]+\.(?:css|js|png|jpg|jpeg|webp|svg))', repl, html)
 
 
 def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh", head_extra: str = "") -> str:
+    demo_on = demo_mode()
     try:
         snapshot = current_snapshot()
         trading_unix = snapshot["trading212"].get("as_of_unix")
@@ -65,7 +66,7 @@ def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh",
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{title} · Helm</title>
+  <title>{title} · Catfolio</title>
   <script>
     // Theme follows the OS unless the user has explicitly chosen one.
     // Applied before render to prevent a flash.
@@ -85,10 +86,14 @@ def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh",
   <div class="v4-shell">
     <aside class="v4-sidebar">
       <a class="sidebar-brand" href="/">
-        <div class="brand-icon"><i class="fa-solid fa-compass"></i></div>
+        <div class="brand-icon" aria-hidden="true">
+          <img class="brand-icon-img brand-icon-dark" src="/static/icons/catfolio-icon-dark.png" alt="" width="36" height="36" />
+          <img class="brand-icon-img brand-icon-light" src="/static/icons/catfolio-icon-light.png" alt="" width="36" height="36" />
+        </div>
         <div class="brand-text">
-          <span class="brand-name">Helm</span>
-          <span class="brand-version">投资指挥中心</span>
+          <span class="brand-name">Catfolio</span>
+          <span class="brand-version">投资组合</span>
+          {'<span class="brand-demo-badge"><i class="fa-solid fa-flask-vial"></i> 假数据</span>' if demo_on else ''}
         </div>
       </a>
       
@@ -136,6 +141,7 @@ def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh",
     </div>
   </div>
   
+  <script src="/static/client_i18n.js"></script>
   <script>
     const html = document.documentElement;
     const themeToggleBtn = document.getElementById("themeToggleBtn");

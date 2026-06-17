@@ -155,10 +155,6 @@ _BODY = r"""
     </section>
 
     <div class="chart-head"><h2>Portfolio Command Center</h2><span>集中度、盈亏、收益和风险</span></div>
-    <div id="qualityBanner" class="quality-banner">
-        <b>数据口径</b>
-        <span>正在读取数据说明...</span>
-    </div>
 
     <div class="section-kicker">真实持仓数据</div>
 

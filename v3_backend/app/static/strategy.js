@@ -22,7 +22,7 @@
   function ensureTheme() {
     if (themeReady || !window.echarts) return;
     const axisDef = { axisLine:{lineStyle:{color:"rgba(128,128,128,0.28)"}}, splitLine:{lineStyle:{color:"rgba(128,128,128,0.14)"}} };
-    window.echarts.registerTheme("helm", { categoryAxis: axisDef, valueAxis: axisDef });
+    window.echarts.registerTheme("catfolio", { categoryAxis: axisDef, valueAxis: axisDef });
     themeReady = true;
   }
   const fmtPct = v => (v === null || v === undefined) ? "—" : (v*100).toFixed(1) + "%";
@@ -110,7 +110,7 @@
 
     ensureTheme();
     if (equityChart) equityChart.dispose();
-    equityChart = window.echarts.init($("equityChart"), "helm");
+    equityChart = window.echarts.init($("equityChart"), "catfolio");
     const dates = result.equity.map(e => e.date);
     equityChart.setOption({
       backgroundColor: "transparent",
@@ -126,7 +126,7 @@
     });
     // drawdown (underwater) chart
     if (ddChart) ddChart.dispose();
-    ddChart = window.echarts.init($("drawdownChart"), "helm");
+    ddChart = window.echarts.init($("drawdownChart"), "catfolio");
     ddChart.setOption({
       backgroundColor: "transparent",
       tooltip: { trigger: "axis", valueFormatter: v => (v*100).toFixed(1) + "%" },

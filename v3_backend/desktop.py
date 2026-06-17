@@ -1,13 +1,13 @@
-"""Desktop launcher for Helm.
+"""Desktop launcher for Catfolio.
 
 Runs the FastAPI app in-process (uvicorn in a background thread) and shows it in a
 native macOS window via pywebview / WKWebView — no browser, no command line.
 Once bundled with PyInstaller this is the app entry point.
 
-Data is written to ~/Library/Application Support/Helm (HELM_DATA_DIR), never into
+Data is written to ~/Library/Application Support/Catfolio (CATFOLIO_DATA_DIR), never into
 the read-only app bundle.
 
-Set HELM_DESKTOP_SELFTEST=1 to start the server, verify it responds, and exit
+Set CATFOLIO_DESKTOP_SELFTEST=1 to start the server, verify it responds, and exit
 without opening a window (used for headless verification / CI).
 """
 
@@ -20,7 +20,7 @@ from pathlib import Path
 
 
 def default_data_dir() -> Path:
-    return Path.home() / "Library" / "Application Support" / "Helm"
+    return Path.home() / "Library" / "Application Support" / "Catfolio"
 
 
 def free_port() -> int:
@@ -44,8 +44,10 @@ def wait_for_port(port: int, timeout: float = 15.0) -> bool:
 
 def main():
     # Choose the writable data dir *before* importing the app (settings reads it at import).
-    os.environ.setdefault("HELM_DATA_DIR", str(default_data_dir()))
-    Path(os.environ["HELM_DATA_DIR"]).mkdir(parents=True, exist_ok=True)
+    data_dir = os.environ.get("CATFOLIO_DATA_DIR") or os.environ.get("HELM_DATA_DIR") or str(default_data_dir())
+    os.environ.setdefault("CATFOLIO_DATA_DIR", data_dir)
+    os.environ.setdefault("HELM_DATA_DIR", data_dir)
+    Path(data_dir).mkdir(parents=True, exist_ok=True)
 
     # Make the app package + scripts importable when launched from here or bundled.
     here = Path(__file__).resolve().parent
@@ -61,22 +63,22 @@ def main():
     thread.start()
 
     if not wait_for_port(port):
-        print("Helm: server failed to start", file=sys.stderr)
+        print("Catfolio: server failed to start", file=sys.stderr)
         sys.exit(1)
 
     url = f"http://127.0.0.1:{port}/"
 
-    if os.environ.get("HELM_DESKTOP_SELFTEST") == "1":
+    if os.environ.get("CATFOLIO_DESKTOP_SELFTEST") == "1" or os.environ.get("HELM_DESKTOP_SELFTEST") == "1":
         import urllib.request
         with urllib.request.urlopen(url, timeout=40) as resp:
             ok = resp.status == 200
-        print(f"selftest: data_dir={os.environ['HELM_DATA_DIR']} port={port} home_ok={ok}")
+        print(f"selftest: data_dir={data_dir} port={port} home_ok={ok}")
         server.should_exit = True
         thread.join(timeout=3)
         sys.exit(0 if ok else 1)
 
     import webview
-    webview.create_window("Helm", url, width=1440, height=920, min_size=(1024, 700))
+    webview.create_window("Catfolio", url, width=1440, height=920, min_size=(1024, 700))
     webview.start()  # blocks on the main thread until the window is closed
 
     server.should_exit = True

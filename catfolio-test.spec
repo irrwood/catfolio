@@ -1,12 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for Helm-test.app — a demo-mode build with no real user data.
+"""PyInstaller spec for Catfolio-test.app — a demo-mode build with no real user data.
 
-Entry point is desktop_test.py (forces HELM_DEMO=1 + isolated data dir). Uses the
-cat icon at assets/Helm.icns and names the bundle Helm-test.app.
+Entry point is desktop_test.py (forces CATFOLIO_DEMO=1 + isolated data dir). Uses the
+cat icon at assets/Catfolio.icns and names the bundle Catfolio-test.app.
 
 Run from the repo root:
-    v3_backend/.venv/bin/pyinstaller helm-test.spec --clean
-Output: dist/Helm-test.app
+    v3_backend/.venv/bin/pyinstaller catfolio-test.spec --clean
+Output: dist/Catfolio-test.app
 """
 
 import os
@@ -108,7 +108,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="Helm-test",
+    name="Catfolio-test",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -127,17 +127,17 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=False,
-    name="Helm-test",
+    name="Catfolio-test",
 )
 
 app = BUNDLE(
     coll,
-    name="Helm-test.app",
-    icon=os.path.join(_here, "assets", "Helm.icns"),
-    bundle_identifier="com.helm.portfolio.test",
+    name="Catfolio-test.app",
+    icon=os.path.join(_here, "assets", "Catfolio.icns"),
+    bundle_identifier="com.catfolio.portfolio.test",
     info_plist={
-        "CFBundleName": "Helm-test",
-        "CFBundleDisplayName": "Helm-test",
+        "CFBundleName": "Catfolio-test",
+        "CFBundleDisplayName": "Catfolio-test",
         "CFBundleVersion": "1.2.0",
         "CFBundleShortVersionString": "1.2.0",
         "NSHighResolutionCapable": True,
