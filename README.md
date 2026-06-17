@@ -21,6 +21,18 @@ Project repository: [github.com/irrwood/catfolio](https://github.com/irrwood/cat
 - **Provider choices**: DeepSeek, Grok/xAI, OpenAI, Gemini, Moonshot Kimi, Zhipu GLM, Qwen, and OpenRouter are supported through one provider registry.
 - **Desktop build**: PyInstaller + pywebview packaging for `Catfolio.app` on macOS.
 
+## Screenshots
+
+These screenshots use Catfolio's built-in demo data mode. No real portfolio data, broker account, or API key is shown.
+
+| Dashboard | Returns & Benchmarks |
+| --- | --- |
+| ![Catfolio dashboard](docs/screenshots/dashboard.jpg) | ![Catfolio returns benchmark comparison](docs/screenshots/returns.jpg) |
+
+| Strategy Lab | Audit Report |
+| --- | --- |
+| ![Catfolio strategy lab](docs/screenshots/strategy-lab.jpg) | ![Catfolio audit report](docs/screenshots/audit-report.jpg) |
+
 ## Quick Start
 
 ### Docker
