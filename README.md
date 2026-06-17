@@ -75,6 +75,7 @@ Common variables:
 ```env
 # Trading 212 portfolio sync
 TRADING212_API_KEY=
+TRADING212_API_SECRET=
 
 # Fundamentals and valuation metrics
 FMP_API_KEY=
@@ -94,9 +95,38 @@ OPENROUTER_API_KEY=
 MASSIVE_API_KEY=
 FRED_API_KEY=
 
+# Optional Telegram alerts
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+
 # Data directory override
 CATFOLIO_DATA_DIR=/path/to/local/data
 ```
+
+## Where To Get API Keys
+
+Catfolio works in demo mode without any keys. For live data or AI analysis, use the official provider links below and configure only the services you need.
+
+| Environment variable | Used for | Where to get it |
+| --- | --- | --- |
+| `TRADING212_API_KEY` | Broker holdings, average cost, cash, and transaction sync | [Trading 212 API key guide](https://helpcentre.trading212.com/hc/en-us/articles/14584770928157-Trading-212-API-key) |
+| `TRADING212_API_SECRET` | Optional Trading 212 secret for account setups that expose key/secret credentials | [Trading 212 API key guide](https://helpcentre.trading212.com/hc/en-us/articles/14584770928157-Trading-212-API-key) |
+| `FMP_API_KEY` | Fundamentals and valuation metrics | [Financial Modeling Prep quickstart](https://site.financialmodelingprep.com/developer/docs/quickstart) |
+| `FINNHUB_API_KEY` | Fundamentals fallback when FMP is unavailable | [Finnhub registration](https://finnhub.io/register) |
+| `MASSIVE_API_KEY` | Optional after-hours movers and options snapshots | [Massive REST API quickstart](https://massive.com/docs/rest/quickstart) |
+| `FRED_API_KEY` | Optional macro data such as rates and inflation | [FRED API key docs](https://fred.stlouisfed.org/docs/api/api_key.html) |
+| `DEEPSEEK_API_KEY` | AI Analyst and Strategy Lab evaluation | [DeepSeek API keys](https://platform.deepseek.com/api_keys) |
+| `XAI_API_KEY` | Grok / xAI provider for AI analysis | [xAI console](https://console.x.ai/) |
+| `OPENAI_API_KEY` | OpenAI provider for AI analysis | [OpenAI API keys](https://platform.openai.com/api-keys) |
+| `GEMINI_API_KEY` | Google Gemini provider for AI analysis | [Google AI Studio API keys](https://aistudio.google.com/app/apikey) |
+| `MOONSHOT_API_KEY` | Moonshot Kimi provider for AI analysis | [Kimi API keys](https://platform.kimi.ai/console/api-keys) |
+| `ZHIPU_API_KEY` | Zhipu GLM provider for AI analysis | [Zhipu BigModel API keys](https://open.bigmodel.cn/usercenter/apikeys) |
+| `QWEN_API_KEY` | Alibaba Cloud Qwen / DashScope provider for AI analysis | [Alibaba Cloud Model Studio API key guide](https://www.alibabacloud.com/help/en/model-studio/get-api-key) |
+| `OPENROUTER_API_KEY` | OpenRouter provider for multi-model AI analysis | [OpenRouter API authentication](https://openrouter.ai/docs/api/reference/authentication) |
+| `TELEGRAM_BOT_TOKEN` | Optional Telegram alert bot | [Telegram BotFather tutorial](https://core.telegram.org/bots/tutorial) |
+| `TELEGRAM_CHAT_ID` | Optional Telegram alert destination | [Telegram Bot API docs](https://core.telegram.org/bots/api) |
+
+Keep provider keys out of git. Use `.env`, macOS Keychain, or another local secret store, and prefer separate keys with spending limits where providers support them.
 
 Run without `CATFOLIO_DEMO=1` when you are ready to use real data:
 
