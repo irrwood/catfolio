@@ -511,6 +511,15 @@
         const _calMv = Number(summary.market_value_usd || 0);
         const _calByDate = {};
         _calNavRows.forEach(row => { _calByDate[row.date] = _calMv * Number(row.return || 0); });
+        const _calIsEn = document.documentElement.lang && document.documentElement.lang.startsWith("en");
+        const _calMonthNames = _calIsEn
+            ? ["January","February","March","April","May","June","July","August","September","October","November","December"]
+            : ["一月","二月","三月","四月","五月","六月","七月","八月","九月","十月","十一月","十二月"];
+        const _calMonthShort = _calIsEn
+            ? ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+            : ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
+        const _calWeekdays = _calIsEn ? ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"] : ["日","一","二","三","四","五","六"];
+        const _calDaySuffix = _calIsEn ? " days" : " 天";
         const _now = new Date();
         let _calYear = _now.getFullYear(), _calMonth = _now.getMonth() + 1;
         // Jump to the most recent month that has data
@@ -525,8 +534,8 @@
         }
         function _setCalStats(total, pos, neg, best, worst) {
             const t = document.querySelector("#calMonthTotal"); if (t) { t.textContent = _fmtCalVal(total); t.className = `pnl-cal-stat-value ${total >= 0 ? "positive" : "negative"}`; }
-            const p = document.querySelector("#calPosDays"); if (p) p.textContent = pos + " 天";
-            const n = document.querySelector("#calNegDays"); if (n) n.textContent = neg + " 天";
+            const p = document.querySelector("#calPosDays"); if (p) p.textContent = pos + _calDaySuffix;
+            const n = document.querySelector("#calNegDays"); if (n) n.textContent = neg + _calDaySuffix;
             const bd = document.querySelector("#calBestDay"); if (bd) bd.textContent = best !== null ? _fmtCalVal(best) : "—";
             const wd = document.querySelector("#calWorstDay"); if (wd) wd.textContent = worst !== null ? _fmtCalVal(worst) : "—";
         }
@@ -534,10 +543,9 @@
             const container = document.querySelector("#pnlCalendar");
             if (!container) return;
             container.className = "pnl-cal-grid";
-            const monthNames = ["一月","二月","三月","四月","五月","六月","七月","八月","九月","十月","十一月","十二月"];
             const calMonthLabel = document.querySelector("#calMonthLabel");
-            if (calMonthLabel) calMonthLabel.textContent = `${year} 年 ${monthNames[month - 1]}`;
-            const totalLabel = document.querySelector("#calTotalLabel"); if (totalLabel) totalLabel.textContent = "当月盈亏";
+            if (calMonthLabel) calMonthLabel.textContent = _calIsEn ? `${_calMonthNames[month - 1]} ${year}` : `${year} 年 ${_calMonthNames[month - 1]}`;
+            const totalLabel = document.querySelector("#calTotalLabel"); if (totalLabel) totalLabel.textContent = _calIsEn ? "Monthly P/L" : "当月盈亏";
             const daysInMonth = new Date(year, month, 0).getDate();
             const startDow = new Date(year, month - 1, 1).getDay();
             let monthTotal = 0, posCount = 0, negCount = 0, bestDay = null, worstDay = null;
@@ -551,8 +559,7 @@
                     if (worstDay === null || v < worstDay) worstDay = v;
                 }
             }
-            const weekdays = ["日","一","二","三","四","五","六"];
-            let html = weekdays.map(d => `<div class="pnl-cal-weekday">${d}</div>`).join("");
+            let html = _calWeekdays.map(d => `<div class="pnl-cal-weekday">${d}</div>`).join("");
             for (let i = 0; i < startDow; i++) html += `<div></div>`;
             for (let d = 1; d <= daysInMonth; d++) {
                 const ds = `${year}-${String(month).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
@@ -575,8 +582,8 @@
             if (!container) return;
             container.className = "";
             const calMonthLabel = document.querySelector("#calMonthLabel");
-            if (calMonthLabel) calMonthLabel.textContent = `${year} 年`;
-            const totalLabel = document.querySelector("#calTotalLabel"); if (totalLabel) totalLabel.textContent = "全年盈亏";
+            if (calMonthLabel) calMonthLabel.textContent = _calIsEn ? `${year}` : `${year} 年`;
+            const totalLabel = document.querySelector("#calTotalLabel"); if (totalLabel) totalLabel.textContent = _calIsEn ? "Yearly P/L" : "全年盈亏";
             const isLeap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
             const daysInYear = isLeap ? 366 : 365;
             const ROWS = 5; // weekdays only (Mon–Fri); weekends never trade, so skip them
@@ -603,14 +610,13 @@
                     cells += `<div class="pnl-cal-ycell" title="${info.ds}"></div>`;
                 }
             }
-            const monthShort = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
             const weekCols = Math.ceil((leadBlanks + workdays.length) / ROWS);
             let labels = "", lastMonth = -1;
             for (let w = 0; w < weekCols; w++) {
                 const firstIdx = w * ROWS - leadBlanks;
                 const idx = Math.max(0, Math.min(workdays.length - 1, firstIdx));
                 const m = workdays[idx].month;
-                if (firstIdx >= 0 && m !== lastMonth) { labels += `<div class="pnl-cal-ymlabel">${monthShort[m]}</div>`; lastMonth = m; }
+                if (firstIdx >= 0 && m !== lastMonth) { labels += `<div class="pnl-cal-ymlabel">${_calMonthShort[m]}</div>`; lastMonth = m; }
                 else labels += `<div class="pnl-cal-ymlabel"></div>`;
             }
             const cols = `repeat(${weekCols}, 13px)`;
