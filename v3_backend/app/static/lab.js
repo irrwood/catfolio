@@ -34,6 +34,7 @@
     let latestCommandCenter = null;
     let latestNavRows = [];
     let currentReturnBasis = "twr";
+    const pageIsEnglish = document.documentElement.lang && document.documentElement.lang.startsWith("en");
 
     // ---- Chart engine: ECharts ----
     const chartById = new Map();
@@ -116,9 +117,13 @@
         const value = drawdownRangeSelect?.value || "all"; return value === "all" ? null : Number(value);
     }
     function drawdownWindowLabel(days, available) {
-        if (!days) return `全部样本 · ${available} 个交易日`;
-        const labels = { 252: "近 1 年", 126: "近 6 个月", 63: "近 3 个月", 21: "近 1 个月" };
-        return `${labels[days] || `近 ${days} 日`} · ${Math.min(days, available)} 个交易日`;
+        if (!days) return pageIsEnglish ? `Full sample · ${available} trading days` : `全部样本 · ${available} 个交易日`;
+        const labels = pageIsEnglish
+            ? { 252: "Past 1Y", 126: "Past 6 months", 63: "Past 3 months", 21: "Past 1 month" }
+            : { 252: "近 1 年", 126: "近 6 个月", 63: "近 3 个月", 21: "近 1 个月" };
+        const fallback = pageIsEnglish ? `Past ${days} days` : `近 ${days} 日`;
+        const unit = pageIsEnglish ? "trading days" : "个交易日";
+        return `${labels[days] || fallback} · ${Math.min(days, available)} ${unit}`;
     }
     function computeDrawdownRows(navRows, days = null) {
         const rows = (navRows || []).filter(row => Number.isFinite(Number(row.nav)));
