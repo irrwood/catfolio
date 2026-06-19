@@ -551,7 +551,7 @@
     function toggleFullscreen() {
       isFullscreen = !isFullscreen;
       heatmap.parentElement.classList.toggle("fullscreen-mode", isFullscreen);
-      fullscreenBtn.innerHTML = isFullscreen ? '<i class="fa-solid fa-compress"></i>' : '<i class="fa-solid fa-expand"></i>';
+      fullscreenBtn.innerHTML = isFullscreen ? '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-compress"></use></svg>' : '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-expand"></use></svg>';
       setTimeout(() => heatmapChart?.resize(), 100);
     }
     fullscreenBtn.addEventListener("click", toggleFullscreen);

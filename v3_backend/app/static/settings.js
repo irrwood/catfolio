@@ -4,7 +4,7 @@
     const turnOn = btn.dataset.on !== '1';
     const orig = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+    btn.innerHTML = '<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg>';
     try {
       const res = await fetch('/api/settings/demo-mode', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -37,26 +37,26 @@
       chatInput.placeholder = data.chat_id;
       const label = data.title ? ` (${data.title})` : '';
       document.getElementById('tg_test_result').innerHTML =
-        `<span style="color:var(--positive)"><i class="fa-solid fa-check"></i> Chat ID: ${data.chat_id}${label}</span>`;
+        `<span style="color:var(--positive)"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> Chat ID: ${data.chat_id}${label}</span>`;
     } else {
       document.getElementById('tg_test_result').innerHTML =
-        `<span style="color:var(--negative)"><i class="fa-solid fa-xmark"></i> ${data.error}</span>`;
+        `<span style="color:var(--negative)"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-x"></use></svg> ${data.error}</span>`;
     }
   }
 
   async function tgTest(btn) {
     const orig = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+    btn.innerHTML = '<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg>';
     const res = await fetch('/api/telegram/test', {method: 'POST'});
     const data = await res.json();
     const el = document.getElementById('tg_test_result');
     if (data.ok) {
-      el.innerHTML = '<span style="color:var(--positive)"><i class="fa-solid fa-check"></i> 消息已发送！</span>';
+      el.innerHTML = '<span style="color:var(--positive)"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> 消息已发送！</span>';
       document.getElementById('tg_status_badge').innerHTML =
         '<span class="market-status-badge" style="color:var(--positive);background:var(--positive-soft);border-color:var(--positive)"><div class="status-dot"></div> 已配置</span>';
     } else {
-      el.innerHTML = `<span style="color:var(--negative)"><i class="fa-solid fa-xmark"></i> 失败：${data.error || '未知错误'}</span>`;
+      el.innerHTML = `<span style="color:var(--negative)"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-x"></use></svg> 失败：${data.error || '未知错误'}</span>`;
     }
     setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2000);
   }
@@ -67,7 +67,7 @@
     if (!value) return;
     const orig = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+    btn.innerHTML = '<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg>';
     try {
       const res = await fetch('/api/settings/save-key', {
         method: 'POST',
@@ -80,10 +80,10 @@
         input.placeholder = '已设置，留空则不修改';
         const badge = document.getElementById('badge_' + envName);
         badge.innerHTML = '<span class="market-status-badge" style="color:var(--positive);background:var(--positive-soft);border-color:var(--positive);white-space:nowrap"><div class="status-dot"></div> 已设置</span>';
-        btn.innerHTML = '<i class="fa-solid fa-check"></i> 已保存';
+        btn.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> 已保存';
         setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2000);
       } else {
-        btn.innerHTML = '<i class="fa-solid fa-xmark"></i> 失败';
+        btn.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-x"></use></svg> 失败';
         setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2000);
       }
     } catch(e) {
@@ -118,64 +118,64 @@
     const statusEl = document.getElementById("settingsStatus");
     statusEl.className = "status";
     if (type === 'trading212') {
-      statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在同步 Trading 212 持仓...';
+      statusEl.innerHTML = '<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> 正在同步 Trading 212 持仓...';
       try {
         const response = await fetch("/api/refresh/trading212", { method: "POST" });
         if (!response.ok) throw new Error("HTTP error");
         statusEl.className = "status positive";
-        statusEl.innerHTML = '<i class="fa-solid fa-check"></i> Trading 212 同步完成！';
+        statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> Trading 212 同步完成！';
         setTimeout(() => location.reload(), 1000);
       } catch (err) {
         statusEl.className = "status negative";
-        statusEl.innerHTML = '<i class="fa-solid fa-xmark"></i> 同步失败，请检查 API Key。';
+        statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-x"></use></svg> 同步失败，请检查 API Key。';
       }
     } else if (type === 'market') {
-      statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在强制拉取最新行情...';
+      statusEl.innerHTML = '<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> 正在强制拉取最新行情...';
       try {
         const response = await fetch("/api/refresh/market?force=true", { method: "POST" });
         if (!response.ok) throw new Error("HTTP error");
         statusEl.className = "status positive";
-        statusEl.innerHTML = '<i class="fa-solid fa-check"></i> 行情刷新完成！';
+        statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> 行情刷新完成！';
         setTimeout(() => location.reload(), 1000);
       } catch (err) {
         statusEl.className = "status negative";
-        statusEl.innerHTML = '<i class="fa-solid fa-xmark"></i> 刷新失败。';
+        statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-x"></use></svg> 刷新失败。';
       }
     } else if (type === 'history') {
-      statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在重新获取所有标的历史价格...';
+      statusEl.innerHTML = '<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> 正在重新获取所有标的历史价格...';
       try {
         const response = await fetch("/api/lab/refresh-history?force=true", { method: "POST" });
         if (!response.ok) throw new Error("HTTP error");
         statusEl.className = "status positive";
-        statusEl.innerHTML = '<i class="fa-solid fa-check"></i> 历史价格刷新完成！';
+        statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> 历史价格刷新完成！';
         setTimeout(() => location.reload(), 1000);
       } catch (err) {
         statusEl.className = "status negative";
-        statusEl.innerHTML = '<i class="fa-solid fa-xmark"></i> 刷新失败。';
+        statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-x"></use></svg> 刷新失败。';
       }
     } else if (type === 'fundamentals') {
-      statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在重新拉取 FMP 估值数据...';
+      statusEl.innerHTML = '<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> 正在重新拉取 FMP 估值数据...';
       try {
         const response = await fetch("/api/refresh/fundamentals?force=true", { method: "POST" });
         if (!response.ok) throw new Error("HTTP error");
         statusEl.className = "status positive";
-        statusEl.innerHTML = '<i class="fa-solid fa-check"></i> 估值数据刷新完成！';
+        statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> 估值数据刷新完成！';
         setTimeout(() => location.reload(), 1500);
       } catch (err) {
         statusEl.className = "status negative";
-        statusEl.innerHTML = '<i class="fa-solid fa-xmark"></i> 刷新失败。';
+        statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-x"></use></svg> 刷新失败。';
       }
     } else if (type === 'after-hours') {
-      statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在拉取 Massive 盘后数据...';
+      statusEl.innerHTML = '<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> 正在拉取 Massive 盘后数据...';
       try {
         const response = await fetch("/api/refresh/after-hours?force=true", { method: "POST" });
         if (!response.ok) throw new Error("HTTP error");
         statusEl.className = "status positive";
-        statusEl.innerHTML = '<i class="fa-solid fa-check"></i> 盘后数据刷新完成！';
+        statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> 盘后数据刷新完成！';
         setTimeout(() => location.reload(), 1000);
       } catch (err) {
         statusEl.className = "status negative";
-        statusEl.innerHTML = '<i class="fa-solid fa-xmark"></i> 刷新失败。';
+        statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-x"></use></svg> 刷新失败。';
       }
     }
   }

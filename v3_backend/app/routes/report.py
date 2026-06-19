@@ -368,7 +368,7 @@ def report(request: Request):
     .report-nav:hover .nav-wrap a {{ font-size: 13px !important; gap: 10px !important; }}
     .nav-wrap a:hover {{ background: var(--soft) !important; color: var(--ink) !important; }}
     .nav-wrap a:hover::before {{ opacity: 0.85; }}
-    .nav-wrap a.active {{ color: var(--ink) !important; font-weight: 700 !important; }}
+    .nav-wrap a.active {{ color: var(--ink) !important; font-weight: 650 !important; }}
     .report-nav:hover .nav-wrap a.active {{ background: var(--soft) !important; }}
     .nav-wrap a.active::before {{ width: 26px; opacity: 1; background: var(--ink); }}
     main {{ padding-left: 52px !important; }}

@@ -82,7 +82,7 @@ def settings_page(request: Request):
             />
             <button class="btn primary" style="white-space:nowrap;flex-shrink:0;"
               onclick="saveKey('{env_name}', this)">
-              <i class="fa-solid fa-floppy-disk"></i> 保存
+              <svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-save"></use></svg> 保存
             </button>
           </div>
         </div>"""
@@ -185,18 +185,18 @@ def settings_page(request: Request):
           onblur="this.style.borderColor='var(--line)'"
         />
         <button class="btn" style="white-space:nowrap;flex-shrink:0;" onclick="getChatId()">
-          <i class="fa-solid fa-magnifying-glass"></i> 获取 Chat ID
+          <svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-search"></use></svg> 获取 Chat ID
         </button>
         <button class="btn primary" style="white-space:nowrap;flex-shrink:0;"
           onclick="saveKey('TELEGRAM_CHAT_ID', this)">
-          <i class="fa-solid fa-floppy-disk"></i> 保存
+          <svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-save"></use></svg> 保存
         </button>
       </div>
     </div>
 
     <div style="display:flex;gap:8px;padding-top:4px;">
       <button class="btn" onclick="tgTest(this)">
-        <i class="fa-solid fa-paper-plane"></i> 发测试消息
+        <svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-paper-plane"></use></svg> 发测试消息
       </button>
       <div id="tg_test_result" style="font-size:var(--text-sm);display:flex;align-items:center;color:var(--muted);"></div>
     </div>
@@ -217,7 +217,7 @@ def settings_page(request: Request):
   <div class="v4-card">
     <div class="v4-card-header">
       <div>
-        <h2 class="v4-card-title"><i class="fa-solid fa-key" style="color:var(--accent)"></i> 外部 API 凭证</h2>
+        <h2 class="v4-card-title"><svg class="hi hi-inline" style="color:var(--accent)" aria-hidden="true" focusable="false"><use href="#hi-key"></use></svg> 外部 API 凭证</h2>
         <div class="v4-card-subtitle">Key 保存至系统密钥库，不写入任何文件。留空点保存 = 不修改。</div>
       </div>
     </div>
@@ -228,7 +228,7 @@ def settings_page(request: Request):
   <div class="v4-card">
     <div class="v4-card-header">
       <div>
-        <h2 class="v4-card-title"><i class="fa-solid fa-robot" style="color:var(--accent)"></i> AI 提供方</h2>
+        <h2 class="v4-card-title"><svg class="hi hi-inline" style="color:var(--accent)" aria-hidden="true" focusable="false"><use href="#hi-ai"></use></svg> AI 提供方</h2>
         <div class="v4-card-subtitle">选择驱动 AI 组合分析的模型。切换前请先填好对应的 API Key（● 表示未配置）。</div>
       </div>
     </div>
@@ -238,7 +238,7 @@ def settings_page(request: Request):
   <div class="v4-card">
     <div class="v4-card-header">
       <div>
-        <h2 class="v4-card-title"><i class="fa-solid fa-flask" style="color:var(--accent)"></i> 演示数据模式</h2>
+        <h2 class="v4-card-title"><svg class="hi hi-inline" style="color:var(--accent)" aria-hidden="true" focusable="false"><use href="#hi-flask"></use></svg> 演示数据模式</h2>
         <div class="v4-card-subtitle">开启后用内置样例组合替代真实数据，适合截图、演示或分享，不暴露你的真实持仓。</div>
       </div>
     </div>
@@ -256,7 +256,7 @@ def settings_page(request: Request):
   <div class="v4-card">
     <div class="v4-card-header">
       <div>
-        <h2 class="v4-card-title"><i class="fa-solid fa-database"></i> 数据缓存生命周期</h2>
+        <h2 class="v4-card-title"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-database"></use></svg> 数据缓存生命周期</h2>
         <div class="v4-card-subtitle">系统采用增量与缓存机制，避免频繁调用外部接口导致封禁。</div>
       </div>
     </div>
@@ -297,7 +297,7 @@ def settings_page(request: Request):
 <div class="v4-card" style="margin-top:24px;">
   <div class="v4-card-header">
     <div>
-      <h2 class="v4-card-title"><i class="fa-solid fa-sliders"></i> 本地系统配置与汇率基准</h2>
+      <h2 class="v4-card-title"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-sliders-2"></use></svg> 本地系统配置与汇率基准</h2>
       <div class="v4-card-subtitle">显示当前本地数据处理路径和系统采用的汇率常量。</div>
     </div>
   </div>
@@ -339,7 +339,7 @@ def settings_page(request: Request):
 <div class="v4-card" style="margin-top:24px;">
   <div class="v4-card-header" style="margin-bottom:12px;cursor:pointer;" onclick="document.getElementById('settingsDeveloperAccordion').classList.toggle('hide')">
     <div>
-      <h2 class="v4-card-title"><i class="fa-solid fa-code"></i> 本地 REST API 数据接口 (折叠)</h2>
+      <h2 class="v4-card-title"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-code"></use></svg> 本地 REST API 数据接口 (折叠)</h2>
       <div class="v4-card-subtitle">提供 JSON 接口供外部脚本或报表工具进行数据对接</div>
     </div>
   </div>
@@ -383,7 +383,7 @@ def settings_page(request: Request):
 <div class="v4-card" style="margin-top:24px;">
   <div class="v4-card-header">
     <div>
-      <h2 class="v4-card-title"><i class="fa-brands fa-telegram" style="color:#2AABEE"></i> Telegram 提醒</h2>
+      <h2 class="v4-card-title"><svg class="hi hi-inline" style="color:#2AABEE" aria-hidden="true" focusable="false"><use href="#hi-telegram"></use></svg> Telegram 提醒</h2>
       <div class="v4-card-subtitle">仓位集中度、高估值、最大回撤超阈值时自动推送到 Telegram。每条提醒最多每小时推一次。</div>
     </div>
     <div id="tg_status_badge">

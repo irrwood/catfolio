@@ -15,7 +15,7 @@ _SCRIPTS = (
 _BODY = r"""<div class="v4-card" style="padding:16px;display:flex;flex-direction:column;gap:12px;">
     <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px;">
     <div>
-      <h1 style="font-size:20px;font-weight:700;margin:0 0 4px;color:var(--ink);">持仓热力图</h1>
+      <h1 style="font-size:20px;font-weight:650;margin:0 0 4px;color:var(--ink);">持仓热力图</h1>
       <p style="font-size:12px;color:var(--muted);margin:0;">面积 = 仓位权重 · 颜色 = 所选指标 · 鼠标悬停查看详情</p>
     </div>
     <div id="coverageNote" style="font-size:11px;color:var(--muted);"></div>
@@ -118,7 +118,7 @@ _BODY = r"""<div class="v4-card" style="padding:16px;display:flex;flex-direction
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
       <span id="status" class="market-status-badge"><div class="status-dot"></div> 读取中...</span>
-      <button id="fullscreenBtn" class="btn" type="button" style="height:32px;font-size:12px;"><i class="fa-solid fa-expand"></i></button>
+      <button id="fullscreenBtn" class="btn" type="button" style="height:32px;font-size:12px;"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-expand"></use></svg></button>
       <button id="refreshMarket" class="btn" type="button" style="height:32px;font-size:12px;">行情</button>
       <button id="refreshValuation" class="btn" type="button" style="height:32px;font-size:12px;">估值</button>
       <button id="refreshHoldings" class="btn" type="button" style="height:32px;font-size:12px;">同步</button>

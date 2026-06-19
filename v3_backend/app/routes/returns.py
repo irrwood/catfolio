@@ -56,14 +56,14 @@ def returns_page(request: Request):
     <h1>收益对比 · Benchmark Comparison</h1>
     <p>组合净值 vs 各大指数基准。TWR (时间加权收益) 剔除现金流影响，衡量策略本身表现。</p>
   </div>
-  <div class="btn" style="pointer-events:none"><i class="fa-solid fa-calendar-day"></i> 数据区间：{twr_start} → {twr_end}</div>
-  <button id="aiReturnsBtn" class="btn primary" onclick="loadReturnsAI()"><i class="fa-solid fa-robot"></i> AI 解读</button>
+  <div class="btn" style="pointer-events:none"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-calendar-day"></use></svg> 数据区间：{twr_start} → {twr_end}</div>
+  <button id="aiReturnsBtn" class="btn primary" onclick="loadReturnsAI()"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-ai"></use></svg> AI 解读</button>
 </div>
 
 <div id="aiReturnsResult" style="display:none;">
   <div class="v4-card" style="border-color:var(--accent);">
     <div class="v4-card-header">
-      <div><h2 class="v4-card-title"><i class="fa-solid fa-robot"></i> AI 收益解读</h2><div class="v4-card-subtitle" id="aiReturnsPeriod"></div></div>
+      <div><h2 class="v4-card-title"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-ai"></use></svg> AI 收益解读</h2><div class="v4-card-subtitle" id="aiReturnsPeriod"></div></div>
       <span onclick="document.querySelector('#aiReturnsResult').style.display='none'" style="cursor:pointer;color:var(--muted);font-size:18px;">&times;</span>
     </div>
     <div style="padding:12px 16px;"><p id="aiReturnsText" style="font-size:14px;line-height:1.7;margin:0;"></p></div>
@@ -96,12 +96,12 @@ def returns_page(request: Request):
 </div>
 
 <div class="v4-card returns-mode-card">
-  <div style="display:flex;align-items:center;gap:12px;">
-    <span style="font-size:13px;font-weight:650;color:var(--ink);">收益口径</span>
-    <div style="display:inline-flex;background:var(--bg);border-radius:8px;padding:3px;gap:3px;">
-      <button id="twrMode" class="active" type="button" style="border:0;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;background:transparent;color:var(--muted);transition:all 0.15s;">TWR</button>
-      <button id="cfMirrorMode" type="button" style="border:0;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;background:transparent;color:var(--muted);transition:all 0.15s;">现金流镜像</button>
-      <button id="costValueMode" type="button" style="border:0;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;background:transparent;color:var(--muted);transition:all 0.15s;">成本与市值对比</button>
+  <div class="returns-mode-row">
+    <span class="returns-mode-label">收益口径</span>
+    <div class="returns-segmented" role="tablist" aria-label="收益口径">
+      <button id="twrMode" class="returns-segment active" type="button" role="tab" aria-selected="true" aria-pressed="true">TWR</button>
+      <button id="cfMirrorMode" class="returns-segment" type="button" role="tab" aria-selected="false" aria-pressed="false">现金流镜像</button>
+      <button id="costValueMode" class="returns-segment" type="button" role="tab" aria-selected="false" aria-pressed="false">成本与市值对比</button>
     </div>
   </div>
 </div>
@@ -110,7 +110,7 @@ def returns_page(request: Request):
 <div class="v4-card">
   <div class="v4-card-header">
     <div>
-      <h2 class="v4-card-title"><i class="fa-solid fa-chart-line text-accent" style="color:var(--accent)"></i> 累计净值对比 — <span id="chartModeLabel">TWR</span></h2>
+      <h2 class="v4-card-title"><svg class="hi hi-inline" style="color:var(--accent)" aria-hidden="true" focusable="false"><use href="#hi-trending"></use></svg> 累计净值对比 — <span id="chartModeLabel">TWR</span></h2>
       <div class="v4-card-subtitle" id="chartSubtitle">剔除现金流影响，衡量策略本身表现。</div>
     </div>
     <select id="returnsRange" class="snapshot-control" style="height:32px;min-width:100px;max-width:120px;" aria-label="时间范围">
@@ -129,7 +129,7 @@ def returns_page(request: Request):
   <div class="v4-card">
     <div class="v4-card-header">
       <div>
-        <h2 class="v4-card-title"><i class="fa-solid fa-table"></i> 各基准表现汇总</h2>
+        <h2 class="v4-card-title"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-table"></use></svg> 各基准表现汇总</h2>
         <div class="v4-card-subtitle">截至最新一致日期的累计收益与超额收益</div>
       </div>
     </div>
@@ -145,7 +145,7 @@ def returns_page(request: Request):
   <div class="v4-card">
     <div class="v4-card-header">
       <div>
-        <h2 class="v4-card-title"><i class="fa-solid fa-circle-info"></i> 口径说明</h2>
+        <h2 class="v4-card-title"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-info-circle"></use></svg> 口径说明</h2>
         <div class="v4-card-subtitle">理解不同收益计算方式</div>
       </div>
     </div>

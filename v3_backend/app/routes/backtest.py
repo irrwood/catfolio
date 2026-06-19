@@ -16,9 +16,9 @@ _BODY = r"""<div class="v4-hero">
   </div>
   <div style="display:flex;gap:8px;align-items:center;">
     <div id="btStatus" class="btn" style="pointer-events:none;color:var(--muted);font-size:12px;">点击刷新加载数据</div>
-    <button id="btRefreshBtn" class="btn primary" onclick="loadBacktest()"><i class="fa-solid fa-arrows-rotate"></i> 刷新数据</button>
-    <button id="aiAnalyzeBtn" class="btn primary" onclick="loadAiAnalysis()"><i class="fa-solid fa-robot"></i> AI 分析</button>
-    <a class="btn" href="/lab"><i class="fa-solid fa-flask"></i> Portfolio Lab</a>
+    <button id="btRefreshBtn" class="btn primary" onclick="loadBacktest()"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-refresh"></use></svg> 刷新数据</button>
+    <button id="aiAnalyzeBtn" class="btn primary" onclick="loadAiAnalysis()"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-ai"></use></svg> AI 分析</button>
+    <a class="btn" href="/lab"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-flask"></use></svg> Portfolio Lab</a>
   </div>
 </div>
 
@@ -35,7 +35,7 @@ _BODY = r"""<div class="v4-hero">
 </section>
 
 <section id="aiComparisonSection" class="panel" style="display:none;">
-    <h2><i class="fa-solid fa-robot"></i> AI 分析对比 <span style="font-size:12px;color:var(--muted);font-weight:400;">程序结论 vs AI 独立解读</span></h2>
+    <h2><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-ai"></use></svg> AI 分析对比 <span style="font-size:12px;color:var(--muted);font-weight:400;">程序结论 vs AI 独立解读</span></h2>
     <div class="ai-compare-grid">
         <div class="ai-compare-card" id="aiBacktestCard">
             <div class="ai-compare-head"><span>历史回测</span></div>
@@ -67,7 +67,7 @@ _BODY = r"""<div class="v4-hero">
         </div>
     </div>
     <div class="ai-review-box" id="aiReviewBox" style="display:none;">
-        <div class="ai-review-head"><i class="fa-solid fa-comment-dots"></i> AI 对程序结论的评议</div>
+        <div class="ai-review-head"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-comment-dots"></use></svg> AI 对程序结论的评议</div>
         <p id="aiReviewText"></p>
     </div>
 </section>

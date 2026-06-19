@@ -46,10 +46,12 @@
       --icon-green: #60c068;
       --hover: #f4f7f1;
       --press: #e8efe1;
-      --radius-panel: 14px;
-      --radius-control: 10px;
-      --radius-inset: 8px;
-      --radius-mark: 12px;
+      /* Radius scale: the larger the surface, the larger the corner. */
+      --radius-card: 22px;
+      --radius-panel: 16px;
+      --radius-control: 12px;
+      --radius-inset: 10px;
+      --radius-mark: 14px;
       --radius-dot: 4px;
       --font-latin: "Raleway";
       --font-cjk: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
@@ -107,7 +109,7 @@
       margin: 0;
       font-size: 26px;
       line-height: 1.15;
-      font-weight: 800;
+      font-weight: 700;
       color: var(--text);
     }
 
@@ -172,8 +174,8 @@
 
     .card {
       border: 1px solid var(--line);
-      border-radius: var(--radius-panel);
-      background: linear-gradient(180deg, var(--surface), var(--soft));
+      border-radius: var(--radius-card);
+      background: linear-gradient(180deg, var(--surface), color-mix(in srgb, var(--soft) 45%, #ffffff));
       overflow: hidden;
     }
 
@@ -199,21 +201,20 @@
     }
 
     .table-card {
-      background: linear-gradient(180deg, #ffffff 0%, #fbfcfa 38%, var(--soft) 100%);
+      background: linear-gradient(180deg, #ffffff 0%, #fdfefc 45%, color-mix(in srgb, var(--soft) 45%, #ffffff) 100%);
     }
 
     .usage-card {
       margin-bottom: 48px;
     }
 
-    .palette-card {
+    .specimen-section {
       margin-bottom: 48px;
-      padding: 18px;
     }
 
-    .component-card {
-      margin-bottom: 48px;
-      padding: 18px;
+    .specimen-section + .card,
+    .card + .specimen-section {
+      margin-top: 0;
     }
 
     .section-heading {
@@ -226,7 +227,7 @@
 
     .section-title {
       font-size: 15px;
-      font-weight: 800;
+      font-weight: 700;
       color: var(--text);
     }
 
@@ -248,7 +249,7 @@
 
     .palette-title {
       font-size: 15px;
-      font-weight: 800;
+      font-weight: 700;
       color: var(--text);
     }
 
@@ -273,7 +274,7 @@
     .palette-label {
       color: var(--soft-text);
       font-size: 11px;
-      font-weight: 800;
+      font-weight: 700;
       letter-spacing: 0.16em;
       text-transform: uppercase;
     }
@@ -304,7 +305,7 @@
 
     .swatch-name {
       font-size: 13px;
-      font-weight: 800;
+      font-weight: 700;
       color: var(--text);
     }
 
@@ -320,14 +321,12 @@
     .component-grid {
       display: grid;
       grid-template-columns: 1.1fr 0.9fr;
-      gap: 14px;
+      gap: 22px 28px;
     }
 
+    /* Flat groups: spacing and labels do the grouping, not nested cards. */
     .component-panel {
-      border: 1px solid var(--line);
-      border-radius: var(--radius-panel);
-      background: linear-gradient(180deg, #ffffff 0%, #fbfcfa 48%, var(--soft) 100%);
-      padding: 16px;
+      padding: 0;
       min-width: 0;
     }
 
@@ -338,7 +337,7 @@
     .component-title {
       color: var(--soft-text);
       font-size: 11px;
-      font-weight: 800;
+      font-weight: 700;
       letter-spacing: 0.16em;
       text-transform: uppercase;
       margin-bottom: 12px;
@@ -405,7 +404,7 @@
     .field-label {
       color: var(--muted);
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 600;
     }
 
     .field-input,
@@ -429,13 +428,13 @@
     .field-input:hover,
     .select:hover {
       border-color: color-mix(in srgb, var(--primary-deep) 22%, var(--line));
-      background: var(--hover);
+      background-color: var(--hover);
     }
 
     .field-input:focus,
     .select:focus {
       border-color: var(--primary-deep);
-      background: var(--hover);
+      background-color: var(--hover);
       outline: 2px solid color-mix(in srgb, var(--primary) 70%, white);
       outline-offset: 2px;
     }
@@ -448,15 +447,12 @@
 
     .select {
       appearance: none;
-      background-image:
-        linear-gradient(45deg, transparent 50%, var(--muted) 50%),
-        linear-gradient(135deg, var(--muted) 50%, transparent 50%);
-      background-position:
-        calc(100% - 15px) 15px,
-        calc(100% - 10px) 15px;
-      background-size: 5px 5px;
+      /* Hugeicons arrow-down-01 chevron, anchored center-right so it never shifts. */
+      background-image: url("data:image/svg+xml,%3Csvg xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg' width%3D'18' height%3D'18' viewBox%3D'0 0 24 24' fill%3D'none'%3E%3Cpath d%3D'M18 9.00005C18 9.00005 13.5811 15 12 15C10.4188 15 6 9 6 9' stroke%3D'currentColor' stroke-linecap%3D'round' stroke-linejoin%3D'round' stroke-width%3D'1.5'%2F%3E%3C%2Fsvg%3E");
+      background-position: right 11px center;
+      background-size: 16px 16px;
       background-repeat: no-repeat;
-      padding-right: 30px;
+      padding-right: 34px;
     }
 
     .toggle-row,
@@ -468,7 +464,7 @@
       min-height: 38px;
       color: var(--text);
       font-size: 13px;
-      font-weight: 700;
+      font-weight: 600;
     }
 
     .toggle {
@@ -496,8 +492,8 @@
 
     .toggle-thumb {
       position: absolute;
-      top: 3px;
-      left: 3px;
+      top: 2px;
+      left: 2px;
       width: 18px;
       height: 18px;
       border-radius: 50%;
@@ -523,7 +519,7 @@
       gap: 8px;
       color: var(--muted);
       font-size: 13px;
-      font-weight: 700;
+      font-weight: 600;
     }
 
     .choice-mark {
@@ -581,34 +577,52 @@
     }
 
     .badge {
-      height: 25px;
+      height: 22px;
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius-inset);
-      background: var(--surface);
+      border: 0;
+      border-radius: 999px;
+      background: var(--soft);
       color: var(--muted);
-      padding: 0 9px;
+      padding: 0 10px;
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 600;
+    }
+
+    /* A small leading dot keeps these reading as status tags, not buttons. */
+    .badge::before {
+      content: "";
+      width: 5px;
+      height: 5px;
+      border-radius: 999px;
+      background: currentColor;
+      opacity: 0.7;
+    }
+
+    /* Badges that carry their own icon don't need the dot. */
+    .badge:has(svg)::before {
+      content: none;
+    }
+
+    .badge .hi {
+      width: 14px;
+      height: 14px;
+      vertical-align: -2px;
     }
 
     .badge.success {
-      border-color: color-mix(in srgb, var(--primary-deep) 24%, var(--line));
-      background: var(--hover);
+      background: color-mix(in srgb, var(--primary) 22%, #ffffff);
       color: var(--moss);
     }
 
     .badge.info {
-      border-color: color-mix(in srgb, var(--icon-blue) 28%, var(--line));
-      background: #f4f7ff;
+      background: #eef3ff;
       color: var(--blue);
     }
 
     .badge.warn {
-      border-color: color-mix(in srgb, var(--clay) 30%, var(--line));
-      background: #fff7f1;
+      background: #fdf2e9;
       color: var(--clay);
     }
 
@@ -629,7 +643,7 @@
 
     .alert-title {
       font-size: 13px;
-      font-weight: 800;
+      font-weight: 700;
     }
 
     .alert-copy {
@@ -656,7 +670,7 @@
       border-bottom: 1px solid var(--line-soft);
       color: var(--muted);
       font-size: 13px;
-      font-weight: 700;
+      font-weight: 600;
       transition: background 140ms ease, color 140ms ease;
     }
 
@@ -704,7 +718,7 @@
 
     .empty-title {
       font-size: 14px;
-      font-weight: 800;
+      font-weight: 700;
     }
 
     .empty-copy {
@@ -734,7 +748,7 @@
 
     .toast-title {
       font-size: 13px;
-      font-weight: 800;
+      font-weight: 700;
     }
 
     .toast-copy {
@@ -747,26 +761,23 @@
     .pagination {
       display: inline-flex;
       align-items: center;
+      gap: 3px;
+      padding: 3px;
       border: 1px solid var(--line);
-      border-radius: var(--radius-control);
+      border-radius: 13px;
       background: var(--soft);
-      overflow: hidden;
     }
 
     .page-button {
-      min-width: 34px;
-      height: 32px;
+      min-width: 30px;
+      height: 28px;
       border: 0;
-      border-right: 1px solid var(--line);
+      border-radius: 9px;
       background: transparent;
       color: var(--muted);
       font-size: 13px;
-      font-weight: 800;
+      font-weight: 600;
       transition: background 140ms ease, color 140ms ease;
-    }
-
-    .page-button:last-child {
-      border-right: 0;
     }
 
     .page-button:hover {
@@ -777,6 +788,7 @@
     .page-button.active {
       background: #ffffff;
       color: var(--text);
+      box-shadow: 0 1px 2px rgba(9, 15, 5, 0.08);
     }
 
     .skeleton-list {
@@ -836,7 +848,7 @@
         linear-gradient(135deg, var(--forest), #090f05),
         var(--forest);
       color: oklch(99% 0.002 95);
-      font-weight: 800;
+      font-weight: 700;
       font-size: 15px;
     }
 
@@ -847,6 +859,11 @@
       color: currentColor;
       display: inline-block;
       vertical-align: -4px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
 
     .hi.linear {
@@ -858,7 +875,8 @@
     }
 
     .hi.solid {
-      fill: currentColor;
+      fill: none;
+      stroke: currentColor;
     }
 
     .mark .hi {
@@ -874,7 +892,7 @@
 
     .plan-title {
       font-size: 15px;
-      font-weight: 700;
+      font-weight: 600;
       line-height: 1.25;
     }
 
@@ -893,7 +911,7 @@
       color: var(--text);
       padding: 0 12px;
       font-size: 13px;
-      font-weight: 700;
+      font-weight: 600;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -1008,7 +1026,7 @@
     .metric-value {
       font-size: 22px;
       line-height: 1;
-      font-weight: 800;
+      font-weight: 700;
       font-variant-numeric: tabular-nums;
       color: var(--text);
     }
@@ -1305,9 +1323,134 @@
         min-width: 760px;
       }
     }
+    /* ── slot-text style motion (textmotion.dev) ───────────────────── */
+    /* Title: characters roll up into place with a soft blur, staggered. */
+    .tm-roll { display: inline-block; }
+    .tm-roll .tm-ch {
+      display: inline-block;
+      white-space: pre;
+      animation: tm-roll-in 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+      animation-delay: calc(var(--i) * 34ms);
+    }
+    @keyframes tm-roll-in {
+      0%   { transform: translateY(0.6em); opacity: 0; filter: blur(5px); }
+      55%  { opacity: 1; filter: blur(0); }
+      100% { transform: translateY(0); opacity: 1; filter: blur(0); }
+    }
+
+    /* Numbers: each digit rolls up from 0 to its value, slot-machine style. */
+    .tm-num { display: flex; align-items: flex-end; justify-content: flex-start; line-height: 1; }
+    .tm-reel { display: inline-block; height: 1em; overflow: hidden; vertical-align: bottom; }
+    .tm-strip {
+      display: flex;
+      flex-direction: column;
+      transform: translateY(0);
+      transition: transform 1100ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .tm-strip .tm-digit { height: 1em; line-height: 1; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .tm-roll .tm-ch { animation: none; }
+      .tm-strip { transition: none; }
+    }
   </style>
 </head>
 <body>
+  <svg class="hugeicons-sprite" aria-hidden="true" focusable="false" width="0" height="0" style="position:absolute;overflow:hidden">
+    <symbol id="hi-check" viewBox="0 0 24 24">
+      <path d="M22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12Z" stroke="currentColor" stroke-width="1.5"></path>
+      <path d="M8 12.5L10.5 15L16 9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+    </symbol>
+    <symbol id="hi-add" viewBox="0 0 24 24">
+      <path d="M12.001 5.00003V19.002" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M19.002 12.002L4.99998 12.002" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+    </symbol>
+    <symbol id="hi-download" viewBox="0 0 24 24">
+      <path d="M16.9504 12.1817C17.1981 12.814 16.5076 13.5726 15.1267 15.0899C13.6702 16.6902 12.9201 17.4904 12 17.5C11.0799 17.4904 10.3298 16.6902 8.87331 15.0899C7.49239 13.5726 6.80193 12.814 7.04964 12.1817C7.05868 12.1586 7.06851 12.1359 7.0791 12.1135C7.34928 11.542 8.24477 11.5029 10 11.5002V4.99998C10 4.53501 10 4.30253 10.0511 4.11179C10.1898 3.59414 10.5941 3.1898 11.1118 3.05111C11.3025 3 11.535 3 12 3C12.4649 3 12.6974 3 12.8882 3.05111C13.4058 3.1898 13.8102 3.59414 13.9489 4.11179C14 4.30253 14 4.53501 14 4.99998V11.5002C15.7552 11.5029 16.6507 11.542 16.9209 12.1135C16.9315 12.1359 16.9413 12.1586 16.9504 12.1817Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M5.00006 21H19.0001" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+    </symbol>
+    <symbol id="hi-list" viewBox="0 0 24 24">
+      <path d="M2 11.4C2 10.2417 2.24173 10 3.4 10H20.6C21.7583 10 22 10.2417 22 11.4V12.6C22 13.7583 21.7583 14 20.6 14H3.4C2.24173 14 2 13.7583 2 12.6V11.4Z" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path>
+      <path d="M2 3.4C2 2.24173 2.24173 2 3.4 2H20.6C21.7583 2 22 2.24173 22 3.4V4.6C22 5.75827 21.7583 6 20.6 6H3.4C2.24173 6 2 5.75827 2 4.6V3.4Z" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path>
+      <path d="M2 19.4C2 18.2417 2.24173 18 3.4 18H20.6C21.7583 18 22 18.2417 22 19.4V20.6C22 21.7583 21.7583 22 20.6 22H3.4C2.24173 22 2 21.7583 2 20.6V19.4Z" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path>
+    </symbol>
+    <symbol id="hi-chart-bar-line" viewBox="0 0 24 24">
+      <path d="M4 15L4 19" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M12 9L12 19" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M22 22L2 22" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M20 13L20 19" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M5.60009 8.79993C5.23521 8.31419 4.6543 8 4 8C2.89543 8 2 8.89543 2 10C2 11.1046 2.89543 12 4 12C5.10457 12 6 11.1046 6 10C6 9.54973 5.8512 9.13421 5.60009 8.79993ZM5.60009 8.79993L10.3999 5.20007M10.3999 5.20007C10.7648 5.68581 11.3457 6 12 6C12.783 6 13.4609 5.55006 13.7892 4.89462M10.3999 5.20007C10.1488 4.86579 10 4.45027 10 4C10 2.89543 10.8954 2 12 2C13.1046 2 14 2.89543 14 4C14 4.32158 13.9241 4.62543 13.7892 4.89462M13.7892 4.89462L18.2108 7.10538M18.2108 7.10538C18.0759 7.37457 18 7.67842 18 8C18 9.10457 18.8954 10 20 10C21.1046 10 22 9.10457 22 8C22 6.89543 21.1046 6 20 6C19.217 6 18.5391 6.44994 18.2108 7.10538Z" stroke="currentColor" stroke-width="1.5"></path>
+    </symbol>
+    <symbol id="hi-file-export" viewBox="0 0 24 24">
+      <path d="M20 14V10.6569C20 9.83935 20 9.4306 19.8478 9.06306C19.6955 8.69552 19.4065 8.40649 18.8284 7.82843L14.0919 3.09188C13.593 2.593 13.3436 2.34355 13.0345 2.19575C12.9702 2.165 12.9044 2.13772 12.8372 2.11401C12.5141 2 12.1614 2 11.4558 2C8.21082 2 6.58831 2 5.48933 2.88607C5.26731 3.06508 5.06508 3.26731 4.88607 3.48933C4 4.58831 4 6.21082 4 9.45584V14C4 17.7712 4 19.6569 5.17157 20.8284C6.34315 22 8.22876 22 12 22M13 2.5V3C13 5.82843 13 7.24264 13.8787 8.12132C14.7574 9 16.1716 9 19 9H19.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M17 22C17.6068 21.4102 20 19.8403 20 19C20 18.1597 17.6068 16.5898 17 16M19 19H12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+    </symbol>
+    <symbol id="hi-alert" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></circle>
+      <path d="M12 8V12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M12.125 15.75H12M12.25 15.75C12.25 15.8881 12.1381 16 12 16C11.8619 16 11.75 15.8881 11.75 15.75C11.75 15.6119 11.8619 15.5 12 15.5C12.1381 15.5 12.25 15.6119 12.25 15.75Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+    </symbol>
+    <symbol id="hi-file-chart" viewBox="0 0 24 24">
+      <path d="M8 17.5L10 15.5C10.2726 15.2274 10.4089 15.0911 10.556 15.0182C10.8358 14.8796 11.1642 14.8796 11.444 15.0182C11.5911 15.0911 11.7274 15.2274 12 15.5C12.2726 15.7726 12.4089 15.9089 12.556 15.9818C12.8358 16.1204 13.1642 16.1204 13.444 15.9818C13.5911 15.9089 13.7274 15.7726 14 15.5L16 13.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M13 2.5V3C13 5.82843 13 7.24264 13.8787 8.12132C14.7574 9 16.1716 9 19 9H19.5M20 10.6569V14C20 17.7712 20 19.6569 18.8284 20.8284C17.6569 22 15.7712 22 12 22C8.22876 22 6.34315 22 5.17157 20.8284C4 19.6569 4 17.7712 4 14V9.45584C4 6.21082 4 4.58831 4.88607 3.48933C5.06508 3.26731 5.26731 3.06508 5.48933 2.88607C6.58831 2 8.21082 2 11.4558 2C12.1614 2 12.5141 2 12.8372 2.11401C12.9044 2.13772 12.9702 2.165 13.0345 2.19575C13.3436 2.34355 13.593 2.593 14.0919 3.09188L18.8284 7.82843C19.4065 8.40649 19.6955 8.69552 19.8478 9.06306C20 9.4306 20 9.83935 20 10.6569Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+    </symbol>
+    <symbol id="hi-hexagon" viewBox="0 0 24 24">
+      <path d="M7.84308 3.80211C9.8718 2.6007 10.8862 2 12 2C13.1138 2 14.1282 2.6007 16.1569 3.80211L16.8431 4.20846C18.8718 5.40987 19.8862 6.01057 20.4431 7C21 7.98943 21 9.19084 21 11.5937V12.4063C21 14.8092 21 16.0106 20.4431 17C19.8862 17.9894 18.8718 18.5901 16.8431 19.7915L16.1569 20.1979C14.1282 21.3993 13.1138 22 12 22C10.8862 22 9.8718 21.3993 7.84308 20.1979L7.15692 19.7915C5.1282 18.5901 4.11384 17.9894 3.55692 17C3 16.0106 3 14.8092 3 12.4063V11.5937C3 9.19084 3 7.98943 3.55692 7C4.11384 6.01057 5.1282 5.40987 7.15692 4.20846L7.84308 3.80211Z" stroke="currentColor" stroke-width="1.5"></path>
+    </symbol>
+    <symbol id="hi-sliders" viewBox="0 0 24 24">
+      <path d="M3.99963 5.00055L9.99963 5.00031" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path>
+      <path d="M12.9996 5.00031L19.9996 5.00031" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path>
+      <path d="M15.9996 9.00031L15.9996 15.0003" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path>
+      <path d="M9.99963 2.00031L9.99963 8.00031" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path>
+      <path d="M11.9996 16.0003L11.9996 22.0003" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path>
+      <path d="M15.9996 12.0001L19.9996 12.0003" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path>
+      <path d="M3.99963 12.0005L12.9996 12.0003" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path>
+      <path d="M11.9996 19.0003L19.9996 19.0003" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path>
+      <path d="M3.99963 19.0005L8.99963 19.0003" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path>
+    </symbol>
+    <symbol id="hi-clock" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"></circle>
+      <path d="M12 8V12L14 14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+    </symbol>
+    <symbol id="hi-task-done" viewBox="0 0 24 24">
+      <path d="M13.498 2H8.49805C7.66962 2 6.99805 2.67157 6.99805 3.5C6.99805 4.32843 7.66962 5 8.49805 5H13.498C14.3265 5 14.998 4.32843 14.998 3.5C14.998 2.67157 14.3265 2 13.498 2Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M6.99805 15H10.4266M6.99805 11H14.998" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M18.9981 13.5V9.48263C18.9981 6.65424 18.9981 5.24004 18.1194 4.36137C17.4781 3.72007 16.5515 3.54681 14.9981 3.5M11.998 21.9995L8.99805 21.9995C6.16963 21.9995 4.75541 21.9995 3.87674 21.1208C2.99806 20.2421 2.99805 18.8279 2.99805 15.9995L2.99806 9.48269C2.99805 6.65425 2.99805 5.24004 3.87673 4.36136C4.51802 3.72007 5.44456 3.54681 6.99795 3.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M13.998 20C13.998 20 14.998 20 15.998 22C15.998 22 18.1745 17 20.998 16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+    </symbol>
+    <symbol id="hi-sparkles" viewBox="0 0 24 24">
+      <path d="M15 2L15.5387 4.39157C15.9957 6.42015 17.5798 8.00431 19.6084 8.46127L22 9L19.6084 9.53873C17.5798 9.99569 15.9957 11.5798 15.5387 13.6084L15 16L14.4613 13.6084C14.0043 11.5798 12.4202 9.99569 10.3916 9.53873L8 9L10.3916 8.46127C12.4201 8.00431 14.0043 6.42015 14.4613 4.39158L15 2Z" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M7 12L7.38481 13.7083C7.71121 15.1572 8.84275 16.2888 10.2917 16.6152L12 17L10.2917 17.3848C8.84275 17.7112 7.71121 18.8427 7.38481 20.2917L7 22L6.61519 20.2917C6.28879 18.8427 5.15725 17.7112 3.70827 17.3848L2 17L3.70827 16.6152C5.15725 16.2888 6.28879 15.1573 6.61519 13.7083L7 12Z" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"></path>
+    </symbol>
+    <symbol id="hi-chart-combined" viewBox="0 0 24 24">
+      <path d="M21 21V9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M15 21V15" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M3 15L8.5 9.5C8.90894 9.09106 9.11341 8.88659 9.33398 8.77729C9.75364 8.56933 10.2464 8.56933 10.666 8.77729C10.8866 8.88659 11.0911 9.09106 11.5 9.5C11.9089 9.90894 12.1134 10.1134 12.334 10.2227C12.7536 10.4307 13.2464 10.4307 13.666 10.2227C13.8866 10.1134 14.0911 9.90894 14.5 9.5L21 3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M9 21V14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M3 21V19" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+    </symbol>
+    <symbol id="hi-search" viewBox="0 0 24 24">
+      <path d="M17 17L21 21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19C15.4183 19 19 15.4183 19 11Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+    </symbol>
+    <symbol id="hi-filter" viewBox="0 0 24 24">
+      <path d="M8.85746 12.5061C6.36901 10.6456 4.59564 8.59915 3.62734 7.44867C3.3276 7.09253 3.22938 6.8319 3.17033 6.3728C2.96811 4.8008 2.86701 4.0148 3.32795 3.5074C3.7889 3 4.60404 3 6.23433 3H17.7657C19.396 3 20.2111 3 20.672 3.5074C21.133 4.0148 21.0319 4.8008 20.8297 6.37281C20.7706 6.83191 20.6724 7.09254 20.3726 7.44867C19.403 8.60062 17.6261 10.6507 15.1326 12.5135C14.907 12.6821 14.7583 12.9567 14.7307 13.2614C14.4837 15.992 14.2559 17.4876 14.1141 18.2442C13.8853 19.4657 12.1532 20.2006 11.226 20.8563C10.6741 21.2466 10.0043 20.782 9.93278 20.1778C9.79643 19.0261 9.53961 16.6864 9.25927 13.2614C9.23409 12.9539 9.08486 12.6761 8.85746 12.5061Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+    </symbol>
+    <symbol id="hi-briefcase-dollar" viewBox="0 0 24 24">
+      <path d="M2 14C2 10.4934 2 8.74003 2.90796 7.55992C3.07418 7.34388 3.25989 7.14579 3.46243 6.96849C4.56878 6 6.21252 6 9.5 6H14.5C17.7875 6 19.4312 6 20.5376 6.96849C20.7401 7.14579 20.9258 7.34388 21.092 7.55992C22 8.74003 22 10.4934 22 14C22 17.5066 22 19.26 21.092 20.4401C20.9258 20.6561 20.7401 20.8542 20.5376 21.0315C19.4312 22 17.7875 22 14.5 22H9.5C6.21252 22 4.56878 22 3.46243 21.0315C3.25989 20.8542 3.07418 20.6561 2.90796 20.4401C2 19.26 2 17.5066 2 14Z" stroke="currentColor" stroke-width="1.5"></path>
+      <path d="M16 6C16 4.11438 16 3.17157 15.4142 2.58579C14.8284 2 13.8856 2 12 2C10.1144 2 9.17157 2 8.58579 2.58579C8 3.17157 8 4.11438 8 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M12 11C10.8954 11 10 11.6716 10 12.5C10 13.3284 10.8954 14 12 14C13.1046 14 14 14.6716 14 15.5C14 16.3284 13.1046 17 12 17M12 11C12.8708 11 13.6116 11.4174 13.8862 12M12 11V10M12 17C11.1292 17 10.3884 16.5826 10.1138 16M12 17V18" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path>
+      <path d="M6 12H2" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path>
+      <path d="M22 12L18 12" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path>
+    </symbol>
+    <symbol id="hi-percent-square" viewBox="0 0 24 24">
+      <path d="M2.5 12C2.5 7.52166 2.5 5.28249 3.89124 3.89124C5.28249 2.5 7.52166 2.5 12 2.5C16.4783 2.5 18.7175 2.5 20.1088 3.89124C21.5 5.28249 21.5 7.52166 21.5 12C21.5 16.4783 21.5 18.7175 20.1088 20.1088C18.7175 21.5 16.4783 21.5 12 21.5C7.52166 21.5 5.28249 21.5 3.89124 20.1088C2.5 18.7175 2.5 16.4783 2.5 12Z" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"></path>
+      <path d="M8 16L16 8M10 9C10 9.55228 9.55228 10 9 10C8.44772 10 8 9.55228 8 9C8 8.44772 8.44772 8 9 8C9.55228 8 10 8.44772 10 9ZM16 14.8284C16 15.3807 15.5523 15.8284 15 15.8284C14.4477 15.8284 14 15.3807 14 14.8284C14 14.2761 14.4477 13.8284 15 13.8284C15.5523 13.8284 16 14.2761 16 14.8284Z" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"></path>
+    </symbol>
+    <symbol id="hi-arrow-down" viewBox="0 0 24 24">
+      <path d="M18 9.00005C18 9.00005 13.5811 15 12 15C10.4188 15 6 9 6 9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+    </symbol>
+  </svg>
   <main class="page">
     <header class="header">
       <div>
@@ -1320,7 +1463,7 @@
       </div>
     </header>
 
-    <section class="card palette-card">
+    <section class="specimen-section palette-card">
       <div class="palette-header">
         <div>
           <div class="palette-title">Catfolio Color Palette</div>
@@ -1405,13 +1548,138 @@
       </div>
     </section>
 
+    <section class="specimen-section component-card">
+      <div class="section-heading">
+        <div>
+          <div class="section-title">SaaS Component Kit</div>
+          <div class="section-note">Core controls for dashboards, settings, billing, filters, onboarding, and table workflows.</div>
+        </div>
+        <span class="badge success">
+          <svg class="hi solid" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-check"></use></svg>
+          Ready
+        </span>
+      </div>
+
+      <div class="component-grid">
+        <div class="component-panel">
+          <div class="component-title">Buttons</div>
+          <div class="control-row">
+            <button class="button primary">
+              <svg class="hi linear" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-add"></use></svg>
+              New Strategy
+            </button>
+            <button class="button dark">Connect Broker</button>
+            <button class="button ghost">
+              <svg class="hi linear" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-download"></use></svg>
+              Export
+            </button>
+            <button class="button danger">Delete</button>
+            <button class="button" disabled>Disabled</button>
+          </div>
+          <div class="control-row">
+            <span class="badge success">Configured</span>
+            <span class="badge info">Demo data</span>
+            <span class="badge warn">Needs review</span>
+            <span class="badge">Neutral</span>
+          </div>
+        </div>
+
+        <div class="component-panel">
+          <div class="component-title">Selectors</div>
+          <div class="toggle-row">
+            <span>AI analysis</span>
+            <label class="toggle" aria-label="AI analysis"><input type="checkbox" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+          </div>
+          <div class="toggle-row">
+            <span>Demo mode</span>
+            <label class="toggle" aria-label="Demo mode"><input type="checkbox"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+          </div>
+          <div class="control-row">
+            <label class="choice checkbox"><input type="checkbox" checked><span class="choice-mark"></span>Save cache</label>
+            <label class="choice checkbox"><input type="checkbox"><span class="choice-mark"></span>Notify</label>
+          </div>
+          <div class="control-row">
+            <label class="choice radio"><input name="broker-mode" type="radio" checked><span class="choice-mark"></span>Auto</label>
+            <label class="choice radio"><input name="broker-mode" type="radio"><span class="choice-mark"></span>Manual</label>
+          </div>
+        </div>
+
+        <div class="component-panel full">
+          <div class="component-title">Forms</div>
+          <div class="field-grid">
+            <label class="field">
+              <span class="field-label">Workspace name</span>
+              <input class="field-input" value="Catfolio Research">
+              <span class="field-hint">Used in sidebar, exports, and report titles.</span>
+            </label>
+            <label class="field">
+              <span class="field-label">Default benchmark</span>
+              <select class="select"><option>SPY</option><option>QQQ</option><option>IWM</option></select>
+              <span class="field-hint">Applies to Returns and Portfolio Lab.</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="component-panel">
+          <div class="component-title">Menu / dropdown</div>
+          <div class="menu-list">
+            <div class="menu-item active"><svg class="hi linear" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-list"></use></svg>Portfolio summary</div>
+            <div class="menu-item"><svg class="hi linear" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-chart-bar-line"></use></svg>Strategy results</div>
+            <div class="menu-item"><svg class="hi linear" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-file-export"></use></svg>Audit export</div>
+          </div>
+        </div>
+
+        <div class="component-panel">
+          <div class="component-title">Status / empty</div>
+          <div class="alert">
+            <svg class="hi solid" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-alert"></use></svg>
+            <div>
+              <div class="alert-title">Demo-safe credentials</div>
+              <div class="alert-copy">Keys are hidden in demo mode and status badges never reveal values.</div>
+            </div>
+          </div>
+          <div style="height:10px"></div>
+          <div class="empty-state">
+            <div>
+              <div class="empty-icon"><svg class="hi solid" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-file-chart"></use></svg></div>
+              <div class="empty-title">No saved runs yet</div>
+              <div class="empty-copy">Run a strategy once and the comparison table will appear here.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="component-panel full">
+          <div class="component-title">Feedback / loading / pagination</div>
+          <div class="control-row" style="align-items:stretch">
+            <div class="toast" style="flex:1 1 280px">
+              <svg class="hi solid" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-check"></use></svg>
+              <div>
+                <div class="toast-title">Strategy run saved</div>
+                <div class="toast-copy">The result is now available in run history.</div>
+              </div>
+            </div>
+            <div class="pagination" aria-label="Pagination">
+              <button class="page-button">&lsaquo;</button>
+              <button class="page-button active">1</button>
+              <button class="page-button">2</button>
+              <button class="page-button">3</button>
+              <button class="page-button">&rsaquo;</button>
+            </div>
+          </div>
+          <div class="skeleton-list" style="margin-top:14px">
+            <div class="skeleton"></div>
+            <div class="skeleton medium"></div>
+            <div class="skeleton short"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="card usage-card">
       <div class="plan-row">
         <div class="plan">
           <div class="mark" aria-hidden="true">
-            <svg class="hi solid" viewBox="0 0 24 24">
-              <path d="M12 2.8 20 7.4v9.2l-8 4.6-8-4.6V7.4l8-4.6Zm0 5.15a4.05 4.05 0 1 0 0 8.1 4.05 4.05 0 0 0 0-8.1Zm0 2.15a1.9 1.9 0 1 1 0 3.8 1.9 1.9 0 0 1 0-3.8Z"/>
-            </svg>
+            <svg class="hi solid" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-hexagon"></use></svg>
           </div>
           <div>
             <div class="plan-title">Catfolio Pro</div>
@@ -1419,10 +1687,7 @@
           </div>
         </div>
         <button class="button">
-          <svg class="hi linear" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 3.5v17M4.5 8.5h15M4.5 15.5h15"/>
-            <path d="M8 6.5v4M16 13.5v4"/>
-          </svg>
+          <svg class="hi linear" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-sliders"></use></svg>
           Manage Plan
         </button>
       </div>
@@ -1445,36 +1710,28 @@
         <div class="metric">
           <div class="metric-value">1,171</div>
           <div class="metric-label">
-            <svg class="hi solid" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 2.8a9.2 9.2 0 1 0 0 18.4 9.2 9.2 0 0 0 0-18.4Zm.9 9.55a1 1 0 0 1-.44.84l-3.2 2.08a1 1 0 0 1-1.09-1.68l2.73-1.77V7.4a1 1 0 1 1 2 0v4.95Z"/>
-            </svg>
+            <svg class="hi solid" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-clock"></use></svg>
             Total Hours Saved
           </div>
         </div>
         <div class="metric">
           <div class="metric-value">15</div>
           <div class="metric-label">
-            <svg class="hi solid" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 5.8C4 4.25 5.25 3 6.8 3h10.4C18.75 3 20 4.25 20 5.8v12.4c0 1.55-1.25 2.8-2.8 2.8H6.8A2.8 2.8 0 0 1 4 18.2V5.8Zm4 2.45a1 1 0 1 0 0 2h8a1 1 0 1 0 0-2H8Zm0 4a1 1 0 1 0 0 2h5.5a1 1 0 1 0 0-2H8Z"/>
-            </svg>
+            <svg class="hi solid" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-task-done"></use></svg>
             Unique Strategies Tested
           </div>
         </div>
         <div class="metric">
           <div class="metric-value">4,690</div>
           <div class="metric-label">
-            <svg class="hi solid" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 2.5 13.8 8l5.7 1.8-5.7 1.9-1.8 5.8-1.8-5.8-5.7-1.9L10.2 8 12 2.5Zm6.2 11.8.8 2.4 2.4.8-2.4.8-.8 2.4-.8-2.4-2.4-.8 2.4-.8.8-2.4ZM5.2 14.2l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2Z"/>
-            </svg>
+            <svg class="hi solid" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-sparkles"></use></svg>
             Total AI Runs
           </div>
         </div>
         <div class="metric">
           <div class="metric-value">173</div>
           <div class="metric-label">
-            <svg class="hi solid" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 18.4V5.6C4 4.7 4.7 4 5.6 4h12.8c.9 0 1.6.7 1.6 1.6v12.8c0 .9-.7 1.6-1.6 1.6H5.6A1.6 1.6 0 0 1 4 18.4Zm3.2-2.2h9.6a1 1 0 0 0 .78-1.62l-2.72-3.4a1 1 0 0 0-1.55-.01l-1.9 2.31-.98-1.07a1 1 0 0 0-1.5.03l-2.5 3.12a1 1 0 0 0 .77 1.64Z"/>
-            </svg>
+            <svg class="hi solid" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-chart-combined"></use></svg>
             Runs / Week avg.
           </div>
         </div>
@@ -1488,26 +1745,15 @@
       </div>
       <div class="tools">
         <div class="search-wrap">
-          <svg class="hi linear search-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="6.5"/>
-            <path d="m16 16 4 4"/>
-          </svg>
+          <svg class="hi linear search-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-search"></use></svg>
           <input class="search" value="Search strategies..." aria-label="Search strategies">
         </div>
         <button class="button ghost">
-          <svg class="hi linear" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 4v10"/>
-            <path d="m8.5 10.5 3.5 3.5 3.5-3.5"/>
-            <path d="M5 16.5v1.2c0 1.5 1.1 2.8 2.6 2.8h8.8c1.5 0 2.6-1.3 2.6-2.8v-1.2"/>
-          </svg>
+          <svg class="hi linear" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-download"></use></svg>
           Export
         </button>
         <button class="button dashed">
-          <svg class="hi linear" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 6h16"/>
-            <path d="M7 12h10"/>
-            <path d="M10 18h4"/>
-          </svg>
+          <svg class="hi linear" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-filter"></use></svg>
           Filter
         </button>
       </div>
@@ -1520,32 +1766,19 @@
             <th>Strategy</th>
             <th>Category</th>
             <th class="num">
-              <svg class="hi linear" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M7 8h10M7 12h10M7 16h6"/>
-              </svg>
+              <svg class="hi linear" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-list"></use></svg>
               Runs
             </th>
             <th class="num">
-              <svg class="hi linear" viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="12" cy="12" r="8"/>
-                <path d="M12 7.5V12l3 2"/>
-              </svg>
+              <svg class="hi linear" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-clock"></use></svg>
               Hours Saved
             </th>
             <th class="num">
-              <svg class="hi linear" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M7 7.5h10a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Z"/>
-                <path d="M8.5 7.5V5.8c0-1 0.8-1.8 1.8-1.8h3.4c1 0 1.8 0.8 1.8 1.8v1.7"/>
-                <path d="M9 13h6"/>
-              </svg>
+              <svg class="hi linear" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-briefcase-dollar"></use></svg>
               Credits Used
             </th>
             <th class="num">
-              <svg class="hi linear" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m6 18 12-12"/>
-                <circle cx="7.5" cy="7.5" r="2"/>
-                <circle cx="16.5" cy="16.5" r="2"/>
-              </svg>
+              <svg class="hi linear" viewBox="0 0 24 24" aria-hidden="true"><use href="#hi-percent-square"></use></svg>
               % Usage
             </th>
           </tr>
@@ -1603,5 +1836,69 @@
       </table>
     </section>
   </main>
+  <script>
+    // slot-text style motion (learned from textmotion.dev): a tiny, tactile
+    // roll for headings and numbers. Dependency-free, pure CSS transforms.
+    (function () {
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      // Title: split into characters that roll up into place, staggered.
+      function rollText(el) {
+        const text = el.textContent;
+        el.textContent = "";
+        el.classList.add("tm-roll");
+        [...text].forEach((ch, i) => {
+          const span = document.createElement("span");
+          span.className = "tm-ch";
+          span.textContent = ch;
+          span.style.setProperty("--i", i);
+          el.appendChild(span);
+        });
+      }
+
+      // Numbers: build a 0–9 reel per digit and roll each to its target.
+      function rollNumber(el) {
+        const text = el.textContent.trim();
+        el.textContent = "";
+        el.classList.add("tm-num");
+        const strips = [];
+        [...text].forEach((ch) => {
+          if (!/[0-9]/.test(ch)) {
+            const sep = document.createElement("span");
+            sep.textContent = ch;
+            el.appendChild(sep);
+            return;
+          }
+          const reel = document.createElement("span");
+          reel.className = "tm-reel";
+          const strip = document.createElement("span");
+          strip.className = "tm-strip";
+          for (let d = 0; d <= 9; d++) {
+            const digit = document.createElement("span");
+            digit.className = "tm-digit";
+            digit.textContent = d;
+            strip.appendChild(digit);
+          }
+          reel.appendChild(strip);
+          el.appendChild(reel);
+          strips.push({ strip, target: Number(ch) });
+        });
+        if (reduce) {
+          strips.forEach(({ strip, target }) => { strip.style.transform = `translateY(-${target}em)`; });
+          return;
+        }
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          strips.forEach(({ strip, target }, i) => {
+            strip.style.transitionDelay = `${i * 60}ms`;
+            strip.style.transform = `translateY(-${target}em)`;
+          });
+        }));
+      }
+
+      const title = document.querySelector("h1");
+      if (title && !reduce) rollText(title);
+      document.querySelectorAll(".metric-value").forEach(rollNumber);
+    })();
+  </script>
 </body>
 </html>

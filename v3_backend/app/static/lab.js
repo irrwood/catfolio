@@ -279,7 +279,7 @@
                 showSymbol: false,
                 data: cumulative.map(row => row[benchmarkKey] ?? row.benchmark ?? null),
                 lineStyle: { width: 1.5, opacity: 0.75 },
-                itemStyle: { color: "#3b82f6" }
+                itemStyle: { color: "#9ca3af" }
             });
         }
         if (cumulative[0] && cumulative[0].excess !== undefined) {
@@ -295,7 +295,7 @@
         chart("#cumulativeChart").setOption({
             ...baseOption(),
             title: { show: false },
-            color: ["#27a648", "#3b82f6", "#f59e0b"],
+            color: ["#27a648", "#9ca3af", "#f59e0b"],
             legend: { bottom: 0, textStyle: { color: isLight ? "#374151" : "#9ca3af" } },
             grid: { left: 54, right: 18, top: 12, bottom: 42 },
             xAxis: { type: "category", data: cumulative.map(row => row.date), axisLabel: { hideOverlap: true } },
@@ -642,8 +642,13 @@
         const _calTabMonth = document.querySelector("#calViewMonth"), _calTabYear = document.querySelector("#calViewYear");
         function _setCalView(view) {
             _calView = view;
-            _calTabMonth?.classList.toggle("active", view === "month");
-            _calTabYear?.classList.toggle("active", view === "year");
+            const isMonth = view === "month";
+            _calTabMonth?.classList.toggle("active", isMonth);
+            _calTabYear?.classList.toggle("active", !isMonth);
+            _calTabMonth?.setAttribute("aria-selected", isMonth ? "true" : "false");
+            _calTabMonth?.setAttribute("aria-pressed", isMonth ? "true" : "false");
+            _calTabYear?.setAttribute("aria-selected", isMonth ? "false" : "true");
+            _calTabYear?.setAttribute("aria-pressed", isMonth ? "false" : "true");
             _renderCurrent();
         }
         _calTabMonth?.addEventListener("click", () => _setCalView("month"));
@@ -790,7 +795,7 @@
     btn.style.marginLeft = "auto";
     btn.title = "AI 解读";
     btn.setAttribute("aria-label", "AI 解读");
-    btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i>';
+    btn.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-wand-sparkles"></use></svg>';
     head.appendChild(btn);
 
     const result = document.createElement("div");
@@ -803,11 +808,11 @@
       if (loaded) { result.hidden = !result.hidden; return; }   // toggle once loaded
       result.hidden = false;
       result.classList.remove("err");
-      result.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> AI 正在解读…';
+      result.innerHTML = '<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> AI 正在解读…';
       btn.disabled = true;
       try {
         const data = await ask(aiPrompt(title));
-        result.innerHTML = '<span class="ai-card-tag"><i class="fa-solid fa-wand-magic-sparkles"></i></span>' + esc(data.answer);
+        result.innerHTML = '<span class="ai-card-tag"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-wand-sparkles"></use></svg></span>' + esc(data.answer);
         loaded = true;
       } catch (e) {
         result.classList.add("err");

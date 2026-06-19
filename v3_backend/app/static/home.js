@@ -14,25 +14,25 @@
       const u = _forceRefresh ? `${url}${sep}force=true` : url;
       return await fetch(u, { method: "POST" });
     };
-    refreshStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${label}...`;
+    refreshStatus.innerHTML = `<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> ${label}...`;
     try {
       let resp = await doFetch();
       let data = await resp.json();
       if (data.refresh?.cached || data.market?.cached || data.fundamentals?.cached) {
         const age = data.refresh?.age_seconds || data.market?.age_seconds || data.fundamentals?.age_seconds;
         refreshStatus.className = "status";
-        refreshStatus.innerHTML = `<i class="fa-solid fa-clock"></i> ${label}已缓存(${fmtAge(age)})。<a href="#" onclick="event.preventDefault();_forceRefresh=true;smartRefresh(${button.id},'${label}','${url}');return false" style="color:var(--accent);cursor:pointer;margin-left:8px;">强制刷新</a>`;
+        refreshStatus.innerHTML = `<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-clock"></use></svg> ${label}已缓存(${fmtAge(age)})。<a href="#" onclick="event.preventDefault();_forceRefresh=true;smartRefresh(${button.id},'${label}','${url}');return false" style="color:var(--accent);cursor:pointer;margin-left:8px;">强制刷新</a>`;
         button.disabled = false;
         return;
       }
       _forceRefresh = false;
       refreshStatus.className = "status positive";
-      refreshStatus.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${label}完成！`;
+      refreshStatus.innerHTML = `<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check-circle"></use></svg> ${label}完成！`;
       setTimeout(() => location.reload(), 1200);
     } catch (error) {
       _forceRefresh = false;
       refreshStatus.className = "status negative";
-      refreshStatus.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> ${label}失败：${error.message}`;
+      refreshStatus.innerHTML = `<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-x-circle"></use></svg> ${label}失败：${error.message}`;
       button.disabled = false;
     }
   }
@@ -50,7 +50,7 @@
     const quiet = document.querySelector("#afterHoursQuiet");
     const meta = document.querySelector("#afterHoursMeta");
     btn.disabled = true;
-    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 正在拉取 Massive 盘后数据...`;
+    btn.innerHTML = `<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> 正在拉取 Massive 盘后数据...`;
     status.innerHTML = "";
     result.style.display = "none";
     try {
@@ -80,12 +80,12 @@
       }
 
       meta.textContent = `共检查 ${data.total_checked || rows.length} 只美股 · ${data.date || ""} · ${warnings.length ? warnings[0] : "Massive API"}`;
-      btn.innerHTML = `<i class="fa-solid fa-arrows-rotate"></i> 刷新盘后数据`;
+      btn.innerHTML = `<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-refresh"></use></svg> 刷新盘后数据`;
       status.innerHTML = "";
       result.style.display = "block";
     } catch(e) {
       status.innerHTML = `<span style="color:var(--negative)">拉取失败：${e.message} <button class="btn" onclick="loadAfterHours()" style="font-size:11px;padding:2px 8px;">重试</button></span>`;
-      btn.innerHTML = `<i class="fa-solid fa-arrows-rotate"></i> 刷新盘后数据`;
+      btn.innerHTML = `<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-refresh"></use></svg> 刷新盘后数据`;
     } finally {
       btn.disabled = false;
     }

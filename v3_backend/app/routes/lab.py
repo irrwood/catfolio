@@ -10,6 +10,7 @@ _HEAD = '<link rel="stylesheet" href="/static/lab.css" />'
 _SCRIPTS = (
     '<script src="/static/vendor/echarts.min.js"></script>'
     '<script src="/static/lab.js"></script>'
+    '<script src="/static/home.js"></script>'
 )
 
 _BODY = r"""    
@@ -18,11 +19,22 @@ _BODY = r"""
             <h1>Portfolio Lab</h1>
             <p>组合分析、量化回测与优化</p>
         </div>
-        <div class="toolbar">
-            <button id="refreshHistory" class="btn">刷新历史价格</button>
+        <div class="lab-hero-actions">
+            <div class="lab-hero-actions-label">数据控制</div>
+            <div class="toolbar">
+                <button id="refreshButton" class="btn primary" type="button">同步持仓</button>
+                <button id="marketRefreshButton" class="btn" type="button">刷新行情</button>
+                <button id="fundamentalsRefreshButton" class="btn" type="button">刷新估值</button>
+                <button id="refreshHistory" class="btn" type="button">刷新历史价格</button>
+                <a class="btn" href="/import">手动导入</a>
+            </div>
         </div>
     </header>
     <div class="dashboard-stack">
+    <section class="command-card lab-control-card">
+        <div id="refreshStatus" class="status"></div>
+    </section>
+
     <div class="data-health-row">
         <div class="data-health-chip"><b><span class="status-dot"></span>Trading 212</b><span id="healthTrading212">读取中...</span></div>
         <div class="data-health-chip"><b><span class="status-dot"></span>Yahoo 行情</b><span id="healthMarket">读取中...</span></div>
@@ -92,13 +104,13 @@ _BODY = r"""
                 <div class="daily-pnl-sub">每日盈亏 · 月 / 年 视图</div>
             </div>
             <div class="pnl-cal-nav">
-                <div class="pnl-cal-viewtabs">
-                    <button class="pnl-cal-viewtab active" id="calViewMonth">月</button>
-                    <button class="pnl-cal-viewtab" id="calViewYear">年</button>
+                <div class="pnl-cal-viewtabs" role="tablist" aria-label="收益日历视图">
+                    <button class="pnl-cal-viewtab active" id="calViewMonth" type="button" role="tab" aria-selected="true" aria-pressed="true">月</button>
+                    <button class="pnl-cal-viewtab" id="calViewYear" type="button" role="tab" aria-selected="false" aria-pressed="false">年</button>
                 </div>
-                <button class="pnl-cal-nav-btn" id="calPrev" title="上一页">&#8249;</button>
+                <button class="pnl-cal-nav-btn" id="calPrev" type="button" title="上一页" aria-label="上一页">&#8249;</button>
                 <span id="calMonthLabel" class="pnl-cal-month-label">—</span>
-                <button class="pnl-cal-nav-btn" id="calNext" title="下一页">&#8250;</button>
+                <button class="pnl-cal-nav-btn" id="calNext" type="button" title="下一页" aria-label="下一页">&#8250;</button>
             </div>
         </div>
         <div id="pnlCalendar" class="pnl-cal-grid"></div>
@@ -154,9 +166,28 @@ _BODY = r"""
         </div>
     </section>
 
-    <div class="chart-head"><h2>Portfolio Command Center</h2><span>集中度、盈亏、收益和风险</span></div>
-
-    <div class="section-kicker">真实持仓数据</div>
+    <section class="command-card">
+        <div class="chart-head" style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+                <h2>盘后异动 <span style="font-size:11px;color:var(--muted);font-weight:400;">Massive · After-Hours Movers</span></h2>
+                <div style="font-size:11px;color:var(--muted);">盘后价 vs 收盘价涨跌超过 ±1% 的持仓</div>
+            </div>
+            <button id="afterHoursBtn" class="btn primary" type="button" onclick="loadAfterHours()">刷新盘后数据</button>
+        </div>
+        <div id="afterHoursStatus" style="padding:8px 0;font-size:12px;color:var(--muted);">点击刷新获取最新盘后数据</div>
+        <div id="afterHoursResult" style="display:none;">
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>代码</th><th>收盘价</th><th>盘后价</th><th>盘后涨跌</th><th>成交量</th></tr></thead>
+                    <tbody id="afterHoursBody"></tbody>
+                </table>
+            </div>
+            <div id="afterHoursQuiet" style="display:none;padding:16px;text-align:center;color:var(--muted);font-size:14px;">
+                盘后无异常波动，所有持仓盘后变化均小于 1%
+            </div>
+            <div id="afterHoursMeta" style="font-size:11px;color:var(--muted);margin-top:8px;"></div>
+        </div>
+    </section>
 
     <section class="command-card">
         <div class="chart-head"><h2>持仓分类集中度</h2><span><span class="source-badge">真实持仓 + 本地分类</span></span></div>

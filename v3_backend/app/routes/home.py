@@ -1,7 +1,7 @@
 """Page route: home."""
 import json
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from datetime import datetime, timezone
 from app.components import wrap_v4_layout
 from app.i18n import get_lang
@@ -60,6 +60,7 @@ try {
 
 @router.get("/")
 def index(request: Request):
+    return RedirectResponse(url="/lab", status_code=307)
     snapshot = current_snapshot()
     alerts = check_alerts()
 
@@ -75,8 +76,6 @@ def index(request: Request):
     market = float(summary.get("market_value_usd") or 0)
     pnl = float(summary.get("unrealized_usd") or 0)
     pnl_pct = (pnl / cost * 100) if cost else 0
-    cash = summary.get("cash") or {}
-    cash_total = float(cash.get("total") or 0)
     positions = int(summary.get("open_positions") or 0)
     as_of = summary.get("as_of") or "unknown"
     pnl_class = "positive" if pnl >= 0 else "negative"
@@ -111,7 +110,7 @@ def index(request: Request):
     <h1>数据与控制中心</h1>
     <p>组合总览与持仓同步。数据源刷新、API key、AI 提供方等配置请前往「系统设置」。</p>
   </div>
-  <div class="btn" style="pointer-events:none"><i class="fa-solid fa-calendar-day"></i> 数据时间：{as_of}</div>
+  <div class="btn" style="pointer-events:none"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-calendar-day"></use></svg> 数据时间：{as_of}</div>
 </div>
 
 <div class="dashboard-stack">
@@ -132,18 +131,13 @@ def index(request: Request):
     <span class="metric-label">未实现浮盈亏</span>
     <div class="metric-value {pnl_class}">${pnl:,.0f} <span style="font-size:14px">({pnl_pct:,.1f}%)</span></div>
   </div>
-  <div class="metric-card">
-    <span class="metric-label">账户现金估算</span>
-    <div class="metric-value">${cash_total:,.0f}</div>
-    <span class="metric-subtext"><i class="fa-solid fa-wallet"></i> 现金占比: {(cash_total/(market+cash_total)*100) if (market+cash_total) else 0:.1f}%</span>
-  </div>
 </div>
 
 <div class="grid-2" style="margin-top:0px;">
   <div class="v4-card">
     <div class="v4-card-header">
       <div>
-        <h2 class="v4-card-title"><i class="fa-solid fa-arrows-rotate text-accent"></i> 同步持仓</h2>
+        <h2 class="v4-card-title"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-refresh"></use></svg> 同步持仓</h2>
         <div class="v4-card-subtitle">从券商拉取最新持仓，并刷新 Yahoo 实时现价。估值、历史等刷新在「系统设置」。</div>
       </div>
     </div>
@@ -160,14 +154,14 @@ def index(request: Request):
           <strong style="display:block;margin-bottom:4px;">Yahoo 实时现价刷新</strong>
           <span style="font-size:12px;color:var(--muted)">拉取最新 Yahoo 现价，用于更新总市值、今日涨跌和浮盈亏。</span>
         </div>
-        <button class="btn" id="marketRefreshButton"><i class="fa-solid fa-arrows-rotate"></i> 刷新行情</button>
+        <button class="btn" id="marketRefreshButton"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-refresh"></use></svg> 刷新行情</button>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div style="flex:1;padding-right:16px;">
           <strong style="display:block;margin-bottom:4px;">手动导入数据 (CSV)</strong>
           <span style="font-size:12px;color:var(--muted)">没有 API key？上传任意券商的交易记录 CSV，自动计算持仓与平均成本。</span>
         </div>
-        <a class="btn" href="/import"><i class="fa-solid fa-file-import"></i> 手动导入数据</a>
+        <a class="btn" href="/import"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-file-import"></use></svg> 手动导入数据</a>
       </div>
     </div>
     <div id="refreshStatus" class="status" style="margin-top:16px;"></div>
@@ -176,7 +170,7 @@ def index(request: Request):
   <div class="v4-card">
     <div class="v4-card-header">
       <div>
-        <h2 class="v4-card-title"><i class="fa-solid fa-circle-info"></i> 产品与文档链接</h2>
+        <h2 class="v4-card-title"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-info-circle"></use></svg> 产品与文档链接</h2>
         <div class="v4-card-subtitle">系统主要页面分析指引。</div>
       </div>
     </div>
@@ -217,10 +211,10 @@ def index(request: Request):
 <section class="panel" style="margin-top:16px;">
   <div class="chart-head" style="display:flex;justify-content:space-between;align-items:center;">
     <div>
-      <h2><i class="fa-solid fa-moon"></i> 盘后异动 <span style="font-size:11px;color:var(--muted);font-weight:400;">Massive · After-Hours Movers</span></h2>
+      <h2><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-moon"></use></svg> 盘后异动 <span style="font-size:11px;color:var(--muted);font-weight:400;">Massive · After-Hours Movers</span></h2>
       <div style="font-size:11px;color:var(--muted);">盘后价 vs 收盘价涨跌超过 ±1% 的持仓</div>
     </div>
-    <button id="afterHoursBtn" class="btn primary" onclick="loadAfterHours()" style="font-size:12px;"><i class="fa-solid fa-arrows-rotate"></i> 刷新盘后数据</button>
+    <button id="afterHoursBtn" class="btn primary" onclick="loadAfterHours()" style="font-size:12px;"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-refresh"></use></svg> 刷新盘后数据</button>
   </div>
   <div id="afterHoursStatus" style="padding:8px 0;font-size:12px;color:var(--muted);">点击刷新获取最新盘后数据</div>
   <div id="afterHoursResult" style="display:none;">
@@ -231,7 +225,7 @@ def index(request: Request):
       </table>
     </div>
     <div id="afterHoursQuiet" style="display:none;padding:16px;text-align:center;color:var(--muted);font-size:14px;">
-      <i class="fa-solid fa-circle-check" style="color:var(--positive)"></i> 盘后无异常波动，所有持仓盘后变化均小于 1%
+      <svg class="hi hi-inline" style="color:var(--positive)" aria-hidden="true" focusable="false"><use href="#hi-check-circle"></use></svg> 盘后无异常波动，所有持仓盘后变化均小于 1%
     </div>
     <div id="afterHoursMeta" style="font-size:11px;color:var(--muted);margin-top:8px;"></div>
   </div>

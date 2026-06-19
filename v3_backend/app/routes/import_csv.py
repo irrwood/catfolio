@@ -35,7 +35,7 @@ def import_page(request: Request):
   <div class="v4-card">
     <div class="v4-card-header">
       <div>
-        <h2 class="v4-card-title"><i class="fa-solid fa-file-csv" style="color:var(--accent)"></i> 上传交易记录</h2>
+        <h2 class="v4-card-title"><svg class="hi hi-inline" style="color:var(--accent)" aria-hidden="true" focusable="false"><use href="#hi-file-csv"></use></svg> 上传交易记录</h2>
         <div class="v4-card-subtitle">支持 CSV 格式，列名不区分大小写</div>
       </div>
     </div>
@@ -53,19 +53,19 @@ def import_page(request: Request):
          ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
          ondragleave="this.style.borderColor='var(--line-strong)'"
          ondrop="handleDrop(event)">
-        <i class="fa-solid fa-cloud-arrow-up" style="font-size:32px;color:var(--muted);margin-bottom:8px;display:block;"></i>
+        <svg class="hi hi-inline" style="font-size:32px;color:var(--muted);margin-bottom:8px;display:block;" aria-hidden="true" focusable="false"><use href="#hi-cloud-upload"></use></svg>
         <div style="font-weight:600;margin-bottom:4px;">点击选择 CSV 文件</div>
         <div style="font-size:var(--text-sm);color:var(--muted);">或拖拽至此</div>
       </div>
       <input type="file" id="csvFile" accept=".csv,text/csv" style="display:none" onchange="onFileSelected(this)">
 
       <div id="fileInfo" style="display:none;margin-bottom:var(--sp-base);padding:10px 14px;background:var(--soft);border-radius:var(--radius-md);font-size:var(--text-sm);">
-        <i class="fa-solid fa-file-csv" style="color:var(--accent)"></i>
+        <svg class="hi hi-inline" style="color:var(--accent)" aria-hidden="true" focusable="false"><use href="#hi-file-csv"></use></svg>
         <span id="fileName"></span>
       </div>
 
       <button id="uploadBtn" class="btn primary" style="width:100%;justify-content:center;" disabled onclick="uploadCSV()">
-        <i class="fa-solid fa-upload"></i> 导入数据
+        <svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-upload"></use></svg> 导入数据
       </button>
 
       <div id="uploadStatus" style="margin-top:var(--sp-base);font-size:var(--text-sm);display:none;"></div>
@@ -76,7 +76,7 @@ def import_page(request: Request):
   <div class="v4-card">
     <div class="v4-card-header">
       <div>
-        <h2 class="v4-card-title"><i class="fa-solid fa-table" style="color:var(--accent)"></i> CSV 格式说明</h2>
+        <h2 class="v4-card-title"><svg class="hi hi-inline" style="color:var(--accent)" aria-hidden="true" focusable="false"><use href="#hi-table"></use></svg> CSV 格式说明</h2>
         <div class="v4-card-subtitle">必填列：Date / Action / Ticker / Quantity / Price</div>
       </div>
     </div>
@@ -98,12 +98,12 @@ def import_page(request: Request):
         <div style="font-size:var(--text-sm);font-weight:600;margin-bottom:var(--sp-sm);color:var(--muted);">示例</div>
         <pre style="background:var(--soft);border-radius:var(--radius-md);padding:var(--sp-md);font-size:11px;overflow-x:auto;line-height:1.6;">{_SAMPLE_CSV}</pre>
         <button class="btn" style="font-size:var(--text-sm);margin-top:var(--sp-sm);" onclick="downloadSample()">
-          <i class="fa-solid fa-download"></i> 下载示例 CSV
+          <svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-download"></use></svg> 下载示例 CSV
         </button>
       </div>
 
       <div style="margin-top:var(--sp-xl);padding:var(--sp-md);background:var(--accent-soft);border-radius:var(--radius-md);font-size:var(--text-sm);color:var(--ink-secondary);">
-        <i class="fa-solid fa-circle-info" style="color:var(--accent)"></i>
+        <svg class="hi hi-inline" style="color:var(--accent)" aria-hidden="true" focusable="false"><use href="#hi-info-circle"></use></svg>
         <strong style="color:var(--ink);">成本计算方式：</strong>加权平均成本法（WAC）。
         列名大小写不限，多余列自动忽略。已平仓（持仓为零）不会显示。
       </div>
@@ -117,7 +117,7 @@ def import_page(request: Request):
   <div class="v4-card">
     <div class="v4-card-header">
       <div>
-        <h2 class="v4-card-title"><i class="fa-solid fa-circle-check" style="color:var(--positive)"></i> 导入成功</h2>
+        <h2 class="v4-card-title"><svg class="hi hi-inline" style="color:var(--positive)" aria-hidden="true" focusable="false"><use href="#hi-check-circle"></use></svg> 导入成功</h2>
         <div class="v4-card-subtitle" id="importSummary"></div>
       </div>
     </div>
@@ -127,9 +127,9 @@ def import_page(request: Request):
         <tbody id="importTbody"></tbody>
       </table>
       <div style="margin-top:var(--sp-xl);display:flex;gap:var(--sp-md);">
-        <a href="/" class="btn primary"><i class="fa-solid fa-gauge"></i> 前往控制台</a>
+        <a href="/" class="btn primary"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-gauge"></use></svg> 前往控制台</a>
         <button class="btn" onclick="document.getElementById('csvFile').click()">
-          <i class="fa-solid fa-rotate"></i> 重新导入
+          <svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-refresh"></use></svg> 重新导入
         </button>
       </div>
     </div>

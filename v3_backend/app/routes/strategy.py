@@ -181,7 +181,7 @@ def api_holdings_universe(top: int = 10):
 def strategy_page(request: Request):
     content = r"""<div class="v4-hero">
   <div class="v4-hero-text">
-    <h1><i class="fa-solid fa-vials"></i> 策略回测</h1>
+    <h1><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-strategy"></use></svg> 策略回测</h1>
     <p>用 Python 写策略，对任意股票回测，每次运行自动保存为一条记录，可随时回看对比。</p>
   </div>
 </div>
@@ -192,7 +192,7 @@ def strategy_page(request: Request):
   <aside class="v4-card" style="padding:var(--sp-base);align-self:start;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--sp-md);">
       <strong style="font-size:13px;">历史回测</strong>
-      <button class="btn" onclick="newRun()" style="height:28px;padding:0 10px;"><i class="fa-solid fa-plus"></i> 新建</button>
+      <button class="btn" onclick="newRun()" style="height:28px;padding:0 10px;"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-plus"></use></svg> 新建</button>
     </div>
     <div id="runList" style="display:flex;flex-direction:column;gap:6px;"></div>
   </aside>
@@ -202,7 +202,7 @@ def strategy_page(request: Request):
 
     <div class="v4-card">
       <div class="v4-card-header"><div><h2 class="v4-card-title">策略与参数</h2></div>
-        <button id="runBtn" class="btn primary" onclick="runBacktest()"><i class="fa-solid fa-play"></i> 运行回测</button>
+        <button id="runBtn" class="btn primary" onclick="runBacktest()"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-play"></use></svg> 运行回测</button>
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--sp-md);margin-bottom:var(--sp-md);">
@@ -227,7 +227,7 @@ def strategy_page(request: Request):
             <option value="topn">动量前 2 强</option>
           </select>
         </label>
-        <button class="btn" onclick="importHoldings()" style="height:30px;"><i class="fa-solid fa-download"></i> 从持仓导入标的</button>
+        <button class="btn" onclick="importHoldings()" style="height:30px;"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-download"></use></svg> 从持仓导入标的</button>
       </div>
       <textarea id="f_code" spellcheck="false"></textarea>
       <div id="runStatus" style="margin-top:8px;font-size:12px;min-height:16px;"></div>
@@ -248,8 +248,8 @@ def strategy_page(request: Request):
 
       <div style="margin-top:var(--sp-base);border-top:1px solid var(--line);padding-top:var(--sp-base);">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <strong style="font-size:13px;"><i class="fa-solid fa-robot" style="color:var(--accent);"></i> AI 评价</strong>
-          <button id="aiEvalBtn" class="btn" onclick="evaluateRun()" style="height:30px;"><i class="fa-solid fa-wand-magic-sparkles"></i> 生成评价</button>
+          <strong style="font-size:13px;"><svg class="hi hi-inline" style="color:var(--accent);" aria-hidden="true" focusable="false"><use href="#hi-ai"></use></svg> AI 评价</strong>
+          <button id="aiEvalBtn" class="btn" onclick="evaluateRun()" style="height:30px;"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-wand-sparkles"></use></svg> 生成评价</button>
         </div>
         <div id="aiEvalBox" style="margin-top:10px;font-size:13px;line-height:1.75;color:var(--ink-secondary);white-space:pre-wrap;"></div>
       </div>

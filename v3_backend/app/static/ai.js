@@ -103,7 +103,7 @@
         return true;
       } catch(e) {}
     }
-    status.innerHTML = `<span style="color:var(--muted)">点击右上角 <i class="fa-solid fa-arrows-rotate"></i> 刷新 生成组合总结</span>`;
+    status.innerHTML = `<span style="color:var(--muted)">点击右上角 <svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-refresh"></use></svg> 刷新 生成组合总结</span>`;
     content.style.display = "none";
     return false;
   }
@@ -113,7 +113,7 @@
     const content = document.querySelector("#briefingContent");
     const text = document.querySelector("#briefingText");
     status.style.display = "block";
-    status.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> AI 正在分析你的组合...`;
+    status.innerHTML = `<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> AI 正在分析你的组合...`;
     content.style.display = "none";
     try {
       const data = await aiPost("/api/ai/briefing");
@@ -144,12 +144,12 @@
 
     input.value = "";
     btn.disabled = true;
-    status.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> AI 正在分析...`;
+    status.innerHTML = `<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> AI 正在分析...`;
 
     // Add question to conversation
     const itemId = "conv-" + Date.now();
     conv.insertAdjacentHTML("beforeend",
-      `<div class="conv-item" id="${itemId}"><div class="conv-q">${question}</div><div class="conv-a loading"><i class="fa-solid fa-spinner fa-spin"></i> 思考中...</div></div>`);
+      `<div class="conv-item" id="${itemId}"><div class="conv-q">${question}</div><div class="conv-a loading"><svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> 思考中...</div></div>`);
 
     try {
       const data = await aiPost("/api/ai/ask", {question});
@@ -159,7 +159,7 @@
       answerEl.insertAdjacentHTML("afterend", `
         <div class="ai-reminder-actions">
           <button class="btn" onclick="previewReminderFromAnswer('${itemId}')">
-            <i class="fa-solid fa-bell"></i> 创建提醒
+            <svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-bell"></use></svg> 创建提醒
           </button>
         </div>
         <div class="ai-reminder-draft" id="${itemId}-reminder"></div>
@@ -183,7 +183,7 @@
   async function previewReminderFromAnswer(itemId) {
     const answer = document.querySelector(`#${itemId} .conv-a`)?.textContent || "";
     const box = document.querySelector(`#${itemId}-reminder`);
-    box.innerHTML = `<div class="ai-reminder-box"><i class="fa-solid fa-spinner fa-spin"></i> 正在生成提醒草稿...</div>`;
+    box.innerHTML = `<div class="ai-reminder-box"><svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> 正在生成提醒草稿...</div>`;
     try {
       const data = await aiPost("/api/alerts/preview-ai-reminders", { text: answer });
       const draft = (data.drafts || [])[0];
@@ -207,7 +207,7 @@
             `).join("")}
           </div>
           <div class="ai-reminder-footer">
-            <button class="btn primary" onclick="saveReminderDraft('${itemId}')"><i class="fa-solid fa-check"></i> 创建提醒</button>
+            <button class="btn primary" onclick="saveReminderDraft('${itemId}')"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> 创建提醒</button>
             <button class="btn" onclick="document.querySelector('#${itemId}-reminder').innerHTML=''">取消</button>
           </div>
         </div>`;
@@ -227,7 +227,7 @@
     }
     try {
       const data = await aiPost("/api/alerts", draft);
-      box.innerHTML = `<div class="ai-reminder-box positive"><i class="fa-solid fa-circle-check"></i> 已创建提醒：${escapeHtml(data.rule.title)}</div>`;
+      box.innerHTML = `<div class="ai-reminder-box positive"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check-circle"></use></svg> 已创建提醒：${escapeHtml(data.rule.title)}</div>`;
     } catch (error) {
       box.innerHTML = `<div class="ai-reminder-box negative">创建失败：${escapeHtml(error.message)}</div>`;
     }

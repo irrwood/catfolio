@@ -26,7 +26,7 @@ async function uploadCSV() {
   const btn = document.getElementById('uploadBtn');
   const status = document.getElementById('uploadStatus');
   btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 处理中…';
+  btn.innerHTML = '<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> 处理中…';
   status.style.display = 'none';
 
   const form = new FormData();
@@ -38,16 +38,16 @@ async function uploadCSV() {
       showResult(data);
     } else {
       status.style.display = 'block';
-      status.innerHTML = '<span style="color:var(--negative)"><i class="fa-solid fa-circle-xmark"></i> 导入失败：' +
+      status.innerHTML = '<span style="color:var(--negative)"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-x-circle"></use></svg> 导入失败：' +
         (data.warnings || []).join('; ') + '</span>';
       btn.disabled = false;
-      btn.innerHTML = '<i class="fa-solid fa-upload"></i> 导入数据';
+      btn.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-upload"></use></svg> 导入数据';
     }
   } catch(e) {
     status.style.display = 'block';
-    status.innerHTML = '<span style="color:var(--negative)"><i class="fa-solid fa-circle-xmark"></i> 请求失败：' + e.message + '</span>';
+    status.innerHTML = '<span style="color:var(--negative)"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-x-circle"></use></svg> 请求失败：' + e.message + '</span>';
     btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-upload"></i> 导入数据';
+    btn.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-upload"></use></svg> 导入数据';
   }
 }
 
@@ -64,7 +64,7 @@ function showResult(data) {
       `<td class="font-mono">${h.currency}</td>`;
     tbody.appendChild(tr);
   });
-  document.getElementById('uploadBtn').innerHTML = '<i class="fa-solid fa-circle-check"></i> 已导入';
+  document.getElementById('uploadBtn').innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check-circle"></use></svg> 已导入';
 }
 
 function downloadSample() {
