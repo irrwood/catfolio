@@ -41,6 +41,10 @@ a = Analysis(
         "app.alerts",
         "app.ai",
         "app.analytics",
+        "app.imap_mail_adapter",
+        "app.mail_analysis",
+        "app.mail_repository",
+        "app.mail_service",
         "app.lab",
         "app.telegram_notify",
         # ── scripts imported at runtime via sys.path ──
@@ -76,6 +80,7 @@ a = Analysis(
         "csv",
         "email.mime.multipart",
         "email.mime.text",
+        "imap_tools",
     ],
     hookspath=[],
     hooksconfig={},

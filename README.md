@@ -19,7 +19,7 @@ Project repository: [github.com/irrwood/catfolio](https://github.com/irrwood/cat
 - **Analysis charts**: monthly return heatmaps, drawdown curves, holding correlations, valuation matrices, and return distributions.
 - **Strategy Lab**: write Python allocation strategies, rebalance over historical prices, compare CAGR/volatility/Sharpe/max drawdown, save runs, and optionally ask an AI provider to critique the result.
 - **AI analysis**: portfolio briefing, risk diagnosis, performance explanation, overlap analysis, what-if scenarios, returns explanation, and free-form portfolio Q&A.
-- **Bank analytics prototype**: locally analyze bundled demo transactions for recurring subscriptions, matched refunds, and email-based refund opportunities. Live Open Banking and email transports are not included yet.
+- **Local-first bank and email analytics**: connect Plaid through the existing FastAPI app, keep normalized transactions in local SQLite, encrypt access tokens with AES-256-GCM and a Keychain-backed key, and scan authorised mailboxes directly over read-only IMAP for refund opportunities.
 - **Provider choices**: DeepSeek, Grok/xAI, OpenAI, Gemini, Moonshot Kimi, Zhipu GLM, Qwen, and OpenRouter are supported through one provider registry.
 - **Desktop build**: PyInstaller + pywebview packaging for `Catfolio.app` on macOS.
 
@@ -103,6 +103,12 @@ OPENROUTER_API_KEY=
 MASSIVE_API_KEY=
 FRED_API_KEY=
 
+# Optional Plaid Open Banking connection (Sandbox by default)
+PLAID_CLIENT_ID=
+PLAID_SECRET=
+PLAID_ENV=sandbox
+PLAID_COUNTRY_CODES=GB
+
 # Optional Telegram alerts
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
@@ -123,6 +129,7 @@ Catfolio works in demo mode without any keys. For live data or AI analysis, use 
 | `FINNHUB_API_KEY` | Fundamentals fallback when FMP is unavailable | [Finnhub registration](https://finnhub.io/register) |
 | `MASSIVE_API_KEY` | Optional after-hours movers and options snapshots | [Massive REST API quickstart](https://massive.com/docs/rest/quickstart) |
 | `FRED_API_KEY` | Optional macro data such as rates and inflation | [FRED API key docs](https://fred.stlouisfed.org/docs/api/api_key.html) |
+| `PLAID_CLIENT_ID` / `PLAID_SECRET` | Optional local bank connection and transaction sync | [Plaid Dashboard](https://dashboard.plaid.com/) |
 | `DEEPSEEK_API_KEY` | AI Analyst and Strategy Lab evaluation | [DeepSeek API keys](https://platform.deepseek.com/api_keys) |
 | `XAI_API_KEY` | Grok / xAI provider for AI analysis | [xAI console](https://console.x.ai/) |
 | `OPENAI_API_KEY` | OpenAI provider for AI analysis | [OpenAI API keys](https://platform.openai.com/api-keys) |
@@ -162,7 +169,7 @@ security add-generic-password -a DEEPSEEK_API_KEY -s com.catfolio.portfolio -w "
 - **Strategy Lab**: custom Python strategy research with historical rebalancing, saved run history, performance metrics, and optional AI evaluation.
 - **Heatmap**: short-term performance grid across the current universe.
 - **AI Analyst**: a chat-oriented portfolio assistant with a preset question library for briefing, risk, overlap, what-if, performance, and free-form Q&A.
-- **Bank**: a demo-only local analytics prototype for subscription detection, refund matching, and email refund opportunities. It does not connect to a real bank or mailbox in this release.
+- **Bank**: local SQLite account and transaction storage, Plaid Link and incremental sync, subscription detection, refund matching, and opt-in direct IMAP analysis. Mail credentials stay in the OS Keychain; raw message bodies are not persisted.
 - **Import**: broker CSV upload for users who do not use Trading 212.
 - **Settings**: API keys, data refresh controls, demo mode, AI provider selection, Telegram alert configuration, and cache controls.
 
@@ -202,8 +209,8 @@ Results include equity curve, CAGR, volatility, Sharpe ratio, max drawdown, turn
 - Private runtime outputs are ignored by git, including `.env`, `outputs/`, `build/`, `dist/`, and generated release archives.
 - `CATFOLIO_DATA_DIR` lets you keep private data outside the repository.
 - Demo mode uses static sample holdings and market content.
-- Bank and email examples are generated from bundled fictional demo records; this release does not connect to a real bank account or mailbox.
-- External network calls happen only when you configure and use providers such as Trading 212, Yahoo Finance, FMP, Finnhub, Massive, FRED, Telegram, or an AI provider.
+- Demo-mode bank and email examples are generated from bundled fictional records. In real mode, Plaid access tokens are encrypted locally and bank transactions remain in the configured `CATFOLIO_DATA_DIR`.
+- External network calls happen only when you configure and use providers such as Trading 212, Yahoo Finance, FMP, Finnhub, Massive, FRED, Plaid, IMAP, Telegram, or an AI provider.
 
 This is not financial advice. Catfolio is a personal analysis tool; verify all numbers before making investment decisions.
 

@@ -173,6 +173,21 @@ def test_strategy_sidebar_uses_api_icon_asset():
     assert 'M12.7764 9.10229L11.2235 14.8978' in icon
 
 
+def test_bank_sidebar_uses_supplied_icon_with_distinct_interaction_states():
+    components = (ROOT / "app" / "components.py").read_text(encoding="utf-8")
+    sidebar = (ROOT / "app" / "static" / "v5.css").read_text(encoding="utf-8")
+    icon = (ROOT / "app" / "static" / "icons" / "sidebar" / "bank.svg").read_text(encoding="utf-8")
+
+    assert '("/bank", "银行", "bank.svg")' in components
+    assert "v5-nav-icon-bank" in components
+    assert 'mask-image: url("/static/icons/sidebar/bank.svg");' in sidebar
+    assert ".v5-nav-link:hover .v5-nav-icon-mask" in sidebar
+    assert ".v5-nav-link:active .v5-nav-icon-mask" in sidebar
+    assert ".v5-nav-link.active .v5-nav-icon-mask" in sidebar
+    assert ".v5-nav-link.active:hover .v5-nav-icon-mask" in sidebar
+    assert 'fill="currentColor"' in icon
+
+
 def test_collapsed_sidebar_secondary_links_fit_without_clipping():
     sidebar = (ROOT / "app" / "static" / "v5.css").read_text(encoding="utf-8")
 

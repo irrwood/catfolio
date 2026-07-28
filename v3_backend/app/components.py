@@ -543,7 +543,7 @@ _V5_NAV_GROUPS = [
         ("/strategy", "策略回测", "strategy.svg"),
         ("/heatmap", "持仓热力图", "tools.svg"),
         ("/ai", "AI 分析", "magic.svg"),
-        ("/bank", "银行", "app.svg"),
+        ("/bank", "银行", "bank.svg"),
     ]),
     ("数据", [
         ("/import", "导入数据", "document.svg"),
@@ -563,9 +563,14 @@ def wrap_v5_layout(title: str, content: str, active_page: str, lang: str = "zh",
         links = ""
         for href, label, icon in items:
             is_active = "active" if href == active_page else ""
+            icon_html = (
+                '<span class="v5-nav-icon v5-nav-icon-mask v5-nav-icon-bank" aria-hidden="true"></span>'
+                if icon == "bank.svg"
+                else f'<img class="v5-nav-icon" src="/static/icons/sidebar/{icon}" alt="" width="24" height="24" />'
+            )
             links += (
                 f'<a class="v5-nav-link {is_active}" href="{href}" title="{label}">'
-                f'<img class="v5-nav-icon" src="/static/icons/sidebar/{icon}" alt="" width="24" height="24" />'
+                f'{icon_html}'
                 f'<span class="v5-nav-label">{label}</span></a>'
             )
         groups_html += f'<div class="v5-nav-group">{links}</div>'

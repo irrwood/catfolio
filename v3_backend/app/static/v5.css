@@ -1703,6 +1703,55 @@ td:first-child, th:first-child {
 
 :root.light-theme .v5-nav-link.active .v5-nav-icon { filter: brightness(0.48); }
 
+.v5-nav-icon-mask {
+  opacity: 1;
+  color: #a7a7a7;
+  background-color: currentColor;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: 24px 24px;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: 24px 24px;
+  transition: color 0.14s ease-out;
+}
+
+.v5-nav-icon-bank {
+  -webkit-mask-image: url("/static/icons/sidebar/bank.svg");
+  mask-image: url("/static/icons/sidebar/bank.svg");
+}
+
+.v5-nav-link:hover .v5-nav-icon-mask {
+  color: var(--ink-secondary);
+}
+
+.v5-nav-link:active .v5-nav-icon-mask {
+  color: var(--accent);
+}
+
+.v5-nav-link.active .v5-nav-icon-mask {
+  color: var(--ink);
+  filter: none;
+}
+
+:root.light-theme .v5-nav-link.active .v5-nav-icon-mask {
+  filter: none;
+}
+
+.v5-nav-link.active:hover .v5-nav-icon-mask {
+  color: var(--accent);
+}
+
+.v5-nav-link.active:active .v5-nav-icon-mask {
+  color: var(--accent-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v5-nav-icon-mask {
+    transition: none;
+  }
+}
+
 .v5-shell.collapsed .v5-nav-link {
   width: 42px;
   margin-inline: 0;

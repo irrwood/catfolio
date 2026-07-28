@@ -622,6 +622,47 @@ body.page-bank .v5-content {
   line-height: 16px;
 }
 
+.bank-mail-connect-fields {
+  margin-top: 14px;
+  padding-top: 14px;
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.bank-mail-connect-fields[hidden] {
+  display: none;
+}
+
+.bank-mail-connect-fields label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.bank-mail-connect-fields label[hidden] {
+  display: none;
+}
+
+.bank-dialog-input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  outline: 0;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+}
+
+.bank-dialog-input:focus-visible {
+  border-color: #708cff;
+  box-shadow: 0 0 0 2px rgba(112, 140, 255, 0.22);
+}
+
 @keyframes bank-row-in {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }

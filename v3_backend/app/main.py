@@ -21,7 +21,7 @@ APP_DIR = Path(__file__).resolve().parent
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
 )
 app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")

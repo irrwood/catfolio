@@ -259,8 +259,7 @@ def save_secret(name: str, value: str) -> bool:
     import platform
     ok = False
     if platform.system() == "Darwin":
-        _keychain_save(name, value, "com.catfolio.portfolio")
-        ok = True
+        ok = _keychain_save(name, value, "com.catfolio.portfolio")
     else:
         try:
             import keyring as _kr
@@ -271,6 +270,25 @@ def save_secret(name: str, value: str) -> bool:
     if ok:
         with _secret_lock:
             _secret_cache[name] = value
+    return ok
+
+
+def delete_secret(name: str) -> bool:
+    """Delete a Catfolio-owned secret from the OS credential store."""
+    import platform
+
+    ok = False
+    if platform.system() == "Darwin":
+        ok = _keychain_delete(name, "com.catfolio.portfolio")
+    else:
+        try:
+            import keyring as _kr
+            _kr.delete_password("com.catfolio.portfolio", name)
+            ok = True
+        except Exception:
+            ok = False
+    with _secret_lock:
+        _secret_cache.pop(name, None)
     return ok
 
 
@@ -289,12 +307,26 @@ def _keychain_get(account, service):
 
 def _keychain_save(account, password, service):
     try:
-        subprocess.run(
+        result = subprocess.run(
             ["security", "add-generic-password", "-a", account, "-s", service, "-w", password, "-U"],
             capture_output=True, text=True, timeout=5,
         )
+        return result.returncode == 0
     except Exception:
-        pass
+        return False
+
+
+def _keychain_delete(account, service):
+    try:
+        result = subprocess.run(
+            ["security", "delete-generic-password", "-a", account, "-s", service],
+            capture_output=True, text=True, timeout=5,
+        )
+        # security returns 44 when the item does not exist; deletion is still
+        # effectively complete from Catfolio's perspective.
+        return result.returncode in {0, 44}
+    except Exception:
+        return False
 
 
 def fetch_yahoo_chart(symbol):

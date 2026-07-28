@@ -27,6 +27,7 @@ def settings_page(request: Request):
     demo_on = demo_mode()
     if demo_on:
         fmp_set = finnhub_set = fred_set = massive_set = t212_set = t212_second_set = False
+        plaid_client_set = plaid_secret_set = False
         ai_provider = AI_DEFAULT
     else:
         fmp_set = secret_value("FMP_API_KEY") is not None
@@ -35,6 +36,8 @@ def settings_page(request: Request):
         massive_set = secret_value("MASSIVE_API_KEY") is not None
         t212_set = secret_value("TRADING212_API_KEY") is not None
         t212_second_set = secret_value("TRADING212_API_KEY_2") is not None
+        plaid_client_set = secret_value("PLAID_CLIENT_ID") is not None
+        plaid_secret_set = secret_value("PLAID_SECRET") is not None
         ai_provider = (secret_value("AI_PROVIDER") or AI_DEFAULT).strip().lower()
     if ai_provider not in AI_PROVIDERS:
         ai_provider = AI_DEFAULT
@@ -139,6 +142,16 @@ def settings_page(request: Request):
           {key_row("FINNHUB_API_KEY", "Finnhub API Key", "备用估值接口，FMP 缺失时自动切换", finnhub_set)}
           {key_row("MASSIVE_API_KEY", "Massive API Key", "盘后异动、期权链快照（可选）", massive_set)}
           {key_row("FRED_API_KEY", "FRED API Key (St. Louis Fed)", "宏观利率、通胀数据（可选）", fred_set, border=False)}
+        </div>
+      </section>
+      <section class="settings-credential-group" aria-labelledby="settingsCredentialBank">
+        <header class="settings-credential-group-head">
+          <strong id="settingsCredentialBank">Open Banking</strong>
+          <span>Plaid Link 与交易同步；Access Token 另行加密保存在本机 SQLite。</span>
+        </header>
+        <div class="settings-key-list">
+          {key_row("PLAID_CLIENT_ID", "Plaid Client ID", "Plaid Dashboard 的应用标识", plaid_client_set)}
+          {key_row("PLAID_SECRET", "Plaid Secret", "默认连接 Sandbox；正式环境通过 PLAID_ENV 切换", plaid_secret_set, border=False)}
         </div>
       </section>
       <section class="settings-credential-group" aria-labelledby="settingsCredentialAi">
@@ -358,6 +371,7 @@ def settings_page(request: Request):
 _ALLOWED_KEYS = {
     "TRADING212_API_KEY", "TRADING212_API_KEY_2", "FMP_API_KEY", "FINNHUB_API_KEY",
     "MASSIVE_API_KEY", "FRED_API_KEY",
+    "PLAID_CLIENT_ID", "PLAID_SECRET",
     "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
     "AI_PROVIDER",
     # Every AI provider's API-key and model-override names, from the registry.

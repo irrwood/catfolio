@@ -35,6 +35,9 @@ def test_bank_tab_uses_shared_shell_and_local_first_workflow():
     assert "TrueLayer" in html
     assert "Plaid" in html
     assert "绝不自动提交索赔" in html
+    assert "imap-tools" in html
+    assert "应用专用密码或 OAuth2" in html
+    assert 'data-mail-provider="imap"' in html
 
 
 def test_bank_subscription_detection_finds_stable_monthly_charges():
@@ -71,6 +74,8 @@ def test_bank_page_has_complete_english_core_actions():
     assert "Detect subscriptions" in html
     assert "Match refunds" in html
     assert "Email refund opportunities" in html
+    assert "Test and connect" in html
+    assert "App password or OAuth2" in html
     assert "绝不自动提交索赔" not in html
 
 
