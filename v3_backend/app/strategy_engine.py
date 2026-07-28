@@ -11,6 +11,7 @@ strategies; a pathological infinite loop inside a single strategy() call is a kn
 MVP limitation (single-user, local, own code — see docs/strategy-backtest-plan.md).
 """
 
+import ast
 import time
 
 from .lab import fetch_history
@@ -20,8 +21,188 @@ from .settings import V2_DIR
 PRICE_CACHE = V2_DIR / "strategy_prices.json"
 PRICE_TTL_SECONDS = 60 * 60 * 12  # 12h
 RUN_BUDGET_SECONDS = 20  # soft wall-clock guard for the whole simulation
+MAX_STRATEGY_CODE_CHARS = 12_000
 
 REBALANCE_FREQS = {"daily", "weekly", "monthly"}
+
+SAFE_BUILTINS = {
+    "abs": abs,
+    "all": all,
+    "any": any,
+    "bool": bool,
+    "dict": dict,
+    "enumerate": enumerate,
+    "float": float,
+    "int": int,
+    "len": len,
+    "list": list,
+    "max": max,
+    "min": min,
+    "range": range,
+    "round": round,
+    "set": set,
+    "sorted": sorted,
+    "sum": sum,
+    "tuple": tuple,
+    "zip": zip,
+}
+
+SAFE_CTX_ATTRIBUTES = {"universe", "date", "i", "price", "history", "sma", "momentum"}
+SAFE_CALL_NAMES = set(SAFE_BUILTINS)
+BLOCKED_NAMES = {
+    "__builtins__",
+    "__import__",
+    "breakpoint",
+    "compile",
+    "eval",
+    "exec",
+    "globals",
+    "input",
+    "locals",
+    "open",
+    "vars",
+}
+
+
+class StrategySafetyValidator(ast.NodeVisitor):
+    """Validate the Strategy Lab script before compiling it.
+
+    This is a deliberately small Python subset for allocation logic. It blocks
+    imports, reflection, filesystem/process access through builtins, and object
+    dunder traversal such as `().__class__.__mro__`.
+    """
+
+    def __init__(self):
+        self._function_depth = 0
+
+    def error(self, node, message):
+        line = getattr(node, "lineno", None)
+        if line:
+            raise ValueError(f"策略代码不安全（第 {line} 行）：{message}")
+        raise ValueError(f"策略代码不安全：{message}")
+
+    def visit_Module(self, node):
+        strategy_defs = [n for n in node.body if isinstance(n, ast.FunctionDef) and n.name == "strategy"]
+        if len(strategy_defs) != 1:
+            self.error(node, "必须且只能定义一个 `def strategy(ctx): ...` 函数。")
+        for stmt in node.body:
+            if not isinstance(stmt, (ast.FunctionDef, ast.Expr)):
+                self.error(stmt, "顶层只允许函数定义和注释/字符串说明。")
+            if isinstance(stmt, ast.Expr) and not isinstance(stmt.value, ast.Constant):
+                self.error(stmt, "顶层只允许函数定义和字符串说明。")
+            self.visit(stmt)
+
+    def visit_FunctionDef(self, node):
+        if self._function_depth:
+            self.error(node, "不允许嵌套定义函数。")
+        if node.name != "strategy":
+            self.error(node, "只允许定义 `strategy` 函数。")
+        if node.decorator_list:
+            self.error(node, "不允许使用装饰器。")
+        if node.returns:
+            self.error(node, "不允许使用返回类型标注。")
+        args = node.args
+        if args.vararg or args.kwarg or args.kwonlyargs or args.defaults or args.kw_defaults:
+            self.error(node, "`strategy` 只能接收一个参数：ctx。")
+        if len(args.args) != 1 or args.args[0].arg != "ctx":
+            self.error(node, "`strategy` 只能接收一个参数：ctx。")
+        self._function_depth += 1
+        for stmt in node.body:
+            self.visit(stmt)
+        self._function_depth -= 1
+
+    def visit_Import(self, node):
+        self.error(node, "不允许 import。")
+
+    def visit_ImportFrom(self, node):
+        self.error(node, "不允许 import。")
+
+    def visit_ClassDef(self, node):
+        self.error(node, "不允许定义 class。")
+
+    def visit_Lambda(self, node):
+        self.error(node, "不允许 lambda。")
+
+    def visit_Global(self, node):
+        self.error(node, "不允许 global。")
+
+    def visit_Nonlocal(self, node):
+        self.error(node, "不允许 nonlocal。")
+
+    def visit_With(self, node):
+        self.error(node, "不允许 with。")
+
+    def visit_AsyncWith(self, node):
+        self.error(node, "不允许 async with。")
+
+    def visit_AsyncFunctionDef(self, node):
+        self.error(node, "不允许 async 函数。")
+
+    def visit_Await(self, node):
+        self.error(node, "不允许 await。")
+
+    def visit_Yield(self, node):
+        self.error(node, "不允许 yield。")
+
+    def visit_YieldFrom(self, node):
+        self.error(node, "不允许 yield。")
+
+    def visit_Try(self, node):
+        self.error(node, "不允许 try/except。")
+
+    def visit_Raise(self, node):
+        self.error(node, "不允许 raise。")
+
+    def visit_While(self, node):
+        self.error(node, "不允许 while 循环。")
+
+    def visit_Delete(self, node):
+        self.error(node, "不允许 del。")
+
+    def visit_Attribute(self, node):
+        if node.attr.startswith("_"):
+            self.error(node, "不允许访问私有或 dunder 属性。")
+        if isinstance(node.value, ast.Name) and node.value.id == "ctx":
+            if node.attr not in SAFE_CTX_ATTRIBUTES:
+                self.error(node, f"ctx.{node.attr} 不在允许的策略 API 中。")
+        elif isinstance(node.ctx, ast.Load):
+            self.error(node, "只允许访问 ctx 提供的策略 API。")
+        self.generic_visit(node)
+
+    def visit_Name(self, node):
+        if node.id.startswith("_") or node.id in BLOCKED_NAMES:
+            self.error(node, f"不允许使用 `{node.id}`。")
+
+    def visit_Call(self, node):
+        if isinstance(node.func, ast.Name):
+            if node.func.id not in SAFE_CALL_NAMES:
+                self.error(node, f"不允许调用 `{node.func.id}`。")
+        elif isinstance(node.func, ast.Attribute):
+            if not (isinstance(node.func.value, ast.Name) and node.func.value.id == "ctx" and node.func.attr in SAFE_CTX_ATTRIBUTES):
+                self.error(node, "只允许调用 ctx.price/history/sma/momentum。")
+        else:
+            self.error(node, "不允许动态调用。")
+        self.generic_visit(node)
+
+
+def _compile_strategy(code):
+    """Compile a validated strategy script and return its strategy(ctx) callable."""
+    if len(code) > MAX_STRATEGY_CODE_CHARS:
+        raise ValueError(f"策略代码过长（>{MAX_STRATEGY_CODE_CHARS} 字符）。")
+    try:
+        tree = ast.parse(code, filename="<strategy>", mode="exec")
+    except SyntaxError as exc:
+        raise ValueError(f"策略代码语法错误：第 {exc.lineno} 行 {exc.msg}")
+    StrategySafetyValidator().visit(tree)
+    namespace = {}
+    try:
+        exec(compile(tree, "<strategy>", "exec"), {"__builtins__": SAFE_BUILTINS}, namespace)
+    except Exception as exc:
+        raise ValueError(f"策略代码编译失败：{type(exc).__name__}: {exc}")
+    strategy_fn = namespace.get("strategy")
+    if not callable(strategy_fn):
+        raise ValueError("策略代码必须定义一个函数 `def strategy(ctx): ...` 并返回目标权重。")
+    return strategy_fn
 
 
 # ── price data (arbitrary tickers, cached per symbol) ──────────────────────────
@@ -207,15 +388,7 @@ def run_backtest(code, config):
         raise ValueError("可用历史数据太少（少于 30 个交易日），请放宽日期范围或换标的。")
     rebal = _rebalance_dates(dates, rebalance)
 
-    # compile user strategy
-    namespace = {}
-    try:
-        exec(compile(code, "<strategy>", "exec"), namespace)
-    except Exception as exc:
-        raise ValueError(f"策略代码编译失败：{type(exc).__name__}: {exc}")
-    strategy_fn = namespace.get("strategy")
-    if not callable(strategy_fn):
-        raise ValueError("策略代码必须定义一个函数 `def strategy(ctx): ...` 并返回目标权重。")
+    strategy_fn = _compile_strategy(code)
 
     cash = capital
     shares = {t: 0.0 for t in universe}

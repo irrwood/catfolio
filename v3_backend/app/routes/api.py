@@ -1,18 +1,46 @@
 """Page route: api."""
-from fastapi import APIRouter, Body, HTTPException, Query
-from fastapi.responses import HTMLResponse
 import json
+import re
+import ssl
 import time
+import urllib.parse
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+
+import certifi
+from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi.responses import FileResponse, HTMLResponse
+
 from app.cache import clear_all, cached
 from app.data_store import current_snapshot, refresh_after_hours, refresh_fundamentals, refresh_market_quotes, refresh_trading212
 from app.analytics import chart_exposure, chart_pnl, etf_lookthrough, holdings_detail, holdings_heatmap, pnl_contribution, portfolio_summary, sector_concentration
-from app.lab import BENCHMARKS, BENCHMARK_CN, backtest, correlation_matrix, cumulative_multi_benchmark, cumulative_vs_benchmark, drawdown_curve, efficient_frontier, factor_analysis, fifty_two_week_position, lab_history_summary, monte_carlo, monthly_contribution_waterfall, monthly_return_heatmap, refresh_history, return_distribution, cash_flow_mirror_vs_benchmark
+from app.lab import BENCHMARKS, BENCHMARK_CN, backtest, correlation_matrix, cumulative_multi_benchmark, cumulative_vs_benchmark, drawdown_curve, efficient_frontier, factor_analysis, fifty_two_week_position, income_summary, lab_history_summary, monte_carlo, monthly_contribution_waterfall, monthly_return_heatmap, refresh_history, return_distribution, cash_flow_mirror_vs_benchmark
+from app.settings import DATA_DIR
 
 from app.returns_twr import compute_twr_returns
 from app.ai import ai_analysis, ask, overlap_analysis, performance_explanation, portfolio_briefing, returns_explanation, risk_diagnosis, what_if
 
 router = APIRouter(prefix="/api", tags=["api"])
+
+_ASSET_LOGO_DIR = DATA_DIR / "asset_logos"
+_ASSET_LOGO_SYMBOL = re.compile(r"^[A-Z0-9][A-Z0-9._-]{0,31}$")
+_ASSET_LOGO_MAX_BYTES = 1024 * 1024
+
+
+def _normalize_asset_logo_symbol(symbol: str) -> str:
+    normalized = str(symbol or "").strip().upper()
+    if not _ASSET_LOGO_SYMBOL.fullmatch(normalized):
+        raise HTTPException(status_code=404, detail="Asset logo not found")
+    return normalized
+
+
+def _asset_logo_file_response(path):
+    return FileResponse(
+        path,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=604800, immutable"},
+    )
 
 
 def _req_lang(req: dict | None) -> str:
@@ -30,6 +58,108 @@ def api_holdings():
     return {
         "summary": portfolio_summary(snapshot),
         "rows": snapshot["portfolio"].get("holdings", []),
+    }
+
+
+@router.get("/holdings/detail")
+def api_holdings_detail():
+    """Detailed positions without loading historical portfolio analytics."""
+    snapshot = current_snapshot()
+    return {
+        "summary": portfolio_summary(snapshot),
+        "rows": holdings_detail(snapshot).get("rows", []),
+    }
+
+
+@router.get("/holdings/heatmap")
+@cached(ttl=60 * 60 * 12)
+def api_holdings_heatmap():
+    """Focused heatmap payload; avoids constructing the analytics command center."""
+    return holdings_heatmap(current_snapshot())
+
+
+@router.get("/asset-logo/{symbol}")
+def api_asset_logo(symbol: str):
+    """Fetch a public asset logo once, then serve it from the local cache."""
+    normalized = _normalize_asset_logo_symbol(symbol)
+    _ASSET_LOGO_DIR.mkdir(parents=True, exist_ok=True)
+    cache_path = _ASSET_LOGO_DIR / f"{normalized}.png"
+    if cache_path.is_file() and cache_path.stat().st_size:
+        return _asset_logo_file_response(cache_path)
+
+    encoded = urllib.parse.quote(normalized, safe=".-_")
+    request = urllib.request.Request(
+        f"https://financialmodelingprep.com/image-stock/{encoded}.png",
+        headers={"User-Agent": "Catfolio/1.0 asset-logo-cache"},
+    )
+    try:
+        tls_context = ssl.create_default_context(cafile=certifi.where())
+        with urllib.request.urlopen(request, timeout=8, context=tls_context) as response:
+            content_type = str(response.headers.get("Content-Type") or "").lower()
+            payload = response.read(_ASSET_LOGO_MAX_BYTES + 1)
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail="Asset logo not found") from exc
+
+    if not content_type.startswith("image/") or not payload or len(payload) > _ASSET_LOGO_MAX_BYTES:
+        raise HTTPException(status_code=404, detail="Asset logo not found")
+    cache_path.write_bytes(payload)
+    return _asset_logo_file_response(cache_path)
+
+
+@router.get("/portfolio/overview")
+def api_portfolio_overview():
+    """Small payload for the Portfolio landing view."""
+    snapshot = current_snapshot()
+    detail = holdings_detail(snapshot).get("rows", [])
+    summary = portfolio_summary(snapshot)
+    today_pnl = 0.0
+    for row in detail:
+        change = row.get("today_change_percent")
+        value = row.get("market_value_usd")
+        if change is None or value is None:
+            continue
+        rate = float(change) / 100
+        if rate != -1:
+            today_pnl += float(value) - float(value) / (1 + rate)
+    return {
+        "summary": summary,
+        "today_pnl_usd": today_pnl,
+        "breadth": {
+            "up": sum(1 for row in detail if float(row.get("today_change_percent") or 0) > 0),
+            "down": sum(1 for row in detail if float(row.get("today_change_percent") or 0) < 0),
+            "flat": sum(1 for row in detail if float(row.get("today_change_percent") or 0) == 0),
+        },
+        "top_holdings": detail[:10],
+        "sectors": sector_concentration(snapshot).get("rows", []),
+    }
+
+
+@router.get("/portfolio/chart")
+def api_portfolio_chart():
+    """Cash-flow history plus the latest broker snapshot used by the value chart."""
+    result = cash_flow_mirror_vs_benchmark("SPY")
+    summary = portfolio_summary(current_snapshot())
+    as_of = str(summary.get("as_of") or "")
+    date_match = re.match(r"^\d{4}-\d{2}-\d{2}", as_of)
+    current_date = date_match.group(0) if date_match else datetime.now(timezone.utc).date().isoformat()
+    return {
+        "cash_flow_mirror": {
+            "available": result.get("available", False),
+            "rows": [
+                {
+                    "date": row.get("date"),
+                    "adjusted_portfolio_value": row.get("adjusted_portfolio_value"),
+                    "net_cash_flow": row.get("net_cash_flow"),
+                }
+                for row in result.get("rows", [])
+            ],
+        },
+        "current_point": {
+            "date": current_date,
+            "as_of": as_of or None,
+            "market_value_usd": summary.get("market_value_usd"),
+            "cost_usd": summary.get("total_cost_usd_standard"),
+        },
     }
 
 
@@ -76,10 +206,14 @@ def api_chart_pnl():
 
 
 @router.get("/command-center")
-@cached(ttl=120)
+# Refresh endpoints already invalidate all derived data explicitly. Keeping
+# this expensive aggregate warm makes normal page navigation instantaneous.
+@cached(ttl=60 * 60 * 12)
 def api_command_center():
     snapshot = current_snapshot()
     history = lab_history_summary()
+    summary = portfolio_summary(snapshot)
+    market_value_usd = float(summary.get("market_value_usd") or 0)
     holdings_count = len(snapshot["portfolio"].get("holdings", []))
     fundamentals_rows = snapshot["fundamentals"].get("rows", [])
     fundamentals_count = len(fundamentals_rows)
@@ -123,6 +257,7 @@ def api_command_center():
         "holdings_detail": holdings_detail(snapshot),
         "holdings_heatmap": holdings_heatmap(snapshot),
         "monthly_returns": monthly_return_heatmap(),
+        "profit_calendar": _profit_calendar_payload(snapshot, history, market_value_usd),
         "cumulative_vs_benchmark": twr_returns,
         "cumulative_return_modes": {
             "default": "twr",
@@ -140,6 +275,93 @@ def api_command_center():
             "coverage": f"{fundamentals_count}/{holdings_count}",
             "note": f"估值数据来自 {fundamentals_provider}，当前覆盖 {fundamentals_count}/{holdings_count} 持仓；ETF 和部分非美股可能没有 fundamentals。",
         },
+    }
+
+
+def _profit_calendar_payload(snapshot=None, history=None, market_value_usd=None):
+    snapshot = snapshot or current_snapshot()
+    history = history or lab_history_summary()
+    if market_value_usd is None:
+        market_value_usd = float(portfolio_summary(snapshot).get("market_value_usd") or 0)
+    return {
+        "basis": "current-weight model daily return multiplied by current portfolio market value",
+        "currency": "USD",
+        "market_value_usd": market_value_usd,
+        "rows": [
+            {
+                "date": row["date"],
+                "return": row["return"],
+                "pnl_usd": market_value_usd * float(row.get("return") or 0),
+            }
+            for row in history.get("nav", [])
+        ],
+        "income": income_summary(),
+    }
+
+
+@router.get("/profit-calendar")
+@cached(ttl=60 * 60 * 12)
+def api_profit_calendar():
+    """Focused calendar payload for Portfolio; substantially cheaper than command-center."""
+    return {"profit_calendar": _profit_calendar_payload()}
+
+
+@router.get("/analytics")
+@cached(ttl=60 * 60 * 12)
+def api_analytics():
+    """Charts used by Analytics, without unrelated holdings and benchmark data."""
+    return {
+        "monthly_returns": monthly_return_heatmap(),
+        "drawdown": drawdown_curve(),
+        "correlation_matrix": correlation_matrix(),
+        "return_distribution": return_distribution(),
+        "waterfall": monthly_contribution_waterfall(),
+    }
+
+
+def _comparison_result(symbol: str):
+    return symbol, cash_flow_mirror_vs_benchmark(symbol)
+
+
+@router.get("/comparison")
+@cached(ttl=60 * 60 * 12)
+def api_comparison():
+    """Compact, chart-ready comparison data with one shared date axis.
+
+    Calculations are unchanged. Independent benchmark cache misses are warmed in
+    parallel, and repeated portfolio/date fields are removed from the response.
+    """
+    symbols = list(BENCHMARKS)
+    with ThreadPoolExecutor(max_workers=min(4, len(symbols))) as executor:
+        results = dict(executor.map(_comparison_result, symbols))
+
+    spy = results.get("SPY") or cash_flow_mirror_vs_benchmark("SPY")
+    spy_rows = spy.get("rows") or []
+    dates = [row.get("date") for row in spy_rows if row.get("date")]
+    portfolio_by_date = {
+        row.get("date"): row.get("adjusted_portfolio_value")
+        for row in spy_rows
+        if row.get("date")
+    }
+    benchmark_series = {}
+    benchmark_returns = {}
+    for symbol, result in results.items():
+        rows = result.get("rows") or []
+        values = {row.get("date"): row.get("adjusted_benchmark_value") for row in rows if row.get("date")}
+        benchmark_series[symbol] = [values.get(date) for date in dates]
+        benchmark_returns[symbol] = rows[-1].get("benchmark_return") if rows else None
+
+    return {
+        "available": bool(dates),
+        "dates": dates,
+        "portfolio": [portfolio_by_date.get(date) for date in dates],
+        "benchmarks": benchmark_series,
+        "summary": {
+            "portfolio_return": spy_rows[-1].get("portfolio_return") if spy_rows else None,
+            "benchmark_return": benchmark_returns.get("SPY"),
+            "benchmark_returns": benchmark_returns,
+        },
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 

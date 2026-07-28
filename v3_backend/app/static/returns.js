@@ -1,271 +1,481 @@
-const BENCH_CN = { "SPY": "标普500", "QQQ": "纳斯达克100", "VTI": "美国全市场", "VOO": "先锋标普500", "DIA": "道琼斯30", "IWM": "罗素2000", "VEU": "全球除美", "GLD": "黄金" };
+(() => {
+  const chartLang = document.documentElement.lang.startsWith("zh") ? "zh" : "en";
+  const chartCopy = chartLang === "zh"
+    ? {
+        portfolio: "组合",
+        loadError: (message) => `对比数据加载失败（${message}）。`,
+        aiError: (message) => `AI 解读失败：${message}`,
+      }
+    : {
+        portfolio: "Portfolio",
+        loadError: (message) => `Comparison data could not be loaded (${message}).`,
+        aiError: (message) => `AI explanation failed: ${message}`,
+      };
 
-  let returnsMode = 'twr';
+  const COLORS = {
+    portfolio: "#22c55e",
+    SPY: "#f97316",
+    QQQ: "#708cff",
+    grid: "#eaebed",
+    text: "rgba(9,15,5,0.60)",
+  };
+
+  const BENCHMARK_COLORS = {
+    SPY: "#f97316",
+    QQQ: "#708cff",
+    VTI: "#8b5cf6",
+    VOO: "#06b6d4",
+    DIA: "#eab308",
+    IWM: "#ec4899",
+    VEU: "#a855f7",
+    GLD: "#d89b22",
+  };
+
+  const container = document.getElementById("returnsChart");
+  const empty = document.getElementById("returnsChartEmpty");
+  const endLabels = document.getElementById("comparisonEndLabels");
+  const crosshairDate = document.getElementById("comparisonCrosshairDate");
+  const crosshairValue = document.getElementById("comparisonCrosshairValue");
+  const rangeButtons = [...document.querySelectorAll(".comparison-ranges button")];
   let chart = null;
-  let chartSeries = [];
-  const currentLang = () => (document.documentElement.lang || "zh").startsWith("en") ? "en" : "zh";
-  const isEn = () => currentLang() === "en";
-  const tr = (zh, en) => isEn() ? en : zh;
+  let resizeObserver = null;
+  let allDates = [];
+  let portfolioSeries = null;
+  let portfolioRows = [];
+  let benchmarkRows = {};
+  const seriesMeta = [];
 
-  const CF_COLORS = ['#f97316','#8b5cf6','#06b6d4','#eab308','#ec4899','#a855f7','#22c55e','#ef4444'];
-  const TWR_COLORS = ['#888','#f97316','#8b5cf6','#ec4899','#06b6d4','#eab308','#ef4444','#a855f7'];
+  const themeColor = (name, fallback) => (
+    getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+  );
 
-  function isDark() { return !document.documentElement.classList.contains('light-theme'); }
-
-  function chartColors() {
-    const d = isDark();
+  function currentChartTheme() {
     return {
-      bg: d ? '#0b0d0f' : '#ffffff',
-      text: d ? '#707580' : '#5d6068',
-      grid: d ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)',
-      crosshair: d ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+      background: "rgba(0, 0, 0, 0)",
+      text: themeColor("--muted", COLORS.text),
+      grid: themeColor("--line-strong", COLORS.grid),
+      crosshairLabel: themeColor("--ink", "#000000"),
     };
   }
 
-  function selectedRange() {
-    const v = document.getElementById('returnsRange')?.value || '252';
-    return v === 'all' ? null : Number(v);
-  }
-
-  function filterRows(rows) {
-    const days = selectedRange();
-    if (!days) return rows;
-    return rows.slice(-days);
-  }
-
-  function numValue(row, keys, fallback = null) {
-    for (const key of keys) {
-      const raw = row?.[key];
-      if (raw === undefined || raw === null || raw === '') continue;
-      const value = Number(raw);
-      if (Number.isFinite(value)) return value;
-    }
-    return fallback;
-  }
-
-  function getActiveData() {
-    if (returnsMode === 'cf') {
-      const raw = cfData.rows || [];
-      if (!raw.length) return { rows: [], unit: '$' };
-      const mapped = raw.map(r => ({
-        date: r.date,
-        portfolio: numValue(r, ['adjusted_portfolio_value', 'portfolio_value', 'portfolio'], 0),
-      }));
-      return { rows: filterRows(mapped), unit: '$' };
-    } else if (returnsMode === 'cv') {
-      const raw = cfData.rows || [];
-      if (!raw.length) return { rows: [], unit: '$' };
-      const mapped = raw.map(r => ({
-        date: r.date,
-        portfolio: numValue(r, ['portfolio_value', 'adjusted_portfolio_value', 'portfolio'], 0),
-        buy_total: numValue(r, ['net_cash_flow', 'invested_cost_usd', 'buy_total', 'buy_total_usd'], 0),
-      }));
-      return { rows: filterRows(mapped), unit: '$' };
-    }
-    return { rows: filterRows(twrData.rows || []), unit: '%' };
-  }
-
-  function fmtDollar(v) {
-    const abs = Math.abs(v || 0);
-    if (abs >= 1e6) return '$' + (abs/1e6).toFixed(1) + 'M';
-    if (abs >= 1000) return '$' + (abs/1000).toFixed(0) + 'k';
-    return '$' + abs.toFixed(0);
-  }
-
-  function fmtPct(v) { return (v || 0).toFixed(1) + '%'; }
-
-  function buildChart() {
-    const container = document.getElementById('returnsChart');
-    const c = chartColors();
-    container.innerHTML = '';
-
-    chart = LightweightCharts.createChart(container, {
-      width: container.clientWidth,
-      height: 420,
+  function applyChartTheme() {
+    if (!chart) return;
+    const theme = currentChartTheme();
+    chart.applyOptions({
       layout: {
-        background: { color: c.bg },
-        textColor: c.text,
+        background: { type: "solid", color: theme.background },
+        textColor: theme.text,
       },
       grid: {
-        vertLines: { color: c.grid },
-        horzLines: { color: c.grid },
+        horzLines: { color: theme.grid },
       },
       crosshair: {
-        mode: LightweightCharts.CrosshairMode.Normal,
-        vertLine: { color: c.crosshair, labelBackgroundColor: c.crosshair },
-        horzLine: { color: c.crosshair, labelBackgroundColor: c.crosshair },
-      },
-      rightPriceScale: {
-        borderColor: c.grid,
-      },
-      timeScale: {
-        borderColor: c.grid,
-        timeVisible: true,
-        secondsVisible: false,
+        vertLine: {
+          visible: false,
+          labelVisible: false,
+        },
       },
     });
-
-    chartSeries = [];
-    return chart;
   }
 
-  function addLine(label, data, color, opts = {}) {
-    const series = chart.addLineSeries({
-      color: color,
-      lineWidth: opts.lineWidth || 1,
-      lineStyle: opts.dashed ? 2 : 0,
-      priceFormat: opts.priceFormat || ((returnsMode === 'cf' || returnsMode === 'cv') ? { type: 'custom', formatter: fmtDollar } : { type: 'custom', formatter: fmtPct }),
-      title: label,
-      visible: opts.visible !== undefined ? opts.visible : true,
+  const finiteNumber = (value) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  };
+
+  const compactValue = (value) => {
+    const number = Number(value) || 0;
+    const absolute = Math.abs(number);
+    if (absolute >= 1_000_000) return `${(number / 1_000_000).toFixed(1)}M`;
+    if (absolute >= 1_000) return `${Math.round(number / 1_000)}K`;
+    return Math.round(number).toLocaleString(chartLang === "zh" ? "zh-CN" : "en-US");
+  };
+
+  const compactRows = (dates, values) => dates
+    .map((date, index) => ({ time: date, value: finiteNumber(values?.[index]) }))
+    .filter((row) => row.time && row.value !== null);
+
+  function formatReturn(value) {
+    const number = finiteNumber(value);
+    if (number === null) return { text: "—", className: "" };
+    const percent = number * 100;
+    return {
+      text: `${percent >= 0 ? "+" : ""}${percent.toFixed(1)}%`,
+      className: percent >= 0 ? "positive" : "negative",
+    };
+  }
+
+  function updateSummary(summary = {}) {
+    [
+      ["comparisonPortfolioReturn", summary.portfolio_return],
+      ["comparisonBenchmarkReturn", summary.benchmark_return],
+    ].forEach(([id, value]) => {
+      const node = document.getElementById(id);
+      if (!node) return;
+      const formatted = formatReturn(value);
+      node.textContent = formatted.text;
+      node.classList.remove("positive", "negative");
+      if (formatted.className) node.classList.add(formatted.className);
     });
-    const chartData = data
-      .map(d => ({ time: d.date, value: Number(d.value) }))
-      .filter(d => d.time && Number.isFinite(d.value));
-    series.setData(chartData);
-    chartSeries.push(series);
+  }
+
+  function setComparisonData(payload) {
+    const dates = Array.isArray(payload?.dates) ? payload.dates : [];
+    portfolioRows = compactRows(dates, payload?.portfolio || []);
+    benchmarkRows = Object.fromEntries(
+      Object.entries(payload?.benchmarks || {}).map(([symbol, values]) => [symbol, compactRows(dates, values)])
+    );
+    allDates = portfolioRows.map((row) => row.time);
+    updateSummary(payload?.summary);
+  }
+  function chartHeight() {
+    return Math.max(398, Math.round(container.getBoundingClientRect().height || 398));
+  }
+
+  function adaptiveAutoscale(baseImplementation) {
+    const scale = baseImplementation();
+    const range = scale?.priceRange;
+    if (!range) return scale;
+    const min = finiteNumber(range.minValue);
+    const max = finiteNumber(range.maxValue);
+    if (min === null || max === null) return scale;
+    const magnitude = Math.max(Math.abs(min), Math.abs(max), 1);
+    const span = Math.max(max - min, magnitude * 0.015);
+    const padding = span * 0.08;
+    return {
+      ...scale,
+      priceRange: {
+        minValue: min - padding,
+        maxValue: max + padding,
+      },
+    };
+  }
+
+  function createSeries(title, color, data, width = 2) {
+    const series = chart.addLineSeries({
+      title: "",
+      color,
+      lineWidth: width,
+      lineType: LightweightCharts.LineType?.Curved ?? 2,
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: title === "Portfolio" ? 4 : 3,
+      crosshairMarkerBorderColor: color,
+      crosshairMarkerBackgroundColor: color,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      priceFormat: { type: "custom", formatter: compactValue },
+      autoscaleInfoProvider: adaptiveAutoscale,
+    });
+    series.setData(data);
+    seriesMeta.push({
+      title,
+      color,
+      data,
+      series,
+      primary: title === "Portfolio" || title === "SPY" || title === "QQQ",
+    });
     return series;
   }
 
-  function renderChart() {
-    if (chart) {
-      chart.remove();
-      chart = null;
+  function timeKey(time) {
+    if (typeof time === "string") return time;
+    if (!time || typeof time !== "object") return "";
+    return `${time.year}-${String(time.month).padStart(2, "0")}-${String(time.day).padStart(2, "0")}`;
+  }
+
+  function rowAtVisibleEnd(meta, visibleTo) {
+    if (!meta.data.length) return null;
+    if (!visibleTo) return meta.data[meta.data.length - 1];
+    for (let index = meta.data.length - 1; index >= 0; index -= 1) {
+      if (meta.data[index].time <= visibleTo) return meta.data[index];
     }
+    return null;
+  }
 
-    const data = getActiveData();
-    const rows = data.rows;
-    const container = document.getElementById('returnsChart');
-    if (!rows.length) {
-      container.innerHTML = `
-        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--muted); padding: 40px; text-align: center;">
-          <svg class="hi hi-inline" style="font-size: 32px; margin-bottom: 12px; color: var(--accent);" aria-hidden="true" focusable="false"><use href="#hi-alert-circle"></use></svg>
-          <div style="font-size: 15px; font-weight: 600; margin-bottom: 6px; color: var(--ink);">${tr("需要交易流水数据", "Transaction history required")}</div>
-          <div style="font-size: 12px; max-width: 320px; line-height: 1.6;">
-            ${returnsMode === 'cf' || returnsMode === 'cv'
-              ? tr('此模式依赖交易流水。请在环境配置中设置 CATFOLIO_DATA_DIR 目录以导入 Trading 212 交易历史 CSV 文件。', 'This mode requires transaction history. Set CATFOLIO_DATA_DIR to import Trading 212 transaction CSV files.')
-              : tr('暂无可用收益数据。', 'No return data is available.')}
-          </div>
-        </div>
-      `;
-      return;
-    }
+  function ensureEndLabel(meta) {
+    if (meta.label) return meta.label;
+    const label = document.createElement("div");
+    label.className = `comparison-end-label${meta.primary ? "" : " secondary"}`;
+    label.style.background = meta.color;
+    const name = document.createElement("span");
+    name.textContent = meta.title;
+    const value = document.createElement("span");
+    value.className = "comparison-end-label-value";
+    label.append(name, value);
+    endLabels.appendChild(label);
+    meta.label = label;
+    meta.labelValue = value;
+    return label;
+  }
 
-    const isDollar = data.unit === '$';
-    buildChart();
+  function updateEndLabels() {
+    if (!chart || !endLabels) return;
+    const visibleTo = timeKey(chart.timeScale().getVisibleRange()?.to);
+    const maxY = Math.max(20, container.clientHeight - 14);
+    const positions = [];
 
-      if (returnsMode === 'cv') {
-      // Cost vs Market Value mode: Plot Current Market Value and Cumulative Investment Cost
-      addLine(tr('当前总市值 (USD)', 'Current Market Value (USD)'), rows.map(r => ({ date: r.date, value: r.portfolio })), '#27a648', { lineWidth: 3 });
-      addLine(tr('净投入成本 (USD)', 'Net Invested Cost (USD)'), rows.map(r => ({ date: r.date, value: r.buy_total })), '#e54d5e', { lineWidth: 2 });
-    } else {
-      // Portfolio line (always first, thick blue)
-      addLine('Portfolio', rows.map(r => ({ date: r.date, value: isDollar ? r.portfolio : ((r.portfolio||1)-1)*100 })), '#8fca5b', { lineWidth: 3 });
-
-      if (returnsMode === 'cf') {
-        // Cash flow mirror: all benchmark lines in dollars
-        let ci = 0;
-        Object.entries(cfBenchmarks).forEach(([symbol, bm]) => {
-          const bmRows = bm.rows || [];
-          const bmByDate = {};
-          bmRows.forEach(r => {
-            bmByDate[r.date] = numValue(r, ['adjusted_benchmark_value', 'benchmark_value', 'benchmark']);
-          });
-          const lineData = rows.map(r => ({ date: r.date, value: bmByDate[r.date] || null }));
-          const isSpy = symbol === 'SPY';
-          addLine(isEn() ? symbol : (BENCH_CN[symbol] || symbol), lineData, isSpy ? '#f97316' : CF_COLORS[ci % CF_COLORS.length], {
-            lineWidth: isSpy ? 2 : 1,
-            dashed: isSpy,
-          });
-          if (!isSpy) ci++;
-        });
-      } else {
-        // TWR mode: multi-benchmark lines in percent
-        if (multiData.benchmarks) {
-          multiData.benchmarks.forEach((b, i) => {
-            const lineData = rows.map(r => {
-              const mr = multiData.rows?.find(m => m.date === r.date);
-              return { date: r.date, value: mr ? ((mr[b.symbol] || 1) - 1) * 100 : null };
-            });
-            addLine(b.symbol, lineData, TWR_COLORS[i % TWR_COLORS.length], { lineWidth: 1 });
-          });
-        }
+    seriesMeta.forEach((meta) => {
+      const label = ensureEndLabel(meta);
+      const row = rowAtVisibleEnd(meta, visibleTo);
+      const coordinate = row ? meta.series.priceToCoordinate(row.value) : null;
+      const timeCoordinate = row ? chart.timeScale().timeToCoordinate(row.time) : null;
+      if (coordinate === null || timeCoordinate === null || coordinate < -20 || coordinate > container.clientHeight + 20) {
+        label.hidden = true;
+        return;
       }
-    }  }
+      meta.labelValue.textContent = compactValue(row.value);
+      label.hidden = false;
+      positions.push({ meta, target: Math.max(14, Math.min(maxY, coordinate)), y: 0, x: timeCoordinate });
+    });
 
-  function setModeButtonState(activeId) {
-    ['twrMode', 'cfMirrorMode', 'costValueMode'].forEach(id => {
-      const button = document.getElementById(id);
-      const active = id === activeId;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-selected', active ? 'true' : 'false');
-      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    positions.sort((a, b) => a.target - b.target);
+    positions.forEach((item, index) => {
+      const gap = item.meta.primary ? 24 : 21;
+      item.y = index === 0 ? item.target : Math.max(item.target, positions[index - 1].y + gap);
+    });
+    if (positions.length && positions[positions.length - 1].y > maxY) {
+      const overflow = positions[positions.length - 1].y - maxY;
+      positions.forEach((item) => { item.y -= overflow; });
+      for (let index = positions.length - 2; index >= 0; index -= 1) {
+        const gap = positions[index + 1].meta.primary ? 24 : 21;
+        positions[index].y = Math.min(positions[index].y, positions[index + 1].y - gap);
+      }
+    }
+    positions.forEach((item) => {
+      item.meta.label.style.top = `${Math.max(14, item.y)}px`;
+      const labelWidth = item.meta.label.offsetWidth;
+      const left = Math.max(0, Math.min(container.clientWidth - labelWidth - 2, item.x + 2));
+      item.meta.label.style.left = `${left}px`;
     });
   }
 
-  document.getElementById('twrMode').addEventListener('click', () => {
-    returnsMode = 'twr';
-    setModeButtonState('twrMode');
-    document.getElementById('chartModeLabel').textContent = 'TWR';
-    document.getElementById('chartSubtitle').textContent = tr('剔除现金流影响，衡量策略本身表现。', 'Removes cash-flow effects to measure strategy performance.');
-    renderChart();
-  });
-  document.getElementById('cfMirrorMode').addEventListener('click', () => {
-    returnsMode = 'cf';
-    setModeButtonState('cfMirrorMode');
-    document.getElementById('chartModeLabel').textContent = tr('现金流镜像', 'Cash-Flow Mirror');
-    document.getElementById('chartSubtitle').textContent = tr(
-      '按你的真实买卖日期和金额重放：Portfolio=持仓市值+累计卖出现金；各基准=同日买入/卖出等额基准。纵轴为 USD 总价值，不是收益率。',
-      'Replays your actual trade dates and amounts: Portfolio = holding value plus cumulative sale proceeds; each benchmark buys/sells the same amount on the same date. The y-axis is total USD value, not return percentage.'
-    );
-    renderChart();
-  });
-  document.getElementById('costValueMode').addEventListener('click', () => {
-    returnsMode = 'cv';
-    setModeButtonState('costValueMode');
-    document.getElementById('chartModeLabel').textContent = tr('投入成本 vs 总市值', 'Cost vs Market Value');
-    document.getElementById('chartSubtitle').textContent = tr(
-      '净投入成本(买入-卖出)与当前持仓总市值的对比线图。纵轴为美元(USD)。',
-      'Line chart comparing net invested cost (buys minus sells) with current holding market value. The y-axis is USD.'
-    );
-    renderChart();
-  });
+  function crosshairDateLabel(time) {
+    const raw = typeof time === "string"
+      ? time
+      : time && typeof time === "object"
+        ? `${time.year}-${String(time.month).padStart(2, "0")}-${String(time.day).padStart(2, "0")}`
+        : "";
+    if (!raw) return "";
+    const date = new Date(`${raw}T00:00:00Z`);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleDateString(chartLang === "zh" ? "zh-CN" : "en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "2-digit",
+      timeZone: "UTC",
+    }).toUpperCase();
+  }
 
-  document.getElementById('returnsRange').addEventListener('change', () => renderChart());
+  function hideCrosshairLabels() {
+    crosshairDate.hidden = true;
+    crosshairValue.hidden = true;
+  }
 
-  window.addEventListener('resize', () => {
-    if (chart) chart.resize(document.getElementById('returnsChart').clientWidth, 420);
-  });
+  function positionCrosshairLabels(param) {
+    if (!param?.point || !param.time || !portfolioSeries) {
+      hideCrosshairLabels();
+      return;
+    }
+    const dateX = Math.max(38, Math.min(container.clientWidth - 80, param.point.x));
+    crosshairDate.textContent = crosshairDateLabel(param.time);
+    crosshairDate.style.left = `${dateX}px`;
+    crosshairDate.hidden = false;
 
-  // Kick off
-  renderChart();
+    let closest = null;
+    seriesMeta.forEach((meta) => {
+      const point = param.seriesData?.get(meta.series);
+      const value = finiteNumber(point?.value ?? point?.close);
+      if (value === null) return;
+      const coordinate = meta.series.priceToCoordinate(value);
+      if (coordinate === null) return;
+      const distance = Math.abs(coordinate - param.point.y);
+      if (!closest || distance < closest.distance) closest = { meta, value, coordinate, distance };
+    });
 
-  // ── AI 解读 ──
-  async function loadReturnsAI() {
-    const btn = document.querySelector("#aiReturnsBtn");
-    const status = document.querySelector("#aiReturnsStatus");
-    const result = document.querySelector("#aiReturnsResult");
-    btn.disabled = true;
-    btn.innerHTML = `<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> ${tr('AI 分析中...', 'AI analyzing...')}`;
-    status.innerHTML = "";
-    result.style.display = "none";
-    try {
-      const lang = currentLang();
-      const resp = await fetch("/api/ai/returns-explanation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lang }),
-      });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-      document.querySelector("#aiReturnsText").textContent = data.explanation;
-      document.querySelector("#aiReturnsPeriod").textContent = data.period || "";
-      btn.innerHTML = `<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-ai"></use></svg> ${tr('AI 解读', 'AI Analysis')}`;
-      status.innerHTML = "";
-      result.style.display = "block";
-    } catch(e) {
-      status.innerHTML = `<span style="color:var(--negative)">${tr('AI 分析失败: ', 'AI analysis failed: ')}${e.message}</span>`;
-      btn.innerHTML = `<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-ai"></use></svg> ${tr('AI 解读', 'AI Analysis')}`;
-    } finally {
-      btn.disabled = false;
+    if (!closest || closest.distance > 18) {
+      crosshairValue.hidden = true;
+      return;
+    }
+
+    crosshairValue.textContent = compactValue(closest.value);
+    crosshairValue.style.background = closest.meta.color;
+    crosshairValue.dataset.series = closest.meta.title;
+    crosshairValue.hidden = false;
+    const halfWidth = Math.max(20, crosshairValue.offsetWidth / 2);
+    const valueX = Math.max(halfWidth + 4, Math.min(container.clientWidth - halfWidth - 4, param.point.x));
+    const placeBelow = closest.coordinate < 42;
+    crosshairValue.classList.toggle("is-below", placeBelow);
+    crosshairValue.style.left = `${valueX}px`;
+    crosshairValue.style.top = `${closest.coordinate + (placeBelow ? 8 : -8)}px`;
+  }
+
+  function visibleRangeFor(key) {
+    if (!allDates.length) return null;
+    const lastIndex = allDates.length - 1;
+    const lastDate = new Date(`${allDates[lastIndex]}T00:00:00`);
+    const cutoff = new Date(lastDate);
+
+    if (key === "max") return { from: allDates[0], to: allDates[lastIndex] };
+    if (key === "ytd") cutoff.setFullYear(lastDate.getFullYear(), 0, 1);
+    else {
+      const days = { "1d": 1, "1w": 7, "1m": 31, "3m": 93, "1y": 366 }[key] || 366;
+      cutoff.setDate(cutoff.getDate() - days);
+    }
+
+    const cutoffValue = cutoff.toISOString().slice(0, 10);
+    const firstVisible = allDates.find((date) => date >= cutoffValue) || allDates[Math.max(0, lastIndex - 1)];
+    return { from: firstVisible, to: allDates[lastIndex] };
+  }
+
+  function setRange(key) {
+    rangeButtons.forEach((button) => {
+      const active = button.dataset.range === key;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    const range = visibleRangeFor(key);
+    if (range) {
+      chart.timeScale().setVisibleRange(range);
+      requestAnimationFrame(updateEndLabels);
     }
   }
+
+  function buildChart() {
+    if (!container || !window.LightweightCharts || !portfolioRows.length) {
+      if (empty) empty.hidden = false;
+      return;
+    }
+
+    empty.hidden = true;
+    const theme = currentChartTheme();
+    chart = LightweightCharts.createChart(container, {
+      width: container.clientWidth,
+      height: chartHeight(),
+      layout: {
+        background: { type: "solid", color: theme.background },
+        textColor: theme.text,
+        fontFamily: '"Nunito Local", "Nunito", sans-serif',
+        fontSize: 12,
+        attributionLogo: false,
+      },
+      localization: {
+        priceFormatter: compactValue,
+      },
+      grid: {
+        vertLines: { visible: false },
+        horzLines: { visible: true, color: theme.grid, style: 0 },
+      },
+      crosshair: {
+        mode: LightweightCharts.CrosshairMode.Normal,
+        vertLine: {
+          visible: false,
+          labelVisible: false,
+        },
+        horzLine: { visible: false, labelVisible: false },
+      },
+      rightPriceScale: {
+        visible: true,
+        borderVisible: false,
+        scaleMargins: { top: 0.08, bottom: 0.08 },
+        minimumWidth: 52,
+      },
+      leftPriceScale: { visible: false },
+      timeScale: {
+        visible: false,
+        borderVisible: false,
+        rightOffset: 8,
+        barSpacing: 5,
+        minBarSpacing: 0.5,
+        fixLeftEdge: false,
+        fixRightEdge: false,
+        lockVisibleTimeRangeOnResize: true,
+        rightBarStaysOnScroll: false,
+        secondsVisible: false,
+        timeVisible: false,
+      },
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: false,
+      },
+      handleScale: {
+        axisPressedMouseMove: false,
+        mouseWheel: false,
+        pinch: true,
+      },
+      kineticScroll: { mouse: true, touch: true },
+    });
+
+    portfolioSeries = createSeries(chartCopy.portfolio, COLORS.portfolio, portfolioRows, 2);
+    Object.entries(benchmarkRows).forEach(([symbol, rows], index) => {
+      if (!rows.length) return;
+      const fallbackColors = ["#8b5cf6", "#06b6d4", "#eab308", "#ec4899", "#a855f7", "#ef4444"];
+      createSeries(symbol, BENCHMARK_COLORS[symbol] || fallbackColors[index % fallbackColors.length], rows, symbol === "SPY" ? 2 : 1);
+    });
+    chart.subscribeCrosshairMove(positionCrosshairLabels);
+    chart.timeScale().subscribeVisibleTimeRangeChange(() => requestAnimationFrame(updateEndLabels));
+    setRange("3m");
+    requestAnimationFrame(updateEndLabels);
+
+    rangeButtons.forEach((button) => {
+      button.addEventListener("click", () => setRange(button.dataset.range));
+    });
+
+    container.addEventListener("pointerdown", () => container.classList.add("is-dragging"));
+    window.addEventListener("pointerup", () => container.classList.remove("is-dragging"));
+    container.addEventListener("pointercancel", () => container.classList.remove("is-dragging"));
+
+    resizeObserver = new ResizeObserver(([entry]) => {
+      if (!chart || !entry) return;
+      chart.resize(Math.floor(entry.contentRect.width), chartHeight());
+      requestAnimationFrame(updateEndLabels);
+    });
+    resizeObserver.observe(container);
+  }
+
+  async function loadComparison() {
+    try {
+      const response = await fetch("/api/comparison", { headers: { Accept: "application/json" } });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      setComparisonData(await response.json());
+      buildChart();
+    } catch (error) {
+      if (empty) {
+        empty.textContent = chartCopy.loadError(error.message);
+        empty.hidden = false;
+      }
+    }
+  }
+
+  window.closeReturnsAI = function closeReturnsAI() {
+    document.getElementById("aiReturnsResult").hidden = true;
+  };
+
+  window.loadReturnsAI = async function loadReturnsAI() {
+    const button = document.getElementById("aiReturnsBtn");
+    const status = document.getElementById("aiReturnsStatus");
+    const result = document.getElementById("aiReturnsResult");
+    button.disabled = true;
+    status.textContent = "";
+    try {
+      const response = await fetch("/api/ai/returns-explanation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lang: document.documentElement.lang || "en" }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      document.getElementById("aiReturnsText").textContent = data.explanation || "";
+      document.getElementById("aiReturnsPeriod").textContent = data.period || "";
+      result.hidden = false;
+    } catch (error) {
+      status.textContent = chartCopy.aiError(error.message);
+    } finally {
+      button.disabled = false;
+    }
+  };
+
+  window.addEventListener("catfolio:themechange", applyChartTheme);
+  loadComparison();
+})();

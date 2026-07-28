@@ -24,6 +24,7 @@ Never publish:
 - generated HTML/XLSX reports
 - local SQLite strategy databases
 - screenshots from real accounts
+- screenshots that were not freshly generated from `CATFOLIO_DEMO=1`
 - `.DS_Store`, caches, virtualenvs, or local tool settings
 
 ## Demo Mode
@@ -35,8 +36,9 @@ CATFOLIO_DEMO=1 uvicorn app.main:app --port 8787
 ```
 
 The app should show the static sample portfolio from `v3_backend/app/demo_data.py`.
-The audit report page must not read `outputs/portfolio_analysis_v2/portfolio_cost_basis_v2.html`
-when demo mode is active.
+The retired `/report` URL must redirect to Portfolio and must not read generated account HTML.
+The Bank page must show only the fictional records bundled in `app/banking.py`; live
+bank and mailbox transports are not part of the open-source demo release.
 
 ## Pre-Publish Checks
 
@@ -49,3 +51,5 @@ git status --short
 
 Review `git status` manually. Untracked files are not safe just because Git ignores them;
 they are safe only if they are intentionally excluded from the source archive.
+Open every screenshot in `docs/screenshots/` and confirm it came from an isolated
+`CATFOLIO_DEMO=1` process before staging it.

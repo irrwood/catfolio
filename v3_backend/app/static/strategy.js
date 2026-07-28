@@ -1,5 +1,5 @@
   const $ = id => document.getElementById(id);
-  const TEMPLATES = __TEMPLATES__;
+  const TEMPLATES = window.STRATEGY_TEMPLATES || {};
   $("f_code").value = TEMPLATES.momentum;
   let equityChart = null, ddChart = null, activeRunId = null, themeReady = false;
 
@@ -186,4 +186,10 @@
     loadRuns();
   }
 
-  loadRuns();
+  if (window.CATFOLIO_DEMO) {
+    loadRun(1);
+    $("runStatus").style.color = "var(--muted)";
+    $("runStatus").textContent = "Demo 假数据 · 只读展示";
+  } else {
+    loadRuns();
+  }

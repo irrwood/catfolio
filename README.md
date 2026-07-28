@@ -11,13 +11,15 @@ Project repository: [github.com/irrwood/catfolio](https://github.com/irrwood/cat
 ## Highlights
 
 - **Local-first by default**: portfolio files, imported CSVs, caches, saved strategy runs, and API keys stay on your machine.
-- **Demo-safe for open source**: `CATFOLIO_DEMO=1` uses bundled sample data and does not read local private reports.
+- **Demo-safe for open source**: `CATFOLIO_DEMO=1` uses bundled sample data and does not read local private account files.
 - **Broker sync or CSV import**: connect Trading 212 for live holdings, or upload broker transaction CSVs to calculate weighted-average cost and current positions.
-- **Portfolio dashboard**: total value, cash, P&L, concentration, sector exposure, data freshness, and alert previews.
-- **Portfolio Lab**: quantitative portfolio analysis with drawdowns, volatility, Sharpe ratio, factor exposure, correlation, Monte Carlo simulation, efficient frontier, and current-weight historical backtests.
+- **Portfolio overview**: total value, P&L, breadth, concentration, sector exposure, and the largest positions at a glance.
+- **Detailed holdings**: full position detail with cost basis, quote currency, market value, P&L, account, and raw-versus-ETF-look-through views.
 - **Returns workspace**: portfolio returns against benchmarks such as SPY, QQQ, and IWM, with monthly heatmaps.
+- **Analysis charts**: monthly return heatmaps, drawdown curves, holding correlations, valuation matrices, and return distributions.
 - **Strategy Lab**: write Python allocation strategies, rebalance over historical prices, compare CAGR/volatility/Sharpe/max drawdown, save runs, and optionally ask an AI provider to critique the result.
 - **AI analysis**: portfolio briefing, risk diagnosis, performance explanation, overlap analysis, what-if scenarios, returns explanation, and free-form portfolio Q&A.
+- **Bank analytics prototype**: locally analyze bundled demo transactions for recurring subscriptions, matched refunds, and email-based refund opportunities. Live Open Banking and email transports are not included yet.
 - **Provider choices**: DeepSeek, Grok/xAI, OpenAI, Gemini, Moonshot Kimi, Zhipu GLM, Qwen, and OpenRouter are supported through one provider registry.
 - **Desktop build**: PyInstaller + pywebview packaging for `Catfolio.app` on macOS.
 
@@ -25,13 +27,19 @@ Project repository: [github.com/irrwood/catfolio](https://github.com/irrwood/cat
 
 These screenshots use Catfolio's built-in demo data mode. No real portfolio data, broker account, or API key is shown.
 
-| Dashboard | Portfolio Lab |
+| Portfolio | Analysis Charts |
 | --- | --- |
-| ![Catfolio dashboard](docs/screenshots/dashboard.jpg) | ![Catfolio portfolio lab](docs/screenshots/portfolio-lab.jpg) |
+| ![Catfolio portfolio using bundled demo data](docs/screenshots/portfolio-v5.jpg) | ![Catfolio analysis charts using bundled demo data](docs/screenshots/analytics-v5.jpg) |
 
-| Returns & Benchmarks | Strategy Lab | Audit Report |
-| --- | --- | --- |
-| ![Catfolio returns benchmark comparison](docs/screenshots/returns.jpg) | ![Catfolio strategy lab](docs/screenshots/strategy-lab.jpg) | ![Catfolio audit report](docs/screenshots/audit-report.jpg) |
+| Returns & Benchmarks | Holdings Heatmap |
+| --- | --- |
+| ![Catfolio returns benchmark comparison using bundled demo data](docs/screenshots/returns-v5.jpg) | ![Catfolio holdings heatmap using bundled demo data](docs/screenshots/heatmap-v5.jpg) |
+
+| Strategy Lab | AI Analyst |
+| --- | --- |
+| ![Catfolio strategy backtest using bundled demo data](docs/screenshots/strategy-v5.jpg) | ![Catfolio AI Analyst in demo mode](docs/screenshots/ai-v5.jpg) |
+
+![Catfolio bank analytics prototype using bundled demo data](docs/screenshots/bank-v5.jpg)
 
 ## Quick Start
 
@@ -60,7 +68,7 @@ CATFOLIO_DEMO=1 uvicorn app.main:app --host 127.0.0.1 --port 8787
 
 Open [http://localhost:8787](http://localhost:8787).
 
-The first visit to Returns or Portfolio Lab may take longer while Yahoo Finance history is fetched and cached.
+The first visit to Returns or a backtest may take longer while Yahoo Finance history is fetched and cached. Portfolio and Holdings use the current snapshot and stay lightweight.
 
 ## Live Data Setup
 
@@ -146,15 +154,16 @@ security add-generic-password -a DEEPSEEK_API_KEY -s com.catfolio.portfolio -w "
 
 ## Main Screens
 
-- **Dashboard**: portfolio summary, holdings, P&L, exposure, market/fundamental freshness, and quick refresh actions.
-- **Portfolio Lab**: quantitative risk and allocation research, including efficient frontier, Monte Carlo, factor exposure, correlation, drawdowns, and reusable backtest APIs.
+- **Portfolio**: a lightweight status view for total value, P&L, breadth, concentration, sector allocation, and major position proportions.
+- **Holdings**: the full position ledger, including average cost, current price, total cost, market value, unrealized P&L, account, and an ETF look-through toggle.
 - **Returns**: time-weighted return views and benchmark comparisons.
+- **Analysis Charts**: monthly return heatmaps, drawdowns, holding correlations, valuation, distributions, and attribution views.
 - **Backtest**: predefined multi-asset experiments and optimizer-style workflows.
 - **Strategy Lab**: custom Python strategy research with historical rebalancing, saved run history, performance metrics, and optional AI evaluation.
 - **Heatmap**: short-term performance grid across the current universe.
-- **AI Analyst**: briefing, risk, overlap, what-if, performance, and question-answering tools.
+- **AI Analyst**: a chat-oriented portfolio assistant with a preset question library for briefing, risk, overlap, what-if, performance, and free-form Q&A.
+- **Bank**: a demo-only local analytics prototype for subscription detection, refund matching, and email refund opportunities. It does not connect to a real bank or mailbox in this release.
 - **Import**: broker CSV upload for users who do not use Trading 212.
-- **Audit Report**: cost-basis and Trading 212 reconciliation report. In demo mode this uses built-in sample content.
 - **Settings**: API keys, data refresh controls, demo mode, AI provider selection, Telegram alert configuration, and cache controls.
 
 ## Strategy Example
@@ -192,7 +201,8 @@ Results include equity curve, CAGR, volatility, Sharpe ratio, max drawdown, turn
 - No analytics or telemetry are built into the app.
 - Private runtime outputs are ignored by git, including `.env`, `outputs/`, `build/`, `dist/`, and generated release archives.
 - `CATFOLIO_DATA_DIR` lets you keep private data outside the repository.
-- Demo mode uses static sample holdings and sample audit content.
+- Demo mode uses static sample holdings and market content.
+- Bank and email examples are generated from bundled fictional demo records; this release does not connect to a real bank account or mailbox.
 - External network calls happen only when you configure and use providers such as Trading 212, Yahoo Finance, FMP, Finnhub, Massive, FRED, Telegram, or an AI provider.
 
 This is not financial advice. Catfolio is a personal analysis tool; verify all numbers before making investment decisions.
@@ -247,6 +257,7 @@ catfolio/
 │   │   ├── main.py              # FastAPI entry point
 │   │   ├── data_store.py        # snapshots, secrets, refresh orchestration
 │   │   ├── analytics.py         # portfolio analytics
+│   │   ├── banking.py           # demo subscription/refund recognition
 │   │   ├── lab.py               # returns, backtests, simulations
 │   │   ├── ai.py                # AI provider registry and prompts
 │   │   ├── demo_data.py         # bundled demo data

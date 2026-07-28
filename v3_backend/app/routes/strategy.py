@@ -2,9 +2,11 @@
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse
 
-from app.components import wrap_v4_layout
+from app.components import render_layout
 from app.i18n import get_lang
 from app.strategy_engine import run_backtest
+from app.data_store import demo_mode
+from app.lab import backtest as portfolio_backtest
 from app import strategy_store
 
 router = APIRouter(tags=["strategy"])
@@ -50,6 +52,80 @@ def strategy(ctx):
 }
 
 
+def _demo_run():
+    """A deterministic saved run so the public demo is useful on first load."""
+    model = portfolio_backtest()
+    portfolio = model.get("portfolio", {})
+    benchmark = next(
+        (row for row in model.get("benchmarks", []) if row.get("symbol") == "SPY"),
+        (model.get("benchmarks") or [{}])[0],
+    )
+    portfolio_nav = portfolio.get("nav") or []
+    benchmark_nav = benchmark.get("nav") or []
+    equity = [{"date": row["date"], "nav": round(float(row["nav"]) * 10_000, 2)} for row in portfolio_nav]
+    benchmark_equity = [{"date": row["date"], "nav": round(float(row["nav"]) * 10_000, 2)} for row in benchmark_nav]
+    peak = 0.0
+    drawdown = []
+    for row in equity:
+        peak = max(peak, row["nav"])
+        drawdown.append({"date": row["date"], "dd": round(row["nav"] / peak - 1, 5) if peak else 0.0})
+
+    def metrics(stats, rows):
+        first = rows[0]["nav"] if rows else 0.0
+        last = rows[-1]["nav"] if rows else 0.0
+        return {
+            "total_return": last / first - 1 if first else 0.0,
+            "cagr": float(stats.get("annual_return") or 0.0),
+            "vol": float(stats.get("annual_volatility") or 0.0),
+            "sharpe": float(stats.get("sharpe") or 0.0),
+            "max_drawdown": float(stats.get("max_drawdown") or 0.0),
+        }
+
+    dates = [row["date"] for row in equity]
+    step = max(1, len(dates) // 10)
+    allocations = [
+        {"AAPL": 0.30, "MSFT": 0.30, "NVDA": 0.25, "SPY": 0.15},
+        {"MSFT": 0.35, "NVDA": 0.30, "GOOGL": 0.20, "SPY": 0.15},
+        {"AAPL": 0.25, "NVDA": 0.35, "META": 0.25, "SPY": 0.15},
+    ]
+    trades = [
+        {"date": date, "weights": allocations[index % len(allocations)]}
+        for index, date in enumerate(dates[::step])
+    ]
+    config = {
+        "universe": ["AAPL", "MSFT", "NVDA", "GOOGL", "META", "SPY"],
+        "benchmark": "SPY",
+        "capital": 10_000,
+        "fee_bps": 5,
+        "rebalance": "monthly",
+        "start": dates[0] if dates else "2021-07-01",
+        "end": dates[-1] if dates else "2026-06-30",
+        "trading_days": len(dates),
+    }
+    result = {
+        "ok": True,
+        "metrics": metrics(portfolio.get("stats") or {}, equity),
+        "benchmark_metrics": metrics(benchmark.get("stats") or {}, benchmark_equity),
+        "benchmark": "SPY",
+        "equity": equity,
+        "benchmark_equity": benchmark_equity,
+        "drawdown": drawdown,
+        "trades": trades,
+        "config": config,
+        "warnings": ["这是固定生成的 Demo 假回测，仅用于展示交互，不构成投资建议。"],
+    }
+    return {
+        "id": 1,
+        "created_at": 1751284800,
+        "name": "Demo · 动量趋势组合",
+        "code": DEFAULT_CODE,
+        "config": config,
+        "metrics": result["metrics"],
+        "result": result,
+        "ai_eval": "Demo 解读：该组合在样本期内取得正收益，但成长股集中度较高，需重点关注回撤、波动和样本期偏差。",
+    }
+
+
 # ── API ────────────────────────────────────────────────────────────────────────
 
 @router.post("/api/strategy/run")
@@ -78,11 +154,16 @@ def api_run(payload: dict):
 
 @router.get("/api/strategy/runs")
 def api_runs():
+    if demo_mode():
+        run = _demo_run()
+        return {"runs": [{key: run[key] for key in ("id", "created_at", "name", "metrics")}]}
     return {"runs": strategy_store.list_runs()}
 
 
 @router.get("/api/strategy/runs/{run_id}")
 def api_run_detail(run_id: int):
+    if demo_mode() and run_id == 1:
+        return _demo_run()
     run = strategy_store.get_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="找不到该回测记录。")
@@ -248,16 +329,18 @@ def strategy_page(request: Request):
 
       <div style="margin-top:var(--sp-base);border-top:1px solid var(--line);padding-top:var(--sp-base);">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <strong style="font-size:13px;"><svg class="hi hi-inline" style="color:var(--accent);" aria-hidden="true" focusable="false"><use href="#hi-ai"></use></svg> AI 评价</strong>
-          <button id="aiEvalBtn" class="btn" onclick="evaluateRun()" style="height:30px;"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-wand-sparkles"></use></svg> 生成评价</button>
+          <strong style="font-size:13px;"><span class="ai-action-icon" style="color:var(--accent);" aria-hidden="true"></span> AI 评价</strong>
+          <button id="aiEvalBtn" class="btn" onclick="evaluateRun()" style="height:30px;"><span class="ai-action-icon" aria-hidden="true"></span> 生成评价</button>
         </div>
         <div id="aiEvalBox" style="margin-top:10px;font-size:13px;line-height:1.75;color:var(--ink-secondary);white-space:pre-wrap;"></div>
       </div>
     </div>
 
   </div>
-</div>""" + '<script src="/static/vendor/echarts.min.js"></script><script src="/static/strategy.js"></script>'.replace("__TEMPLATES__", _js_templates())
-    return HTMLResponse(wrap_v4_layout("策略回测", content, "/strategy", get_lang(request), head_extra='<link rel="stylesheet" href="/static/strategy.css" />'))
+</div>"""
+    boot = '<script>window.STRATEGY_TEMPLATES = ' + _js_templates() + '; window.CATFOLIO_DEMO = ' + ("true" if demo_mode() else "false") + ';</script>'
+    content += boot + '<script src="/static/vendor/echarts.min.js"></script><script src="/static/strategy.js"></script>'
+    return HTMLResponse(render_layout(request, "策略回测", content, "/strategy", get_lang(request), head_extra='<link rel="stylesheet" href="/static/strategy.css" />'))
 
 
 def _js_templates():

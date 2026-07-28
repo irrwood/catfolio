@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
 /* ==========================================================================
    Design Tokens
    Typography: xs:10 / sm:12 / base:14 / md:16 / lg:20 / xl:24 / 2xl:32 / 3xl:42
@@ -40,6 +38,14 @@
   --warn: #e2a631;
   --warn-soft: rgba(226,166,49,0.12);
 
+  /* Icon accents — compact metric/category chips only, not general UI color */
+  --icon-teal: #4fc3b5;
+  --icon-blue: #5a92f0;
+  --icon-indigo: #7b82f0;
+  --icon-orange: #f0934a;
+  --icon-green: #6bd17a;
+  --icon-violet: #d875ef;
+
   /* Radii */
   /* Radius scale: larger surfaces take larger corners (card>panel>control>inset). */
   --radius-sm: 10px;
@@ -48,8 +54,8 @@
   --radius-xl: 22px;
 
   /* Typography */
-  --font-sans: 'Raleway', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Monaco, Consolas, monospace;
   --text-xs: 10px;
   --text-sm: 12px;
   --text-base: 14px;
@@ -113,6 +119,13 @@
   --negative-soft: rgba(228,0,20,0.08);
   --warn: #a8761a;
   --warn-soft: rgba(168,118,26,0.10);
+
+  --icon-teal: #50b8a8;
+  --icon-blue: #4880e8;
+  --icon-indigo: #6068e8;
+  --icon-orange: #f07830;
+  --icon-green: #60c068;
+  --icon-violet: #c858e8;
 
   --shadow-sm: 0 1px 2px rgba(9,15,5,0.04);
   --shadow-md: 0 6px 18px rgba(9,15,5,0.06);

@@ -46,7 +46,6 @@ a = Analysis(
         # ── scripts imported at runtime via sys.path ──
         "build_trading212_v2",
         "enrich_trading212_data",
-        "build_portfolio_html",
         # ── uvicorn internals ──
         "uvicorn.logging",
         "uvicorn.loops",

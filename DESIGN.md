@@ -149,13 +149,11 @@ Use a restrained light palette inspired by Spade: pure white surfaces, neutral g
 
 ## Typography
 
-Use Raleway for English and Latin UI text, with system fonts as the fallback for Chinese and unavailable font loading.
+Use the native system UI font stack. On macOS this resolves to San Francisco through `-apple-system` / `BlinkMacSystemFont`; Chinese text uses PingFang. Windows uses Segoe UI. Do not load a web font for core product UI.
 
 ```css
---font-latin: "Raleway";
---font-cjk: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
---font-sans: var(--font-latin), var(--font-cjk);
---font-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+--font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+--font-mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Monaco, Consolas, monospace;
 ```
 
 ### Type Scale

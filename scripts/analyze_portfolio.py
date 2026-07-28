@@ -6,6 +6,8 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation, getcontext
 from pathlib import Path
 
+from report_import_export import build_import_csv_rows
+
 getcontext().prec = 28
 
 import os, glob as _glob
@@ -414,7 +416,17 @@ def main():
     out_dir = Path("outputs/portfolio_analysis")
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "portfolio_analysis.json").write_text(
-        json.dumps({"summary": summary, "holdings": holdings, "holdings_by_account": holdings_by_account, "closed_positions": closed}, ensure_ascii=False, indent=2),
+        json.dumps(
+            {
+                "summary": summary,
+                "holdings": holdings,
+                "holdings_by_account": holdings_by_account,
+                "closed_positions": closed,
+                "import_transactions": build_import_csv_rows(transactions),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
     )
 

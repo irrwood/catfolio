@@ -346,6 +346,11 @@
 
   // Restore from cache or show prompt
   (function init() {
+    if (window.CATFOLIO_DEMO) {
+      btStatus.innerHTML = `<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> 正在加载 Demo 分析...`;
+      loadBacktest();
+      return;
+    }
     try {
       const raw = localStorage.getItem(BT_CACHE_KEY);
       if (raw) {
@@ -406,7 +411,7 @@
     btn.className = "ai-card-btn" + (chartHead ? "" : " abs");
     btn.title = "AI 解读";
     btn.setAttribute("aria-label", "AI 解读");
-    btn.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-wand-sparkles"></use></svg>';
+    btn.innerHTML = '<span class="ai-action-icon" aria-hidden="true"></span>';
     if (chartHead) { btn.style.marginLeft = "auto"; chartHead.appendChild(btn); }
     else { panel.appendChild(btn); }
 
@@ -424,7 +429,7 @@
       btn.disabled = true;
       try {
         const data = await ask(aiPrompt(title));
-        result.innerHTML = '<span class="ai-card-tag"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-wand-sparkles"></use></svg></span>' + esc(data.answer);
+        result.innerHTML = '<span class="ai-card-tag"><span class="ai-action-icon" aria-hidden="true"></span></span>' + esc(data.answer);
         loaded = true;
       } catch (e) {
         result.classList.add("err");

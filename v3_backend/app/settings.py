@@ -18,10 +18,9 @@ def _compute_root() -> Path:
 ROOT = Path(os.environ.get("CATFOLIO_ROOT") or os.environ.get("HELM_ROOT") or str(_compute_root()))
 # Writable data directory. Defaults to <repo>/outputs for dev; the packaged desktop
 # app points CATFOLIO_DATA_DIR at ~/Library/Application Support/Catfolio so it never writes
-# into a read-only app bundle. All caches/DB/report derive from here.
+# into a read-only app bundle. All caches and databases derive from here.
 DATA_DIR = Path(os.environ.get("CATFOLIO_DATA_DIR") or os.environ.get("HELM_DATA_DIR") or str(ROOT / "outputs"))
 V2_DIR = DATA_DIR / "portfolio_analysis_v2"
-V2_HTML = V2_DIR / "portfolio_cost_basis_v2.html"
 LIVE_MARKET_CACHE = V2_DIR / "live_market_data.json"
 FUNDAMENTALS_CACHE = V2_DIR / "fundamentals_data.json"
 LAB_HISTORY_CACHE = V2_DIR / "lab_history_data.json"

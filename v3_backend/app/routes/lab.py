@@ -1,265 +1,140 @@
-"""Page route: lab — HTML body only; CSS/JS live in static/lab.css and static/lab.js."""
+"""Portfolio landing page based on the compact Figma workspace."""
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
-from app.components import wrap_v4_layout
+
+from app.components import render_layout
 from app.i18n import get_lang
 
 router = APIRouter(tags=["pages"])
 
-_HEAD = '<link rel="stylesheet" href="/static/lab.css" />'
+_HEAD = '<link rel="stylesheet" href="/static/portfolio.css" />'
 _SCRIPTS = (
     '<script src="/static/vendor/echarts.min.js"></script>'
-    '<script src="/static/lab.js"></script>'
-    '<script src="/static/home.js"></script>'
+    '<script src="/static/portfolio.js"></script>'
+    '<script src="/static/portfolio-calendar.js"></script>'
+    '<script src="/static/portfolio-holdings.js"></script>'
 )
+_BODY = r"""
+<main class="portfolio-workspace">
+  <header class="portfolio-page-head">
+    <h1>Catfolio</h1>
+    <p id="portfolioStatus" class="portfolio-visually-hidden" role="status" aria-live="polite">正在读取组合数据</p>
+  </header>
 
-_BODY = r"""    
-<header id="overview" class="lab-hero">
+  <section class="portfolio-metrics" aria-label="组合核心概览">
+    <article class="portfolio-metric-card">
+      <span>总市值</span>
+      <strong id="portfolioValue">—</strong>
+      <small id="portfolioToday">—</small>
+    </article>
+    <article class="portfolio-metric-card">
+      <span>未实现盈亏</span>
+      <strong id="portfolioPnl">—</strong>
+      <small id="portfolioPnlRate">—</small>
+    </article>
+    <article class="portfolio-metric-card">
+      <span>持仓数</span>
+      <strong id="portfolioCount">—</strong>
+      <small id="portfolioBreadth">—</small>
+    </article>
+    <article class="portfolio-metric-card">
+      <span>前五大仓位</span>
+      <strong id="portfolioTopFive">—</strong>
+      <small id="portfolioTopOne">—</small>
+    </article>
+  </section>
+
+  <div class="portfolio-insights-row">
+    <section class="portfolio-value-card" aria-labelledby="costValueTitle">
+      <div class="portfolio-chart-head">
         <div>
-            <h1>Portfolio Lab</h1>
-            <p>组合分析、量化回测与优化</p>
+          <h2 id="costValueTitle">成本与市值对比</h2>
+          <p>净投入成本与当前总市值（USD）</p>
         </div>
-        <div class="lab-hero-actions">
-            <div class="lab-hero-actions-label">数据控制</div>
-            <div class="toolbar">
-                <button id="refreshButton" class="btn primary" type="button">同步持仓</button>
-                <button id="marketRefreshButton" class="btn" type="button">刷新行情</button>
-                <button id="fundamentalsRefreshButton" class="btn" type="button">刷新估值</button>
-                <button id="refreshHistory" class="btn" type="button">刷新历史价格</button>
-                <a class="btn" href="/import">手动导入</a>
-            </div>
+      </div>
+      <div class="portfolio-chart-body">
+        <div id="costValueChart" class="portfolio-value-chart" role="img" aria-label="净投入成本与当前总市值折线图"></div>
+        <div class="portfolio-ranges" role="group" aria-label="图表时间范围">
+          <button type="button" data-range="1d" aria-pressed="false">1D</button>
+          <button type="button" data-range="1w">1W</button>
+          <button type="button" data-range="1m">1M</button>
+          <button type="button" class="active" data-range="3m" aria-pressed="true">3M</button>
+          <button type="button" data-range="ytd">YTD</button>
+          <button type="button" data-range="1y">1Y</button>
+          <button type="button" data-range="max">MAX</button>
         </div>
+      </div>
+      <div class="portfolio-chart-legend" aria-label="图表图例">
+        <span><i class="market"></i>当前总市值</span>
+        <span><i class="cost"></i>净投入成本</span>
+      </div>
+    </section>
+
+    <article class="portfolio-profit-calendar-card" aria-labelledby="profitCalendarTitle">
+      <header class="profit-calendar-head">
+        <h2 id="profitCalendarTitle">收益日历</h2>
+        <div class="profit-calendar-controls">
+          <div class="profit-calendar-range" role="group" aria-label="日历范围">
+            <button class="profit-calendar-range-button active" id="profitCalendarDay" type="button" aria-pressed="true" title="查看当月每日盈亏">D</button>
+            <button class="profit-calendar-range-button" id="profitCalendarMonth" type="button" aria-pressed="false" title="查看全年逐月盈亏">M</button>
+            <button class="profit-calendar-range-button" id="profitCalendarYear" type="button" aria-pressed="false" title="查看全年每日盈亏">Y</button>
+          </div>
+          <div class="profit-calendar-period-nav">
+            <button id="profitCalendarPrev" type="button" aria-label="上一个周期"><img src="/static/icons/analytics/arrow-left.svg" alt="" /></button>
+            <span id="profitCalendarPeriod" aria-live="polite"><span id="profitCalendarPeriodMonth">—</span><span id="profitCalendarPeriodYear">—</span></span>
+            <button id="profitCalendarNext" type="button" aria-label="下一个周期"><img src="/static/icons/analytics/arrow-right.svg" alt="" /></button>
+          </div>
+        </div>
+      </header>
+      <div class="profit-calendar-body">
+        <div class="profit-calendar-weekdays" id="profitCalendarWeekdays" aria-hidden="true"></div>
+        <div class="profit-calendar-grid is-loading" id="profitCalendarGrid" role="grid" aria-label="每日投资组合盈亏"></div>
+      </div>
+      <footer class="profit-calendar-summary">
+        <div class="profit-calendar-summary-item">
+          <img src="/static/icons/analytics/dividend.svg" alt="" />
+          <span class="profit-calendar-summary-label">股息</span>
+          <strong id="profitCalendarDividends">+$0.00</strong>
+          <span class="profit-calendar-summary-period">本月</span>
+        </div>
+        <div class="profit-calendar-summary-item">
+          <img src="/static/icons/analytics/cash-interest.svg" alt="" />
+          <span class="profit-calendar-summary-label">现金利息</span>
+          <strong id="profitCalendarInterest">+$0.00</strong>
+          <span class="profit-calendar-summary-period">本月</span>
+        </div>
+      </footer>
+    </article>
+  </div>
+
+  <section class="portfolio-holdings-card" aria-labelledby="portfolioHoldingsTitle">
+    <header class="portfolio-holdings-head">
+      <div class="portfolio-holdings-title">
+        <h2 id="portfolioHoldingsTitle">持仓明细</h2>
+        <p id="portfolioHoldingsMeta" aria-live="polite">正在读取持仓…</p>
+      </div>
+      <div class="portfolio-holdings-mode" role="tablist" aria-label="持仓视图">
+        <button class="active" type="button" role="tab" aria-selected="true" data-portfolio-holdings-mode="direct">原始持仓</button>
+        <button type="button" role="tab" aria-selected="false" data-portfolio-holdings-mode="lookthrough">ETF 穿透</button>
+      </div>
     </header>
-    <div class="dashboard-stack">
-    <section class="command-card lab-control-card">
-        <div id="refreshStatus" class="status"></div>
-    </section>
 
-    <div class="data-health-row">
-        <div class="data-health-chip"><b><span class="status-dot"></span>Trading 212</b><span id="healthTrading212">读取中...</span></div>
-        <div class="data-health-chip"><b><span class="status-dot"></span>Yahoo 行情</b><span id="healthMarket">读取中...</span></div>
-        <div class="data-health-chip"><b><span id="healthFundamentalsDot" class="status-dot warn"></span>FMP 估值</b><span id="healthFundamentals">读取中...</span></div>
-        <div class="data-health-chip"><b><span class="status-dot"></span>历史价格</b><span id="healthHistory">读取中...</span></div>
+    <div class="portfolio-holdings-scroll" tabindex="0" aria-label="持仓明细列表">
+      <table class="portfolio-holdings-table">
+        <thead id="portfolioHoldingsHead"></thead>
+        <tbody id="portfolioHoldingsRows">
+          <tr class="portfolio-holdings-message"><td>正在读取持仓…</td></tr>
+        </tbody>
+      </table>
     </div>
-    <div class="snapshot-grid">
-        <div class="snapshot-card">
-            <div>
-                <div class="snapshot-label">总市值</div>
-                <div id="snapshotMarketValue" class="snapshot-value">—</div>
-                <div id="snapshotMarketSub" class="snapshot-sub">等待持仓...</div>
-            </div>
-            <svg id="snapshotMarketSpark" class="snapshot-spark muted" viewBox="0 0 120 34" preserveAspectRatio="none"></svg>
-        </div>
-        <div class="snapshot-card">
-            <div>
-                <div class="snapshot-label">总浮盈</div>
-                <div id="snapshotTotalPnl" class="snapshot-value positive">—</div>
-                <div id="annualReturn" class="snapshot-sub positive">—</div>
-            </div>
-            <svg id="snapshotPnlSpark" class="snapshot-spark" viewBox="0 0 120 34" preserveAspectRatio="none"></svg>
-        </div>
-        <div class="snapshot-card">
-            <div>
-                <div class="snapshot-label">今日盈亏</div>
-                <div id="snapshotTodayPnl" class="snapshot-value positive">—</div>
-                <div id="annualVol" class="snapshot-sub positive">—</div>
-            </div>
-            <svg id="snapshotTodaySpark" class="snapshot-spark" viewBox="0 0 120 34" preserveAspectRatio="none"></svg>
-        </div>
-        <div class="snapshot-card">
-            <div>
-                <div class="snapshot-label">持仓股数</div>
-                <div id="snapshotHoldingsCount" class="snapshot-value">—</div>
-                <div id="snapshotBreadth" class="snapshot-sub">等待涨跌分布...</div>
-            </div>
-        </div>
-        <div class="snapshot-card">
-            <div>
-                <div class="snapshot-label">夏普比率</div>
-                <div id="sharpe" class="snapshot-value">—</div>
-                <div id="snapshotSharpeSub" class="snapshot-sub positive">等待基准...</div>
-            </div>
-        </div>
-        <div class="snapshot-card">
-            <div>
-                <div class="snapshot-card-head">
-                    <div class="snapshot-label">最大回撤</div>
-                    <select id="drawdownRangeSelect" class="snapshot-control" aria-label="最大回撤统计时间">
-                        <option value="all">全部</option>
-                        <option value="252">1 年</option>
-                        <option value="126">6 月</option>
-                        <option value="63">3 月</option>
-                        <option value="21">1 月</option>
-                    </select>
-                </div>
-                <div id="maxDrawdown" class="snapshot-value negative">—</div>
-                <div id="snapshotDrawdownSub" class="snapshot-sub">样本期</div>
-            </div>
-        </div>
-    </div>
-    <section class="daily-pnl-panel">
-        <div class="daily-pnl-head">
-            <div>
-                <div class="daily-pnl-title">收益分布日历</div>
-                <div class="daily-pnl-sub">每日盈亏 · 月 / 年 视图</div>
-            </div>
-            <div class="pnl-cal-nav">
-                <div class="pnl-cal-viewtabs" role="tablist" aria-label="收益日历视图">
-                    <button class="pnl-cal-viewtab active" id="calViewMonth" type="button" role="tab" aria-selected="true" aria-pressed="true">月</button>
-                    <button class="pnl-cal-viewtab" id="calViewYear" type="button" role="tab" aria-selected="false" aria-pressed="false">年</button>
-                </div>
-                <button class="pnl-cal-nav-btn" id="calPrev" type="button" title="上一页" aria-label="上一页">&#8249;</button>
-                <span id="calMonthLabel" class="pnl-cal-month-label">—</span>
-                <button class="pnl-cal-nav-btn" id="calNext" type="button" title="下一页" aria-label="下一页">&#8250;</button>
-            </div>
-        </div>
-        <div id="pnlCalendar" class="pnl-cal-grid"></div>
-        <div class="pnl-cal-summary">
-            <div>
-                <div id="calTotalLabel" class="pnl-cal-stat-label">当月盈亏</div>
-                <div id="calMonthTotal" class="pnl-cal-stat-value">—</div>
-            </div>
-            <div>
-                <div class="pnl-cal-stat-label">盈利天数</div>
-                <div id="calPosDays" class="pnl-cal-stat-value positive">—</div>
-            </div>
-            <div>
-                <div class="pnl-cal-stat-label">亏损天数</div>
-                <div id="calNegDays" class="pnl-cal-stat-value negative">—</div>
-            </div>
-            <div>
-                <div class="pnl-cal-stat-label">最大单日</div>
-                <div id="calBestDay" class="pnl-cal-stat-value positive">—</div>
-            </div>
-            <div>
-                <div class="pnl-cal-stat-label">最差单日</div>
-                <div id="calWorstDay" class="pnl-cal-stat-value negative">—</div>
-            </div>
-        </div>
-    </section>
-    <section class="daily-pnl-panel">
-        <div class="daily-pnl-head">
-            <div>
-                <div class="daily-pnl-title">月度收益热图</div>
-                <div class="daily-pnl-sub">年 × 月盈亏%</div>
-            </div>
-            <div class="daily-pnl-note">按当前仓位模型估算，适合看月份节奏和波动，不代表完整账户现金流收益。</div>
-        </div>
-        <div id="monthlyReturnDarkChart" class="monthly-return-chart"></div>
-    </section>
-    <section class="daily-pnl-panel">
-        <div class="daily-pnl-head">
-            <div>
-                <div class="daily-pnl-title">估值矩阵 (P/E vs 成长)</div>
-                <div class="daily-pnl-sub">气泡大小 = 仓位权重</div>
-            </div>
-            <div class="daily-pnl-note">优先使用 EPS 成长率；缺失时使用营收同比成长率。需要 fundamentals 数据源刷新。</div>
-        </div>
-        <div id="valuationMatrixChart" class="valuation-matrix-chart"></div>
-        <div class="valuation-waterline">
-            <div class="valuation-waterline-summary">
-                <div class="kicker">估值水位<br>(PREMIUM/DISCOUNT)</div>
-                <b id="valuationWaterlineOverall">—</b>
-                <span id="valuationWaterlineNote">刷新 FMP fundamentals 后，显示持仓相对同板块/组合中位估值的 premium 或 discount。</span>
-            </div>
-            <div id="valuationWaterlineList" class="valuation-waterline-list"></div>
-        </div>
-    </section>
-
-    <section class="command-card">
-        <div class="chart-head" style="display:flex;justify-content:space-between;align-items:center;">
-            <div>
-                <h2>盘后异动 <span style="font-size:11px;color:var(--muted);font-weight:400;">Massive · After-Hours Movers</span></h2>
-                <div style="font-size:11px;color:var(--muted);">盘后价 vs 收盘价涨跌超过 ±1% 的持仓</div>
-            </div>
-            <button id="afterHoursBtn" class="btn primary" type="button" onclick="loadAfterHours()">刷新盘后数据</button>
-        </div>
-        <div id="afterHoursStatus" style="padding:8px 0;font-size:12px;color:var(--muted);">点击刷新获取最新盘后数据</div>
-        <div id="afterHoursResult" style="display:none;">
-            <div class="table-wrap">
-                <table>
-                    <thead><tr><th>代码</th><th>收盘价</th><th>盘后价</th><th>盘后涨跌</th><th>成交量</th></tr></thead>
-                    <tbody id="afterHoursBody"></tbody>
-                </table>
-            </div>
-            <div id="afterHoursQuiet" style="display:none;padding:16px;text-align:center;color:var(--muted);font-size:14px;">
-                盘后无异常波动，所有持仓盘后变化均小于 1%
-            </div>
-            <div id="afterHoursMeta" style="font-size:11px;color:var(--muted);margin-top:8px;"></div>
-        </div>
-    </section>
-
-    <section class="command-card">
-        <div class="chart-head"><h2>持仓分类集中度</h2><span><span class="source-badge">真实持仓 + 本地分类</span></span></div>
-        <div id="sectorChart" class="mini-chart"></div>
-    </section>
-
-    <section class="command-card">
-        <div class="chart-head"><h2>个股盈亏贡献</h2><span><span class="source-badge">真实账户 · 美元浮盈（成本 vs 现价）</span></span></div>
-        <div id="pnlChart" class="mini-chart"></div>
-    </section>
-
-    <section class="command-card">
-        <div class="chart-head"><h2>持仓明细</h2><span>成本、现价、今日涨跌、浮盈和仓位</span></div>
-        <div class="table-wrap">
-            <table>
-                <thead><tr><th>代码</th><th>名称</th><th>成本</th><th>现价</th><th>今日</th><th>浮盈%</th><th>52周</th><th>仓位</th></tr></thead>
-                <tbody id="holdingRows"></tbody>
-            </table>
-        </div>
-    </section>
-
-    <div class="section-kicker">模型分析，按当前仓位回看历史，不是现金流口径真实收益</div>
-
-    <section class="command-card">
-        <div class="chart-head"><h2>收益率分布</h2><span>模型日收益</span></div>
-        <div id="distributionChart" class="mini-chart"></div>
-        <div id="distributionNote" style="font-size:11px;color:var(--muted);text-align:center;margin-top:4px;"></div>
-    </section>
-
-    <section class="command-card">
-        <div class="chart-head"><h2>回撤水下曲线</h2><span>模型组合跌离高点</span></div>
-        <div id="drawdownChart" class="mini-chart"></div>
-    </section>
-
-    <section class="command-card">
-        <div class="chart-head"><h2>持仓相关性矩阵</h2><span>颜色越深，越容易同涨同跌</span></div>
-        <div id="correlationChart" class="heatmap-chart"></div>
-    </section>
-
-    <section class="command-card">
-        <div class="chart-head"><h2>模型归因 Waterfall</h2><span>模型口径 · 当月权重收益%（非真实盈亏）</span></div>
-        <div id="waterfallChart" class="mini-chart"></div>
-    </section>
-
-    <section class="command-card">
-        <div class="chart-head"><h2>累计收益对比</h2><span id="cumulativeRange">TWR / 现金流镜像</span></div>
-        <div id="cumulativeChart" style="width:100%;height:280px;"></div>
-    </section>
-
-    <aside class="stack">
-        <section class="panel">
-            <h2>资产归并</h2>
-            <table>
-                <thead><tr><th>底层暴露</th><th>成员</th><th>权重</th></tr></thead>
-                <tbody id="groupRows"></tbody>
-            </table>
-        </section>
-        <section class="panel" style="display: none;">
-            <h2>Monte Carlo Range</h2>
-            <div id="percentileGrid" class="percentile-grid"></div>
-        </section>
-        <section class="panel" style="display: none;">
-            <h2>状态</h2>
-            <p id="status">正在加载 Portfolio Lab...</p>
-        </section>
-    </aside>
-    </div>"""
+  </section>
+</main>
+"""
 
 
 @router.get("/lab")
 def lab_page(request: Request):
-    content = _BODY + _SCRIPTS
     return HTMLResponse(
-        wrap_v4_layout("Portfolio Lab", content, "/lab", get_lang(request), head_extra=_HEAD)
+        render_layout(request, "Portfolio", _BODY + _SCRIPTS, "/lab", get_lang(request), head_extra=_HEAD)
     )

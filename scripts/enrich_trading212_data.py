@@ -14,6 +14,7 @@ PORTFOLIO_ANALYSIS = DATA_DIR / "portfolio_analysis/portfolio_analysis.json"
 
 BASE_URL = os.environ.get("TRADING212_API_BASE", "https://live.trading212.com/api/v0").rstrip("/")
 READ_ONLY_ENDPOINTS = {
+    "account_info": "/equity/account/info",
     "account_cash": "/equity/account/cash",
     "portfolio": "/equity/portfolio",
 }
@@ -271,6 +272,8 @@ def main():
                     "accounts": len(account_rows),
                     "total_invested_from_positions": total_invested,
                     "total_ppl_from_positions": total_ppl,
+                    "ppl_basis": "broker_unrealized_in_account_currency_including_fx",
+                    "fx_ppl_is_component_of_ppl": True,
                     "auth_mode": "multi_account" if len(account_rows) > 1 else (account_rows[0].get("summary", {}).get("auth_mode") if account_rows else "not_configured"),
                 },
                 "warnings": warnings,

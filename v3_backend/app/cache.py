@@ -24,6 +24,7 @@ _store: dict[str, tuple[float, object]] = {}
 # the lock, so parallel cache misses still compute in parallel (a brief double
 # compute on a miss is harmless and far cheaper than serializing all work).
 _lock = threading.Lock()
+_inflight: dict[str, threading.Event] = {}
 
 
 def cached(ttl: float = 300, key=None):
@@ -48,10 +49,34 @@ def cached(ttl: float = 300, key=None):
                 if hit is not None and now < hit[0]:
                     return hit[1]
 
-            result = func(*args, **kwargs)
+            # Coalesce concurrent misses. A page can request several related
+            # views together, and those views often share expensive analytics.
             with _lock:
-                _store[cache_key] = (now + ttl, result)
-            return result
+                event = _inflight.get(cache_key)
+                if event is None:
+                    event = threading.Event()
+                    _inflight[cache_key] = event
+                    owner = True
+                else:
+                    owner = False
+
+            if not owner:
+                event.wait()
+                with _lock:
+                    hit = _store.get(cache_key)
+                    if hit is not None and time.time() < hit[0]:
+                        return hit[1]
+                return wrapper(*args, **kwargs)
+
+            try:
+                result = func(*args, **kwargs)
+                with _lock:
+                    _store[cache_key] = (time.time() + ttl, result)
+                return result
+            finally:
+                with _lock:
+                    _inflight.pop(cache_key, None)
+                    event.set()
 
         wrapper.cache_clear = lambda: _clear_prefix(func.__name__)
         return wrapper

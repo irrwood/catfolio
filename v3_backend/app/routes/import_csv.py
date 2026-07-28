@@ -1,7 +1,7 @@
 """Page route: CSV portfolio import."""
 from fastapi import APIRouter, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse
-from app.components import wrap_v4_layout
+from app.components import render_layout
 from app.i18n import get_lang
 from app.settings import V2_DIR
 from app.csv_import import process_csv_upload
@@ -139,7 +139,7 @@ def import_page(request: Request):
 <script>const csv = {json.dumps(_SAMPLE_CSV)};</script>
 <script src="/static/import_csv.js"></script>
 """
-    return HTMLResponse(wrap_v4_layout("导入持仓数据", content, "/import", lang))
+    return HTMLResponse(render_layout(request, "导入持仓数据", content, "/import", lang))
 
 
 @router.post("/api/import-csv")

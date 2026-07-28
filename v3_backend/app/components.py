@@ -2,7 +2,6 @@
 
 import re as _re
 import time as _time
-import json as _json
 from datetime import datetime, timezone
 from pathlib import Path
 from app.data_store import current_snapshot, demo_mode
@@ -50,10 +49,6 @@ _HUGEICON_SYMBOLS = """<svg class="hugeicons-sprite" aria-hidden="true" focusabl
   <symbol id="hi-heatmap" viewBox="0 0 24 24">
     <path d="M3.89124 3.89124C5.28249 2.5 7.52166 2.5 12 2.5C16.4783 2.5 18.7175 2.5 20.1088 3.89124C21.5 5.28249 21.5 7.52166 21.5 12C21.5 16.4783 21.5 18.7175 20.1088 20.1088C18.7175 21.5 16.4783 21.5 12 21.5C7.52166 21.5 5.28249 21.5 3.89124 20.1088C2.5 18.7175 2.5 16.4783 2.5 12C2.5 7.52166 2.5 5.28249 3.89124 3.89124Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
     <path d="M12 2.5V4.4M12 19.6V21.5M9.15 12H14.85M19.6 12H21.5M2.5 12H4.4M12 9.14999V14.85" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
-  </symbol>
-  <symbol id="hi-report" viewBox="0 0 24 24">
-    <path d="M8 17.5L10 15.5C10.2726 15.2274 10.4089 15.0911 10.556 15.0182C10.8358 14.8796 11.1642 14.8796 11.444 15.0182C11.5911 15.0911 11.7274 15.2274 12 15.5C12.2726 15.7726 12.4089 15.9089 12.556 15.9818C12.8358 16.1204 13.1642 16.1204 13.444 15.9818C13.5911 15.9089 13.7274 15.7726 14 15.5L16 13.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
-    <path d="M13 2.5V3C13 5.82843 13 7.24264 13.8787 8.12132C14.7574 9 16.1716 9 19 9H19.5M20 10.6569V14C20 17.7712 20 19.6569 18.8284 20.8284C17.6569 22 15.7712 22 12 22C8.22876 22 6.34315 22 5.17157 20.8284C4 19.6569 4 17.7712 4 14V9.45584C4 6.21082 4 4.58831 4.88607 3.48933C5.06508 3.26731 5.26731 3.06508 5.48933 2.88607C6.58831 2 8.21082 2 11.4558 2C12.1614 2 12.5141 2 12.8372 2.11401C12.9044 2.13772 12.9702 2.165 13.0345 2.19575C13.3436 2.34355 13.593 2.593 14.0919 3.09188L18.8284 7.82843C19.4065 8.40649 19.6955 8.69552 19.8478 9.06306C20 9.4306 20 9.83935 20 10.6569Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
   </symbol>
   <symbol id="hi-ai" viewBox="0 0 24 24">
     <path d="M4 16.4999C4 18.1567 5.34315 19.4999 7 19.4999C7 20.8806 8.11929 21.9999 9.5 21.9999C10.8807 21.9999 12 20.8806 12 19.4999C12 20.8806 13.1193 21.9998 14.5 21.9998C15.8807 21.9998 17 20.8805 17 19.4998C18.6569 19.4998 20 18.1566 20 16.4998C20 15.9311 19.8418 15.3994 19.567 14.9463C20.9527 14.6812 22 13.4628 22 11.9998C22 10.5367 20.9527 9.31831 19.567 9.05325C19.8418 8.60012 20 8.06842 20 7.49976C20 5.8429 18.6569 4.49976 17 4.49976C17 3.11904 15.8807 1.99976 14.5 1.99976C13.1193 1.99976 12 3.11914 12 4.49985C12 3.11914 10.8807 1.99985 9.5 1.99985C8.11929 1.99985 7 3.11914 7 4.49985C5.34315 4.49985 4 5.843 4 7.49985C4 8.06851 4.15822 8.60022 4.43304 9.05335C3.04727 9.3184 2 10.5368 2 11.9999C2 13.4629 3.04727 14.6813 4.43304 14.9464C4.15822 15.3995 4 15.9312 4 16.4999Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
@@ -309,12 +304,6 @@ _HUGEICON_PATHS = dict(
         _re.S,
     )
 )
-_THEME_ICON_PATHS_JSON = _json.dumps({
-    key: _HUGEICON_PATHS[key]
-    for key in ("hi-theme-system", "hi-sun", "hi-moon")
-}, ensure_ascii=False)
-
-
 def _hi(symbol_id: str, class_name: str = "hi hi-sidebar") -> str:
     paths = _HUGEICON_PATHS.get(symbol_id, "")
     return f'<svg class="{class_name}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">{paths}</svg>'
@@ -336,8 +325,22 @@ def _version_assets(html: str) -> str:
     return _re.sub(r'(/static/[^"?\s>]+\.(?:css|js|png|jpg|jpeg|webp|svg))', repl, html)
 
 
+def _brand_icon_paths(demo_on: bool) -> tuple[str, str]:
+    """Return dark-theme and light-theme brand icons for the active data mode."""
+    if demo_on:
+        return (
+            "/static/icons/catfolio-icon-dark.png",
+            "/static/icons/catfolio-icon-light.png",
+        )
+    return (
+        "/static/icons/realcat-dark.svg",
+        "/static/icons/realcat.svg",
+    )
+
+
 def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh", head_extra: str = "") -> str:
     demo_on = demo_mode()
+    brand_icon_dark, brand_icon_light = _brand_icon_paths(demo_on)
     try:
         snapshot = current_snapshot()
         trading_unix = snapshot["trading212"].get("as_of_unix")
@@ -352,12 +355,11 @@ def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh",
         return datetime.fromtimestamp(int(val), tz=timezone.utc).astimezone().strftime("%H:%M")
 
     nav_links = [
-        ("/lab", "Portfolio Lab", "hi-lab"),
-        ("/backtest", "回测与优化", "hi-calculator"),
-        ("/strategy", "策略回测", "hi-strategy"),
+        ("/lab", "Portfolio", "hi-lab"),
         ("/returns", "收益对比", "hi-returns"),
+        ("/analytics", "分析图表", "hi-trending"),
+        ("/strategy", "策略回测", "hi-strategy"),
         ("/heatmap", "持仓热力图", "hi-heatmap"),
-        ("/report", "审计报表", "hi-report"),
         ("/ai", "AI 分析", "hi-ai"),
         ("/import", "导入数据", "hi-import"),
         ("/settings", "系统设置", "hi-settings")
@@ -371,7 +373,7 @@ def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh",
     zh_lang_class = "active" if lang == "zh" else ""
     en_lang_class = "active" if lang == "en" else ""
     demo_badge = f'<span class="brand-demo-badge">{_hi("hi-demo", "hi hi-badge")} 假数据</span>' if demo_on else ""
-    theme_icon = _hi("hi-moon")
+    theme_icon = '<img class="hi hi-sidebar" src="/static/icons/sidebar/theme-light.svg" alt="" width="24" height="24" />'
     menu_icon = _hi("hi-menu", "hi hi-menu-toggle")
 
     html = f"""<!doctype html>
@@ -405,8 +407,8 @@ def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh",
     <aside class="v4-sidebar">
       <a class="sidebar-brand" href="/">
         <div class="brand-icon" aria-hidden="true">
-          <img class="brand-icon-img brand-icon-dark" src="/static/icons/catfolio-icon-dark.png" alt="" width="36" height="36" />
-          <img class="brand-icon-img brand-icon-light" src="/static/icons/catfolio-icon-light.png" alt="" width="36" height="36" />
+          <img class="brand-icon-img brand-icon-dark" src="{brand_icon_dark}" alt="" width="36" height="36" />
+          <img class="brand-icon-img brand-icon-light" src="{brand_icon_light}" alt="" width="36" height="36" />
         </div>
         <div class="brand-text">
           <span class="brand-name">Catfolio</span>
@@ -425,7 +427,7 @@ def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh",
         </button>
 
         <div class="language-switcher" aria-label="Language">
-          <a class="language-option {zh_lang_class}" href="/set-lang/zh">中文</a>
+          <a class="language-option {zh_lang_class}" href="/set-lang/zh">CN</a>
           <a class="language-option {en_lang_class}" href="/set-lang/en">EN</a>
         </div>
 
@@ -470,13 +472,12 @@ def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh",
     // picks it, and is stored as the literal string so it survives reloads.
     const THEME_MODES = ["light", "dark", "system"];
     const THEME_META = {{
-      system: ["hi-theme-system", "跟随系统"],
-      light: ["hi-sun", "浅色模式"],
-      dark: ["hi-moon", "深色模式"],
+      system: ["theme-system.svg", "跟随系统"],
+      light: ["theme-light.svg", "浅色模式"],
+      dark: ["theme.svg", "深色模式"],
     }};
-    const THEME_ICON_PATHS = {_THEME_ICON_PATHS_JSON};
-    function sidebarIcon(symbolId) {{
-      return '<svg class="hi hi-sidebar" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + (THEME_ICON_PATHS[symbolId] || '') + '</svg>';
+    function sidebarIcon(filename) {{
+      return '<img class="hi hi-sidebar" src="/static/icons/sidebar/' + filename + '" alt="" width="24" height="24" />';
     }}
     function sysLight() {{
       return window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
@@ -491,6 +492,7 @@ def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh",
       html.classList.toggle("light-theme", light);
       const meta = THEME_META[mode];
       themeToggleBtn.innerHTML = sidebarIcon(meta[0]) + ' <span>' + meta[1] + '</span>';
+      window.dispatchEvent(new CustomEvent("catfolio:themechange", {{ detail: {{ mode, light }} }}));
     }}
     applyMode(currentMode());
 
@@ -502,7 +504,10 @@ def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh",
     // Live-follow OS theme changes while in 跟随系统 mode.
     if (window.matchMedia) {{
       window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", (e) => {{
-        if (currentMode() === "system") html.classList.toggle("light-theme", e.matches);
+        if (currentMode() === "system") {{
+          html.classList.toggle("light-theme", e.matches);
+          window.dispatchEvent(new CustomEvent("catfolio:themechange", {{ detail: {{ mode: "system", light: e.matches }} }}));
+        }}
       }});
     }}
     
@@ -524,6 +529,206 @@ def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh",
 </html>"""
     return t_block(_version_assets(html), lang)
 
+
+# ---------------------------------------------------------------------------
+# v5 shell — the default collapsible reference-style chrome. The legacy v4 shell
+# remains available through `?ui=v4` in render_layout.
+# ---------------------------------------------------------------------------
+
+_V5_NAV_GROUPS = [
+    ("分析", [
+        ("/lab", "Portfolio", "research.svg"),
+        ("/returns", "收益对比", "analysis.svg"),
+        ("/analytics", "分析图表", "trade.svg"),
+        ("/strategy", "策略回测", "strategy.svg"),
+        ("/heatmap", "持仓热力图", "tools.svg"),
+        ("/ai", "AI 分析", "magic.svg"),
+        ("/bank", "银行", "app.svg"),
+    ]),
+    ("数据", [
+        ("/import", "导入数据", "document.svg"),
+        ("/settings", "系统设置", "setting.svg"),
+    ]),
+]
+
+def wrap_v5_layout(title: str, content: str, active_page: str, lang: str = "zh", head_extra: str = "") -> str:
+    demo_on = demo_mode()
+    brand_icon_dark, brand_icon_light = _brand_icon_paths(demo_on)
+    page_slug = active_page.strip("/").replace("/", "-") or "home"
+    shell_class = "v5-shell collapsed"
+    sidebar_mode = "hover"
+
+    groups_html = ""
+    for _, items in _V5_NAV_GROUPS:
+        links = ""
+        for href, label, icon in items:
+            is_active = "active" if href == active_page else ""
+            links += (
+                f'<a class="v5-nav-link {is_active}" href="{href}" title="{label}">'
+                f'<img class="v5-nav-icon" src="/static/icons/sidebar/{icon}" alt="" width="24" height="24" />'
+                f'<span class="v5-nav-label">{label}</span></a>'
+            )
+        groups_html += f'<div class="v5-nav-group">{links}</div>'
+
+    language_group_label = "语言" if lang == "zh" else "Language"
+    language_target = "en" if lang == "zh" else "zh"
+    language_toggle_text = "CN" if lang == "zh" else "EN"
+    language_toggle_label = "切换到英文" if language_target == "en" else "Switch to Chinese"
+    demo_brand = '<span class="v5-brand-demo">演示模式</span>' if demo_on else ""
+
+    html = f"""<!doctype html>
+<html lang="{'en' if lang == 'en' else 'zh-CN'}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{title} · Catfolio</title>
+  <script>
+    (function () {{
+      var saved = localStorage.getItem("theme");
+      var light = saved === "dark" ? false
+        : saved === "system" ? (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches)
+        : true;
+      if (light) document.documentElement.classList.add("light-theme");
+    }})();
+  </script>
+  <link rel="stylesheet" href="/static/v5.css" />
+  {head_extra}
+  <link rel="stylesheet" href="/static/design-system.css" />
+</head>
+<body class="page-{page_slug}">
+  {_HUGEICON_SYMBOLS}
+  <div class="{shell_class}" id="v5Shell" data-sidebar-mode="{sidebar_mode}">
+    <aside class="v5-sidebar" id="v5Sidebar" aria-label="主导航">
+      <div class="v5-brand">
+        <a class="v5-brand-icon" href="/lab" aria-label="Catfolio">
+          <img class="brand-icon-dark" src="{brand_icon_dark}" alt="" width="38" height="38" />
+          <img class="brand-icon-light" src="{brand_icon_light}" alt="" width="38" height="38" />
+        </a>
+        <div class="v5-brand-text">
+          <span class="v5-brand-name">Catfolio</span>
+          {demo_brand}
+        </div>
+        <button class="v5-collapse-btn" id="v5CollapseBtn" title="展开侧边栏" aria-label="展开侧边栏" aria-expanded="false">{_hi("hi-menu", "hi")}</button>
+      </div>
+
+      <div class="v5-divider"></div>
+
+      <nav class="v5-nav">
+        {groups_html}
+      </nav>
+
+      <div class="v5-divider"></div>
+
+      <div class="v5-foot">
+        <button class="v5-foot-btn" id="themeToggleBtn"><img class="v5-theme-icon" src="/static/icons/sidebar/theme-light.svg" alt="" width="24" height="24" /> <span>浅色模式</span></button>
+        <div class="v5-lang" role="group" aria-label="{language_group_label}">
+          <a class="v5-lang-toggle" href="/set-lang/{language_target}" aria-label="{language_toggle_label}" title="{language_toggle_label}">{language_toggle_text}</a>
+        </div>
+        <a class="v5-account" href="/settings">
+          <span class="v5-account-mark">{_hi("hi-shield", "hi")}</span>
+          <span class="v5-account-copy"><strong>本地工作区</strong><small>数据仅存在这台设备</small></span>
+        </a>
+      </div>
+    </aside>
+
+    <div class="v5-main">
+      <div class="v5-content">
+        {content}
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/client_i18n.js"></script>
+  <script>
+    const html = document.documentElement;
+    const shell = document.getElementById("v5Shell");
+    const sidebar = document.getElementById("v5Sidebar");
+    // Desktop uses a hover/focus rail; touch devices keep an explicit toggle.
+    const desktopSidebarQuery = window.matchMedia("(hover: hover) and (pointer: fine)");
+    let sidebarPointerInside = false;
+    function syncSidebarButton() {{
+      const collapsed = shell.classList.contains("collapsed");
+      const btn = document.getElementById("v5CollapseBtn");
+      if (!btn) return;
+      btn.setAttribute("aria-label", collapsed ? "展开侧边栏" : "收起侧边栏");
+      btn.setAttribute("title", collapsed ? "展开侧边栏" : "收起侧边栏");
+      btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    }}
+    function setSidebarCollapsed(collapsed) {{
+      shell.classList.toggle("collapsed", collapsed);
+      syncSidebarButton();
+    }}
+    function syncSidebarMode() {{
+      if (desktopSidebarQuery.matches) {{
+        const keyboardInside = sidebar.contains(document.activeElement);
+        setSidebarCollapsed(!sidebarPointerInside && !keyboardInside && !sidebar.matches(":hover"));
+      }} else {{
+        setSidebarCollapsed(true);
+      }}
+    }}
+    sidebar.addEventListener("pointerenter", () => {{
+      sidebarPointerInside = true;
+      if (desktopSidebarQuery.matches) setSidebarCollapsed(false);
+    }});
+    sidebar.addEventListener("pointerleave", () => {{
+      sidebarPointerInside = false;
+      if (desktopSidebarQuery.matches && !sidebar.contains(document.activeElement)) setSidebarCollapsed(true);
+    }});
+    sidebar.addEventListener("focusin", () => {{
+      if (desktopSidebarQuery.matches) setSidebarCollapsed(false);
+    }});
+    sidebar.addEventListener("focusout", () => {{
+      requestAnimationFrame(() => {{
+        if (desktopSidebarQuery.matches && !sidebarPointerInside && !sidebar.contains(document.activeElement)) setSidebarCollapsed(true);
+      }});
+    }});
+    document.getElementById("v5CollapseBtn")?.addEventListener("click", () => {{
+      if (!desktopSidebarQuery.matches) setSidebarCollapsed(!shell.classList.contains("collapsed"));
+    }});
+    document.addEventListener("keydown", (event) => {{
+      if (event.key === "Escape" && desktopSidebarQuery.matches) setSidebarCollapsed(true);
+    }});
+    desktopSidebarQuery.addEventListener?.("change", syncSidebarMode);
+    syncSidebarMode();
+
+    // Three-state theme toggle (shared with v4 behaviour).
+    const themeToggleBtn = document.getElementById("themeToggleBtn");
+    const THEME_MODES = ["light", "dark", "system"];
+    const THEME_META = {{ system: ["theme-system.svg", "跟随系统"], light: ["theme-light.svg", "浅色模式"], dark: ["theme.svg", "深色模式"] }};
+    function themeIcon(filename) {{ return '<img class="v5-theme-icon" src="/static/icons/sidebar/' + filename + '" alt="" width="24" height="24" />'; }}
+    function sysLight() {{ return window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches; }}
+    function currentMode() {{ const s = localStorage.getItem("theme"); return (s === "light" || s === "dark" || s === "system") ? s : "light"; }}
+    function applyMode(mode) {{
+      localStorage.setItem("theme", mode);
+      const light = mode === "light" || (mode === "system" && sysLight());
+      html.classList.toggle("light-theme", light);
+      const meta = THEME_META[mode];
+      themeToggleBtn.innerHTML = themeIcon(meta[0]) + ' <span>' + meta[1] + '</span>';
+      themeToggleBtn.setAttribute("aria-label", meta[1]);
+      themeToggleBtn.setAttribute("title", meta[1]);
+      window.dispatchEvent(new CustomEvent("catfolio:themechange", {{ detail: {{ mode, light }} }}));
+    }}
+    applyMode(currentMode());
+    themeToggleBtn?.addEventListener("click", () => applyMode(THEME_MODES[(THEME_MODES.indexOf(currentMode()) + 1) % THEME_MODES.length]));
+    if (window.matchMedia) {{
+      window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", (e) => {{
+        if (currentMode() === "system") {{
+          html.classList.toggle("light-theme", e.matches);
+          window.dispatchEvent(new CustomEvent("catfolio:themechange", {{ detail: {{ mode: "system", light: e.matches }} }}));
+        }}
+      }});
+    }}
+  </script>
+</body>
+</html>"""
+    return t_block(_version_assets(html), lang)
+
+
+def render_layout(request, title: str, content: str, active_page: str, lang: str = "zh", head_extra: str = "") -> str:
+    """Use the current v5 shell by default; keep `?ui=v4` as a legacy escape hatch."""
+    if request is not None and request.query_params.get("ui") == "v4":
+        return wrap_v4_layout(title, content, active_page, lang, head_extra)
+    return wrap_v5_layout(title, content, active_page, lang, head_extra)
 
 
 

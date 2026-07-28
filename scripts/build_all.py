@@ -13,13 +13,11 @@ STEPS = [
     ["python3", str(ROOT / "scripts/enrich_trading212_data.py")],
     ["python3", str(ROOT / "scripts/enrich_macro_data.py")],
     ["python3", str(ROOT / "scripts/enrich_options_data.py")],
-    ["python3", str(ROOT / "scripts/build_portfolio_html.py")],
     ["node", str(ROOT / "scripts/build_portfolio_workbook.mjs")],
 ]
 
 REQUIRED = {
     "analyze_portfolio.py",
-    "build_portfolio_html.py",
 }
 
 

@@ -13,7 +13,7 @@
       const data = await res.json();
       const on = !!data.demo;
       btn.dataset.on = on ? '1' : '0';
-      btn.classList.toggle('primary', on);
+      btn.classList.toggle('settings-button-primary', on);
       btn.innerHTML = on ? '关闭假数据' : '开启假数据';
       state.textContent = on ? '当前：已开启 — 显示样例数据' : '当前：已关闭 — 显示真实数据';
       // reload so every page picks up the switched data source
@@ -54,7 +54,7 @@
     if (data.ok) {
       el.innerHTML = '<span style="color:var(--positive)"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> 消息已发送！</span>';
       document.getElementById('tg_status_badge').innerHTML =
-        '<span class="market-status-badge" style="color:var(--positive);background:var(--positive-soft);border-color:var(--positive)"><div class="status-dot"></div> 已配置</span>';
+        '<span class="settings-status settings-status-success"><span class="settings-status-dot"></span>已配置</span><span class="settings-chevron" aria-hidden="true"></span>';
     } else {
       el.innerHTML = `<span style="color:var(--negative)"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-x"></use></svg> 失败：${data.error || '未知错误'}</span>`;
     }
@@ -79,7 +79,7 @@
         input.value = '';
         input.placeholder = '已设置，留空则不修改';
         const badge = document.getElementById('badge_' + envName);
-        badge.innerHTML = '<span class="market-status-badge" style="color:var(--positive);background:var(--positive-soft);border-color:var(--positive);white-space:nowrap"><div class="status-dot"></div> 已设置</span>';
+        badge.innerHTML = '<span class="settings-status settings-status-success"><span class="settings-status-dot"></span>已设置</span>';
         btn.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> 已保存';
         setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2000);
       } else {
@@ -101,10 +101,8 @@
       });
       const data = await res.json();
       if (data.ok) {
-        document.querySelectorAll('.ai-provider-btn').forEach(b => {
-          b.style.background = 'var(--soft)'; b.style.color = 'var(--ink)'; b.style.borderColor = 'transparent';
-        });
-        btn.style.background = 'var(--accent)'; btn.style.color = '#fff'; btn.style.borderColor = 'var(--accent)';
+        document.querySelectorAll('.ai-provider-btn').forEach(b => b.classList.remove('is-active'));
+        btn.classList.add('is-active');
         status.innerHTML = '当前：<strong style="color:var(--ink)">' + btn.textContent.trim() + '</strong> <span style="color:var(--positive)">已切换</span>';
       } else {
         status.innerHTML = '<span style="color:var(--negative)">切换失败：' + (data.error || '未知错误') + '</span>';
@@ -116,17 +114,17 @@
 
   async function triggerRefresh(type) {
     const statusEl = document.getElementById("settingsStatus");
-    statusEl.className = "status";
+    statusEl.className = "settings-action-status";
     if (type === 'trading212') {
       statusEl.innerHTML = '<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> 正在同步 Trading 212 持仓...';
       try {
         const response = await fetch("/api/refresh/trading212", { method: "POST" });
         if (!response.ok) throw new Error("HTTP error");
-        statusEl.className = "status positive";
+        statusEl.className = "settings-action-status positive";
         statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> Trading 212 同步完成！';
         setTimeout(() => location.reload(), 1000);
       } catch (err) {
-        statusEl.className = "status negative";
+        statusEl.className = "settings-action-status negative";
         statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-x"></use></svg> 同步失败，请检查 API Key。';
       }
     } else if (type === 'market') {
@@ -134,11 +132,11 @@
       try {
         const response = await fetch("/api/refresh/market?force=true", { method: "POST" });
         if (!response.ok) throw new Error("HTTP error");
-        statusEl.className = "status positive";
+        statusEl.className = "settings-action-status positive";
         statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> 行情刷新完成！';
         setTimeout(() => location.reload(), 1000);
       } catch (err) {
-        statusEl.className = "status negative";
+        statusEl.className = "settings-action-status negative";
         statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-x"></use></svg> 刷新失败。';
       }
     } else if (type === 'history') {
@@ -146,11 +144,11 @@
       try {
         const response = await fetch("/api/lab/refresh-history?force=true", { method: "POST" });
         if (!response.ok) throw new Error("HTTP error");
-        statusEl.className = "status positive";
+        statusEl.className = "settings-action-status positive";
         statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> 历史价格刷新完成！';
         setTimeout(() => location.reload(), 1000);
       } catch (err) {
-        statusEl.className = "status negative";
+        statusEl.className = "settings-action-status negative";
         statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-x"></use></svg> 刷新失败。';
       }
     } else if (type === 'fundamentals') {
@@ -158,11 +156,11 @@
       try {
         const response = await fetch("/api/refresh/fundamentals?force=true", { method: "POST" });
         if (!response.ok) throw new Error("HTTP error");
-        statusEl.className = "status positive";
+        statusEl.className = "settings-action-status positive";
         statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> 估值数据刷新完成！';
         setTimeout(() => location.reload(), 1500);
       } catch (err) {
-        statusEl.className = "status negative";
+        statusEl.className = "settings-action-status negative";
         statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-x"></use></svg> 刷新失败。';
       }
     } else if (type === 'after-hours') {
@@ -170,12 +168,37 @@
       try {
         const response = await fetch("/api/refresh/after-hours?force=true", { method: "POST" });
         if (!response.ok) throw new Error("HTTP error");
-        statusEl.className = "status positive";
+        statusEl.className = "settings-action-status positive";
         statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> 盘后数据刷新完成！';
         setTimeout(() => location.reload(), 1000);
       } catch (err) {
-        statusEl.className = "status negative";
+        statusEl.className = "settings-action-status negative";
         statusEl.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-x"></use></svg> 刷新失败。';
       }
     }
   }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const links = Array.from(document.querySelectorAll('.settings-nav-link'));
+    const sections = links
+      .map(link => document.querySelector(link.getAttribute('href')))
+      .filter(Boolean);
+
+    links.forEach(link => {
+      link.addEventListener('click', () => {
+        links.forEach(item => item.classList.toggle('is-active', item === link));
+      });
+    });
+
+    if (!('IntersectionObserver' in window)) return;
+    const observer = new IntersectionObserver(entries => {
+      const visible = entries
+        .filter(entry => entry.isIntersecting)
+        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (!visible) return;
+      links.forEach(link => {
+        link.classList.toggle('is-active', link.getAttribute('href') === '#' + visible.target.id);
+      });
+    }, { rootMargin: '-18% 0px -64% 0px', threshold: [0, 0.15, 0.4] });
+    sections.forEach(section => observer.observe(section));
+  });
