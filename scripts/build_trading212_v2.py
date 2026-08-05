@@ -301,19 +301,59 @@ def build_and_write():
     without spawning a `python3` subprocess.
     """
     V2_DIR.mkdir(parents=True, exist_ok=True)
+    existing_portfolio = load_json(V2_DIR / "portfolio_analysis.json", {"holdings": [], "holdings_by_account": []})
     data = build_v2_data()
-    # Guard: dont overwrite existing data if the API returned empty positions
+    # Guard: never replace a usable local snapshot with an empty/failed API
+    # response. Authentication and upstream errors are carried back to FastAPI
+    # so the UI cannot report a successful refresh while continuing to display
+    # stale holdings.
     portfolio_data = data.get("portfolio") or {}
     holdings = portfolio_data.get("holdings") or []
     if len(holdings) == 0:
+        source = data.get("trading212_data") or {}
+        warnings = list(source.get("warnings") or [])
         existing = V2_DIR / "portfolio_analysis.json"
         if existing.exists() and existing.stat().st_size > 5000:
+            authorization_failed = any(
+                marker in str(warning).lower()
+                for warning in warnings
+                for marker in ("401", "403", "unauthorized", "forbidden")
+            )
             return {
-                "ok": True,
+                "ok": not warnings,
                 "skipped": True,
                 "holdings": 0,
-                "message": "API returned 0 positions, existing data preserved.",
+                "error_code": "authorization_failed" if authorization_failed else ("upstream_failed" if warnings else None),
+                "message": (
+                    "Trading 212 authorization failed; existing data preserved."
+                    if authorization_failed
+                    else "Trading 212 returned no positions; existing data preserved."
+                ),
+                "warnings": warnings,
             }
+
+    def position_key(row):
+        return (str(row.get("account") or row.get("accounts") or ""), str(row.get("api_ticker") or row.get("ticker") or ""))
+
+    def position_signature(row):
+        numeric_fields = (
+            "shares", "avg_cost_native", "last_trade_price", "cost_usd_standard",
+            "api_market_value_usd", "broker_unrealized_usd", "broker_fx_ppl_usd",
+        )
+        return tuple(round(float(row.get(field) or 0), 8) for field in numeric_fields)
+
+    previous_rows = existing_portfolio.get("holdings_by_account") or existing_portfolio.get("holdings") or []
+    current_rows = portfolio_data.get("holdings_by_account") or portfolio_data.get("holdings") or []
+    previous_by_key = {position_key(row): row for row in previous_rows}
+    current_by_key = {position_key(row): row for row in current_rows}
+    added_keys = set(current_by_key) - set(previous_by_key)
+    removed_keys = set(previous_by_key) - set(current_by_key)
+    shared_keys = set(previous_by_key) & set(current_by_key)
+    updated_keys = {
+        key for key in shared_keys
+        if position_signature(previous_by_key[key]) != position_signature(current_by_key[key])
+    }
+    unchanged_keys = shared_keys - updated_keys
 
     (V2_DIR / "portfolio_analysis.json").write_text(json.dumps(portfolio_data, ensure_ascii=False, indent=2), encoding="utf-8")
     (V2_DIR / "market_data.json").write_text(json.dumps(data["market_data"], ensure_ascii=False, indent=2), encoding="utf-8")
@@ -323,6 +363,13 @@ def build_and_write():
         "ok": True,
         "skipped": False,
         "holdings": len(holdings),
+        "incremental": True,
+        "changes": {
+            "added": len(added_keys),
+            "updated": len(updated_keys),
+            "removed": len(removed_keys),
+            "unchanged": len(unchanged_keys),
+        },
         "warnings": (portfolio_data.get("summary") or {}).get("warnings", []),
     }
 

@@ -11,8 +11,9 @@
     down: "Down",
     largest: "Largest position",
     noHistory: "Cost and market-value history is not available yet",
-    market: "Current Market Value",
-    cost: "Net Invested Cost",
+    market: "Holdings Market Value",
+    cost: "Holdings Cost",
+    asOf: "As of",
   } : {
     loading: "正在读取组合数据",
     ready: "组合数据已更新",
@@ -23,8 +24,9 @@
     down: "下跌",
     largest: "最大单一仓位",
     noHistory: "暂无可用的成本与市值历史数据",
-    market: "当前总市值",
-    cost: "净投入成本",
+    market: "持仓市值",
+    cost: "持仓成本",
+    asOf: "截至",
   };
 
   const elements = {
@@ -45,12 +47,14 @@
   const CHART_COLORS = {
     market: "#2F8A3E",
     cost: "#708CFF",
+    negative: "#E40014",
     grid: "#EAEBED",
     date: "#000000",
   };
   const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   function syncChartColors() {
     CHART_COLORS.market = cssVar("--positive") || "#2F8A3E";
+    CHART_COLORS.negative = cssVar("--negative") || "#E40014";
     CHART_COLORS.grid = cssVar("--line-strong") || "#EAEBED";
     CHART_COLORS.date = cssVar("--ink") || "#000000";
   }
@@ -131,13 +135,12 @@
   }
 
   function normalizeValueRows(payload) {
-    const cashFlow = payload?.cash_flow_mirror || {};
-    const rows = (cashFlow.rows || []).map(row => ({
+    const positionHistory = payload?.position_history || {};
+    const rows = (positionHistory.rows || []).map(row => ({
       date: row.date,
-      market: numeric(row, ["portfolio_value", "adjusted_portfolio_value", "portfolio"], null),
-      cost: numeric(row, ["net_cash_flow", "invested_cost_usd", "buy_total", "buy_total_usd"], null),
+      market: numeric(row, ["market_value_usd"], null),
+      cost: numeric(row, ["cost_usd"], null),
     })).filter(row => row.date && Number.isFinite(row.market) && Number.isFinite(row.cost));
-
     const current = payload?.current_point || {};
     const currentRow = {
       date: current.date,
@@ -146,14 +149,10 @@
     };
     if (currentRow.date && Number.isFinite(currentRow.market) && Number.isFinite(currentRow.cost)) {
       const existingIndex = rows.findIndex(row => row.date === currentRow.date);
-      if (existingIndex >= 0) {
-        rows[existingIndex] = currentRow;
-      } else {
-        rows.push(currentRow);
-        rows.sort((left, right) => String(left.date).localeCompare(String(right.date)));
-      }
+      if (existingIndex >= 0) rows[existingIndex] = currentRow;
+      else rows.push(currentRow);
     }
-    return rows;
+    return rows.sort((left, right) => String(left.date).localeCompare(String(right.date)));
   }
 
   function visibleRows() {
@@ -379,6 +378,70 @@
     });
   }
 
+  function renderSnapshotChart(point) {
+    hideChartHover();
+    const marketTone = point.market >= point.cost ? CHART_COLORS.market : CHART_COLORS.negative;
+    chartInstance.setOption({
+      animation: !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+      animationDuration: 420,
+      animationEasing: "cubicOut",
+      backgroundColor: "transparent",
+      textStyle: { fontFamily: "Nunito Local, Nunito, sans-serif" },
+      grid: { left: 10, right: 78, top: 44, bottom: 20, containLabel: true },
+      tooltip: {
+        trigger: "item",
+        confine: true,
+        backgroundColor: cssVar("--surface") || "#fff",
+        borderColor: cssVar("--line") || "#f1f1f1",
+        textStyle: { color: cssVar("--ink") || "#000", fontWeight: 700 },
+        formatter: params => `${params.name}<br/>$${Number(params.value).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      },
+      xAxis: {
+        type: "value",
+        min: 0,
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { color: cssVar("--muted") || "#888", fontSize: 12, fontWeight: 700, formatter: axisMoney },
+        splitLine: { lineStyle: { color: CHART_COLORS.grid, width: 1 } },
+      },
+      yAxis: {
+        type: "category",
+        data: [copy.cost, copy.market],
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { color: cssVar("--ink") || "#000", fontSize: 13, fontWeight: 800, margin: 14 },
+      },
+      series: [{
+        type: "bar",
+        barWidth: 36,
+        data: [
+          { value: point.cost, itemStyle: { color: CHART_COLORS.cost, borderRadius: [0, 8, 8, 0] } },
+          { value: point.market, itemStyle: { color: marketTone, borderRadius: [0, 8, 8, 0] } },
+        ],
+        label: {
+          show: true,
+          position: "right",
+          distance: 10,
+          color: cssVar("--ink") || "#000",
+          fontSize: 13,
+          fontWeight: 800,
+          formatter: params => `$${Number(params.value).toLocaleString(locale, { maximumFractionDigits: 0 })}`,
+        },
+        emphasis: { disabled: true },
+      }],
+      graphic: [{
+        type: "text",
+        right: 8,
+        top: 8,
+        style: {
+          text: `${copy.asOf} ${point.date}`,
+          fill: cssVar("--muted") || "#888",
+          font: "700 12px Nunito, sans-serif",
+        },
+      }],
+    }, true);
+  }
+
   function renderChart() {
     if (!window.echarts || !elements.chart) return;
     if (highlightFrame !== null) {
@@ -413,6 +476,11 @@
     const rows = visibleRows();
     if (!rows.length) {
       showEmptyState();
+      return;
+    }
+
+    if (rows.length === 1) {
+      renderSnapshotChart(rows[0]);
       return;
     }
 

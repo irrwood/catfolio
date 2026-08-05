@@ -6,9 +6,12 @@ a fully-populated dashboard without setting up any external services.
 """
 
 import math
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
-_AS_OF = 1748779200  # 2025-06-01 12:00 UTC (fixed demo date)
+_AS_OF_DATE = date(2026, 8, 4)
+_AS_OF_ISO = _AS_OF_DATE.isoformat()
+_AS_OF = int(datetime(2026, 8, 4, 20, 0, tzinfo=timezone.utc).timestamp())
+_DEMO_ACCOUNT = "Demo Account"
 
 # ── Holdings table (shared source of truth) ─────────────────────────
 # (ticker, name, yahoo_symbol, cost_currency, shares, avg_cost_native, price_native, change_pct_today)
@@ -28,6 +31,25 @@ _H = [
     ("BP.L",   "BP p.l.c.",                        "BP.L",    "GBX",200,   398.00, 425.30, -0.44),
     ("VUAG.L", "Vanguard S&P 500 UCITS ETF",       "VUAG.L",  "GBX", 30,  8800.00,9248.00, +0.51),
 ]
+
+# A deterministic first-fill date for every synthetic position.  These fields
+# mirror the Trading 212 portfolio response closely enough for every view to
+# exercise the same history pipeline as a real workspace.
+_FILL_DATES = {
+    "AAPL": "2022-03-14",
+    "MSFT": "2022-09-06",
+    "NVDA": "2023-01-20",
+    "GOOGL": "2023-05-08",
+    "META": "2023-09-18",
+    "AMZN": "2024-01-12",
+    "BRK.B": "2024-04-22",
+    "SPY": "2024-07-15",
+    "V": "2024-10-07",
+    "JNJ": "2025-01-21",
+    "LLOY.L": "2025-05-12",
+    "BP.L": "2025-09-08",
+    "VUAG.L": "2026-01-19",
+}
 
 _MARKET_META = {
     "AAPL": (58_400_000, 52_100_000, 3_080_000_000_000, 237.49, 164.08),
@@ -54,8 +76,12 @@ def _usd(amount, ccy):
 
 def _build_snapshot():
     holdings = []
+    holdings_by_account = []
     market_rows = []
+    broker_positions = []
     total_cost = 0.0
+    broker_unrealized_total = 0.0
+    broker_fx_total = 0.0
 
     for ticker, name, yahoo, ccy, shares, avg_cost, price, chg in _H:
         cost_native = shares * avg_cost
@@ -66,17 +92,45 @@ def _build_snapshot():
         pnl_pct = round((mv_usd / cost_usd - 1) * 100, 2) if cost_usd else 0
         total_cost += cost_usd
 
-        holdings.append({
+        price_pnl_usd = round(mv_usd - cost_usd, 2)
+        fx_pnl_usd = round(-cost_usd * 0.0125, 2) if ccy == "GBX" else 0.0
+        broker_pnl_usd = round(price_pnl_usd + fx_pnl_usd, 2)
+        api_ticker = ticker
+        base_holding = {
             "ticker": ticker,
             "name": name,
             "yahoo_symbol": yahoo,
+            "account": _DEMO_ACCOUNT,
+            "accounts": _DEMO_ACCOUNT,
+            "api_ticker": api_ticker,
             "shares": shares,
             "cost_currency": ccy,
             "avg_cost_native": round(avg_cost, 4),
+            "avg_cost_usd_standard": round(cost_usd / shares, 4),
+            "cost_native": round(cost_native, 4),
             "cost_usd_standard": round(cost_usd, 2),
+            "api_market_value_usd": mv_usd,
+            "api_unrealized_usd": broker_pnl_usd,
+            "price_unrealized_usd": price_pnl_usd,
+            "price_unrealized_percent": pnl_pct,
+            "broker_unrealized_account": broker_pnl_usd,
+            "broker_unrealized_currency": "USD",
+            "broker_unrealized_usd": broker_pnl_usd,
+            "broker_fx_ppl_account": fx_pnl_usd,
+            "broker_fx_ppl_usd": fx_pnl_usd,
+            "broker_ppl_includes_fx": True,
             "last_trade_price": price,
+            "last_trade_price_currency": ccy,
+            "last_trade_time": f"{_AS_OF_ISO}T20:00:00Z",
             "price_currency": ccy,
-        })
+            "buys": 1,
+            "sells": 0,
+            "stock_dividends": 0,
+        }
+        holdings.append(base_holding)
+        holdings_by_account.append(dict(base_holding))
+        broker_unrealized_total += broker_pnl_usd
+        broker_fx_total += fx_pnl_usd
 
         volume, avg_volume, market_cap, high_52w, low_52w = _MARKET_META[ticker]
         market_rows.append({
@@ -93,6 +147,9 @@ def _build_snapshot():
             "market_value_usd": mv_usd,
             "unrealized_usd": pnl_usd,
             "unrealized_percent": pnl_pct,
+            "price_unrealized_usd": price_pnl_usd,
+            "price_unrealized_percent": pnl_pct,
+            "pnl_basis": "price_difference",
             "change_percent": chg,
             "today_change_percent": chg,
             "trailing_pe": None,
@@ -107,14 +164,55 @@ def _build_snapshot():
             "source": "demo",
         })
 
+        broker_positions.append({
+            "account": _DEMO_ACCOUNT,
+            "account_key": "demo",
+            "ticker": api_ticker,
+            "normalized_ticker": ticker,
+            "name": name,
+            "quantity": shares,
+            "quantity_available_for_trading": shares,
+            "quantity_in_pies": 0,
+            "average_price_paid": round(avg_cost, 4),
+            "current_price": price,
+            "currency": ccy,
+            "invested": round(cost_usd, 2),
+            "ppl": broker_pnl_usd,
+            "fx_ppl": fx_pnl_usd,
+            "initial_fill_date": f"{_FILL_DATES[ticker]}T14:30:00Z",
+            "type": "ETF" if ticker in {"SPY", "VUAG.L"} else "STOCK",
+            "result": "demo",
+        })
+
     portfolio = {
         "summary": {
             "total_cost_usd_standard": round(total_cost, 2),
             "open_positions": len(holdings),
-            "as_of": "2025-06-01",
+            "open_positions_by_account": {_DEMO_ACCOUNT: len(holdings)},
+            "closed_positions": 0,
+            "transactions": len(holdings),
+            "dividends_usd_standard": 286.40,
+            "interest_usd_standard": 42.75,
+            "dividends_by_currency": {"USD": 286.40},
+            "interest_by_currency": {"USD": 42.75},
+            "dividends_by_account_currency": {_DEMO_ACCOUNT: {"USD": 286.40}},
+            "interest_by_account_currency": {_DEMO_ACCOUNT: {"USD": 42.75}},
+            "cash_movements_by_account_currency": {_DEMO_ACCOUNT: {"USD": 329.15}},
+            "report_fx_to_usd": dict(_FX),
+            "report_fx_source": "fixed synthetic demo rates",
+            "price_pnl_basis": "current_price_minus_average_cost",
+            "unrealized_pnl_basis": "broker_ppl_including_fx",
+            "cost_scale_by_currency": {"USD": 1.0, "GBX": 0.01},
+            "cost_scale_by_account_gbp_available": {_DEMO_ACCOUNT: True},
+            "source_files": [],
+            "version": 2,
+            "warnings": ["Synthetic demo portfolio; no personal or broker data is used."],
+            "as_of": f"{_AS_OF_ISO} 20:00:00",
         },
         "holdings": holdings,
-        "holdings_by_account": [{"account": "Demo Account", "holdings": holdings}],
+        "holdings_by_account": holdings_by_account,
+        "closed_positions": [],
+        "import_transactions": [],
     }
 
     market = {
@@ -162,19 +260,19 @@ def _build_snapshot():
     trading212 = {
         "as_of_unix": _AS_OF,
         "summary": {"positions": len(holdings)},
-        "account_cash": {"total": 2500.0, "currency": "USD"},
-        "positions": [
-            {
-                "ticker": h["ticker"],
-                "name": h["name"],
-                "shares": h["shares"],
-                "avg_cost_native": h["avg_cost_native"],
-                "last_trade_price": h["last_trade_price"],
-                "price_currency": h["price_currency"],
-                "cost_currency": h["cost_currency"],
+        "account_cash": {
+            _DEMO_ACCOUNT: {
+                "free": 2140.30,
+                "blocked": 0.0,
+                "invested": round(total_cost, 2),
+                "ppl": round(broker_unrealized_total, 2),
+                "total": round(total_cost + broker_unrealized_total + 2140.30, 2),
+                "currencyCode": "USD",
+                "result": "demo",
             }
-            for h in holdings
-        ],
+        },
+        "account_info": {_DEMO_ACCOUNT: {"currencyCode": "USD", "result": "demo"}},
+        "positions": broker_positions,
         "warnings": [],
         "source": "demo",
     }
@@ -184,12 +282,12 @@ def _build_snapshot():
         "market": market,
         "fundamentals": fundamentals,
         "trading212": trading212,
-        "loaded_at": "2025-06-01T12:00:00+00:00",
+        "loaded_at": f"{_AS_OF_ISO}T20:00:00+00:00",
         "demo": True,
     }
 
 
-def _trading_dates(start=date(2021, 6, 18), end=date(2026, 6, 16)):
+def _trading_dates(start=date(2021, 8, 4), end=_AS_OF_DATE):
     current = start
     rows = []
     while current <= end:
@@ -216,7 +314,26 @@ def _demo_price_path(final_price, annual_drift, daily_wave, phase):
         nav *= max(0.72, 1.0 + ret)
         raw.append(nav)
     scale = final_price / (raw[-1] or 1.0)
-    return [{"date": day, "close": round(value * scale, 4)} for day, value in zip(dates, raw)]
+    closes = [value * scale for value in raw]
+    rows = []
+    previous = closes[0]
+    for index, (day, close) in enumerate(zip(dates, closes)):
+        open_price = previous * (1 + math.sin(index / 3.7 + phase) * daily_wave * 0.45)
+        spread = max(0.0025, daily_wave * (0.85 + abs(math.cos(index / 11.0 + phase))))
+        high = max(open_price, close) * (1 + spread)
+        low = min(open_price, close) * (1 - spread * 0.92)
+        volume = int(1_200_000 * (1.15 + abs(math.sin(index / 9.0 + phase)) * 2.8))
+        rows.append({
+            "date": day,
+            "open": round(open_price, 4),
+            "high": round(high, 4),
+            "low": round(low, 4),
+            "close": round(close, 4),
+            "raw_close": round(close, 4),
+            "volume": volume,
+        })
+        previous = close
+    return rows
 
 
 def _build_lab_history():
@@ -268,3 +385,18 @@ def _build_lab_history():
 
 DEMO_SNAPSHOT = _build_snapshot()
 DEMO_LAB_HISTORY = _build_lab_history()
+
+DEMO_INCOME_SUMMARY = {
+    "currency": "USD",
+    "rows": [
+        {"year": "2024", "dividends_usd": 72.15, "cash_interest_usd": 8.20},
+        {"year": "2025", "dividends_usd": 126.40, "cash_interest_usd": 19.75},
+        {"year": "2026", "dividends_usd": 87.85, "cash_interest_usd": 14.80},
+    ],
+    "monthly_rows": [
+        {"month": "2026-05", "dividends_usd": 21.30, "cash_interest_usd": 3.50},
+        {"month": "2026-06", "dividends_usd": 34.75, "cash_interest_usd": 3.80},
+        {"month": "2026-07", "dividends_usd": 13.56, "cash_interest_usd": 4.10},
+        {"month": "2026-08", "dividends_usd": 18.24, "cash_interest_usd": 3.40},
+    ],
+}

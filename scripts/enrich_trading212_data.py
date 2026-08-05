@@ -19,6 +19,7 @@ READ_ONLY_ENDPOINTS = {
     "portfolio": "/equity/portfolio",
 }
 BLOCKED_PATH_FRAGMENTS = ("/orders", "/pies")
+ACCOUNT_INFO_TTL_SECONDS = 60 * 60 * 24
 KEYCHAIN_SERVICE = "portfolio-analysis/trading212"
 TICKER_ALIASES = {
     "FB": "META",
@@ -32,6 +33,13 @@ REPORT_FX_TO_GBP = {
     "EUR": 1.1630 / 1.3460,
 }
 KNOWN_PRICE_CURRENCY = None
+
+def load_json(path, fallback):
+    """Read a JSON cache without letting a missing/corrupt file stop refresh."""
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError):
+        return fallback
 
 def normalize_t212_ticker(ticker):
     if not ticker:
@@ -199,17 +207,20 @@ def summarize_position(row):
         "invested": gbp_equivalent(cost_native, currency),
     }
 
-def fetch_account(account):
+def fetch_account(account, cached_account=None):
     authorization = auth_header(account)
     warnings = []
-    account_info = {}
+    account_info = dict((cached_account or {}).get("account_info") or {})
     account_cash = {}
     positions = []
+    reused_account_info = bool(account_info)
 
     if not authorization:
         warnings.append(f"{account_label(account)}: TRADING212_API_KEY is not set; Trading 212 data skipped.")
     else:
         for name, path in READ_ONLY_ENDPOINTS.items():
+            if name == "account_info" and reused_account_info:
+                continue
             try:
                 payload = open_json(path, authorization)
                 if name == "account_info" and isinstance(payload, dict):
@@ -242,13 +253,25 @@ def fetch_account(account):
             "total_invested_from_positions": total_invested,
             "total_ppl_from_positions": total_ppl,
             "auth_mode": auth_mode_label(account),
+            "account_info_cached": reused_account_info,
         },
         "warnings": warnings,
     }
 
 def main():
     accounts = configured_accounts()
-    account_rows = [fetch_account(account) for account in accounts]
+    previous = load_json(OUTPUT, {}) or {}
+    previous_age = max(0, int(time.time()) - int(previous.get("as_of_unix") or 0))
+    previous_accounts = {
+        row.get("account_key"): row
+        for row in previous.get("accounts", [])
+        if row.get("account_key")
+    }
+    reuse_account_info = previous_age < ACCOUNT_INFO_TTL_SECONDS
+    account_rows = [
+        fetch_account(account, previous_accounts.get(account) if reuse_account_info else None)
+        for account in accounts
+    ]
     positions = [row for account in account_rows for row in account.get("positions", [])]
     warnings = [warning for account in account_rows for warning in account.get("warnings", [])]
     total_invested = sum(float(row.get("invested") or 0) for row in positions)
@@ -275,6 +298,10 @@ def main():
                     "ppl_basis": "broker_unrealized_in_account_currency_including_fx",
                     "fx_ppl_is_component_of_ppl": True,
                     "auth_mode": "multi_account" if len(account_rows) > 1 else (account_rows[0].get("summary", {}).get("auth_mode") if account_rows else "not_configured"),
+                    "account_info_cache_hits": sum(
+                        1 for account in account_rows
+                        if account.get("summary", {}).get("account_info_cached")
+                    ),
                 },
                 "warnings": warnings,
             },

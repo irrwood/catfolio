@@ -22,6 +22,7 @@ a = Analysis(
     binaries=[],
     datas=[
         (os.path.join(_here, "v3_backend", "app", "static"), "app/static"),
+        (os.path.join(_here, "v3_backend", "app", "data"), "app/data"),
     ],
     hiddenimports=[
         "desktop",

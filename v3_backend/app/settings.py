@@ -24,6 +24,7 @@ V2_DIR = DATA_DIR / "portfolio_analysis_v2"
 LIVE_MARKET_CACHE = V2_DIR / "live_market_data.json"
 FUNDAMENTALS_CACHE = V2_DIR / "fundamentals_data.json"
 LAB_HISTORY_CACHE = V2_DIR / "lab_history_data.json"
+SP500_HOLDINGS_CACHE = V2_DIR / "sp500_holdings.json"
 BUILD_V2_SCRIPT = ROOT / "scripts/build_trading212_v2.py"
 GBP_TO_USD = float(os.environ.get("CATFOLIO_GBP_TO_USD") or os.environ.get("HELM_GBP_TO_USD") or "1.3460")
 MARKET_REFRESH_TTL_SECONDS = 60

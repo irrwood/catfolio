@@ -1,4 +1,5 @@
 from .cache import cached
+from .sp500_holdings import sp500_holdings_dataset
 
 # These analytics are pure functions of the snapshot. The snapshot is itself
 # cached (~10s) and re-keyed by its loaded_at timestamp, so caching on that
@@ -279,7 +280,14 @@ def portfolio_summary(snapshot):
     market = market_by_ticker(snapshot)
     holdings = holdings_by_ticker(snapshot)
     broker_pnl = broker_pnl_by_ticker(snapshot)
-    market_total = sum(_num(row.get("market_value_usd")) for row in market.values())
+    market_total = sum(
+        _num(holding.get("api_market_value_usd"))
+        if holding.get("api_market_value_usd") is not None
+        else _num(market.get(ticker, {}).get("market_value_usd"))
+        for ticker, holding in holdings.items()
+    )
+    if not holdings:
+        market_total = sum(_num(row.get("market_value_usd")) for row in market.values())
     cost_total = _num(summary.get("total_cost_usd_standard"))
     price_unrealized_total = market_total - cost_total
     unrealized_total = 0.0
@@ -316,9 +324,19 @@ def etf_lookthrough(snapshot, basis="cost"):
         for ticker in holdings
         if ticker not in SP500_ETF_TICKERS
     }
+    dataset = sp500_holdings_dataset()
+    constituent_rows = dataset.get("rows") or [
+        {"ticker": ticker, "name": name, "weight_percent": weight}
+        for ticker, name, weight in SP500_WEIGHTS
+    ]
     rows = []
     used_weight = 0.0
-    for ticker, name, weight in SP500_WEIGHTS:
+    for constituent in constituent_rows:
+        ticker = str(constituent.get("ticker") or "").upper()
+        if not ticker:
+            continue
+        name = constituent.get("name") or ticker
+        weight = _num(constituent.get("weight_percent"))
         used_weight += weight
         from_etf = etf_total * weight / 100
         direct_value = direct.get(ticker, 0.0)
@@ -331,19 +349,22 @@ def etf_lookthrough(snapshot, basis="cost"):
                 "from_etf_usd": from_etf,
                 "total_usd": direct_value + from_etf,
                 "etf_weight_percent": weight,
+                "sector": constituent.get("sector"),
             }
         )
     other_weight = max(0.0, 100 - used_weight)
-    rows.append(
-        {
-            "ticker": "其他 S&P 500",
-            "name": "其他 S&P 500 成分股",
-            "direct_usd": 0.0,
-            "from_etf_usd": etf_total * other_weight / 100,
-            "total_usd": etf_total * other_weight / 100,
-            "etf_weight_percent": other_weight,
-        }
-    )
+    if other_weight > 0.001:
+        rows.append(
+            {
+                "ticker": "ETF 其他",
+                "name": "基金现金及衍生品",
+                "direct_usd": 0.0,
+                "from_etf_usd": etf_total * other_weight / 100,
+                "total_usd": etf_total * other_weight / 100,
+                "etf_weight_percent": other_weight,
+                "sector": "ETF / Other",
+            }
+        )
     for ticker, value in direct.items():
         if ticker in {row["ticker"] for row in rows}:
             continue
@@ -366,6 +387,10 @@ def etf_lookthrough(snapshot, basis="cost"):
         "etf_total_usd": etf_total,
         "covered_weight_percent": used_weight,
         "other_weight_percent": other_weight,
+        "constituent_count": len(constituent_rows),
+        "holdings_as_of": dataset.get("as_of"),
+        "holdings_source": dataset.get("source"),
+        "holdings_source_url": dataset.get("source_url"),
         "rows": rows,
     }
 

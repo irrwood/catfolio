@@ -26,7 +26,9 @@ def test_lab_page_uses_figma_portfolio_structure():
     assert "Unrealized P/L" in html
     assert 'class="portfolio-insights-row"' in html
     assert 'id="costValueChart"' in html
-    assert 'class="portfolio-chart-legend" aria-label="图表图例"' in html
+    assert "Current stock-position cost and historical market value (USD, excluding account cash)" in html
+    assert "Stock-position cost and historical market-value chart, excluding account cash" in html
+    assert 'class="portfolio-chart-legend"' not in html
     assert 'id="profitCalendarGrid"' in html
     assert 'id="profitCalendarDay"' in html
     assert 'id="profitCalendarMonth"' in html
@@ -34,8 +36,9 @@ def test_lab_page_uses_figma_portfolio_structure():
     assert '>D</button>' in html
     assert '>M</button>' in html
     assert '>Y</button>' in html
+    assert 'class="portfolio-ranges"' in html
     assert 'data-range="1d"' in html
-    assert 'class="active" data-range="3m" aria-pressed="true"' in html
+    assert 'class="active" data-range="3m"' in html
     assert 'data-range="max"' in html
     assert "/static/portfolio.css" in html
     assert "/static/portfolio.js" in html
@@ -174,6 +177,10 @@ def test_holdings_list_uses_figma_asset_and_value_rules():
     assert 'profitSortMetric: "amount"' in script
     assert 'state.profitSortMetric = "percent"' in script
     assert 'state.profitSortMetric === "amount" ? numeric(row.unrealized_usd) : numeric(row.unrealized_percent)' in script
+    assert '[copy.marketValueColumn, "position"], [copy.weeks, "range"]' in script
+    assert 'range: rangePosition(row) ?? Number.NEGATIVE_INFINITY' in script
+    assert 'class="portfolio-holding-range-marker"' in script
+    assert 'rangeCurrent: "当前价格"' in script
 
 
 def test_portfolio_chart_uses_figma_colors_and_dynamic_axis_rules():

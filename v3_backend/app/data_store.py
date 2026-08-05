@@ -83,6 +83,41 @@ def load_json(path: Path, fallback):
         return fallback
 
 
+def _cache_freshness(data, path: Path) -> float:
+    """Return a comparable timestamp for a JSON cache without trusting its name."""
+    if isinstance(data, dict):
+        for value in (data.get("as_of_unix"), data.get("market_time")):
+            try:
+                if value is not None:
+                    return float(value)
+            except (TypeError, ValueError):
+                pass
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _latest_market_cache():
+    """Pick the newest market snapshot instead of blindly preferring live cache.
+
+    A Trading 212 sync writes market_data.json. Previously an older
+    live_market_data.json always won, so the refreshed positions/cost basis were
+    combined with stale prices until somebody separately refreshed quotes.
+    """
+    pipeline_path = V2_DIR / "market_data.json"
+    pipeline = load_json(pipeline_path, None)
+    live = load_json(LIVE_MARKET_CACHE, None)
+    candidates = [
+        (live, LIVE_MARKET_CACHE),
+        (pipeline, pipeline_path),
+    ]
+    valid = [(data, path) for data, path in candidates if isinstance(data, dict) and data.get("rows")]
+    if not valid:
+        return {"rows": [], "warnings": []}
+    return max(valid, key=lambda item: _cache_freshness(item[0], item[1]))[0]
+
+
 @cached(ttl=10)
 def current_snapshot():
     # Cached briefly to dedupe the burst of concurrent /api/* calls a single page
@@ -93,7 +128,7 @@ def current_snapshot():
         from .demo_data import DEMO_SNAPSHOT
         return DEMO_SNAPSHOT
     portfolio = load_json(V2_DIR / "portfolio_analysis.json", {"summary": {}, "holdings": [], "holdings_by_account": []})
-    market = load_json(LIVE_MARKET_CACHE, None) or load_json(V2_DIR / "market_data.json", {"rows": [], "warnings": []})
+    market = _latest_market_cache()
     market = reconcile_market_currencies(portfolio, market)
     fundamentals = load_json(FUNDAMENTALS_CACHE, {"rows": [], "warnings": ["Fundamentals cache not available."]})
     trading212 = load_json(V2_DIR / "trading212_data.json", {"summary": {}, "account_cash": {}, "positions": [], "warnings": []})
@@ -367,22 +402,58 @@ def live_cache_age_seconds():
 
 
 def refresh_market_quotes(force=False):
-    age = live_cache_age_seconds()
-    if not force and age is not None and age < MARKET_REFRESH_TTL_SECONDS:
-        data = load_json(LIVE_MARKET_CACHE, {"rows": [], "warnings": []})
-        return {"ok": True, "cached": True, "age_seconds": age, "market": data}
-
     portfolio = load_json(V2_DIR / "portfolio_analysis.json", {"holdings": []})
     holdings = portfolio.get("holdings", [])
     symbols = sorted({row.get("yahoo_symbol") or row.get("ticker") for row in holdings if row.get("ticker")})
+    cached_market = load_json(LIVE_MARKET_CACHE, {"rows": [], "warnings": []}) or {"rows": []}
+    cached_as_of = int(cached_market.get("as_of_unix") or 0)
+    cached_by_symbol = {
+        row.get("yahoo_symbol") or row.get("ticker"): row
+        for row in cached_market.get("rows", [])
+        if row.get("ticker")
+    }
+    now = int(time.time())
+    fetch_symbols = []
+    for symbol in symbols:
+        cached_row = cached_by_symbol.get(symbol)
+        row_as_of = int((cached_row or {}).get("quote_as_of_unix") or cached_as_of or 0)
+        if force or not cached_row or now - row_as_of >= MARKET_REFRESH_TTL_SECONDS:
+            fetch_symbols.append(symbol)
+
+    structure_changed = set(symbols) != set(cached_by_symbol)
+    age = live_cache_age_seconds()
+    if not fetch_symbols and not structure_changed:
+        return {"ok": True, "cached": True, "age_seconds": age or 0, "market": cached_market}
+
     warnings = []
-    quotes = {}
+    quotes = {
+        symbol: {
+            "symbol": symbol,
+            "regularMarketPrice": row.get("quote_price"),
+            "regularMarketCurrency": row.get("quote_currency"),
+            "regularMarketChangePercent": row.get("change_percent"),
+            "regularMarketTime": row.get("market_time"),
+            "shortName": row.get("company_name") or row.get("name"),
+            "trailingPE": row.get("trailing_pe"),
+            "forwardPE": row.get("forward_pe"),
+            "regularMarketVolume": row.get("volume"),
+            "averageDailyVolume3Month": row.get("avg_volume_3m"),
+            "marketCap": row.get("market_cap"),
+            "fiftyTwoWeekHigh": row.get("high_52w"),
+            "fiftyTwoWeekLow": row.get("low_52w"),
+            "regularMarketOpen": row.get("open_price"),
+            "quote_as_of_unix": row.get("quote_as_of_unix") or cached_as_of,
+        }
+        for symbol, row in cached_by_symbol.items()
+        if symbol in symbols
+    }
     started = time.time()
 
-    for symbol in symbols:
+    for symbol in fetch_symbols:
         try:
             quote = fetch_yahoo_chart(symbol)
             if quote:
+                quote["quote_as_of_unix"] = now
                 quotes[symbol] = quote
             else:
                 warnings.append(f"Yahoo chart empty: {symbol}")
@@ -440,6 +511,7 @@ def refresh_market_quotes(force=False):
                 "low_52w": quote.get("fiftyTwoWeekLow"),
                 "open_price": quote.get("regularMarketOpen"),
                 "market_time": quote.get("regularMarketTime"),
+                "quote_as_of_unix": quote.get("quote_as_of_unix") or cached_as_of or now,
                 "source": source,
             }
         )
@@ -451,6 +523,12 @@ def refresh_market_quotes(force=False):
         "warnings": warnings,
         "source": "live_market_cache",
         "ttl_seconds": MARKET_REFRESH_TTL_SECONDS,
+        "incremental": not force,
+        "refresh_stats": {
+            "requested": len(fetch_symbols),
+            "reused": max(0, len(symbols) - len(fetch_symbols)),
+            "removed": len(set(cached_by_symbol) - set(symbols)),
+        },
     }
     LIVE_MARKET_CACHE.write_text(json.dumps(market, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"ok": True, "cached": False, "age_seconds": 0, "market": market}
@@ -566,25 +644,49 @@ def fundamentals_cache_age_seconds():
 
 
 def refresh_fundamentals(force=False):
-    age = fundamentals_cache_age_seconds()
-    # Cache fundamentals for 12 hours
     FUNDAMENTALS_TTL_SECONDS = 60 * 60 * 12
-    if not force and age is not None and age < FUNDAMENTALS_TTL_SECONDS:
-        data = load_json(FUNDAMENTALS_CACHE, {"rows": [], "warnings": []})
-        if data.get("rows"):
-            return {"ok": True, "cached": True, "age_seconds": age, "fundamentals": data}
-
     fmp_token = secret_value("FMP_API_KEY")
     finnhub_token = secret_value("FINNHUB_API_KEY")
     portfolio = load_json(V2_DIR / "portfolio_analysis.json", {"holdings": []})
     holdings = portfolio.get("holdings", [])
+    eligible_holdings = [
+        holding for holding in holdings
+        if holding.get("ticker") and holding.get("cost_currency") == "USD"
+    ]
+    eligible_tickers = {holding["ticker"] for holding in eligible_holdings}
+    cached = load_json(FUNDAMENTALS_CACHE, {"rows": [], "warnings": []}) or {"rows": []}
+    cached_by_ticker = {
+        row.get("ticker"): row
+        for row in cached.get("rows", [])
+        if row.get("ticker") in eligible_tickers
+    }
+    attempted_at = dict(cached.get("attempted_at") or {})
+    cached_as_of = int(cached.get("as_of_unix") or 0)
+    now = int(time.time())
+    needed_tickers = set()
+    for holding in eligible_holdings:
+        ticker = holding["ticker"]
+        row = cached_by_ticker.get(ticker, {})
+        last_attempt = int(attempted_at.get(ticker) or row.get("fetched_at_unix") or cached_as_of or 0)
+        if force or last_attempt == 0 or now - last_attempt >= FUNDAMENTALS_TTL_SECONDS:
+            needed_tickers.add(ticker)
+
+    if not needed_tickers:
+        return {
+            "ok": True,
+            "cached": True,
+            "age_seconds": fundamentals_cache_age_seconds() or 0,
+            "fundamentals": cached,
+        }
+
+    needed_holdings = [holding for holding in eligible_holdings if holding["ticker"] in needed_tickers]
     all_rows = []
     all_warnings = []
     providers_used = []
 
     # ── Step 1: FMP first ──
     if fmp_token:
-        fmp_rows, fmp_warnings = _refresh_fundamentals_fmp(holdings, fmp_token)
+        fmp_rows, fmp_warnings = _refresh_fundamentals_fmp(needed_holdings, fmp_token)
         all_rows.extend(fmp_rows)
         all_warnings.extend(fmp_warnings)
         if fmp_rows:
@@ -596,7 +698,7 @@ def refresh_fundamentals(force=False):
     if finnhub_token:
         fmp_tickers = {r["ticker"] for r in all_rows}
         needed = []
-        for h in sorted(holdings, key=lambda h: float(h.get("cost_usd_standard") or 0), reverse=True):
+        for h in sorted(needed_holdings, key=lambda h: float(h.get("cost_usd_standard") or 0), reverse=True):
             t = h.get("ticker")
             if not t or "." in t or h.get("cost_currency") != "USD":
                 continue
@@ -632,17 +734,39 @@ def refresh_fundamentals(force=False):
     elif not fmp_token:
         all_warnings.append("未设置 FINNHUB_API_KEY。")
 
-    if not all_rows:
-        cached = load_json(FUNDAMENTALS_CACHE, {"rows": [], "warnings": []})
-        return {"ok": False, "cached": True, "fundamentals": cached, "warning": "FMP 和 Finnhub 均未返回数据，返回缓存。"}
+    for ticker in needed_tickers:
+        attempted_at[ticker] = now
+    for row in all_rows:
+        row["fetched_at_unix"] = now
+
+    merged_by_ticker = dict(cached_by_ticker)
+    merged_by_ticker.update({row["ticker"]: row for row in all_rows if row.get("ticker")})
+    merged_rows = [merged_by_ticker[ticker] for ticker in sorted(merged_by_ticker) if ticker in eligible_tickers]
+    failed_count = len(needed_tickers - {row.get("ticker") for row in all_rows})
 
     fundamentals = {
-        "as_of_unix": int(time.time()),
-        "rows": all_rows,
+        "as_of_unix": now,
+        "rows": merged_rows,
         "warnings": all_warnings,
-        "source": "+".join(providers_used) if providers_used else "none",
+        "source": "+".join(providers_used) if providers_used else cached.get("source", "none"),
+        "attempted_at": {ticker: attempted_at[ticker] for ticker in eligible_tickers if ticker in attempted_at},
+        "incremental": not force,
+        "refresh_stats": {
+            "requested": len(needed_tickers),
+            "updated": len({row.get("ticker") for row in all_rows}),
+            "reused": max(0, len(eligible_tickers) - len({row.get("ticker") for row in all_rows})),
+            "failed": failed_count,
+            "removed": len(set(row.get("ticker") for row in cached.get("rows", [])) - eligible_tickers),
+        },
     }
     FUNDAMENTALS_CACHE.write_text(json.dumps(fundamentals, ensure_ascii=False, indent=2), encoding="utf-8")
+    if not merged_rows and not all_rows:
+        return {
+            "ok": False,
+            "cached": False,
+            "fundamentals": fundamentals,
+            "warning": "FMP 和 Finnhub 均未返回数据。",
+        }
     return {"ok": True, "cached": False, "fundamentals": fundamentals}
 
 

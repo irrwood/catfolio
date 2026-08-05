@@ -21,6 +21,8 @@ a = Analysis(
     datas=[
         # Static web assets (CSS, ECharts, LW Charts)
         (os.path.join(_here, "v3_backend", "app", "static"), "app/static"),
+        # Public fund constituent baseline used for offline ETF look-through
+        (os.path.join(_here, "v3_backend", "app", "data"), "app/data"),
     ],
     hiddenimports=[
         # ── app routes (dynamically assembled in main.py) ──

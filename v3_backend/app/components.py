@@ -1,8 +1,10 @@
 """Shared UI components used across route modules."""
 
+import hashlib as _hashlib
 import re as _re
 import time as _time
 from datetime import datetime, timezone
+from functools import lru_cache as _lru_cache
 from pathlib import Path
 from app.data_store import current_snapshot, demo_mode
 from app.i18n import t_block
@@ -310,28 +312,36 @@ def _hi(symbol_id: str, class_name: str = "hi hi-sidebar") -> str:
 
 
 
+@_lru_cache(maxsize=512)
+def _asset_content_version(path: str, mtime_ns: int, size: int) -> str:
+    """Return a content fingerprint, using stat values only as the cache key.
+
+    Deployment systems can normalize every packaged file's modification time, so
+    the public URL must be derived from the bytes rather than from ``mtime``.
+    """
+    del mtime_ns, size
+    return _hashlib.sha256(Path(path).read_bytes()).hexdigest()[:12]
+
+
 def _version_assets(html: str) -> str:
-    """Append ?v=<mtime> to every local /static asset URL so browsers refetch
-    whenever a file changes (cache-busting). Without this, extracted CSS/JS stay
-    cached and edits never reach users."""
+    """Append a content fingerprint to local static asset URLs."""
     def repl(match):
         path = match.group(1)
         rel = path[len("/static/"):]
         try:
-            mtime = int((_STATIC_DIR / rel).stat().st_mtime)
-            return f"{path}?v={mtime}"
+            asset = _STATIC_DIR / rel
+            stat = asset.stat()
+            version = _asset_content_version(
+                str(asset), stat.st_mtime_ns, stat.st_size
+            )
+            return f"{path}?v={version}"
         except OSError:
             return path
     return _re.sub(r'(/static/[^"?\s>]+\.(?:css|js|png|jpg|jpeg|webp|svg))', repl, html)
 
 
-def _brand_icon_paths(demo_on: bool) -> tuple[str, str]:
-    """Return dark-theme and light-theme brand icons for the active data mode."""
-    if demo_on:
-        return (
-            "/static/icons/catfolio-icon-dark.png",
-            "/static/icons/catfolio-icon-light.png",
-        )
+def _brand_icon_paths() -> tuple[str, str]:
+    """Return the shared brand icons used by local and hosted builds."""
     return (
         "/static/icons/realcat-dark.svg",
         "/static/icons/realcat.svg",
@@ -340,7 +350,7 @@ def _brand_icon_paths(demo_on: bool) -> tuple[str, str]:
 
 def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh", head_extra: str = "") -> str:
     demo_on = demo_mode()
-    brand_icon_dark, brand_icon_light = _brand_icon_paths(demo_on)
+    brand_icon_dark, brand_icon_light = _brand_icon_paths()
     try:
         snapshot = current_snapshot()
         trading_unix = snapshot["trading212"].get("as_of_unix")
@@ -553,7 +563,7 @@ _V5_NAV_GROUPS = [
 
 def wrap_v5_layout(title: str, content: str, active_page: str, lang: str = "zh", head_extra: str = "") -> str:
     demo_on = demo_mode()
-    brand_icon_dark, brand_icon_light = _brand_icon_paths(demo_on)
+    brand_icon_dark, brand_icon_light = _brand_icon_paths()
     page_slug = active_page.strip("/").replace("/", "-") or "home"
     shell_class = "v5-shell collapsed"
     sidebar_mode = "hover"
@@ -563,11 +573,7 @@ def wrap_v5_layout(title: str, content: str, active_page: str, lang: str = "zh",
         links = ""
         for href, label, icon in items:
             is_active = "active" if href == active_page else ""
-            icon_html = (
-                '<span class="v5-nav-icon v5-nav-icon-mask v5-nav-icon-bank" aria-hidden="true"></span>'
-                if icon == "bank.svg"
-                else f'<img class="v5-nav-icon" src="/static/icons/sidebar/{icon}" alt="" width="24" height="24" />'
-            )
+            icon_html = f'<img class="v5-nav-icon" src="/static/icons/sidebar/{icon}" alt="" width="24" height="24" />'
             links += (
                 f'<a class="v5-nav-link {is_active}" href="{href}" title="{label}">'
                 f'{icon_html}'

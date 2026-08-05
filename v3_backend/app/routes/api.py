@@ -15,8 +15,9 @@ from fastapi.responses import FileResponse, HTMLResponse
 from app.cache import clear_all, cached
 from app.data_store import current_snapshot, refresh_after_hours, refresh_fundamentals, refresh_market_quotes, refresh_trading212
 from app.analytics import chart_exposure, chart_pnl, etf_lookthrough, holdings_detail, holdings_heatmap, pnl_contribution, portfolio_summary, sector_concentration
-from app.lab import BENCHMARKS, BENCHMARK_CN, backtest, correlation_matrix, cumulative_multi_benchmark, cumulative_vs_benchmark, drawdown_curve, efficient_frontier, factor_analysis, fifty_two_week_position, income_summary, lab_history_summary, monte_carlo, monthly_contribution_waterfall, monthly_return_heatmap, refresh_history, return_distribution, cash_flow_mirror_vs_benchmark
+from app.lab import BENCHMARKS, BENCHMARK_CN, backtest, correlation_matrix, cumulative_multi_benchmark, cumulative_vs_benchmark, current_open_positions_history, drawdown_curve, efficient_frontier, factor_analysis, fifty_two_week_position, holding_volume_profile, income_summary, lab_history_summary, monte_carlo, monthly_contribution_waterfall, monthly_return_heatmap, refresh_history, return_distribution, cash_flow_mirror_vs_benchmark
 from app.settings import DATA_DIR
+from app.sp500_holdings import refresh_sp500_holdings
 
 from app.returns_twr import compute_twr_returns
 from app.ai import ai_analysis, ask, overlap_analysis, performance_explanation, portfolio_briefing, returns_explanation, risk_diagnosis, what_if
@@ -69,6 +70,16 @@ def api_holdings_detail():
         "summary": portfolio_summary(snapshot),
         "rows": holdings_detail(snapshot).get("rows", []),
     }
+
+
+@router.get("/holdings/{ticker}/volume-profile")
+def api_holding_volume_profile(ticker: str):
+    """Daily-OHLCV Volume Profile for a holding in the active portfolio."""
+    normalized = _normalize_asset_logo_symbol(ticker)
+    result = holding_volume_profile(normalized)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Holding not found")
+    return result
 
 
 @router.get("/holdings/heatmap")
@@ -136,29 +147,34 @@ def api_portfolio_overview():
 
 @router.get("/portfolio/chart")
 def api_portfolio_chart():
-    """Cash-flow history plus the latest broker snapshot used by the value chart."""
-    result = cash_flow_mirror_vs_benchmark("SPY")
-    summary = portfolio_summary(current_snapshot())
+    """Open-stock cost/value curve plus the live broker point; never includes cash."""
+    snapshot = current_snapshot()
+    summary = portfolio_summary(snapshot)
+    holdings = snapshot["portfolio"].get("holdings", [])
     as_of = str(summary.get("as_of") or "")
     date_match = re.match(r"^\d{4}-\d{2}-\d{2}", as_of)
     current_date = date_match.group(0) if date_match else datetime.now(timezone.utc).date().isoformat()
+    # Use the normalized portfolio summary rather than relying on a broker-only
+    # field on each raw holding.  Imported and demo portfolios keep their live
+    # values in the market snapshot, while Trading 212 holdings also persist an
+    # ``api_market_value_usd`` shortcut.
+    market_value = float(summary.get("market_value_usd") or 0)
+    summary_cost = summary.get("total_cost_usd_standard")
+    position_cost = (
+        float(summary_cost)
+        if summary_cost is not None
+        else sum(float(row.get("cost_usd_standard") or 0) for row in holdings)
+    )
+    position_history = current_open_positions_history(snapshot=snapshot)
     return {
-        "cash_flow_mirror": {
-            "available": result.get("available", False),
-            "rows": [
-                {
-                    "date": row.get("date"),
-                    "adjusted_portfolio_value": row.get("adjusted_portfolio_value"),
-                    "net_cash_flow": row.get("net_cash_flow"),
-                }
-                for row in result.get("rows", [])
-            ],
-        },
+        "basis": "current_trading212_open_positions_excluding_cash",
+        "position_count": len(holdings),
+        "position_history": position_history,
         "current_point": {
             "date": current_date,
             "as_of": as_of or None,
-            "market_value_usd": summary.get("market_value_usd"),
-            "cost_usd": summary.get("total_cost_usd_standard"),
+            "market_value_usd": market_value,
+            "cost_usd": position_cost,
         },
     }
 
@@ -421,6 +437,28 @@ def api_refresh_fundamentals(force: bool = False):
     }
 
 
+@router.post("/refresh/etf-holdings")
+def api_refresh_etf_holdings(force: bool = False):
+    result = refresh_sp500_holdings(force=force)
+    if not result.get("ok"):
+        raise HTTPException(status_code=502, detail=result)
+    if not result.get("cached"):
+        clear_all()
+    holdings = result.get("holdings") or {}
+    return {
+        "ok": True,
+        "cached": bool(result.get("cached")),
+        "stale": bool(result.get("stale")),
+        "warning": result.get("warning"),
+        "constituent_count": len(holdings.get("rows") or []),
+        "covered_weight_percent": sum(
+            float(row.get("weight_percent") or 0) for row in holdings.get("rows") or []
+        ),
+        "holdings_as_of": holdings.get("as_of"),
+        "holdings_source": holdings.get("source"),
+    }
+
+
 @router.get("/lab/history")
 def api_lab_history():
     return lab_history_summary()
@@ -432,7 +470,11 @@ def api_lab_refresh_history(force: bool = False):
     result = refresh_history(force=force)
     if not result["ok"]:
         raise HTTPException(status_code=500, detail=result)
-    return {"refresh": {key: value for key, value in result.items() if key != "history"}, "history_as_of_unix": result["history"].get("as_of_unix")}
+    return {
+        "refresh": {key: value for key, value in result.items() if key != "history"},
+        "history_as_of_unix": result["history"].get("as_of_unix"),
+        "refresh_stats": result["history"].get("refresh_stats", {}),
+    }
 
 
 @router.get("/lab/efficient-frontier")

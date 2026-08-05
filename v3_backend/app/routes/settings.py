@@ -9,6 +9,7 @@ from app.data_store import (
     after_hours_cache_age_seconds,
     load_json,
     demo_mode,
+    public_demo_mode,
     set_demo_mode,
 )
 from app.lab import history_cache_age_seconds
@@ -25,8 +26,10 @@ router = APIRouter(tags=["pages"])
 @router.get("/settings")
 def settings_page(request: Request):
     demo_on = demo_mode()
+    public_demo_on = public_demo_mode()
     if demo_on:
-        fmp_set = finnhub_set = fred_set = massive_set = t212_set = t212_second_set = False
+        fmp_set = finnhub_set = fred_set = massive_set = False
+        t212_set = t212_secret_set = t212_second_set = t212_second_secret_set = False
         plaid_client_set = plaid_secret_set = False
         ai_provider = AI_DEFAULT
     else:
@@ -36,22 +39,39 @@ def settings_page(request: Request):
         massive_set = secret_value("MASSIVE_API_KEY") is not None
         t212_set = secret_value("TRADING212_API_KEY") is not None
         t212_second_set = secret_value("TRADING212_API_KEY_2") is not None
+        t212_secret_set = secret_value("TRADING212_API_SECRET") is not None
+        t212_second_secret_set = secret_value("TRADING212_API_SECRET_2") is not None
         plaid_client_set = secret_value("PLAID_CLIENT_ID") is not None
         plaid_secret_set = secret_value("PLAID_SECRET") is not None
         ai_provider = (secret_value("AI_PROVIDER") or AI_DEFAULT).strip().lower()
     if ai_provider not in AI_PROVIDERS:
         ai_provider = AI_DEFAULT
 
-    market_cache = live_cache_age_seconds()
-    history_cache = history_cache_age_seconds()
-    fundamentals_cache = fundamentals_cache_age_seconds()
-    after_hours_cache = after_hours_cache_age_seconds()
+    if demo_on:
+        # Demo settings must never reveal or even inspect a machine's real cache
+        # age/coverage.  Use the same synthetic snapshot shown by the pages.
+        from app.demo_data import DEMO_SNAPSHOT
 
-    # FMP coverage stats
-    fund_data = load_json(V2_DIR / "fundamentals_data.json", {"rows": []})
-    fund_tickers = len(fund_data.get("rows", []))
-    pf_data = load_json(V2_DIR / "portfolio_analysis.json", {"holdings": []})
-    usd_count = sum(1 for h in pf_data.get("holdings", []) if h.get("cost_currency") == "USD")
+        market_cache = history_cache = fundamentals_cache = after_hours_cache = None
+        fund_tickers = len(DEMO_SNAPSHOT.get("fundamentals", {}).get("rows", []))
+        usd_count = sum(
+            1
+            for holding in DEMO_SNAPSHOT.get("portfolio", {}).get("holdings", [])
+            if holding.get("cost_currency") == "USD"
+        )
+        demo_as_of = str(DEMO_SNAPSHOT.get("portfolio", {}).get("summary", {}).get("as_of") or "")[:10]
+    else:
+        market_cache = live_cache_age_seconds()
+        history_cache = history_cache_age_seconds()
+        fundamentals_cache = fundamentals_cache_age_seconds()
+        after_hours_cache = after_hours_cache_age_seconds()
+
+        # FMP coverage stats
+        fund_data = load_json(V2_DIR / "fundamentals_data.json", {"rows": []})
+        fund_tickers = len(fund_data.get("rows", []))
+        pf_data = load_json(V2_DIR / "portfolio_analysis.json", {"holdings": []})
+        usd_count = sum(1 for h in pf_data.get("holdings", []) if h.get("cost_currency") == "USD")
+        demo_as_of = ""
     
     def fmt_age(sec):
         if sec is None: return "无缓存"
@@ -129,7 +149,9 @@ def settings_page(request: Request):
         </header>
         <div class="settings-key-list">
           {key_row("TRADING212_API_KEY", "Trading 212 API Key 1", "主账户：同步持仓、平均成本和账户现金", t212_set)}
-          {key_row("TRADING212_API_KEY_2", "Trading 212 API Key 2", "第二账户（可选）：同步时自动合并两个账户", t212_second_set, border=False)}
+          {key_row("TRADING212_API_SECRET", "Trading 212 API Secret 1", "主账户 API Key 对应的 Secret", t212_secret_set)}
+          {key_row("TRADING212_API_KEY_2", "Trading 212 API Key 2", "第二账户（可选）：同步时自动合并两个账户", t212_second_set)}
+          {key_row("TRADING212_API_SECRET_2", "Trading 212 API Secret 2", "第二账户 API Key 对应的 Secret", t212_second_secret_set, border=False)}
         </div>
       </section>
       <section class="settings-credential-group" aria-labelledby="settingsCredentialMarket">
@@ -227,48 +249,27 @@ def settings_page(request: Request):
     if not demo_on:
         telegram_configured = bool(secret_value("TELEGRAM_BOT_TOKEN") and secret_value("TELEGRAM_CHAT_ID"))
     root_display = "隐藏（演示数据模式）" if demo_on else str(ROOT)
-
-    content = f"""<main class="settings-page">
-  <header class="settings-page-header">
-    <h1>设置</h1>
-    <p>管理数据源、AI 提供方、缓存和本地服务。</p>
-  </header>
-
-  <div class="settings-layout">
-    <nav class="settings-nav" aria-label="设置分类">
-      <a class="settings-nav-link is-active" href="#settings-general">常规</a>
-      <a class="settings-nav-link" href="#settings-data">数据与缓存</a>
-      <a class="settings-nav-link" href="#settings-ai">AI</a>
-      <a class="settings-nav-link" href="#settings-credentials">凭证</a>
-      <a class="settings-nav-link" href="#settings-system">系统</a>
-      <a class="settings-nav-link" href="#settings-developer">开发者</a>
-    </nav>
-
-    <div class="settings-content">
-      <section class="settings-section" id="settings-general">
-        <div class="settings-section-header">
-          <h2>常规</h2>
-          <p>控制当前工作区使用真实数据还是演示组合。</p>
-        </div>
-        <div class="settings-group">
-          <div class="settings-row">
-            <div class="settings-row-copy">
-              <strong>演示数据模式</strong>
-              <span id="demoModeState">当前：{"已开启 — 显示样例数据" if demo_on else "已关闭 — 显示真实数据"}</span>
-            </div>
-            <button class="settings-button {"settings-button-primary" if demo_on else ""}" id="demoModeBtn" data-on="{"1" if demo_on else "0"}" onclick="toggleDemoMode()">
+    if public_demo_on:
+        demo_mode_control = """<button class="settings-button" id="demoModeBtn" data-on="1" disabled aria-disabled="true">
+              公开 Demo · 只读
+            </button>"""
+    else:
+        demo_mode_control = f"""<button class="settings-button {"settings-button-primary" if demo_on else ""}" id="demoModeBtn" data-on="{"1" if demo_on else "0"}" onclick="toggleDemoMode()">
               {"关闭假数据" if demo_on else "开启假数据"}
-            </button>
-          </div>
-        </div>
-      </section>
+            </button>"""
 
-      <section class="settings-section" id="settings-data">
-        <div class="settings-section-header">
-          <h2>数据与缓存</h2>
-          <p>查看缓存状态，并在需要时单独刷新数据源。</p>
-        </div>
-        <div class="settings-group">
+    if demo_on:
+        data_cache_rows = f"""
+          <div class="settings-notice">当前使用内置 Demo 快照（截至 {demo_as_of}）。不会读取本机缓存，也不会请求外部数据源。</div>
+          <div class="settings-row settings-system-row"><div class="settings-row-copy"><strong>Demo 持仓与行情</strong><span>内置组合、历史价格和收益日历</span></div><code>{demo_as_of}</code></div>
+          <div class="settings-row settings-system-row"><div class="settings-row-copy"><strong>Demo 估值数据</strong><span>与持仓页共用同一份虚构快照</span></div><code>{fund_tickers}/{usd_count} 只美股</code></div>
+          <div class="settings-row settings-system-row"><div class="settings-row-copy"><strong>外部刷新</strong><span>演示模式禁止同步券商、行情、估值和盘后数据</span></div><code>已禁用</code></div>
+        """
+    else:
+        data_cache_rows = f"""<div class="settings-row">
+            <div class="settings-row-copy"><strong>刷新全部组合数据</strong><span>依次同步持仓、行情、历史价格和估值；任一步失败都会明确提示。</span></div>
+            <button class="settings-button settings-button-primary" onclick="triggerRefresh('all')">一键刷新</button>
+          </div>
           <div class="settings-row">
             <div class="settings-row-copy"><strong>Trading 212 持仓</strong><span>重新拉取持仓与平均成本，并验证 API 凭证。</span></div>
             <button class="settings-button" onclick="triggerRefresh('trading212')">立即同步</button>
@@ -284,7 +285,50 @@ def settings_page(request: Request):
           <div class="settings-row">
             <div class="settings-row-copy"><strong>Massive 盘后异动</strong><span>当前缓存： {fmt_age(after_hours_cache)} · 每 15 分钟过期</span></div>
             <button class="settings-button" onclick="triggerRefresh('after-hours')">刷新盘后</button>
+          </div>"""
+
+    content = f"""<main class="settings-page">
+  <header class="settings-page-header">
+    <h1>设置</h1>
+    <p>管理数据源、AI 提供方、缓存和本地服务。</p>
+  </header>
+
+  <div class="settings-layout">
+    <div class="settings-nav-rail">
+      <nav class="settings-nav" aria-label="设置分类">
+        <a class="settings-nav-link is-active" href="#settings-general">常规</a>
+        <a class="settings-nav-link" href="#settings-data">数据与缓存</a>
+        <a class="settings-nav-link" href="#settings-ai">AI</a>
+        <a class="settings-nav-link" href="#settings-credentials">凭证</a>
+        <a class="settings-nav-link" href="#settings-system">系统</a>
+        <a class="settings-nav-link" href="#settings-developer">开发者</a>
+      </nav>
+    </div>
+
+    <div class="settings-content">
+      <section class="settings-section" id="settings-general">
+        <div class="settings-section-header">
+          <h2>常规</h2>
+          <p>控制当前工作区使用真实数据还是演示组合。</p>
+        </div>
+        <div class="settings-group">
+          <div class="settings-row">
+            <div class="settings-row-copy">
+              <strong>演示数据模式</strong>
+              <span id="demoModeState">当前：{"已开启 — 显示样例数据" if demo_on else "已关闭 — 显示真实数据"}</span>
+            </div>
+            {demo_mode_control}
           </div>
+        </div>
+      </section>
+
+      <section class="settings-section" id="settings-data">
+        <div class="settings-section-header">
+          <h2>数据与缓存</h2>
+          <p>查看缓存状态，并在需要时单独刷新数据源。</p>
+        </div>
+        <div class="settings-group">
+          {data_cache_rows}
         </div>
         <div id="settingsStatus" class="settings-action-status" aria-live="polite"></div>
       </section>
@@ -369,7 +413,9 @@ def settings_page(request: Request):
 
 
 _ALLOWED_KEYS = {
-    "TRADING212_API_KEY", "TRADING212_API_KEY_2", "FMP_API_KEY", "FINNHUB_API_KEY",
+    "TRADING212_API_KEY", "TRADING212_API_SECRET",
+    "TRADING212_API_KEY_2", "TRADING212_API_SECRET_2",
+    "FMP_API_KEY", "FINNHUB_API_KEY",
     "MASSIVE_API_KEY", "FRED_API_KEY",
     "PLAID_CLIENT_ID", "PLAID_SECRET",
     "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",

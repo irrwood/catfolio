@@ -3,13 +3,17 @@
 }
 
 .page-settings .settings-page {
+  display: grid;
+  grid-template-columns: 176px minmax(0, 760px);
+  column-gap: 44px;
   width: min(1040px, 100%);
   margin: 0 auto;
   color: var(--ink);
 }
 
 .page-settings .settings-page-header {
-  margin-left: 220px;
+  grid-column: 2;
+  grid-row: 1;
   margin-bottom: 28px;
 }
 
@@ -30,15 +34,18 @@
 }
 
 .page-settings .settings-layout {
-  display: grid;
-  grid-template-columns: 176px minmax(0, 760px);
-  gap: 44px;
-  align-items: start;
+  display: contents;
+}
+
+.page-settings .settings-nav-rail {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  min-height: 100%;
 }
 
 .page-settings .settings-nav {
   position: sticky;
-  top: 24px;
+  top: 20px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -78,6 +85,8 @@
 }
 
 .page-settings .settings-content {
+  grid-column: 2;
+  grid-row: 2;
   min-width: 0;
 }
 
@@ -501,13 +510,26 @@
 }
 
 @media (max-width: 1100px) {
+  .page-settings .settings-page {
+    display: block;
+  }
+
   .page-settings .settings-layout {
+    display: grid;
     grid-template-columns: 1fr;
     gap: 22px;
   }
 
   .page-settings .settings-page-header {
     margin-left: 0;
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .page-settings .settings-nav-rail {
+    grid-column: auto;
+    grid-row: auto;
+    min-height: 0;
   }
 
   .page-settings .settings-nav {

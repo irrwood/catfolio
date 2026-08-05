@@ -50,11 +50,11 @@ _BODY = r"""
       <div class="portfolio-chart-head">
         <div>
           <h2 id="costValueTitle">成本与市值对比</h2>
-          <p>净投入成本与当前总市值（USD）</p>
+          <p>当前股票持仓的成本与历史市值（USD，不含账户现金）</p>
         </div>
       </div>
       <div class="portfolio-chart-body">
-        <div id="costValueChart" class="portfolio-value-chart" role="img" aria-label="净投入成本与当前总市值折线图"></div>
+        <div id="costValueChart" class="portfolio-value-chart" role="img" aria-label="股票持仓成本与历史市值曲线，不含账户现金"></div>
         <div class="portfolio-ranges" role="group" aria-label="图表时间范围">
           <button type="button" data-range="1d" aria-pressed="false">1D</button>
           <button type="button" data-range="1w">1W</button>
@@ -64,10 +64,6 @@ _BODY = r"""
           <button type="button" data-range="1y">1Y</button>
           <button type="button" data-range="max">MAX</button>
         </div>
-      </div>
-      <div class="portfolio-chart-legend" aria-label="图表图例">
-        <span><i class="market"></i>当前总市值</span>
-        <span><i class="cost"></i>净投入成本</span>
       </div>
     </section>
 
