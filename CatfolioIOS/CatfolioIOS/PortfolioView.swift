@@ -297,7 +297,7 @@ private struct PortfolioDetailsCard: View {
 
     private var holdingsTable: some View {
         LazyVStack(spacing: 0) {
-            ForEach(Array(holdings.enumerated()), id: \.element.id) { index, holding in
+            ForEach(holdings) { holding in
                 Button {
                     onSelect(holding)
                 } label: {
@@ -305,10 +305,6 @@ private struct PortfolioDetailsCard: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint("打开成交量分析")
-
-                if index < holdings.count - 1 {
-                    Divider().padding(.leading, 54)
-                }
             }
         }
     }
@@ -366,14 +362,9 @@ private struct PortfolioDetailsCard: View {
             }
             .padding(.vertical, 8)
 
-            Divider()
-
             LazyVStack(spacing: 0) {
-                ForEach(Array(response.rows.enumerated()), id: \.element.id) { index, row in
+                ForEach(response.rows) { row in
                     ETFExposureRow(row: row)
-                    if index < response.rows.count - 1 {
-                        Divider().padding(.leading, 46)
-                    }
                 }
             }
         }
