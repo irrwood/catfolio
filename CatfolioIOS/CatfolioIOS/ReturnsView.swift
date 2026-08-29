@@ -12,6 +12,13 @@ struct ReturnsView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 12) {
+                    HStack {
+                        Spacer()
+                        GlassChoiceBar(choices: benchmarkChoices, selection: $benchmark)
+                        Spacer()
+                    }
+                    .padding(.bottom, 2)
+
                     if let comparison = model.comparison {
                         ReturnsSummary(comparison: comparison, benchmark: benchmark)
                         ReturnsChart(comparison: comparison, benchmark: benchmark, selectedDate: $selectedDate)
@@ -26,7 +33,8 @@ struct ReturnsView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 24)
+                .padding(.top, 8)
+                .padding(.bottom, 88)
             }
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("收益对比")
@@ -43,14 +51,6 @@ struct ReturnsView: View {
                         }
                     }
                 }
-            }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                HStack {
-                    Spacer()
-                    GlassChoiceBar(choices: benchmarkChoices, selection: $benchmark)
-                    Spacer()
-                }
-                .padding(.vertical, 8)
             }
             .refreshable { await model.refreshReturns() }
             .task {
@@ -174,7 +174,7 @@ private struct ReturnsChart: View {
                     systemImage: "chart.xyaxis.line",
                     description: Text("请先同步一次持仓，然后点右上角刷新。")
                 )
-                .frame(height: 330)
+                .frame(height: 280)
             } else {
                 Chart(points) { point in
                     LineMark(x: .value("日期", point.date), y: .value("组合", point.portfolio))
@@ -224,11 +224,10 @@ private struct ReturnsChart: View {
                         Rectangle()
                             .fill(.clear)
                             .contentShape(Rectangle())
-                            .gesture(
-                                LongPressGesture(minimumDuration: 0.12)
-                                    .sequenced(before: DragGesture(minimumDistance: 0))
-                                    .onChanged { value in
-                                        guard case let .second(true, drag?) = value,
+                            .simultaneousGesture(
+                                DragGesture(minimumDistance: 8)
+                                    .onChanged { drag in
+                                        guard abs(drag.translation.width) > abs(drag.translation.height),
                                               let plotFrame = proxy.plotFrame else { return }
                                         let frame = geometry[plotFrame]
                                         let x = min(max(drag.location.x - frame.origin.x, 0), frame.width)
@@ -237,8 +236,8 @@ private struct ReturnsChart: View {
                             )
                     }
                 }
-                .frame(height: 330)
-                .accessibilityLabel("组合与 \(benchmark) 的收益对比图，按住后左右拖动查看")
+                .frame(height: 290)
+                .accessibilityLabel("组合与 \(benchmark) 的收益对比图，横向拖动查看")
             }
 
             Text("只有一个同步快照时，会按当前持仓回溯近一年行情；后续同步将优先使用手机保存的真实快照。")
