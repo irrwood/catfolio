@@ -87,6 +87,18 @@ private struct CostMarketCard: View {
         return rows.min { abs($0.date.timeIntervalSince(selectedDate)) < abs($1.date.timeIntervalSince(selectedDate)) }
     }
 
+    private var displayedMarketValue: Double {
+        selectedPoint?.marketValue ?? overview.summary.marketValue
+    }
+
+    private var displayedCost: Double {
+        selectedPoint?.cost ?? overview.summary.totalCost
+    }
+
+    private var displayedProfit: Double {
+        displayedMarketValue - displayedCost
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .top) {
@@ -109,9 +121,14 @@ private struct CostMarketCard: View {
                 }
             }
 
-            HStack(spacing: 20) {
-                ChartLegend(color: CatfolioStyle.green, title: "市值", value: DisplayFormat.money(selectedPoint?.marketValue ?? overview.summary.marketValue))
-                ChartLegend(color: CatfolioStyle.blue, title: "成本", value: DisplayFormat.money(selectedPoint?.cost ?? overview.summary.totalCost))
+            HStack(spacing: 12) {
+                ChartLegend(color: CatfolioStyle.green, title: "市值", value: DisplayFormat.money(displayedMarketValue))
+                ChartLegend(color: CatfolioStyle.blue, title: "成本", value: DisplayFormat.money(displayedCost))
+                ChartLegend(
+                    color: displayedProfit >= 0 ? CatfolioStyle.green : CatfolioStyle.red,
+                    title: "盈利",
+                    value: DisplayFormat.money(displayedProfit, signed: true)
+                )
             }
 
             Chart(rows) { row in
@@ -224,7 +241,10 @@ private struct ChartLegend: View {
             .font(.caption.weight(.semibold))
             Text(value)
                 .font(.subheadline.weight(.bold).monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
