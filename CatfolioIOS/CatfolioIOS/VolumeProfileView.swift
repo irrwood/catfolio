@@ -24,13 +24,13 @@ struct VolumeProfileView: View {
                         }
                         .padding(16)
                     }
+                    .background(Color(uiColor: .systemGroupedBackground))
                 } else if let errorMessage {
                     ContentUnavailableView("暂无成交量分析", systemImage: "chart.bar.xaxis", description: Text(errorMessage))
                 } else {
                     ProgressView("正在读取成交量数据")
                 }
             }
-            .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("\(holding.ticker) 成交量")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
