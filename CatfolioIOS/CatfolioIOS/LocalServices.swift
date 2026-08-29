@@ -121,36 +121,126 @@ struct LocalMarketDataClient {
             throw LocalPortfolioError.noPortfolio
         }
         let end = DayDateFormatter.shared.string(from: Date())
-        let start = document.snapshots.first?.date ?? end
-        async let spy = historicalCloses(symbol: "SPY", from: start, to: end)
-        async let qqq = historicalCloses(symbol: "QQQ", from: start, to: end)
-        async let vti = historicalCloses(symbol: "VTI", from: start, to: end)
-        async let gld = historicalCloses(symbol: "GLD", from: start, to: end)
-        let histories = try await ["SPY": spy, "QQQ": qqq, "VTI": vti, "GLD": gld]
+        let oneYearAgo = Calendar.current.date(byAdding: .year, value: -1, to: Date()) ?? Date()
+        let lookbackStart = DayDateFormatter.shared.string(from: oneYearAgo)
+        let start = min(document.snapshots.first?.date ?? end, lookbackStart)
+        let benchmarkSymbols = ["SPY", "QQQ", "VTI", "GLD"]
+        let positionSymbols = document.snapshots.count > 1
+            ? []
+            : document.positions
+                .sorted { $0.shares * $0.quotePrice > $1.shares * $1.quotePrice }
+                .prefix(8)
+                .map(\.ticker)
+        let histories = await historicalCloses(
+            symbols: Array(Set(benchmarkSymbols + positionSymbols)),
+            from: start,
+            to: end
+        )
+
+        let useRecordedSnapshots = document.snapshots.count > 1
+        let dates: [String]
+        let portfolio: [Double?]
+        if useRecordedSnapshots {
+            dates = document.snapshots.map(\.date)
+            portfolio = document.snapshots.map { Optional($0.marketValueUSD) }
+        } else {
+            dates = comparisonDates(from: histories, preferredSymbols: benchmarkSymbols + positionSymbols)
+            portfolio = historicalPortfolioValues(
+                document: document,
+                histories: histories,
+                dates: dates
+            ).map(Optional.some)
+        }
+
+        guard let firstPortfolioValue = portfolio.compactMap({ $0 }).first, firstPortfolioValue > 0 else {
+            throw LocalPortfolioError.noPortfolio
+        }
+
         var series: [String: [Double?]] = [:]
-        var returns = Dictionary(uniqueKeysWithValues: histories.keys.map { ($0, Optional<Double>.none) })
-        for (symbol, history) in histories {
-            let values = document.snapshots.map { snapshot in Self.close(onOrBefore: snapshot.date, in: history) }
+        var returns = Dictionary(uniqueKeysWithValues: benchmarkSymbols.map { ($0, Optional<Double>.none) })
+        for symbol in benchmarkSymbols {
+            let history = histories[symbol] ?? [:]
+            let values = dates.map { Self.close(onOrBefore: $0, in: history) }
             guard let initial = values.compactMap({ $0 }).first, initial > 0 else {
-                series[symbol] = document.snapshots.map { _ in nil }
+                series[symbol] = dates.map { _ in nil }
                 continue
             }
-            series[symbol] = values.map { $0.map { first.marketValueUSD * $0 / initial } }
+            series[symbol] = values.map { $0.map { firstPortfolioValue * $0 / initial } }
             if let final = values.compactMap({ $0 }).last {
                 returns[symbol] = final / initial - 1
             }
         }
         return ComparisonResponse(
             available: true,
-            dates: document.snapshots.map(\.date),
-            portfolio: document.snapshots.map { Optional($0.marketValueUSD) },
+            dates: dates,
+            portfolio: portfolio,
             benchmarks: series,
             summary: ComparisonSummary(
-                portfolioReturn: document.snapshots.last.map { $0.marketValueUSD / first.marketValueUSD - 1 },
+                portfolioReturn: portfolio.compactMap({ $0 }).last.map { $0 / firstPortfolioValue - 1 },
                 benchmarkReturn: returns["SPY"] ?? nil,
                 benchmarkReturns: returns
             )
         )
+    }
+
+    private func historicalCloses(
+        symbols: [String],
+        from: String,
+        to: String
+    ) async -> [String: [String: Double]] {
+        await withTaskGroup(of: (String, [String: Double]?).self) { group in
+            for symbol in symbols {
+                group.addTask {
+                    (symbol, try? await historicalCloses(symbol: symbol, from: from, to: to))
+                }
+            }
+
+            var result: [String: [String: Double]] = [:]
+            for await (symbol, history) in group {
+                if let history, !history.isEmpty {
+                    result[symbol] = history
+                }
+            }
+            return result
+        }
+    }
+
+    private func comparisonDates(
+        from histories: [String: [String: Double]],
+        preferredSymbols: [String]
+    ) -> [String] {
+        for symbol in preferredSymbols {
+            if let history = histories[symbol], history.count > 1 {
+                return history.keys.sorted()
+            }
+        }
+        return histories.values.flatMap(\.keys).sorted().uniqued()
+    }
+
+    private func historicalPortfolioValues(
+        document: LocalPortfolioDocument,
+        histories: [String: [String: Double]],
+        dates: [String]
+    ) -> [Double] {
+        let currentValues = document.positions.map { position -> (LocalPositionRecord, Double) in
+            let localValue = position.shares * position.quotePrice
+            let value = (try? LocalPortfolioEngine.usd(localValue, currency: position.quoteCurrency)) ?? 0
+            return (position, value)
+        }
+
+        return dates.map { date in
+            currentValues.reduce(0) { total, item in
+                let (position, currentValue) = item
+                guard currentValue > 0,
+                      let history = histories[position.ticker],
+                      let latestDate = history.keys.max(),
+                      let latestClose = history[latestDate], latestClose > 0,
+                      let close = Self.close(onOrBefore: date, in: history) else {
+                    return total + currentValue
+                }
+                return total + currentValue * close / latestClose
+            }
+        }
     }
 
     private func historicalCloses(symbol: String, from: String, to: String) async throws -> [String: Double] {
@@ -188,6 +278,13 @@ struct LocalMarketDataClient {
             ?? object["error"] as? String
             ?? object["message"] as? String
             ?? fallback
+    }
+}
+
+private extension Array where Element: Hashable {
+    func uniqued() -> [Element] {
+        var seen = Set<Element>()
+        return filter { seen.insert($0).inserted }
     }
 }
 

@@ -32,8 +32,15 @@ struct ReturnsView: View {
             .navigationTitle("收益对比")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    GlassIconButton(systemImage: "arrow.clockwise", accessibilityLabel: "刷新收益") {
-                        Task { await model.refreshReturns() }
+                    if model.isReturnsLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(width: 36, height: 36)
+                            .accessibilityLabel("正在刷新收益")
+                    } else {
+                        GlassIconButton(systemImage: "arrow.clockwise", accessibilityLabel: "刷新收益") {
+                            Task { await model.refreshReturns() }
+                        }
                     }
                 }
             }
@@ -91,7 +98,7 @@ private struct ReturnMetric: View {
             .font(.caption.weight(.semibold))
             Text(DisplayFormat.ratioPercent(value))
                 .font(.title2.weight(.bold).monospacedDigit())
-                .foregroundStyle((value ?? 0) >= 0 ? CatfolioStyle.green : CatfolioStyle.red)
+                .foregroundStyle(value.map { $0 >= 0 ? CatfolioStyle.green : CatfolioStyle.red } ?? Color.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -123,6 +130,15 @@ private struct ReturnsChart: View {
         return points.min { abs($0.date.timeIntervalSince(selectedDate)) < abs($1.date.timeIntervalSince(selectedDate)) }
     }
 
+    private var yDomain: ClosedRange<Double> {
+        let values = points.flatMap { point in
+            [Optional(point.portfolio), point.benchmark].compactMap { $0 }
+        }
+        guard let minimum = values.min(), let maximum = values.max() else { return 0...1 }
+        let padding = max((maximum - minimum) * 0.12, maximum * 0.02, 1)
+        return max(0, minimum - padding)...(maximum + padding)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top) {
@@ -148,70 +164,84 @@ private struct ReturnsChart: View {
                 }
             }
 
-            Chart(points) { point in
-                LineMark(x: .value("日期", point.date), y: .value("组合", point.portfolio))
-                    .foregroundStyle(by: .value("系列", "组合"))
-                    .interpolationMethod(.linear)
-                if let benchmarkValue = point.benchmark {
-                    LineMark(x: .value("日期", point.date), y: .value(benchmark, benchmarkValue))
-                        .foregroundStyle(by: .value("系列", benchmark))
-                        .interpolationMethod(.linear)
-                }
+            if !points.isEmpty, points.allSatisfy({ $0.benchmark == nil }) {
+                StatusNotice(text: "暂时没有读取到 \(benchmark) 行情，组合曲线仍可正常查看。", kind: .info)
+            }
 
-                if selectedPoint?.id == point.id {
-                    RuleMark(x: .value("选择日期", point.date))
-                        .foregroundStyle(Color.secondary.opacity(0.4))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                    PointMark(x: .value("日期", point.date), y: .value("组合", point.portfolio))
-                        .foregroundStyle(CatfolioStyle.green)
-                        .symbolSize(48)
+            if points.isEmpty {
+                ContentUnavailableView(
+                    "暂无可绘制数据",
+                    systemImage: "chart.xyaxis.line",
+                    description: Text("请先同步一次持仓，然后点右上角刷新。")
+                )
+                .frame(height: 330)
+            } else {
+                Chart(points) { point in
+                    LineMark(x: .value("日期", point.date), y: .value("组合", point.portfolio))
+                        .foregroundStyle(by: .value("系列", "组合"))
+                        .interpolationMethod(.linear)
                     if let benchmarkValue = point.benchmark {
-                        PointMark(x: .value("日期", point.date), y: .value(benchmark, benchmarkValue))
-                            .foregroundStyle(CatfolioStyle.blue)
-                            .symbolSize(48)
+                        LineMark(x: .value("日期", point.date), y: .value(benchmark, benchmarkValue))
+                            .foregroundStyle(by: .value("系列", benchmark))
+                            .interpolationMethod(.linear)
                     }
-                }
-            }
-            .chartForegroundStyleScale(["组合": CatfolioStyle.green, benchmark: CatfolioStyle.blue])
-            .chartLegend(.hidden)
-            .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 4)) { _ in
-                    AxisGridLine().foregroundStyle(.clear)
-                    AxisValueLabel(format: .dateTime.year())
-                }
-            }
-            .chartYAxis {
-                AxisMarks(position: .trailing, values: .automatic(desiredCount: 5)) { value in
-                    AxisGridLine().foregroundStyle(Color.secondary.opacity(0.12))
-                    AxisValueLabel {
-                        if let amount = value.as(Double.self) {
-                            Text(amount, format: .number.notation(.compactName))
+
+                    if selectedPoint?.id == point.id {
+                        RuleMark(x: .value("选择日期", point.date))
+                            .foregroundStyle(Color.secondary.opacity(0.4))
+                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                        PointMark(x: .value("日期", point.date), y: .value("组合", point.portfolio))
+                            .foregroundStyle(CatfolioStyle.green)
+                            .symbolSize(48)
+                        if let benchmarkValue = point.benchmark {
+                            PointMark(x: .value("日期", point.date), y: .value(benchmark, benchmarkValue))
+                                .foregroundStyle(CatfolioStyle.blue)
+                                .symbolSize(48)
                         }
                     }
                 }
-            }
-            .chartOverlay { proxy in
-                GeometryReader { geometry in
-                    Rectangle()
-                        .fill(.clear)
-                        .contentShape(Rectangle())
-                        .gesture(
-                            LongPressGesture(minimumDuration: 0.12)
-                                .sequenced(before: DragGesture(minimumDistance: 0))
-                                .onChanged { value in
-                                    guard case let .second(true, drag?) = value,
-                                          let plotFrame = proxy.plotFrame else { return }
-                                    let frame = geometry[plotFrame]
-                                    let x = min(max(drag.location.x - frame.origin.x, 0), frame.width)
-                                    selectedDate = proxy.value(atX: x, as: Date.self)
-                                }
-                        )
+                .chartForegroundStyleScale(["组合": CatfolioStyle.green, benchmark: CatfolioStyle.blue])
+                .chartYScale(domain: yDomain)
+                .chartLegend(.hidden)
+                .chartXAxis {
+                    AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                        AxisGridLine().foregroundStyle(.clear)
+                        AxisValueLabel(format: .dateTime.month().day())
+                    }
                 }
+                .chartYAxis {
+                    AxisMarks(position: .trailing, values: .automatic(desiredCount: 5)) { value in
+                        AxisGridLine().foregroundStyle(Color.secondary.opacity(0.12))
+                        AxisValueLabel {
+                            if let amount = value.as(Double.self) {
+                                Text(amount, format: .number.notation(.compactName))
+                            }
+                        }
+                    }
+                }
+                .chartOverlay { proxy in
+                    GeometryReader { geometry in
+                        Rectangle()
+                            .fill(.clear)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                LongPressGesture(minimumDuration: 0.12)
+                                    .sequenced(before: DragGesture(minimumDistance: 0))
+                                    .onChanged { value in
+                                        guard case let .second(true, drag?) = value,
+                                              let plotFrame = proxy.plotFrame else { return }
+                                        let frame = geometry[plotFrame]
+                                        let x = min(max(drag.location.x - frame.origin.x, 0), frame.width)
+                                        selectedDate = proxy.value(atX: x, as: Date.self)
+                                    }
+                            )
+                    }
+                }
+                .frame(height: 330)
+                .accessibilityLabel("组合与 \(benchmark) 的收益对比图，按住后左右拖动查看")
             }
-            .frame(height: 330)
-            .accessibilityLabel("组合与 \(benchmark) 的收益对比图，按住后左右拖动查看")
 
-            Text("组合收益从首次在手机同步开始按日记录。基准行情尚未配置时会显示为暂无。")
+            Text("只有一个同步快照时，会按当前持仓回溯近一年行情；后续同步将优先使用手机保存的真实快照。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
