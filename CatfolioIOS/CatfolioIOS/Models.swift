@@ -247,6 +247,37 @@ struct SaveSettingResponse: Decodable {
     let error: String?
 }
 
+struct CSVImportResult: Decodable {
+    let ok: Bool
+    let holdingsCount: Int
+    let transactionsCount: Int?
+    let backupCreated: Bool?
+    let warnings: [String]
+    let holdings: [CSVImportedHolding]?
+
+    enum CodingKeys: String, CodingKey {
+        case ok, warnings, holdings
+        case holdingsCount = "holdings_count"
+        case transactionsCount = "transactions_count"
+        case backupCreated = "backup_created"
+    }
+}
+
+struct CSVImportedHolding: Decodable, Identifiable {
+    let ticker: String
+    let name: String
+    let shares: Double
+    let averageCost: Double
+    let currency: String
+
+    var id: String { ticker }
+
+    enum CodingKeys: String, CodingKey {
+        case ticker, name, shares, currency
+        case averageCost = "avg_cost"
+    }
+}
+
 enum ETFLookThroughBasis: String, CaseIterable, Identifiable {
     case market
     case cost

@@ -42,10 +42,45 @@ struct APIClient {
 
     func post<T: Decodable>(_ path: String, json: [String: String]) async throws -> T {
         let data = try JSONSerialization.data(withJSONObject: json)
-        return try await request(path: path, method: "POST", body: data, queryItems: nil)
+        return try await request(
+            path: path,
+            method: "POST",
+            body: data,
+            queryItems: nil,
+            contentType: "application/json"
+        )
     }
 
-    private func request<T: Decodable>(path: String, method: String, body: Data?, queryItems: [URLQueryItem]?) async throws -> T {
+    func uploadCSV(_ data: Data, filename: String) async throws -> CSVImportResult {
+        let boundary = "CatfolioBoundary-\(UUID().uuidString)"
+        let safeFilename = filename
+            .replacingOccurrences(of: "\"", with: "")
+            .replacingOccurrences(of: "\r", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+        var body = Data()
+        body.append(Data("--\(boundary)\r\n".utf8))
+        body.append(Data("Content-Disposition: form-data; name=\"file\"; filename=\"\(safeFilename)\"\r\n".utf8))
+        body.append(Data("Content-Type: text/csv\r\n\r\n".utf8))
+        body.append(data)
+        body.append(Data("\r\n--\(boundary)--\r\n".utf8))
+        return try await request(
+            path: "/api/import-csv",
+            method: "POST",
+            body: body,
+            queryItems: nil,
+            contentType: "multipart/form-data; boundary=\(boundary)",
+            timeoutInterval: 60
+        )
+    }
+
+    private func request<T: Decodable>(
+        path: String,
+        method: String,
+        body: Data?,
+        queryItems: [URLQueryItem]?,
+        contentType: String? = nil,
+        timeoutInterval: TimeInterval = 20
+    ) async throws -> T {
         let cleanPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let endpoint = baseURL.appendingPathComponent(cleanPath)
         var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
@@ -56,10 +91,10 @@ struct APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = body
-        request.timeoutInterval = 20
+        request.timeoutInterval = timeoutInterval
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if body != nil {
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let contentType {
+            request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         }
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -87,6 +122,9 @@ struct APIClient {
             return detail["message"] as? String
                 ?? detail["error"] as? String
                 ?? HTTPURLResponse.localizedString(forStatusCode: statusCode)
+        }
+        if let warnings = payload["warnings"] as? [String], !warnings.isEmpty {
+            return warnings.joined(separator: "；")
         }
         return payload["message"] as? String
             ?? payload["error"] as? String
@@ -245,5 +283,15 @@ final class AppModel: ObservableObject {
     func loadETFLookThrough(basis: ETFLookThroughBasis) async throws -> ETFLookThroughResponse {
         let client = try APIClient(serverURL: serverURL)
         return try await client.get("/api/etf-lookthrough", query: ["basis": basis.rawValue])
+    }
+
+    func importCSV(_ data: Data, filename: String) async throws -> CSVImportResult {
+        let client = try APIClient(serverURL: serverURL)
+        let result = try await client.uploadCSV(data, filename: filename)
+        guard result.ok else {
+            throw CatfolioAPIError.server(400, result.warnings.joined(separator: "；"))
+        }
+        await refreshPortfolio()
+        return result
     }
 }

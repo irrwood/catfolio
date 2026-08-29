@@ -4,6 +4,7 @@ struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
     @AppStorage("catfolio.haptics") private var hapticsEnabled = true
     @State private var selectedBroker: BrokerProvider = .trading212
+    @State private var showsCSVImport = false
 
     var body: some View {
         NavigationStack {
@@ -62,6 +63,18 @@ struct SettingsView: View {
                     LabeledContent("数据货币", value: "USD")
                 }
 
+                Section("CSV 导入") {
+                    Button {
+                        showsCSVImport = true
+                    } label: {
+                        Label("导入交易记录", systemImage: "doc.badge.plus")
+                    }
+
+                    Text("支持任意券商交易 CSV，按加权平均成本重新计算当前持仓。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section("服务端设置") {
                     Text("AI Key、券商连接和数据导入继续由 Catfolio 服务端管理。")
                         .font(.footnote)
@@ -84,6 +97,9 @@ struct SettingsView: View {
             .task {
                 await model.loadBrokerStatus()
                 selectedBroker = model.activeBroker ?? .trading212
+                if ProcessInfo.processInfo.arguments.contains("--show-csv") {
+                    showsCSVImport = true
+                }
             }
             .onChange(of: selectedBroker) { _, provider in
                 guard provider != model.activeBroker else { return }
@@ -91,6 +107,12 @@ struct SettingsView: View {
                     await model.selectBroker(provider)
                     selectedBroker = model.activeBroker ?? .trading212
                 }
+            }
+            .sheet(isPresented: $showsCSVImport) {
+                CSVImportView()
+                    .environmentObject(model)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
         }
     }

@@ -19,6 +19,7 @@ portfolio_analysis.json and trading212_data.json so every page picks it up.
 import csv
 import io
 import json
+import shutil
 import time
 from datetime import datetime
 from pathlib import Path
@@ -217,6 +218,14 @@ def process_csv_upload(csv_text: str, v2_dir: Path) -> dict:
     pf_path = v2_dir / "portfolio_analysis.json"
     t212_path = v2_dir / "trading212_data.json"
 
+    existing_paths = [path for path in (pf_path, t212_path) if path.exists()]
+    backup_created = bool(existing_paths)
+    if backup_created:
+        backup_dir = v2_dir / "csv_import_backups" / datetime.now().strftime("%Y%m%dT%H%M%S%f")
+        backup_dir.mkdir(parents=True, exist_ok=False)
+        for path in existing_paths:
+            shutil.copy2(path, backup_dir / path.name)
+
     pf_path.write_text(json.dumps(holdings_to_portfolio_json(holdings), ensure_ascii=False, indent=2), encoding="utf-8")
     t212_path.write_text(json.dumps(holdings_to_trading212_json(holdings), ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -228,6 +237,7 @@ def process_csv_upload(csv_text: str, v2_dir: Path) -> dict:
         "ok": True,
         "holdings_count": len(holdings),
         "transactions_count": len(transactions),
+        "backup_created": backup_created,
         "warnings": parse_warnings,
         "holdings": [{"ticker": h["ticker"], "name": h["name"], "shares": round(h["shares"], 4),
                       "avg_cost": round(h["avg_cost_native"], 2), "currency": h["currency"]}

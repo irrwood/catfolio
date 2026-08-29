@@ -2,12 +2,15 @@
 from fastapi import APIRouter, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse
 from app.components import render_layout
+from app.data_store import demo_mode
 from app.i18n import get_lang
 from app.settings import V2_DIR
 from app.csv_import import process_csv_upload
 import json
 
 router = APIRouter(tags=["pages"])
+
+_MAX_CSV_BYTES = 5 * 1024 * 1024
 
 _SAMPLE_CSV = """\
 Date,Action,Ticker,Quantity,Price,Currency,Name
@@ -144,11 +147,30 @@ def import_page(request: Request):
 
 @router.post("/api/import-csv")
 async def import_csv_api(file: UploadFile = File(...)):
+    if demo_mode():
+        return JSONResponse(
+            {"ok": False, "warnings": ["Demo 模式不允许写入持仓数据。"], "holdings_count": 0},
+            status_code=403,
+        )
+    filename = str(file.filename or "").strip()
+    if not filename.lower().endswith(".csv"):
+        return JSONResponse(
+            {"ok": False, "warnings": ["请选择扩展名为 .csv 的文件。"], "holdings_count": 0},
+            status_code=400,
+        )
     try:
-        raw = await file.read()
+        raw = await file.read(_MAX_CSV_BYTES + 1)
+        if len(raw) > _MAX_CSV_BYTES:
+            return JSONResponse(
+                {"ok": False, "warnings": ["CSV 文件不能超过 5 MB。"], "holdings_count": 0},
+                status_code=413,
+            )
         text = raw.decode("utf-8-sig")  # utf-8-sig strips BOM from Excel exports
     except Exception as exc:
-        return JSONResponse({"ok": False, "warnings": [f"Could not read file: {exc}"]})
+        return JSONResponse(
+            {"ok": False, "warnings": [f"Could not read file: {exc}"], "holdings_count": 0},
+            status_code=400,
+        )
 
     result = process_csv_upload(text, V2_DIR)
-    return JSONResponse(result)
+    return JSONResponse(result, status_code=200 if result.get("ok") else 400)
