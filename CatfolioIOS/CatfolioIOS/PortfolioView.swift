@@ -63,7 +63,9 @@ private struct CostMarketCard: View {
     private let choices = ["1M", "3M", "YTD", "1Y", "全部"]
 
     private var rows: [ChartPoint] {
-        let source = response.positionHistory.rows
+        let source = response.positionHistory.rows.isEmpty
+            ? [response.currentPoint]
+            : response.positionHistory.rows
         guard let last = source.last?.date else { return [] }
         switch range {
         case "1M":
@@ -113,14 +115,31 @@ private struct CostMarketCard: View {
             }
 
             Chart(rows) { row in
-                LineMark(x: .value("日期", row.date), y: .value("市值", row.marketValue))
-                    .foregroundStyle(by: .value("系列", "市值"))
-                    .interpolationMethod(.catmullRom)
-                LineMark(x: .value("日期", row.date), y: .value("成本", row.cost))
-                    .foregroundStyle(by: .value("系列", "成本"))
-                    .interpolationMethod(.catmullRom)
+                if rows.count > 1 {
+                    LineMark(x: .value("日期", row.date), y: .value("市值", row.marketValue))
+                        .foregroundStyle(by: .value("系列", "市值"))
+                        .lineStyle(StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
+                        .interpolationMethod(.catmullRom)
+                    LineMark(x: .value("日期", row.date), y: .value("成本", row.cost))
+                        .foregroundStyle(by: .value("系列", "成本"))
+                        .lineStyle(StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
+                        .interpolationMethod(.catmullRom)
+                } else {
+                    RuleMark(y: .value("市值", row.marketValue))
+                        .foregroundStyle(CatfolioStyle.green)
+                        .lineStyle(StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                    RuleMark(y: .value("成本", row.cost))
+                        .foregroundStyle(CatfolioStyle.blue)
+                        .lineStyle(StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                    PointMark(x: .value("日期", row.date), y: .value("市值", row.marketValue))
+                        .foregroundStyle(CatfolioStyle.green)
+                        .symbolSize(60)
+                    PointMark(x: .value("日期", row.date), y: .value("成本", row.cost))
+                        .foregroundStyle(CatfolioStyle.blue)
+                        .symbolSize(60)
+                }
 
-                if let selectedPoint, selectedPoint.id == row.id {
+                if rows.count > 1, let selectedPoint, selectedPoint.id == row.id {
                     RuleMark(x: .value("选择日期", row.date))
                         .foregroundStyle(Color.secondary.opacity(0.4))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
@@ -177,7 +196,9 @@ private struct CostMarketCard: View {
                 Spacer()
             }
 
-            Text("按住图表并左右拖动，可查看任意日期。")
+            Text(rows.count > 1
+                ? "按住图表并左右拖动，可查看任意日期。"
+                : "当前只有一次本机快照；再次在其他日期同步后会自动形成趋势线。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
