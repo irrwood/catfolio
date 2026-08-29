@@ -21,7 +21,7 @@ struct ReturnsView: View {
                             .frame(height: 520)
                             .redacted(reason: .placeholder)
                     } else if let error = model.returnsError {
-                        ContentUnavailableView("无法读取收益", systemImage: "wifi.exclamationmark", description: Text(error))
+                        ContentUnavailableView("暂无收益记录", systemImage: "calendar.badge.clock", description: Text(error))
                             .frame(minHeight: 420)
                     }
                 }
@@ -113,9 +113,8 @@ private struct ReturnsChart: View {
         }
         return sampledIndices.compactMap { index -> ComparisonPoint? in
             guard let portfolio = comparison.portfolio[index],
-                  let benchmarkValue = benchmarkValues[index],
                   let date = DayDateFormatter.shared.date(from: comparison.dates[index]) else { return nil }
-            return ComparisonPoint(date: date, portfolio: portfolio, benchmark: benchmarkValue)
+            return ComparisonPoint(date: date, portfolio: portfolio, benchmark: benchmarkValues[index])
         }
     }
 
@@ -153,9 +152,11 @@ private struct ReturnsChart: View {
                 LineMark(x: .value("日期", point.date), y: .value("组合", point.portfolio))
                     .foregroundStyle(by: .value("系列", "组合"))
                     .interpolationMethod(.linear)
-                LineMark(x: .value("日期", point.date), y: .value(benchmark, point.benchmark))
-                    .foregroundStyle(by: .value("系列", benchmark))
-                    .interpolationMethod(.linear)
+                if let benchmarkValue = point.benchmark {
+                    LineMark(x: .value("日期", point.date), y: .value(benchmark, benchmarkValue))
+                        .foregroundStyle(by: .value("系列", benchmark))
+                        .interpolationMethod(.linear)
+                }
 
                 if selectedPoint?.id == point.id {
                     RuleMark(x: .value("选择日期", point.date))
@@ -164,9 +165,11 @@ private struct ReturnsChart: View {
                     PointMark(x: .value("日期", point.date), y: .value("组合", point.portfolio))
                         .foregroundStyle(CatfolioStyle.green)
                         .symbolSize(48)
-                    PointMark(x: .value("日期", point.date), y: .value(benchmark, point.benchmark))
-                        .foregroundStyle(CatfolioStyle.blue)
-                        .symbolSize(48)
+                    if let benchmarkValue = point.benchmark {
+                        PointMark(x: .value("日期", point.date), y: .value(benchmark, benchmarkValue))
+                            .foregroundStyle(CatfolioStyle.blue)
+                            .symbolSize(48)
+                    }
                 }
             }
             .chartForegroundStyleScale(["组合": CatfolioStyle.green, benchmark: CatfolioStyle.blue])
@@ -208,7 +211,7 @@ private struct ReturnsChart: View {
             .frame(height: 330)
             .accessibilityLabel("组合与 \(benchmark) 的收益对比图，按住后左右拖动查看")
 
-            Text("按住图表并左右拖动，可比较同一天的组合与基准价值。")
+            Text("组合收益从首次在手机同步开始按日记录。基准行情尚未配置时会显示为暂无。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -218,13 +221,13 @@ private struct ReturnsChart: View {
 
 private struct SmallValue: View {
     let title: String
-    let value: Double
+    let value: Double?
     let color: Color
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title).font(.caption).foregroundStyle(color)
-            Text(DisplayFormat.money(value))
+            Text(value.map { DisplayFormat.money($0) } ?? "暂无")
                 .font(.subheadline.weight(.bold).monospacedDigit())
         }
     }

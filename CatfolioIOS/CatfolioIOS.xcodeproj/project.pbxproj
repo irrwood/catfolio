@@ -26,6 +26,10 @@
 		A10000000000000000000012 /* MoomooOAuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000014 /* MoomooOAuthView.swift */; };
 		A10000000000000000000013 /* Trading212Client.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000015 /* Trading212Client.swift */; };
 		A10000000000000000000014 /* Trading212View.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000016 /* Trading212View.swift */; };
+		A10000000000000000000015 /* LocalPortfolioStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000017 /* LocalPortfolioStore.swift */; };
+		A10000000000000000000016 /* LocalServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000018 /* LocalServices.swift */; };
+		A10000000000000000000017 /* sp500_holdings.json in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000019 /* sp500_holdings.json */; };
+		A10000000000000000000018 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001A /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -51,6 +55,10 @@
 		B10000000000000000000014 /* MoomooOAuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoomooOAuthView.swift; sourceTree = "<group>"; };
 		B10000000000000000000015 /* Trading212Client.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212Client.swift; sourceTree = "<group>"; };
 		B10000000000000000000016 /* Trading212View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212View.swift; sourceTree = "<group>"; };
+		B10000000000000000000017 /* LocalPortfolioStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalPortfolioStore.swift; sourceTree = "<group>"; };
+		B10000000000000000000018 /* LocalServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalServices.swift; sourceTree = "<group>"; };
+		B10000000000000000000019 /* sp500_holdings.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = sp500_holdings.json; path = ../v3_backend/app/data/sp500_holdings.json; sourceTree = SOURCE_ROOT; };
+		B1000000000000000000001A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -88,6 +96,10 @@
 				B10000000000000000000014 /* MoomooOAuthView.swift */,
 				B10000000000000000000015 /* Trading212Client.swift */,
 				B10000000000000000000016 /* Trading212View.swift */,
+				B10000000000000000000017 /* LocalPortfolioStore.swift */,
+				B10000000000000000000018 /* LocalServices.swift */,
+				B10000000000000000000019 /* sp500_holdings.json */,
+				B1000000000000000000001A /* PrivacyInfo.xcprivacy */,
 				B1000000000000000000000B /* Assets.xcassets */,
 				B1000000000000000000000C /* Info.plist */,
 			);
@@ -138,7 +150,7 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		C10000000000000000000003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A1000000000000000000000B /* Assets.xcassets in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
+		C10000000000000000000003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A1000000000000000000000B /* Assets.xcassets in Resources */, A10000000000000000000017 /* sp500_holdings.json in Resources */, A10000000000000000000018 /* PrivacyInfo.xcprivacy in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -165,6 +177,8 @@
 				A10000000000000000000012 /* MoomooOAuthView.swift in Sources */,
 				A10000000000000000000013 /* Trading212Client.swift in Sources */,
 				A10000000000000000000014 /* Trading212View.swift in Sources */,
+				A10000000000000000000015 /* LocalPortfolioStore.swift in Sources */,
+				A10000000000000000000016 /* LocalServices.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

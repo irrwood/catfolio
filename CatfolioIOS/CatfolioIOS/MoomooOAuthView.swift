@@ -191,10 +191,9 @@ struct MoomooOAuthView: View {
         do {
             let currentSnapshot = try await MoomooOpenAPIClient().fetchSnapshot()
             snapshot = currentSnapshot
-            let export = try currentSnapshot.csvImportExport()
-            status = .working("Moomoo 已读取，正在更新 Catfolio 持仓…")
-            let result = try await model.importCSV(export.data, filename: "moomoo-openapi-positions.csv")
-            let warningText = export.warnings.isEmpty ? "" : "，跳过 \(export.warnings.count) 项"
+            status = .working("Moomoo 已读取，正在保存到本机…")
+            let result = try await model.importMoomoo(currentSnapshot)
+            let warningText = result.warnings.isEmpty ? "" : "，跳过 \(result.warnings.count) 项"
             status = .success("已同步 \(result.holdingsCount) 个持仓\(warningText)")
         } catch {
             status = .failure(error.localizedDescription)

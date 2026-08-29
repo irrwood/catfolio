@@ -31,7 +31,7 @@ struct CSVImportView: View {
                 } header: {
                     Text("交易记录")
                 } footer: {
-                    Text("文件只会发送到你配置的 Catfolio 服务端，不会上传给第三方。最大 5 MB。")
+                    Text("文件只在此 iPhone 内解析和保存，不会上传。最大 5 MB。")
                 }
 
                 Section("格式") {
@@ -71,7 +71,7 @@ struct CSVImportView: View {
                             LabeledContent("有效交易", value: "\(count) 条")
                         }
                         if importResult.backupCreated == true {
-                            Label("原持仓已在服务端备份", systemImage: "archivebox.fill")
+                            Label("持仓已保存到此 iPhone", systemImage: "iphone.gen3")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
@@ -129,7 +129,7 @@ struct CSVImportView: View {
                 }
                 Button("取消", role: .cancel) {}
             } message: {
-                Text("请确认 CSV 包含完整交易记录。服务端会先备份原持仓；已平仓持仓不会显示。")
+                Text("请确认 CSV 包含完整交易记录。导入会替换本机当前持仓；已平仓持仓不会显示。")
             }
         }
     }

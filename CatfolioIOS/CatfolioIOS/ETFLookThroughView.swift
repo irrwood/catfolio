@@ -72,7 +72,7 @@ struct ETFLookThroughView: View {
                             Text("\(filteredRows.count) 项")
                         }
                     } footer: {
-                        Text("合计暴露 = 直接持有 + ETF 间接持有。ETF 权重来自服务端记录的官方基金持仓。")
+                        Text("合计暴露 = 直接持有 + ETF 间接持有。ETF 权重来自 App 内置的官方基金持仓快照。")
                     }
                 } else if isLoading {
                     Section {

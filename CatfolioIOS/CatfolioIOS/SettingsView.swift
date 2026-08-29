@@ -3,93 +3,54 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
     @AppStorage("catfolio.haptics") private var hapticsEnabled = true
-    @State private var selectedBroker: BrokerProvider = .trading212
     @State private var showsCSVImport = false
     @State private var showsTrading212 = false
     @State private var showsIBKRFlex = false
     @State private var showsMoomooOAuth = false
+    @State private var showsLocalServices = false
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("连接") {
-                    TextField("http://127.0.0.1:8000", text: $model.serverURL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                        .font(.body.monospaced())
-
-                    GlassPrimaryButton(title: "测试连接", systemImage: "network") {
-                        Task { await model.testConnection() }
+                Section("本机数据") {
+                    LabeledContent("数据来源", value: model.localSource)
+                    LabeledContent("持仓", value: "\(model.holdings.count) 项")
+                    if let updatedAt = model.localUpdatedAt {
+                        LabeledContent("最后更新", value: updatedAt.formatted(date: .abbreviated, time: .shortened))
                     }
+                    Label("组合数据保存在此 iPhone，不需要 Catfolio 服务地址或 Mac 常开。", systemImage: "checkmark.shield.fill")
+                        .font(.footnote)
+                        .foregroundStyle(CatfolioStyle.green)
+                }
 
-                    if let message = model.connectionMessage {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(message.hasPrefix("连接成功") ? CatfolioStyle.green : .secondary)
+                Section("券商直连") {
+                    connector("Trading 212", detail: "支持两个正式或模拟账户", icon: "chart.line.uptrend.xyaxis") {
+                        showsTrading212 = true
+                    }
+                    connector("Moomoo OAuth", detail: "OAuth 2.1 + PKCE，无需 OpenD", icon: "person.badge.key") {
+                        showsMoomooOAuth = true
+                    }
+                    connector("Interactive Brokers", detail: "IBKR Flex Web Service，无需 Gateway", icon: "bolt.horizontal.circle") {
+                        showsIBKRFlex = true
                     }
                 }
 
-                Section("券商 API") {
-                    Picker("当前数据源", selection: $selectedBroker) {
-                        ForEach(BrokerProvider.allCases) { provider in
-                            Text(provider.displayName).tag(provider)
-                        }
+                Section("CSV 导入") {
+                    Button { showsCSVImport = true } label: {
+                        Label("导入交易记录", systemImage: "doc.badge.plus")
                     }
-                    .disabled(model.isBrokerLoading || model.isBrokerSyncing)
-
-                    Text("Trading 212、Moomoo OAuth 与 IBKR Flex 均可由 iPhone 直连。")
+                    Text("CSV 会在手机内解析，并按加权平均成本重建当前持仓。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                }
 
-                    brokerRow(.moomoo)
-                    brokerRow(.ibkr)
-
-                    Button {
-                        showsTrading212 = true
-                    } label: {
-                        Label("Trading 212 直连", systemImage: "chart.line.uptrend.xyaxis")
+                Section("行情与 AI") {
+                    Button { showsLocalServices = true } label: {
+                        Label("配置本机服务", systemImage: "key.horizontal")
                     }
-
-                    Text("支持正式或模拟环境，可合并两个账户；Key 与 Secret 只保存在此 iPhone。")
+                    Text("成交量分析可直连 FMP；AI 可直连 DeepSeek。Key 只保存在本机 Keychain。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-
-                    Button {
-                        showsMoomooOAuth = true
-                    } label: {
-                        Label("Moomoo OAuth 直连", systemImage: "person.badge.key")
-                    }
-
-                    Text("使用 OAuth 2.1 + PKCE；无需 OpenD 或 API Key，Token 只保存在此 iPhone。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
-                    Button {
-                        showsIBKRFlex = true
-                    } label: {
-                        Label("IBKR Flex 直连", systemImage: "bolt.horizontal.circle")
-                    }
-
-                    Text("Flex Web Service 不需要 Gateway；Token 只保存在此 iPhone。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
-                    GlassPrimaryButton(
-                        title: model.isBrokerSyncing
-                            ? "正在同步"
-                            : legacySyncTitle,
-                        systemImage: "arrow.triangle.2.circlepath",
-                        isDisabled: model.isBrokerSyncing || model.isBrokerLoading
-                    ) {
-                        Task { await model.syncActiveBroker() }
-                    }
-
-                    if let message = model.brokerMessage {
-                        Label(message, systemImage: brokerMessageIcon(message))
-                            .font(.footnote)
-                            .foregroundStyle(brokerMessageColor(message))
-                    }
                 }
 
                 Section("体验") {
@@ -98,178 +59,110 @@ struct SettingsView: View {
                     LabeledContent("数据货币", value: "USD")
                 }
 
-                Section("CSV 导入") {
-                    Button {
-                        showsCSVImport = true
-                    } label: {
-                        Label("导入交易记录", systemImage: "doc.badge.plus")
-                    }
-
-                    Text("支持任意券商交易 CSV，按加权平均成本重新计算当前持仓。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section("服务端设置") {
-                    Text("AI Key、旧版 OpenD/Gateway 连接和最终数据导入由 Catfolio 服务端管理。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
-                    if let settingsURL {
-                        Link(destination: settingsURL) {
-                            Label("打开服务端设置", systemImage: "safari")
-                        }
-                    }
-                }
-
                 Section("关于") {
                     LabeledContent("应用", value: "Catfolio iOS")
+                    LabeledContent("运行方式", value: "完全本机")
                     LabeledContent("界面", value: "SwiftUI + Liquid Glass")
                     LabeledContent("最低系统", value: "iOS 18")
                 }
             }
             .navigationTitle("设置")
             .task {
-                await model.loadBrokerStatus()
-                selectedBroker = model.activeBroker ?? .trading212
-                if ProcessInfo.processInfo.arguments.contains("--show-csv") {
-                    showsCSVImport = true
-                }
-                if ProcessInfo.processInfo.arguments.contains("--show-trading212") {
-                    showsTrading212 = true
-                }
-                if ProcessInfo.processInfo.arguments.contains("--show-flex") {
-                    showsIBKRFlex = true
-                }
-                if ProcessInfo.processInfo.arguments.contains("--show-moomoo") {
-                    showsMoomooOAuth = true
-                }
-            }
-            .onChange(of: selectedBroker) { _, provider in
-                guard provider != model.activeBroker else { return }
-                Task {
-                    await model.selectBroker(provider)
-                    selectedBroker = model.activeBroker ?? .trading212
-                }
+                if model.overview == nil { await model.refreshPortfolio() }
+                let arguments = ProcessInfo.processInfo.arguments
+                showsCSVImport = arguments.contains("--show-csv")
+                showsTrading212 = arguments.contains("--show-trading212")
+                showsIBKRFlex = arguments.contains("--show-flex")
+                showsMoomooOAuth = arguments.contains("--show-moomoo")
             }
             .sheet(isPresented: $showsCSVImport) {
-                CSVImportView()
-                    .environmentObject(model)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                CSVImportView().environmentObject(model)
+                    .presentationDetents([.large]).presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showsTrading212) {
-                Trading212View()
-                    .environmentObject(model)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                Trading212View().environmentObject(model)
+                    .presentationDetents([.large]).presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showsIBKRFlex) {
-                IBKRFlexView()
-                    .environmentObject(model)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                IBKRFlexView().environmentObject(model)
+                    .presentationDetents([.large]).presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showsMoomooOAuth) {
-                MoomooOAuthView()
-                    .environmentObject(model)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                MoomooOAuthView().environmentObject(model)
+                    .presentationDetents([.large]).presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showsLocalServices) {
+                LocalServicesSettingsView()
+                    .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
             }
         }
     }
 
-    @ViewBuilder
-    private func brokerRow(_ provider: BrokerProvider) -> some View {
-        let state = model.brokerConnectionStates[provider] ?? .idle
-        VStack(alignment: .leading, spacing: 10) {
+    private func connector(_ title: String, detail: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             HStack(spacing: 12) {
-                Image(systemName: provider.systemImage)
-                    .font(.headline)
-                    .foregroundStyle(provider == model.activeBroker ? CatfolioStyle.blue : .secondary)
-                    .frame(width: 28)
-
+                Image(systemName: icon).frame(width: 25).foregroundStyle(CatfolioStyle.blue)
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(provider.displayName)
-                            .font(.body.weight(.semibold))
-                        if provider == model.activeBroker {
-                            Text("当前")
-                                .font(.caption2.weight(.bold))
-                                .foregroundStyle(CatfolioStyle.blue)
-                        }
-                    }
-                    Text(provider.setupHint)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text(title).foregroundStyle(.primary)
+                    Text(detail).font(.caption).foregroundStyle(.secondary)
                 }
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.tertiary)
+            }
+        }
+    }
+}
 
-                Spacer(minLength: 8)
+private struct LocalServicesSettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var fmpKey = ""
+    @State private var deepSeekKey = ""
+    @State private var message: String?
 
-                Button(state.isTesting ? "测试中" : legacyTestTitle(provider)) {
-                    Task { await model.testBroker(provider) }
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("成交量行情") {
+                    SecureField("FMP API Key", text: $fmpKey)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    Text("用于由 iPhone 直接下载日线与成交量，并在本机计算 VAH、POC、VAL。")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
-                .buttonStyle(.bordered)
-                .disabled(state.isTesting || model.isBrokerSyncing)
+                Section("AI") {
+                    SecureField("DeepSeek API Key", text: $deepSeekKey)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    Text("问题与组合摘要会直接发送给 DeepSeek，不经过 Mac 或 Catfolio 服务端。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section {
+                    Button("保存到 Keychain") { save() }
+                    Button("清除两个 Key", role: .destructive) { clear() }
+                    if let message { Text(message).font(.footnote).foregroundStyle(.secondary) }
+                }
             }
-
-            brokerStateView(state)
-        }
-        .padding(.vertical, 4)
-    }
-
-    @ViewBuilder
-    private func brokerStateView(_ state: BrokerConnectionState) -> some View {
-        switch state {
-        case .idle:
-            EmptyView()
-        case .testing:
-            HStack(spacing: 8) {
-                ProgressView()
-                    .controlSize(.small)
-                Text("正在通过服务端检查连接…")
+            .navigationTitle("本机服务")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+            .onAppear {
+                fmpKey = KeychainStore.string(for: LocalServiceKeys.fmp) ?? ""
+                deepSeekKey = KeychainStore.string(for: LocalServiceKeys.deepSeek) ?? ""
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        case let .success(message):
-            Label(message, systemImage: "checkmark.circle.fill")
-                .font(.caption)
-                .foregroundStyle(CatfolioStyle.green)
-        case let .failure(message):
-            Label(message, systemImage: "exclamationmark.triangle.fill")
-                .font(.caption)
-                .foregroundStyle(CatfolioStyle.red)
         }
     }
 
-    private func brokerMessageIcon(_ message: String) -> String {
-        message.contains("失败") || message.contains("连接失败") ? "exclamationmark.triangle.fill" : "info.circle.fill"
+    private func save() {
+        do {
+            try KeychainStore.set(fmpKey.trimmingCharacters(in: .whitespacesAndNewlines), for: LocalServiceKeys.fmp)
+            try KeychainStore.set(deepSeekKey.trimmingCharacters(in: .whitespacesAndNewlines), for: LocalServiceKeys.deepSeek)
+            message = "已安全保存到此 iPhone"
+        } catch { message = error.localizedDescription }
     }
 
-    private func brokerMessageColor(_ message: String) -> Color {
-        message.contains("失败") || message.contains("连接失败")
-            ? CatfolioStyle.red
-            : Color(uiColor: .secondaryLabel)
-    }
-
-    private var settingsURL: URL? {
-        URL(string: model.serverURL)?.appendingPathComponent("settings")
-    }
-
-    private var legacySyncTitle: String {
-        switch model.activeBroker {
-        case .moomoo: "通过 OpenD 同步"
-        case .ibkr: "通过 Gateway 同步"
-        case .trading212: "通过服务端同步"
-        case nil: "同步当前券商"
-        }
-    }
-
-    private func legacyTestTitle(_ provider: BrokerProvider) -> String {
-        switch provider {
-        case .moomoo: "OpenD"
-        case .ibkr: "Gateway"
-        case .trading212: "测试"
-        }
+    private func clear() {
+        try? KeychainStore.set("", for: LocalServiceKeys.fmp)
+        try? KeychainStore.set("", for: LocalServiceKeys.deepSeek)
+        fmpKey = ""
+        deepSeekKey = ""
+        message = "已清除"
     }
 }

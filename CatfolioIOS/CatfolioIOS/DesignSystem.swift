@@ -133,28 +133,14 @@ struct GlassPrimaryButton: View {
 struct AssetLogo: View {
     let ticker: String
     let logoSymbol: String?
-    let serverURL: String
 
     var body: some View {
-        AsyncImage(url: logoURL) { phase in
-            switch phase {
-            case let .success(image):
-                image.resizable().scaledToFit().padding(7)
-            default:
-                Text(String(ticker.prefix(1)))
-                    .font(.headline.weight(.heavy))
-                    .foregroundStyle(.secondary)
-            }
-        }
+        Text(String(ticker.prefix(1)))
+            .font(.headline.weight(.heavy))
+            .foregroundStyle(.secondary)
         .frame(width: 42, height: 42)
         .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-
-    private var logoURL: URL? {
-        guard let base = URL(string: serverURL) else { return nil }
-        let symbol = logoSymbol ?? ticker
-        return base.appendingPathComponent("api/asset-logo/\(symbol)")
     }
 }
 

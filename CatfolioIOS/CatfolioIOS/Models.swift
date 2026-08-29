@@ -154,7 +154,7 @@ struct ComparisonSummary: Decodable {
 struct ComparisonPoint: Identifiable, Equatable {
     let date: Date
     let portfolio: Double
-    let benchmark: Double
+    let benchmark: Double?
 
     var id: Date { date }
 }
@@ -194,11 +194,11 @@ enum BrokerProvider: String, CaseIterable, Codable, Identifiable {
     var setupHint: String {
         switch self {
         case .trading212:
-            "支持 iPhone 直连并合并两个账户；服务端同步仍可兼容使用。"
+            "支持 iPhone 直连并合并两个账户。"
         case .moomoo:
-            "支持 iPhone OAuth 直连；OpenD 作为旧版兼容选项。"
+            "支持 iPhone OAuth 2.1 + PKCE 直连。"
         case .ibkr:
-            "支持 iPhone 直连 Flex；Client Portal Gateway 作为实时同步选项。"
+            "支持 iPhone 直连 IBKR Flex Web Service。"
         }
     }
 }

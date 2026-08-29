@@ -1,142 +1,7 @@
 import Foundation
 
-enum CatfolioAPIError: LocalizedError {
-    case invalidServerURL
-    case invalidResponse
-    case server(Int, String)
-
-    var errorDescription: String? {
-        switch self {
-        case .invalidServerURL:
-            return "服务地址无效"
-        case .invalidResponse:
-            return "服务器返回了无法识别的数据"
-        case let .server(code, message):
-            return "连接失败（\(code)）：\(message)"
-        }
-    }
-}
-
-struct APIClient {
-    let baseURL: URL
-
-    init(serverURL: String) throws {
-        let normalized = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard let url = URL(string: normalized), url.scheme != nil, url.host != nil else {
-            throw CatfolioAPIError.invalidServerURL
-        }
-        baseURL = url
-    }
-
-    func get<T: Decodable>(_ path: String) async throws -> T {
-        try await request(path: path, method: "GET", body: nil, queryItems: nil)
-    }
-
-    func get<T: Decodable>(_ path: String, query: [String: String]) async throws -> T {
-        let items = query
-            .sorted { $0.key < $1.key }
-            .map { URLQueryItem(name: $0.key, value: $0.value) }
-        return try await request(path: path, method: "GET", body: nil, queryItems: items)
-    }
-
-    func post<T: Decodable>(_ path: String, json: [String: String]) async throws -> T {
-        let data = try JSONSerialization.data(withJSONObject: json)
-        return try await request(
-            path: path,
-            method: "POST",
-            body: data,
-            queryItems: nil,
-            contentType: "application/json"
-        )
-    }
-
-    func uploadCSV(_ data: Data, filename: String) async throws -> CSVImportResult {
-        let boundary = "CatfolioBoundary-\(UUID().uuidString)"
-        let safeFilename = filename
-            .replacingOccurrences(of: "\"", with: "")
-            .replacingOccurrences(of: "\r", with: "")
-            .replacingOccurrences(of: "\n", with: "")
-        var body = Data()
-        body.append(Data("--\(boundary)\r\n".utf8))
-        body.append(Data("Content-Disposition: form-data; name=\"file\"; filename=\"\(safeFilename)\"\r\n".utf8))
-        body.append(Data("Content-Type: text/csv\r\n\r\n".utf8))
-        body.append(data)
-        body.append(Data("\r\n--\(boundary)--\r\n".utf8))
-        return try await request(
-            path: "/api/import-csv",
-            method: "POST",
-            body: body,
-            queryItems: nil,
-            contentType: "multipart/form-data; boundary=\(boundary)",
-            timeoutInterval: 60
-        )
-    }
-
-    private func request<T: Decodable>(
-        path: String,
-        method: String,
-        body: Data?,
-        queryItems: [URLQueryItem]?,
-        contentType: String? = nil,
-        timeoutInterval: TimeInterval = 20
-    ) async throws -> T {
-        let cleanPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let endpoint = baseURL.appendingPathComponent(cleanPath)
-        var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
-        components?.queryItems = queryItems
-        guard let url = components?.url else {
-            throw CatfolioAPIError.invalidServerURL
-        }
-        var request = URLRequest(url: url)
-        request.httpMethod = method
-        request.httpBody = body
-        request.timeoutInterval = timeoutInterval
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let contentType {
-            request.setValue(contentType, forHTTPHeaderField: "Content-Type")
-        }
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw CatfolioAPIError.invalidResponse
-        }
-        guard (200..<300).contains(http.statusCode) else {
-            throw CatfolioAPIError.server(http.statusCode, serverMessage(from: data, statusCode: http.statusCode))
-        }
-        do {
-            return try JSONDecoder().decode(T.self, from: data)
-        } catch {
-            throw CatfolioAPIError.invalidResponse
-        }
-    }
-
-    private func serverMessage(from data: Data, statusCode: Int) -> String {
-        guard let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return HTTPURLResponse.localizedString(forStatusCode: statusCode)
-        }
-        if let detail = payload["detail"] as? String {
-            return detail
-        }
-        if let detail = payload["detail"] as? [String: Any] {
-            return detail["message"] as? String
-                ?? detail["error"] as? String
-                ?? HTTPURLResponse.localizedString(forStatusCode: statusCode)
-        }
-        if let warnings = payload["warnings"] as? [String], !warnings.isEmpty {
-            return warnings.joined(separator: "；")
-        }
-        return payload["message"] as? String
-            ?? payload["error"] as? String
-            ?? HTTPURLResponse.localizedString(forStatusCode: statusCode)
-    }
-}
-
 @MainActor
 final class AppModel: ObservableObject {
-    @Published var serverURL: String {
-        didSet { UserDefaults.standard.set(serverURL, forKey: Self.serverKey) }
-    }
     @Published var overview: PortfolioOverview?
     @Published var portfolioChart: PortfolioChartResponse?
     @Published var holdings: [Holding] = []
@@ -145,17 +10,17 @@ final class AppModel: ObservableObject {
     @Published var isReturnsLoading = false
     @Published var portfolioError: String?
     @Published var returnsError: String?
-    @Published var connectionMessage: String?
     @Published var activeBroker: BrokerProvider?
-    @Published var brokerConnectionStates: [BrokerProvider: BrokerConnectionState] = [:]
-    @Published var isBrokerLoading = false
-    @Published var isBrokerSyncing = false
-    @Published var brokerMessage: String?
+    @Published var localSource = "尚未导入"
+    @Published var localUpdatedAt: Date?
 
-    private static let serverKey = "catfolio.serverURL"
+    private var document = LocalPortfolioDocument.empty
+    private static let brokerKey = "catfolio.activeBroker"
 
     init() {
-        serverURL = UserDefaults.standard.string(forKey: Self.serverKey) ?? "http://127.0.0.1:8000"
+        if let raw = UserDefaults.standard.string(forKey: Self.brokerKey) {
+            activeBroker = BrokerProvider(rawValue: raw)
+        }
     }
 
     func refreshPortfolio() async {
@@ -163,15 +28,12 @@ final class AppModel: ObservableObject {
         portfolioError = nil
         defer { isPortfolioLoading = false }
         do {
-            let client = try APIClient(serverURL: serverURL)
-            async let overviewRequest: PortfolioOverview = client.get("/api/portfolio/overview")
-            async let chartRequest: PortfolioChartResponse = client.get("/api/portfolio/chart")
-            async let holdingsRequest: HoldingsResponse = client.get("/api/holdings/detail")
-            let (overview, chart, holdings) = try await (overviewRequest, chartRequest, holdingsRequest)
-            self.overview = overview
-            portfolioChart = chart
-            self.holdings = holdings.rows
+            let loaded = try await LocalPortfolioStore.shared.load()
+            try apply(loaded)
         } catch {
+            overview = nil
+            portfolioChart = nil
+            holdings = []
             portfolioError = error.localizedDescription
         }
     }
@@ -181,117 +43,171 @@ final class AppModel: ObservableObject {
         returnsError = nil
         defer { isReturnsLoading = false }
         do {
-            let client = try APIClient(serverURL: serverURL)
-            comparison = try await client.get("/api/comparison")
+            let loaded = try await LocalPortfolioStore.shared.load()
+            document = loaded
+            if KeychainStore.string(for: LocalServiceKeys.fmp)?.isEmpty == false {
+                if let enriched = try? await LocalMarketDataClient().comparison(document: loaded) {
+                    comparison = enriched
+                } else {
+                    comparison = try LocalPortfolioEngine.comparison(for: loaded)
+                }
+            } else {
+                comparison = try LocalPortfolioEngine.comparison(for: loaded)
+            }
         } catch {
+            comparison = nil
             returnsError = error.localizedDescription
         }
     }
 
     func volumeProfile(for ticker: String) async throws -> VolumeProfile {
-        let client = try APIClient(serverURL: serverURL)
-        let encoded = ticker.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ticker
-        return try await client.get("/api/holdings/\(encoded)/volume-profile")
+        let currency = holdings.first(where: { $0.ticker == ticker })?.quoteCurrency ?? "USD"
+        return try await LocalMarketDataClient().volumeProfile(ticker: ticker, currency: currency)
     }
 
     func loadBriefing() async throws -> String {
-        let client = try APIClient(serverURL: serverURL)
-        let response: BriefingResponse = try await client.post("/api/ai/briefing", json: ["lang": "zh"])
-        return response.briefing
+        let loaded = try await LocalPortfolioStore.shared.load()
+        return try await LocalAIClient().briefing(document: loaded)
     }
 
     func askAI(_ question: String) async throws -> String {
-        let client = try APIClient(serverURL: serverURL)
-        let response: AskResponse = try await client.post("/api/ai/ask", json: ["lang": "zh", "question": question])
-        return response.answer
+        let loaded = try await LocalPortfolioStore.shared.load()
+        return try await LocalAIClient().answer(question, document: loaded)
     }
 
-    func testConnection() async {
-        connectionMessage = "正在连接…"
-        do {
-            let client = try APIClient(serverURL: serverURL)
-            let summary: PortfolioSummary = try await client.get("/api/portfolio/summary")
-            connectionMessage = "连接成功，已读取 \(summary.openPositions) 个持仓"
-        } catch {
-            connectionMessage = error.localizedDescription
-        }
-    }
-
-    func loadBrokerStatus() async {
-        isBrokerLoading = true
-        defer { isBrokerLoading = false }
-        do {
-            let client = try APIClient(serverURL: serverURL)
-            let overview: BrokerOverview = try await client.get("/api/broker")
-            activeBroker = overview.provider
-        } catch {
-            brokerMessage = error.localizedDescription
-        }
-    }
-
-    func selectBroker(_ provider: BrokerProvider) async {
-        guard provider != activeBroker else { return }
-        isBrokerLoading = true
-        brokerMessage = "正在切换到 \(provider.displayName)…"
-        defer { isBrokerLoading = false }
-        do {
-            let client = try APIClient(serverURL: serverURL)
-            let response: SaveSettingResponse = try await client.post(
-                "/api/settings/save-key",
-                json: ["name": "BROKER_PROVIDER", "value": provider.rawValue]
-            )
-            guard response.ok else {
-                throw CatfolioAPIError.server(400, response.error ?? "服务端未保存券商设置")
-            }
-            activeBroker = provider
-            brokerMessage = "已切换到 \(provider.displayName)"
-        } catch {
-            brokerMessage = error.localizedDescription
-        }
-    }
-
-    func testBroker(_ provider: BrokerProvider) async {
-        brokerConnectionStates[provider] = .testing
-        do {
-            let client = try APIClient(serverURL: serverURL)
-            let result: BrokerConnectionResult = try await client.get("/api/brokers/\(provider.rawValue)/test")
-            brokerConnectionStates[provider] = .success(result.message)
-        } catch {
-            brokerConnectionStates[provider] = .failure(error.localizedDescription)
-        }
-    }
-
-    func syncActiveBroker() async {
-        guard let activeBroker else {
-            brokerMessage = "请先读取或选择券商数据源"
-            return
-        }
-        isBrokerSyncing = true
-        brokerMessage = "正在从 \(activeBroker.displayName) 同步…"
-        defer { isBrokerSyncing = false }
-        do {
-            let client = try APIClient(serverURL: serverURL)
-            let result: BrokerRefreshEnvelope = try await client.post("/api/refresh/broker", json: [:])
-            let count = result.refresh.holdings ?? result.summary.openPositions
-            brokerMessage = "\(result.provider.displayName) 同步完成，共 \(count) 个持仓"
-            await refreshPortfolio()
-        } catch {
-            brokerMessage = error.localizedDescription
-        }
+    func selectBroker(_ provider: BrokerProvider) {
+        activeBroker = provider
+        UserDefaults.standard.set(provider.rawValue, forKey: Self.brokerKey)
     }
 
     func loadETFLookThrough(basis: ETFLookThroughBasis) async throws -> ETFLookThroughResponse {
-        let client = try APIClient(serverURL: serverURL)
-        return try await client.get("/api/etf-lookthrough", query: ["basis": basis.rawValue])
+        let loaded = try await LocalPortfolioStore.shared.load()
+        return try LocalETFLookThrough.make(document: loaded, basis: basis)
     }
 
-    func importCSV(_ data: Data, filename: String) async throws -> CSVImportResult {
-        let client = try APIClient(serverURL: serverURL)
-        let result = try await client.uploadCSV(data, filename: filename)
-        guard result.ok else {
-            throw CatfolioAPIError.server(400, result.warnings.joined(separator: "；"))
-        }
-        await refreshPortfolio()
+    func importCSV(_ data: Data, filename _: String) async throws -> CSVImportResult {
+        let (positions, result) = try LocalCSVImporter.parse(data)
+        let saved = try await LocalPortfolioStore.shared.replace(positions: positions, source: "CSV")
+        try apply(saved)
         return result
+    }
+
+    func importTrading212(_ snapshot: Trading212Snapshot) async throws -> CSVImportResult {
+        var warnings: [String] = []
+        let positions = snapshot.positions.compactMap { position -> LocalPositionRecord? in
+            guard position.quantity > 0 else { return nil }
+            guard let average = position.averagePricePaid, average > 0 else {
+                warnings.append("\(position.rawTicker) 缺少平均成本，已跳过")
+                return nil
+            }
+            return LocalPositionRecord(
+                ticker: position.ticker, name: position.name, shares: position.quantity,
+                averageCost: average, currency: position.currency,
+                quotePrice: position.currentPrice ?? average, quoteCurrency: position.currency,
+                source: "Trading 212"
+            )
+        }
+        return try await replace(positions, source: "Trading 212", warnings: warnings)
+    }
+
+    func importMoomoo(_ snapshot: MoomooSnapshot) async throws -> CSVImportResult {
+        var warnings: [String] = []
+        let positions = snapshot.positions.compactMap { position -> LocalPositionRecord? in
+            guard position.positionSide.uppercased() != "SHORT", position.quantityValue > 0 else { return nil }
+            guard let average = position.costPriceValue, average > 0 else {
+                warnings.append("\(position.code) 缺少有效成本价，已跳过")
+                return nil
+            }
+            return LocalPositionRecord(
+                ticker: Self.moomooTicker(position.code), name: position.stockName,
+                shares: position.quantityValue, averageCost: average,
+                currency: position.currency.uppercased(), quotePrice: position.nominalPriceValue ?? average,
+                quoteCurrency: position.currency.uppercased(), source: "Moomoo"
+            )
+        }
+        return try await replace(positions, source: "Moomoo", warnings: warnings)
+    }
+
+    func importIBKR(_ snapshot: IBKRFlexSnapshot) async throws -> CSVImportResult {
+        var warnings: [String] = []
+        let positions = snapshot.positions.compactMap { position -> LocalPositionRecord? in
+            guard position.quantity > 0 else { return nil }
+            let category = position.assetCategory.uppercased()
+            guard category.isEmpty || category == "STK" else {
+                warnings.append("已跳过不受支持的 \(category) 持仓 \(position.symbol)")
+                return nil
+            }
+            guard let average = position.averageCost, average > 0 else {
+                warnings.append("\(position.symbol) 缺少平均成本，已跳过")
+                return nil
+            }
+            let currency = position.currency.isEmpty ? "USD" : position.currency.uppercased()
+            let quote = position.markPrice ?? position.marketValue.map { $0 / position.quantity } ?? average
+            return LocalPositionRecord(
+                ticker: position.symbol.uppercased(), name: position.name, shares: position.quantity,
+                averageCost: average, currency: currency, quotePrice: quote,
+                quoteCurrency: currency, source: "IBKR Flex"
+            )
+        }
+        return try await replace(positions, source: "IBKR Flex", warnings: warnings)
+    }
+
+    private func replace(_ rawPositions: [LocalPositionRecord], source: String, warnings: [String]) async throws -> CSVImportResult {
+        let positions = Self.merge(rawPositions)
+        let saved = try await LocalPortfolioStore.shared.replace(positions: positions, source: source)
+        try apply(saved)
+        return CSVImportResult(
+            ok: true, holdingsCount: positions.count, transactionsCount: nil,
+            backupCreated: false, warnings: warnings,
+            holdings: positions.map {
+                CSVImportedHolding(ticker: $0.ticker, name: $0.name, shares: $0.shares, averageCost: $0.averageCost, currency: $0.currency)
+            }
+        )
+    }
+
+    private func apply(_ loaded: LocalPortfolioDocument) throws {
+        let presentation = try LocalPortfolioEngine.presentation(for: loaded)
+        document = loaded
+        overview = presentation.0
+        portfolioChart = presentation.1
+        holdings = presentation.2
+        localSource = loaded.source
+        localUpdatedAt = loaded.updatedAt
+        comparison = try? LocalPortfolioEngine.comparison(for: loaded)
+    }
+
+    private static func merge(_ positions: [LocalPositionRecord]) -> [LocalPositionRecord] {
+        var grouped: [String: LocalPositionRecord] = [:]
+        for position in positions {
+            let key = position.ticker.uppercased()
+            guard let existing = grouped[key], existing.currency == position.currency,
+                  existing.quoteCurrency == position.quoteCurrency else {
+                grouped[key] = position
+                continue
+            }
+            let shares = existing.shares + position.shares
+            guard shares > 0 else { continue }
+            grouped[key] = LocalPositionRecord(
+                ticker: key, name: existing.name.isEmpty ? position.name : existing.name, shares: shares,
+                averageCost: (existing.averageCost * existing.shares + position.averageCost * position.shares) / shares,
+                currency: existing.currency,
+                quotePrice: (existing.quotePrice * existing.shares + position.quotePrice * position.shares) / shares,
+                quoteCurrency: existing.quoteCurrency, source: existing.source
+            )
+        }
+        return grouped.values.sorted { $0.ticker < $1.ticker }
+    }
+
+    private static func moomooTicker(_ value: String) -> String {
+        let parts = value.split(separator: ".", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return value.uppercased() }
+        let market = parts[0].uppercased()
+        var code = parts[1].uppercased()
+        if market == "HK", code.count == 5, code.first == "0" { code.removeFirst() }
+        let suffixes = [
+            "US": "", "HK": ".HK", "SG": ".SI", "JP": ".T", "JA": ".T",
+            "AU": ".AX", "CA": ".TO", "SH": ".SS", "SZ": ".SZ", "BMS": ".KL",
+        ]
+        return suffixes[market].map { code + $0 } ?? value.uppercased()
     }
 }

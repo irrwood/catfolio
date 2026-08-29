@@ -15,13 +15,13 @@ struct PortfolioView: View {
                         ETFLookThroughEntryCard {
                             showsETFLookThrough = true
                         }
-                        HoldingsCard(holdings: model.holdings, serverURL: model.serverURL) { holding in
+                        HoldingsCard(holdings: model.holdings) { holding in
                             selectedHolding = holding
                         }
                     } else if model.isPortfolioLoading {
                         PortfolioLoadingView()
                     } else if let error = model.portfolioError {
-                        ContentUnavailableView("无法读取持仓", systemImage: "wifi.exclamationmark", description: Text(error))
+                        ContentUnavailableView("还没有本机持仓", systemImage: "iphone.gen3.slash", description: Text(error))
                             .frame(minHeight: 420)
                     }
                 }
@@ -257,7 +257,6 @@ private struct ChartLegend: View {
 
 private struct HoldingsCard: View {
     let holdings: [Holding]
-    let serverURL: String
     let onSelect: (Holding) -> Void
 
     var body: some View {
@@ -276,7 +275,7 @@ private struct HoldingsCard: View {
                 Button {
                     onSelect(holding)
                 } label: {
-                    HoldingRow(holding: holding, serverURL: serverURL)
+                    HoldingRow(holding: holding)
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint("打开成交量分析")
@@ -292,11 +291,10 @@ private struct HoldingsCard: View {
 
 private struct HoldingRow: View {
     let holding: Holding
-    let serverURL: String
 
     var body: some View {
         HStack(spacing: 12) {
-            AssetLogo(ticker: holding.ticker, logoSymbol: holding.logoSymbol, serverURL: serverURL)
+            AssetLogo(ticker: holding.ticker, logoSymbol: holding.logoSymbol)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(holding.ticker)
