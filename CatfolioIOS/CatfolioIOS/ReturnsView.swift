@@ -4,6 +4,7 @@ import SwiftUI
 struct ReturnsView: View {
     @EnvironmentObject private var model: AppModel
     @State private var benchmark = "SPY"
+    @State private var chartMode = ReturnsChartMode.cumulativeValue
     @State private var selectedDate: Date?
 
     private let benchmarkChoices = ["SPY", "QQQ", "VTI", "GLD"]
@@ -21,7 +22,12 @@ struct ReturnsView: View {
 
                     if let comparison = model.comparison {
                         ReturnsSummary(comparison: comparison, benchmark: benchmark)
-                        ReturnsChart(comparison: comparison, benchmark: benchmark, selectedDate: $selectedDate)
+                        ReturnsChart(
+                            comparison: comparison,
+                            benchmark: benchmark,
+                            mode: $chartMode,
+                            selectedDate: $selectedDate
+                        )
                     } else if model.isReturnsLoading {
                         RoundedRectangle(cornerRadius: 20)
                             .fill(Color.secondary.opacity(0.12))
@@ -59,8 +65,14 @@ struct ReturnsView: View {
                 }
             }
             .onChange(of: benchmark) { _, _ in selectedDate = nil }
+            .onChange(of: chartMode) { _, _ in selectedDate = nil }
         }
     }
+}
+
+private enum ReturnsChartMode: String, CaseIterable {
+    case cumulativeValue = "累计价值"
+    case twr = "TWR"
 }
 
 private struct ReturnsSummary: View {
@@ -107,9 +119,10 @@ private struct ReturnMetric: View {
 private struct ReturnsChart: View {
     let comparison: ComparisonResponse
     let benchmark: String
+    @Binding var mode: ReturnsChartMode
     @Binding var selectedDate: Date?
 
-    private var points: [ComparisonPoint] {
+    private var rawPoints: [ComparisonPoint] {
         guard let benchmarkValues = comparison.benchmarks[benchmark] else { return [] }
         let count = min(comparison.dates.count, comparison.portfolio.count, benchmarkValues.count)
         guard count > 0 else { return [] }
@@ -125,6 +138,23 @@ private struct ReturnsChart: View {
         }
     }
 
+    private var points: [ComparisonPoint] {
+        guard mode == .twr,
+              let initialPortfolio = rawPoints.first?.portfolio,
+              initialPortfolio != 0 else { return rawPoints }
+        let initialBenchmark = rawPoints.compactMap(\.benchmark).first
+        return rawPoints.map { point in
+            ComparisonPoint(
+                date: point.date,
+                portfolio: (point.portfolio / initialPortfolio - 1) * 100,
+                benchmark: initialBenchmark.flatMap { initial in
+                    guard initial != 0, let value = point.benchmark else { return nil }
+                    return (value / initial - 1) * 100
+                }
+            )
+        }
+    }
+
     private var selectedPoint: ComparisonPoint? {
         guard let selectedDate else { return points.last }
         return points.min { abs($0.date.timeIntervalSince(selectedDate)) < abs($1.date.timeIntervalSince(selectedDate)) }
@@ -135,7 +165,10 @@ private struct ReturnsChart: View {
             [Optional(point.portfolio), point.benchmark].compactMap { $0 }
         }
         guard let minimum = values.min(), let maximum = values.max() else { return 0...1 }
-        let padding = max((maximum - minimum) * 0.12, maximum * 0.02, 1)
+        let padding = max((maximum - minimum) * 0.12, max(abs(minimum), abs(maximum)) * 0.02, 1)
+        if mode == .twr {
+            return (minimum - padding)...(maximum + padding)
+        }
         return max(0, minimum - padding)...(maximum + padding)
     }
 
@@ -143,24 +176,33 @@ private struct ReturnsChart: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("累计价值")
+                    Text(mode.rawValue)
                         .font(.title3.weight(.bold))
-                    Text("同一现金流基础下的组合与基准")
+                    Text(mode == .twr ? "以首日为 0% 的组合与基准链式收益" : "同一现金流基础下的组合与基准")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                if let point = selectedPoint {
-                    Text(DayDateFormatter.shared.string(from: point.date))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                VStack(alignment: .trailing, spacing: 8) {
+                    GlassChoiceBar(
+                        choices: ReturnsChartMode.allCases.map(\.rawValue),
+                        selection: Binding(
+                            get: { mode.rawValue },
+                            set: { mode = ReturnsChartMode(rawValue: $0) ?? .cumulativeValue }
+                        )
+                    )
+                    if let point = selectedPoint {
+                        Text(DayDateFormatter.shared.string(from: point.date))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
             if let point = selectedPoint {
                 HStack(spacing: 20) {
-                    SmallValue(title: "组合", value: point.portfolio, color: CatfolioStyle.green)
-                    SmallValue(title: benchmark, value: point.benchmark, color: CatfolioStyle.blue)
+                    SmallValue(title: "组合", value: point.portfolio, color: CatfolioStyle.green, mode: mode)
+                    SmallValue(title: benchmark, value: point.benchmark, color: CatfolioStyle.blue, mode: mode)
                 }
             }
 
@@ -214,7 +256,11 @@ private struct ReturnsChart: View {
                         AxisGridLine().foregroundStyle(Color.secondary.opacity(0.12))
                         AxisValueLabel {
                             if let amount = value.as(Double.self) {
-                                Text(amount, format: .number.notation(.compactName))
+                                if mode == .twr {
+                                    Text(DisplayFormat.percent(amount, signed: false))
+                                } else {
+                                    Text(amount, format: .number.notation(.compactName))
+                                }
                             }
                         }
                     }
@@ -237,14 +283,21 @@ private struct ReturnsChart: View {
                     }
                 }
                 .frame(height: 290)
-                .accessibilityLabel("组合与 \(benchmark) 的收益对比图，横向拖动查看")
+                .accessibilityLabel("组合与 \(benchmark) 的 \(mode.rawValue) 对比图，横向拖动查看")
             }
 
-            Text("只有一个同步快照时，会按当前持仓回溯近一年行情；后续同步将优先使用手机保存的真实快照。")
+            Text(footnote)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .contentCard()
+    }
+
+    private var footnote: String {
+        if mode == .twr {
+            return "TWR 按已保存的净值序列链式计算；如果期间有入金或出金但没有对应现金流记录，结果无法自动剔除其影响。"
+        }
+        return "只有一个同步快照时，会按当前持仓回溯近一年行情；后续同步将优先使用手机保存的真实快照。"
     }
 }
 
@@ -252,12 +305,18 @@ private struct SmallValue: View {
     let title: String
     let value: Double?
     let color: Color
+    let mode: ReturnsChartMode
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title).font(.caption).foregroundStyle(color)
-            Text(value.map { DisplayFormat.money($0) } ?? "暂无")
+            Text(formattedValue)
                 .font(.subheadline.weight(.bold).monospacedDigit())
         }
+    }
+
+    private var formattedValue: String {
+        guard let value else { return "暂无" }
+        return mode == .twr ? DisplayFormat.percent(value) : DisplayFormat.money(value)
     }
 }
