@@ -4,6 +4,7 @@ import SwiftUI
 struct PortfolioView: View {
     @EnvironmentObject private var model: AppModel
     @State private var selectedHolding: Holding?
+    @State private var showsETFLookThrough = false
 
     var body: some View {
         NavigationStack {
@@ -11,6 +12,9 @@ struct PortfolioView: View {
                 LazyVStack(spacing: 12) {
                     if let overview = model.overview, let chart = model.portfolioChart {
                         CostMarketCard(overview: overview, response: chart)
+                        ETFLookThroughEntryCard {
+                            showsETFLookThrough = true
+                        }
                         HoldingsCard(holdings: model.holdings, serverURL: model.serverURL) { holding in
                             selectedHolding = holding
                         }
@@ -42,6 +46,9 @@ struct PortfolioView: View {
                    selectedHolding == nil {
                     selectedHolding = model.holdings.first
                 }
+                if ProcessInfo.processInfo.arguments.contains("--show-etf") {
+                    showsETFLookThrough = true
+                }
             }
             .sheet(item: $selectedHolding) { holding in
                 VolumeProfileView(holding: holding)
@@ -49,7 +56,48 @@ struct PortfolioView: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
+            .sheet(isPresented: $showsETFLookThrough) {
+                ETFLookThroughView()
+                    .environmentObject(model)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
         }
+    }
+}
+
+private struct ETFLookThroughEntryCard: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Image(systemName: "square.3.layers.3d")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(CatfolioStyle.blue)
+                    .frame(width: 42, height: 42)
+                    .background(CatfolioStyle.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("ETF 穿透")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.primary)
+                    Text("展开基金底层持仓，合并直接与间接暴露")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .contentCard()
+        .accessibilityHint("打开 ETF 底层股票暴露")
     }
 }
 

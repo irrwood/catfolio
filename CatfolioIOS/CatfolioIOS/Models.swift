@@ -247,6 +247,61 @@ struct SaveSettingResponse: Decodable {
     let error: String?
 }
 
+enum ETFLookThroughBasis: String, CaseIterable, Identifiable {
+    case market
+    case cost
+
+    var id: String { rawValue }
+    var title: String { self == .market ? "市值" : "成本" }
+}
+
+struct ETFLookThroughResponse: Decodable {
+    let basis: String
+    let etfTickers: [String]
+    let etfTotalUSD: Double
+    let coveredWeightPercent: Double
+    let otherWeightPercent: Double
+    let constituentCount: Int
+    let holdingsAsOf: String?
+    let holdingsSource: String?
+    let holdingsSourceURL: String?
+    let rows: [ETFLookThroughRow]
+
+    enum CodingKeys: String, CodingKey {
+        case basis, rows
+        case etfTickers = "etf_tickers"
+        case etfTotalUSD = "etf_total_usd"
+        case coveredWeightPercent = "covered_weight_percent"
+        case otherWeightPercent = "other_weight_percent"
+        case constituentCount = "constituent_count"
+        case holdingsAsOf = "holdings_as_of"
+        case holdingsSource = "holdings_source"
+        case holdingsSourceURL = "holdings_source_url"
+    }
+}
+
+struct ETFLookThroughRow: Decodable, Identifiable {
+    let ticker: String
+    let logoSymbol: String?
+    let name: String
+    let directUSD: Double
+    let fromETFUSD: Double
+    let totalUSD: Double
+    let etfWeightPercent: Double
+    let sector: String?
+
+    var id: String { ticker }
+
+    enum CodingKeys: String, CodingKey {
+        case ticker, name, sector
+        case logoSymbol = "logo_symbol"
+        case directUSD = "direct_usd"
+        case fromETFUSD = "from_etf_usd"
+        case totalUSD = "total_usd"
+        case etfWeightPercent = "etf_weight_percent"
+    }
+}
+
 enum BrokerConnectionState: Equatable {
     case idle
     case testing

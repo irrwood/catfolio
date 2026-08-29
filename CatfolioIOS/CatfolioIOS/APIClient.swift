@@ -30,17 +30,29 @@ struct APIClient {
     }
 
     func get<T: Decodable>(_ path: String) async throws -> T {
-        try await request(path: path, method: "GET", body: nil)
+        try await request(path: path, method: "GET", body: nil, queryItems: nil)
+    }
+
+    func get<T: Decodable>(_ path: String, query: [String: String]) async throws -> T {
+        let items = query
+            .sorted { $0.key < $1.key }
+            .map { URLQueryItem(name: $0.key, value: $0.value) }
+        return try await request(path: path, method: "GET", body: nil, queryItems: items)
     }
 
     func post<T: Decodable>(_ path: String, json: [String: String]) async throws -> T {
         let data = try JSONSerialization.data(withJSONObject: json)
-        return try await request(path: path, method: "POST", body: data)
+        return try await request(path: path, method: "POST", body: data, queryItems: nil)
     }
 
-    private func request<T: Decodable>(path: String, method: String, body: Data?) async throws -> T {
+    private func request<T: Decodable>(path: String, method: String, body: Data?, queryItems: [URLQueryItem]?) async throws -> T {
         let cleanPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let url = baseURL.appendingPathComponent(cleanPath)
+        let endpoint = baseURL.appendingPathComponent(cleanPath)
+        var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
+        components?.queryItems = queryItems
+        guard let url = components?.url else {
+            throw CatfolioAPIError.invalidServerURL
+        }
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = body
@@ -228,5 +240,10 @@ final class AppModel: ObservableObject {
         } catch {
             brokerMessage = error.localizedDescription
         }
+    }
+
+    func loadETFLookThrough(basis: ETFLookThroughBasis) async throws -> ETFLookThroughResponse {
+        let client = try APIClient(serverURL: serverURL)
+        return try await client.get("/api/etf-lookthrough", query: ["basis": basis.rawValue])
     }
 }

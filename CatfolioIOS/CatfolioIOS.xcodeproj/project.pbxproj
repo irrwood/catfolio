@@ -17,6 +17,7 @@
 		A10000000000000000000009 /* AIView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000009 /* AIView.swift */; };
 		A1000000000000000000000A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000A /* SettingsView.swift */; };
 		A1000000000000000000000B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000B /* Assets.xcassets */; };
+		A1000000000000000000000C /* ETFLookThroughView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000E /* ETFLookThroughView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +34,7 @@
 		B1000000000000000000000B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B1000000000000000000000C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B1000000000000000000000D /* CatfolioIOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CatfolioIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B1000000000000000000000E /* ETFLookThroughView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ETFLookThroughView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -61,6 +63,7 @@
 				B10000000000000000000008 /* ReturnsView.swift */,
 				B10000000000000000000009 /* AIView.swift */,
 				B1000000000000000000000A /* SettingsView.swift */,
+				B1000000000000000000000E /* ETFLookThroughView.swift */,
 				B1000000000000000000000B /* Assets.xcassets */,
 				B1000000000000000000000C /* Info.plist */,
 			);
@@ -129,6 +132,7 @@
 				A10000000000000000000008 /* ReturnsView.swift in Sources */,
 				A10000000000000000000009 /* AIView.swift in Sources */,
 				A1000000000000000000000A /* SettingsView.swift in Sources */,
+				A1000000000000000000000C /* ETFLookThroughView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
