@@ -28,7 +28,7 @@ struct PortfolioView: View {
             .navigationTitle("投资组合")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    GlassIconButton(systemImage: "arrow.clockwise", accessibilityLabel: "刷新投资组合") {
+                    ToolbarIconButton(systemImage: "arrow.clockwise", accessibilityLabel: "刷新投资组合") {
                         Task { await model.refreshPortfolio() }
                     }
                 }

@@ -100,7 +100,7 @@ struct ETFLookThroughView: View {
                     Button("完成") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    GlassIconButton(systemImage: "arrow.clockwise", accessibilityLabel: "刷新 ETF 穿透") {
+                    ToolbarIconButton(systemImage: "arrow.clockwise", accessibilityLabel: "刷新 ETF 穿透") {
                         Task { await load() }
                     }
                 }

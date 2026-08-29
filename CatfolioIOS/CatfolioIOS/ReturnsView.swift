@@ -38,7 +38,7 @@ struct ReturnsView: View {
                             .frame(width: 36, height: 36)
                             .accessibilityLabel("正在刷新收益")
                     } else {
-                        GlassIconButton(systemImage: "arrow.clockwise", accessibilityLabel: "刷新收益") {
+                        ToolbarIconButton(systemImage: "arrow.clockwise", accessibilityLabel: "刷新收益") {
                             Task { await model.refreshReturns() }
                         }
                     }

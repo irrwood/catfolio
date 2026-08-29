@@ -134,28 +134,17 @@ struct GlassChoiceBar: View {
     }
 }
 
-struct GlassIconButton: View {
+struct ToolbarIconButton: View {
     let systemImage: String
     let accessibilityLabel: String
     let action: () -> Void
 
     var body: some View {
-        if #available(iOS 26.0, *) {
-            Button(action: action) {
-                Image(systemName: systemImage)
-                    .frame(width: 24, height: 24)
-            }
-            .buttonStyle(.glass(.regular.interactive()))
-            .accessibilityLabel(accessibilityLabel)
-        } else {
-            Button(action: action) {
-                Image(systemName: systemImage)
-                    .frame(width: 24, height: 24)
-            }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.circle)
-            .accessibilityLabel(accessibilityLabel)
+        Button(action: action) {
+            Label(accessibilityLabel, systemImage: systemImage)
+                .labelStyle(.iconOnly)
         }
+        .accessibilityLabel(accessibilityLabel)
     }
 }
 
