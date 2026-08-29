@@ -44,9 +44,9 @@ struct PortfolioView: View {
                 }
             }
             .sheet(item: $selectedHolding) { holding in
-                VolumeProfileView(holding: holding)
+                HoldingDetailView(holding: holding)
                     .environmentObject(model)
-                    .presentationDetents([.medium, .large])
+                    .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
         }

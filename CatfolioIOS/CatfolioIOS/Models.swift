@@ -76,6 +76,7 @@ struct Holding: Decodable, Identifiable, Equatable {
     let logoSymbol: String?
     let displayName: String
     let sector: String?
+    let source: String?
     let shares: Double
     let averageCost: Double
     let costCurrency: String?
@@ -97,6 +98,7 @@ struct Holding: Decodable, Identifiable, Equatable {
         case logoSymbol = "logo_symbol"
         case displayName = "display_name"
         case sector
+        case source
         case shares
         case averageCost = "avg_cost_usd"
         case costCurrency = "cost_currency"
@@ -120,6 +122,9 @@ struct VolumeProfile: Decodable, Equatable {
     let sessions: Int
     let valueAreaPercent: Int
     let asOf: String
+    let fiftyTwoWeekHigh: Double?
+    let fiftyTwoWeekLow: Double?
+    let todayChangePercent: Double?
 
     enum CodingKeys: String, CodingKey {
         case ticker, currency, available, sessions
@@ -128,6 +133,9 @@ struct VolumeProfile: Decodable, Equatable {
         case valueAreaLow = "val"
         case valueAreaPercent = "value_area_percent"
         case asOf = "as_of"
+        case fiftyTwoWeekHigh = "high_52w"
+        case fiftyTwoWeekLow = "low_52w"
+        case todayChangePercent = "today_change_percent"
     }
 }
 

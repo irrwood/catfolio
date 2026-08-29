@@ -182,6 +182,7 @@ enum LocalPortfolioEngine {
                 logoSymbol: position.ticker,
                 displayName: position.name.isEmpty ? position.ticker : position.name,
                 sector: nil,
+                source: position.source,
                 shares: position.shares,
                 averageCost: position.averageCost,
                 costCurrency: position.currency,

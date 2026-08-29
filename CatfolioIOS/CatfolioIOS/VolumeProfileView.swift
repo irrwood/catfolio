@@ -1,7 +1,7 @@
 import Charts
 import SwiftUI
 
-struct VolumeProfileView: View {
+struct HoldingDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var model: AppModel
 
@@ -14,24 +14,46 @@ struct VolumeProfileView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if let profile {
-                    ScrollView {
-                        VStack(spacing: 14) {
-                            VolumeSummary(holding: holding)
-                            VolumePriceChart(profile: profile, holding: holding, selectedPrice: $selectedPrice)
-                            VolumeLevels(profile: profile)
+            ScrollView {
+                LazyVStack(spacing: 14) {
+                    HoldingDetailHeader(holding: holding, marketTodayChange: profile?.todayChangePercent)
+                    HoldingPositionDetails(holding: holding, marketTodayChange: profile?.todayChangePercent)
+
+                    if let profile {
+                        if let high = profile.fiftyTwoWeekHigh,
+                           let low = profile.fiftyTwoWeekLow,
+                           high > low {
+                            FiftyTwoWeekRange(
+                                low: low,
+                                high: high,
+                                current: holding.quotePrice,
+                                currency: profile.currency
+                            )
                         }
-                        .padding(16)
+                        VolumePriceChart(profile: profile, holding: holding, selectedPrice: $selectedPrice)
+                        VolumeLevels(profile: profile)
+                    } else if let errorMessage {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("成交量分析")
+                                .font(.headline)
+                            StatusNotice(text: errorMessage, kind: .info)
+                        }
+                        .contentCard()
+                    } else {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                            Text("正在读取成交量与 52 周数据…")
+                                .foregroundStyle(.secondary)
+                        }
+                        .font(.subheadline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 28)
                     }
-                    .background(Color(uiColor: .systemGroupedBackground))
-                } else if let errorMessage {
-                    ContentUnavailableView("暂无成交量分析", systemImage: "chart.bar.xaxis", description: Text(errorMessage))
-                } else {
-                    ProgressView("正在读取成交量数据")
                 }
+                .padding(16)
             }
-            .navigationTitle("\(holding.ticker) 成交量")
+            .background(Color(uiColor: .systemGroupedBackground))
+            .navigationTitle("持仓详情")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -58,23 +80,33 @@ struct VolumeProfileView: View {
     }
 }
 
-private struct VolumeSummary: View {
+private struct HoldingDetailHeader: View {
     let holding: Holding
+    let marketTodayChange: Double?
+
+    private var todayChange: Double? {
+        holding.todayChangePercent ?? marketTodayChange
+    }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(spacing: 12) {
+            AssetLogo(ticker: holding.ticker, logoSymbol: holding.logoSymbol)
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(holding.shortName)
                     .font(.headline)
-                Text("当前价")
+                    .lineLimit(2)
+                Text(metadata)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
             Spacer()
+
             VStack(alignment: .trailing, spacing: 4) {
                 Text(DisplayFormat.money(holding.quotePrice, currency: holding.quoteCurrency ?? "USD"))
                     .font(.title2.weight(.bold).monospacedDigit())
-                if let todayChangePercent = holding.todayChangePercent {
+                if let todayChangePercent = todayChange {
                     Text(DisplayFormat.percent(todayChangePercent))
                         .font(.caption.weight(.bold))
                         .foregroundStyle(todayChangePercent >= 0 ? CatfolioStyle.green : CatfolioStyle.red)
@@ -86,6 +118,150 @@ private struct VolumeSummary: View {
             }
         }
         .contentCard()
+    }
+
+    private var metadata: String {
+        ([holding.ticker] + [holding.sector, holding.source].compactMap { value in
+            guard let value, !value.isEmpty else { return nil }
+            return value
+        }).joined(separator: " · ")
+    }
+}
+
+private struct HoldingPositionDetails: View {
+    let holding: Holding
+    let marketTodayChange: Double?
+
+    private let columns = [
+        GridItem(.flexible(), alignment: .leading),
+        GridItem(.flexible(), alignment: .leading),
+    ]
+
+    private var costBasis: Double {
+        holding.marketValue - holding.unrealized
+    }
+
+    private var profitColor: Color {
+        holding.unrealized >= 0 ? CatfolioStyle.green : CatfolioStyle.red
+    }
+
+    private var todayChange: Double? {
+        holding.todayChangePercent ?? marketTodayChange
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("持仓数据")
+                .font(.headline)
+
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
+                HoldingMetric(
+                    title: "股数",
+                    value: holding.shares.formatted(.number.precision(.fractionLength(0...4)))
+                )
+                HoldingMetric(
+                    title: "组合占比",
+                    value: DisplayFormat.percent(holding.weight * 100, signed: false)
+                )
+                HoldingMetric(
+                    title: "平均成本",
+                    value: DisplayFormat.money(holding.averageCost, currency: holding.costCurrency ?? "USD")
+                )
+                HoldingMetric(
+                    title: "当前价格",
+                    value: DisplayFormat.money(holding.quotePrice, currency: holding.quoteCurrency ?? "USD")
+                )
+                HoldingMetric(title: "持仓成本", value: DisplayFormat.money(costBasis))
+                HoldingMetric(title: "当前市值", value: DisplayFormat.money(holding.marketValue))
+                HoldingMetric(
+                    title: "未实现盈亏",
+                    value: DisplayFormat.money(holding.unrealized, signed: true),
+                    detail: DisplayFormat.percent(holding.unrealizedPercent),
+                    color: profitColor
+                )
+                HoldingMetric(
+                    title: "今日变化",
+                    value: todayChange.map { DisplayFormat.percent($0) } ?? "暂无",
+                    color: todayChange.map { $0 >= 0 ? CatfolioStyle.green : CatfolioStyle.red } ?? .secondary
+                )
+            }
+        }
+        .contentCard()
+    }
+}
+
+private struct HoldingMetric: View {
+    let title: String
+    let value: String
+    var detail: String? = nil
+    var color: Color = .primary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.body.weight(.bold).monospacedDigit())
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+            if let detail {
+                Text(detail)
+                    .font(.caption.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(color)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct FiftyTwoWeekRange: View {
+    let low: Double
+    let high: Double
+    let current: Double
+    let currency: String
+
+    private var position: Double {
+        min(1, max(0, (current - low) / (high - low)))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("52 周区间")
+                    .font(.headline)
+                Spacer()
+                Text("当前位于 \(Int((position * 100).rounded()))%")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.secondary.opacity(0.14))
+                    Capsule()
+                        .fill(CatfolioStyle.blue.opacity(0.34))
+                        .frame(width: max(8, geometry.size.width * position))
+                    Circle()
+                        .fill(CatfolioStyle.blue)
+                        .frame(width: 14, height: 14)
+                        .offset(x: max(0, min(geometry.size.width - 14, geometry.size.width * position - 7)))
+                }
+            }
+            .frame(height: 14)
+
+            HStack {
+                Text(DisplayFormat.money(low, currency: currency))
+                Spacer()
+                Text(DisplayFormat.money(high, currency: currency))
+            }
+            .font(.caption.weight(.semibold).monospacedDigit())
+            .foregroundStyle(.secondary)
+        }
+        .contentCard()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("52 周最低 \(DisplayFormat.money(low, currency: currency))，最高 \(DisplayFormat.money(high, currency: currency))，当前位于百分之 \(Int((position * 100).rounded()))")
     }
 }
 

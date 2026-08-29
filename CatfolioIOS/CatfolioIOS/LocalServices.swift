@@ -46,7 +46,7 @@ struct LocalMarketDataClient {
         }
         let end = DayDateFormatter.shared.string(from: Date())
         let start = DayDateFormatter.shared.string(
-            from: Calendar.current.date(byAdding: .day, value: -220, to: Date()) ?? Date()
+            from: Calendar.current.date(byAdding: .day, value: -370, to: Date()) ?? Date()
         )
         var components = URLComponents(string: "https://financialmodelingprep.com/stable/historical-price-eod/full")!
         components.queryItems = [
@@ -72,7 +72,12 @@ struct LocalMarketDataClient {
         }
         guard !bars.isEmpty else { throw LocalServiceError.noMarketData }
 
-        let sessions = Array(bars.sorted { $0.date > $1.date }.prefix(160))
+        let annualSessions = Array(bars.sorted { $0.date > $1.date }.prefix(252))
+        let sessions = Array(annualSessions.prefix(160))
+        let todayChangePercent: Double? = {
+            guard annualSessions.count > 1, annualSessions[1].close > 0 else { return nil }
+            return (annualSessions[0].close / annualSessions[1].close - 1) * 100
+        }()
         let minimum = sessions.map(\.low).min() ?? 0
         let maximum = sessions.map(\.high).max() ?? 0
         guard maximum > minimum else { throw LocalServiceError.noMarketData }
@@ -112,7 +117,10 @@ struct LocalMarketDataClient {
             valueAreaLow: midpoint(lowIndex),
             sessions: sessions.count,
             valueAreaPercent: 70,
-            asOf: sessions.map(\.date).max() ?? end
+            asOf: sessions.map(\.date).max() ?? end,
+            fiftyTwoWeekHigh: annualSessions.map(\.high).max(),
+            fiftyTwoWeekLow: annualSessions.map(\.low).min(),
+            todayChangePercent: todayChangePercent
         )
     }
 
