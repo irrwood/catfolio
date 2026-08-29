@@ -54,9 +54,7 @@ struct CSVImportView: View {
                         }
 
                         if selectedFile.dataRowCount == 0 {
-                            Text("CSV 没有可导入的数据行。")
-                                .font(.footnote)
-                                .foregroundStyle(CatfolioStyle.red)
+                            StatusNotice(text: "CSV 没有可导入的数据行。")
                         }
                     } footer: {
                         Text("导入会按交易日期重新计算加权平均成本，并替换当前持仓数据。")
@@ -99,9 +97,7 @@ struct CSVImportView: View {
                     }
                 } else if let statusMessage {
                     Section {
-                        Label(statusMessage, systemImage: "exclamationmark.triangle.fill")
-                            .font(.footnote)
-                            .foregroundStyle(CatfolioStyle.red)
+                        StatusNotice(text: statusMessage)
                     }
                 }
             }

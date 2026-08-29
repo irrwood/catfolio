@@ -152,9 +152,7 @@ struct MoomooOAuthView: View {
                 .font(.footnote)
                 .foregroundStyle(CatfolioStyle.green)
         case let .failure(message):
-            Label(message, systemImage: "exclamationmark.triangle.fill")
-                .font(.footnote)
-                .foregroundStyle(CatfolioStyle.red)
+            StatusNotice(text: message)
         }
     }
 

@@ -34,10 +34,7 @@ struct AIView: View {
                         }
 
                         if let errorMessage {
-                            Text(errorMessage)
-                                .font(.footnote)
-                                .foregroundStyle(CatfolioStyle.red)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            StatusNotice(text: errorMessage)
                         }
                     }
                     .padding(16)

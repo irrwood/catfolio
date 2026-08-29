@@ -134,9 +134,10 @@ private struct LocalServicesSettingsView: View {
                     }
                     .disabled(isTestingFMP || fmpKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     if let fmpTestMessage {
-                        Label(fmpTestMessage, systemImage: fmpTestMessage.hasPrefix("成功") ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                            .font(.footnote)
-                            .foregroundStyle(fmpTestMessage.hasPrefix("成功") ? CatfolioStyle.green : CatfolioStyle.red)
+                        StatusNotice(
+                            text: fmpTestMessage,
+                            kind: fmpTestMessage.hasPrefix("成功") ? .success : .error
+                        )
                     }
                 }
                 Section("AI") {

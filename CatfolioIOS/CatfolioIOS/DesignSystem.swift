@@ -20,6 +20,66 @@ struct ContentCard: ViewModifier {
     }
 }
 
+struct StatusNotice: View {
+    enum Kind {
+        case error
+        case success
+        case info
+    }
+
+    let text: String
+    var kind: Kind = .error
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: iconName)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(accentColor)
+                .frame(width: 20)
+
+            Text(text)
+                .font(.footnote)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            accentColor.opacity(0.08),
+            in: RoundedRectangle(cornerRadius: CatfolioStyle.controlRadius, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: CatfolioStyle.controlRadius, style: .continuous)
+                .stroke(accentColor.opacity(0.14), lineWidth: 0.5)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var accentColor: Color {
+        switch kind {
+        case .error:
+            return .orange
+        case .success:
+            return CatfolioStyle.green
+        case .info:
+            return CatfolioStyle.blue
+        }
+    }
+
+    private var iconName: String {
+        switch kind {
+        case .error:
+            return "exclamationmark.circle.fill"
+        case .success:
+            return "checkmark.circle.fill"
+        case .info:
+            return "info.circle.fill"
+        }
+    }
+}
+
 extension View {
     func contentCard() -> some View {
         modifier(ContentCard())
