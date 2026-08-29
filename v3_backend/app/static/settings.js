@@ -112,6 +112,48 @@
     }
   }
 
+  async function setBrokerProvider(value, btn) {
+    const status = document.getElementById('brokerProviderStatus');
+    const labels = {trading212: 'Trading 212', moomoo: 'Moomoo', ibkr: 'Interactive Brokers'};
+    try {
+      const res = await fetch('/api/settings/save-key', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: 'BROKER_PROVIDER', value})
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      document.querySelectorAll('.broker-provider-btn').forEach(item => item.classList.remove('is-active'));
+      btn.classList.add('is-active');
+      status.innerHTML = `当前：<strong>${labels[value] || value}</strong> <span style="color:var(--positive)">已切换</span>`;
+      setTimeout(() => location.reload(), 600);
+    } catch (err) {
+      status.innerHTML = `<span style="color:var(--negative)">切换失败：${err.message}</span>`;
+    }
+  }
+
+  async function testBroker(provider, btn) {
+    const result = document.getElementById('broker_test_' + provider);
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> 正在连接';
+    try {
+      const response = await fetch(`/api/brokers/${provider}/test`);
+      let payload = {};
+      try { payload = await response.json(); } catch (_) {}
+      if (!response.ok) {
+        const detail = payload.detail || payload;
+        throw new Error(detail.message || detail.error || `HTTP ${response.status}`);
+      }
+      result.innerHTML = `<span style="color:var(--positive)"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> ${payload.message || '连接成功'}</span>`;
+    } catch (err) {
+      result.innerHTML = `<span style="color:var(--negative)"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-x"></use></svg> ${err.message}</span>`;
+    } finally {
+      btn.innerHTML = original;
+      btn.disabled = false;
+    }
+  }
+
   async function triggerRefresh(type) {
     const statusEl = document.getElementById("settingsStatus");
     statusEl.className = "settings-action-status";
@@ -139,7 +181,7 @@
 
     if (type === 'all') {
       const steps = [
-        ["正在同步 Trading 212 持仓…", "/api/refresh/trading212"],
+        ["正在同步当前券商持仓…", "/api/refresh/broker"],
         ["正在增量刷新实时行情…", "/api/refresh/market"],
         ["正在增量刷新历史价格…", "/api/lab/refresh-history"],
         ["正在增量刷新估值数据…", "/api/refresh/fundamentals"],
@@ -164,6 +206,18 @@
       } catch (err) {
         statusEl.className = "settings-action-status negative";
         statusEl.textContent = `刷新已停止：${err.message}`;
+      }
+    } else if (type === 'broker') {
+      statusEl.innerHTML = '<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> 正在同步当前券商持仓...';
+      try {
+        const payload = await refreshRequest("/api/refresh/broker");
+        statusEl.className = "settings-action-status positive";
+        const provider = payload.provider || 'broker';
+        statusEl.innerHTML = `<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> ${provider} 同步完成！`;
+        setTimeout(() => location.reload(), 1000);
+      } catch (err) {
+        statusEl.className = "settings-action-status negative";
+        statusEl.textContent = `同步失败：${err.message}`;
       }
     } else if (type === 'trading212') {
       statusEl.innerHTML = '<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> 正在同步 Trading 212 持仓...';

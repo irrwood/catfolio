@@ -73,6 +73,13 @@ FX_TO_USD = {
     "GBP": 1.3460,
     "GBX": 0.013460,
     "EUR": 1.1630,
+    "AUD": float(os.environ.get("CATFOLIO_AUD_TO_USD", "0.655")),
+    "CAD": float(os.environ.get("CATFOLIO_CAD_TO_USD", "0.726")),
+    "CNH": float(os.environ.get("CATFOLIO_CNH_TO_USD", "0.139")),
+    "CNY": float(os.environ.get("CATFOLIO_CNY_TO_USD", "0.139")),
+    "HKD": float(os.environ.get("CATFOLIO_HKD_TO_USD", "0.1275")),
+    "JPY": float(os.environ.get("CATFOLIO_JPY_TO_USD", "0.0068")),
+    "SGD": float(os.environ.get("CATFOLIO_SGD_TO_USD", "0.777")),
 }
 
 
@@ -132,10 +139,14 @@ def current_snapshot():
     market = reconcile_market_currencies(portfolio, market)
     fundamentals = load_json(FUNDAMENTALS_CACHE, {"rows": [], "warnings": ["Fundamentals cache not available."]})
     trading212 = load_json(V2_DIR / "trading212_data.json", {"summary": {}, "account_cash": {}, "positions": [], "warnings": []})
+    broker_cache = load_json(V2_DIR / "broker_data.json", {})
+    provider = str(portfolio.get("summary", {}).get("broker_provider") or "trading212")
+    broker = broker_cache if provider in {"moomoo", "ibkr"} and broker_cache.get("provider") == provider else trading212
     return {
         "portfolio": portfolio,
         "market": market,
         "fundamentals": fundamentals,
+        "broker": broker,
         "trading212": trading212,
         "loaded_at": datetime.now(timezone.utc).isoformat(),
     }

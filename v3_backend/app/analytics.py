@@ -185,6 +185,13 @@ BROKER_PNL_FX_TO_USD = {
     "GBP": 1.3460,
     "GBX": 0.013460,
     "EUR": 1.1630,
+    "AUD": 0.655,
+    "CAD": 0.726,
+    "CNH": 0.139,
+    "CNY": 0.139,
+    "HKD": 0.1275,
+    "JPY": 0.0068,
+    "SGD": 0.777,
 }
 
 
@@ -195,7 +202,7 @@ def broker_pnl_by_ticker(snapshot):
     FX contribution. `fxPpl` is therefore exposed as an informational component
     and must not be added to `ppl` again.
     """
-    trading212 = snapshot.get("trading212", {})
+    trading212 = snapshot.get("broker") or snapshot.get("trading212", {})
     account_cash = trading212.get("account_cash", {})
     account_info = trading212.get("account_info", {})
     rows = {}
@@ -277,6 +284,11 @@ def exposure_value_usd(ticker, snapshot, basis="market"):
 
 def portfolio_summary(snapshot):
     summary = dict(snapshot["portfolio"].get("summary", {}))
+    broker_provider = str(
+        summary.get("broker_provider")
+        or (snapshot.get("broker") or {}).get("provider")
+        or "trading212"
+    )
     market = market_by_ticker(snapshot)
     holdings = holdings_by_ticker(snapshot)
     broker_pnl = broker_pnl_by_ticker(snapshot)
@@ -308,9 +320,10 @@ def portfolio_summary(snapshot):
             "broker_fx_ppl_usd": sum(row["broker_fx_ppl_usd"] for row in broker_pnl.values()),
             "price_unrealized_usd": price_unrealized_total,
             "unrealized_includes_fx": bool(broker_positions),
-            "unrealized_source": "trading212_ppl" if broker_positions == len(holdings) and holdings else ("mixed" if broker_positions else "price_difference"),
+            "unrealized_source": f"{broker_provider}_ppl" if broker_positions == len(holdings) and holdings else ("mixed" if broker_positions else "price_difference"),
             "trading212_positions": snapshot["trading212"].get("summary", {}).get("positions"),
-            "cash": snapshot["trading212"].get("account_cash", {}),
+            "broker_positions": len((snapshot.get("broker") or snapshot["trading212"]).get("positions", [])),
+            "cash": (snapshot.get("broker") or snapshot["trading212"]).get("account_cash", {}),
         }
     )
     return summary

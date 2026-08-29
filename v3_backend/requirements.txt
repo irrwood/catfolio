@@ -6,3 +6,4 @@ keyring>=25.0.0
 cryptography>=42.0.0
 python-multipart>=0.0.9
 imap-tools>=1.14.0,<2.0
+futu-api>=10.0.6008

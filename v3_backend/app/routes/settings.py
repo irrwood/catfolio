@@ -17,6 +17,9 @@ from app.settings import ROOT, V2_DIR
 from app.components import render_layout
 from app.i18n import get_lang
 from app.ai import PROVIDERS as AI_PROVIDERS, DEFAULT_PROVIDER as AI_DEFAULT
+from app.brokers.service import SUPPORTED_BROKERS
+from app.brokers.ibkr import IBKRConfig
+from app.brokers.moomoo import MoomooConfig
 from datetime import datetime, timezone
 import json
 
@@ -32,6 +35,9 @@ def settings_page(request: Request):
         t212_set = t212_secret_set = t212_second_set = t212_second_secret_set = False
         plaid_client_set = plaid_secret_set = False
         ai_provider = AI_DEFAULT
+        broker_provider = "trading212"
+        moomoo_host_set = moomoo_port_set = moomoo_markets_set = moomoo_account_set = False
+        ibkr_url_set = ibkr_account_set = False
     else:
         fmp_set = secret_value("FMP_API_KEY") is not None
         finnhub_set = secret_value("FINNHUB_API_KEY") is not None
@@ -44,8 +50,17 @@ def settings_page(request: Request):
         plaid_client_set = secret_value("PLAID_CLIENT_ID") is not None
         plaid_secret_set = secret_value("PLAID_SECRET") is not None
         ai_provider = (secret_value("AI_PROVIDER") or AI_DEFAULT).strip().lower()
+        broker_provider = (secret_value("BROKER_PROVIDER") or "trading212").strip().lower()
+        moomoo_host_set = secret_value("MOOMOO_HOST") is not None
+        moomoo_port_set = secret_value("MOOMOO_PORT") is not None
+        moomoo_markets_set = secret_value("MOOMOO_MARKETS") is not None
+        moomoo_account_set = secret_value("MOOMOO_ACCOUNT_ID") is not None
+        ibkr_url_set = secret_value("IBKR_BASE_URL") is not None
+        ibkr_account_set = secret_value("IBKR_ACCOUNT_ID") is not None
     if ai_provider not in AI_PROVIDERS:
         ai_provider = AI_DEFAULT
+    if broker_provider not in SUPPORTED_BROKERS:
+        broker_provider = "trading212"
 
     if demo_on:
         # Demo settings must never reveal or even inspect a machine's real cache
@@ -79,13 +94,13 @@ def settings_page(request: Request):
         if sec < 3600: return f"{sec // 60} 分钟前"
         return f"{sec // 3600} 小时前"
 
-    def key_row(env_name, label, description, is_set, border=True):
+    def key_row(env_name, label, description, is_set, border=True, input_type="password", default_placeholder=None):
         badge = (
             '<span class="settings-status settings-status-success"><span class="settings-status-dot"></span>已设置</span>'
             if is_set else
             '<span class="settings-status settings-status-muted"><span class="settings-status-dot"></span>未配置</span>'
         )
-        ph = "已设置，留空则不修改" if is_set else "粘贴 API Key…"
+        ph = "已设置，留空则不修改" if is_set else (default_placeholder or "粘贴 API Key…")
         row_class = "settings-key-row" if border else "settings-key-row settings-key-row-last"
         return f"""<div class="{row_class}">
           <div class="settings-key-meta">
@@ -96,7 +111,7 @@ def settings_page(request: Request):
             <div id="badge_{env_name}">{badge}</div>
           </div>
           <div class="settings-key-controls">
-            <input class="settings-input" type="password" id="input_{env_name}"
+            <input class="settings-input" type="{input_type}" id="input_{env_name}"
               placeholder="{ph}" autocomplete="off" />
             <button class="settings-button settings-button-primary"
               onclick="saveKey('{env_name}', this)">
@@ -112,6 +127,13 @@ def settings_page(request: Request):
         return (
             f'<button class="ai-provider-btn{active_class}" data-provider="{value}" '
             f'onclick="setProvider(\'{value}\', this)">{warn}<span>{label}</span></button>'
+        )
+
+    def broker_provider_btn(value, label):
+        active_class = " is-active" if broker_provider == value else ""
+        return (
+            f'<button class="broker-provider-btn{active_class}" data-broker-provider="{value}" '
+            f'onclick="setBrokerProvider(\'{value}\', this)"><span>{label}</span></button>'
         )
 
     # Generate AI provider key rows + switcher buttons from the registry so new
@@ -144,14 +166,43 @@ def settings_page(request: Request):
         f"""<div class="settings-credential-groups">
       <section class="settings-credential-group" aria-labelledby="settingsCredentialBroker">
         <header class="settings-credential-group-head">
-          <strong id="settingsCredentialBroker">Trading 212 账户</strong>
-          <span>分别保存两个账户的 Key，同步时自动合并。</span>
+          <strong id="settingsCredentialBroker">券商持仓源</strong>
+          <span>选择一个当前数据源。所有连接仅调用只读持仓与账户接口。</span>
         </header>
+        <div class="settings-broker-picker">
+          <div class="settings-provider-grid settings-broker-grid">
+            {''.join(broker_provider_btn(value, label) for value, label in SUPPORTED_BROKERS.items())}
+          </div>
+          <div id="brokerProviderStatus" class="settings-inline-status">
+            当前：<strong>{SUPPORTED_BROKERS[broker_provider]}</strong>
+          </div>
+        </div>
+        <div class="settings-integration-head"><strong>Trading 212</strong><span>API Key 认证，可合并两个账户。</span></div>
         <div class="settings-key-list">
           {key_row("TRADING212_API_KEY", "Trading 212 API Key 1", "主账户：同步持仓、平均成本和账户现金", t212_set)}
           {key_row("TRADING212_API_SECRET", "Trading 212 API Secret 1", "主账户 API Key 对应的 Secret", t212_secret_set)}
           {key_row("TRADING212_API_KEY_2", "Trading 212 API Key 2", "第二账户（可选）：同步时自动合并两个账户", t212_second_set)}
           {key_row("TRADING212_API_SECRET_2", "Trading 212 API Secret 2", "第二账户 API Key 对应的 Secret", t212_second_secret_set, border=False)}
+        </div>
+        <div class="settings-integration-head"><strong>Moomoo / Futu OpenD</strong><span>先启动本机 OpenD；默认连接 127.0.0.1:11111。</span></div>
+        <div class="settings-key-list">
+          {key_row("MOOMOO_HOST", "OpenD Host", "安全限制：仅允许本机地址", moomoo_host_set, input_type="text", default_placeholder="127.0.0.1")}
+          {key_row("MOOMOO_PORT", "OpenD Port", "OpenD 监听端口", moomoo_port_set, input_type="text", default_placeholder="11111")}
+          {key_row("MOOMOO_MARKETS", "市场", "逗号分隔：US、HK、CN、SG、JP", moomoo_markets_set, input_type="text", default_placeholder="US,HK")}
+          {key_row("MOOMOO_ACCOUNT_ID", "账户 ID（可选）", "留空时读取 OpenD 返回的全部匹配账户", moomoo_account_set, border=False, input_type="text", default_placeholder="自动选择")}
+        </div>
+        <div class="settings-test-row">
+          <button class="settings-button" onclick="testBroker('moomoo', this)">测试 Moomoo 连接</button>
+          <div id="broker_test_moomoo" class="settings-inline-status"></div>
+        </div>
+        <div class="settings-integration-head"><strong>Interactive Brokers</strong><span>先启动并登录本机 Client Portal Gateway。</span></div>
+        <div class="settings-key-list">
+          {key_row("IBKR_BASE_URL", "Gateway URL", "安全限制：仅允许 localhost / 127.0.0.1", ibkr_url_set, input_type="text", default_placeholder="https://localhost:5000/v1/api")}
+          {key_row("IBKR_ACCOUNT_ID", "账户 ID（可选）", "留空时同步 Gateway 返回的全部账户", ibkr_account_set, border=False, input_type="text", default_placeholder="自动选择")}
+        </div>
+        <div class="settings-test-row">
+          <button class="settings-button" onclick="testBroker('ibkr', this)">测试 IBKR 连接</button>
+          <div id="broker_test_ibkr" class="settings-inline-status"></div>
         </div>
       </section>
       <section class="settings-credential-group" aria-labelledby="settingsCredentialMarket">
@@ -266,13 +317,14 @@ def settings_page(request: Request):
           <div class="settings-row settings-system-row"><div class="settings-row-copy"><strong>外部刷新</strong><span>演示模式禁止同步券商、行情、估值和盘后数据</span></div><code>已禁用</code></div>
         """
     else:
+        active_broker_label = SUPPORTED_BROKERS[broker_provider]
         data_cache_rows = f"""<div class="settings-row">
-            <div class="settings-row-copy"><strong>刷新全部组合数据</strong><span>依次同步持仓、行情、历史价格和估值；任一步失败都会明确提示。</span></div>
+            <div class="settings-row-copy"><strong>刷新全部组合数据</strong><span>当前券商：{active_broker_label}。依次同步持仓、行情、历史价格和估值。</span></div>
             <button class="settings-button settings-button-primary" onclick="triggerRefresh('all')">一键刷新</button>
           </div>
           <div class="settings-row">
-            <div class="settings-row-copy"><strong>Trading 212 持仓</strong><span>重新拉取持仓与平均成本，并验证 API 凭证。</span></div>
-            <button class="settings-button" onclick="triggerRefresh('trading212')">立即同步</button>
+            <div class="settings-row-copy"><strong>{active_broker_label} 持仓</strong><span>从当前券商拉取持仓、平均成本和账户现金。</span></div>
+            <button class="settings-button" onclick="triggerRefresh('broker')">立即同步</button>
           </div>
           <div class="settings-row">
             <div class="settings-row-copy"><strong>历史日线价格</strong><span>当前缓存： {fmt_age(history_cache)} · 每 12 小时过期</span></div>
@@ -413,8 +465,11 @@ def settings_page(request: Request):
 
 
 _ALLOWED_KEYS = {
+    "BROKER_PROVIDER",
     "TRADING212_API_KEY", "TRADING212_API_SECRET",
     "TRADING212_API_KEY_2", "TRADING212_API_SECRET_2",
+    "MOOMOO_HOST", "MOOMOO_PORT", "MOOMOO_MARKETS", "MOOMOO_ACCOUNT_ID",
+    "IBKR_BASE_URL", "IBKR_ACCOUNT_ID",
     "FMP_API_KEY", "FINNHUB_API_KEY",
     "MASSIVE_API_KEY", "FRED_API_KEY",
     "PLAID_CLIENT_ID", "PLAID_SECRET",
@@ -439,6 +494,24 @@ async def save_key_api(request: Request):
         return JSONResponse({"ok": False, "error": "unknown key"}, status_code=400)
     if not value:
         return JSONResponse({"ok": False, "error": "empty value"})
+    try:
+        if name == "BROKER_PROVIDER" and value.lower() not in SUPPORTED_BROKERS:
+            raise ValueError("unsupported broker provider")
+        if name == "MOOMOO_HOST":
+            MoomooConfig(host=value)
+        elif name == "MOOMOO_PORT":
+            MoomooConfig(port=int(value))
+        elif name == "MOOMOO_MARKETS":
+            markets = tuple(item.strip().upper() for item in value.split(",") if item.strip())
+            MoomooConfig(markets=markets)
+        elif name == "MOOMOO_ACCOUNT_ID":
+            int(value)
+        elif name == "IBKR_BASE_URL":
+            IBKRConfig(base_url=value)
+        elif name == "IBKR_ACCOUNT_ID" and (len(value) > 64 or not all(ch.isalnum() or ch in "._-" for ch in value)):
+            raise ValueError("invalid IBKR account id")
+    except (TypeError, ValueError) as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
     ok = save_secret(name, value)
     return JSONResponse({"ok": ok})
 

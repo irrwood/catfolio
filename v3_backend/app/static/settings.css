@@ -77,6 +77,7 @@
 .page-settings .settings-nav-link:focus-visible,
 .page-settings .settings-button:focus-visible,
 .page-settings .ai-provider-btn:focus-visible,
+.page-settings .broker-provider-btn:focus-visible,
 .page-settings .settings-input:focus-visible,
 .page-settings .settings-disclosure summary:focus-visible,
 .page-settings .settings-api-row:focus-visible {
@@ -238,7 +239,8 @@
   gap: 8px;
 }
 
-.page-settings .ai-provider-btn {
+.page-settings .ai-provider-btn,
+.page-settings .broker-provider-btn {
   display: inline-flex;
   min-height: 34px;
   align-items: center;
@@ -253,11 +255,13 @@
   transition: background-color 160ms ease, border-color 160ms ease;
 }
 
-.page-settings .ai-provider-btn:hover {
+.page-settings .ai-provider-btn:hover,
+.page-settings .broker-provider-btn:hover {
   background: var(--soft);
 }
 
-.page-settings .ai-provider-btn.is-active {
+.page-settings .ai-provider-btn.is-active,
+.page-settings .broker-provider-btn.is-active {
   border-color: var(--ink);
   background: var(--ink);
   color: var(--bg);
@@ -403,6 +407,38 @@
   font-size: 12px;
   font-weight: 450;
   line-height: 17px;
+}
+
+.page-settings .settings-broker-picker {
+  padding: 14px;
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--soft);
+}
+
+.page-settings .settings-broker-grid {
+  margin-bottom: 10px;
+}
+
+.page-settings .settings-integration-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 20px 0 12px;
+}
+
+.page-settings .settings-integration-head strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.page-settings .settings-integration-head span {
+  color: var(--muted);
+  font-size: 11px;
+  text-align: right;
 }
 
 .page-settings .settings-key-list {
@@ -601,6 +637,7 @@
   .page-settings .settings-nav-link,
   .page-settings .settings-button,
   .page-settings .ai-provider-btn,
+  .page-settings .broker-provider-btn,
   .page-settings .settings-chevron,
   .page-settings .settings-input {
     transition: none;

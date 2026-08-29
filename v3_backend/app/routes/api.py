@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 from app.cache import clear_all, cached
 from app.data_store import current_snapshot, refresh_after_hours, refresh_fundamentals, refresh_market_quotes, refresh_trading212
+from app.brokers.service import active_broker, broker_connection_status, refresh_broker
 from app.analytics import chart_exposure, chart_pnl, etf_lookthrough, holdings_detail, holdings_heatmap, pnl_contribution, portfolio_summary, sector_concentration
 from app.lab import BENCHMARKS, BENCHMARK_CN, backtest, correlation_matrix, cumulative_multi_benchmark, cumulative_vs_benchmark, current_open_positions_history, drawdown_curve, efficient_frontier, factor_analysis, fifty_two_week_position, holding_volume_profile, income_summary, lab_history_summary, monte_carlo, monthly_contribution_waterfall, monthly_return_heatmap, refresh_history, return_distribution, cash_flow_mirror_vs_benchmark
 from app.settings import DATA_DIR
@@ -204,6 +205,15 @@ def api_trading212():
     return current_snapshot()["trading212"]
 
 
+@router.get("/broker")
+def api_broker():
+    snapshot = current_snapshot()
+    return {
+        "provider": active_broker(),
+        "data": snapshot.get("broker") or snapshot.get("trading212", {}),
+    }
+
+
 @router.get("/etf-lookthrough")
 def api_etf_lookthrough(basis: str = "cost"):
     if basis not in {"cost", "market"}:
@@ -246,9 +256,10 @@ def api_command_center():
             "history_end": history["nav"][-1]["date"] if history.get("nav") else None,
             "history_days": len(history.get("nav", [])),
             "sources": {
-                "trading212": {
-                    "as_of_unix": snapshot["trading212"].get("as_of_unix"),
-                    "positions": len(snapshot["trading212"].get("positions", [])),
+                "broker": {
+                    "provider": active_broker(),
+                    "as_of_unix": (snapshot.get("broker") or snapshot["trading212"]).get("as_of_unix"),
+                    "positions": len((snapshot.get("broker") or snapshot["trading212"]).get("positions", [])),
                 },
                 "market": {
                     "as_of_unix": snapshot["market"].get("as_of_unix"),
@@ -405,6 +416,31 @@ def api_refresh_trading212():
         raise HTTPException(status_code=500, detail=result)
     clear_all()
     return {"refresh": result, "summary": portfolio_summary(current_snapshot())}
+
+
+@router.get("/brokers/{provider}/test")
+def api_test_broker(provider: str):
+    normalized = str(provider or "").strip().lower()
+    if normalized not in {"trading212", "moomoo", "ibkr"}:
+        raise HTTPException(status_code=404, detail="Unknown broker provider")
+    result = broker_connection_status(normalized)
+    if not result.get("ok"):
+        raise HTTPException(status_code=502, detail=result)
+    return result
+
+
+@router.post("/refresh/broker")
+def api_refresh_broker():
+    provider = active_broker()
+    result = refresh_trading212() if provider == "trading212" else refresh_broker(provider)
+    if not result.get("ok"):
+        raise HTTPException(status_code=502, detail=result)
+    clear_all()
+    return {
+        "provider": provider,
+        "refresh": result,
+        "summary": portfolio_summary(current_snapshot()),
+    }
 
 
 @router.post("/refresh/after-hours")

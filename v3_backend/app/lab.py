@@ -561,7 +561,7 @@ def current_open_positions_history(snapshot=None, history=None):
     history = history or get_history_cached()
     prices = history.get("prices", {}) if isinstance(history.get("prices"), dict) else {}
     holdings_by_account = snapshot.get("portfolio", {}).get("holdings_by_account", [])
-    raw_positions = snapshot.get("trading212", {}).get("positions", [])
+    raw_positions = (snapshot.get("broker") or snapshot.get("trading212", {})).get("positions", [])
     initial_fill_by_key = {
         (str(row.get("account") or ""), str(row.get("ticker") or "")): str(row.get("initial_fill_date") or "")[:10]
         for row in raw_positions

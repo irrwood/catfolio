@@ -353,7 +353,7 @@ def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh",
     brand_icon_dark, brand_icon_light = _brand_icon_paths()
     try:
         snapshot = current_snapshot()
-        trading_unix = snapshot["trading212"].get("as_of_unix")
+        trading_unix = (snapshot.get("broker") or snapshot["trading212"]).get("as_of_unix")
         market_unix = snapshot["market"].get("as_of_unix")
         fundamentals_unix = snapshot["fundamentals"].get("as_of_unix")
     except Exception:
@@ -746,12 +746,13 @@ def render_layout(request, title: str, content: str, active_page: str, lang: str
 
 def data_health_bar(snapshot) -> str:
     """Render a compact data-health indicator bar."""
-    trading_unix = snapshot["trading212"].get("as_of_unix")
+    broker = snapshot.get("broker") or snapshot["trading212"]
+    trading_unix = broker.get("as_of_unix")
     market_unix = snapshot["market"].get("as_of_unix")
     fundamentals_unix = snapshot["fundamentals"].get("as_of_unix")
     fund_rows = len(snapshot["fundamentals"].get("rows", []))
     market_rows = len(snapshot["market"].get("rows", []))
-    trading_positions = len(snapshot["trading212"].get("positions", []))
+    trading_positions = len(broker.get("positions", []))
 
     def age_class(unix_val, max_age_sec):
         if not unix_val:
