@@ -5,6 +5,7 @@ struct SettingsView: View {
     @AppStorage("catfolio.haptics") private var hapticsEnabled = true
     @State private var selectedBroker: BrokerProvider = .trading212
     @State private var showsCSVImport = false
+    @State private var showsIBKRFlex = false
 
     var body: some View {
         NavigationStack {
@@ -42,8 +43,20 @@ struct SettingsView: View {
                     brokerRow(.moomoo)
                     brokerRow(.ibkr)
 
+                    Button {
+                        showsIBKRFlex = true
+                    } label: {
+                        Label("IBKR Flex 直连", systemImage: "bolt.horizontal.circle")
+                    }
+
+                    Text("Flex Web Service 不需要 Gateway；Token 只保存在此 iPhone。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
                     GlassPrimaryButton(
-                        title: model.isBrokerSyncing ? "正在同步" : "同步当前券商",
+                        title: model.isBrokerSyncing
+                            ? "正在同步"
+                            : (model.activeBroker == .ibkr ? "通过 Gateway 同步" : "同步当前券商"),
                         systemImage: "arrow.triangle.2.circlepath",
                         isDisabled: model.isBrokerSyncing || model.isBrokerLoading
                     ) {
@@ -100,6 +113,9 @@ struct SettingsView: View {
                 if ProcessInfo.processInfo.arguments.contains("--show-csv") {
                     showsCSVImport = true
                 }
+                if ProcessInfo.processInfo.arguments.contains("--show-flex") {
+                    showsIBKRFlex = true
+                }
             }
             .onChange(of: selectedBroker) { _, provider in
                 guard provider != model.activeBroker else { return }
@@ -110,6 +126,12 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showsCSVImport) {
                 CSVImportView()
+                    .environmentObject(model)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showsIBKRFlex) {
+                IBKRFlexView()
                     .environmentObject(model)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
@@ -144,7 +166,7 @@ struct SettingsView: View {
 
                 Spacer(minLength: 8)
 
-                Button(state.isTesting ? "测试中" : "测试") {
+                Button(state.isTesting ? "测试中" : (provider == .ibkr ? "Gateway" : "测试")) {
                     Task { await model.testBroker(provider) }
                 }
                 .buttonStyle(.bordered)

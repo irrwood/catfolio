@@ -16,8 +16,9 @@
 
 - 支持在 iOS 设置中读取和切换 Trading 212、Moomoo、Interactive Brokers 数据源。
 - 支持分别测试 Moomoo OpenD 与 IBKR Client Portal Gateway 连接。
+- 支持 iPhone 直连 IBKR Flex Web Service；Token 与 Query ID 仅保存在设备 Keychain，不需要 Gateway。
 - 支持从当前券商主动同步；成功后自动刷新 iOS 持仓。
-- 券商连接始终发生在 Catfolio 服务端，iPhone 不保存券商密钥，也不直接连接本机 Gateway。
+- Trading 212、Moomoo 与 IBKR Gateway 连接发生在 Catfolio 服务端；IBKR Flex 由 iPhone 直接连接 IBKR，凭证不会发送到 Catfolio 服务端。
 
 ## 运行
 

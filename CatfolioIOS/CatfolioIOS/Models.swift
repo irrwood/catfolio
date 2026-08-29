@@ -198,7 +198,7 @@ enum BrokerProvider: String, CaseIterable, Codable, Identifiable {
         case .moomoo:
             "需要在运行 Catfolio 的 Mac 上启动并登录 OpenD。"
         case .ibkr:
-            "需要在运行 Catfolio 的 Mac 上启动并登录 Client Portal Gateway。"
+            "支持 iPhone 直连 Flex；Client Portal Gateway 作为实时同步选项。"
         }
     }
 }
