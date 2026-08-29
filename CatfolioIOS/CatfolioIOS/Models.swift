@@ -194,7 +194,7 @@ enum BrokerProvider: String, CaseIterable, Codable, Identifiable {
     var setupHint: String {
         switch self {
         case .trading212:
-            "由 Catfolio 服务端使用 API Key 同步。"
+            "支持 iPhone 直连并合并两个账户；服务端同步仍可兼容使用。"
         case .moomoo:
             "支持 iPhone OAuth 直连；OpenD 作为旧版兼容选项。"
         case .ibkr:

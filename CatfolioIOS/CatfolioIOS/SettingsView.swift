@@ -5,6 +5,7 @@ struct SettingsView: View {
     @AppStorage("catfolio.haptics") private var hapticsEnabled = true
     @State private var selectedBroker: BrokerProvider = .trading212
     @State private var showsCSVImport = false
+    @State private var showsTrading212 = false
     @State private var showsIBKRFlex = false
     @State private var showsMoomooOAuth = false
 
@@ -37,12 +38,22 @@ struct SettingsView: View {
                     }
                     .disabled(model.isBrokerLoading || model.isBrokerSyncing)
 
-                    Text("Moomoo OAuth 与 IBKR Flex 可由 iPhone 直连；其他连接仍由 Catfolio 服务端处理。")
+                    Text("Trading 212、Moomoo OAuth 与 IBKR Flex 均可由 iPhone 直连。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
                     brokerRow(.moomoo)
                     brokerRow(.ibkr)
+
+                    Button {
+                        showsTrading212 = true
+                    } label: {
+                        Label("Trading 212 直连", systemImage: "chart.line.uptrend.xyaxis")
+                    }
+
+                    Text("支持正式或模拟环境，可合并两个账户；Key 与 Secret 只保存在此 iPhone。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
 
                     Button {
                         showsMoomooOAuth = true
@@ -100,7 +111,7 @@ struct SettingsView: View {
                 }
 
                 Section("服务端设置") {
-                    Text("AI Key、Trading 212、旧版 OpenD/Gateway 连接和最终数据导入由 Catfolio 服务端管理。")
+                    Text("AI Key、旧版 OpenD/Gateway 连接和最终数据导入由 Catfolio 服务端管理。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
@@ -124,6 +135,9 @@ struct SettingsView: View {
                 if ProcessInfo.processInfo.arguments.contains("--show-csv") {
                     showsCSVImport = true
                 }
+                if ProcessInfo.processInfo.arguments.contains("--show-trading212") {
+                    showsTrading212 = true
+                }
                 if ProcessInfo.processInfo.arguments.contains("--show-flex") {
                     showsIBKRFlex = true
                 }
@@ -140,6 +154,12 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showsCSVImport) {
                 CSVImportView()
+                    .environmentObject(model)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showsTrading212) {
+                Trading212View()
                     .environmentObject(model)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
@@ -240,7 +260,8 @@ struct SettingsView: View {
         switch model.activeBroker {
         case .moomoo: "通过 OpenD 同步"
         case .ibkr: "通过 Gateway 同步"
-        default: "同步当前券商"
+        case .trading212: "通过服务端同步"
+        case nil: "同步当前券商"
         }
     }
 
