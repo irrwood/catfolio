@@ -74,9 +74,15 @@ private struct VolumeSummary: View {
             VStack(alignment: .trailing, spacing: 4) {
                 Text(DisplayFormat.money(holding.quotePrice, currency: holding.quoteCurrency ?? "USD"))
                     .font(.title2.weight(.bold).monospacedDigit())
-                Text(DisplayFormat.percent(holding.todayChangePercent))
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(holding.todayChangePercent >= 0 ? CatfolioStyle.green : CatfolioStyle.red)
+                if let todayChangePercent = holding.todayChangePercent {
+                    Text(DisplayFormat.percent(todayChangePercent))
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(todayChangePercent >= 0 ? CatfolioStyle.green : CatfolioStyle.red)
+                } else {
+                    Text("今日 —")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .contentCard()

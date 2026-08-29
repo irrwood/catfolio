@@ -81,7 +81,7 @@ struct Holding: Decodable, Identifiable, Equatable {
     let costCurrency: String?
     let quotePrice: Double
     let quoteCurrency: String?
-    let todayChangePercent: Double
+    let todayChangePercent: Double?
     let marketValue: Double
     let weight: Double
     let unrealized: Double
