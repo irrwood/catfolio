@@ -32,7 +32,6 @@ enum LocalServiceError: LocalizedError {
 }
 
 struct LocalMarketDataClient {
-    private struct Envelope: Decodable { let historical: [Bar] }
     private struct Bar: Decodable {
         let date: String
         let close: Double
@@ -49,8 +48,9 @@ struct LocalMarketDataClient {
         let start = DayDateFormatter.shared.string(
             from: Calendar.current.date(byAdding: .day, value: -220, to: Date()) ?? Date()
         )
-        var components = URLComponents(string: "https://financialmodelingprep.com/api/v3/historical-price-full/\(ticker)")!
+        var components = URLComponents(string: "https://financialmodelingprep.com/stable/historical-price-eod/full")!
         components.queryItems = [
+            URLQueryItem(name: "symbol", value: ticker),
             URLQueryItem(name: "from", value: start),
             URLQueryItem(name: "to", value: end),
             URLQueryItem(name: "apikey", value: key),
@@ -64,10 +64,15 @@ struct LocalMarketDataClient {
         guard (200..<300).contains(http.statusCode) else {
             throw LocalServiceError.remote(Self.message(from: data, fallback: "行情请求失败（\(http.statusCode)）"))
         }
-        guard let bars = try? JSONDecoder().decode(Envelope.self, from: data).historical,
-              !bars.isEmpty else { throw LocalServiceError.noMarketData }
+        let bars: [Bar]
+        do {
+            bars = try JSONDecoder().decode([Bar].self, from: data)
+        } catch {
+            throw LocalServiceError.remote(Self.message(from: data, fallback: "FMP 返回格式无法识别"))
+        }
+        guard !bars.isEmpty else { throw LocalServiceError.noMarketData }
 
-        let sessions = Array(bars.prefix(160))
+        let sessions = Array(bars.sorted { $0.date > $1.date }.prefix(160))
         let minimum = sessions.map(\.low).min() ?? 0
         let maximum = sessions.map(\.high).max() ?? 0
         guard maximum > minimum else { throw LocalServiceError.noMarketData }
@@ -107,7 +112,7 @@ struct LocalMarketDataClient {
             valueAreaLow: midpoint(lowIndex),
             sessions: sessions.count,
             valueAreaPercent: 70,
-            asOf: sessions.first?.date ?? end
+            asOf: sessions.map(\.date).max() ?? end
         )
     }
 
@@ -152,8 +157,9 @@ struct LocalMarketDataClient {
         guard let key = KeychainStore.string(for: LocalServiceKeys.fmp), !key.isEmpty else {
             throw LocalServiceError.missingMarketKey
         }
-        var components = URLComponents(string: "https://financialmodelingprep.com/api/v3/historical-price-full/\(symbol)")!
+        var components = URLComponents(string: "https://financialmodelingprep.com/stable/historical-price-eod/full")!
         components.queryItems = [
+            URLQueryItem(name: "symbol", value: symbol),
             URLQueryItem(name: "from", value: from),
             URLQueryItem(name: "to", value: to),
             URLQueryItem(name: "apikey", value: key),
@@ -161,9 +167,12 @@ struct LocalMarketDataClient {
         var request = URLRequest(url: components.url!)
         request.timeoutInterval = 25
         let (data, response) = try await URLSession(configuration: .ephemeral).data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
-              let bars = try? JSONDecoder().decode(Envelope.self, from: data).historical else {
-            throw LocalServiceError.invalidResponse
+        guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            throw LocalServiceError.remote(Self.message(from: data, fallback: "行情请求失败（\(http.statusCode)）"))
+        }
+        guard let bars = try? JSONDecoder().decode([Bar].self, from: data) else {
+            throw LocalServiceError.remote(Self.message(from: data, fallback: "FMP 返回格式无法识别"))
         }
         return Dictionary(uniqueKeysWithValues: bars.map { ($0.date, $0.close) })
     }
@@ -175,7 +184,10 @@ struct LocalMarketDataClient {
 
     private static func message(from data: Data, fallback: String) -> String {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return fallback }
-        return object["Error Message"] as? String ?? object["message"] as? String ?? fallback
+        return object["Error Message"] as? String
+            ?? object["error"] as? String
+            ?? object["message"] as? String
+            ?? fallback
     }
 }
 

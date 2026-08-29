@@ -135,12 +135,50 @@ struct AssetLogo: View {
     let logoSymbol: String?
 
     var body: some View {
-        Text(String(ticker.prefix(1)))
-            .font(.headline.weight(.heavy))
-            .foregroundStyle(.secondary)
+        AsyncImage(url: logoURL) { phase in
+            switch phase {
+            case let .success(image):
+                image
+                    .resizable()
+                    .scaledToFit()
+                    .padding(6)
+            default:
+                fallback
+            }
+        }
         .frame(width: 42, height: 42)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
+        }
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityHidden(true)
+    }
+
+    private var fallback: some View {
+        ZStack {
+            Circle()
+                .fill(fallbackColor.opacity(0.14))
+                .frame(width: 30, height: 30)
+            Text(String(ticker.prefix(1)).uppercased())
+                .font(.subheadline.weight(.heavy))
+                .foregroundStyle(fallbackColor)
+        }
+    }
+
+    private var fallbackColor: Color {
+        let colors = [CatfolioStyle.blue, CatfolioStyle.green, Color.orange, Color.purple, Color.teal]
+        let seed = ticker.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+        return colors[seed % colors.count]
+    }
+
+    private var logoURL: URL? {
+        let symbol = (logoSymbol ?? ticker).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !symbol.isEmpty, symbol != "ETF 其他" else { return nil }
+        return URL(string: "https://financialmodelingprep.com")?
+            .appendingPathComponent("image-stock")
+            .appendingPathComponent("\(symbol).png")
     }
 }
 

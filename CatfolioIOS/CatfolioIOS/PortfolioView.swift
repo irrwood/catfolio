@@ -4,7 +4,6 @@ import SwiftUI
 struct PortfolioView: View {
     @EnvironmentObject private var model: AppModel
     @State private var selectedHolding: Holding?
-    @State private var showsETFLookThrough = false
 
     var body: some View {
         NavigationStack {
@@ -12,10 +11,7 @@ struct PortfolioView: View {
                 LazyVStack(spacing: 12) {
                     if let overview = model.overview, let chart = model.portfolioChart {
                         CostMarketCard(overview: overview, response: chart)
-                        ETFLookThroughEntryCard {
-                            showsETFLookThrough = true
-                        }
-                        HoldingsCard(holdings: model.holdings) { holding in
+                        PortfolioDetailsCard(holdings: model.holdings) { holding in
                             selectedHolding = holding
                         }
                     } else if model.isPortfolioLoading {
@@ -46,9 +42,6 @@ struct PortfolioView: View {
                    selectedHolding == nil {
                     selectedHolding = model.holdings.first
                 }
-                if ProcessInfo.processInfo.arguments.contains("--show-etf") {
-                    showsETFLookThrough = true
-                }
             }
             .sheet(item: $selectedHolding) { holding in
                 VolumeProfileView(holding: holding)
@@ -56,48 +49,7 @@ struct PortfolioView: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showsETFLookThrough) {
-                ETFLookThroughView()
-                    .environmentObject(model)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-            }
         }
-    }
-}
-
-private struct ETFLookThroughEntryCard: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 14) {
-                Image(systemName: "square.3.layers.3d")
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(CatfolioStyle.blue)
-                    .frame(width: 42, height: 42)
-                    .background(CatfolioStyle.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("ETF 穿透")
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(.primary)
-                    Text("展开基金底层持仓，合并直接与间接暴露")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: 8)
-
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.tertiary)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .contentCard()
-        .accessibilityHint("打开 ETF 底层股票暴露")
     }
 }
 
@@ -255,22 +207,55 @@ private struct ChartLegend: View {
     }
 }
 
-private struct HoldingsCard: View {
+private struct PortfolioDetailsCard: View {
+    @EnvironmentObject private var model: AppModel
     let holdings: [Holding]
     let onSelect: (Holding) -> Void
+
+    @State private var tableMode = ProcessInfo.processInfo.arguments.contains("--show-etf") ? "ETF 穿透" : "持仓"
+    @State private var basis: ETFLookThroughBasis = .market
+    @State private var etfResponse: ETFLookThroughResponse?
+    @State private var etfError: String?
+    @State private var isLoadingETF = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("持仓明细")
+                Text("组合明细")
                     .font(.title3.weight(.bold))
                 Spacer()
-                Text("\(holdings.count) 项")
+                Text(itemCount)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
-            .padding(.bottom, 10)
+            .padding(.bottom, 12)
 
+            HStack {
+                Spacer()
+                GlassChoiceBar(choices: ["持仓", "ETF 穿透"], selection: $tableMode)
+                Spacer()
+            }
+            .padding(.bottom, 12)
+
+            if tableMode == "持仓" {
+                holdingsTable
+            } else {
+                etfTable
+            }
+        }
+        .contentCard()
+        .task(id: "\(tableMode)-\(basis.rawValue)-\(holdings.count)") {
+            guard tableMode == "ETF 穿透" else { return }
+            await loadETF()
+        }
+    }
+
+    private var itemCount: String {
+        tableMode == "持仓" ? "\(holdings.count) 项" : "\(etfResponse?.rows.count ?? 0) 项"
+    }
+
+    private var holdingsTable: some View {
+        LazyVStack(spacing: 0) {
             ForEach(Array(holdings.enumerated()), id: \.element.id) { index, holding in
                 Button {
                     onSelect(holding)
@@ -285,7 +270,117 @@ private struct HoldingsCard: View {
                 }
             }
         }
-        .contentCard()
+    }
+
+    @ViewBuilder
+    private var etfTable: some View {
+        HStack {
+            Text("计算口径")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Spacer()
+            GlassChoiceBar(
+                choices: ETFLookThroughBasis.allCases.map(\.title),
+                selection: Binding(
+                    get: { basis.title },
+                    set: { title in
+                        basis = ETFLookThroughBasis.allCases.first { $0.title == title } ?? .market
+                    }
+                )
+            )
+        }
+        .padding(.bottom, 10)
+
+        if isLoadingETF, etfResponse == nil {
+            HStack(spacing: 10) {
+                ProgressView()
+                Text("正在计算 ETF 底层持仓…")
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .font(.subheadline)
+            .frame(minHeight: 90)
+        } else if let etfError {
+            Label(etfError, systemImage: "square.3.layers.3d.slash")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, minHeight: 90, alignment: .leading)
+        } else if let response = etfResponse {
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("ETF \(basis.title)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(DisplayFormat.money(response.etfTotalUSD))
+                        .font(.subheadline.weight(.bold).monospacedDigit())
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("穿透标的")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(response.etfTickers.joined(separator: " · "))
+                        .font(.subheadline.weight(.semibold))
+                }
+                Spacer()
+            }
+            .padding(.vertical, 8)
+
+            Divider()
+
+            LazyVStack(spacing: 0) {
+                ForEach(Array(response.rows.enumerated()), id: \.element.id) { index, row in
+                    ETFExposureRow(row: row)
+                    if index < response.rows.count - 1 {
+                        Divider().padding(.leading, 46)
+                    }
+                }
+            }
+        }
+    }
+
+    private func loadETF() async {
+        isLoadingETF = true
+        etfError = nil
+        defer { isLoadingETF = false }
+        do {
+            etfResponse = try await model.loadETFLookThrough(basis: basis)
+        } catch {
+            etfResponse = nil
+            etfError = error.localizedDescription
+        }
+    }
+}
+
+private struct ETFExposureRow: View {
+    let row: ETFLookThroughRow
+
+    var body: some View {
+        HStack(spacing: 10) {
+            AssetLogo(ticker: row.ticker, logoSymbol: row.logoSymbol)
+                .scaleEffect(0.86)
+                .frame(width: 38, height: 48)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(row.ticker)
+                    .font(.subheadline.weight(.bold))
+                Text(row.name)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            VStack(alignment: .trailing, spacing: 3) {
+                Text(DisplayFormat.money(row.totalUSD))
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                Text(row.fromETFUSD > 0 ? "ETF \(DisplayFormat.percent(row.etfWeightPercent, signed: false))" : "直接持有")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(minHeight: 58)
+        .accessibilityElement(children: .combine)
     }
 }
 

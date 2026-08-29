@@ -118,6 +118,8 @@ private struct LocalServicesSettingsView: View {
     @State private var fmpKey = ""
     @State private var deepSeekKey = ""
     @State private var message: String?
+    @State private var fmpTestMessage: String?
+    @State private var isTestingFMP = false
 
     var body: some View {
         NavigationStack {
@@ -127,6 +129,15 @@ private struct LocalServicesSettingsView: View {
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                     Text("用于由 iPhone 直接下载日线与成交量，并在本机计算 VAH、POC、VAL。")
                         .font(.footnote).foregroundStyle(.secondary)
+                    Button(isTestingFMP ? "正在测试…" : "测试 FMP 行情") {
+                        Task { await testFMP() }
+                    }
+                    .disabled(isTestingFMP || fmpKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    if let fmpTestMessage {
+                        Label(fmpTestMessage, systemImage: fmpTestMessage.hasPrefix("成功") ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                            .font(.footnote)
+                            .foregroundStyle(fmpTestMessage.hasPrefix("成功") ? CatfolioStyle.green : CatfolioStyle.red)
+                    }
                 }
                 Section("AI") {
                     SecureField("DeepSeek API Key", text: $deepSeekKey)
@@ -164,5 +175,18 @@ private struct LocalServicesSettingsView: View {
         fmpKey = ""
         deepSeekKey = ""
         message = "已清除"
+    }
+
+    private func testFMP() async {
+        isTestingFMP = true
+        fmpTestMessage = nil
+        defer { isTestingFMP = false }
+        do {
+            try KeychainStore.set(fmpKey.trimmingCharacters(in: .whitespacesAndNewlines), for: LocalServiceKeys.fmp)
+            let profile = try await LocalMarketDataClient().volumeProfile(ticker: "AAPL", currency: "USD")
+            fmpTestMessage = "成功读取 AAPL 的 \(profile.sessions) 个交易日"
+        } catch {
+            fmpTestMessage = error.localizedDescription
+        }
     }
 }
