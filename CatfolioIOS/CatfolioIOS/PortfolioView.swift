@@ -25,7 +25,7 @@ struct PortfolioView: View {
                 .padding(.bottom, 24)
             }
             .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("投资组合")
+            .navigationTitle("Catfolio")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     ToolbarIconButton(systemImage: "arrow.clockwise", accessibilityLabel: "刷新投资组合") {
