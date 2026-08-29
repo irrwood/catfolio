@@ -60,10 +60,7 @@ struct SettingsView: View {
                 }
 
                 Section("关于") {
-                    LabeledContent("应用", value: "Catfolio iOS")
-                    LabeledContent("运行方式", value: "完全本机")
-                    LabeledContent("界面", value: "SwiftUI + Liquid Glass")
-                    LabeledContent("最低系统", value: "iOS 18")
+                    LabeledContent("版本", value: appVersion)
                 }
             }
             .navigationTitle("设置")
@@ -96,6 +93,10 @@ struct SettingsView: View {
                     .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
             }
         }
+    }
+
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
     }
 
     private func connector(_ title: String, detail: String, icon: String, action: @escaping () -> Void) -> some View {
