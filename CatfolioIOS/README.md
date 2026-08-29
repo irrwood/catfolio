@@ -15,10 +15,12 @@
 ## 券商 API
 
 - 支持在 iOS 设置中读取和切换 Trading 212、Moomoo、Interactive Brokers 数据源。
-- 支持分别测试 Moomoo OpenD 与 IBKR Client Portal Gateway 连接。
+- 支持 iPhone 通过 OAuth 2.1 + PKCE 直连新版 Moomoo REST OpenAPI，无需 OpenD 或 API Key；自动读取全部授权账户。
+- Moomoo OAuth 使用官方支持的 `http://localhost:60355/callback` 本机回调；授权时只需授予账户持仓读取所需的 `trade:read` 权限。
+- 旧版 Moomoo OpenD 与 IBKR Client Portal Gateway 继续作为服务端兼容选项。
 - 支持 iPhone 直连 IBKR Flex Web Service；Token 与 Query ID 仅保存在设备 Keychain，不需要 Gateway。
 - 支持从当前券商主动同步；成功后自动刷新 iOS 持仓。
-- Trading 212、Moomoo 与 IBKR Gateway 连接发生在 Catfolio 服务端；IBKR Flex 由 iPhone 直接连接 IBKR，凭证不会发送到 Catfolio 服务端。
+- Trading 212、旧版 Moomoo OpenD 与 IBKR Gateway 连接发生在 Catfolio 服务端；Moomoo OAuth 与 IBKR Flex 由 iPhone 直连，凭证不会发送到 Catfolio 服务端。
 
 ## 运行
 

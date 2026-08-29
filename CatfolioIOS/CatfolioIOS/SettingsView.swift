@@ -6,6 +6,7 @@ struct SettingsView: View {
     @State private var selectedBroker: BrokerProvider = .trading212
     @State private var showsCSVImport = false
     @State private var showsIBKRFlex = false
+    @State private var showsMoomooOAuth = false
 
     var body: some View {
         NavigationStack {
@@ -36,12 +37,22 @@ struct SettingsView: View {
                     }
                     .disabled(model.isBrokerLoading || model.isBrokerSyncing)
 
-                    Text("iPhone 仅调用 Catfolio API；券商连接和账户数据留在运行服务端的 Mac 上。")
+                    Text("Moomoo OAuth 与 IBKR Flex 可由 iPhone 直连；其他连接仍由 Catfolio 服务端处理。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
                     brokerRow(.moomoo)
                     brokerRow(.ibkr)
+
+                    Button {
+                        showsMoomooOAuth = true
+                    } label: {
+                        Label("Moomoo OAuth 直连", systemImage: "person.badge.key")
+                    }
+
+                    Text("使用 OAuth 2.1 + PKCE；无需 OpenD 或 API Key，Token 只保存在此 iPhone。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
 
                     Button {
                         showsIBKRFlex = true
@@ -56,7 +67,7 @@ struct SettingsView: View {
                     GlassPrimaryButton(
                         title: model.isBrokerSyncing
                             ? "正在同步"
-                            : (model.activeBroker == .ibkr ? "通过 Gateway 同步" : "同步当前券商"),
+                            : legacySyncTitle,
                         systemImage: "arrow.triangle.2.circlepath",
                         isDisabled: model.isBrokerSyncing || model.isBrokerLoading
                     ) {
@@ -89,7 +100,7 @@ struct SettingsView: View {
                 }
 
                 Section("服务端设置") {
-                    Text("AI Key、券商连接和数据导入继续由 Catfolio 服务端管理。")
+                    Text("AI Key、Trading 212、旧版 OpenD/Gateway 连接和最终数据导入由 Catfolio 服务端管理。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
@@ -116,6 +127,9 @@ struct SettingsView: View {
                 if ProcessInfo.processInfo.arguments.contains("--show-flex") {
                     showsIBKRFlex = true
                 }
+                if ProcessInfo.processInfo.arguments.contains("--show-moomoo") {
+                    showsMoomooOAuth = true
+                }
             }
             .onChange(of: selectedBroker) { _, provider in
                 guard provider != model.activeBroker else { return }
@@ -132,6 +146,12 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showsIBKRFlex) {
                 IBKRFlexView()
+                    .environmentObject(model)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showsMoomooOAuth) {
+                MoomooOAuthView()
                     .environmentObject(model)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
@@ -166,7 +186,7 @@ struct SettingsView: View {
 
                 Spacer(minLength: 8)
 
-                Button(state.isTesting ? "测试中" : (provider == .ibkr ? "Gateway" : "测试")) {
+                Button(state.isTesting ? "测试中" : legacyTestTitle(provider)) {
                     Task { await model.testBroker(provider) }
                 }
                 .buttonStyle(.bordered)
@@ -214,5 +234,21 @@ struct SettingsView: View {
 
     private var settingsURL: URL? {
         URL(string: model.serverURL)?.appendingPathComponent("settings")
+    }
+
+    private var legacySyncTitle: String {
+        switch model.activeBroker {
+        case .moomoo: "通过 OpenD 同步"
+        case .ibkr: "通过 Gateway 同步"
+        default: "同步当前券商"
+        }
+    }
+
+    private func legacyTestTitle(_ provider: BrokerProvider) -> String {
+        switch provider {
+        case .moomoo: "OpenD"
+        case .ibkr: "Gateway"
+        case .trading212: "测试"
+        }
     }
 }

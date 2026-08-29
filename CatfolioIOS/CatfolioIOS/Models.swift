@@ -196,7 +196,7 @@ enum BrokerProvider: String, CaseIterable, Codable, Identifiable {
         case .trading212:
             "由 Catfolio 服务端使用 API Key 同步。"
         case .moomoo:
-            "需要在运行 Catfolio 的 Mac 上启动并登录 OpenD。"
+            "支持 iPhone OAuth 直连；OpenD 作为旧版兼容选项。"
         case .ibkr:
             "支持 iPhone 直连 Flex；Client Portal Gateway 作为实时同步选项。"
         }

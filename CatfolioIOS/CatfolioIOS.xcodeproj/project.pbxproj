@@ -22,6 +22,8 @@
 		A1000000000000000000000E /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000010 /* KeychainStore.swift */; };
 		A1000000000000000000000F /* IBKRFlexClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000011 /* IBKRFlexClient.swift */; };
 		A10000000000000000000010 /* IBKRFlexView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000012 /* IBKRFlexView.swift */; };
+		A10000000000000000000011 /* MoomooOAuthClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000013 /* MoomooOAuthClient.swift */; };
+		A10000000000000000000012 /* MoomooOAuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000014 /* MoomooOAuthView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +45,8 @@
 		B10000000000000000000010 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		B10000000000000000000011 /* IBKRFlexClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IBKRFlexClient.swift; sourceTree = "<group>"; };
 		B10000000000000000000012 /* IBKRFlexView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IBKRFlexView.swift; sourceTree = "<group>"; };
+		B10000000000000000000013 /* MoomooOAuthClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoomooOAuthClient.swift; sourceTree = "<group>"; };
+		B10000000000000000000014 /* MoomooOAuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoomooOAuthView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -76,6 +80,8 @@
 				B10000000000000000000010 /* KeychainStore.swift */,
 				B10000000000000000000011 /* IBKRFlexClient.swift */,
 				B10000000000000000000012 /* IBKRFlexView.swift */,
+				B10000000000000000000013 /* MoomooOAuthClient.swift */,
+				B10000000000000000000014 /* MoomooOAuthView.swift */,
 				B1000000000000000000000B /* Assets.xcassets */,
 				B1000000000000000000000C /* Info.plist */,
 			);
@@ -149,6 +155,8 @@
 				A1000000000000000000000E /* KeychainStore.swift in Sources */,
 				A1000000000000000000000F /* IBKRFlexClient.swift in Sources */,
 				A10000000000000000000010 /* IBKRFlexView.swift in Sources */,
+				A10000000000000000000011 /* MoomooOAuthClient.swift in Sources */,
+				A10000000000000000000012 /* MoomooOAuthView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
