@@ -561,6 +561,65 @@ _V5_NAV_GROUPS = [
     ]),
 ]
 
+
+def _global_ai_float(lang: str, active_page: str) -> str:
+    """Shared AI chat surface mounted outside page content in the v5 shell."""
+    is_english = lang == "en"
+    copy = {
+        "label": "AI assistant" if is_english else "AI 助手",
+        "title": "Ask Cat",
+        "close": "Close AI assistant" if is_english else "关闭 AI 助手",
+        "open": "Open AI assistant" if is_english else "打开 AI 助手",
+        "intro": (
+            "Ask about the page you are viewing or your portfolio."
+            if is_english
+            else "可以问当前页面，也可以问你的投资组合。"
+        ),
+        "prompt": "Ask AI" if is_english else "问问 AI",
+        "starters": "Show suggested questions" if is_english else "显示推荐问题",
+        "send": "Send" if is_english else "发送",
+        "disclaimer": (
+            "AI can make mistakes. Verify important figures in Portfolio."
+            if is_english
+            else "AI 可能会出错，重要数字请回到 Portfolio 核对。"
+        ),
+    }
+    default_open = "false" if active_page == "/ai" else "true"
+    return f"""
+  <div class="global-ai-float" id="globalAiFloat" data-default-open="{default_open}">
+    <section class="global-ai-panel" id="globalAiPanel" role="dialog" aria-modal="false" aria-label="{copy['label']}">
+      <header class="global-ai-head">
+        <span class="global-ai-kicker">{copy['title']}</span>
+        <button class="global-ai-close" id="globalAiClose" type="button" aria-label="{copy['close']}">×</button>
+      </header>
+      <div class="global-ai-scroll" id="globalAiScroll" aria-live="polite">
+        <div class="global-ai-intro" id="globalAiIntro">
+          <img src="/static/icons/sidebar/magic.svg" alt="" width="28" height="28" />
+          <p>{copy['intro']}</p>
+        </div>
+        <div class="global-ai-conversation" id="globalAiConversation"></div>
+      </div>
+      <div class="global-ai-starters" id="globalAiStarters" hidden></div>
+      <form class="global-ai-composer" id="globalAiComposer">
+        <div class="global-ai-status" id="globalAiStatus" aria-live="polite"></div>
+        <div class="global-ai-compose-row">
+          <button class="global-ai-tool" id="globalAiSuggestions" type="button" aria-label="{copy['starters']}" aria-expanded="false">{_hi('hi-plus', 'hi')}</button>
+          <div class="global-ai-input-wrap">
+            <textarea id="globalAiInput" rows="1" maxlength="1200" placeholder="{copy['prompt']}" aria-label="{copy['prompt']}"></textarea>
+            <button class="global-ai-send" id="globalAiSend" type="submit" aria-label="{copy['send']}">
+              <img src="/static/icons/ai-send-arrow.svg" alt="" width="28" height="28" />
+            </button>
+          </div>
+        </div>
+        <small>{copy['disclaimer']}</small>
+      </form>
+    </section>
+    <button class="global-ai-launcher" id="globalAiLauncher" type="button" aria-label="{copy['open']}" aria-controls="globalAiPanel" aria-expanded="false" hidden>
+      <img src="/static/icons/sidebar/magic.svg" alt="" width="24" height="24" />
+    </button>
+  </div>
+"""
+
 def wrap_v5_layout(title: str, content: str, active_page: str, lang: str = "zh", head_extra: str = "") -> str:
     demo_on = demo_mode()
     brand_icon_dark, brand_icon_light = _brand_icon_paths()
@@ -605,6 +664,7 @@ def wrap_v5_layout(title: str, content: str, active_page: str, lang: str = "zh",
   <link rel="stylesheet" href="/static/v5.css" />
   {head_extra}
   <link rel="stylesheet" href="/static/design-system.css" />
+  <link rel="stylesheet" href="/static/ai-float.css" />
 </head>
 <body class="page-{page_slug}">
   {_HUGEICON_SYMBOLS}
@@ -648,6 +708,8 @@ def wrap_v5_layout(title: str, content: str, active_page: str, lang: str = "zh",
       </div>
     </div>
   </div>
+
+  {_global_ai_float(lang, active_page)}
 
   <script src="/static/client_i18n.js"></script>
   <script>
@@ -730,6 +792,7 @@ def wrap_v5_layout(title: str, content: str, active_page: str, lang: str = "zh",
       }});
     }}
   </script>
+  <script src="/static/ai-float.js"></script>
 </body>
 </html>"""
     return t_block(_version_assets(html), lang)

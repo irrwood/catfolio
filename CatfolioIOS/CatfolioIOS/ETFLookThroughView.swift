@@ -2,9 +2,9 @@ import SwiftUI
 
 struct ETFLookThroughView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var model: AppModel
+    @Environment(AppModel.self) private var model
 
-    @State private var basis: ETFLookThroughBasis = .market
+    @State private var basis: ETFLookThroughBasis = .cost
     @State private var response: ETFLookThroughResponse?
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -32,7 +32,7 @@ struct ETFLookThroughView: View {
                             selection: Binding(
                                 get: { basis.title },
                                 set: { title in
-                                    basis = ETFLookThroughBasis.allCases.first { $0.title == title } ?? .market
+                                    basis = ETFLookThroughBasis.allCases.first { $0.title == title } ?? .cost
                                 }
                             )
                         )
@@ -44,7 +44,7 @@ struct ETFLookThroughView: View {
                 if let response {
                     Section("ETF 概览") {
                         LabeledContent("包含 ETF", value: response.etfTickers.joined(separator: " · "))
-                        LabeledContent("ETF \(basis.title)", value: DisplayFormat.money(response.etfTotalUSD))
+                        LabeledContent("用于穿透的\(basis.title)", value: DisplayFormat.money(response.etfTotalUSD))
                         LabeledContent("成分覆盖", value: DisplayFormat.percent(response.coveredWeightPercent, signed: false))
                         LabeledContent("底层证券", value: "\(response.constituentCount) 项")
 
@@ -63,7 +63,7 @@ struct ETFLookThroughView: View {
 
                     Section {
                         ForEach(filteredRows) { row in
-                            ETFLookThroughRowView(row: row)
+                            ETFLookThroughRowView(row: row, basis: basis)
                         }
                     } header: {
                         HStack {
@@ -72,7 +72,7 @@ struct ETFLookThroughView: View {
                             Text("\(filteredRows.count) 项")
                         }
                     } footer: {
-                        Text("合计暴露 = 直接持有 + ETF 间接持有。ETF 权重来自 App 内置的官方基金持仓快照。")
+                        Text(footerText(for: response))
                     }
                 } else if isLoading {
                     Section {
@@ -99,12 +99,8 @@ struct ETFLookThroughView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("完成") { dismiss() }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    ToolbarIconButton(systemImage: "arrow.clockwise", accessibilityLabel: "刷新 ETF 穿透") {
-                        Task { await load() }
-                    }
-                }
             }
+            .refreshable { await load() }
             .task { await load() }
             .onChange(of: basis) { _, _ in
                 Task { await load() }
@@ -123,10 +119,20 @@ struct ETFLookThroughView: View {
             errorMessage = error.localizedDescription
         }
     }
+
+    private func footerText(for response: ETFLookThroughResponse) -> String {
+        let base = "直接持仓始终按当前市值；\(basis.title)按基金权重拆分后加入直接市值。ETF 权重来自 App 内置的官方基金持仓快照。"
+        let xs2dAliases = Set(["XS2D", "XS2D.L", "DBPG", "DBPG.DE", "XS2L", "XS2L.MI"])
+        guard response.etfTickers.contains(where: { xs2dAliases.contains($0.uppercased()) }) else {
+            return base
+        }
+        return base + " XS2D 是合成日杠杆产品，这里展示标普 500 经济暴露近似；净成本和净市值只分配一次，不会再次乘 2。"
+    }
 }
 
 private struct ETFLookThroughRowView: View {
     let row: ETFLookThroughRow
+    let basis: ETFLookThroughBasis
 
     private var indirectRatio: Double {
         guard row.totalUSD > 0 else { return 0 }
@@ -139,7 +145,7 @@ private struct ETFLookThroughRowView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.ticker)
                         .font(.body.weight(.bold))
-                    Text(row.name)
+                    Text(CompanyNameCatalog.displayName(ticker: row.ticker, fallback: row.name))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -177,8 +183,8 @@ private struct ETFLookThroughRowView: View {
             .accessibilityHidden(true)
 
             HStack(spacing: 16) {
-                exposureLabel("直接", value: row.directUSD, color: CatfolioStyle.blue)
-                exposureLabel("ETF", value: row.fromETFUSD, color: CatfolioStyle.green)
+                exposureLabel("直接市值", value: row.directUSD, color: CatfolioStyle.blue)
+                exposureLabel(basis.title, value: row.fromETFUSD, color: CatfolioStyle.green)
                 Spacer()
                 if row.fromETFUSD > 0 {
                     Text("间接 \(DisplayFormat.percent(indirectRatio * 100, signed: false))")

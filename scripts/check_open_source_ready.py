@@ -73,7 +73,7 @@ def is_blocked_path(path: str) -> bool:
 
 def scan_file(path: str) -> list[str]:
     full_path = ROOT / path
-    if not full_path.exists():
+    if not full_path.is_file():
         return []
     if full_path.suffix.lower() in {".icns", ".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip"}:
         return []

@@ -1,0 +1,811 @@
+{
+  "generated_at": "2026-09-02T14:12:54.662819+00:00",
+  "provider": "Brandfetch Brand API",
+  "selection": "Hand-selected Brand API symbols are preferred; exact-domain, verified, high-quality Brandfetch Search API icons expand coverage; FMP remains the fallback.",
+  "count": 66,
+  "assets": [
+    {
+      "ticker": "NVDA",
+      "brand": "NVIDIA",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "MSFT",
+      "brand": "Microsoft",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "AMZN",
+      "brand": "Amazon",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "AVGO",
+      "brand": "Broadcom Inc.",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "TSLA",
+      "brand": "Tesla",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "WMT",
+      "brand": "Walmart",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "AMD",
+      "brand": "AMD",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "MA",
+      "brand": "Mastercard",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "BAC",
+      "brand": "Bank of America",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "PLTR",
+      "brand": "Palantir",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "CVX",
+      "brand": "Chevron",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "ORCL",
+      "brand": "Oracle",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "MRK",
+      "brand": "Merck",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "LRCX",
+      "brand": "Lam Research",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "HSBC",
+      "brand": "HSBC",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "AMAT",
+      "brand": "Applied Materials",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "NFLX",
+      "brand": "Netflix",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "NVS",
+      "brand": "Novartis",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "PANW",
+      "brand": "Palo Alto Networks",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "GS",
+      "brand": "Goldman Sachs",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "PM",
+      "brand": "Philip Morris International",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "RTX",
+      "brand": "Raythe Technologies",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "BABA",
+      "brand": "Alibaba Group",
+      "asset_type": "symbol",
+      "theme": "dark",
+      "format": "png"
+    },
+    {
+      "ticker": "AAPL",
+      "brand": "Apple",
+      "domain": "apple.com",
+      "brand_id": "idnrCPuv87",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 1.0,
+      "bytes": 2609
+    },
+    {
+      "ticker": "META",
+      "brand": "Meta",
+      "domain": "meta.com",
+      "brand_id": "idWvz5T3V7",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 1.0,
+      "bytes": 6858
+    },
+    {
+      "ticker": "LLY",
+      "brand": "Lilly",
+      "domain": "lilly.com",
+      "brand_id": "idxr899feu",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9612,
+      "bytes": 8812
+    },
+    {
+      "ticker": "PG",
+      "brand": "Procter & Gamble",
+      "domain": "pg.com",
+      "brand_id": "id6htIcs_f",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9609,
+      "bytes": 15465
+    },
+    {
+      "ticker": "WFC",
+      "brand": "Wells Fargo",
+      "domain": "wellsfargo.com",
+      "brand_id": "idVCed0KqE",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9998,
+      "bytes": 5768
+    },
+    {
+      "ticker": "CSCO",
+      "brand": "Cisco",
+      "domain": "cisco.com",
+      "brand_id": "ida_xaMYlM",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9615,
+      "bytes": 7657
+    },
+    {
+      "ticker": "MCD",
+      "brand": "McDonald's",
+      "domain": "mcdonalds.com",
+      "brand_id": "id7ETzoB9W",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9613,
+      "bytes": 8411
+    },
+    {
+      "ticker": "ABT",
+      "brand": "Abbott",
+      "domain": "abbott.com",
+      "brand_id": "idtqCIB40M",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9994,
+      "bytes": 3133
+    },
+    {
+      "ticker": "AXP",
+      "brand": "American Express",
+      "domain": "americanexpress.com",
+      "brand_id": "id5WXF6Iyd",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9614,
+      "bytes": 10381
+    },
+    {
+      "ticker": "GE",
+      "brand": "GE Aviation",
+      "domain": "geaerospace.com",
+      "brand_id": "idXNlE524Y",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9588,
+      "bytes": 17013
+    },
+    {
+      "ticker": "DIS",
+      "brand": "The Walt Disney Company",
+      "domain": "thewaltdisneycompany.com",
+      "brand_id": "idrbPzQywU",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9604,
+      "bytes": 10795
+    },
+    {
+      "ticker": "VZ",
+      "brand": "Verizon",
+      "domain": "verizon.com",
+      "brand_id": "idXhrQrb5t",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9999,
+      "bytes": 5240
+    },
+    {
+      "ticker": "AMGN",
+      "brand": "Amgen",
+      "domain": "amgen.com",
+      "brand_id": "idYnJ6l4Ub",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9605,
+      "bytes": 4942
+    },
+    {
+      "ticker": "TXN",
+      "brand": "Texas Instruments",
+      "domain": "ti.com",
+      "brand_id": "idjx-GI6U-",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9614,
+      "bytes": 7451
+    },
+    {
+      "ticker": "BKNG",
+      "brand": "Booking Holdings",
+      "domain": "bookingholdings.com",
+      "brand_id": "idExtYJ7kt",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9441,
+      "bytes": 8628
+    },
+    {
+      "ticker": "PFE",
+      "brand": "Pfizer",
+      "domain": "pfizer.com",
+      "brand_id": "idiBxFRhd9",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9996,
+      "bytes": 10529
+    },
+    {
+      "ticker": "PEP",
+      "brand": "PepsiCo",
+      "domain": "pepsico.com",
+      "brand_id": "idzsO4cZJ1",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9611,
+      "bytes": 9981
+    },
+    {
+      "ticker": "HON",
+      "brand": "Honeywell",
+      "domain": "honeywell.com",
+      "brand_id": "id9eVV7cJp",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9614,
+      "bytes": 3348
+    },
+    {
+      "ticker": "QCOM",
+      "brand": "Qualcomm",
+      "domain": "qualcomm.com",
+      "brand_id": "id57CH5xdF",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9613,
+      "bytes": 6853
+    },
+    {
+      "ticker": "DE",
+      "brand": "John Deere",
+      "domain": "deere.com",
+      "brand_id": "idUgsqXMoD",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9615,
+      "bytes": 11582
+    },
+    {
+      "ticker": "COP",
+      "brand": "ConocoPhillips",
+      "domain": "conocophillips.com",
+      "brand_id": "idF2-YoGy7",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9578,
+      "bytes": 4252
+    },
+    {
+      "ticker": "ACN",
+      "brand": "Accenture",
+      "domain": "accenture.com",
+      "brand_id": "id44tJQbVE",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9999,
+      "bytes": 5718
+    },
+    {
+      "ticker": "ADBE",
+      "brand": "Adobe",
+      "domain": "adobe.com",
+      "brand_id": "id_KsyK7J9",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 1.0,
+      "bytes": 4938
+    },
+    {
+      "ticker": "NKE",
+      "brand": "Nike",
+      "domain": "nike.com",
+      "brand_id": "id_0dwKPKT",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 1.0,
+      "bytes": 1904
+    },
+    {
+      "ticker": "BA",
+      "brand": "The Boeing Company",
+      "domain": "boeing.com",
+      "brand_id": "idqRgU_Nu5",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9613,
+      "bytes": 13824
+    },
+    {
+      "ticker": "MU",
+      "brand": "Micron",
+      "domain": "micron.com",
+      "brand_id": "idNcgNtzG1",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9607,
+      "bytes": 12048
+    },
+    {
+      "ticker": "GILD",
+      "brand": "Gilead Sciences, Inc.",
+      "domain": "gilead.com",
+      "brand_id": "ideNjePptV",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9601,
+      "bytes": 7022
+    },
+    {
+      "ticker": "MDT",
+      "brand": "Medtronic",
+      "domain": "medtronic.com",
+      "brand_id": "idIGayoY2K",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9997,
+      "bytes": 10255
+    },
+    {
+      "ticker": "SBUX",
+      "brand": "Starbucks",
+      "domain": "starbucks.com",
+      "brand_id": "idwBSkfVb3",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9998,
+      "bytes": 21404
+    },
+    {
+      "ticker": "PGR",
+      "brand": "Progressive",
+      "domain": "progressive.com",
+      "brand_id": "idFDF9ze43",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9612,
+      "bytes": 5074
+    },
+    {
+      "ticker": "LMT",
+      "brand": "Lockheed Martin",
+      "domain": "lockheedmartin.com",
+      "brand_id": "idDGntMzIS",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9607,
+      "bytes": 6665
+    },
+    {
+      "ticker": "DHR",
+      "brand": "Danaher",
+      "domain": "danaher.com",
+      "brand_id": "idro86--SX",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9947,
+      "bytes": 6636
+    },
+    {
+      "ticker": "BMY",
+      "brand": "Bristol Myers Squibb",
+      "domain": "bms.com",
+      "brand_id": "idkch54HBd",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9996,
+      "bytes": 5536
+    },
+    {
+      "ticker": "COIN",
+      "brand": "Coinbase",
+      "domain": "coinbase.com",
+      "brand_id": "idwDWo4ONQ",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9614,
+      "bytes": 6809
+    },
+    {
+      "ticker": "HOOD",
+      "brand": "Robinhood",
+      "domain": "robinhood.com",
+      "brand_id": "id3WzK3p17",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9614,
+      "bytes": 5005
+    },
+    {
+      "ticker": "CRWD",
+      "brand": "CrowdStrike",
+      "domain": "crowdstrike.com",
+      "brand_id": "idfOAAUeK0",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9613,
+      "bytes": 4140
+    },
+    {
+      "ticker": "SNOW",
+      "brand": "Snowflake",
+      "domain": "snowflake.com",
+      "brand_id": "idJz-fGD_q",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9614,
+      "bytes": 11475
+    },
+    {
+      "ticker": "DDOG",
+      "brand": "Datadog",
+      "domain": "datadoghq.com",
+      "brand_id": "idg33VVWFZ",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 1.0,
+      "bytes": 10269
+    },
+    {
+      "ticker": "NET",
+      "brand": "Cloudflare",
+      "domain": "cloudflare.com",
+      "brand_id": "idJ3Cg8ymG",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 1.0,
+      "bytes": 4431
+    },
+    {
+      "ticker": "SHOP",
+      "brand": "Shopify.com",
+      "domain": "shopify.com",
+      "brand_id": "idAgPm7IvG",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 1.0,
+      "bytes": 6697
+    },
+    {
+      "ticker": "SPOT",
+      "brand": "Spotify",
+      "domain": "spotify.com",
+      "brand_id": "id20mQyGeY",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 1.0,
+      "bytes": 12455
+    },
+    {
+      "ticker": "SQ",
+      "brand": "Block",
+      "domain": "block.xyz",
+      "brand_id": "idioU2Jl5y",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 0.9047,
+      "bytes": 2404
+    },
+    {
+      "ticker": "PYPL",
+      "brand": "PayPal",
+      "domain": "paypal.com",
+      "brand_id": "id-Wd4a4TS",
+      "asset_type": "icon",
+      "theme": "brand_default",
+      "format": "png",
+      "quality_score": 1.0,
+      "bytes": 4904
+    }
+  ],
+  "failed": [
+    {
+      "ticker": "ABBV",
+      "reason": "no_raster_symbol"
+    },
+    {
+      "ticker": "GOOGL",
+      "domain": "alphabet.com",
+      "reason": "no_exact_verified_icon"
+    },
+    {
+      "ticker": "IBM",
+      "domain": "ibm.com",
+      "reason": "no_exact_verified_icon"
+    },
+    {
+      "ticker": "T",
+      "domain": "att.com",
+      "reason": "no_exact_verified_icon"
+    },
+    {
+      "ticker": "PLD",
+      "domain": "prologis.com",
+      "reason": "no_exact_verified_icon"
+    },
+    {
+      "ticker": "NEE",
+      "domain": "nexteraenergy.com",
+      "reason": "no_exact_verified_icon"
+    },
+    {
+      "ticker": "SCHW",
+      "domain": "schwab.com",
+      "reason": "no_exact_verified_icon"
+    },
+    {
+      "ticker": "MMC",
+      "domain": "mmc.com",
+      "reason": "no_exact_verified_icon"
+    },
+    {
+      "ticker": "BRK.B",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "JPM",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "V",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "XOM",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "UNH",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "COST",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "JNJ",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "HD",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "ABBV",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "KO",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "CRM",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "MS",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "NOW",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "INTU",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "UBER",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "ISRG",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "CAT",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "SPGI",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "BLK",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "SYK",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "TMO",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "LOW",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "UNP",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "ETN",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "ADP",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "TJX",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "CVS",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "MO",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "C",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "CB",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "MMM",
+      "reason": "not_symbol_like_after_visual_review"
+    },
+    {
+      "ticker": "FI",
+      "reason": "not_symbol_like_after_visual_review"
+    }
+  ]
+}

@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en" class="light-theme">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:," />
+  <title>Catfolio component demo</title>
+  <link rel="stylesheet" href="design-system.css" />
+  <link rel="stylesheet" href="portfolio.css" />
+  <link rel="stylesheet" href="analysis_charts.css" />
+  <link rel="stylesheet" href="component-demo.css?v=3" />
+</head>
+<body class="component-demo-page page-lab">
+  <main class="component-demo-workspace" id="componentDemo">
+    <section class="component-demo-stage" aria-roledescription="carousel" aria-label="Portfolio component demo" tabindex="0">
+      <button class="component-demo-arrow component-demo-arrow-prev" id="componentDemoPrev" type="button" aria-label="Previous component">
+        <img src="icons/analytics/arrow-left.svg" alt="" />
+      </button>
+
+      <div class="component-demo-viewport" id="componentDemoViewport">
+        <div class="component-demo-track">
+          <article class="component-demo-slide is-active" data-demo-slide="0" aria-labelledby="costValueTitle">
+            <section class="portfolio-value-card" aria-labelledby="costValueTitle">
+              <div class="portfolio-chart-head">
+                <div>
+                  <h2 id="costValueTitle">Cost vs Market Value</h2>
+                  <p>Current stock-position cost and historical market value (USD, excluding account cash)</p>
+                </div>
+              </div>
+              <div class="portfolio-chart-body">
+                <div id="costValueChart" class="portfolio-value-chart" role="img" aria-label="Stock-position cost and historical market-value chart, excluding account cash"></div>
+                <div class="portfolio-ranges" role="group" aria-label="Chart time range">
+                  <button type="button" data-range="1d" aria-pressed="false">1D</button>
+                  <button type="button" data-range="1w">1W</button>
+                  <button type="button" data-range="1m">1M</button>
+                  <button type="button" class="active" data-range="3m" aria-pressed="true">3M</button>
+                  <button type="button" data-range="ytd">YTD</button>
+                  <button type="button" data-range="1y">1Y</button>
+                  <button type="button" data-range="max">MAX</button>
+                </div>
+              </div>
+            </section>
+          </article>
+
+          <article class="component-demo-slide" data-demo-slide="1" aria-labelledby="profitCalendarTitle" aria-hidden="true" inert>
+            <article class="portfolio-profit-calendar-card" aria-labelledby="profitCalendarTitle">
+              <header class="profit-calendar-head">
+                <h2 id="profitCalendarTitle">Profit Calendar</h2>
+                <div class="profit-calendar-controls">
+                  <div class="profit-calendar-range" role="group" aria-label="Calendar range">
+                    <button class="profit-calendar-range-button active" id="profitCalendarDay" type="button" aria-pressed="true" title="View daily P/L for the month">D</button>
+                    <button class="profit-calendar-range-button" id="profitCalendarMonth" type="button" aria-pressed="false" title="View monthly P/L for the year">M</button>
+                    <button class="profit-calendar-range-button" id="profitCalendarYear" type="button" aria-pressed="false" title="View daily P/L for the year">Y</button>
+                  </div>
+                  <div class="profit-calendar-period-nav">
+                    <button id="profitCalendarPrev" type="button" aria-label="Previous period"><img src="icons/analytics/arrow-left.svg" alt="" /></button>
+                    <span id="profitCalendarPeriod" aria-live="polite"><span id="profitCalendarPeriodMonth">—</span><span id="profitCalendarPeriodYear">—</span></span>
+                    <button id="profitCalendarNext" type="button" aria-label="Next period"><img src="icons/analytics/arrow-right.svg" alt="" /></button>
+                  </div>
+                </div>
+              </header>
+              <div class="profit-calendar-body">
+                <div class="profit-calendar-weekdays" id="profitCalendarWeekdays" aria-hidden="true"></div>
+                <div class="profit-calendar-grid is-loading" id="profitCalendarGrid" role="grid" aria-label="Daily portfolio profit and loss"></div>
+              </div>
+              <footer class="profit-calendar-summary">
+                <div class="profit-calendar-summary-item">
+                  <img src="icons/analytics/dividend.svg" alt="" />
+                  <span class="profit-calendar-summary-label">Dividends</span>
+                  <strong id="profitCalendarDividends">+$0.00</strong>
+                  <span class="profit-calendar-summary-period">Month</span>
+                </div>
+                <div class="profit-calendar-summary-item">
+                  <img src="icons/analytics/cash-interest.svg" alt="" />
+                  <span class="profit-calendar-summary-label">Cash interest</span>
+                  <strong id="profitCalendarInterest">+$0.00</strong>
+                  <span class="profit-calendar-summary-period">Month</span>
+                </div>
+              </footer>
+            </article>
+          </article>
+
+          <article class="component-demo-slide" data-demo-slide="2" aria-labelledby="drawdownTitle" aria-hidden="true" inert>
+            <article class="analytics-card analytics-drawdown-card" aria-labelledby="drawdownTitle">
+              <header>
+                <div><h2 id="drawdownTitle">Drawdown Underwater Curve</h2><p id="drawdownMeta">Max drawdown</p></div>
+              </header>
+              <div class="analytics-drawdown-body">
+                <div class="analytics-chart is-loading" id="drawdownChart" role="img" aria-label="Drawdown Underwater Curve"></div>
+                <div class="analytics-drawdown-ranges" role="group" aria-label="Drawdown chart time range">
+                  <button type="button" data-drawdown-range="1D" aria-pressed="false">1D</button>
+                  <button type="button" data-drawdown-range="1W" aria-pressed="false">1W</button>
+                  <button type="button" data-drawdown-range="1M" aria-pressed="false">1M</button>
+                  <button type="button" data-drawdown-range="3M" aria-pressed="false">3M</button>
+                  <button type="button" data-drawdown-range="YTD" aria-pressed="false">YTD</button>
+                  <button type="button" data-drawdown-range="1Y" aria-pressed="false">1Y</button>
+                  <button type="button" data-drawdown-range="MAX" class="active" aria-pressed="true">MAX</button>
+                </div>
+              </div>
+            </article>
+          </article>
+
+          <article class="component-demo-slide" data-demo-slide="3" aria-labelledby="portfolioHoldingsTitle" aria-hidden="true" inert>
+            <section class="portfolio-holdings-card" aria-labelledby="portfolioHoldingsTitle">
+              <header class="portfolio-holdings-head">
+                <div class="portfolio-holdings-title">
+                  <h2 id="portfolioHoldingsTitle">Holding Details</h2>
+                  <p id="portfolioHoldingsMeta" aria-live="polite">Loading holdings…</p>
+                </div>
+                <div class="portfolio-holdings-mode" role="tablist" aria-label="Holdings view">
+                  <button class="active" type="button" role="tab" aria-selected="true" data-portfolio-holdings-mode="direct">Raw holdings</button>
+                  <button type="button" role="tab" aria-selected="false" data-portfolio-holdings-mode="lookthrough">ETF Look-Through</button>
+                </div>
+              </header>
+              <div class="portfolio-holdings-scroll" tabindex="0" aria-label="Holding details list">
+                <table class="portfolio-holdings-table">
+                  <thead id="portfolioHoldingsHead"></thead>
+                  <tbody id="portfolioHoldingsRows">
+                    <tr class="portfolio-holdings-message"><td>Loading holdings…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </article>
+        </div>
+      </div>
+
+      <button class="component-demo-arrow component-demo-arrow-next" id="componentDemoNext" type="button" aria-label="Next component">
+        <img src="icons/analytics/arrow-right.svg" alt="" />
+      </button>
+    </section>
+
+    <footer class="component-demo-footer" aria-label="Component navigation">
+      <span class="component-demo-position" id="componentDemoPosition" aria-live="polite">01 / 04</span>
+      <div class="component-demo-dots" id="componentDemoDots" role="tablist" aria-label="Select component">
+        <button class="active" type="button" role="tab" data-demo-go="0" aria-label="Cost vs Market Value" aria-selected="true"></button>
+        <button type="button" role="tab" data-demo-go="1" aria-label="Profit Calendar" aria-selected="false"></button>
+        <button type="button" role="tab" data-demo-go="2" aria-label="Drawdown Underwater Curve" aria-selected="false"></button>
+        <button type="button" role="tab" data-demo-go="3" aria-label="Holding Details" aria-selected="false"></button>
+      </div>
+      <span aria-hidden="true"></span>
+    </footer>
+  </main>
+
+  <p id="portfolioStatus" class="component-demo-status" role="status" aria-live="polite">Loading portfolio data</p>
+  <div class="component-demo-status" aria-hidden="true">
+    <span id="portfolioValue"></span><span id="portfolioToday"></span>
+    <span id="portfolioPnl"></span><span id="portfolioPnlRate"></span>
+    <span id="portfolioCount"></span><span id="portfolioBreadth"></span>
+    <span id="portfolioTopFive"></span><span id="portfolioTopOne"></span>
+  </div>
+  <div id="analyticsStatus" class="component-demo-status" aria-live="polite"></div>
+
+  <script>
+    window.__CATFOLIO_STATIC_BASE__ = ".";
+  </script>
+  <script src="component-demo.js"></script>
+  <script src="vendor/echarts.min.js"></script>
+  <script src="portfolio.js"></script>
+  <script src="portfolio-calendar.js"></script>
+  <script src="portfolio-holdings.js"></script>
+  <script src="analysis_charts.js"></script>
+</body>
+</html>

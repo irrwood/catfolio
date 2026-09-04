@@ -27,7 +27,10 @@ enum KeychainStore {
             kSecAttrAccount as String: key,
         ]
         if value.isEmpty {
-            SecItemDelete(baseQuery as CFDictionary)
+            let status = SecItemDelete(baseQuery as CFDictionary)
+            guard status == errSecSuccess || status == errSecItemNotFound else {
+                throw KeychainError.deleteFailed(status)
+            }
             return
         }
 
@@ -52,11 +55,14 @@ enum KeychainStore {
 
 private enum KeychainError: LocalizedError {
     case writeFailed(OSStatus)
+    case deleteFailed(OSStatus)
 
     var errorDescription: String? {
         switch self {
         case let .writeFailed(status):
             "无法保存到 Keychain（\(status)）"
+        case let .deleteFailed(status):
+            "无法从 Keychain 移除密钥（\(status)）"
         }
     }
 }

@@ -2,11 +2,13 @@ import json
 import ssl
 import time
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from .analytics import etf_lookthrough, holdings_detail, pnl_contribution, portfolio_summary, sector_concentration
 from .data_store import current_snapshot, demo_mode, secret_value
-from .lab import backtest, cumulative_multi_benchmark, cumulative_vs_benchmark, drawdown_curve, efficient_frontier, factor_analysis, lab_history_summary, monte_carlo, monthly_return_heatmap
+from .lab import backtest, cumulative_multi_benchmark, cumulative_vs_benchmark, drawdown_curve, efficient_frontier, factor_analysis, get_history, lab_history_summary, monte_carlo, monthly_return_heatmap
+from .portfolio_attention import enforce_confidence, fallback_thesis, fetch_recent_company_events, scan_portfolio
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -800,7 +802,115 @@ def what_if(scenario: str, lang: str | None = None):
     return {"what_if_analysis": text.strip(), "scenario": scenario}
 
 
-def ask(question: str, lang: str | None = None):
+def _attention_thesis_prompt(rows: list[dict], sources: dict[str, list[dict]], lang: str) -> str:
+    evidence = []
+    for row in rows:
+        evidence.append({
+            "ticker": row["ticker"],
+            "name": row["name"],
+            "attention": row["attention"],
+            "signals": row["signals"],
+            "metrics_calculated_by_catfolio": {
+                "weight": row["weight"],
+                "today_change_percent": row["today_change_percent"],
+                "portfolio_contribution_percent": row["portfolio_contribution_percent"],
+                "return_60d_percent": row["return_60d_percent"],
+                "volume_multiple": row["volume_multiple"],
+                "distance_from_52w_high_percent": row["distance_from_52w_high_percent"],
+                "distance_from_52w_low_percent": row["distance_from_52w_low_percent"],
+                "ma_200_position_percent": row["ma_200_position_percent"],
+            },
+            "fundamentals": row["fundamentals"],
+            "recent_source_bundle": sources.get(row["ticker"], []),
+        })
+    language = "English" if _normalize_lang(lang) == "en" else "Chinese"
+    return f"""You are the thesis stage of Catfolio's Portfolio Attention Engine.
+
+Catfolio has already calculated every market metric below. Never recalculate, alter, or invent a number. Only explain the supplied evidence. A headline is not proof of a catalyst unless it clearly describes a company-specific confirmed event. Do not invent article contents. If the evidence bundle is empty or only shows market/sector commentary, set company_specific_catalyst=false and catalyst_confirmed=false.
+
+For each holding, evaluate what changed, why it matters, whether the investment thesis is strengthening, maintaining, or weakening, the strongest counter-evidence, risks, and what to watch. Risk flags may only use: legal_regulatory, governance, dilution, liquidity, leadership. Do not recommend buying or selling, give a target price, or suggest position sizing. Write human-readable fields in {language}.
+
+Evidence:
+{json.dumps(evidence, ensure_ascii=False)}
+
+Return only this JSON structure:
+{{
+  "theses": [
+    {{
+      "ticker": "NVDA",
+      "stance": "strengthening|maintaining|weakening",
+      "what_changed": "...",
+      "why_it_matters": "...",
+      "supporting_evidence": ["..."],
+      "counter_evidence": ["..."],
+      "risks": ["..."],
+      "watch_next": ["..."],
+      "risk_flags": ["legal_regulatory|governance|dilution|liquidity|leadership"],
+      "company_specific_catalyst": false,
+      "catalyst_confirmed": false,
+      "catalyst_is_recent": false,
+      "evidence_source_ids": ["exact-source-id-from-bundle"],
+      "severe_unresolved_risk": false
+    }}
+  ]
+}}"""
+
+
+def portfolio_attention(lang: str | None = None):
+    """Run deterministic screening, then research/explain only selected rows."""
+    normalized_lang = _normalize_lang(lang)
+    snapshot = current_snapshot()
+    history = get_history()
+    result = scan_portfolio(snapshot, history)
+    selected = result["attention_rows"]
+    if not selected:
+        return {**result, "research_status": "not_needed", "warnings": []}
+
+    sources: dict[str, list[dict]] = {}
+    if demo_mode():
+        sources = {row["ticker"]: [] for row in selected}
+    else:
+        research_rows = selected[:8]
+        with ThreadPoolExecutor(max_workers=min(4, len(research_rows))) as pool:
+            futures = {
+                row["ticker"]: pool.submit(fetch_recent_company_events, row["ticker"], row["name"])
+                for row in research_rows
+            }
+            sources = {ticker: future.result() for ticker, future in futures.items()}
+
+    model_by_ticker = {}
+    warnings = []
+    if not demo_mode():
+        try:
+            prompt = _attention_thesis_prompt(selected[:8], sources, normalized_lang)
+            text = _deepseek([
+                {"role": "system", "content": "You are a cautious portfolio research analyst. Return valid JSON only."},
+                {"role": "user", "content": prompt},
+            ], temperature=0.2, max_tokens=4000, lang=normalized_lang)
+            parsed = _parse_ai_json(text)
+            model_by_ticker = {
+                str(item.get("ticker") or "").upper(): item
+                for item in parsed.get("theses", [])
+                if isinstance(item, dict) and item.get("ticker")
+            }
+        except Exception as exc:
+            warnings.append(f"AI thesis unavailable: {type(exc).__name__}")
+
+    output_rows = []
+    for row in selected:
+        source_rows = sources.get(row["ticker"], [])
+        source_index = {source["id"]: source for source in source_rows}
+        thesis = model_by_ticker.get(row["ticker"]) or fallback_thesis(row, normalized_lang)
+        thesis["confidence"] = enforce_confidence(thesis, source_index)
+        output_rows.append({**row, "thesis": thesis, "sources": source_rows})
+
+    result["attention_rows"] = output_rows
+    result["research_status"] = "demo" if demo_mode() else ("complete" if model_by_ticker else "signals_only")
+    result["warnings"] = warnings
+    return result
+
+
+def ask(question: str, lang: str | None = None, context: dict | None = None):
     """Generic AI Q&A — answer any portfolio question by feeding all relevant data to DeepSeek."""
     if not question or not question.strip():
         return {"answer": "请先输入一个问题。", "question": question}
@@ -861,6 +971,16 @@ def ask(question: str, lang: str | None = None):
     max_dd = dd.get("max_drawdown", 0)
     top5_w = sum(h.get("weight", 0) for h in hd.get("rows", [])[:5])
 
+    attention_context = ""
+    if isinstance(context, dict) and context.get("type") == "portfolio_attention":
+        compact = context.get("data") or {}
+        attention_context = f"""
+
+## 本轮对话之前的 Portfolio Attention 结果
+{json.dumps(compact, ensure_ascii=False)[:24000]}
+
+如果用户的追问涉及上述结果，必须沿用 Catfolio 已计算的信号、thesis 和 confidence，不要重算数字。"""
+
     data = f"""## 用户提问
 "{question.strip()}"
 
@@ -890,7 +1010,7 @@ Sharpe: {_fmt_num(pf_stats.get('sharpe') or hist_stats.get('sharpe'))}
 最大回撤: {_fmt_pct(max_dd)}
 
 ## ETF穿透
-{_etf_overlap()}"""
+{_etf_overlap()}{attention_context}"""
 
     prompt = f"""{data}
 

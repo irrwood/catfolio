@@ -83,6 +83,11 @@
   };
   if (!elements.meta || !elements.head || !elements.rows) return;
 
+  const staticAsset = path => {
+    const base = String(window.__CATFOLIO_STATIC_BASE__ || "/static").replace(/\/$/, "");
+    return `${base}/${path}`;
+  };
+
   const state = {
     mode: "direct",
     direct: [],
@@ -188,7 +193,9 @@
     const name = escapeHtml(holdingName(row));
     const shareLabel = shares === null || shares === undefined || shares === "" ? "" : formatNumber(shares, 3, 3);
     const initial = escapeHtml(String(row.ticker || "?").slice(0, 1));
-    const logoSymbol = String(row.logo_symbol || row.ticker || "").trim();
+    const logoSymbol = window.__CATFOLIO_COMPONENT_DEMO__
+      ? ""
+      : String(row.logo_symbol || row.ticker || "").trim();
     const logoImage = logoSymbol
       ? `<img class="portfolio-holding-logo-image" src="/api/asset-logo/${encodeURIComponent(logoSymbol)}" alt="" loading="lazy" decoding="async" />`
       : "";
@@ -387,7 +394,7 @@
       const active = key && state.sortKey === key;
       const ariaSort = active ? ` aria-sort="${state.sortDirection === "asc" ? "ascending" : "descending"}"` : "";
       if (!key) return `<th scope="col">${escapeHtml(label)}</th>`;
-      const sortIcon = active ? '<img src="/static/icons/portfolio-sort.svg" alt="" />' : "";
+      const sortIcon = active ? `<img src="${staticAsset("icons/portfolio-sort.svg")}" alt="" />` : "";
       const profitSortHint = active && key === "profit"
         ? `${label}: ${state.profitSortMetric === "amount" ? copy.amountSort : copy.percentSort}, ${state.sortDirection === "desc" ? copy.highToLow : copy.lowToHigh}`
         : label;

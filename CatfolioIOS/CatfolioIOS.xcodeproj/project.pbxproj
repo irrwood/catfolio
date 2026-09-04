@@ -1,8 +1,9 @@
 // !$*UTF8*$!
 {
 	archiveVersion = 1;
-	classes = {};
-	objectVersion = 77;
+	classes = {
+	};
+	objectVersion = 71;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -30,6 +31,25 @@
 		A10000000000000000000016 /* LocalServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000018 /* LocalServices.swift */; };
 		A10000000000000000000017 /* sp500_holdings.json in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000019 /* sp500_holdings.json */; };
 		A10000000000000000000018 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001A /* PrivacyInfo.xcprivacy */; };
+		A10000000000000000000019 /* eqqq_holdings.json in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001B /* eqqq_holdings.json */; };
+		A1000000000000000000001A /* LocalChatStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001C /* LocalChatStore.swift */; };
+		A1000000000000000000001B /* ReturnsAnalyticsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001D /* ReturnsAnalyticsModels.swift */; };
+		A1000000000000000000001C /* LocalReturnsAnalytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001E /* LocalReturnsAnalytics.swift */; };
+		A1000000000000000000001D /* ReturnsAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001F /* ReturnsAnalyticsView.swift */; };
+		A1000000000000000000001E /* HoldingsTreemapLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000020 /* HoldingsTreemapLayout.swift */; };
+		A1000000000000000000001F /* HoldingsHeatmapTile.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000021 /* HoldingsHeatmapTile.swift */; };
+		A10000000000000000000020 /* HoldingsHeatmapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000022 /* HoldingsHeatmapView.swift */; };
+		A10000000000000000000021 /* PolymarketMarketsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000023 /* PolymarketMarketsView.swift */; };
+		A10000000000000000000022 /* CompanyFinancials.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000024 /* CompanyFinancials.swift */; };
+		A10000000000000000000023 /* CompanyFinancialsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000025 /* CompanyFinancialsView.swift */; };
+		A10000000000000000000024 /* StandardLineChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000026 /* StandardLineChart.swift */; };
+		A10000000000000000000025 /* AssetLogos in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000027 /* AssetLogos */; };
+		A10000000000000000000026 /* Montserrat-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000028 /* Montserrat-Regular.ttf */; };
+		A10000000000000000000027 /* Montserrat-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000029 /* Montserrat-Medium.ttf */; };
+		A10000000000000000000028 /* Montserrat-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000002A /* Montserrat-SemiBold.ttf */; };
+		A10000000000000000000029 /* Montserrat-Italic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000002B /* Montserrat-Italic.ttf */; };
+		A1000000000000000000002A /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000002C /* OFL.txt */; };
+		A1000000000000000000002B /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000002D /* HistoryView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -57,12 +77,37 @@
 		B10000000000000000000016 /* Trading212View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212View.swift; sourceTree = "<group>"; };
 		B10000000000000000000017 /* LocalPortfolioStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalPortfolioStore.swift; sourceTree = "<group>"; };
 		B10000000000000000000018 /* LocalServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalServices.swift; sourceTree = "<group>"; };
-		B10000000000000000000019 /* sp500_holdings.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = sp500_holdings.json; path = ../v3_backend/app/data/sp500_holdings.json; sourceTree = SOURCE_ROOT; };
+		B10000000000000000000019 /* sp500_holdings.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = sp500_holdings.json; sourceTree = "<group>"; };
 		B1000000000000000000001A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		B1000000000000000000001B /* eqqq_holdings.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = eqqq_holdings.json; sourceTree = "<group>"; };
+		B1000000000000000000001C /* LocalChatStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalChatStore.swift; sourceTree = "<group>"; };
+		B1000000000000000000001D /* ReturnsAnalyticsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReturnsAnalyticsModels.swift; sourceTree = "<group>"; };
+		B1000000000000000000001E /* LocalReturnsAnalytics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalReturnsAnalytics.swift; sourceTree = "<group>"; };
+		B1000000000000000000001F /* ReturnsAnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReturnsAnalyticsView.swift; sourceTree = "<group>"; };
+		B10000000000000000000020 /* HoldingsTreemapLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingsTreemapLayout.swift; sourceTree = "<group>"; };
+		B10000000000000000000021 /* HoldingsHeatmapTile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingsHeatmapTile.swift; sourceTree = "<group>"; };
+		B10000000000000000000022 /* HoldingsHeatmapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingsHeatmapView.swift; sourceTree = "<group>"; };
+		B10000000000000000000023 /* PolymarketMarketsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolymarketMarketsView.swift; sourceTree = "<group>"; };
+		B10000000000000000000024 /* CompanyFinancials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyFinancials.swift; sourceTree = "<group>"; };
+		B10000000000000000000025 /* CompanyFinancialsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyFinancialsView.swift; sourceTree = "<group>"; };
+		B10000000000000000000026 /* StandardLineChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StandardLineChart.swift; sourceTree = "<group>"; };
+		B10000000000000000000027 /* AssetLogos */ = {isa = PBXFileReference; lastKnownFileType = folder; path = AssetLogos; sourceTree = "<group>"; };
+		B10000000000000000000028 /* Montserrat-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file.ttf; path = Montserrat-Regular.ttf; sourceTree = "<group>"; };
+		B10000000000000000000029 /* Montserrat-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file.ttf; path = Montserrat-Medium.ttf; sourceTree = "<group>"; };
+		B1000000000000000000002A /* Montserrat-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file.ttf; path = Montserrat-SemiBold.ttf; sourceTree = "<group>"; };
+		B1000000000000000000002B /* Montserrat-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file.ttf; path = Montserrat-Italic.ttf; sourceTree = "<group>"; };
+		B1000000000000000000002C /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
+		B1000000000000000000002D /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		C10000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		C10000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -98,7 +143,19 @@
 				B10000000000000000000016 /* Trading212View.swift */,
 				B10000000000000000000017 /* LocalPortfolioStore.swift */,
 				B10000000000000000000018 /* LocalServices.swift */,
-				B10000000000000000000019 /* sp500_holdings.json */,
+				B1000000000000000000001C /* LocalChatStore.swift */,
+				B1000000000000000000001D /* ReturnsAnalyticsModels.swift */,
+				B1000000000000000000001E /* LocalReturnsAnalytics.swift */,
+				B1000000000000000000001F /* ReturnsAnalyticsView.swift */,
+				B10000000000000000000020 /* HoldingsTreemapLayout.swift */,
+				B10000000000000000000021 /* HoldingsHeatmapTile.swift */,
+				B10000000000000000000022 /* HoldingsHeatmapView.swift */,
+				B10000000000000000000023 /* PolymarketMarketsView.swift */,
+				B10000000000000000000024 /* CompanyFinancials.swift */,
+				B10000000000000000000025 /* CompanyFinancialsView.swift */,
+				B10000000000000000000026 /* StandardLineChart.swift */,
+				B1000000000000000000002D /* HistoryView.swift */,
+				D10000000000000000000004 /* Resources */,
 				B1000000000000000000001A /* PrivacyInfo.xcprivacy */,
 				B1000000000000000000000B /* Assets.xcassets */,
 				B1000000000000000000000C /* Info.plist */,
@@ -106,9 +163,50 @@
 			path = CatfolioIOS;
 			sourceTree = "<group>";
 		};
+		D10000000000000000000004 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000027 /* AssetLogos */,
+				D10000000000000000000005 /* ETF */,
+				D10000000000000000000006 /* Fonts */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		D10000000000000000000005 /* ETF */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000019 /* sp500_holdings.json */,
+				B1000000000000000000001B /* eqqq_holdings.json */,
+			);
+			path = ETF;
+			sourceTree = "<group>";
+		};
+		D10000000000000000000006 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				D10000000000000000000007 /* Montserrat */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
+		D10000000000000000000007 /* Montserrat */ = {
+			isa = PBXGroup;
+			children = (
+				B10000000000000000000028 /* Montserrat-Regular.ttf */,
+				B10000000000000000000029 /* Montserrat-Medium.ttf */,
+				B1000000000000000000002A /* Montserrat-SemiBold.ttf */,
+				B1000000000000000000002B /* Montserrat-Italic.ttf */,
+				B1000000000000000000002C /* OFL.txt */,
+			);
+			path = Montserrat;
+			sourceTree = "<group>";
+		};
 		D10000000000000000000003 /* Products */ = {
 			isa = PBXGroup;
-			children = (B1000000000000000000000D /* CatfolioIOS.app */,);
+			children = (
+				B1000000000000000000000D /* CatfolioIOS.app */,
+			);
 			name = Products;
 			sourceTree = "<group>";
 		};
@@ -123,8 +221,10 @@
 				C10000000000000000000001 /* Frameworks */,
 				C10000000000000000000003 /* Resources */,
 			);
-			buildRules = ();
-			dependencies = ();
+			buildRules = (
+			);
+			dependencies = (
+			);
 			name = CatfolioIOS;
 			productName = CatfolioIOS;
 			productReference = B1000000000000000000000D /* CatfolioIOS.app */;
@@ -135,22 +235,53 @@
 /* Begin PBXProject section */
 		E10000000000000000000002 /* Project object */ = {
 			isa = PBXProject;
-			attributes = { BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 2650; LastUpgradeCheck = 2650; TargetAttributes = { E10000000000000000000001 = { CreatedOnToolsVersion = 26.5; }; }; };
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2650;
+				LastUpgradeCheck = 2650;
+				TargetAttributes = {
+					E10000000000000000000001 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+				};
+			};
 			buildConfigurationList = F10000000000000000000001 /* Build configuration list for PBXProject "CatfolioIOS" */;
 			compatibilityVersion = "Xcode 16.0";
 			developmentRegion = zh_Hans;
 			hasScannedForEncodings = 0;
-			knownRegions = (Base, en, zh_Hans);
+			knownRegions = (
+				Base,
+				en,
+				zh_Hans,
+			);
 			mainGroup = D10000000000000000000001;
 			productRefGroup = D10000000000000000000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
-			targets = (E10000000000000000000001 /* CatfolioIOS */,);
+			targets = (
+				E10000000000000000000001 /* CatfolioIOS */,
+			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		C10000000000000000000003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A1000000000000000000000B /* Assets.xcassets in Resources */, A10000000000000000000017 /* sp500_holdings.json in Resources */, A10000000000000000000018 /* PrivacyInfo.xcprivacy in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
+		C10000000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1000000000000000000000B /* Assets.xcassets in Resources */,
+				A10000000000000000000025 /* AssetLogos in Resources */,
+				A10000000000000000000017 /* sp500_holdings.json in Resources */,
+				A10000000000000000000018 /* PrivacyInfo.xcprivacy in Resources */,
+				A10000000000000000000019 /* eqqq_holdings.json in Resources */,
+				A10000000000000000000026 /* Montserrat-Regular.ttf in Resources */,
+				A10000000000000000000027 /* Montserrat-Medium.ttf in Resources */,
+				A10000000000000000000028 /* Montserrat-SemiBold.ttf in Resources */,
+				A10000000000000000000029 /* Montserrat-Italic.ttf in Resources */,
+				A1000000000000000000002A /* OFL.txt in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -179,14 +310,46 @@
 				A10000000000000000000014 /* Trading212View.swift in Sources */,
 				A10000000000000000000015 /* LocalPortfolioStore.swift in Sources */,
 				A10000000000000000000016 /* LocalServices.swift in Sources */,
+				A1000000000000000000001A /* LocalChatStore.swift in Sources */,
+				A1000000000000000000001B /* ReturnsAnalyticsModels.swift in Sources */,
+				A1000000000000000000001C /* LocalReturnsAnalytics.swift in Sources */,
+				A1000000000000000000001D /* ReturnsAnalyticsView.swift in Sources */,
+				A1000000000000000000001E /* HoldingsTreemapLayout.swift in Sources */,
+				A1000000000000000000001F /* HoldingsHeatmapTile.swift in Sources */,
+				A10000000000000000000020 /* HoldingsHeatmapView.swift in Sources */,
+				A10000000000000000000021 /* PolymarketMarketsView.swift in Sources */,
+				A10000000000000000000022 /* CompanyFinancials.swift in Sources */,
+				A10000000000000000000023 /* CompanyFinancialsView.swift in Sources */,
+				A10000000000000000000024 /* StandardLineChart.swift in Sources */,
+				A1000000000000000000002B /* HistoryView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		F20000000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 18.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Debug; };
-		F20000000000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 18.0; SDKROOT = iphoneos; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_VERSION = 5.0; VALIDATE_PRODUCT = YES; }; name = Release; };
+		F20000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		F20000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		F20000000000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -195,10 +358,14 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = 2G5PCQU652;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = CatfolioIOS/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks");
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.catfolio.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -217,10 +384,14 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2G5PCQU652;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = CatfolioIOS/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks");
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.catfolio.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -235,8 +406,24 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		F10000000000000000000001 /* Build configuration list for PBXProject "CatfolioIOS" */ = {isa = XCConfigurationList; buildConfigurations = (F20000000000000000000001 /* Debug */, F20000000000000000000002 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-		F10000000000000000000002 /* Build configuration list for PBXNativeTarget "CatfolioIOS" */ = {isa = XCConfigurationList; buildConfigurations = (F20000000000000000000003 /* Debug */, F20000000000000000000004 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		F10000000000000000000001 /* Build configuration list for PBXProject "CatfolioIOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F20000000000000000000001 /* Debug */,
+				F20000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F10000000000000000000002 /* Build configuration list for PBXNativeTarget "CatfolioIOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F20000000000000000000003 /* Debug */,
+				F20000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 	};
 	rootObject = E10000000000000000000002 /* Project object */;

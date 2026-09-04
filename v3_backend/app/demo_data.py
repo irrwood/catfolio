@@ -359,15 +359,25 @@ def _build_lab_history():
         "VEU": (61.00, 0.045, 0.0062, 8.6),
         "GLD": (215.00, 0.055, 0.0048, 9.0),
     }
+    prices = {}
+    ticker_by_symbol = {yahoo: ticker for ticker, _name, yahoo, *_rest in _H}
+    for symbol, (final_price, drift, wave, phase) in profile.items():
+        bars = _demo_price_path(final_price, drift, wave, phase)
+        ticker = ticker_by_symbol.get(symbol)
+        if ticker in _MARKET_META:
+            current_volume, target_average, *_ = _MARKET_META[ticker]
+            generated_average = sum(row["volume"] for row in bars[-31:-1]) / 30
+            scale = target_average / generated_average if generated_average else 1.0
+            for row in bars:
+                row["volume"] = int(row["volume"] * scale)
+            bars[-1]["volume"] = current_volume
+        prices[symbol] = bars
     return {
         "as_of_unix": _AS_OF,
         "duration_seconds": 0,
         "years": 5,
         "symbols": list(profile),
-        "prices": {
-            symbol: _demo_price_path(final_price, drift, wave, phase)
-            for symbol, (final_price, drift, wave, phase) in profile.items()
-        },
+        "prices": prices,
         "benchmarks": {
             "SPY": "S&P 500",
             "QQQ": "Nasdaq 100",

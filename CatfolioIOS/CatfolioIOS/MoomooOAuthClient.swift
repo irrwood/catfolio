@@ -84,6 +84,9 @@ struct MoomooPosition: Decodable, Identifiable, Equatable {
 struct MoomooSnapshot: Equatable {
     let accounts: [MoomooAccount]
     let positions: [MoomooPosition]
+    let fills: [MoomooFill]
+    let accountCurrencies: [String: String]
+    let historyWarnings: [String]
 
     func csvImportExport() throws -> MoomooCSVExport {
         var warnings: [String] = []
@@ -122,12 +125,14 @@ struct MoomooSnapshot: Equatable {
         guard parts.count == 2 else { return value.uppercased() }
         let market = parts[0].uppercased()
         var code = parts[1].uppercased()
-        if market == "HK", code.count == 5, code.first == "0" {
+        if ["HK", "SEHK"].contains(market), code.count == 5, code.first == "0" {
             code.removeFirst()
         }
         let suffixes = [
-            "US": "", "HK": ".HK", "SG": ".SI", "JP": ".T", "JA": ".T",
-            "AU": ".AX", "CA": ".TO", "SH": ".SS", "SZ": ".SZ", "BMS": ".KL",
+            "US": "", "NASDAQ": "", "NYSE": "", "AMEX": "", "ARCA": "",
+            "HK": ".HK", "SEHK": ".HK", "SG": ".SI", "SGX": ".SI",
+            "JP": ".T", "JA": ".T", "TSE": ".T", "AU": ".AX", "ASX": ".AX",
+            "CA": ".TO", "TSX": ".TO", "SH": ".SS", "SZ": ".SZ", "BMS": ".KL",
         ]
         guard let suffix = suffixes[market] else { return value.uppercased() }
         return code + suffix
@@ -136,6 +141,60 @@ struct MoomooSnapshot: Equatable {
     private static func csvField(_ value: String) -> String {
         guard value.contains(",") || value.contains("\"") || value.contains("\n") else { return value }
         return "\"\(value.replacingOccurrences(of: "\"", with: "\"\""))\""
+    }
+}
+
+struct MoomooFill: Decodable, Identifiable, Equatable {
+    let tradeID: String
+    let side: String
+    let code: String
+    let stockName: String
+    let quantity: Double
+    let price: Double
+    let executedAtMicroseconds: Int64
+    let accountID: String
+
+    var id: String { "\(accountID):\(tradeID)" }
+    var date: String {
+        let seconds = TimeInterval(executedAtMicroseconds) / 1_000_000
+        return DayDateCodec.string(from: Date(timeIntervalSince1970: seconds))
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case tradeID = "deal_id"
+        case side = "trd_side"
+        case code
+        case stockName = "stock_name"
+        case quantity = "qty"
+        case price
+        case executedAtMicroseconds = "create_time"
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        tradeID = try values.decode(String.self, forKey: .tradeID)
+        side = try values.decodeIfPresent(String.self, forKey: .side) ?? ""
+        code = try values.decode(String.self, forKey: .code)
+        stockName = try values.decodeIfPresent(String.self, forKey: .stockName) ?? code
+        quantity = try values.decodeMoomooDoubleIfPresent(forKey: .quantity) ?? 0
+        price = try values.decodeMoomooDoubleIfPresent(forKey: .price) ?? 0
+        executedAtMicroseconds = try values.decodeMoomooInt64IfPresent(forKey: .executedAtMicroseconds) ?? 0
+        accountID = ""
+    }
+
+    private init(accountID: String, fill: MoomooFill) {
+        tradeID = fill.tradeID
+        side = fill.side
+        code = fill.code
+        stockName = fill.stockName
+        quantity = fill.quantity
+        price = fill.price
+        executedAtMicroseconds = fill.executedAtMicroseconds
+        self.accountID = accountID
+    }
+
+    fileprivate func assigned(to accountID: String) -> MoomooFill {
+        MoomooFill(accountID: accountID, fill: self)
     }
 }
 
@@ -156,14 +215,51 @@ struct MoomooTokenSet: Codable, Equatable {
 
 enum MoomooCredentialStore {
     private static let clientIDKey = "moomoo.oauth.client-id"
-    private static let tokenSetKey = "moomoo.oauth.tokens"
+    private static let legacyTokenSetKey = "moomoo.oauth.tokens"
+
+    private static func tokenSetKey(accountID: String) -> String {
+        "moomoo.oauth.account.\(accountID).tokens"
+    }
+
+    private static func disconnectedKey(accountID: String) -> String {
+        "moomoo.oauth.account.\(accountID).disconnected"
+    }
 
     static var clientID: String? {
         KeychainStore.string(for: clientIDKey)
     }
 
     static var tokenSet: MoomooTokenSet? {
-        guard let value = KeychainStore.string(for: tokenSetKey),
+        tokenSet(for: nil)
+    }
+
+    static func tokenSet(for accountID: String?, fallbackToLegacy: Bool = true) -> MoomooTokenSet? {
+        if let accountID {
+            guard KeychainStore.string(for: disconnectedKey(accountID: accountID)) == nil else { return nil }
+            if let tokenSet = decodedTokenSet(for: tokenSetKey(accountID: accountID)) {
+                return tokenSet
+            }
+            guard fallbackToLegacy else { return nil }
+        }
+        return decodedTokenSet(for: legacyTokenSetKey)
+    }
+
+    static func hasScopedToken(for accountID: String) -> Bool {
+        decodedTokenSet(for: tokenSetKey(accountID: accountID)) != nil
+    }
+
+    static func migrateLegacyToken(to accountIDs: [String]) throws {
+        guard let legacyToken = decodedTokenSet(for: legacyTokenSetKey) else { return }
+        for accountID in Set(accountIDs) where !accountID.isEmpty {
+            let wasDisconnected = KeychainStore.string(for: disconnectedKey(accountID: accountID)) != nil
+            if !wasDisconnected, !hasScopedToken(for: accountID) {
+                try save(tokenSet: legacyToken, for: accountID)
+            }
+        }
+    }
+
+    private static func decodedTokenSet(for key: String) -> MoomooTokenSet? {
+        guard let value = KeychainStore.string(for: key),
               let data = value.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(MoomooTokenSet.self, from: data)
     }
@@ -172,16 +268,26 @@ enum MoomooCredentialStore {
         try KeychainStore.set(clientID, for: clientIDKey)
     }
 
-    static func save(tokenSet: MoomooTokenSet) throws {
+    static func save(tokenSet: MoomooTokenSet, for accountID: String? = nil) throws {
         let data = try JSONEncoder().encode(tokenSet)
         guard let value = String(data: data, encoding: .utf8) else {
             throw MoomooOpenAPIError.invalidResponse
         }
-        try KeychainStore.set(value, for: tokenSetKey)
+        if let accountID {
+            try KeychainStore.set(value, for: tokenSetKey(accountID: accountID))
+            try KeychainStore.set("", for: disconnectedKey(accountID: accountID))
+        } else {
+            try KeychainStore.set(value, for: legacyTokenSetKey)
+        }
     }
 
-    static func clearTokens() {
-        try? KeychainStore.set("", for: tokenSetKey)
+    static func clearTokens(for accountID: String? = nil) {
+        if let accountID {
+            try? KeychainStore.set("", for: tokenSetKey(accountID: accountID))
+            try? KeychainStore.set("1", for: disconnectedKey(accountID: accountID))
+        } else {
+            try? KeychainStore.set("", for: legacyTokenSetKey)
+        }
     }
 }
 
@@ -227,8 +333,10 @@ struct MoomooOpenAPIClient {
     static let redirectURI = "http://localhost:60355/callback"
     private static let baseURL = URL(string: "https://webapi.moomoo.com")!
     private let session: URLSession
+    private let credentialAccountID: String?
 
-    init(session: URLSession? = nil) {
+    init(credentialAccountID: String? = nil, session: URLSession? = nil) {
+        self.credentialAccountID = credentialAccountID
         if let session {
             self.session = session
         } else {
@@ -289,8 +397,12 @@ struct MoomooOpenAPIClient {
     }
 
     func validToken() async throws -> MoomooTokenSet {
-        guard let tokenSet = MoomooCredentialStore.tokenSet else {
+        guard let tokenSet = MoomooCredentialStore.tokenSet(for: credentialAccountID) else {
             throw MoomooOpenAPIError.tokenMissing
+        }
+        if let credentialAccountID,
+           !MoomooCredentialStore.hasScopedToken(for: credentialAccountID) {
+            try MoomooCredentialStore.save(tokenSet: tokenSet, for: credentialAccountID)
         }
         guard !tokenSet.isUsable else { return tokenSet }
         guard let clientID = MoomooCredentialStore.clientID else {
@@ -301,12 +413,19 @@ struct MoomooOpenAPIClient {
             "refresh_token": tokenSet.refreshToken,
             "client_id": clientID,
         ], existingRefreshToken: tokenSet.refreshToken)
-        try MoomooCredentialStore.save(tokenSet: refreshed)
+        try MoomooCredentialStore.save(tokenSet: refreshed, for: credentialAccountID)
         return refreshed
     }
 
-    func fetchSnapshot() async throws -> MoomooSnapshot {
+    /// Moomoo universal accounts do not expose one immutable base currency.
+    /// Treat Catfolio's selected display currency as the reporting currency so
+    /// the independently calculated FX component has an explicit perspective.
+    func fetchSnapshot(reportingCurrency: String = "USD") async throws -> MoomooSnapshot {
         let token = try await validToken()
+        let reportingCurrency = reportingCurrency
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        guard !reportingCurrency.isEmpty else { throw MoomooOpenAPIError.invalidResponse }
         let accounts: [MoomooAccount] = try await authorizedGet(
             path: "/api/v1.0/accounts/authorized_trd_accs",
             accessToken: token.accessToken,
@@ -319,6 +438,9 @@ struct MoomooOpenAPIClient {
         guard !accounts.isEmpty else { throw MoomooOpenAPIError.noAccounts }
 
         var allPositions: [MoomooPosition] = []
+        var allFills: [MoomooFill] = []
+        var accountCurrencies: [String: String] = [:]
+        var historyWarnings: [String] = []
         for account in accounts {
             let encodedID = account.accountID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
                 ?? account.accountID
@@ -331,10 +453,92 @@ struct MoomooOpenAPIClient {
                     return envelope.data ?? []
                 }
             )
-            allPositions.append(contentsOf: positions.map { MoomooPosition(accountID: account.accountID, position: $0) })
+            let assignedPositions = positions.map {
+                MoomooPosition(accountID: account.accountID, position: $0)
+            }
+            allPositions.append(contentsOf: assignedPositions)
+
+            accountCurrencies[account.accountID] = reportingCurrency
+
+            let markets = Set(assignedPositions.compactMap {
+                Self.tradeMarket(forCode: $0.code)
+            })
+            for market in markets.sorted() {
+                do {
+                    let fills = try await fetchHistoricalFills(
+                        encodedAccountID: encodedID,
+                        market: market,
+                        accessToken: token.accessToken
+                    )
+                    allFills.append(contentsOf: fills.map { $0.assigned(to: account.accountID) })
+                } catch {
+                    historyWarnings.append("\(account.accountCardNumber) · \(market)：历史成交未完整同步")
+                }
+            }
         }
         guard !allPositions.isEmpty else { throw MoomooOpenAPIError.noPositions }
-        return MoomooSnapshot(accounts: accounts, positions: allPositions)
+        return MoomooSnapshot(
+            accounts: accounts,
+            positions: allPositions,
+            fills: allFills,
+            accountCurrencies: accountCurrencies,
+            historyWarnings: historyWarnings
+        )
+    }
+
+    private static func tradeMarket(forCode code: String) -> String? {
+        guard let rawPrefix = code.split(separator: ".", maxSplits: 1).first else { return nil }
+        switch rawPrefix.uppercased() {
+        case "US", "NASDAQ", "NYSE", "AMEX", "ARCA", "BATS": return "US"
+        case "HK", "SEHK": return "HK"
+        case "SG", "SGX": return "SG"
+        case "JP", "JA", "TSE": return "JP"
+        case "CA", "TSX": return "CA"
+        case "KR", "KRX": return "KR"
+        case "SH", "SZ", "HKCC": return "HKCC"
+        default: return nil
+        }
+    }
+
+    private func fetchHistoricalFills(
+        encodedAccountID: String,
+        market: String,
+        accessToken: String
+    ) async throws -> [MoomooFill] {
+        let start = Int64(Date(timeIntervalSince1970: 946_684_800).timeIntervalSince1970 * 1_000_000)
+        let end = Int64(Date().timeIntervalSince1970 * 1_000_000)
+        var pageFlag = ""
+        var fills: [MoomooFill] = []
+        var seen = Set<String>()
+
+        for _ in 0..<400 {
+            let page: MoomooFillsData = try await authorizedGet(
+                path: "/api/v1.0/accounts/\(encodedAccountID)/fills_history",
+                accessToken: accessToken,
+                queryItems: [
+                    URLQueryItem(name: "trd_market", value: market.uppercased()),
+                    URLQueryItem(name: "start", value: String(start)),
+                    URLQueryItem(name: "end", value: String(end)),
+                    URLQueryItem(name: "page_flag", value: pageFlag),
+                    URLQueryItem(name: "page_size", value: "50"),
+                ],
+                decode: { data in
+                    let envelope = try JSONDecoder().decode(MoomooFillsEnvelope.self, from: data)
+                    try Self.validate(envelope.status, code: envelope.errorCode, message: envelope.errorMessage)
+                    guard let page = envelope.data else { throw MoomooOpenAPIError.invalidResponse }
+                    return page
+                }
+            )
+            for fill in page.orderFills where seen.insert(fill.tradeID).inserted {
+                fills.append(fill)
+            }
+            if page.completed { return fills }
+            guard !page.pageFlag.isEmpty, page.pageFlag != pageFlag else {
+                throw MoomooOpenAPIError.invalidResponse
+            }
+            pageFlag = page.pageFlag
+        }
+        throw MoomooOpenAPIError.invalidResponse
     }
 
     private func tokenRequest(parameters: [String: String], existingRefreshToken: String?) async throws -> MoomooTokenSet {
@@ -360,9 +564,16 @@ struct MoomooOpenAPIClient {
     private func authorizedGet<T>(
         path: String,
         accessToken: String,
+        queryItems: [URLQueryItem] = [],
         decode: (Data) throws -> T
     ) async throws -> T {
         var request = request(path: path, method: "GET")
+        if !queryItems.isEmpty {
+            var components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)
+            components?.queryItems = queryItems
+            guard let url = components?.url else { throw MoomooOpenAPIError.invalidResponse }
+            request.url = url
+        }
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         let (data, http) = try await response(for: request)
         guard (200..<300).contains(http.statusCode) else {
@@ -415,7 +626,7 @@ final class MoomooAuthorizationSession: ObservableObject {
     @Published var authorizationPage: MoomooAuthorizationPage?
     private var loopbackListener: MoomooLoopbackListener?
 
-    func authorize() async throws -> MoomooTokenSet {
+    func authorize(accountID: String? = nil) async throws -> MoomooTokenSet {
         let client = MoomooOpenAPIClient()
         let clientID: String
         if let savedClientID = MoomooCredentialStore.clientID {
@@ -460,7 +671,7 @@ final class MoomooAuthorizationSession: ObservableObject {
         guard value("state") == state else { throw MoomooOpenAPIError.invalidState }
         guard let code = value("code"), !code.isEmpty else { throw MoomooOpenAPIError.invalidResponse }
         let tokens = try await client.exchangeCode(code, clientID: clientID, verifier: verifier)
-        try MoomooCredentialStore.save(tokenSet: tokens)
+        try MoomooCredentialStore.save(tokenSet: tokens, for: accountID)
         return tokens
     }
 
@@ -675,11 +886,55 @@ private struct MoomooPositionsEnvelope: Decodable {
     }
 }
 
+private struct MoomooFillsEnvelope: Decodable {
+    let status: String
+    let data: MoomooFillsData?
+    let errorCode: Int?
+    let errorMessage: String?
+
+    enum CodingKeys: String, CodingKey {
+        case status = "s"
+        case data = "d"
+        case errorCode = "errcode"
+        case errorMessage = "errmsg"
+    }
+}
+
+private struct MoomooFillsData: Decodable {
+    let orderFills: [MoomooFill]
+    let pageFlag: String
+    let completed: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case orderFills = "order_fills"
+        case pageFlag = "page_flag"
+        case completed
+    }
+}
+
 private extension Data {
     func base64URLEncodedString() -> String {
         base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
+    }
+}
+
+private extension KeyedDecodingContainer {
+    func decodeMoomooDoubleIfPresent(forKey key: Key) throws -> Double? {
+        if let value = try? decodeIfPresent(Double.self, forKey: key) { return value }
+        if let value = try? decodeIfPresent(Int.self, forKey: key) { return Double(value) }
+        if let value = try? decodeIfPresent(String.self, forKey: key) {
+            return Double(value.replacingOccurrences(of: ",", with: ""))
+        }
+        return nil
+    }
+
+    func decodeMoomooInt64IfPresent(forKey key: Key) throws -> Int64? {
+        if let value = try? decodeIfPresent(Int64.self, forKey: key) { return value }
+        if let value = try? decodeIfPresent(Int.self, forKey: key) { return Int64(value) }
+        if let value = try? decodeIfPresent(String.self, forKey: key) { return Int64(value) }
+        return nil
     }
 }

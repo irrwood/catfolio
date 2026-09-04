@@ -38,8 +38,10 @@ struct PortfolioChartResponse: Decodable {
     let positionCount: Int
     let positionHistory: PositionHistory
     let currentPoint: ChartPoint
+    let warning: String?
 
     enum CodingKeys: String, CodingKey {
+        case warning
         case positionCount = "position_count"
         case positionHistory = "position_history"
         case currentPoint = "current_point"
@@ -57,7 +59,7 @@ struct ChartPoint: Decodable, Identifiable, Equatable {
     let cost: Double
 
     var id: String { dateText }
-    var date: Date { DayDateFormatter.shared.date(from: dateText) ?? .distantPast }
+    var date: Date { DayDateCodec.date(from: dateText) ?? .distantPast }
 
     enum CodingKeys: String, CodingKey {
         case dateText = "date"
@@ -87,10 +89,15 @@ struct Holding: Decodable, Identifiable, Equatable {
     let weight: Double
     let unrealized: Double
     let unrealizedPercent: Double
+    let fxPnl: Double?
+    let fxPnlPercent: Double?
+    let fxPnlStatus: String?
+    let fxPnlSource: String?
 
     var id: String { ticker }
     var shortName: String {
-        displayName.components(separatedBy: " / ").first ?? displayName
+        let original = displayName.components(separatedBy: " / ").first ?? displayName
+        return CompanyNameCatalog.displayName(ticker: ticker, fallback: original)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -109,6 +116,10 @@ struct Holding: Decodable, Identifiable, Equatable {
         case weight
         case unrealized = "unrealized_usd"
         case unrealizedPercent = "unrealized_percent"
+        case fxPnl = "broker_fx_ppl_usd"
+        case fxPnlPercent = "broker_fx_ppl_percent"
+        case fxPnlStatus = "fx_pnl_status"
+        case fxPnlSource = "fx_pnl_source"
     }
 }
 
@@ -124,7 +135,9 @@ struct VolumeProfile: Decodable, Equatable {
     let asOf: String
     let fiftyTwoWeekHigh: Double?
     let fiftyTwoWeekLow: Double?
+    let fiftyTwoWeekStartPrice: Double?
     let todayChangePercent: Double?
+    let bins: [VolumeProfileBin]?
 
     enum CodingKeys: String, CodingKey {
         case ticker, currency, available, sessions
@@ -135,7 +148,79 @@ struct VolumeProfile: Decodable, Equatable {
         case asOf = "as_of"
         case fiftyTwoWeekHigh = "high_52w"
         case fiftyTwoWeekLow = "low_52w"
+        case fiftyTwoWeekStartPrice = "start_price_52w"
         case todayChangePercent = "today_change_percent"
+        case bins
+    }
+}
+
+struct VolumeProfileBin: Codable, Equatable, Identifiable {
+    let priceLow: Double
+    let priceHigh: Double
+    let volume: Double
+
+    var id: Double { priceLow }
+    var midpoint: Double { (priceLow + priceHigh) / 2 }
+
+    enum CodingKeys: String, CodingKey {
+        case priceLow = "price_low"
+        case priceHigh = "price_high"
+        case volume
+    }
+}
+
+struct SecurityPriceHistory: Equatable {
+    let ticker: String
+    let currency: String
+    let points: [SecurityPricePoint]
+    let intradayPoints: [SecurityPricePoint]
+    let trades: [SecurityTrade]
+}
+
+struct SecurityPricePoint: Equatable, Identifiable {
+    let dateText: String
+    let close: Double
+    let timestamp: Date?
+
+    init(dateText: String, close: Double, timestamp: Date? = nil) {
+        self.dateText = dateText
+        self.close = close
+        self.timestamp = timestamp
+    }
+
+    var id: String { dateText }
+    var date: Date { timestamp ?? DayDateCodec.date(from: dateText) ?? .distantPast }
+}
+
+struct SecurityTrade: Equatable, Identifiable {
+    let dateText: String
+    let action: String
+    let quantity: Double
+    let tradeCount: Int
+    let accountKeys: Set<String>
+
+    var id: String { "\(dateText)|\(action)" }
+    var date: Date { DayDateCodec.date(from: dateText) ?? .distantPast }
+    var isBuy: Bool { Self.canonicalAction(action) == "BUY" }
+    var isSell: Bool { Self.canonicalAction(action) == "SELL" }
+
+    static func canonicalAction(_ rawAction: String) -> String? {
+        let action = rawAction
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+            .replacingOccurrences(of: "-", with: "_")
+            .replacingOccurrences(of: " ", with: "_")
+        if ["SELL", "S", "SLD", "SELL_SHORT"].contains(action)
+            || action.contains("SELL")
+            || action.contains("卖出") {
+            return "SELL"
+        }
+        if ["BUY", "B", "BOT", "BUY_BACK", "BUY_TO_COVER"].contains(action)
+            || action.contains("BUY")
+            || action.contains("买入") {
+            return "BUY"
+        }
+        return nil
     }
 }
 
@@ -144,7 +229,167 @@ struct ComparisonResponse: Decodable {
     let dates: [String]
     let portfolio: [Double?]
     let benchmarks: [String: [Double?]]
+    let cashFlowPortfolioReturns: [Double?]?
+    let cashFlowBenchmarkReturns: [String: [Double?]]?
+    let mwrPortfolio: [Double?]?
+    let mwrBenchmarks: [String: [Double?]]?
+    let twrDates: [String]?
+    let twrPortfolio: [Double?]?
+    let twrBenchmarks: [String: [Double?]]?
+    let warnings: [String]?
     let summary: ComparisonSummary
+
+    enum CodingKeys: String, CodingKey {
+        case available, dates, portfolio, benchmarks, warnings, summary
+        case cashFlowPortfolioReturns = "cash_flow_portfolio_returns"
+        case cashFlowBenchmarkReturns = "cash_flow_benchmark_returns"
+        case mwrPortfolio = "mwr_portfolio"
+        case mwrBenchmarks = "mwr_benchmarks"
+        case twrDates = "twr_dates"
+        case twrPortfolio = "twr_portfolio"
+        case twrBenchmarks = "twr_benchmarks"
+    }
+}
+
+enum MoneyWeightedReturnCalculator {
+    /// Builds a cumulative, date-aware MWR series. Cost increases are investor
+    /// contributions and cost decreases are withdrawals; the value at each
+    /// point closes the cash-flow stream for that date.
+    static func rolling(
+        dates: [String],
+        cashFlows: [Double],
+        terminalValues: [Double?]
+    ) -> [Double?] {
+        let count = min(dates.count, cashFlows.count, terminalValues.count)
+        guard count > 0 else { return [] }
+
+        var events: [(date: Date, amount: Double)] = []
+        var result: [Double?] = []
+        result.reserveCapacity(count)
+
+        for index in 0..<count {
+            guard let date = DayDateCodec.date(from: dates[index]) else {
+                result.append(nil)
+                continue
+            }
+            let cashFlow = cashFlows[index]
+            if cashFlow.isFinite, abs(cashFlow) > 0.000_001 {
+                events.append((date, -cashFlow))
+            }
+            guard let terminalValue = terminalValues[index],
+                  terminalValue.isFinite,
+                  terminalValue >= 0 else {
+                result.append(nil)
+                continue
+            }
+            result.append(solve(events: events, terminalDate: date, terminalValue: terminalValue))
+        }
+        return result
+    }
+
+    private static func solve(
+        events: [(date: Date, amount: Double)],
+        terminalDate: Date,
+        terminalValue: Double
+    ) -> Double? {
+        guard let startDate = events.first?.date,
+              terminalDate > startDate,
+              events.contains(where: { $0.amount < 0 }),
+              events.contains(where: { $0.amount > 0 }) || terminalValue > 0 else { return nil }
+
+        let duration = terminalDate.timeIntervalSince(startDate)
+        guard duration > 0 else { return nil }
+        let flows = events + [(terminalDate, terminalValue)]
+        guard flows.contains(where: { $0.amount > 0 }) else { return nil }
+        let scale = flows.reduce(0) { $0 + abs($1.amount) }
+        guard scale > 0 else { return nil }
+
+        func npv(logGrowth: Double) -> (value: Double, derivative: Double) {
+            var value = 0.0
+            var derivative = 0.0
+            for flow in flows {
+                let fraction = max(0, flow.date.timeIntervalSince(startDate) / duration)
+                let discount = exp(-fraction * logGrowth)
+                value += flow.amount * discount
+                derivative -= fraction * flow.amount * discount
+            }
+            return (value, derivative)
+        }
+
+        // Newton converges quickly for normal portfolio cash-flow streams.
+        var logGrowth = log(1.1)
+        for _ in 0..<32 {
+            let current = npv(logGrowth: logGrowth)
+            if abs(current.value) <= scale * 1e-10 {
+                let rate = exp(logGrowth) - 1
+                return rate.isFinite ? rate : nil
+            }
+            guard current.derivative.isFinite, abs(current.derivative) > scale * 1e-14 else { break }
+            let next = logGrowth - current.value / current.derivative
+            guard next.isFinite, (-20...20).contains(next) else { break }
+            if abs(next - logGrowth) < 1e-11 {
+                let rate = exp(next) - 1
+                return rate.isFinite ? rate : nil
+            }
+            logGrowth = next
+        }
+
+        // Irregular deposits and withdrawals can defeat Newton. Scan the valid
+        // growth domain and bisect the root nearest a flat return.
+        let scan = stride(from: -20.0, through: 20.0, by: 0.25).map { $0 }
+        var brackets: [(lower: Double, upper: Double)] = []
+        var previousX = scan[0]
+        var previousValue = npv(logGrowth: previousX).value
+        for x in scan.dropFirst() {
+            let value = npv(logGrowth: x).value
+            if value == 0 {
+                let rate = exp(x) - 1
+                return rate.isFinite ? rate : nil
+            }
+            if previousValue.isFinite, value.isFinite,
+               (previousValue < 0 && value > 0) || (previousValue > 0 && value < 0) {
+                brackets.append((previousX, x))
+            }
+            previousX = x
+            previousValue = value
+        }
+        guard var bracket = brackets.min(by: {
+            abs(($0.lower + $0.upper) / 2) < abs(($1.lower + $1.upper) / 2)
+        }) else { return nil }
+
+        var lowerValue = npv(logGrowth: bracket.lower).value
+        for _ in 0..<80 {
+            let midpoint = (bracket.lower + bracket.upper) / 2
+            let midpointValue = npv(logGrowth: midpoint).value
+            if abs(midpointValue) <= scale * 1e-10 {
+                let rate = exp(midpoint) - 1
+                return rate.isFinite ? rate : nil
+            }
+            if (lowerValue < 0 && midpointValue > 0) || (lowerValue > 0 && midpointValue < 0) {
+                bracket.upper = midpoint
+            } else {
+                bracket.lower = midpoint
+                lowerValue = midpointValue
+            }
+        }
+        let rate = exp((bracket.lower + bracket.upper) / 2) - 1
+        return rate.isFinite ? rate : nil
+    }
+}
+
+enum ComparisonBenchmarkCatalog {
+    static let symbols = ["SPY", "QQQ", "VTI", "VOO", "DIA", "IWM", "VEU", "GLD"]
+
+    static let names = [
+        "SPY": "标普500",
+        "QQQ": "纳斯达克100",
+        "VTI": "美国全市场",
+        "VOO": "先锋标普500",
+        "DIA": "道琼斯30",
+        "IWM": "罗素2000",
+        "VEU": "全球除美",
+        "GLD": "黄金",
+    ]
 }
 
 struct ComparisonSummary: Decodable {
@@ -174,6 +419,105 @@ struct BriefingResponse: Decodable {
 struct AskResponse: Decodable {
     let answer: String
     let question: String
+}
+
+enum PortfolioAttentionLevel: String, Codable, Sendable {
+    case high, medium, none
+}
+
+enum PortfolioThesisStance: String, Codable, Sendable {
+    case strengthening, maintaining, weakening
+}
+
+struct PortfolioAttentionSignal: Identifiable, Codable, Sendable {
+    let kind: String
+    let label: String
+    let direction: String
+    let value: Double
+
+    var id: String { kind }
+}
+
+struct PortfolioAttentionSource: Identifiable, Codable, Sendable {
+    let id: String
+    let title: String
+    let publisher: String
+    let url: URL
+    let publishedAt: Date?
+    let tier: String
+}
+
+struct PortfolioAttentionThesis: Codable, Sendable {
+    var stance: PortfolioThesisStance
+    var confidence: PortfolioAttentionLevel
+    var whatChanged: String
+    var whyItMatters: String
+    var supportingEvidence: [String]
+    var counterEvidence: [String]
+    var risks: [String]
+    var watchNext: [String]
+    var riskFlags: [String]
+}
+
+struct PortfolioFundamentalSnapshot: Codable, Sendable {
+    let source: String
+    let latestPeriod: String?
+    let revenueGrowthYoY: Double?
+    let operatingIncomeGrowthYoY: Double?
+    let freeCashFlowGrowthYoY: Double?
+}
+
+struct PortfolioAttentionHolding: Identifiable, Codable, Sendable {
+    let ticker: String
+    let name: String
+    let attention: PortfolioAttentionLevel
+    let weight: Double
+    let portfolioContributionPercent: Double?
+    let return60DPercent: Double?
+    let volumeMultiple: Double?
+    let distanceFrom52WHighPercent: Double?
+    let distanceFrom52WLowPercent: Double?
+    let ma200PositionPercent: Double?
+    let signals: [PortfolioAttentionSignal]
+    var fundamentals: PortfolioFundamentalSnapshot?
+    var thesis: PortfolioAttentionThesis
+    var sources: [PortfolioAttentionSource]
+
+    var id: String { ticker }
+}
+
+struct PortfolioAttentionReport: Codable, Sendable {
+    let generatedAt: Date
+    let holdingsCount: Int
+    let noMaterialChangeCount: Int
+    var attentionRows: [PortfolioAttentionHolding]
+    let warnings: [String]
+
+    var contextSummary: String {
+        let rows = attentionRows.map { row in
+            let signals = row.signals.map(\.label).joined(separator: "、")
+            return "\(row.ticker) | \(row.attention.rawValue) | \(row.thesis.stance.rawValue) | \(row.thesis.confidence.rawValue) | \(signals) | \(row.thesis.whyItMatters)"
+        }.joined(separator: "\n")
+        return "Portfolio Attention 扫描了 \(holdingsCount) 只持仓，\(attentionRows.count) 只需要关注。\n\(rows)"
+    }
+
+    var markdownFallback: String {
+        var blocks = ["## 今天", "**\(holdingsCount) 只持仓中有 \(attentionRows.count) 只需要关注**"]
+        for row in attentionRows {
+            blocks.append("""
+            ### \(row.ticker)
+            \(row.attention.rawValue.capitalized) attention · \(row.thesis.stance.rawValue)
+
+            \(row.signals.map(\.label).joined(separator: " · "))
+
+            \(row.thesis.whyItMatters)
+
+            **主要风险：** \(row.thesis.risks.first ?? "暂无已确认的公司级风险")
+            """)
+        }
+        blocks.append("**其他持仓**\n\(noMaterialChangeCount) 只 · 无重大变化")
+        return blocks.joined(separator: "\n\n")
+    }
 }
 
 enum BrokerProvider: String, CaseIterable, Codable, Identifiable {
@@ -291,7 +635,7 @@ enum ETFLookThroughBasis: String, CaseIterable, Identifiable {
     case cost
 
     var id: String { rawValue }
-    var title: String { self == .market ? "市值" : "成本" }
+    var title: String { self == .market ? "ETF 市值" : "ETF 成本" }
 }
 
 struct ETFLookThroughResponse: Decodable {
@@ -353,12 +697,25 @@ enum BrokerConnectionState: Equatable {
     }
 }
 
-struct ChatMessage: Identifiable, Equatable {
-    enum Role { case user, assistant }
+struct ChatMessage: Identifiable, Equatable, Codable, Sendable {
+    enum Role: String, Codable, Sendable { case user, assistant }
 
-    let id = UUID()
+    let id: UUID
     let role: Role
     let text: String
+    let createdAt: Date
+
+    init(
+        id: UUID = UUID(),
+        role: Role,
+        text: String,
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.role = role
+        self.text = text
+        self.createdAt = createdAt
+    }
 }
 
 final class DayDateFormatter {
@@ -370,4 +727,28 @@ final class DayDateFormatter {
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
+}
+
+/// A formatter-free codec for hot and concurrent market-data paths. DateFormatter
+/// is relatively expensive and its shared instance becomes a synchronization
+/// point when Yahoo responses are decoded in parallel.
+enum DayDateCodec {
+    static func date(from text: String) -> Date? {
+        let parts = text.split(separator: "-", omittingEmptySubsequences: false)
+        guard parts.count == 3,
+              let year = Int(parts[0]),
+              let month = Int(parts[1]),
+              let day = Int(parts[2]) else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar.date(from: DateComponents(year: year, month: month, day: day))
+    }
+
+    static func string(from date: Date) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let values = calendar.dateComponents([.year, .month, .day], from: date)
+        guard let year = values.year, let month = values.month, let day = values.day else { return "" }
+        return String(format: "%04d-%02d-%02d", year, month, day)
+    }
 }

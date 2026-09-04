@@ -1,0 +1,33 @@
+{
+  "name": "catfolio-dsh",
+  "version": "0.2.0",
+  "description": "Catfolio portfolio & returns dashboard as a DeepSeek Harness web plugin",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "verify:payloads": "node scripts/verify-payloads.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-llm": "^0.1.1-rc.2",
+    "echarts": "^6.1.0",
+    "esbuild": "^0.28.2",
+    "lightweight-charts": "^5.2.1"
+  }
+}

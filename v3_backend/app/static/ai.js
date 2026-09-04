@@ -26,6 +26,22 @@
     moreQuestions: "Generate more",
     moreQuestionsAgain: "Another batch",
     generatedQuestions: "New questions",
+    attentionLoading: "Scanning every holding and researching material changes...",
+    attentionToday: "Today",
+    attentionSummary: (attention, total) => `${attention} of ${total} holdings need attention`,
+    everythingElse: "Everything else",
+    noMaterialChange: "No material change",
+    viewAnalysis: "View analysis",
+    whatChanged: "What changed",
+    whyItMatters: "Why it matters",
+    supportingEvidence: "Supporting evidence",
+    counterEvidence: "Counter evidence",
+    risks: "Risks",
+    watchNext: "Watch next",
+    sources: "Sources",
+    mainRisk: "Main risk",
+    confidence: "confidence",
+    attention: "attention",
   } : {
     briefingHint: "点击右上角刷新按钮生成组合总结。",
     briefingLoading: "AI 正在分析你的组合...",
@@ -50,11 +66,28 @@
     moreQuestions: "生成更多",
     moreQuestionsAgain: "再来一批",
     generatedQuestions: "新生成的问题",
+    attentionLoading: "正在扫描全部持仓并研究重要变化...",
+    attentionToday: "今天",
+    attentionSummary: (attention, total) => `${total} 只持仓中有 ${attention} 只需要关注`,
+    everythingElse: "其他持仓",
+    noMaterialChange: "无重大变化",
+    viewAnalysis: "查看分析",
+    whatChanged: "发生了什么",
+    whyItMatters: "为什么值得关注",
+    supportingEvidence: "支持证据",
+    counterEvidence: "反方证据",
+    risks: "风险",
+    watchNext: "接下来关注",
+    sources: "来源",
+    mainRisk: "主要风险",
+    confidence: "置信度",
+    attention: "关注",
   };
 
   // ── Question Bank ──
   const Q_ZH = {
     quick: [
+      "今天哪些持仓值得我关注？",
       "为什么今天涨跌？",
       "我现在主要在赌什么？",
       "我的组合是不是太集中？",
@@ -133,6 +166,7 @@
   };
   const Q_EN = {
     quick: [
+      "Which holdings need my attention today?",
       "Why did my portfolio move today?",
       "What am I mainly betting on?",
       "Is my portfolio too concentrated?",
@@ -312,6 +346,124 @@
     doAsk();
   }
 
+  let lastAttentionContext = null;
+
+  function isAttentionQuestion(question) {
+    const normalized = String(question || "").trim().toLowerCase();
+    return normalized === "今天哪些持仓值得我关注？" ||
+      normalized === "今天哪些持仓值得我关注?" ||
+      normalized === "which holdings need my attention today?";
+  }
+
+  function titleCase(value) {
+    return String(value || "").replaceAll("_", " ").replace(/\b\w/g, letter => letter.toUpperCase());
+  }
+
+  function attentionLabel(value) {
+    const labels = currentLang() === "en"
+      ? { high: "High", medium: "Medium", none: "Low" }
+      : { high: "高", medium: "中", none: "低" };
+    return labels[value] || titleCase(value);
+  }
+
+  function stanceLabel(value) {
+    const labels = currentLang() === "en"
+      ? { strengthening: "Thesis strengthening", maintaining: "Thesis maintained", weakening: "Thesis weakening" }
+      : { strengthening: "投资逻辑增强", maintaining: "投资逻辑维持", weakening: "投资逻辑减弱" };
+    return labels[value] || titleCase(value);
+  }
+
+  function analysisList(title, values) {
+    const items = (values || []).filter(Boolean);
+    if (!items.length) return "";
+    return `<section><b>${escapeHtml(title)}</b><ul>${items.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section>`;
+  }
+
+  function renderAttentionResult(data) {
+    const rows = data.attention_rows || [];
+    const cards = rows.map(row => {
+      const thesis = row.thesis || {};
+      const signals = (row.signals || []).map(signal => `<span class="attention-signal">${escapeHtml(signal.label)}</span>`).join("");
+      const risk = (thesis.risks || [])[0];
+      const sources = (row.sources || []).map(source =>
+        `<li><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a><span>${escapeHtml(source.publisher)}</span></li>`
+      ).join("");
+      return `<article class="attention-card attention-${escapeHtml(row.attention)}">
+        <div class="attention-card-head">
+          <div><h3>${escapeHtml(row.ticker)}</h3><p>${escapeHtml(row.name)}</p></div>
+          <span class="attention-level">${escapeHtml(attentionLabel(row.attention))} ${escapeHtml(UI.attention)}</span>
+        </div>
+        <div class="attention-stance">${escapeHtml(stanceLabel(thesis.stance))} · ${escapeHtml(attentionLabel(thesis.confidence))} ${escapeHtml(UI.confidence)}</div>
+        <div class="attention-signals">${signals}</div>
+        <p class="attention-summary">${escapeHtml(thesis.why_it_matters || thesis.what_changed || "")}</p>
+        ${risk ? `<p class="attention-risk"><b>${escapeHtml(UI.mainRisk)}:</b> ${escapeHtml(risk)}</p>` : ""}
+        <details class="attention-details">
+          <summary>${escapeHtml(UI.viewAnalysis)}</summary>
+          <div class="attention-detail-body">
+            <section><b>${escapeHtml(UI.whatChanged)}</b><p>${escapeHtml(thesis.what_changed || "—")}</p></section>
+            <section><b>${escapeHtml(UI.whyItMatters)}</b><p>${escapeHtml(thesis.why_it_matters || "—")}</p></section>
+            ${analysisList(UI.supportingEvidence, thesis.supporting_evidence)}
+            ${analysisList(UI.counterEvidence, thesis.counter_evidence)}
+            ${analysisList(UI.risks, thesis.risks)}
+            ${analysisList(UI.watchNext, thesis.watch_next)}
+            ${sources ? `<section class="attention-sources"><b>${escapeHtml(UI.sources)}</b><ul>${sources}</ul></section>` : ""}
+          </div>
+        </details>
+      </article>`;
+    }).join("");
+    return `<div class="attention-report">
+      <div class="attention-report-head"><span>${escapeHtml(UI.attentionToday)}</span><strong>${escapeHtml(UI.attentionSummary(data.attention_count || 0, data.holdings_count || 0))}</strong></div>
+      <div class="attention-cards">${cards || `<p class="attention-empty">${escapeHtml(UI.noMaterialChange)}</p>`}</div>
+      <div class="attention-rest"><b>${escapeHtml(UI.everythingElse)}</b><span>${Number(data.no_material_change_count || 0)} · ${escapeHtml(UI.noMaterialChange)}</span></div>
+    </div>`;
+  }
+
+  async function runPortfolioAttention(question) {
+    const btn = document.querySelector("#askBtn");
+    const status = document.querySelector("#askStatus");
+    const conv = document.querySelector("#convArea");
+    btn.disabled = true;
+    status.textContent = UI.attentionLoading;
+    const itemId = "conv-" + Date.now();
+    document.querySelector(".ai-chat-scroll")?.classList.add("has-conversation");
+    conv.insertAdjacentHTML("beforeend", `<div class="conv-item" id="${itemId}"><div class="conv-q">${escapeHtml(question)}</div><div class="conv-a attention-answer loading">${escapeHtml(UI.attentionLoading)}</div></div>`);
+    document.querySelector(".ai-chat-scroll")?.scrollTo({ top: 1e9, behavior: "smooth" });
+    try {
+      const data = await aiPost("/api/ai/portfolio-attention");
+      const answerEl = document.querySelector(`#${itemId} .conv-a`);
+      answerEl.innerHTML = renderAttentionResult(data);
+      answerEl.classList.remove("loading");
+      lastAttentionContext = {
+        type: "portfolio_attention",
+        data: {
+          holdings_count: data.holdings_count,
+          attention_count: data.attention_count,
+          thresholds: data.thresholds,
+          attention_rows: (data.attention_rows || []).map(row => ({
+            ticker: row.ticker,
+            attention: row.attention,
+            signals: row.signals,
+            weight: row.weight,
+            portfolio_contribution_percent: row.portfolio_contribution_percent,
+            fundamentals: row.fundamentals,
+            thesis: row.thesis,
+            sources: row.sources,
+          })),
+        },
+      };
+      status.textContent = "";
+    } catch(e) {
+      const answerEl = document.querySelector(`#${itemId} .conv-a`);
+      answerEl.textContent = `${UI.analysisFailed}: ${e.message}`;
+      answerEl.classList.remove("loading");
+      answerEl.style.color = "var(--negative)";
+      status.textContent = `${UI.failed}: ${e.message}`;
+    } finally {
+      btn.disabled = false;
+      document.querySelector(".ai-chat-scroll")?.scrollTo({ top: 1e9, behavior: "smooth" });
+    }
+  }
+
   // ── Ask question ──
   async function doAsk() {
     const input = document.querySelector("#aiAskInput");
@@ -322,6 +474,10 @@
     if (!question) { status.innerHTML = `<span style="color:var(--negative)">${UI.enterQuestion}</span>`; return; }
 
     input.value = "";
+    if (isAttentionQuestion(question)) {
+      await runPortfolioAttention(question);
+      return;
+    }
     btn.disabled = true;
     status.innerHTML = `<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> ${UI.analyzing}`;
 
@@ -333,7 +489,7 @@
     document.querySelector(".ai-chat-scroll")?.scrollTo({ top: 1e9, behavior: "smooth" });
 
     try {
-      const data = await aiPost("/api/ai/ask", {question});
+      const data = await aiPost("/api/ai/ask", {question, context: lastAttentionContext});
       const answerEl = document.querySelector(`#${itemId} .conv-a`);
       answerEl.textContent = data.answer;
       answerEl.classList.remove("loading");

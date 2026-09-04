@@ -133,8 +133,10 @@ def test_settings_exposes_two_trading212_key_slots(monkeypatch):
         settings_route,
         "secret_value",
         lambda name: "configured" if name in {
-            "TRADING212_API_KEY", "TRADING212_API_SECRET",
-            "TRADING212_API_KEY_2", "TRADING212_API_SECRET_2",
+            "TRADING212_API_KEY",
+            "TRADING212_API_SECRET",
+            "TRADING212_API_KEY_2",
+            "TRADING212_API_SECRET_2",
         } else None,
     )
 
@@ -182,7 +184,13 @@ def test_trading212_refresh_enables_and_merges_second_key(monkeypatch):
         )
         return {"ok": True, "positions": 2}
 
-    for name in (*secrets, "TRADING212_API_SECRET", "TRADING212_API_SECRET_2", "TRADING212_ACCOUNTS"):
+    env_names = (
+        *secrets,
+        "TRADING212_API_SECRET",
+        "TRADING212_API_SECRET_2",
+        "TRADING212_ACCOUNTS",
+    )
+    for name in env_names:
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(data_store, "secret_value", lambda name: secrets.get(name))
     monkeypatch.setitem(sys.modules, "build_trading212_v2", SimpleNamespace(build_and_write=build_and_write))

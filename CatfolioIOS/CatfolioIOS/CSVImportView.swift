@@ -3,7 +3,10 @@ import UniformTypeIdentifiers
 
 struct CSVImportView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var model: AppModel
+    @Environment(AppModel.self) private var model
+    @Environment(\.colorScheme) private var colorScheme
+
+    let context: AccountConnectorContext
 
     @State private var showsFileImporter = false
     @State private var showsImportConfirmation = false
@@ -11,10 +14,28 @@ struct CSVImportView: View {
     @State private var importResult: CSVImportResult?
     @State private var statusMessage: String?
     @State private var isImporting = false
+    @State private var nickname = ""
+    @State private var newAccountID = UUID().uuidString.lowercased()
+
+    init(context: AccountConnectorContext = .create) {
+        self.context = context
+    }
 
     var body: some View {
         NavigationStack {
             Form {
+                if context.isCreating {
+                    Section {
+                        TextField("账户昵称", text: $nickname)
+                            .textInputAutocapitalization(.words)
+                            .autocorrectionDisabled()
+                    } header: {
+                        Text("账户昵称")
+                    } footer: {
+                        Text("用于区分多个账户，创建后仍可在账户详情中修改。")
+                    }
+                }
+
                 Section {
                     Button {
                         showsFileImporter = true
@@ -31,12 +52,12 @@ struct CSVImportView: View {
                 } header: {
                     Text("交易记录")
                 } footer: {
-                    Text("文件只在此 iPhone 内解析和保存，不会上传。最大 5 MB。")
+                    Text("文件只在此 iPhone 内解析和保存，不会上传。最大 50 MB。")
                 }
 
                 Section("格式") {
-                    requiredColumn("Date", detail: "YYYY-MM-DD 或常见日期格式")
-                    requiredColumn("Action", detail: "BUY / SELL / DIVIDEND")
+                    requiredColumn("Date / Time", detail: "支持 Time (UTC) 和带时分秒日期")
+                    requiredColumn("Action", detail: "BUY / SELL / DIVIDEND 及 212 交易类型")
                     requiredColumn("Ticker", detail: "例如 AAPL、LLOY.L")
                     requiredColumn("Quantity", detail: "交易股数")
                     requiredColumn("Price", detail: "每股成交价")
@@ -46,9 +67,11 @@ struct CSVImportView: View {
                 if let selectedFile {
                     Section {
                         GlassPrimaryButton(
-                            title: isImporting ? "正在导入" : "导入并替换持仓",
+                            title: isImporting
+                                ? "正在导入"
+                                : (context.isCreating ? "创建 CSV 账户" : "导入并更新账户"),
                             systemImage: "arrow.down.doc",
-                            isDisabled: isImporting
+                            isDisabled: isImporting || (context.isCreating && nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         ) {
                             showsImportConfirmation = true
                         }
@@ -57,14 +80,16 @@ struct CSVImportView: View {
                             StatusNotice(text: "CSV 没有可导入的数据行。")
                         }
                     } footer: {
-                        Text("导入会按交易日期重新计算加权平均成本，并替换当前持仓数据。")
+                        Text(context.isCreating
+                            ? "导入会按交易日期重算加权平均成本，并创建一个新账户。"
+                            : "导入会按交易日期重算加权平均成本，只更新当前账户。")
                     }
                 }
 
                 if let importResult {
                     Section("导入完成") {
                         Label("已导入 \(importResult.holdingsCount) 个持仓", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(CatfolioStyle.green)
+                            .foregroundStyle(CatfolioTheme.positive)
                         if let count = importResult.transactionsCount {
                             LabeledContent("有效交易", value: "\(count) 条")
                         }
@@ -86,7 +111,7 @@ struct CSVImportView: View {
                                 }
                                 Spacer()
                                 VStack(alignment: .trailing, spacing: 2) {
-                                    Text(holding.shares.formatted(.number.precision(.fractionLength(0...4))))
+                                    Text(DisplayFormat.shares(holding.shares))
                                         .font(.body.monospacedDigit())
                                     Text("均价 \(DisplayFormat.money(holding.averageCost, currency: holding.currency))")
                                         .font(.caption.monospacedDigit())
@@ -101,7 +126,9 @@ struct CSVImportView: View {
                     }
                 }
             }
-            .navigationTitle("CSV 导入")
+            .scrollContentBackground(.hidden)
+            .background(CatfolioTheme.pageBackground(for: colorScheme))
+            .navigationTitle(context.isCreating ? "新建 CSV 账户" : "CSV 导入")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -115,19 +142,33 @@ struct CSVImportView: View {
             ) { result in
                 handleFileSelection(result)
             }
+            .task {
+                guard nickname.isEmpty else { return }
+                if let account = context.account {
+                    nickname = AccountNaming.nickname(
+                        from: account.displayName,
+                        provider: AccountNaming.providerName(for: account.source)
+                    )
+                } else {
+                    nickname = model.suggestedAccountNickname()
+                }
+            }
             .confirmationDialog(
-                "导入后将替换当前持仓",
+                context.isCreating ? "创建 CSV 账户？" : "更新当前账户？",
                 isPresented: $showsImportConfirmation,
                 titleVisibility: .visible
             ) {
-                Button("导入并替换", role: .destructive) {
+                Button(context.isCreating ? "导入并创建" : "导入并更新") {
                     Task { await importSelectedFile() }
                 }
                 Button("取消", role: .cancel) {}
             } message: {
-                Text("请确认 CSV 包含完整交易记录。导入会替换本机当前持仓；已平仓持仓不会显示。")
+                Text(context.isCreating
+                    ? "请确认 CSV 包含完整交易记录。导入会创建新账户，不影响现有账户；已平仓持仓不显示。"
+                    : "请确认 CSV 包含完整交易记录。导入只更新当前账户，不影响其他账户；已平仓持仓不显示。")
             }
         }
+        .tint(CatfolioTheme.accent)
     }
 
     private func requiredColumn(_ name: String, detail: String) -> some View {
@@ -148,7 +189,13 @@ struct CSVImportView: View {
                 if hasAccess { url.stopAccessingSecurityScopedResource() }
             }
             let data = try Data(contentsOf: url, options: .mappedIfSafe)
-            selectedFile = try SelectedCSVFile(url: url, data: data)
+            let file = try SelectedCSVFile(url: url, data: data)
+            selectedFile = file
+            if context.isCreating,
+               AccountNaming.generatedNicknames.contains(nickname),
+               let detectedName = file.detectedAccountNickname {
+                nickname = model.suggestedAccountNickname(detectedName: detectedName)
+            }
             importResult = nil
             statusMessage = nil
         } catch {
@@ -165,7 +212,19 @@ struct CSVImportView: View {
         importResult = nil
         defer { isImporting = false }
         do {
-            importResult = try await model.importCSV(selectedFile.data, filename: selectedFile.filename)
+            let targetAccount = context.account
+            let source = targetAccount?.source ?? "CSV"
+            let provider = AccountNaming.providerName(for: source)
+            let accountName = targetAccount?.name
+                ?? AccountNaming.displayName(provider: provider, nickname: nickname)
+            importResult = try await model.importCSV(
+                selectedFile.data,
+                filename: selectedFile.filename,
+                accountID: targetAccount?.accountID ?? newAccountID,
+                accountName: accountName,
+                source: source,
+                replacingAccountsOnly: true
+            )
         } catch {
             statusMessage = error.localizedDescription
         }
@@ -173,12 +232,23 @@ struct CSVImportView: View {
 }
 
 private struct SelectedCSVFile {
-    static let maximumBytes = 5 * 1024 * 1024
+    static let maximumBytes = 50 * 1024 * 1024
 
     let filename: String
     let data: Data
     let dataRowCount: Int
     let headers: [String]
+
+    var detectedAccountNickname: String? {
+        let stem = (filename as NSString).deletingPathExtension.lowercased()
+        for (marker, nickname) in [
+            ("stocks isa", "ISA"), ("_isa", "ISA"), ("-isa", "ISA"),
+            ("invest", "Invest"), ("sipp", "SIPP"),
+        ] where stem.contains(marker) {
+            return nickname
+        }
+        return nil
+    }
 
     var formattedSize: String {
         ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file)
@@ -191,67 +261,39 @@ private struct SelectedCSVFile {
         guard data.count <= Self.maximumBytes else {
             throw CSVSelectionError.fileTooLarge
         }
-        guard var text = String(data: data, encoding: .utf8) else {
+        guard var text = LocalCSVImporter.decodedText(from: data) else {
             throw CSVSelectionError.invalidEncoding
         }
         text = text.replacingOccurrences(of: "\u{feff}", with: "")
-        let lines = text
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
-            .split(separator: "\n", omittingEmptySubsequences: true)
-        guard let headerLine = lines.first else {
+        let records = LocalCSVImporter.parseRecords(text)
+        guard !records.isEmpty else {
             throw CSVSelectionError.emptyFile
         }
-        let headers = Self.parseHeader(String(headerLine))
+        guard let headerIndex = LocalCSVImporter.headerRowIndex(in: records) else {
+            throw CSVSelectionError.missingColumns(["Date / Time", "Action", "Ticker", "Quantity", "Price"])
+        }
+        let headers = records[headerIndex]
         try Self.validate(headers: headers)
         filename = url.lastPathComponent
         self.data = data
-        dataRowCount = max(0, lines.count - 1)
+        dataRowCount = max(0, records.count - headerIndex - 1)
         self.headers = Array(headers.prefix(8))
     }
 
     private static func validate(headers: [String]) throws {
-        let normalized = Set(headers.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
-        let requiredAliases: [(String, Set<String>)] = [
-            ("Date", ["date", "trade date", "transaction date", "time"]),
-            ("Action", ["action", "type", "transaction type", "side", "direction"]),
-            ("Ticker", ["ticker", "symbol", "instrument", "stock", "isin", "code"]),
-            ("Quantity", ["quantity", "qty", "shares", "units", "amount", "no. of shares"]),
-            ("Price", ["price", "price / share", "trade price", "unit price", "execution price"]),
+        let displayNames = [
+            "date": "Date / Time",
+            "action": "Action",
+            "ticker": "Ticker",
+            "quantity": "Quantity",
+            "price": "Price",
         ]
-        let missing = requiredAliases.compactMap { name, aliases in
-            normalized.isDisjoint(with: aliases) ? name : nil
+        let missing = LocalCSVImporter.missingRequiredColumns(in: headers).map {
+            displayNames[$0] ?? $0
         }
         guard missing.isEmpty else {
             throw CSVSelectionError.missingColumns(missing)
         }
-    }
-
-    private static func parseHeader(_ line: String) -> [String] {
-        var fields: [String] = []
-        var field = ""
-        var insideQuotes = false
-        var index = line.startIndex
-        while index < line.endIndex {
-            let character = line[index]
-            if character == "\"" {
-                let next = line.index(after: index)
-                if insideQuotes, next < line.endIndex, line[next] == "\"" {
-                    field.append("\"")
-                    index = next
-                } else {
-                    insideQuotes.toggle()
-                }
-            } else if character == ",", !insideQuotes {
-                fields.append(field)
-                field = ""
-            } else {
-                field.append(character)
-            }
-            index = line.index(after: index)
-        }
-        fields.append(field)
-        return fields
     }
 }
 
@@ -267,9 +309,9 @@ private enum CSVSelectionError: LocalizedError {
         case .invalidExtension:
             "请选择扩展名为 .csv 的文件"
         case .fileTooLarge:
-            "CSV 文件不能超过 5 MB"
+            "CSV 文件不能超过 50 MB"
         case .invalidEncoding:
-            "CSV 必须使用 UTF-8 编码"
+            "CSV 必须使用 UTF-8、UTF-16 或常见 Windows 文本编码"
         case .emptyFile:
             "CSV 文件为空"
         case let .missingColumns(columns):

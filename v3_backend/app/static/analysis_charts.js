@@ -1,5 +1,6 @@
 (() => {
   const isEnglish = document.documentElement.lang === "en";
+  const isComponentDemo = window.__CATFOLIO_COMPONENT_DEMO__ === true;
   const copy = isEnglish ? {
     loading: "Loading analytics…",
     loadError: "Could not load analytics.",
@@ -749,7 +750,7 @@
 
   function renderAll(data) {
     latestData = data;
-    renderProfitCalendar(data);
+    if (!isComponentDemo) renderProfitCalendar(data);
     renderMonthly(data);
     renderDrawdown(data);
     renderCorrelation(data);
@@ -836,26 +837,28 @@
       if (latestData) renderDrawdown(latestData);
     });
   });
-  document.getElementById("profitCalendarMonth")?.addEventListener("click", () => {
-    calendarState.view = "month";
-    if (latestData) renderProfitCalendar(latestData);
-  });
-  document.getElementById("profitCalendarYear")?.addEventListener("click", () => {
-    calendarState.view = "year";
-    if (latestData) renderProfitCalendar(latestData);
-  });
-  document.getElementById("profitCalendarPrev")?.addEventListener("click", () => {
-    if (calendarState.view === "year") calendarState.year -= 1;
-    else if (calendarState.month === 1) { calendarState.month = 12; calendarState.year -= 1; }
-    else calendarState.month -= 1;
-    if (latestData) renderProfitCalendar(latestData);
-  });
-  document.getElementById("profitCalendarNext")?.addEventListener("click", () => {
-    if (calendarState.view === "year") calendarState.year += 1;
-    else if (calendarState.month === 12) { calendarState.month = 1; calendarState.year += 1; }
-    else calendarState.month += 1;
-    if (latestData) renderProfitCalendar(latestData);
-  });
+  if (!isComponentDemo) {
+    document.getElementById("profitCalendarMonth")?.addEventListener("click", () => {
+      calendarState.view = "month";
+      if (latestData) renderProfitCalendar(latestData);
+    });
+    document.getElementById("profitCalendarYear")?.addEventListener("click", () => {
+      calendarState.view = "year";
+      if (latestData) renderProfitCalendar(latestData);
+    });
+    document.getElementById("profitCalendarPrev")?.addEventListener("click", () => {
+      if (calendarState.view === "year") calendarState.year -= 1;
+      else if (calendarState.month === 1) { calendarState.month = 12; calendarState.year -= 1; }
+      else calendarState.month -= 1;
+      if (latestData) renderProfitCalendar(latestData);
+    });
+    document.getElementById("profitCalendarNext")?.addEventListener("click", () => {
+      if (calendarState.view === "year") calendarState.year += 1;
+      else if (calendarState.month === 12) { calendarState.month = 1; calendarState.year += 1; }
+      else calendarState.month += 1;
+      if (latestData) renderProfitCalendar(latestData);
+    });
+  }
   window.addEventListener("resize", () => instances.forEach(instance => instance.resize()));
   new MutationObserver(mutations => {
     if (mutations.some(record => record.attributeName === "class")) {

@@ -30,12 +30,32 @@ struct IBKRFlexPosition: Identifiable, Equatable {
     let averageCost: Double?
     let costBasis: Double?
     let reportDate: String?
+    let openDate: String?
 
     var id: String { "\(accountID):\(assetCategory):\(symbol)" }
 }
 
+struct IBKRFlexTransaction: Identifiable, Equatable {
+    let accountID: String
+    let tradeID: String
+    let symbol: String
+    let name: String
+    let currency: String
+    let side: String
+    let quantity: Double
+    let price: Double
+    let tradeDate: String
+    let fxRateToBase: Double?
+    let realisedProfitLoss: Double?
+
+    var id: String { "\(accountID):\(tradeID)" }
+}
+
 struct IBKRFlexSnapshot: Equatable {
     let positions: [IBKRFlexPosition]
+    let transactions: [IBKRFlexTransaction]
+    let accountCurrencies: [String: String]
+    let accountNames: [String: String]
     let reportDate: String?
 
     func csvImportExport() throws -> IBKRFlexCSVExport {
@@ -245,7 +265,13 @@ struct IBKRFlexClient {
         let parser = XMLParser(data: data)
         parser.delegate = delegate
         guard parser.parse() else { throw IBKRFlexError.invalidResponse }
-        return IBKRFlexSnapshot(positions: delegate.positions, reportDate: delegate.reportDate)
+        return IBKRFlexSnapshot(
+            positions: delegate.positions,
+            transactions: delegate.transactions,
+            accountCurrencies: delegate.accountCurrencies,
+            accountNames: delegate.accountNames,
+            reportDate: delegate.reportDate
+        )
     }
 }
 
@@ -288,12 +314,39 @@ private final class FlexEnvelopeParser: NSObject, XMLParserDelegate {
 
 private final class FlexStatementParser: NSObject, XMLParserDelegate {
     var positions: [IBKRFlexPosition] = []
+    var transactions: [IBKRFlexTransaction] = []
+    var accountCurrencies: [String: String] = [:]
+    var accountNames: [String: String] = [:]
     var reportDate: String?
 
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String: String] = [:]) {
         let attributes = Dictionary(uniqueKeysWithValues: attributeDict.map { ($0.key.lowercased(), $0.value) })
         if elementName.caseInsensitiveCompare("FlexStatement") == .orderedSame {
             reportDate = attributes["todate"] ?? attributes["fromdate"] ?? reportDate
+            return
+        }
+        if elementName.caseInsensitiveCompare("AccountInformation") == .orderedSame {
+            let accountID = attributes["accountid"] ?? attributes["acctid"] ?? ""
+            let baseCurrency = attributes["basecurrency"] ?? attributes["currency"] ?? ""
+            let accountName = attributes["accountalias"]
+                ?? attributes["accountname"]
+                ?? attributes["name"]
+            if !accountID.isEmpty, !baseCurrency.isEmpty {
+                accountCurrencies[accountID] = baseCurrency.uppercased()
+            }
+            if !accountID.isEmpty,
+               let accountName = accountName?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !accountName.isEmpty {
+                accountNames[accountID] = accountName
+            }
+            return
+        }
+        if elementName.caseInsensitiveCompare("Trade") == .orderedSame {
+            parseTrade(attributes)
+            return
+        }
+        if elementName.caseInsensitiveCompare("CashTransaction") == .orderedSame {
+            parseCashTransaction(attributes)
             return
         }
         guard elementName.caseInsensitiveCompare("OpenPosition") == .orderedSame else { return }
@@ -316,8 +369,105 @@ private final class FlexStatementParser: NSObject, XMLParserDelegate {
             marketValue: number(attributes["positionvalue"] ?? attributes["value"]),
             averageCost: averageCost,
             costBasis: costBasis,
-            reportDate: attributes["reportdate"]
+            reportDate: attributes["reportdate"],
+            openDate: normalizedDate(
+                attributes["opendatetime"]
+                    ?? attributes["holdingperioddatetime"]
+            )
         ))
+    }
+
+    private func parseTrade(_ attributes: [String: String]) {
+        let symbol = (attributes["symbol"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let quantity = abs(number(attributes["quantity"]) ?? 0)
+        let price = number(attributes["tradeprice"] ?? attributes["price"]) ?? 0
+        let rawSide = (attributes["buysell"] ?? attributes["side"] ?? "").uppercased()
+        guard !symbol.isEmpty, quantity > 0, price > 0,
+              rawSide == "BUY" || rawSide == "SELL" else { return }
+        let rawDate = attributes["tradedate"]
+            ?? attributes["datetime"]
+            ?? attributes["date/time"]
+            ?? attributes["reportdate"]
+        guard let tradeDate = normalizedDate(rawDate) else { return }
+        let fallbackID = [tradeDate, symbol, rawSide, String(quantity), String(price)].joined(separator: "|")
+        transactions.append(IBKRFlexTransaction(
+            accountID: attributes["accountid"] ?? "IBKR",
+            tradeID: attributes["tradeid"] ?? attributes["transactionid"] ?? fallbackID,
+            symbol: symbol.uppercased(),
+            name: attributes["description"] ?? symbol,
+            currency: (attributes["currency"] ?? "USD").uppercased(),
+            side: rawSide,
+            quantity: quantity,
+            price: price,
+            tradeDate: tradeDate,
+            fxRateToBase: number(attributes["fxratetobase"]),
+            realisedProfitLoss: number(
+                attributes["realizedpnl"]
+                    ?? attributes["realisedpnl"]
+                    ?? attributes["fifopnlrealized"]
+            )
+        ))
+    }
+
+    /// Import posted cash activity from the Flex `Cash Transactions` section.
+    /// Interest accrual rows are deliberately not used here: IBKR reverses the
+    /// daily accruals when the monthly amount is posted, so importing both
+    /// would double count the user's actual interest.
+    private func parseCashTransaction(_ attributes: [String: String]) {
+        let description = (attributes["description"] ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let type = (attributes["type"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let code = (attributes["code"] ?? "").uppercased()
+        let searchable = "\(description) \(type) \(code)".lowercased()
+
+        let action: String
+        let codeParts = Set(code.split { !$0.isLetter && !$0.isNumber }.map(String.init))
+        if searchable.contains("interest")
+            || !codeParts.isDisjoint(with: ["CINT", "DINT", "INTP", "INTR"]) {
+            action = "INTEREST"
+        } else if searchable.contains("dividend")
+                    || !codeParts.isDisjoint(with: ["DIV", "DIVR", "PIL"]) {
+            action = "DIVIDEND"
+        } else if searchable.contains("deposit") || codeParts.contains("DEP") {
+            action = "DEPOSIT"
+        } else if searchable.contains("withdraw") || codeParts.contains("WITH") {
+            action = "WITHDRAW"
+        } else {
+            return
+        }
+
+        guard let amount = number(attributes["amount"]), amount != 0 else { return }
+        let rawDate = attributes["datetime"]
+            ?? attributes["date/time"]
+            ?? attributes["date"]
+            ?? attributes["reportdate"]
+        guard let activityDate = normalizedDate(rawDate) else { return }
+        let accountID = attributes["accountid"] ?? "IBKR"
+        let currency = (attributes["currency"] ?? accountCurrencies[accountID] ?? "USD").uppercased()
+        let symbol = (attributes["symbol"] ?? "CASH").trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallbackID = [activityDate, action, currency, String(amount), description].joined(separator: "|")
+
+        transactions.append(IBKRFlexTransaction(
+            accountID: accountID,
+            tradeID: attributes["transactionid"]
+                ?? attributes["tradeid"]
+                ?? fallbackID,
+            symbol: symbol.isEmpty ? "CASH" : symbol.uppercased(),
+            name: description.isEmpty ? type : description,
+            currency: currency,
+            side: action,
+            quantity: 1,
+            price: amount,
+            tradeDate: activityDate,
+            fxRateToBase: number(attributes["fxratetobase"]),
+            realisedProfitLoss: nil
+        ))
+    }
+
+    private func normalizedDate(_ value: String?) -> String? {
+        let digits = String((value ?? "").filter(\.isNumber))
+        guard digits.count >= 8 else { return nil }
+        return "\(digits.prefix(4))-\(digits.dropFirst(4).prefix(2))-\(digits.dropFirst(6).prefix(2))"
     }
 
     private func number(_ value: String?) -> Double? {

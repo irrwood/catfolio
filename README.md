@@ -83,6 +83,7 @@ Common variables:
 ```env
 # Trading 212 portfolio sync
 TRADING212_API_KEY=
+# Optional for account setups that expose separate key/secret credentials.
 TRADING212_API_SECRET=
 
 # Fundamentals and valuation metrics

@@ -21,7 +21,7 @@ from app.settings import DATA_DIR
 from app.sp500_holdings import refresh_sp500_holdings
 
 from app.returns_twr import compute_twr_returns
-from app.ai import ai_analysis, ask, overlap_analysis, performance_explanation, portfolio_briefing, returns_explanation, risk_diagnosis, what_if
+from app.ai import ai_analysis, ask, overlap_analysis, performance_explanation, portfolio_attention, portfolio_briefing, returns_explanation, risk_diagnosis, what_if
 
 router = APIRouter(prefix="/api", tags=["api"])
 
@@ -565,7 +565,12 @@ async def api_ai_what_if(req: dict = Body(...)):
 
 @router.post("/ai/ask")
 async def api_ai_ask(req: dict = Body(...)):
-    return ask(req.get("question", ""), _req_lang(req))
+    return ask(req.get("question", ""), _req_lang(req), req.get("context"))
+
+
+@router.post("/ai/portfolio-attention")
+def api_ai_portfolio_attention(req: dict | None = Body(None)):
+    return portfolio_attention(_req_lang(req))
 
 
 @router.post("/ai/returns-explanation")

@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from datetime import datetime
 from collections import defaultdict
 from pathlib import Path
@@ -79,6 +80,64 @@ def yahoo_symbol_for(ticker, api_ticker, currency, fallback=None):
     if currency in {"GBP", "GBX"} and "." not in ticker:
         return f"{ticker}.L"
     return ticker
+
+
+def _aggregate_holdings(by_account_rows):
+    """Aggregate per-account rows into top-level holdings (one row per ticker).
+
+    Same ticker held in several accounts is merged: shares/cost/market values
+    are summed and `accounts` lists the holding accounts.
+    """
+    grouped = {}
+    accounts_by_ticker = defaultdict(set)
+    for row in by_account_rows:
+        ticker = row["ticker"]
+        accounts_by_ticker[ticker].add(row.get("account") or row.get("accounts") or "Trading212 API")
+        if ticker not in grouped:
+            grouped[ticker] = {**row}
+            continue
+        target = grouped[ticker]
+        target["shares"] += float(row.get("shares") or 0)
+        target["cost_native"] += float(row.get("cost_native") or 0)
+        target["cost_gbp_available"] += float(row.get("cost_gbp_available") or 0)
+        target["cost_usd_standard"] += float(row.get("cost_usd_standard") or 0)
+        target["api_market_value_gbp"] += float(row.get("api_market_value_gbp") or 0)
+        target["api_market_value_usd"] += float(row.get("api_market_value_usd") or 0)
+        target["api_unrealized_gbp"] += float(row.get("api_unrealized_gbp") or 0)
+        target["api_unrealized_usd"] += float(row.get("api_unrealized_usd") or 0)
+        target["broker_unrealized_usd"] = float(target.get("broker_unrealized_usd") or 0) + float(row.get("broker_unrealized_usd") or 0)
+        target["broker_fx_ppl_usd"] = float(target.get("broker_fx_ppl_usd") or 0) + float(row.get("broker_fx_ppl_usd") or 0)
+        target["price_unrealized_usd"] = float(target.get("price_unrealized_usd") or 0) + float(row.get("price_unrealized_usd") or 0)
+        target["api_share_diff"] += float(row.get("api_share_diff") or 0)
+        target["buys"] += int(row.get("buys") or 0)
+        target["sells"] += int(row.get("sells") or 0)
+        target["stock_dividends"] += int(row.get("stock_dividends") or 0)
+
+    holdings = []
+    for ticker, row in grouped.items():
+        shares = float(row.get("shares") or 0)
+        row["accounts"] = ",".join(sorted(accounts_by_ticker[ticker]))
+        row["avg_cost_native"] = float(row.get("cost_native") or 0) / shares if shares else 0
+        row["avg_cost_gbp_available"] = float(row.get("cost_gbp_available") or 0) / shares if shares else 0
+        row["avg_cost_usd_standard"] = float(row.get("cost_usd_standard") or 0) / shares if shares else 0
+        holdings.append(row)
+
+    holdings.sort(key=lambda row: float(row.get("cost_usd_standard") or 0), reverse=True)
+    return holdings
+
+
+def _failed_accounts(t212_data):
+    """Accounts whose Trading 212 calls failed with an authorization error.
+
+    Warning format produced by enrich_trading212_data.py:
+    "<Account label> account_cash failed: HTTPError 401 HTTP Error 401: Unauthorized"
+    """
+    failed = set()
+    for warning in t212_data.get("warnings") or []:
+        match = re.match(r"^(.+?) (?:account_cash|portfolio) failed: HTTPError (\d{3})", str(warning))
+        if match and match.group(2) in ("401", "403"):
+            failed.add(match.group(1))
+    return failed
 
 
 def build_v2_data():
@@ -190,41 +249,7 @@ def build_v2_data():
             "source": "Trading 212 portfolio API",
         })
 
-    grouped = {}
-    accounts_by_ticker = defaultdict(set)
-    for row in holdings_by_account:
-        ticker = row["ticker"]
-        accounts_by_ticker[ticker].add(row.get("account") or row.get("accounts") or "Trading212 API")
-        if ticker not in grouped:
-            grouped[ticker] = {**row}
-            continue
-        target = grouped[ticker]
-        target["shares"] += float(row.get("shares") or 0)
-        target["cost_native"] += float(row.get("cost_native") or 0)
-        target["cost_gbp_available"] += float(row.get("cost_gbp_available") or 0)
-        target["cost_usd_standard"] += float(row.get("cost_usd_standard") or 0)
-        target["api_market_value_gbp"] += float(row.get("api_market_value_gbp") or 0)
-        target["api_market_value_usd"] += float(row.get("api_market_value_usd") or 0)
-        target["api_unrealized_gbp"] += float(row.get("api_unrealized_gbp") or 0)
-        target["api_unrealized_usd"] += float(row.get("api_unrealized_usd") or 0)
-        target["broker_unrealized_usd"] = float(target.get("broker_unrealized_usd") or 0) + float(row.get("broker_unrealized_usd") or 0)
-        target["broker_fx_ppl_usd"] = float(target.get("broker_fx_ppl_usd") or 0) + float(row.get("broker_fx_ppl_usd") or 0)
-        target["price_unrealized_usd"] = float(target.get("price_unrealized_usd") or 0) + float(row.get("price_unrealized_usd") or 0)
-        target["api_share_diff"] += float(row.get("api_share_diff") or 0)
-        target["buys"] += int(row.get("buys") or 0)
-        target["sells"] += int(row.get("sells") or 0)
-        target["stock_dividends"] += int(row.get("stock_dividends") or 0)
-
-    holdings = []
-    for ticker, row in grouped.items():
-        shares = float(row.get("shares") or 0)
-        row["accounts"] = ",".join(sorted(accounts_by_ticker[ticker]))
-        row["avg_cost_native"] = float(row.get("cost_native") or 0) / shares if shares else 0
-        row["avg_cost_gbp_available"] = float(row.get("cost_gbp_available") or 0) / shares if shares else 0
-        row["avg_cost_usd_standard"] = float(row.get("cost_usd_standard") or 0) / shares if shares else 0
-        holdings.append(row)
-
-    holdings.sort(key=lambda row: float(row.get("cost_usd_standard") or 0), reverse=True)
+    holdings = _aggregate_holdings(holdings_by_account)
     holdings_by_account.sort(key=lambda row: float(row.get("cost_usd_standard") or 0), reverse=True)
     market_rows.sort(key=lambda row: float(row.get("market_value_usd") or 0), reverse=True)
 
@@ -354,6 +379,65 @@ def build_and_write():
         if position_signature(previous_by_key[key]) != position_signature(current_by_key[key])
     }
     unchanged_keys = shared_keys - updated_keys
+
+    # ── Merge stale rows for accounts that failed this run ──────────────
+    # A failed account (auth error) contributes no rows this run. Without a
+    # merge, its holdings silently disappear from the snapshot even though the
+    # broker still holds them. Keep the account's previous rows, flagged stale,
+    # so the combined portfolio keeps showing both accounts; the UI/next sync
+    # replaces them as soon as the account syncs again.
+    failed_accounts = _failed_accounts(data.get("trading212_data") or {})
+    merged_stale = []
+    if failed_accounts:
+        existing_by_account = existing_portfolio.get("holdings_by_account") or existing_portfolio.get("holdings") or []
+        stale_rows = [
+            row for row in existing_by_account
+            if str(row.get("account") or "") in failed_accounts
+        ]
+        present_accounts = {row.get("account") for row in portfolio_data.get("holdings_by_account") or []}
+        stale_rows = [row for row in stale_rows if row.get("account") not in present_accounts]
+        if stale_rows:
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            holdings_by_account = portfolio_data.get("holdings_by_account") or portfolio_data.get("holdings") or []
+            for row in stale_rows:
+                merged = dict(row)
+                merged["data_stale"] = True
+                if not merged.get("stale_as_of"):
+                    merged["stale_as_of"] = now
+                holdings_by_account.append(merged)
+                merged_stale.append(merged["ticker"])
+            holdings_by_account.sort(key=lambda row: float(row.get("cost_usd_standard") or 0), reverse=True)
+            holdings = _aggregate_holdings(holdings_by_account)
+            portfolio_data["holdings"] = holdings
+            portfolio_data["holdings_by_account"] = holdings_by_account
+            # Recompute the summary fields that depend on the merged rows.
+            summary = portfolio_data.get("summary") or {}
+            total_usd = sum(float(row.get("cost_usd_standard") or 0) for row in holdings)
+            by_currency = {}
+            for row in holdings:
+                cur = row.get("cost_currency") or "UNKNOWN"
+                item = by_currency.setdefault(cur, {"positions": 0, "cost_native": 0.0, "cost_gbp_available": 0.0})
+                item["positions"] += 1
+                item["cost_native"] += float(row.get("cost_native") or 0)
+                item["cost_gbp_available"] += float(row.get("cost_gbp_available") or 0)
+            by_account = {}
+            for row in holdings_by_account:
+                account = row.get("account") or "Trading212 API"
+                item = by_account.setdefault(account, {"positions": 0, "cost_gbp_available": 0.0})
+                item["positions"] += 1
+                item["cost_gbp_available"] += float(row.get("cost_gbp_available") or 0)
+            summary["total_cost_usd_standard"] = total_usd
+            summary["open_positions"] = len(holdings)
+            summary["open_positions_by_account"] = len(holdings_by_account)
+            summary["cost_scale_by_currency"] = by_currency
+            summary["cost_scale_by_account_gbp_available"] = by_account
+            stale_note = (
+                f"账户 {','.join(sorted(failed_accounts))} 本次同步失败（授权错误 401/403），"
+                f"已保留上次快照的 {len(stale_rows)} 个持仓（标记 data_stale，快照时间 {now}）。"
+                f"请检查该账户的 API Key/Secret。"
+            )
+            summary["warnings"] = list(summary.get("warnings") or []) + [stale_note]
+            portfolio_data["summary"] = summary
 
     (V2_DIR / "portfolio_analysis.json").write_text(json.dumps(portfolio_data, ensure_ascii=False, indent=2), encoding="utf-8")
     (V2_DIR / "market_data.json").write_text(json.dumps(data["market_data"], ensure_ascii=False, indent=2), encoding="utf-8")

@@ -124,8 +124,9 @@ def test_lab_page_keeps_portfolio_nav_active():
 
 def test_standalone_holdings_page_is_removed_but_api_remains():
     from app.main import app
+    from conftest import app_route_paths
 
-    paths = {route.path for route in app.routes}
+    paths = app_route_paths(app)
     assert "/holdings" not in paths
     assert "/api/holdings" in paths
     assert "/api/holdings/detail" in paths

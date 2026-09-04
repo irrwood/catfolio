@@ -2,25 +2,33 @@ import SwiftUI
 
 struct Trading212View: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var model: AppModel
+    @Environment(AppModel.self) private var model
+    @Environment(\.colorScheme) private var colorScheme
+
+    let context: AccountConnectorContext
 
     @State private var environment: Trading212Environment = .live
-    @State private var apiKey1 = ""
-    @State private var apiSecret1 = ""
-    @State private var apiKey2 = ""
-    @State private var apiSecret2 = ""
+    @State private var apiKey = ""
+    @State private var apiSecret = ""
+    @State private var accountSlot = 1
+    @State private var nickname = ""
     @State private var snapshot: Trading212Snapshot?
     @State private var snapshotAccounts: [Trading212AccountCredentials]?
     @State private var snapshotEnvironment: Trading212Environment?
     @State private var status: Trading212ViewStatus = .idle
     @State private var isWorking = false
     @State private var showsClearConfirmation = false
+    @State private var showsSyncConfirmation = false
+    @State private var historyRetryTask: Task<Void, Never>?
 
-    private static let environmentKey = "trading212.environment"
-    private static let apiKey1Key = "trading212.account-1.api-key"
-    private static let apiSecret1Key = "trading212.account-1.api-secret"
-    private static let apiKey2Key = "trading212.account-2.api-key"
-    private static let apiSecret2Key = "trading212.account-2.api-secret"
+    private static let environmentPreferenceName = "trading212.environment"
+
+    init(context: AccountConnectorContext = .create) {
+        self.context = context
+    }
+
+    private static func apiKeyKey(slot: Int) -> String { "trading212.account-\(slot).api-key" }
+    private static func apiSecretKey(slot: Int) -> String { "trading212.account-\(slot).api-secret" }
 
     var body: some View {
         NavigationStack {
@@ -39,37 +47,49 @@ struct Trading212View: View {
                 } header: {
                     Text("Trading 212 API")
                 } footer: {
-                    Text("仅使用读取持仓接口。建议在 Trading 212 创建只有账户与持仓读取权限的专用 Key。")
+                    Text("只使用账户、持仓和历史数据的读取权限。建议创建专用的只读 Key。")
                 }
 
-                credentialsSection(
-                    title: "账户 1",
-                    apiKey: $apiKey1,
-                    apiSecret: $apiSecret1,
-                    optional: false
-                )
+                if context.isCreating {
+                    Section {
+                        TextField("账户昵称", text: $nickname)
+                            .textInputAutocapitalization(.words)
+                            .autocorrectionDisabled()
+                    } header: {
+                        Text("账户昵称")
+                    } footer: {
+                        Text("用于区分多个 Trading 212 账户，创建后仍可在账户详情中修改。")
+                    }
+                }
 
-                credentialsSection(
-                    title: "账户 2",
-                    apiKey: $apiKey2,
-                    apiSecret: $apiSecret2,
-                    optional: true
-                )
+                credentialsSection
 
                 Section("连接") {
-                    Button {
-                        Task { await preview() }
-                    } label: {
-                        Label(isWorking ? "正在读取" : "测试并预览", systemImage: "checkmark.shield")
-                    }
-                    .disabled(isWorking)
+                    if let snapshot {
+                        Button {
+                            Task { await preview() }
+                        } label: {
+                            Label("重新读取持仓", systemImage: "arrow.clockwise")
+                        }
+                        .disabled(isWorking)
 
-                    GlassPrimaryButton(
-                        title: isWorking ? "正在同步" : "同步到 Catfolio",
-                        systemImage: "arrow.triangle.2.circlepath",
-                        isDisabled: isWorking
-                    ) {
-                        Task { await sync() }
+                        GlassPrimaryButton(
+                            title: isWorking
+                                ? (context.isCreating ? "正在创建" : "正在同步")
+                                : (context.isCreating ? "创建 Trading 212 账户" : "同步 \(snapshot.positions.count) 项到 Catfolio"),
+                            systemImage: "tray.and.arrow.down.fill",
+                            isDisabled: isWorking || !hasValidNickname
+                        ) {
+                            showsSyncConfirmation = true
+                        }
+                    } else {
+                        GlassPrimaryButton(
+                            title: isWorking ? "正在读取" : "读取并预览持仓",
+                            systemImage: "arrow.down.circle",
+                            isDisabled: isWorking
+                        ) {
+                            Task { await preview() }
+                        }
                     }
 
                     statusView
@@ -103,7 +123,7 @@ struct Trading212View: View {
                                 }
                                 Spacer()
                                 VStack(alignment: .trailing, spacing: 2) {
-                                    Text(position.quantity.formatted(.number.precision(.fractionLength(0...4))))
+                                    Text(DisplayFormat.shares(position.quantity))
                                         .font(.body.monospacedDigit())
                                     if let currentPrice = position.currentPrice {
                                         Text(DisplayFormat.money(position.quantity * currentPrice, currency: position.currency))
@@ -116,11 +136,11 @@ struct Trading212View: View {
                     } header: {
                         Text("持仓预览")
                     } footer: {
-                        Text(snapshot.positions.count > 10 ? "仅预览前 10 项；同步会合并两个账户的全部可导入持仓。" : "同步时会合并已配置账户的持仓。")
+                        Text(snapshot.positions.count > 10 ? "仅预览前 10 项；保存时会处理该账户的全部可导入持仓。" : "只处理当前 Trading 212 账户。")
                     }
                 }
 
-                if hasCredentials {
+                if hasCredentials && !context.isCreating {
                     Section {
                         Button("移除本机 Trading 212 凭证", role: .destructive) {
                             showsClearConfirmation = true
@@ -128,19 +148,23 @@ struct Trading212View: View {
                     }
                 }
             }
-            .navigationTitle("Trading 212")
+            .scrollContentBackground(.hidden)
+            .background(CatfolioTheme.pageBackground(for: colorScheme))
+            .navigationTitle(context.isCreating ? "新建 Trading 212 账户" : "Trading 212")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("完成") { dismiss() }
                 }
             }
-            .task { loadCredentials() }
+            .task { prepareAccount() }
+            .onDisappear {
+                historyRetryTask?.cancel()
+                historyRetryTask = nil
+            }
             .onChange(of: environment) { _, _ in invalidatePreview() }
-            .onChange(of: apiKey1) { _, _ in invalidatePreview() }
-            .onChange(of: apiSecret1) { _, _ in invalidatePreview() }
-            .onChange(of: apiKey2) { _, _ in invalidatePreview() }
-            .onChange(of: apiSecret2) { _, _ in invalidatePreview() }
+            .onChange(of: apiKey) { _, _ in invalidatePreview() }
+            .onChange(of: apiSecret) { _, _ in invalidatePreview() }
             .confirmationDialog(
                 "移除 Trading 212 凭证？",
                 isPresented: $showsClearConfirmation,
@@ -149,35 +173,43 @@ struct Trading212View: View {
                 Button("移除", role: .destructive) { clearCredentials() }
                 Button("取消", role: .cancel) {}
             } message: {
-                Text("只会删除此 iPhone Keychain 中的两组 API Key 与 Secret。")
+                Text("只会删除当前账户保存在此 iPhone Keychain 中的 API Key 与 Secret。")
+            }
+            .confirmationDialog(
+                context.isCreating ? "创建 Trading 212 账户？" : "更新 Trading 212 账户？",
+                isPresented: $showsSyncConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button(context.isCreating ? "创建账户" : "同步并更新") {
+                    Task { await sync() }
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text(context.isCreating
+                    ? "将使用预览中的数据创建新账户；现有账户不受影响。"
+                    : "将更新当前 Trading 212 账户持仓；其他账户不受影响。")
             }
         }
+        .tint(CatfolioTheme.accent)
     }
 
-    private func credentialsSection(
-        title: String,
-        apiKey: Binding<String>,
-        apiSecret: Binding<String>,
-        optional: Bool
-    ) -> some View {
+    private var credentialsSection: some View {
         Section {
-            SecureField("API Key", text: apiKey)
+            SecureField("API Key", text: $apiKey)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .font(.body.monospaced())
                 .privacySensitive()
 
-            SecureField("API Secret", text: apiSecret)
+            SecureField("API Secret", text: $apiSecret)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .font(.body.monospaced())
                 .privacySensitive()
         } header: {
-            Text(optional ? "\(title)（可选）" : title)
+            Text("只读凭证")
         } footer: {
-            if optional {
-                Text("如需合并第二个账户，请同时填写这一组 Key 与 Secret。")
-            }
+            Text("每次只创建或更新一个 Trading 212 账户。")
         }
     }
 
@@ -196,57 +228,61 @@ struct Trading212View: View {
         case let .success(message):
             Label(message, systemImage: "checkmark.circle.fill")
                 .font(.footnote)
-                .foregroundStyle(CatfolioStyle.green)
+                .foregroundStyle(CatfolioTheme.positive)
         case let .failure(message):
             StatusNotice(text: message)
         }
     }
 
     private var hasCredentials: Bool {
-        !apiKey1.isEmpty || !apiSecret1.isEmpty || !apiKey2.isEmpty || !apiSecret2.isEmpty
+        !apiKey.isEmpty || !apiSecret.isEmpty
     }
 
-    private func loadCredentials() {
-        if let rawEnvironment = UserDefaults.standard.string(forKey: Self.environmentKey),
+    private var hasValidNickname: Bool {
+        !context.isCreating || !nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func prepareAccount() {
+        if let rawEnvironment = UserDefaults.standard.string(forKey: Self.environmentPreferenceName),
            let savedEnvironment = Trading212Environment(rawValue: rawEnvironment) {
             environment = savedEnvironment
         }
-        apiKey1 = KeychainStore.string(for: Self.apiKey1Key) ?? ""
-        apiSecret1 = KeychainStore.string(for: Self.apiSecret1Key) ?? ""
-        apiKey2 = KeychainStore.string(for: Self.apiKey2Key) ?? ""
-        apiSecret2 = KeychainStore.string(for: Self.apiSecret2Key) ?? ""
+
+        if let account = context.account {
+            if let slot = account.accountID.flatMap({ Int($0.replacingOccurrences(of: "account-", with: "")) }) {
+                accountSlot = slot
+            }
+            apiKey = KeychainStore.string(for: Self.apiKeyKey(slot: accountSlot)) ?? ""
+            apiSecret = KeychainStore.string(for: Self.apiSecretKey(slot: accountSlot)) ?? ""
+            nickname = AccountNaming.nickname(from: account.displayName, provider: "Trading 212")
+            return
+        }
+
+        let usedSlots = Set(model.accounts
+            .filter { $0.source == "Trading 212" }
+            .compactMap { $0.accountID }
+            .compactMap { Int($0.replacingOccurrences(of: "account-", with: "")) })
+        var availableSlot = 1
+        while usedSlots.contains(availableSlot) { availableSlot += 1 }
+        accountSlot = availableSlot
+        nickname = model.suggestedAccountNickname()
     }
 
     private func accountCredentials() throws -> [Trading212AccountCredentials] {
-        let primary = try Trading212Credentials(apiKey: apiKey1, apiSecret: apiSecret1)
-        var accounts = [Trading212AccountCredentials(slot: 1, credentials: primary)]
-        let hasSecondKey = !apiKey2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let hasSecondSecret = !apiSecret2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        guard hasSecondKey == hasSecondSecret else { throw Trading212Error.incompleteSecondAccount }
-        if hasSecondKey {
-            let secondary = try Trading212Credentials(apiKey: apiKey2, apiSecret: apiSecret2)
-            accounts.append(Trading212AccountCredentials(slot: 2, credentials: secondary))
-        }
-        return accounts
+        let credentials = try Trading212Credentials(apiKey: apiKey, apiSecret: apiSecret)
+        return [Trading212AccountCredentials(slot: accountSlot, credentials: credentials)]
     }
 
     private func saveCredentials(_ accounts: [Trading212AccountCredentials]) throws {
-        let primary = accounts[0].credentials
-        try KeychainStore.set(primary.apiKey, for: Self.apiKey1Key)
-        try KeychainStore.set(primary.apiSecret, for: Self.apiSecret1Key)
-        if let secondary = accounts.first(where: { $0.slot == 2 })?.credentials {
-            try KeychainStore.set(secondary.apiKey, for: Self.apiKey2Key)
-            try KeychainStore.set(secondary.apiSecret, for: Self.apiSecret2Key)
-        } else {
-            try KeychainStore.set("", for: Self.apiKey2Key)
-            try KeychainStore.set("", for: Self.apiSecret2Key)
-        }
-        UserDefaults.standard.set(environment.rawValue, forKey: Self.environmentKey)
+        guard let account = accounts.first else { return }
+        try KeychainStore.set(account.credentials.apiKey, for: Self.apiKeyKey(slot: account.slot))
+        try KeychainStore.set(account.credentials.apiSecret, for: Self.apiSecretKey(slot: account.slot))
+        UserDefaults.standard.set(environment.rawValue, forKey: Self.environmentPreferenceName)
     }
 
     private func preview() async {
         isWorking = true
-        status = .working("正在读取 Trading 212 持仓…")
+        status = .working("正在读取 Trading 212 持仓与历史成交…")
         defer { isWorking = false }
         do {
             let accounts = try accountCredentials()
@@ -255,7 +291,11 @@ struct Trading212View: View {
             snapshot = result
             snapshotAccounts = accounts
             snapshotEnvironment = environment
-            status = .success("读取成功：\(result.accountCount) 个账户，\(result.positions.count) 项持仓")
+            let historyText = result.transactionHistoryStatus.map { "；\($0)" } ?? ""
+            status = .success("读取成功：\(result.accountCount) 个账户，\(result.positions.count) 项持仓\(historyText)")
+            if !result.hasCompleteTransactionHistory {
+                scheduleHistoryRetry(.preview)
+            }
         } catch {
             status = .failure(error.localizedDescription)
         }
@@ -263,13 +303,16 @@ struct Trading212View: View {
 
     private func sync() async {
         isWorking = true
-        status = .working("正在读取并转换 Trading 212 持仓…")
+        status = .working("正在同步 Trading 212 持仓与历史数据…")
         defer { isWorking = false }
         do {
             let accounts = try accountCredentials()
             try saveCredentials(accounts)
             let currentSnapshot: Trading212Snapshot
-            if let snapshot, snapshotAccounts == accounts, snapshotEnvironment == environment {
+            if let snapshot,
+               snapshotAccounts == accounts,
+               snapshotEnvironment == environment,
+               snapshot.hasCompleteTransactionHistory {
                 currentSnapshot = snapshot
             } else {
                 currentSnapshot = try await Trading212Client().fetchSnapshot(accounts: accounts, environment: environment)
@@ -278,9 +321,26 @@ struct Trading212View: View {
                 snapshotEnvironment = environment
             }
             status = .working("Trading 212 已读取，正在保存到本机…")
-            let result = try await model.importTrading212(currentSnapshot)
+            let accountID = "account-\(accountSlot)"
+            let accountNames = model.accountNames(
+                source: "Trading 212",
+                accountIDs: [accountID],
+                preferredNickname: nickname,
+                targetAccountID: context.account?.accountID
+            )
+            let result = try await model.importTrading212(
+                currentSnapshot,
+                accountNames: accountNames,
+                replacingAccountsOnly: true
+            )
             let warningText = result.warnings.isEmpty ? "" : "，跳过 \(result.warnings.count) 项"
-            status = .success("已同步 \(result.holdingsCount) 个持仓\(warningText)")
+            let historyText = currentSnapshot.transactionHistoryStatus.map { "；\($0)" } ?? ""
+            status = .success(context.isCreating
+                ? "已创建账户，导入 \(result.holdingsCount) 个持仓\(warningText)\(historyText)"
+                : "已同步 \(result.holdingsCount) 个持仓\(warningText)\(historyText)")
+            if !currentSnapshot.hasCompleteTransactionHistory {
+                scheduleHistoryRetry(.sync)
+            }
         } catch {
             status = .failure(error.localizedDescription)
         }
@@ -288,23 +348,39 @@ struct Trading212View: View {
 
     private func invalidatePreview() {
         guard !isWorking else { return }
+        historyRetryTask?.cancel()
+        historyRetryTask = nil
         snapshot = nil
         snapshotAccounts = nil
         snapshotEnvironment = nil
         status = .idle
     }
 
+    private func scheduleHistoryRetry(_ action: Trading212HistoryRetryAction) {
+        historyRetryTask?.cancel()
+        historyRetryTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(62))
+            guard !Task.isCancelled else { return }
+            switch action {
+            case .preview:
+                await preview()
+            case .sync:
+                await sync()
+            }
+        }
+    }
+
     private func clearCredentials() {
-        for key in [Self.apiKey1Key, Self.apiSecret1Key, Self.apiKey2Key, Self.apiSecret2Key] {
+        for key in [Self.apiKeyKey(slot: accountSlot), Self.apiSecretKey(slot: accountSlot)] {
             try? KeychainStore.set("", for: key)
         }
-        apiKey1 = ""
-        apiSecret1 = ""
-        apiKey2 = ""
-        apiSecret2 = ""
+        apiKey = ""
+        apiSecret = ""
         snapshot = nil
         snapshotAccounts = nil
         snapshotEnvironment = nil
+        historyRetryTask?.cancel()
+        historyRetryTask = nil
         status = .idle
     }
 }
@@ -314,4 +390,9 @@ private enum Trading212ViewStatus {
     case working(String)
     case success(String)
     case failure(String)
+}
+
+private enum Trading212HistoryRetryAction {
+    case preview
+    case sync
 }
