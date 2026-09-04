@@ -636,9 +636,9 @@ final class MoomooAuthorizationSession: ObservableObject {
             try MoomooCredentialStore.save(clientID: clientID)
         }
 
-        let verifier = Self.randomURLSafeString(byteCount: 32)
+        let verifier = try Self.randomURLSafeString(byteCount: 32)
         let challenge = Data(SHA256.hash(data: Data(verifier.utf8))).base64URLEncodedString()
-        let state = Self.randomURLSafeString(byteCount: 24)
+        let state = try Self.randomURLSafeString(byteCount: 24)
         let authorizationURL = try client.authorizationURL(clientID: clientID, challenge: challenge, state: state)
         let listener = try MoomooLoopbackListener(port: 60355)
         loopbackListener = listener
@@ -681,9 +681,15 @@ final class MoomooAuthorizationSession: ObservableObject {
         authorizationPage = nil
     }
 
-    private static func randomURLSafeString(byteCount: Int) -> String {
+    /// A silent failure here would leave `bytes` all zero, making both the PKCE
+    /// verifier and the OAuth state fixed and predictable. Fail the login
+    /// instead of proceeding with unusable entropy.
+    private static func randomURLSafeString(byteCount: Int) throws -> String {
         var bytes = [UInt8](repeating: 0, count: byteCount)
-        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        let status = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        guard status == errSecSuccess else {
+            throw MoomooOpenAPIError.authorizationFailed("无法生成安全随机数（\(status)）")
+        }
         return Data(bytes).base64URLEncodedString()
     }
 }
@@ -726,7 +732,22 @@ private final class MoomooLoopbackListener: @unchecked Sendable {
         }
     }
 
-    func waitForCallback() async throws -> URL {
+    /// Abandoning the authorization page (backgrounding the app, closing the
+    /// sheet without cancelling) would otherwise hold port 60355 and this
+    /// continuation forever, so bound the wait.
+    func waitForCallback(timeout: TimeInterval = 300) async throws -> URL {
+        let timeoutTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            self?.finish(.failure(
+                MoomooOpenAPIError.authorizationFailed("Moomoo 授权超时，请重新登录")
+            ))
+        }
+        defer { timeoutTask.cancel() }
+        return try await awaitCallback()
+    }
+
+    private func awaitCallback() async throws -> URL {
         try await withCheckedThrowingContinuation { continuation in
             lock.lock()
             if let pendingCallback {
