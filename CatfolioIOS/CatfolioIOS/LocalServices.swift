@@ -1,5 +1,6 @@
 import Foundation
 import FoundationModels
+import OSLog
 
 enum LocalServiceKeys {
     static let fmp = "catfolio.fmp.api-key"
@@ -696,7 +697,7 @@ private actor LocalHistoricalPriceCache {
 
     private var cacheURL: URL {
         let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        return root.appendingPathComponent("catfolio-market-history.json")
+        return root.appendingPathComponent("catfolio-market-history-units-v2.json")
     }
 }
 
@@ -752,7 +753,7 @@ private actor LocalIntradayPriceCache {
 
     private var cacheURL: URL {
         let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        return root.appendingPathComponent("catfolio-intraday-history.json")
+        return root.appendingPathComponent("catfolio-intraday-history-units-v2.json")
     }
 }
 
@@ -822,8 +823,18 @@ private actor LocalVolumeBarCache {
 
     private var cacheURL: URL {
         let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        return root.appendingPathComponent("catfolio-volume-bars.json")
+        return root.appendingPathComponent("catfolio-volume-bars-units-v2.json")
     }
+}
+
+private enum LocalRequestSessions {
+    static let ephemeral = URLSession(configuration: .ephemeral)
+    static let waiting: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.waitsForConnectivity = true
+        configuration.timeoutIntervalForResource = 60
+        return URLSession(configuration: configuration)
+    }()
 }
 
 struct LocalMarketDataClient {
@@ -845,6 +856,8 @@ struct LocalMarketDataClient {
         }
 
         struct Result: Decodable {
+            struct Meta: Decodable { let currency: String? }
+            let meta: Meta?
             let timestamp: [Int]?
             let indicators: Indicators
         }
@@ -959,6 +972,7 @@ struct LocalMarketDataClient {
             )
             guard let rawPrice = rawPrices[symbol] else { return }
             let adjusted = rawPrice * Self.priceScale(
+                ticker: position.ticker, currency: position.quoteCurrency,
                 referencePrice: position.quotePrice,
                 marketPrice: rawPrice
             )
@@ -1029,6 +1043,7 @@ struct LocalMarketDataClient {
             let symbol = Self.yahooSymbol(ticker: position.ticker, currency: position.quoteCurrency)
             guard let latest = histories[symbol]?.max(by: { $0.key < $1.key })?.value else { continue }
             scales[symbol] = Self.priceScale(
+                ticker: position.ticker, currency: position.quoteCurrency,
                 referencePrice: position.quotePrice,
                 marketPrice: latest
             )
@@ -1184,7 +1199,7 @@ struct LocalMarketDataClient {
             throw latestError ?? LocalServiceError.noHistoricalPrices
         }
         let ordered = bars.sorted { $0.date < $1.date }
-        let scale = Self.priceScale(referencePrice: referencePrice, marketPrice: ordered.last?.close)
+        let scale = Self.priceScale(ticker: ticker, currency: currency, referencePrice: referencePrice, marketPrice: ordered.last?.close)
         return ordered.map {
             PortfolioAttentionDailyBar(
                 date: $0.date,
@@ -1313,7 +1328,7 @@ struct LocalMarketDataClient {
         guard !closes.isEmpty else { throw LocalServiceError.noHistoricalPrices }
 
         let latestMarketClose = closes.max(by: { $0.key < $1.key })?.value
-        let scale = Self.priceScale(referencePrice: referencePrice, marketPrice: latestMarketClose)
+        let scale = Self.priceScale(ticker: ticker, currency: currency, referencePrice: referencePrice, marketPrice: latestMarketClose)
         if let referencePrice, referencePrice.isFinite, referencePrice > 0 {
             closes[end] = referencePrice / scale
         }
@@ -1431,7 +1446,7 @@ struct LocalMarketDataClient {
         request.timeoutInterval = 12
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await URLSession(configuration: .ephemeral).data(for: request)
+        let (data, response) = try await LocalRequestSessions.ephemeral.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             throw LocalServiceError.remote(Self.message(from: data, fallback: "Massive 日内行情请求失败（\(http.statusCode)）"))
@@ -1487,13 +1502,16 @@ struct LocalMarketDataClient {
               let closes = result.indicators.quote?.first?.close else {
             throw LocalServiceError.noMarketData
         }
+        guard let unitScale = InstrumentCurrencyRules.providerPriceScale(symbol: symbol, sourceCurrency: result.meta?.currency) else {
+            throw LocalServiceError.remote("行情报价币种无法确认：\(symbol)")
+        }
         var bars: [MarketIntradayBar] = []
         bars.reserveCapacity(timestamps.count)
         for (index, timestamp) in timestamps.enumerated() where index < closes.count {
             guard let close = closes[index], close.isFinite, close > 0 else { continue }
             bars.append(MarketIntradayBar(
                 timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp)),
-                close: close
+                close: close * unitScale
             ))
         }
         return try Self.latestMarketSession(from: bars, symbol: symbol)
@@ -1579,6 +1597,11 @@ struct LocalMarketDataClient {
         to end: String,
         key: String
     ) async throws -> [MarketDailyBar] {
+        // This endpoint has no currency metadata. Do not use it for London
+        // listings where pounds and pence cannot be distinguished safely.
+        guard !ticker.uppercased().hasSuffix(".L"), InstrumentCurrencyRules.marketDataSymbol(for: ticker) == nil else {
+            throw LocalServiceError.remote("FMP 无法确认伦敦标的报价币种")
+        }
         var components = URLComponents(string: "https://financialmodelingprep.com/stable/historical-price-eod/full")!
         components.queryItems = [
             URLQueryItem(name: "symbol", value: ticker),
@@ -1588,10 +1611,14 @@ struct LocalMarketDataClient {
         ]
         var request = URLRequest(url: components.url!)
         request.timeoutInterval = 25
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.waitsForConnectivity = true
-        let (data, response) = try await URLSession(configuration: configuration).data(for: request)
+        try await FMPRequestLimiter.shared.waitForTurn()
+        let (data, response) = try await LocalRequestSessions.waiting.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
+        if http.statusCode == 429 {
+            await FMPRequestLimiter.shared.backOff(retryAfter: http.value(forHTTPHeaderField: "Retry-After"))
+            let wait = await FMPRequestLimiter.shared.secondsUntilFreeSlot
+            throw FMPFailure.rateLimited(retryAfterSeconds: Int(wait.rounded(.up)))
+        }
         guard (200..<300).contains(http.statusCode) else {
             throw LocalServiceError.remote(Self.message(from: data, fallback: "行情请求失败（\(http.statusCode)）"))
         }
@@ -1625,7 +1652,7 @@ struct LocalMarketDataClient {
         request.timeoutInterval = 20
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await URLSession(configuration: .ephemeral).data(for: request)
+        let (data, response) = try await LocalRequestSessions.ephemeral.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             throw LocalServiceError.remote(Self.message(from: data, fallback: "Massive 行情请求失败（\(http.statusCode)）"))
@@ -1700,6 +1727,9 @@ struct LocalMarketDataClient {
               let volumes = quote.volume else {
             throw LocalServiceError.noMarketData
         }
+        guard let unitScale = InstrumentCurrencyRules.providerPriceScale(symbol: symbol, sourceCurrency: result.meta?.currency) else {
+            throw LocalServiceError.remote("行情报价币种无法确认：\(symbol)")
+        }
         var bars: [MarketDailyBar] = []
         for index in timestamps.indices {
             guard index < closes.count, index < highs.count, index < lows.count, index < volumes.count,
@@ -1707,9 +1737,9 @@ struct LocalMarketDataClient {
                   close > 0, high > 0, low > 0 else { continue }
             bars.append(MarketDailyBar(
                 date: DayDateCodec.string(from: Date(timeIntervalSince1970: TimeInterval(timestamps[index]))),
-                close: close,
-                high: high,
-                low: low,
+                close: close * unitScale,
+                high: high * unitScale,
+                low: low * unitScale,
                 volume: volume
             ))
         }
@@ -1727,6 +1757,7 @@ struct LocalMarketDataClient {
         let annualSessions = Array(bars.sorted { $0.date > $1.date }.prefix(252))
         let sessions = Array(annualSessions.prefix(160))
         let scale = Self.priceScale(
+            ticker: ticker, currency: currency,
             referencePrice: referencePrice,
             marketPrice: annualSessions.first?.close
         )
@@ -2178,17 +2209,23 @@ struct LocalMarketDataClient {
         let adjusted = result.indicators.adjclose?.first?.adjclose ?? []
         let raw = result.indicators.quote?.first?.close ?? []
         let closes = adjusted.contains(where: { $0 != nil }) ? adjusted : raw
+        guard let unitScale = InstrumentCurrencyRules.providerPriceScale(symbol: symbol, sourceCurrency: result.meta?.currency) else {
+            throw LocalServiceError.remote("行情报价币种无法确认：\(symbol)")
+        }
         var values: [String: Double] = [:]
         for (index, timestamp) in timestamps.enumerated() where index < closes.count {
             guard let close = closes[index], close > 0 else { continue }
             let date = DayDateCodec.string(from: Date(timeIntervalSince1970: TimeInterval(timestamp)))
-            values[date] = close
+            values[date] = close * unitScale
         }
         guard !values.isEmpty else { throw LocalServiceError.noMarketData }
         return values
     }
 
     private func fmpHistoricalCloses(symbol: String, from: String, to: String) async throws -> [String: Double] {
+        guard !symbol.uppercased().hasSuffix(".L"), InstrumentCurrencyRules.marketDataSymbol(for: symbol) == nil else {
+            throw LocalServiceError.remote("FMP 无法确认伦敦标的报价币种")
+        }
         guard let key = KeychainStore.string(for: LocalServiceKeys.fmp), !key.isEmpty else {
             throw LocalServiceError.missingMarketKey
         }
@@ -2201,8 +2238,14 @@ struct LocalMarketDataClient {
         ]
         var request = URLRequest(url: components.url!)
         request.timeoutInterval = 25
-        let (data, response) = try await URLSession(configuration: .ephemeral).data(for: request)
+        try await FMPRequestLimiter.shared.waitForTurn()
+        let (data, response) = try await LocalRequestSessions.ephemeral.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
+        if http.statusCode == 429 {
+            await FMPRequestLimiter.shared.backOff(retryAfter: http.value(forHTTPHeaderField: "Retry-After"))
+            let wait = await FMPRequestLimiter.shared.secondsUntilFreeSlot
+            throw FMPFailure.rateLimited(retryAfterSeconds: Int(wait.rounded(.up)))
+        }
         guard (200..<300).contains(http.statusCode) else {
             throw LocalServiceError.remote(Self.message(from: data, fallback: "行情请求失败（\(http.statusCode)）"))
         }
@@ -2285,14 +2328,21 @@ struct LocalMarketDataClient {
         return history[nextDate]
     }
 
-    private static func priceScale(referencePrice: Double?, marketPrice: Double?) -> Double {
-        guard let referencePrice, let marketPrice, referencePrice > 0, marketPrice > 0 else {
-            return 1
+    static func priceScale(ticker: String, currency: String, referencePrice: Double?, marketPrice: Double?) -> Double {
+        let symbol = yahooSymbol(ticker: ticker, currency: currency)
+        // A London suffix alone does not identify pounds vs pence. Only the
+        // verified listing currency can authorize a 100x unit conversion.
+        let scale = InstrumentCurrencyRules.marketPriceScale(symbol: symbol, targetCurrency: currency)
+        if let referencePrice, let marketPrice,
+           referencePrice.isFinite, marketPrice.isFinite,
+           referencePrice > 0, marketPrice > 0 {
+            let ratio = marketPrice * scale / referencePrice
+            if ratio < 0.25 || ratio > 4 {
+                Logger(subsystem: "com.catfolio.ios", category: "PriceUnits")
+                    .warning("Price cross-check failed for \(symbol, privacy: .public); retaining declared currency scale \(scale)")
+            }
         }
-        let ratio = marketPrice / referencePrice
-        if (40...160).contains(ratio) { return 0.01 }
-        if (0.006...0.025).contains(ratio) { return 100 }
-        return 1
+        return scale
     }
 
     private static func message(from data: Data, fallback: String) -> String {
@@ -2821,9 +2871,7 @@ struct LocalAIClient {
         request.timeoutInterval = 20
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.waitsForConnectivity = false
-        let (data, response) = try await URLSession(configuration: configuration).data(for: request)
+        let (data, response) = try await LocalRequestSessions.ephemeral.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw LocalServiceError.invalidResponse
         }
@@ -2985,21 +3033,27 @@ struct LocalAIClient {
             context += "\n\n上一次 Portfolio Attention 的结果：\n\(additionalContext)\n追问必须沿用上述信号、thesis 和 confidence，不要重算指标。"
         }
 
+        return try await researchAnswer(question, context: context)
+    }
+
+    /// Public research only. Unlike portfolio chat this does not load or send
+    /// account balances, credentials, or the user's holdings.
+    func researchAnswer(_ question: String, context: String, structured: Bool = false) async throws -> String {
         switch AIProviderPreference.current {
         case .apple:
             if #available(iOS 26.0, *) {
-                return try await completeWithApple(question: question, context: context)
+                return try await completeWithApple(question: question, context: context, structured: structured)
             }
             throw LocalServiceError.appleModelUnavailable(Self.appleModelStatus.message)
         case .deepSeek:
-            return try await completeWithDeepSeek(question: question, context: context)
+            return try await completeWithDeepSeek(question: question, context: context, structured: structured)
         case .codex:
             return try await completeWithCodex(question: question, context: context)
         case .automatic:
             var appleFailure = Self.appleModelStatus.message
             if #available(iOS 26.0, *), Self.appleModelStatus.isAvailable {
                 do {
-                    return try await completeWithApple(question: question, context: context)
+                    return try await completeWithApple(question: question, context: context, structured: structured)
                 } catch {
                     appleFailure = error.localizedDescription
                 }
@@ -3013,7 +3067,7 @@ struct LocalAIClient {
                 }
             }
             do {
-                return try await completeWithDeepSeek(question: question, context: context)
+                return try await completeWithDeepSeek(question: question, context: context, structured: structured)
             } catch {
                 throw LocalServiceError.noAvailableAIProvider(
                     "Apple：\(appleFailure)；Codex：\(codexFailure)；DeepSeek：\(error.localizedDescription)"
@@ -3037,7 +3091,7 @@ struct LocalAIClient {
     }
 
     @available(iOS 26.0, *)
-    private func completeWithApple(question: String, context: String) async throws -> String {
+    private func completeWithApple(question: String, context: String, structured: Bool = false) async throws -> String {
         let model = SystemLanguageModel.default
         guard model.availability == .available else {
             throw LocalServiceError.appleModelUnavailable(Self.appleModelStatus.message)
@@ -3049,7 +3103,7 @@ struct LocalAIClient {
 
         let session = LanguageModelSession(
             model: model,
-            instructions: """
+            instructions: structured ? "你是筛选条件解析器。严格按提供的 JSON schema 输出单个 JSON 对象，不附加解释、Markdown 或免责声明。不支持的条件放入 unsupported，不可忽略。" : """
             你是 Catfolio 的投资组合分析助手。只根据用户设备提供的组合摘要回答，使用简洁中文；不要虚构实时新闻、行情或组合中未提供的数据。金融数字由 Catfolio 计算，你只负责解释，不要重新推算或改写。回答末尾简短说明这不是投资建议。
             """
         )
@@ -3099,7 +3153,7 @@ struct LocalAIClient {
         }
     }
 
-    private func completeWithDeepSeek(question: String, context: String) async throws -> String {
+    private func completeWithDeepSeek(question: String, context: String, structured: Bool = false) async throws -> String {
         guard let key = KeychainStore.string(for: LocalServiceKeys.deepSeek), !key.isEmpty else {
             throw LocalServiceError.missingAIKey
         }
@@ -3107,7 +3161,7 @@ struct LocalAIClient {
             "model": "deepseek-chat",
             "temperature": 0.2,
             "messages": [
-                ["role": "system", "content": "你是 Catfolio 的投资组合分析助手。只根据用户手机提供的组合摘要回答，不虚构实时新闻或行情；明确说明这不是投资建议。"],
+                ["role": "system", "content": structured ? "你是筛选条件解析器。严格按提供的 JSON schema 输出单个 JSON 对象，不附加解释、Markdown 或免责声明。不支持的条件放入 unsupported，不可忽略。" : "你是 Catfolio 的投资组合分析助手。只根据用户手机提供的组合摘要回答，不虚构实时新闻或行情；明确说明这不是投资建议。"],
                 ["role": "user", "content": "\(context)\n\n问题：\(question)"],
             ],
         ]
@@ -3117,7 +3171,7 @@ struct LocalAIClient {
         request.timeoutInterval = 45
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-        let (data, response) = try await URLSession(configuration: .ephemeral).data(for: request)
+        let (data, response) = try await LocalRequestSessions.ephemeral.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]

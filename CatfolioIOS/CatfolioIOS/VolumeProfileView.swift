@@ -58,6 +58,14 @@ struct HoldingDetailView: View {
         ProcessInfo.processInfo.arguments.contains("--show-security-data")
     }
 
+    private var showsVolumeFocusedPreview: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--show-volume-focused")
+        #else
+        false
+        #endif
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -70,50 +78,52 @@ struct HoldingDetailView: View {
                     HoldingDetailLoadingPlaceholder()
                 } else {
                     LazyVStack(spacing: 0) {
-                    VStack(spacing: 0) {
-                        HoldingDetailHeader(
-                            holding: displayedHolding,
-                            marketTodayChange: profile?.todayChangePercent,
-                            selectedPrice: priceSelection?.price,
-                            selectedReturn: priceSelection?.returnPercent
-                        )
+                    if !showsVolumeFocusedPreview {
+                        VStack(spacing: 0) {
+                            HoldingDetailHeader(
+                                holding: displayedHolding,
+                                marketTodayChange: profile?.todayChangePercent,
+                                selectedPrice: priceSelection?.price,
+                                selectedReturn: priceSelection?.returnPercent
+                            )
 
-                        if let priceHistory {
-                            SecurityPriceChart(
-                                history: priceHistory,
-                                averageCost: averageCostInQuoteCurrency,
-                                selectedAccountKeys: selectedAccountKeys,
-                                onSelectionChange: { priceSelection = $0 }
-                            )
-                        } else if let priceHistoryError {
-                            SecurityPriceChartState(
-                                title: "暂无价格走势",
-                                message: priceHistoryError,
-                                isLoading: false
-                            )
-                        } else if presentationReady {
-                            SecurityPriceChartState(
-                                title: "正在读取价格走势",
-                                message: "正在整理历史行情与买卖记录",
-                                isLoading: true
-                            )
-                        } else {
-                            Color.clear
-                                .frame(height: SecurityPriceChartState.fixedHeight)
-                                .accessibilityHidden(true)
-                        }
+                            if let priceHistory {
+                                SecurityPriceChart(
+                                    history: priceHistory,
+                                    averageCost: averageCostInQuoteCurrency,
+                                    selectedAccountKeys: selectedAccountKeys,
+                                    onSelectionChange: { priceSelection = $0 }
+                                )
+                            } else if let priceHistoryError {
+                                SecurityPriceChartState(
+                                    title: "暂无价格走势",
+                                    message: priceHistoryError,
+                                    isLoading: false
+                                )
+                            } else if presentationReady {
+                                SecurityPriceChartState(
+                                    title: "正在读取价格走势",
+                                    message: "正在整理历史行情与买卖记录",
+                                    isLoading: true
+                                )
+                            } else {
+                                Color.clear
+                                    .frame(height: SecurityPriceChartState.fixedHeight)
+                                    .accessibilityHidden(true)
+                            }
 
-                        if let accountContext, accountContext.options.count > 1 {
-                            HoldingDetailAccountSelector(
-                                options: accountContext.options,
-                                selectedAccountKeys: selectedAccountKeys,
-                                onSelectAll: selectAllDetailAccounts,
-                                onToggleAccount: toggleDetailAccount
-                            )
+                            if let accountContext, accountContext.options.count > 1 {
+                                HoldingDetailAccountSelector(
+                                    options: accountContext.options,
+                                    selectedAccountKeys: selectedAccountKeys,
+                                    onSelectAll: selectAllDetailAccounts,
+                                    onToggleAccount: toggleDetailAccount
+                                )
+                            }
                         }
+                        .padding(.top, 15)
+                        .background(pageBackground)
                     }
-                    .padding(.top, 15)
-                    .background(pageBackground)
 
                     LazyVStack(spacing: 64) {
                         if let profile {
@@ -159,6 +169,8 @@ struct HoldingDetailView: View {
                             HoldingPositionDetails(holding: displayedHolding)
                         }
 
+                        AnalystConsensusView(symbol: holding.ticker, currency: holding.quoteCurrency, price: holding.quotePrice)
+
                         if CompanyFinancialsView.supports(holding) {
                             HoldingFinancialCard(holding: holding)
                                 .padding(.horizontal, -8)
@@ -170,7 +182,7 @@ struct HoldingDetailView: View {
                         }
                     }
                     .padding(.horizontal, 24)
-                    .padding(.top, 40)
+                    .padding(.top, showsVolumeFocusedPreview ? 28 : 40)
                     .padding(.bottom, 72)
                     }
                 }
@@ -2218,48 +2230,411 @@ private struct FiftyTwoWeekRange: View {
     }
 }
 
+enum VolumeProfileInterpretation {
+    /// Product rule: "near the POC" means no farther than 10% of the
+    /// selected historical value area's width. This is a presentation rule,
+    /// not a market or accounting standard.
+    static let pointOfControlProximityFraction = 0.10
+
+    /// Product rule: costs within 1% of the current quote are described as
+    /// broadly aligned. This is deliberately centralized for copy consistency.
+    static let costParityFraction = 0.01
+
+    enum PricePosition: Equatable {
+        case below
+        case inside
+        case above
+        case unavailable
+    }
+
+    enum CostPosition: Equatable {
+        case belowCurrent
+        case aligned
+        case aboveCurrent
+        case unavailable
+    }
+
+    struct Result: Equatable {
+        let text: String
+        let pricePosition: PricePosition
+        let costPosition: CostPosition
+        let isNearPointOfControl: Bool
+        let costDifferencePercent: Double?
+    }
+
+    struct TailPresence: Equatable {
+        let hasUpper: Bool
+        let hasLower: Bool
+    }
+
+    struct VisualGaps: Equatable {
+        let upper: Double
+        let lower: Double
+    }
+
+    struct BoundaryConnections: Equatable {
+        let upper: Bool
+        let lower: Bool
+    }
+
+    struct BinSlice: Equatable {
+        let priceLow: Double
+        let priceHigh: Double
+        let volume: Double
+    }
+
+    static func tailPresence(
+        bins: [(priceLow: Double, priceHigh: Double, volume: Double)],
+        valueAreaLow: Double,
+        valueAreaHigh: Double
+    ) -> TailPresence {
+        guard valueAreaLow.isFinite,
+              valueAreaHigh.isFinite,
+              valueAreaHigh > valueAreaLow else {
+            return TailPresence(hasUpper: false, hasLower: false)
+        }
+        let validBins = bins.filter {
+            $0.volume.isFinite
+                && $0.volume > 0
+                && $0.priceLow.isFinite
+                && $0.priceHigh.isFinite
+                && $0.priceHigh > $0.priceLow
+        }
+        return TailPresence(
+            hasUpper: validBins.contains { $0.priceHigh > valueAreaHigh },
+            hasLower: validBins.contains { $0.priceLow < valueAreaLow }
+        )
+    }
+
+    /// Returns the full visual gap at each value-area boundary. A gap is only
+    /// introduced when real positive-volume regions touch on both sides and
+    /// both have enough pixels to remain legible. Narrow regions retain their
+    /// complete price span rather than being consumed by decoration.
+    static func visualGaps(
+        upperBoundaryConnected: Bool,
+        lowerBoundaryConnected: Bool,
+        upperPixelSpan: Double,
+        mainPixelSpan: Double,
+        lowerPixelSpan: Double,
+        preferred: Double = 8
+    ) -> VisualGaps {
+        func adaptiveGap(isConnected: Bool, tailSpan: Double) -> Double {
+            guard isConnected,
+                  tailSpan.isFinite,
+                  mainPixelSpan.isFinite,
+                  preferred.isFinite,
+                  preferred > 0,
+                  tailSpan >= preferred * 1.5,
+                  mainPixelSpan >= preferred * 1.5 else { return 0 }
+            return min(preferred, tailSpan / 3, mainPixelSpan / 3)
+        }
+
+        return VisualGaps(
+            upper: adaptiveGap(isConnected: upperBoundaryConnected, tailSpan: upperPixelSpan),
+            lower: adaptiveGap(isConnected: lowerBoundaryConnected, tailSpan: lowerPixelSpan)
+        )
+    }
+
+    /// A decorative gap is appropriate only when positive-volume data reaches
+    /// the same value-area boundary from both sides. A zero-volume bin or a
+    /// missing price interval leaves the real data gap untouched.
+    static func boundaryConnections(
+        bins: [(priceLow: Double, priceHigh: Double, volume: Double)],
+        valueAreaLow: Double,
+        valueAreaHigh: Double
+    ) -> BoundaryConnections {
+        guard valueAreaLow.isFinite,
+              valueAreaHigh.isFinite,
+              valueAreaHigh > valueAreaLow else {
+            return BoundaryConnections(upper: false, lower: false)
+        }
+
+        let validBins = bins.filter {
+            $0.volume.isFinite
+                && $0.volume > 0
+                && $0.priceLow.isFinite
+                && $0.priceHigh.isFinite
+                && $0.priceHigh > $0.priceLow
+        }
+        let tolerance = max(0.000_000_001, (valueAreaHigh - valueAreaLow) * 0.000_000_001)
+
+        func hasVolumeImmediatelyBelow(_ boundary: Double) -> Bool {
+            validBins.contains {
+                $0.priceLow < boundary && $0.priceHigh >= boundary - tolerance
+            }
+        }
+
+        func hasVolumeImmediatelyAbove(_ boundary: Double) -> Bool {
+            validBins.contains {
+                $0.priceHigh > boundary && $0.priceLow <= boundary + tolerance
+            }
+        }
+
+        return BoundaryConnections(
+            upper: hasVolumeImmediatelyBelow(valueAreaHigh)
+                && hasVolumeImmediatelyAbove(valueAreaHigh),
+            lower: hasVolumeImmediatelyBelow(valueAreaLow)
+                && hasVolumeImmediatelyAbove(valueAreaLow)
+        )
+    }
+
+    static func curveVerticalHandle(distance: Double) -> Double {
+        guard distance.isFinite, distance > 0 else { return 0 }
+        return distance / 3
+    }
+
+    static func positiveRuns(
+        bins: [(priceLow: Double, priceHigh: Double, volume: Double)],
+        lowerBound: Double,
+        upperBound: Double
+    ) -> [[BinSlice]] {
+        guard lowerBound.isFinite,
+              upperBound.isFinite,
+              upperBound > lowerBound else { return [] }
+
+        let sortedBins = bins.filter {
+            $0.volume.isFinite
+                && $0.volume >= 0
+                && $0.priceLow.isFinite
+                && $0.priceHigh.isFinite
+                && $0.priceHigh > $0.priceLow
+        }.sorted { ($0.priceLow + $0.priceHigh) < ($1.priceLow + $1.priceHigh) }
+
+        var runs: [[BinSlice]] = []
+        var current: [BinSlice] = []
+        var previousHigh: Double?
+
+        func appendCurrentRun() {
+            guard !current.isEmpty else { return }
+            runs.append(current)
+            current.removeAll(keepingCapacity: true)
+            previousHigh = nil
+        }
+
+        for bin in sortedBins {
+            let clippedLow = max(bin.priceLow, lowerBound)
+            let clippedHigh = min(bin.priceHigh, upperBound)
+            guard clippedHigh > clippedLow else { continue }
+            guard bin.volume > 0 else {
+                appendCurrentRun()
+                continue
+            }
+
+            if let previousHigh {
+                let tolerance = max(0.000_000_001, max(abs(previousHigh), abs(clippedLow)) * 0.000_000_001)
+                if clippedLow > previousHigh + tolerance {
+                    appendCurrentRun()
+                }
+            }
+            current.append(BinSlice(priceLow: clippedLow, priceHigh: clippedHigh, volume: bin.volume))
+            previousHigh = clippedHigh
+        }
+        appendCurrentRun()
+        return runs
+    }
+
+    static func constrainedCornerRadius(
+        height: Double,
+        topWidth: Double,
+        bottomWidth: Double
+    ) -> Double {
+        guard height.isFinite,
+              topWidth.isFinite,
+              bottomWidth.isFinite else { return 0 }
+        return max(0, min(18, min(height / 2, min(topWidth / 2, bottomWidth / 2))))
+    }
+
+    static func result(
+        sessions: Int,
+        quote: Double,
+        valueAreaLow: Double,
+        valueAreaHigh: Double,
+        pointOfControl: Double?,
+        cost: Double?
+    ) -> Result {
+        guard quote.isFinite,
+              quote > 0,
+              valueAreaLow.isFinite,
+              valueAreaHigh.isFinite,
+              valueAreaHigh > valueAreaLow else {
+            return Result(
+                text: "当前价格或主成交区数据暂不可用。",
+                pricePosition: .unavailable,
+                costPosition: .unavailable,
+                isNearPointOfControl: false,
+                costDifferencePercent: nil
+            )
+        }
+
+        let period = sessions > 0 ? "过去\(sessions)个交易日" : "所选历史区间"
+        let areaWidth = valueAreaHigh - valueAreaLow
+        let isNearPointOfControl = pointOfControl.map { point in
+            point.isFinite
+                && point >= valueAreaLow
+                && point <= valueAreaHigh
+                && abs(quote - point) <= areaWidth * pointOfControlProximityFraction
+        } ?? false
+
+        let pricePosition: PricePosition
+        var priceText: String
+        if quote < valueAreaLow {
+            pricePosition = .below
+            priceText = "当前价格低于\(period)的主要成交区域，说明市场相对于所选历史成交区域处于弱势位置。"
+        } else if quote > valueAreaHigh {
+            pricePosition = .above
+            priceText = "当前价格已高于\(period)的主要成交密集区，说明市场相对于所选历史成交区域处于较高位置。"
+        } else {
+            pricePosition = .inside
+            priceText = "当前价格位于\(period)的主成交区内"
+            priceText += isNearPointOfControl ? "，且接近成交峰值。" : "。"
+        }
+
+        guard let cost, cost.isFinite, cost > 0 else {
+            return Result(
+                text: priceText,
+                pricePosition: pricePosition,
+                costPosition: .unavailable,
+                isNearPointOfControl: isNearPointOfControl,
+                costDifferencePercent: nil
+            )
+        }
+
+        let differenceFraction = abs(cost - quote) / quote
+        let differencePercent = differenceFraction * 100
+        let costPosition: CostPosition
+        let costText: String
+        if differenceFraction <= costParityFraction {
+            costPosition = .aligned
+            costText = "你的持仓成本与现价基本持平。"
+        } else if cost < quote {
+            costPosition = .belowCurrent
+            costText = "你的持仓成本低于现价\(percentageText(differencePercent))%，目前持仓处于盈利状态。"
+        } else {
+            costPosition = .aboveCurrent
+            costText = "你的持仓成本高于现价\(percentageText(differencePercent))%，当前持仓处于浮亏状态。"
+        }
+
+        return Result(
+            text: "\(priceText)\(costText)",
+            pricePosition: pricePosition,
+            costPosition: costPosition,
+            isNearPointOfControl: isNearPointOfControl,
+            costDifferencePercent: differencePercent
+        )
+    }
+
+    static func convertedPrice(
+        _ value: Double,
+        from sourceCurrency: String?,
+        to targetCurrency: String?,
+        usdRate: (String) -> Double?
+    ) -> Double? {
+        guard value.isFinite,
+              value > 0,
+              let source = normalizedCurrency(sourceCurrency),
+              let target = normalizedCurrency(targetCurrency) else { return nil }
+        guard source != target else { return value }
+        guard let sourceRate = usdRate(source),
+              let targetRate = usdRate(target),
+              sourceRate.isFinite,
+              targetRate.isFinite,
+              sourceRate > 0,
+              targetRate > 0 else { return nil }
+        let converted = value * sourceRate / targetRate
+        return converted.isFinite && converted > 0 ? converted : nil
+    }
+
+    private static func normalizedCurrency(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func percentageText(_ value: Double) -> String {
+        String(format: "%.1f", value)
+    }
+}
+
 private struct VolumePriceChart: View {
     let profile: VolumeProfile
     let holding: Holding
     let showsHoldingCost: Bool
     @State private var selectedPrice: Double?
 
+    private var displayedValueArea: (low: Double, high: Double) {
+        let positiveBins = (profile.bins ?? []).filter {
+            $0.volume.isFinite && $0.volume > 0 && $0.priceHigh > $0.priceLow
+        }
+        let distributionLow = positiveBins.map(\.priceLow).min() ?? profile.valueAreaLow
+        let distributionHigh = positiveBins.map(\.priceHigh).max() ?? profile.valueAreaHigh
+        #if DEBUG
+        let previewMode = ProcessInfo.processInfo.arguments
+            .first { $0.hasPrefix("--volume-tail-preview=") }?
+            .split(separator: "=", maxSplits: 1)
+            .last
+            .map(String.init)
+        switch previewMode {
+        case "none":
+            return (distributionLow, distributionHigh)
+        case "upper-only":
+            return (distributionLow, profile.valueAreaHigh)
+        case "lower-only":
+            return (profile.valueAreaLow, distributionHigh)
+        default:
+            break
+        }
+        #endif
+        return (profile.valueAreaLow, profile.valueAreaHigh)
+    }
+
+    private var currentPrice: Double? {
+        VolumeProfileInterpretation.convertedPrice(
+            holding.quotePrice,
+            from: holding.quoteCurrency ?? profile.currency,
+            to: profile.currency,
+            usdRate: LocalPortfolioEngine.usdRate(for:)
+        )
+    }
+
+    private var holdingCost: Double? {
+        guard showsHoldingCost,
+              holding.costCurrency?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+              holding.quoteCurrency?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+            return nil
+        }
+        return VolumeProfileInterpretation.convertedPrice(
+            holding.averageCost,
+            from: holding.costCurrency,
+            to: profile.currency,
+            usdRate: LocalPortfolioEngine.usdRate(for:)
+        )
+    }
+
     private var domain: ClosedRange<Double> {
         let binValues = (profile.bins ?? []).flatMap { [$0.priceLow, $0.priceHigh] }
         var values = binValues + [
-            profile.valueAreaLow,
-            profile.valueAreaHigh,
+            displayedValueArea.low,
+            displayedValueArea.high,
             profile.pointOfControl,
-            holding.quotePrice,
         ]
-        if showsHoldingCost {
-            values.append(holding.averageCost)
-        }
+        if let currentPrice { values.append(currentPrice) }
+        if let holdingCost { values.append(holdingCost) }
+        values = values.filter { $0.isFinite && $0 > 0 }
         let low = values.min() ?? 0
         let high = values.max() ?? 1
-        let padding = max((high - low) * 0.035, max(high * 0.005, 0.01))
+        let padding = max((high - low) * 0.035, max(abs(high) * 0.005, 0.01))
         return max(0, low - padding)...(high + padding)
     }
 
-    private var valueAreaPositionText: String {
-        let low = min(profile.valueAreaLow, profile.valueAreaHigh)
-        let high = max(profile.valueAreaLow, profile.valueAreaHigh)
-        let span = high - low
-        guard span > 0 else { return "Near the main transaction area" }
-
-        let position = (holding.quotePrice - low) / span
-        switch position {
-        case ..<(-0.15): return "Below the main transaction area"
-        case ..<0.20: return "Near the lower transaction area"
-        case ...0.80: return "In the main transaction area"
-        case ...1.15: return "Near the upper transaction area"
-        default: return "Above the main transaction area"
-        }
-    }
-
-    private var costComparisonPercent: Double? {
-        guard showsHoldingCost, holding.averageCost > 0 else { return nil }
-        return (holding.quotePrice / holding.averageCost - 1) * 100
+    private var interpretation: VolumeProfileInterpretation.Result {
+        VolumeProfileInterpretation.result(
+            sessions: profile.sessions,
+            quote: currentPrice ?? .nan,
+            valueAreaLow: displayedValueArea.low,
+            valueAreaHigh: displayedValueArea.high,
+            pointOfControl: profile.pointOfControl,
+            cost: holdingCost
+        )
     }
 
     var body: some View {
@@ -2278,8 +2653,10 @@ private struct VolumePriceChart: View {
 
             VolumeDistributionPlot(
                 profile: profile,
-                holding: holding,
-                showsHoldingCost: showsHoldingCost,
+                valueAreaLow: displayedValueArea.low,
+                valueAreaHigh: displayedValueArea.high,
+                currentPrice: currentPrice,
+                holdingCost: holdingCost,
                 domain: domain,
                 selectedPrice: $selectedPrice,
                 onSelectionChanged: updateSelection
@@ -2287,35 +2664,18 @@ private struct VolumePriceChart: View {
             .frame(height: 303)
             .padding(.top, 24)
 
-            VStack(alignment: .leading, spacing: 0) {
-                Group {
-                    if let costComparisonPercent {
-                        Text("\(valueAreaPositionText) • Cost ")
-                            .foregroundStyle(.secondary)
-                        + Text(DisplayFormat.percent(costComparisonPercent))
-                            .foregroundStyle(CatfolioStyle.blue)
-                    } else {
-                        Text(valueAreaPositionText)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .frame(height: 24, alignment: .leading)
-                .lineLimit(1)
-                .minimumScaleFactor(0.78)
-                .accessibilityLabel(
-                    costComparisonPercent.map {
-                        "\(valueAreaPositionText), cost \(DisplayFormat.percent($0))"
-                    } ?? valueAreaPositionText
-                )
+            VStack(alignment: .leading, spacing: 8) {
+                Text(interpretation.text)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel(interpretation.text)
 
                 Text(profile.asOf)
                     .foregroundStyle(.secondary)
-                    .frame(height: 24, alignment: .leading)
             }
             .font(HoldingDetailTypography.medium(15, relativeTo: .subheadline))
             .padding(.top, 12)
         }
-        .frame(height: 410, alignment: .top)
         .transaction { transaction in transaction.animation = nil }
     }
 
@@ -2332,8 +2692,10 @@ private struct VolumePriceChart: View {
 
 private struct VolumeDistributionPlot: View {
     let profile: VolumeProfile
-    let holding: Holding
-    let showsHoldingCost: Bool
+    let valueAreaLow: Double
+    let valueAreaHigh: Double
+    let currentPrice: Double?
+    let holdingCost: Double?
     let domain: ClosedRange<Double>
     @Binding var selectedPrice: Double?
     let onSelectionChanged: (Double?) -> Void
@@ -2342,46 +2704,119 @@ private struct VolumeDistributionPlot: View {
 
     private let verticalPlotInset: CGFloat = 0
 
-    private var bins: [VolumeProfileBin] {
-        let provided = (profile.bins ?? []).filter { $0.volume > 0 }.sorted { $0.midpoint < $1.midpoint }
-        guard provided.isEmpty else { return provided }
-        let span = max(profile.valueAreaHigh - profile.valueAreaLow, 0.01)
-        return [
-            VolumeProfileBin(priceLow: profile.valueAreaLow - span * 0.35, priceHigh: profile.valueAreaLow, volume: 0.28),
-            VolumeProfileBin(priceLow: profile.valueAreaLow, priceHigh: profile.pointOfControl, volume: 0.74),
-            VolumeProfileBin(priceLow: profile.pointOfControl, priceHigh: profile.valueAreaHigh, volume: 1),
-            VolumeProfileBin(priceLow: profile.valueAreaHigh, priceHigh: profile.valueAreaHigh + span * 0.35, volume: 0.32),
-        ]
+    private var sourceBins: [VolumeProfileBin] {
+        let bins = (profile.bins ?? [])
+            .filter {
+                $0.volume.isFinite
+                    && $0.volume >= 0
+                    && $0.priceLow.isFinite
+                    && $0.priceHigh.isFinite
+                    && $0.priceHigh > $0.priceLow
+            }
+            .sorted { $0.midpoint < $1.midpoint }
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--volume-narrow-bin-preview"),
+           let anchor = bins.first(where: { $0.volume > 0 }) {
+            let narrowHeight = max((domain.upperBound - domain.lowerBound) * 0.000_1, 0.000_001)
+            return [
+                VolumeProfileBin(
+                    priceLow: anchor.midpoint - narrowHeight / 2,
+                    priceHigh: anchor.midpoint + narrowHeight / 2,
+                    volume: anchor.volume
+                )
+            ]
+        }
+        #endif
+        return bins
+    }
+
+    private var positiveBins: [VolumeProfileBin] {
+        sourceBins.filter { $0.volume > 0 }
+    }
+
+    private var tailPresence: VolumeProfileInterpretation.TailPresence {
+        VolumeProfileInterpretation.tailPresence(
+            bins: sourceBins.map { ($0.priceLow, $0.priceHigh, $0.volume) },
+            valueAreaLow: valueAreaLow,
+            valueAreaHigh: valueAreaHigh
+        )
+    }
+
+    private var boundaryConnections: VolumeProfileInterpretation.BoundaryConnections {
+        VolumeProfileInterpretation.boundaryConnections(
+            bins: sourceBins.map { ($0.priceLow, $0.priceHigh, $0.volume) },
+            valueAreaLow: valueAreaLow,
+            valueAreaHigh: valueAreaHigh
+        )
+    }
+
+    /// Produces independent positive-volume runs inside one price band.
+    /// Zero-volume slots and missing price intervals terminate a run, so the
+    /// renderer never bridges them with an invented solid shape.
+    private func drawableRuns(lowerBound: Double, upperBound: Double) -> [[VolumeProfileBin]] {
+        VolumeProfileInterpretation.positiveRuns(
+            bins: sourceBins.map { ($0.priceLow, $0.priceHigh, $0.volume) },
+            lowerBound: lowerBound,
+            upperBound: upperBound
+        ).map { run in
+            run.map {
+                VolumeProfileBin(priceLow: $0.priceLow, priceHigh: $0.priceHigh, volume: $0.volume)
+            }
+        }
     }
 
     var body: some View {
         GeometryReader { geometry in
             let size = geometry.size
             let plotWidth = max(120, size.width - 93)
-            let maximumVolume = max(bins.map(\.volume).max() ?? 1, 1)
+            let maximumVolume = max(positiveBins.map(\.volume).max() ?? 1, 0.000_001)
             let peakMarkerWidth = min(
                 126,
                 max(94, CGFloat(money(profile.pointOfControl).count) * 8 + 62)
             )
             let edgeLabelLeading: CGFloat = 6
             let peakMarkerX = edgeLabelLeading + peakMarkerWidth / 2
-            let longestMarkerPrice = showsHoldingCost
-                ? max(money(holding.quotePrice).count, money(holding.averageCost).count)
-                : money(holding.quotePrice).count
+            let markerPriceLengths = [currentPrice, holdingCost]
+                .compactMap { $0 }
+                .map { money($0).count }
+            let longestMarkerPrice = markerPriceLengths.max() ?? money(profile.pointOfControl).count
             let markerWidth = min(
                 size.width * 0.42,
                 max(100, CGFloat(longestMarkerPrice) * 8 + 62)
             )
             let markerGap: CGFloat = 6
-            let profileHigh = bins.last?.priceHigh ?? domain.upperBound
-            let profileLow = bins.first?.priceLow ?? domain.lowerBound
-            let profileTopY = yPosition(for: profileHigh, height: size.height)
-            let profileBottomY = yPosition(for: profileLow, height: size.height)
-            let currentY = yPosition(for: holding.quotePrice, height: size.height)
-            let costY = yPosition(for: holding.averageCost, height: size.height)
-            let peakY = yPosition(for: profile.pointOfControl, height: size.height)
+            let hasValidValueArea = valueAreaLow.isFinite
+                && valueAreaHigh.isFinite
+                && valueAreaHigh > valueAreaLow
+            let valueAreaHighY = hasValidValueArea
+                ? yPosition(for: valueAreaHigh, height: size.height)
+                : 0
+            let valueAreaLowY = hasValidValueArea
+                ? yPosition(for: valueAreaLow, height: size.height)
+                : size.height
+            let profileHigh = positiveBins.last?.priceHigh ?? valueAreaHigh
+            let profileLow = positiveBins.first?.priceLow ?? valueAreaLow
+            let profileTopY = profileHigh.isFinite
+                ? yPosition(for: profileHigh, height: size.height)
+                : valueAreaHighY
+            let profileBottomY = profileLow.isFinite
+                ? yPosition(for: profileLow, height: size.height)
+                : valueAreaLowY
+            let visualGaps = VolumeProfileInterpretation.visualGaps(
+                upperBoundaryConnected: boundaryConnections.upper,
+                lowerBoundaryConnected: boundaryConnections.lower,
+                upperPixelSpan: Double(max(0, valueAreaHighY - profileTopY)),
+                mainPixelSpan: Double(max(0, valueAreaLowY - valueAreaHighY)),
+                lowerPixelSpan: Double(max(0, profileBottomY - valueAreaLowY))
+            )
+            let currentY = currentPrice.map { yPosition(for: $0, height: size.height) }
+            let costY = holdingCost.map { yPosition(for: $0, height: size.height) }
+            let hasValidPeak = profile.pointOfControl.isFinite && profile.pointOfControl > 0
+            let peakY = hasValidPeak ? yPosition(for: profile.pointOfControl, height: size.height) : 0
             let rightMarkerX = size.width - markerWidth / 2
-            let markersWouldOverlap = showsHoldingCost && abs(currentY - costY) < 28
+            let markersWouldOverlap = currentY.flatMap { current in
+                costY.map { abs(current - $0) < 28 }
+            } ?? false
             let currentMarkerX = markersWouldOverlap
                 ? rightMarkerX - markerWidth - markerGap
                 : rightMarkerX
@@ -2403,37 +2838,89 @@ private struct VolumeDistributionPlot: View {
 
             ZStack(alignment: .topLeading) {
                 Canvas { context, canvasSize in
-                    let silhouette = silhouettePath(
-                        bins: bins,
-                        maximumVolume: maximumVolume,
-                        plotWidth: plotWidth,
-                        height: canvasSize.height
-                    )
-                    context.fill(silhouette, with: .color(volumeProfileBlue))
-                    context.drawLayer { layer in
-                        layer.clip(to: silhouette)
-                        var stripes = Path()
-                        var x = -canvasSize.height
-                        while x < plotWidth + canvasSize.height {
-                            stripes.move(to: CGPoint(x: x, y: canvasSize.height))
-                            stripes.addLine(to: CGPoint(x: x + canvasSize.height, y: 0))
-                            x += 13
+                    let pricePerPoint = (domain.upperBound - domain.lowerBound)
+                        / Double(max(canvasSize.height - 2 * verticalPlotInset, 1))
+                    let upperGapPrice = visualGaps.upper * pricePerPoint
+                    let lowerGapPrice = visualGaps.lower * pricePerPoint
+                    var bands: [(runs: [[VolumeProfileBin]], color: Color, stripe: Color)] = []
+
+                    if hasValidValueArea {
+                        if tailPresence.hasUpper {
+                            bands.append((
+                                drawableRuns(
+                                    lowerBound: valueAreaHigh + upperGapPrice / 2,
+                                    upperBound: profileHigh
+                                ),
+                                volumeProfileTailBlue,
+                                .white.opacity(0.38)
+                            ))
                         }
-                        layer.stroke(stripes, with: .color(.white.opacity(0.25)), lineWidth: 1)
+                        bands.append((
+                            drawableRuns(
+                                lowerBound: valueAreaLow + lowerGapPrice / 2,
+                                upperBound: valueAreaHigh - upperGapPrice / 2
+                            ),
+                            volumeProfileBlue,
+                            .white.opacity(0.24)
+                        ))
+                        if tailPresence.hasLower {
+                            bands.append((
+                                drawableRuns(
+                                    lowerBound: profileLow,
+                                    upperBound: valueAreaLow - lowerGapPrice / 2
+                                ),
+                                volumeProfileTailBlue,
+                                .white.opacity(0.38)
+                            ))
+                        }
+                    } else {
+                        bands.append((
+                            drawableRuns(lowerBound: profileLow, upperBound: profileHigh),
+                            volumeProfileBlue,
+                            .white.opacity(0.24)
+                        ))
+                    }
+
+                    for band in bands {
+                        for run in band.runs {
+                            let silhouette = silhouettePath(
+                                bins: run,
+                                maximumVolume: maximumVolume,
+                                plotWidth: plotWidth,
+                                height: canvasSize.height
+                            )
+                            context.fill(silhouette, with: .color(band.color))
+                            context.drawLayer { layer in
+                                layer.clip(to: silhouette)
+
+                                var stripes = Path()
+                                var x = -canvasSize.height
+                                while x < plotWidth + canvasSize.height {
+                                    // The Figma bands descend from left to right,
+                                    // opposite to the former fine hatch direction.
+                                    stripes.move(to: CGPoint(x: x, y: 0))
+                                    stripes.addLine(to: CGPoint(x: x + canvasSize.height, y: canvasSize.height))
+                                    x += 30
+                                }
+                                layer.stroke(stripes, with: .color(band.stripe), lineWidth: 11)
+                            }
+                        }
                     }
                 }
 
-                glassRule(
-                    color: currentPriceTint,
-                    width: max(0, currentRuleEndX - edgeLabelLeading)
-                )
-                .position(
-                    x: edgeLabelLeading + max(0, currentRuleEndX - edgeLabelLeading) / 2,
-                    y: currentY
-                )
-                .zIndex(1)
+                if let currentY {
+                    glassRule(
+                        color: currentPriceTint,
+                        width: max(0, currentRuleEndX - edgeLabelLeading)
+                    )
+                    .position(
+                        x: edgeLabelLeading + max(0, currentRuleEndX - edgeLabelLeading) / 2,
+                        y: currentY
+                    )
+                    .zIndex(1)
+                }
 
-                if showsHoldingCost {
+                if let costY {
                     glassRule(
                         color: volumeCostGreen,
                         width: max(0, costRuleEndX - edgeLabelLeading)
@@ -2445,40 +2932,49 @@ private struct VolumeDistributionPlot: View {
                     .zIndex(1)
                 }
 
-                edgePriceLabel(price: profileHigh)
-                    .frame(width: 80, alignment: .leading)
-                    .position(x: edgeLabelLeading + 40, y: profileTopY + 12)
-                edgePriceLabel(price: profileLow)
-                    .frame(width: 80, alignment: .leading)
-                    .position(x: edgeLabelLeading + 40, y: profileBottomY - 12)
+                if hasValidValueArea {
+                    edgePriceLabel(price: valueAreaHigh)
+                        .frame(width: 80, alignment: .leading)
+                        .position(x: edgeLabelLeading + 40, y: valueAreaHighY + 14)
+                }
+                if hasValidValueArea {
+                    edgePriceLabel(price: valueAreaLow)
+                        .frame(width: 80, alignment: .leading)
+                        .position(x: edgeLabelLeading + 40, y: valueAreaLowY - 14)
+                }
 
-                markerPill(
-                    title: "当前价格",
-                    price: holding.quotePrice,
-                    foreground: currentPriceText,
-                    background: currentPriceTint,
-                    width: markerWidth
-                )
-                .position(x: currentMarkerX, y: currentY)
-                .zIndex(2)
+                if let currentPrice, let currentY {
+                    markerPill(
+                        title: "当前价格",
+                        price: currentPrice,
+                        foreground: currentPriceText,
+                        background: currentPriceTint,
+                        width: markerWidth
+                    )
+                    .position(x: currentMarkerX, y: currentY)
+                    .zIndex(2)
+                }
 
-                peakMarkerPill(
-                    title: "成交峰值",
-                    price: profile.pointOfControl,
-                    width: peakMarkerWidth
-                )
-                .position(x: peakMarkerX, y: peakY)
-                .zIndex(2)
+                if hasValidPeak {
+                    peakMarkerPill(
+                        title: "成交峰值",
+                        price: profile.pointOfControl,
+                        width: peakMarkerWidth
+                    )
+                    .position(x: peakMarkerX, y: peakY)
+                    .zIndex(2)
+                }
 
-                if showsHoldingCost {
+                if let holdingCost, let costY {
                     markerPill(
                         title: "持仓成本",
-                        price: holding.averageCost,
+                        price: holdingCost,
                         foreground: volumeCostText,
                         background: volumeCostGreen,
                         width: markerWidth
                     )
                     .position(x: rightMarkerX, y: costY)
+                    .shadow(color: volumeCostGreen.opacity(0.42), radius: 18)
                     .zIndex(2)
                 }
 
@@ -2517,9 +3013,10 @@ private struct VolumeDistributionPlot: View {
     }
 
     private var accessibilityLabel: String {
-        let market = "成交量价格分布，当前价格 \(money(holding.quotePrice))，成交峰值 \(money(profile.pointOfControl))"
-        guard showsHoldingCost else { return market }
-        return "\(market)，持仓成本 \(money(holding.averageCost))"
+        var parts = ["成交量价格分布", "成交峰值 \(money(profile.pointOfControl))"]
+        if let currentPrice { parts.insert("当前价格 \(money(currentPrice))", at: 1) }
+        if let holdingCost { parts.append("持仓成本 \(money(holdingCost))") }
+        return parts.joined(separator: "，")
     }
 
     private var volumeCostGreen: Color {
@@ -2540,6 +3037,12 @@ private struct VolumeDistributionPlot: View {
 
     private var volumeProfileBlue: Color {
         Color(red: 52 / 255, green: 117 / 255, blue: 1)
+    }
+
+    private var volumeProfileTailBlue: Color {
+        colorScheme == .dark
+            ? Color(red: 113 / 255, green: 151 / 255, blue: 224 / 255)
+            : Color(red: 188 / 255, green: 211 / 255, blue: 1)
     }
 
     private var volumeSelectionBlue: Color {
@@ -2584,9 +3087,16 @@ private struct VolumeDistributionPlot: View {
             CGPoint(x: width, y: yPosition(for: bin.midpoint, height: height))
         }
 
-        let cornerRadius = min(18, max(10, (bottomY - topY) * 0.05))
-        let topRadius = min(cornerRadius, max(5, topWidth * 0.32))
-        let bottomRadius = min(cornerRadius, max(5, bottomWidth * 0.32))
+        let realHeight = max(0, bottomY - topY)
+        let cornerRadius = CGFloat(
+            VolumeProfileInterpretation.constrainedCornerRadius(
+                height: Double(realHeight),
+                topWidth: Double(topWidth),
+                bottomWidth: Double(bottomWidth)
+            )
+        )
+        let topRadius = min(cornerRadius, topWidth / 2)
+        let bottomRadius = min(cornerRadius, bottomWidth / 2)
 
         path.move(to: CGPoint(x: 0, y: topY + cornerRadius))
         path.addQuadCurve(
@@ -2610,6 +3120,15 @@ private struct VolumeDistributionPlot: View {
             control: CGPoint(x: 0, y: bottomY)
         )
         path.closeSubpath()
+        #if DEBUG
+        let bounds = path.boundingRect
+        let boundaryTolerance: CGFloat = 0.01
+        assert(
+            bounds.minY >= topY - boundaryTolerance
+                && bounds.maxY <= bottomY + boundaryTolerance,
+            "Volume profile curve escaped its real price band"
+        )
+        #endif
         return path
     }
 
@@ -2638,7 +3157,11 @@ private struct VolumeDistributionPlot: View {
 
         let slopes = smoothEdgeSlopes(for: edgePoints)
         let first = edgePoints[0]
-        let topVerticalHandle = max(2, (first.y - topY) / 3)
+        let topVerticalHandle = CGFloat(
+            VolumeProfileInterpretation.curveVerticalHandle(
+                distance: Double(first.y - topY)
+            )
+        )
         path.addCurve(
             to: first,
             control1: CGPoint(x: topWidth, y: topY),
@@ -2652,7 +3175,11 @@ private struct VolumeDistributionPlot: View {
             for index in 0..<(edgePoints.count - 1) {
                 let start = edgePoints[index]
                 let end = edgePoints[index + 1]
-                let verticalHandle = max(1, (end.y - start.y) / 3)
+                let verticalHandle = CGFloat(
+                    VolumeProfileInterpretation.curveVerticalHandle(
+                        distance: Double(end.y - start.y)
+                    )
+                )
                 path.addCurve(
                     to: end,
                     control1: CGPoint(
@@ -2668,7 +3195,11 @@ private struct VolumeDistributionPlot: View {
         }
 
         let last = edgePoints[edgePoints.count - 1]
-        let bottomVerticalHandle = max(2, (bottomY - last.y) / 3)
+        let bottomVerticalHandle = CGFloat(
+            VolumeProfileInterpretation.curveVerticalHandle(
+                distance: Double(bottomY - last.y)
+            )
+        )
         path.addCurve(
             to: CGPoint(x: max(0, bottomWidth - bottomRadius), y: bottomY),
             control1: CGPoint(
@@ -2733,14 +3264,15 @@ private struct VolumeDistributionPlot: View {
             return weightedValue / max(totalWeight, 1)
         }
 
-        let filteredMaximum = max(filtered.max() ?? 1, 0.000_001)
-        var displayValues = filtered.map { $0 / filteredMaximum }
+        var displayValues = filtered
         if let peakIndex = bins.indices.max(by: { bins[$0].volume < bins[$1].volume }) {
-            displayValues[peakIndex] = 1
+            // Preserve this run's true scale against the global maximum. A
+            // tail run must never be independently expanded to full width.
+            displayValues[peakIndex] = normalized[peakIndex]
         }
 
         return displayValues.map { value in
-            max(12, plotWidth * CGFloat(0.20 + value * 0.80))
+            plotWidth * CGFloat(max(0, value))
         }
     }
 

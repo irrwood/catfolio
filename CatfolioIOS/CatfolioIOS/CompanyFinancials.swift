@@ -414,6 +414,9 @@ actor CompanyFinancialsClient {
             URLQueryItem(name: "limit", value: period == "annual" ? "6" : "12"),
             URLQueryItem(name: "apikey", value: apiKey),
         ]
+        // Shares the app's FMP quota with the analyst card and the historical
+        // bars that render on the same stock page.
+        try await FMPRequestLimiter.shared.waitForTurn()
         let data = try await request(url: components.url!, isSEC: false, forceRefresh: true)
         do {
             return try JSONDecoder().decode([Row].self, from: data)

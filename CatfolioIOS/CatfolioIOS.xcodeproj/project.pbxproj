@@ -51,6 +51,7 @@
 		A1000000000000000000002A /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000002C /* OFL.txt */; };
 		A1000000000000000000002B /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000002D /* HistoryView.swift */; };
 		A199000000000000000000AA /* RealisedProfitCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AA /* RealisedProfitCalculator.swift */; };
+		A199000000000000000000AB /* FMPRateLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AB /* FMPRateLimiter.swift */; };
 		A19900000000000000000001 /* ResearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000001 /* ResearchView.swift */; };
 		A19900000000000000000002 /* StockScreenerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000002 /* StockScreenerView.swift */; };
 		A19900000000000000000003 /* AnalystConsensusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000003 /* AnalystConsensusView.swift */; };
@@ -113,6 +114,7 @@
 		B1000000000000000000002C /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
 		B1000000000000000000002D /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		B199000000000000000000AA /* RealisedProfitCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealisedProfitCalculator.swift; sourceTree = "<group>"; };
+		B199000000000000000000AB /* FMPRateLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FMPRateLimiter.swift; sourceTree = "<group>"; };
 		B199000000000000000000B0 /* CatfolioIOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CatfolioIOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B199000000000000000000B1 /* MoneyWeightedReturnCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyWeightedReturnCalculatorTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000B2 /* LocalPortfolioEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalPortfolioEngineTests.swift; sourceTree = "<group>"; };
@@ -187,6 +189,7 @@
 				B10000000000000000000026 /* StandardLineChart.swift */,
 				B1000000000000000000002D /* HistoryView.swift */,
 				B199000000000000000000AA /* RealisedProfitCalculator.swift */,
+				B199000000000000000000AB /* FMPRateLimiter.swift */,
 				B19900000000000000000001 /* ResearchView.swift */,
 				B19900000000000000000002 /* StockScreenerView.swift */,
 				B19900000000000000000003 /* AnalystConsensusView.swift */,
@@ -413,6 +416,7 @@
 				A10000000000000000000024 /* StandardLineChart.swift in Sources */,
 				A1000000000000000000002B /* HistoryView.swift in Sources */,
 				A199000000000000000000AA /* RealisedProfitCalculator.swift in Sources */,
+				A199000000000000000000AB /* FMPRateLimiter.swift in Sources */,
 				A19900000000000000000001 /* ResearchView.swift in Sources */,
 				A19900000000000000000002 /* StockScreenerView.swift in Sources */,
 				A19900000000000000000003 /* AnalystConsensusView.swift in Sources */,

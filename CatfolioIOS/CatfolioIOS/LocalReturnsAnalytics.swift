@@ -83,23 +83,6 @@ private actor LocalFundamentalsCache {
     }
 }
 
-private actor FMPRequestLimiter {
-    static let shared = FMPRequestLimiter()
-    private var nextAllowedAt = Date.distantPast
-
-    func waitForTurn() async throws {
-        let now = Date()
-        let slot = nextAllowedAt > now ? nextAllowedAt : now
-        // Reserve this request's unique slot before suspending. Actors are
-        // re-entrant across `await`, so updating afterwards can release a burst.
-        nextAllowedAt = slot.addingTimeInterval(0.20)
-        let delay = slot.timeIntervalSince(now)
-        if delay > 0 {
-            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-        }
-    }
-}
-
 struct LocalReturnsAnalyticsClient {
     private enum PartialResult: Sendable {
         case drawdown(DrawdownSeries)

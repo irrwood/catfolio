@@ -128,26 +128,30 @@ struct ScreenStock: Identifiable {
 /// time. No portfolio records or display-currency conversions are involved.
 actor StockScreenDataClient {
     static let shared = StockScreenDataClient()
-    private var nextRequest = Date.distantPast
+
+    /// Pacing lives in FMPRateLimiter now: this client is one of five that
+    /// spend the same quota, and throttling only itself achieved nothing.
     func rows(_ endpoint: String, query: [String: String]) async throws -> [[String: Any]] {
         guard let key = KeychainStore.string(for: LocalServiceKeys.fmp), !key.isEmpty else {
-            throw ScreenFailure.message("请先在设置 → 服务商中配置 FMP。筛选和财报接口需要相应的数据权限。")
+            throw FMPFailure.missingKey
         }
         for attempt in 0..<3 {
-            let wait = max(0, nextRequest.timeIntervalSinceNow)
-            nextRequest = Date().addingTimeInterval(wait + 0.35)
-            try await Task.sleep(for: .seconds(wait))
-            try Task.checkCancellation()
+            try await FMPRequestLimiter.shared.waitForTurn()
             var url = URLComponents(string: "https://financialmodelingprep.com/stable/\(endpoint)")!
             url.queryItems = query.merging(["apikey": key]) { _, new in new }.map { URLQueryItem(name: $0.key, value: $0.value) }
             var request = URLRequest(url: url.url!)
             request.timeoutInterval = 25
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let response = response as? HTTPURLResponse else { throw ScreenFailure.message("行情响应无效") }
-            if response.statusCode == 429 && attempt < 2 {
-                let seconds = min(60, max(1, Double(response.value(forHTTPHeaderField: "Retry-After") ?? "") ?? pow(2, Double(attempt + 1))))
-                nextRequest = Date().addingTimeInterval(seconds + Double.random(in: 0...0.5))
-                continue
+            if response.statusCode == 429 {
+                // Hold every FMP caller back, not just this one, so the other
+                // cards on the same screen stop spending an exhausted budget.
+                await FMPRequestLimiter.shared.backOff(
+                    retryAfter: response.value(forHTTPHeaderField: "Retry-After")
+                )
+                if attempt < 2 { continue }
+                let wait = await FMPRequestLimiter.shared.secondsUntilFreeSlot
+                throw FMPFailure.rateLimited(retryAfterSeconds: Int(wait.rounded(.up)))
             }
             guard (200..<300).contains(response.statusCode) else {
                 throw ScreenFailure.message("FMP 请求失败（\(response.statusCode)）。请检查密钥、套餐权限或稍后重试。")
@@ -157,7 +161,8 @@ actor StockScreenDataClient {
             }
             return rows
         }
-        throw ScreenFailure.message("请求已限流，请稍后重试。")
+        let wait = await FMPRequestLimiter.shared.secondsUntilFreeSlot
+        throw FMPFailure.rateLimited(retryAfterSeconds: Int(wait.rounded(.up)))
     }
 
     func candidates(_ rules: ScreenRules) async throws -> [ScreenStock] {
