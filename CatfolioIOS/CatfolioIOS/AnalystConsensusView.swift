@@ -1,15 +1,18 @@
 import SwiftUI
 
 struct AnalystConsensusData {
-    let counts: [Int]?
+    let ratings: RatingSpread?
     let consensus: String?
     let low: Double?
     let mean: Double?
     let high: Double?
     let current: Double?
+    /// Which provider answered, so the card can say so rather than implying
+    /// every number comes from the same place.
+    let source: String
     let fetchedAt: Date
     let warnings: [String]
-    var total: Int { counts?.reduce(0, +) ?? 0 }
+    var total: Int { ratings?.total ?? 0 }
 
     static func ratingCounts(_ row: [String: Any]) -> [Int]? {
         let keys = ["strongSell", "sell", "hold", "buy", "strongBuy"]
@@ -63,19 +66,52 @@ actor AnalystConsensusClient {
         // The holding's own quote, so the current-price marker agrees with the
         // price shown at the top of the same sheet.
         let price = price.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
-        let data = AnalystConsensusData(counts: AnalystConsensusData.ratingCounts(rating), consensus: rating["consensus"] as? String,
+        let data = AnalystConsensusData(
+            ratings: AnalystConsensusData.ratingCounts(rating).flatMap(RatingSpread.init(fiveBucket:)),
+            consensus: rating["consensus"] as? String,
             low: valid ? low : nil, mean: valid ? mean : nil, high: valid ? high : nil,
-            current: price, fetchedAt: Date(), warnings: warnings)
+            current: price, source: "FMP", fetchedAt: Date(), warnings: warnings)
         // Both sub-requests are caught rather than thrown so one missing
         // entitlement cannot hide the other half. But when neither returned
         // anything usable, reporting "暂无数据" would bury the actual cause —
         // a missing key or a 429 reads as if the analysts simply had no view.
-        if data.counts == nil, !valid, let reason = warnings.first {
-            throw ScreenFailure.message(reason)
+        if data.ratings == nil, !valid {
+            // FMP gave nothing usable — an exhausted quota, a missing
+            // entitlement, or genuinely no coverage. Nasdaq publishes the same
+            // two figures without a key, so try there before giving up.
+            if let fallback = try? await nasdaqData(symbol: symbol, price: price, after: warnings) {
+                cache[symbol] = fallback
+                return fallback
+            }
+            if let reason = warnings.first { throw ScreenFailure.message(reason) }
         }
         // Do not cache entitlement failures or empty responses as valid data.
-        if warnings.isEmpty && data.counts != nil && valid { cache[symbol] = data }
+        if warnings.isEmpty && data.ratings != nil && valid { cache[symbol] = data }
         return data
+    }
+
+    private func nasdaqData(
+        symbol: String, price: Double?, after warnings: [String]
+    ) async throws -> AnalystConsensusData {
+        let consensus = try await NasdaqAnalystClient.shared.consensus(symbol: symbol)
+        let valid = AnalystConsensusData.validTargets(
+            low: consensus.low, mean: consensus.mean, high: consensus.high
+        )
+        guard consensus.ratings != nil || valid else { throw NasdaqAnalystError.noCoverage }
+        // Nasdaq measures three buckets, not five. The card only ever drew
+        // three, so nothing is lost — but the source is named so the numbers
+        // are not read as the provider the other cards used.
+        return AnalystConsensusData(
+            ratings: consensus.ratings,
+            consensus: consensus.rating,
+            low: valid ? consensus.low : nil,
+            mean: valid ? consensus.mean : nil,
+            high: valid ? consensus.high : nil,
+            current: price,
+            source: "Nasdaq",
+            fetchedAt: Date(),
+            warnings: warnings.isEmpty ? [] : ["FMP 未返回数据，已改用 Nasdaq。"]
+        )
     }
 }
 
@@ -165,14 +201,14 @@ private struct AnalystConsensusContent: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            if let counts = data.counts, data.total > 0 {
+            if let ratings = data.ratings, data.total > 0 {
                 HStack {
                     Text(ratingLabel).font(.subheadline.weight(.semibold))
                         .padding(8).background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
                     Spacer()
                     Text("\(data.total) 份评级").font(.subheadline).foregroundStyle(.secondary)
                 }
-                let totals = [counts[0] + counts[1], counts[2], counts[3] + counts[4]]
+                let totals = [ratings.bearish, ratings.neutral, ratings.bullish]
                 HStack {
                     Text("\(totals[0]) 看跌").foregroundStyle(.red)
                     Spacer(); Text("\(totals[1]) 中性").foregroundStyle(.secondary)
@@ -210,7 +246,7 @@ private struct AnalystConsensusContent: View {
                     }
                 }.frame(height: 22).accessibilityHidden(true)
             } else { Text("暂无可核验的目标价区间").foregroundStyle(.secondary) }
-            Text("FMP · 读取于 \(data.fetchedAt.formatted(date: .abbreviated, time: .shortened))")
+            Text("\(data.source) · 读取于 \(data.fetchedAt.formatted(date: .abbreviated, time: .shortened))")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -234,11 +270,15 @@ private struct AnalystConsensusDetails: View {
     var body: some View {
         List {
             Section { AnalystConsensusContent(data: data) }
-            if let counts = data.counts {
+            if let ratings = data.ratings {
+                // Three buckets, not five: Nasdaq does not distinguish
+                // strong from ordinary, and showing it as "强烈买入 0" would
+                // be an invented number rather than a missing one.
                 Section("评级细分") {
-                    ForEach(Array(["强烈卖出", "卖出", "中性", "买入", "强烈买入"].enumerated()), id: \.offset) { item in
-                        LabeledContent(item.element, value: "\(counts[item.offset])")
-                    }
+                    LabeledContent("看跌", value: "\(ratings.bearish)")
+                    LabeledContent("中性", value: "\(ratings.neutral)")
+                    LabeledContent("看涨", value: "\(ratings.bullish)")
+                    LabeledContent("合计", value: "\(ratings.total)")
                 }
             }
             Section("数据口径") {
