@@ -54,6 +54,9 @@
 		A19900000000000000000001 /* ResearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000001 /* ResearchView.swift */; };
 		A19900000000000000000002 /* StockScreenerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000002 /* StockScreenerView.swift */; };
 		A19900000000000000000003 /* AnalystConsensusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000003 /* AnalystConsensusView.swift */; };
+		A199000000000000000000A1 /* MoneyWeightedReturnCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B1 /* MoneyWeightedReturnCalculatorTests.swift */; };
+		A199000000000000000000A2 /* LocalPortfolioEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B2 /* LocalPortfolioEngineTests.swift */; };
+		A199000000000000000000A3 /* RealisedProfitCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -106,10 +109,21 @@
 		B1000000000000000000002C /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
 		B1000000000000000000002D /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		B199000000000000000000AA /* RealisedProfitCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealisedProfitCalculator.swift; sourceTree = "<group>"; };
+		B199000000000000000000B0 /* CatfolioIOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CatfolioIOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B199000000000000000000B1 /* MoneyWeightedReturnCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyWeightedReturnCalculatorTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000B2 /* LocalPortfolioEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalPortfolioEngineTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealisedProfitCalculatorTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		C10000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C199000000000000000000C1 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -123,6 +137,7 @@
 			isa = PBXGroup;
 			children = (
 				D10000000000000000000002 /* CatfolioIOS */,
+				D199000000000000000000D0 /* CatfolioIOSTests */,
 				D10000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -218,8 +233,19 @@
 			isa = PBXGroup;
 			children = (
 				B1000000000000000000000D /* CatfolioIOS.app */,
+				B199000000000000000000B0 /* CatfolioIOSTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		D199000000000000000000D0 /* CatfolioIOSTests */ = {
+			isa = PBXGroup;
+			children = (
+				B199000000000000000000B1 /* MoneyWeightedReturnCalculatorTests.swift */,
+				B199000000000000000000B2 /* LocalPortfolioEngineTests.swift */,
+				B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */,
+			);
+			path = CatfolioIOSTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -242,7 +268,42 @@
 			productReference = B1000000000000000000000D /* CatfolioIOS.app */;
 			productType = "com.apple.product-type.application";
 		};
+		E199000000000000000000E0 /* CatfolioIOSTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F199000000000000000000F0 /* Build configuration list for PBXNativeTarget "CatfolioIOSTests" */;
+			buildPhases = (
+				C199000000000000000000C0 /* Sources */,
+				C199000000000000000000C1 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E199000000000000000000E1 /* PBXTargetDependency */,
+			);
+			name = CatfolioIOSTests;
+			productName = CatfolioIOSTests;
+			productReference = B199000000000000000000B0 /* CatfolioIOSTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
+
+/* Begin PBXContainerItemProxy section */
+		E199000000000000000000E2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E10000000000000000000002 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E10000000000000000000001;
+			remoteInfo = CatfolioIOS;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		E199000000000000000000E1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E10000000000000000000001 /* CatfolioIOS */;
+			targetProxy = E199000000000000000000E2 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXProject section */
 		E10000000000000000000002 /* Project object */ = {
@@ -254,6 +315,10 @@
 				TargetAttributes = {
 					E10000000000000000000001 = {
 						CreatedOnToolsVersion = 26.5;
+					};
+					E199000000000000000000E0 = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = E10000000000000000000001;
 					};
 				};
 			};
@@ -272,6 +337,7 @@
 			projectRoot = "";
 			targets = (
 				E10000000000000000000001 /* CatfolioIOS */,
+				E199000000000000000000E0 /* CatfolioIOSTests */,
 			);
 		};
 /* End PBXProject section */
@@ -341,6 +407,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C199000000000000000000C0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A199000000000000000000A1 /* MoneyWeightedReturnCalculatorTests.swift in Sources */,
+				A199000000000000000000A2 /* LocalPortfolioEngineTests.swift in Sources */,
+				A199000000000000000000A3 /* RealisedProfitCalculatorTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
@@ -352,6 +428,7 @@
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				CLANG_ENABLE_MODULES = YES;
+				ENABLE_TESTABILITY = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
@@ -423,6 +500,38 @@
 			};
 			name = Release;
 		};
+		F199000000000000000000F1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 2G5PCQU652;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.catfolio.ios.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CatfolioIOS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CatfolioIOS";
+			};
+			name = Debug;
+		};
+		F199000000000000000000F2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 2G5PCQU652;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.catfolio.ios.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CatfolioIOS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CatfolioIOS";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -440,6 +549,15 @@
 			buildConfigurations = (
 				F20000000000000000000003 /* Debug */,
 				F20000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F199000000000000000000F0 /* Build configuration list for PBXNativeTarget "CatfolioIOSTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F199000000000000000000F1 /* Debug */,
+				F199000000000000000000F2 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
