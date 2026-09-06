@@ -11,17 +11,15 @@ private enum HistoryCategory: String, CaseIterable, Identifiable {
     case all = "All"
     case orders = "Orders"
     case dividends = "Dividends"
-    case transactions = "Transactions"
     case interest = "Interest"
 
     var id: String { rawValue }
 
-    var systemImage: String? {
+    var systemImage: String {
         switch self {
-        case .all: nil
+        case .all: "tray.full"
         case .orders: "arrow.up.arrow.down"
         case .dividends: "banknote.fill"
-        case .transactions: "creditcard.fill"
         case .interest: "percent"
         }
     }
@@ -31,7 +29,6 @@ private enum HistoryCategory: String, CaseIterable, Identifiable {
         case .all: true
         case .orders: kind == .buy || kind == .sell
         case .dividends: kind == .dividend
-        case .transactions: kind == .deposit || kind == .withdrawal || kind == .transfer
         case .interest: kind == .interest
         }
     }
@@ -98,24 +95,17 @@ private enum PortfolioActivityKind: Equatable {
         case .other: "clock.arrow.circlepath"
         }
     }
+
+    var isCashTransfer: Bool {
+        self == .deposit || self == .withdrawal || self == .transfer
+    }
 }
 
 private struct PortfolioActivity: Identifiable {
     let transaction: LocalTransactionRecord
     let securityName: String
 
-    var id: String {
-        [
-            transaction.accountKey,
-            transaction.tradeID ?? [
-                transaction.date,
-                transaction.action,
-                transaction.ticker,
-                String(transaction.quantity),
-                String(transaction.price),
-            ].joined(separator: "|"),
-        ].joined(separator: "|")
-    }
+    var id: String { transaction.id }
 
     var kind: PortfolioActivityKind {
         PortfolioActivityKind(action: transaction.action)
@@ -134,7 +124,7 @@ private struct PortfolioActivity: Identifiable {
     }
 
     var amountUSD: Double {
-        nativeAmount * (LocalPortfolioEngine.usdRate(for: transaction.currency) ?? 1)
+        nativeAmount * (LocalPortfolioEngine.usdRate(for: transaction.currency) ?? .nan)
     }
 
     var title: String {
@@ -161,20 +151,19 @@ private struct PortfolioActivity: Identifiable {
     }
 }
 
-private struct RealisedLot {
-    var quantity: Double
-    let costPerShareUSD: Double
-}
+private struct HistorySummaryMetric: Identifiable {
+    let title: String
+    let value: String
+    let color: Color
 
-private struct RealisedCalculation {
-    var totalUSD = 0.0
-    var hasIncompleteCostBasis = false
+    var id: String { title }
 }
 
 struct HistoryView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var categorySelection
 
     private let initialAccountIDs: Set<String>?
     @State private var ledger = PortfolioActivityLedger(accounts: [], transactions: [], securityNames: [:])
@@ -190,6 +179,11 @@ struct HistoryView: View {
     init(initialAccountIDs: Set<String>? = nil) {
         self.initialAccountIDs = initialAccountIDs
         _selectedAccountIDs = State(initialValue: initialAccountIDs)
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--verify-history-orders") {
+            _category = State(initialValue: .orders)
+        }
+        #endif
     }
 
     var body: some View {
@@ -210,26 +204,25 @@ struct HistoryView: View {
         .background(CatfolioTheme.pageBackground(for: colorScheme))
         .navigationTitle("History")
         .navigationBarTitleDisplayMode(.large)
-        .navigationBarBackButtonHidden(true)
-        .toolbar(.hidden, for: .tabBar)
+        .toolbarVisibility(.visible, for: .navigationBar)
+        .toolbarVisibility(.hidden, for: .tabBar)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button("Back", systemImage: "xmark") {
-                    dismiss()
-                }
-                .labelStyle(.iconOnly)
-                .accessibilityLabel("Back")
-            }
-
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                if ledger.accounts.count > 1 {
+            if model.accounts.count > 1 {
+                ToolbarItem(id: "history-accounts", placement: .topBarTrailing) {
                     accountFilter
+                        .disabled(isLoading)
+                        .tint(.primary)
                 }
-
+                if #available(iOS 26.0, *) {
+                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
+                }
+            }
+            ToolbarItem(id: "history-export", placement: .topBarTrailing) {
                 Button("Download History", systemImage: "arrow.down.doc") {
                     prepareExport()
                 }
                 .labelStyle(.iconOnly)
+                .tint(.primary)
                 .disabled(filteredActivities.isEmpty)
             }
         }
@@ -271,17 +264,12 @@ struct HistoryView: View {
 
     private var historyList: some View {
         List {
-            Section {
-                categoryPicker
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-            }
+            categorySection
 
             Section {
-                summary
-                    .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16))
-                    .listRowSeparator(.hidden)
+                ForEach(summaryMetrics) { metric in
+                    summaryRow(metric)
+                }
             }
 
             if filteredActivities.isEmpty {
@@ -296,11 +284,15 @@ struct HistoryView: View {
                 }
             } else {
                 ForEach(groupedActivities) { group in
-                    Section(group.title) {
+                    Section {
                         ForEach(group.activities) { activity in
                             activityRow(activity)
                         }
+                    } header: {
+                        Text(group.title)
+                            .textCase(nil)
                     }
+                    .headerProminence(.increased)
                 }
             }
         }
@@ -325,68 +317,79 @@ struct HistoryView: View {
         .animation(.snappy, value: isSyncing)
     }
 
-    @ViewBuilder
-    private var summary: some View {
+    private var summaryMetrics: [HistorySummaryMetric] {
         switch category {
         case .all:
-            HistorySummarySurface {
-                summaryMetric("ACTIVITY", value: "\(filteredActivities.count)", color: .primary)
-                summaryMetric("ACCOUNTS", value: "\(selectedAccounts.count)", color: .secondary)
-            }
+            [
+                HistorySummaryMetric(title: "Activity", value: "\(filteredActivities.count)", color: .primary),
+                HistorySummaryMetric(title: "Accounts", value: "\(selectedAccounts.count)", color: .secondary),
+            ]
         case .orders:
-            HistorySummarySurface {
-                let calculation = realisedCalculation
-                let realised = calculation.totalUSD
-                summaryMetric(
-                    calculation.hasIncompleteCostBasis ? "REALISED P/L · PARTIAL" : "REALISED P/L",
-                    value: DisplayFormat.money(realised, signed: true),
-                    color: realised >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger
-                )
-            }
+            realisedSummaryMetrics
         case .dividends:
-            HistorySummarySurface {
-                summaryMetric(
-                    "TOTAL DIVIDENDS",
+            [
+                HistorySummaryMetric(
+                    title: "Total dividends",
                     value: DisplayFormat.money(totalUSD(for: .dividend)),
                     color: CatfolioTheme.positive
                 )
-            }
-        case .transactions:
-            HistorySummarySurface {
-                summaryMetric(
-                    "DEPOSITS",
-                    value: DisplayFormat.money(abs(totalUSD(for: .deposit))),
-                    color: CatfolioTheme.positive
-                )
-                summaryMetric(
-                    "WITHDRAWALS",
-                    value: DisplayFormat.money(abs(totalUSD(for: .withdrawal))),
-                    color: CatfolioTheme.danger
-                )
-            }
+            ]
         case .interest:
-            HistorySummarySurface {
-                summaryMetric(
-                    "TOTAL INTEREST",
+            [
+                HistorySummaryMetric(
+                    title: "Total interest",
                     value: DisplayFormat.money(totalUSD(for: .interest)),
                     color: CatfolioTheme.positive
                 )
-            }
+            ]
         }
     }
 
-    private func summaryMetric(_ title: String, value: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.title2.weight(.semibold).monospacedDigit())
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
+    /// Reported side by side rather than merged, so an exact broker figure is
+    /// never dragged through Catfolio's rate table just to join a total. A
+    /// sale with no Result yet still shows its reconstructed value, labelled
+    /// as an estimate, instead of collapsing the whole row to a dash.
+    private var realisedSummaryMetrics: [HistorySummaryMetric] {
+        let calculation = realisedCalculation
+        guard calculation.saleCount > 0 else {
+            return [HistorySummaryMetric(title: "Realised P/L · 暂无卖出", value: "—", color: .secondary)]
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        let total = calculation.saleCount
+        var metrics: [HistorySummaryMetric] = []
+
+        if !calculation.brokerTotals.isEmpty {
+            let values = calculation.brokerTotals.keys.sorted().map { currency in
+                DisplayFormat.money(
+                    NSDecimalNumber(decimal: calculation.brokerTotals[currency]!).doubleValue,
+                    currency: currency, signed: true, fractionDigits: 2)
+            }.joined(separator: " · ")
+            metrics.append(HistorySummaryMetric(
+                title: "已实现盈亏 · 券商 Result · \(calculation.brokerCount)/\(total) 笔 · 原币",
+                value: values, color: .primary))
+        }
+
+        if calculation.estimatedCount > 0 {
+            metrics.append(HistorySummaryMetric(
+                title: "已实现盈亏 · 本地估算 · \(calculation.estimatedCount)/\(total) 笔 · 按当前汇率",
+                value: DisplayFormat.money(calculation.estimatedUSD, signed: true),
+                color: calculation.estimatedUSD >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger))
+        }
+
+        if calculation.unavailableCount > 0 {
+            metrics.append(HistorySummaryMetric(
+                title: "已实现盈亏 · 缺买入成本 · \(calculation.unavailableCount)/\(total) 笔",
+                value: "—", color: .secondary))
+        }
+
+        return metrics
+    }
+
+    private func summaryRow(_ metric: HistorySummaryMetric) -> some View {
+        LabeledContent(metric.title) {
+            Text(metric.value)
+                .monospacedDigit()
+                .foregroundStyle(metric.color)
+        }
     }
 
     private var accountFilter: some View {
@@ -418,67 +421,94 @@ struct HistoryView: View {
         .accessibilityValue(accountFilterTitle)
     }
 
-    private var categoryPicker: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            categoryButtons
+    @ViewBuilder
+    private var categorySection: some View {
+        let section = Section {
+            categoryPicker
+                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
         }
-        .contentMargins(.horizontal, 16, for: .scrollContent)
-        .scrollTargetBehavior(.viewAligned)
-        .scrollBounceBehavior(.basedOnSize)
-        .accessibilityElement(children: .contain)
+        if #available(iOS 26.0, *) {
+            section.listSectionMargins(.horizontal, 0)
+        } else {
+            section
+        }
+    }
+
+    private var categoryContentInset: CGFloat {
+        if #available(iOS 26.0, *) { 16 } else { 0 }
+    }
+
+    private var categoryPicker: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                Group {
+                    if #available(iOS 26.0, *) {
+                        GlassEffectContainer(spacing: 8) {
+                            categoryButtons
+                        }
+                    } else {
+                        categoryButtons
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+            .contentMargins(.horizontal, categoryContentInset, for: .scrollContent)
+            .scrollIndicators(.hidden)
+            .scrollClipDisabled()
+            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+            .onChange(of: category) {
+                withAnimation(reduceMotion ? nil : .smooth(duration: 0.22)) {
+                    proxy.scrollTo(category.id)
+                }
+            }
+        }
     }
 
     private var categoryButtons: some View {
         HStack(spacing: 8) {
             ForEach(HistoryCategory.allCases) { option in
                 categoryButton(option)
+                    .id(option.id)
             }
         }
-        .scrollTargetLayout()
     }
 
     @ViewBuilder
     private func categoryButton(_ option: HistoryCategory) -> some View {
         let isSelected = category == option
+        let button = Button {
+            withAnimation(reduceMotion ? nil : .smooth(duration: 0.22)) {
+                category = option
+            }
+        } label: {
+            Text(option.rawValue)
+                .font(.body.weight(.medium))
+                .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .frame(minWidth: 80, minHeight: 48)
+                .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
 
         if isSelected {
-            Button {
-                withAnimation(.snappy) { category = option }
-            } label: {
-                categoryLabel(option, isSelected: isSelected)
-                    .foregroundStyle(Color(uiColor: .systemBackground))
+            if #available(iOS 26.0, *) {
+                button
+                    .glassEffect(.regular.interactive(), in: .capsule)
+                    .glassEffectID("category-selection", in: categorySelection)
+            } else {
+                button
+                    .background(.thinMaterial, in: Capsule())
+                    .matchedGeometryEffect(id: "category-selection", in: categorySelection)
             }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.capsule)
-            .controlSize(.large)
-            .tint(.primary)
-            .id(option.id)
-            .accessibilityAddTraits(.isSelected)
         } else {
-            Button {
-                withAnimation(.snappy) { category = option }
-            } label: {
-                categoryLabel(option, isSelected: isSelected)
-                    .foregroundStyle(.primary)
-            }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.capsule)
-            .controlSize(.large)
-            .tint(.secondary)
-            .id(option.id)
+            button
         }
-    }
-
-    private func categoryLabel(_ option: HistoryCategory, isSelected: Bool) -> some View {
-        HStack(spacing: 6) {
-            if let systemImage = option.systemImage {
-                Image(systemName: systemImage)
-            }
-            Text(option.rawValue)
-                .lineLimit(1)
-        }
-        .font(.subheadline.weight(.semibold))
-        .fixedSize(horizontal: true, vertical: false)
     }
 
     private func activityRow(_ activity: PortfolioActivity) -> some View {
@@ -531,7 +561,6 @@ struct HistoryView: View {
                 }
             }
         }
-        .padding(.vertical, 5)
         .accessibilityElement(children: .combine)
     }
 
@@ -576,28 +605,20 @@ struct HistoryView: View {
                 selectedAccountIDs = [account.id]
             }
         } label: {
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(accountTint(account.id))
-                    .frame(width: 7, height: 7)
-                Text(accountTagTitle(account))
-                    .font(.caption2.weight(.semibold))
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(Color(uiColor: .quaternarySystemFill), in: Capsule())
+            Text(accountTagTitle(account))
+                .lineLimit(1)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.borderless)
         .accessibilityHint("Filter History to this account; tap again to show all accounts")
     }
 
     private var allActivities: [PortfolioActivity] {
-        ledger.transactions.map { transaction in
-            PortfolioActivity(
+        ledger.transactions.compactMap { transaction in
+            let activity = PortfolioActivity(
                 transaction: transaction,
                 securityName: ledger.securityNames[transaction.ticker.uppercased()] ?? transaction.ticker
             )
+            return activity.kind.isCashTransfer ? nil : activity
         }
     }
 
@@ -665,72 +686,12 @@ struct HistoryView: View {
             .reduce(0) { $0 + $1.amountUSD }
     }
 
-    private var realisedProfitLossUSD: Double {
-        realisedCalculation.totalUSD
-    }
-
-    /// FIFO matches each sale only against previously imported purchase lots.
-    /// The sale's gross proceeds remain separate and are never treated as P/L.
-    private var realisedCalculation: RealisedCalculation {
-        var lotsByPosition: [String: [RealisedLot]] = [:]
-        var result = RealisedCalculation()
-        let orders = allActivities
-            .filter {
-                effectiveAccountIDs.contains($0.transaction.accountKey)
-                    && ($0.kind == .buy || $0.kind == .sell)
-            }
-            .sorted {
-                if $0.transaction.date == $1.transaction.date {
-                    if $0.kind != $1.kind { return $0.kind == .buy }
-                    return $0.id < $1.id
-                }
-                return $0.transaction.date < $1.transaction.date
-            }
-
-        for activity in orders {
-            let transaction = activity.transaction
-            let key = "\(transaction.accountKey)|\(transaction.ticker.uppercased())"
-            let rate = LocalPortfolioEngine.usdRate(for: transaction.currency) ?? 1
-            if activity.kind == .buy {
-                lotsByPosition[key, default: []].append(RealisedLot(
-                    quantity: abs(transaction.quantity),
-                    costPerShareUSD: transaction.price * rate
-                ))
-                continue
-            }
-
-            let saleQuantity = abs(transaction.quantity)
-            var remaining = saleQuantity
-            var lots = lotsByPosition[key] ?? []
-            var saleProfitLoss = 0.0
-            let proceedsPerShareUSD = transaction.price * rate
-            while remaining > 0.000_000_1, !lots.isEmpty {
-                let matched = min(remaining, lots[0].quantity)
-                saleProfitLoss += (proceedsPerShareUSD - lots[0].costPerShareUSD) * matched
-                remaining -= matched
-                lots[0].quantity -= matched
-                if lots[0].quantity <= 0.000_000_1 {
-                    lots.removeFirst()
-                }
-            }
-            lotsByPosition[key] = lots
-            if let brokerRealised = transaction.realisedProfitLoss {
-                let brokerCurrency = transaction.realisedProfitLossCurrency ?? transaction.currency
-                let brokerRate = LocalPortfolioEngine.usdRate(for: brokerCurrency) ?? 1
-                let brokerRealisedUSD = brokerRealised * brokerRate
-                result.totalUSD += brokerRealisedUSD
-            } else if remaining <= max(0.000_000_1, saleQuantity * 0.000_001) {
-                // Broker-reported P/L is authoritative when present. When it
-                // is absent, a sale with a complete imported cost basis can be
-                // calculated locally without confusing proceeds for profit.
-                result.totalUSD += saleProfitLoss
-            } else {
-                // Never extrapolate from a partially imported purchase history.
-                // Keep exact/complete sales visible and identify the total as partial.
-                result.hasIncompleteCostBasis = true
-            }
-        }
-        return result
+    private var realisedCalculation: RealisedProfitSummary {
+        RealisedProfitCalculator.summarize(
+            transactions: allActivities
+                .filter { effectiveAccountIDs.contains($0.transaction.accountKey) }
+                .map(\.transaction)
+        )
     }
 
     private func account(for id: String) -> PortfolioAccount? {
@@ -778,18 +739,6 @@ struct HistoryView: View {
         case .withdrawal: CatfolioTheme.danger
         default: CatfolioTheme.neutralIcon
         }
-    }
-
-    private func accountTint(_ key: String) -> Color {
-        let palette: [Color] = [
-            CatfolioPalette.neutral500,
-            CatfolioPalette.sky700,
-            CatfolioPalette.violet500,
-            CatfolioPalette.clay500,
-            CatfolioPalette.teal500,
-        ]
-        let stableValue = key.unicodeScalars.reduce(0) { ($0 &* 31) &+ Int($1.value) }
-        return palette[abs(stableValue) % palette.count]
     }
 
     private func dateGroupTitle(_ text: String) -> String {
@@ -899,20 +848,6 @@ private struct ActivityDateGroup: Identifiable {
     let id: String
     let title: String
     let activities: [PortfolioActivity]
-}
-
-private struct HistorySummarySurface<Content: View>: View {
-    @ViewBuilder let content: Content
-
-    init(@ViewBuilder content: () -> Content) {
-        self.content = content()
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 24) {
-            content
-        }
-    }
 }
 
 private struct HistoryCSVDocument: FileDocument {
