@@ -57,6 +57,10 @@
 		A199000000000000000000A1 /* MoneyWeightedReturnCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B1 /* MoneyWeightedReturnCalculatorTests.swift */; };
 		A199000000000000000000A2 /* LocalPortfolioEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B2 /* LocalPortfolioEngineTests.swift */; };
 		A199000000000000000000A3 /* RealisedProfitCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */; };
+		A199000000000000000000A4 /* BrokerResultPreservationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B4 /* BrokerResultPreservationTests.swift */; };
+		A199000000000000000000A5 /* AnalystConsensusDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B5 /* AnalystConsensusDataTests.swift */; };
+		A199000000000000000000A6 /* StockScreenerRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B6 /* StockScreenerRulesTests.swift */; };
+		A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B7 /* Trading212FillDecodingTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -113,6 +117,10 @@
 		B199000000000000000000B1 /* MoneyWeightedReturnCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyWeightedReturnCalculatorTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000B2 /* LocalPortfolioEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalPortfolioEngineTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealisedProfitCalculatorTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000B4 /* BrokerResultPreservationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrokerResultPreservationTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000B5 /* AnalystConsensusDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalystConsensusDataTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000B6 /* StockScreenerRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockScreenerRulesTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000B7 /* Trading212FillDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212FillDecodingTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -244,6 +252,10 @@
 				B199000000000000000000B1 /* MoneyWeightedReturnCalculatorTests.swift */,
 				B199000000000000000000B2 /* LocalPortfolioEngineTests.swift */,
 				B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */,
+				B199000000000000000000B4 /* BrokerResultPreservationTests.swift */,
+				B199000000000000000000B5 /* AnalystConsensusDataTests.swift */,
+				B199000000000000000000B6 /* StockScreenerRulesTests.swift */,
+				B199000000000000000000B7 /* Trading212FillDecodingTests.swift */,
 			);
 			path = CatfolioIOSTests;
 			sourceTree = "<group>";
@@ -414,6 +426,10 @@
 				A199000000000000000000A1 /* MoneyWeightedReturnCalculatorTests.swift in Sources */,
 				A199000000000000000000A2 /* LocalPortfolioEngineTests.swift in Sources */,
 				A199000000000000000000A3 /* RealisedProfitCalculatorTests.swift in Sources */,
+				A199000000000000000000A4 /* BrokerResultPreservationTests.swift in Sources */,
+				A199000000000000000000A5 /* AnalystConsensusDataTests.swift in Sources */,
+				A199000000000000000000A6 /* StockScreenerRulesTests.swift in Sources */,
+				A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

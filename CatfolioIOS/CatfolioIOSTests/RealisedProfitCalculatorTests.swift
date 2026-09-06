@@ -219,6 +219,87 @@ final class RealisedProfitCalculatorTests: XCTestCase {
         XCTAssertEqual(summary.estimatedUSD, 5_000 * penceRate, accuracy: 1e-6)
     }
 
+    // MARK: - The combined total
+
+    /// The headline figure has to convert, so it exists even when the broker
+    /// and local sources are denominated differently.
+    func testCombinedTotalAddsBrokerAndEstimatedSales() throws {
+        let gbpRate = try XCTUnwrap(LocalPortfolioEngine.usdRate(for: "GBP"))
+        let summary = RealisedProfitCalculator.summarize(transactions: [
+            trade("BUY", "AAA", date: "2024-01-01", quantity: 10, price: 100),
+            trade("SELL", "AAA", date: "2024-06-01", quantity: 10, price: 120,
+                  result: 100, resultCurrency: "GBP"),
+            trade("BUY", "BBB", date: "2024-01-01", quantity: 10, price: 100),
+            trade("SELL", "BBB", date: "2024-06-01", quantity: 10, price: 150),
+        ])
+
+        XCTAssertEqual(summary.brokerUSD, 100 * gbpRate, accuracy: 1e-6)
+        XCTAssertEqual(summary.estimatedUSD, 500, accuracy: 1e-9)
+        XCTAssertEqual(summary.combinedUSD, 100 * gbpRate + 500, accuracy: 1e-6)
+    }
+
+    /// Converting for the total must not disturb the exact per-currency
+    /// figures that are shown unconverted.
+    func testConvertingForTheTotalLeavesBrokerCurrencyFiguresIntact() {
+        let summary = RealisedProfitCalculator.summarize(transactions: [
+            trade("BUY", date: "2024-01-01", quantity: 10, price: 100),
+            trade("SELL", date: "2024-06-01", quantity: 10, price: 120,
+                  result: 42.50, resultCurrency: "GBP"),
+        ])
+
+        XCTAssertEqual(summary.brokerTotals["GBP"], Decimal(string: "42.5"))
+        XCTAssertNotEqual(summary.brokerUSD, 42.5, "GBP must not be taken as USD")
+    }
+
+    func testUnconvertibleBrokerCurrencyIsExcludedFromTheTotalAndFlagged() {
+        let summary = RealisedProfitCalculator.summarize(transactions: [
+            trade("BUY", date: "2024-01-01", quantity: 10, price: 100),
+            trade("SELL", date: "2024-06-01", quantity: 10, price: 120,
+                  result: 75, resultCurrency: "ZZZ"),
+        ])
+
+        XCTAssertEqual(summary.brokerTotals["ZZZ"], Decimal(75), "still reported")
+        XCTAssertEqual(summary.brokerUSD, 0, "but never converted at parity")
+        XCTAssertTrue(summary.unconvertibleCurrencies.contains("ZZZ"))
+        XCTAssertFalse(summary.isComplete)
+    }
+
+    func testNegativeResultsReduceTheTotal() {
+        let summary = RealisedProfitCalculator.summarize(transactions: [
+            trade("BUY", "AAA", date: "2024-01-01", quantity: 10, price: 100),
+            trade("SELL", "AAA", date: "2024-06-01", quantity: 10, price: 120,
+                  result: -50, resultCurrency: "USD"),
+            trade("BUY", "BBB", date: "2024-01-01", quantity: 10, price: 100),
+            trade("SELL", "BBB", date: "2024-06-01", quantity: 10, price: 80),
+        ])
+
+        // -50 broker, -200 estimated.
+        XCTAssertEqual(summary.combinedUSD, -250, accuracy: 1e-9)
+    }
+
+    func testACleanRunIsReportedComplete() {
+        let summary = RealisedProfitCalculator.summarize(transactions: [
+            trade("BUY", date: "2024-01-01", quantity: 10, price: 100),
+            trade("SELL", date: "2024-06-01", quantity: 10, price: 120,
+                  result: 200, resultCurrency: "USD"),
+        ])
+
+        XCTAssertTrue(summary.isComplete)
+        XCTAssertEqual(summary.combinedUSD, 200, accuracy: 1e-9)
+    }
+
+    func testSalesWithNoBasisLeaveTheTotalUnchangedButMarkItIncomplete() {
+        let summary = RealisedProfitCalculator.summarize(transactions: [
+            trade("BUY", "AAA", date: "2024-01-01", quantity: 10, price: 100),
+            trade("SELL", "AAA", date: "2024-06-01", quantity: 10, price: 130),
+            trade("SELL", "BBB", date: "2024-06-01", quantity: 10, price: 500),
+        ])
+
+        XCTAssertEqual(summary.combinedUSD, 300, accuracy: 1e-9)
+        XCTAssertEqual(summary.unavailableCount, 1)
+        XCTAssertFalse(summary.isComplete)
+    }
+
     // MARK: - Classification and shape
 
     func testNonTradeActivityIsIgnored() {

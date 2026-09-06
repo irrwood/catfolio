@@ -234,6 +234,7 @@ struct Trading212Snapshot: Equatable {
     let transactions: [Trading212Transaction]
     let hasCompleteTransactionHistory: Bool
     let transactionHistoryStatus: String?
+    var syncedAccounts: [PortfolioAccount] = []
 }
 
 struct Trading212Transaction: Codable, Equatable, Sendable {
@@ -246,10 +247,11 @@ struct Trading212Transaction: Codable, Equatable, Sendable {
     let price: Double
     let currency: String
     let reference: String?
-    /// Exact closed-position result reported by Trading 212's activity CSV.
+    /// Exact closed-position result reported by Trading 212's fill or CSV.
     /// This is intentionally separate from the order total.
     let realisedProfitLoss: Double?
     let realisedProfitLossCurrency: String?
+    let brokerFXRate: Double?
 
     init(
         accountSlot: Int,
@@ -262,7 +264,8 @@ struct Trading212Transaction: Codable, Equatable, Sendable {
         currency: String,
         reference: String? = nil,
         realisedProfitLoss: Double? = nil,
-        realisedProfitLossCurrency: String? = nil
+        realisedProfitLossCurrency: String? = nil,
+        brokerFXRate: Double? = nil
     ) {
         self.accountSlot = accountSlot
         self.date = date
@@ -275,6 +278,7 @@ struct Trading212Transaction: Codable, Equatable, Sendable {
         self.reference = reference
         self.realisedProfitLoss = realisedProfitLoss
         self.realisedProfitLossCurrency = realisedProfitLossCurrency
+        self.brokerFXRate = brokerFXRate
     }
 }
 
@@ -406,8 +410,8 @@ private struct Trading212ReportedOrder: Codable, Equatable, Sendable {
 
 private struct Trading212InterestCheckpoint: Codable, Equatable, Sendable {
     var interests: [Trading212CachedInterest] = []
-    /// Orders from the broker-generated CSV carry the authoritative Result
-    /// and Currency (Result) values that the lightweight orders endpoint omits.
+    /// Broker CSV Result and Currency (Result) supplement fills whose
+    /// walletImpact is absent. Complete API result/currency pairs take priority.
     var reportedOrders: [Trading212ReportedOrder]?
     var pendingReportID: Int64?
     var nextCheckAfter: Date?
@@ -554,6 +558,7 @@ struct Trading212Client {
         var transactions: [Trading212Transaction] = []
         var hasCompleteTransactionHistory = true
         var historyStatuses: [String] = []
+        var syncedCurrencies: [Int: String] = [:]
         for account in accounts {
             do {
                 // Match the desktop pipeline: `fxPpl` is denominated in the
@@ -566,6 +571,7 @@ struct Trading212Client {
                     credentials: account.credentials,
                     environment: environment
                 )) ?? "GBP"
+                syncedCurrencies[account.slot] = accountCurrency
                 let accountPositions = try await fetchPositions(
                     credentials: account.credentials,
                     environment: environment
@@ -594,7 +600,7 @@ struct Trading212Client {
                         // valid BUY/SELL history from the account.
                         dividendHistory = HistoricalOrdersResult(
                             transactions: [],
-                            isComplete: true,
+                            isComplete: false,
                             cachedCount: 0,
                             status: "分红记录读取失败：\(error.localizedDescription)"
                         )
@@ -656,7 +662,6 @@ struct Trading212Client {
                 throw Trading212Error.accountFailed(account.slot, error.localizedDescription)
             }
         }
-        guard !positions.isEmpty else { throw Trading212Error.noPositions }
         return Trading212Snapshot(
             accountCount: accounts.count,
             positions: positions,
@@ -667,7 +672,13 @@ struct Trading212Client {
             hasCompleteTransactionHistory: hasCompleteTransactionHistory,
             transactionHistoryStatus: historyStatuses.isEmpty
                 ? nil
-                : historyStatuses.joined(separator: "；")
+                : historyStatuses.joined(separator: "；"),
+            syncedAccounts: accounts.map { account in
+                PortfolioAccount(id: "Trading 212|account-\(account.slot)", accountID: "account-\(account.slot)",
+                    source: "Trading 212", name: account.label,
+                    baseCurrency: syncedCurrencies[account.slot] ?? "GBP",
+                    positionCount: 0, transactionCount: 0, manualTransactionCount: 0, hasCSVImport: false, marketValueUSD: 0)
+            }
         )
     }
 
@@ -683,15 +694,29 @@ struct Trading212Client {
         let nextPagePath: String?
     }
 
-    private struct HistoricalOrder: Decodable {
+    // Internal rather than private so the fill decoding can be tested: this is
+    // where a sale's walletImpact Result is read, and a silent decoding change
+    // here is what leaves realised P/L unreconciled.
+    struct HistoricalOrder: Decodable {
         struct Fill: Decodable {
+            struct WalletImpact: Decodable {
+                let currency: String?
+                let fxRate: Double?
+                let realisedProfitLoss: Double?
+            }
             let filledAt: String?
             let id: Int64?
             let price: Double?
             let quantity: Double?
+            let walletImpact: WalletImpact?
         }
 
         struct Order: Decodable {
+            struct Instrument: Decodable {
+                let currency: String?
+                let ticker: String?
+            }
+            let instrument: Instrument?
             let currency: String?
             let side: String?
             let status: String?
@@ -726,8 +751,7 @@ struct Trading212Client {
         struct IncludedData: Encodable {
             let includeDividends = false
             let includeInterest = true
-            // The lightweight orders endpoint omits realised P/L. Trading
-            // 212's CSV `Result` column is the broker source of truth.
+            // CSV supplements historical fills without walletImpact results.
             let includeOrders = true
             let includeTransactions = false
         }
@@ -822,18 +846,18 @@ struct Trading212Client {
             for item in page.items {
                 guard let fill = item.fill,
                       let order = item.order,
-                      order.status?.uppercased() == "FILLED",
+                      ["FILLED", "PARTIALLY_FILLED", "CANCELLED"].contains(order.status?.uppercased() ?? ""),
                       let filledAt = fill.filledAt,
                       let signedQuantity = fill.quantity, signedQuantity != 0,
                       let price = fill.price, price >= 0,
-                      let rawTicker = order.ticker,
+                      let rawTicker = order.instrument?.ticker ?? order.ticker,
                       let side = order.side?.uppercased(),
                       ["BUY", "SELL"].contains(side),
                       side == "SELL" || price > 0 else { continue }
                 // `order.currency` is the account/order currency, while
                 // `fill.price` is quoted in the instrument currency. Never
                 // multiply a USD share price as though it were GBP.
-                let currency = Trading212Position.currency(nil, rawTicker: rawTicker)
+                let currency = Trading212Position.currency(order.instrument?.currency, rawTicker: rawTicker)
                 let transaction = Trading212Transaction(
                     accountSlot: accountSlot,
                     date: String(filledAt.prefix(10)),
@@ -845,7 +869,11 @@ struct Trading212Client {
                     // transaction model stores quantity as an absolute value.
                     quantity: abs(signedQuantity),
                     price: price,
-                    currency: currency
+                    currency: currency,
+                    reference: fill.id.map { String($0) },
+                    realisedProfitLoss: side == "SELL" ? fill.walletImpact?.realisedProfitLoss : nil,
+                    realisedProfitLossCurrency: side == "SELL" ? fill.walletImpact?.currency?.uppercased() : nil,
+                    brokerFXRate: fill.walletImpact?.fxRate
                 )
                 let orderKey = Self.transactionKey(transaction, filledAt: filledAt)
                 if isRefreshingBaseline, checkpoint.refreshBoundaryKeys.contains(orderKey) {
@@ -1018,8 +1046,8 @@ struct Trading212Client {
         )
     }
 
-    /// Trading 212 omits realised results and interest from its lightweight
-    /// endpoints. The official activity export is the source of truth, so this
+    /// The official activity export supplies interest and supplements missing
+    /// historical fill results. This
     /// persists request/check/download state and retrieves at most one
     /// broker-supported 365-day period per cycle.
     private func fetchInterestHistory(
@@ -1340,7 +1368,7 @@ struct Trading212Client {
                 realisedProfitLoss: realised,
                 realisedProfitLossCurrency: realised == nil
                     ? nil
-                    : (resultCurrency.isEmpty ? fallbackCurrency : resultCurrency)
+                    : (resultCurrency.isEmpty ? nil : resultCurrency)
             )))
         }
         return ParsedActivityReport(interests: interests, orders: orders)
@@ -1363,15 +1391,19 @@ struct Trading212Client {
                     && report.action == order.action
                     && comparableTicker(report.ticker) == comparableTicker(order.ticker)
             }
-            guard let match = candidates.min(by: { left, right in
-                reportDistance(unmatched[left], order) < reportDistance(unmatched[right], order)
-            }) else { return order }
-            let report = unmatched[match]
             let quantityTolerance = max(0.000_01, abs(order.quantity) * 0.000_1)
             let priceTolerance = max(0.02, abs(order.price) * 0.000_1)
-            guard abs(report.quantity - order.quantity) <= quantityTolerance,
-                  abs(report.price - order.price) <= priceTolerance else { return order }
+            let compatible = candidates.filter {
+                abs(unmatched[$0].quantity - order.quantity) <= quantityTolerance &&
+                abs(unmatched[$0].price - order.price) <= priceTolerance
+            }
+            let byReference = compatible.filter { order.reference != nil && unmatched[$0].reference == order.reference }
+            let matches = byReference.isEmpty ? compatible : byReference
+            // Never assign one of two indistinguishable fills arbitrarily.
+            guard matches.count == 1, let match = matches.first else { return order }
+            let report = unmatched[match]
             unmatched.remove(at: match)
+            let hasAPIResult = order.realisedProfitLoss?.isFinite == true && order.realisedProfitLossCurrency?.isEmpty == false
             return Trading212Transaction(
                 accountSlot: order.accountSlot,
                 date: order.date,
@@ -1382,8 +1414,9 @@ struct Trading212Client {
                 price: order.price,
                 currency: report.currency,
                 reference: order.reference,
-                realisedProfitLoss: report.realisedProfitLoss,
-                realisedProfitLossCurrency: report.realisedProfitLossCurrency
+                realisedProfitLoss: hasAPIResult ? order.realisedProfitLoss : (report.realisedProfitLoss ?? order.realisedProfitLoss),
+                realisedProfitLossCurrency: hasAPIResult ? order.realisedProfitLossCurrency : (report.realisedProfitLoss != nil ? report.realisedProfitLossCurrency : order.realisedProfitLossCurrency),
+                brokerFXRate: order.brokerFXRate
             )
         }
     }
@@ -1446,9 +1479,9 @@ struct Trading212Client {
         environment: Trading212Environment,
         accountSlot: Int
     ) -> String {
-        // v3 invalidates checkpoints that mislabeled fill prices with the
-        // account currency instead of the instrument's quote currency.
-        let source = "v3:\(environment.rawValue):\(accountSlot):\(credentials.apiKey)"
+        // v4 replays the complete history to backfill walletImpact and fill ID.
+        // The prior cache remains on disk; the portfolio is enriched pagewise.
+        let source = "v4:\(environment.rawValue):\(accountSlot):\(credentials.apiKey)"
         let digest = SHA256.hash(data: Data(source.utf8))
         return digest.prefix(16).map { String(format: "%02x", $0) }.joined()
     }
@@ -1474,6 +1507,7 @@ struct Trading212Client {
     }
 
     private static func transactionKey(_ transaction: Trading212Transaction, filledAt: String) -> String {
+        if let reference = transaction.reference { return "fill:\(transaction.accountSlot):\(reference)" }
         let canonicalTime = String(
             filledAt.replacingOccurrences(of: " ", with: "T").prefix(19)
         )

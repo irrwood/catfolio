@@ -161,7 +161,6 @@ private struct HistorySummaryMetric: Identifiable {
 
 struct HistoryView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var categorySelection
 
@@ -201,7 +200,6 @@ struct HistoryView: View {
                 historyList
             }
         }
-        .background(CatfolioTheme.pageBackground(for: colorScheme))
         .navigationTitle("History")
         .navigationBarTitleDisplayMode(.large)
         .toolbarVisibility(.visible, for: .navigationBar)
@@ -297,7 +295,6 @@ struct HistoryView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
         .contentMargins(.top, 0, for: .scrollContent)
         .refreshable {
             await synchronizeTrading212History()
@@ -345,17 +342,39 @@ struct HistoryView: View {
         }
     }
 
-    /// Reported side by side rather than merged, so an exact broker figure is
-    /// never dragged through Catfolio's rate table just to join a total. A
-    /// sale with no Result yet still shows its reconstructed value, labelled
-    /// as an estimate, instead of collapsing the whole row to a dash.
+    /// A single total in the user's display currency, with its composition
+    /// spelled out beneath it.
+    ///
+    /// The total has to convert, so it is approximate by construction: every
+    /// sale is valued at today's rate regardless of when it settled. The
+    /// broker's own exact figures are therefore still shown unconverted, in
+    /// their own currency, rather than being replaced by the converted total.
     private var realisedSummaryMetrics: [HistorySummaryMetric] {
         let calculation = realisedCalculation
         guard calculation.saleCount > 0 else {
-            return [HistorySummaryMetric(title: "Realised P/L · 暂无卖出", value: "—", color: .secondary)]
+            return [HistorySummaryMetric(title: "已实现盈亏 · 暂无卖出", value: "—", color: .secondary)]
         }
         let total = calculation.saleCount
+        let valued = calculation.brokerCount + calculation.estimatedCount
         var metrics: [HistorySummaryMetric] = []
+
+        if valued > 0 {
+            var notes: [String] = []
+            if calculation.estimatedCount > 0 {
+                notes.append("含 \(calculation.estimatedCount) 笔估算")
+            }
+            if calculation.unavailableCount > 0 {
+                notes.append("\(calculation.unavailableCount) 笔缺成本未计入")
+            }
+            if !calculation.unconvertibleCurrencies.isEmpty {
+                notes.append("\(calculation.unconvertibleCurrencies.sorted().joined(separator: "/")) 未计入")
+            }
+            let suffix = notes.isEmpty ? "" : "（\(notes.joined(separator: "，"))）"
+            metrics.append(HistorySummaryMetric(
+                title: "已实现盈亏 · 合计\(suffix)",
+                value: DisplayFormat.money(calculation.combinedUSD, signed: true),
+                color: calculation.combinedUSD >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger))
+        }
 
         if !calculation.brokerTotals.isEmpty {
             let values = calculation.brokerTotals.keys.sorted().map { currency in
@@ -364,20 +383,20 @@ struct HistoryView: View {
                     currency: currency, signed: true, fractionDigits: 2)
             }.joined(separator: " · ")
             metrics.append(HistorySummaryMetric(
-                title: "已实现盈亏 · 券商 Result · \(calculation.brokerCount)/\(total) 笔 · 原币",
-                value: values, color: .primary))
+                title: "券商 Result · \(calculation.brokerCount)/\(total) 笔 · 原币",
+                value: values, color: .secondary))
         }
 
         if calculation.estimatedCount > 0 {
             metrics.append(HistorySummaryMetric(
-                title: "已实现盈亏 · 本地估算 · \(calculation.estimatedCount)/\(total) 笔 · 按当前汇率",
+                title: "本地估算 · \(calculation.estimatedCount)/\(total) 笔 · 按当前汇率",
                 value: DisplayFormat.money(calculation.estimatedUSD, signed: true),
-                color: calculation.estimatedUSD >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger))
+                color: .secondary))
         }
 
         if calculation.unavailableCount > 0 {
             metrics.append(HistorySummaryMetric(
-                title: "已实现盈亏 · 缺买入成本 · \(calculation.unavailableCount)/\(total) 笔",
+                title: "缺买入成本 · \(calculation.unavailableCount)/\(total) 笔",
                 value: "—", color: .secondary))
         }
 

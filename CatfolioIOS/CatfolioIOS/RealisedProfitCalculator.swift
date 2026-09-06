@@ -16,8 +16,25 @@ struct RealisedProfitSummary: Equatable {
     var estimatedCount = 0
     /// Sales that could be neither reconciled nor reconstructed.
     var unavailableCount = 0
+    /// Broker Results converted to USD at current rates, so they can join a
+    /// single total. The per-currency figures above stay unconverted.
+    var brokerUSD = 0.0
+    /// Broker currencies with no rate available. Their Results are still
+    /// reported in `brokerTotals` but cannot enter the combined total.
+    var unconvertibleCurrencies: Set<String> = []
 
     var saleCount: Int { brokerCount + estimatedCount + unavailableCount }
+
+    /// Everything that could be valued, in USD, ready for display in the
+    /// user's chosen currency.
+    ///
+    /// Approximate by construction: profits realised on different dates are
+    /// all converted at today's rate, so this will not tie out to the sum of
+    /// the broker's own figures unless every sale settled in one currency.
+    var combinedUSD: Double { brokerUSD + estimatedUSD }
+
+    /// True when every sale was valued and every currency converted.
+    var isComplete: Bool { unavailableCount == 0 && unconvertibleCurrencies.isEmpty }
 }
 
 /// FIFO reconstruction of closed-position profit.
@@ -98,9 +115,17 @@ enum RealisedProfitCalculator {
             }
             lotsByPosition[key] = lots
 
-            if let decimal = brokerResult(for: transaction) {
-                summary.brokerTotals[decimal.currency, default: 0] += decimal.value
+            if let broker = brokerResult(for: transaction) {
+                summary.brokerTotals[broker.currency, default: 0] += broker.value
                 summary.brokerCount += 1
+                // Converted separately so the exact per-currency figures above
+                // are never overwritten by a rate-dependent one.
+                if let brokerRate = LocalPortfolioEngine.usdRate(for: broker.currency),
+                   brokerRate.isFinite {
+                    summary.brokerUSD += broker.raw * brokerRate
+                } else {
+                    summary.unconvertibleCurrencies.insert(broker.currency)
+                }
                 continue
             }
 
@@ -127,7 +152,7 @@ enum RealisedProfitCalculator {
     /// in its own currency and must not be assumed to be USD.
     private static func brokerResult(
         for transaction: LocalTransactionRecord
-    ) -> (value: Decimal, currency: String)? {
+    ) -> (value: Decimal, currency: String, raw: Double)? {
         guard let raw = transaction.realisedProfitLoss, raw.isFinite else { return nil }
         let currency = transaction.realisedProfitLossCurrency?
             .trimmingCharacters(in: .whitespacesAndNewlines).uppercased() ?? ""
@@ -137,6 +162,6 @@ enum RealisedProfitCalculator {
                   string: String(raw),
                   locale: Locale(identifier: "en_US_POSIX")
               ) else { return nil }
-        return (decimal, currency)
+        return (decimal, currency, raw)
     }
 }
