@@ -93,10 +93,16 @@ actor CompanyFinancialsClient {
         let data: CompanyFinancialsData
     }
 
-    private struct SECTickerRow: Codable {
+    struct SECTickerRow: Codable {
         let cik: Int
         let ticker: String
         let title: String
+
+        init(cik: Int, ticker: String, title: String) {
+            self.cik = cik
+            self.ticker = ticker
+            self.title = title
+        }
 
         enum CodingKeys: String, CodingKey {
             case cik = "cik_str"
@@ -321,20 +327,57 @@ actor CompanyFinancialsClient {
     }
 
     private func secTicker(for ticker: String, forceRefresh: Bool) async throws -> SECTickerRow {
+        let normalized = ticker.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let catalog = try? CompanyReferenceCatalog.bundled.get()
+        let entry = catalog?.entry(symbol: normalized, market: "US")
+        let candidates = [normalized, entry?.symbol].compactMap { $0 }
+        loadTickerCacheIfNeeded()
+        let bundleDate = catalog.flatMap {
+            ISO8601DateFormatter().date(from: $0.generatedOn + "T00:00:00Z")
+        }
+        if !forceRefresh, let cacheDate = tickerCacheDate,
+           cacheDate >= (bundleDate ?? .distantPast),
+           Date().timeIntervalSince(cacheDate) < 7 * 24 * 60 * 60 {
+            for candidate in candidates {
+                if let row = tickerMap[candidate] { return row }
+            }
+        }
+        if !forceRefresh,
+           let entry,
+           let cik = entry.verifiedCIK {
+            return SECTickerRow(cik: cik, ticker: entry.symbol, title: entry.name ?? entry.symbol)
+        }
         try await loadTickerMap(forceRefresh: forceRefresh)
-        let candidates = [
-            ticker,
-            ticker.replacingOccurrences(of: ".", with: "-"),
-            ticker.split(separator: ".", maxSplits: 1).first.map(String.init) ?? ticker,
-        ]
+        // Only reviewed aliases can change spelling. Stripping .L/.HK/etc.
+        // can accidentally select a different US company with the same code.
         for candidate in candidates {
             if let row = tickerMap[candidate.uppercased()] { return row }
         }
         throw CompanyFinancialsError.unsupportedTicker
     }
 
+    /// The bundled reference already carries SEC-verified CIKs, so the map is
+    /// seeded from it before anything is fetched. Financial statements then
+    /// work offline and on first launch, instead of every lookup depending on
+    /// a multi-megabyte download from sec.gov succeeding first.
+    ///
+    /// The download stays as a refresh: it covers registrants added since the
+    /// bundle was generated, and its rows win when both have an entry.
+    private static let bundledTickerRows: [String: SECTickerRow] = {
+        guard let catalog = try? CompanyReferenceCatalog.bundled.get() else { return [:] }
+        var rows: [String: SECTickerRow] = [:]
+        for entry in catalog.entries.values {
+            guard let cik = entry.verifiedCIK else { continue }
+            rows[entry.symbol.uppercased()] = SECTickerRow(
+                cik: cik, ticker: entry.symbol.uppercased(), title: entry.name ?? entry.symbol
+            )
+        }
+        return rows
+    }()
+
     private func loadTickerMap(forceRefresh: Bool) async throws {
         loadTickerCacheIfNeeded()
+        if tickerMap.isEmpty { tickerMap = Self.bundledTickerRows }
         if !forceRefresh,
            !tickerMap.isEmpty,
            let tickerCacheDate,
@@ -344,10 +387,12 @@ actor CompanyFinancialsClient {
         do {
             let data = try await request(url: url, isSEC: true, forceRefresh: forceRefresh)
             let rows = try JSONDecoder().decode([String: SECTickerRow].self, from: data)
-            tickerMap = Dictionary(uniqueKeysWithValues: rows.values.map { ($0.ticker.uppercased(), $0) })
+            let fetched = Dictionary(uniqueKeysWithValues: rows.values.map { ($0.ticker.uppercased(), $0) })
+            tickerMap = tickerMap.merging(fetched) { _, fresh in fresh }
             tickerCacheDate = Date()
             persistTickerCache()
         } catch {
+            // A failed refresh is no longer fatal: the bundle answers on its own.
             if tickerMap.isEmpty { throw error }
         }
     }
