@@ -74,6 +74,9 @@ final class SectorOverrideTests: XCTestCase {
             "SIE.DE": .industrials,
             "MC.PA": .consumerCyclical,
             "7203.T": .consumerCyclical,
+            // GICS and iShares ACWI both place Sony in Consumer Discretionary,
+            // not Technology, which is where a first pass had put it.
+            "6758.T": .consumerCyclical,
             "0388.HK": .financials,
             "D05.SI": .financials,
             "BHP.AX": .materials,

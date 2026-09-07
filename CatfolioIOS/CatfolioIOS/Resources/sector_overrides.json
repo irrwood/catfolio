@@ -10,7 +10,7 @@
     "2318.HK": { "sector": "Financial Services", "name": "Ping An Insurance" },
     "2388.HK": { "sector": "Financial Services", "name": "BOC Hong Kong" },
 
-    "6758.T": { "sector": "Technology", "name": "Sony Group" },
+    "6758.T": { "sector": "Consumer Cyclical", "name": "Sony Group", "note": "GICS places Sony in Consumer Discretionary; iShares ACWI agrees. Corrected from an earlier Technology guess." },
     "6861.T": { "sector": "Technology", "name": "Keyence" },
     "7203.T": { "sector": "Consumer Cyclical", "name": "Toyota Motor" },
 
