@@ -66,7 +66,16 @@ struct IBKRFlexView: View {
                 } header: {
                     Text("Flex 凭证")
                 } footer: {
-                    Text("Flex Query 输出请选择 XML，并加入 Account Information → Base Currency、Open Positions → Summary，以及 Trades → Executions、Trade ID、Buy/Sell、Quantity、Trade Price、Trade Date、Currency、FX Rate to Base。成交时间范围需覆盖当前持仓的建仓记录。")
+                    // The two credentials come from different halves of the
+                    // same screen, and IBKR's own instructions for creating a
+                    // query never mention the ID — it only appears in the list
+                    // afterwards. Saying so here saves a hunt.
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("两个凭证来自同一个页面的不同区域：Client Portal → Performance & Reports → Flex Queries。")
+                        Text("Token：该页 Flex Web Service Configuration 区域 → 齿轮图标 → 启用后点 Generate A New Token。")
+                        Text("Query ID：在 Activity Flex Query 区域点 + 建好查询后，回到列表就能在查询名称旁看到那串数字。创建向导本身不会显示它。")
+                        Text("查询输出请选 XML，并加入 Account Information → Base Currency、Open Positions → Summary，以及 Trades → Executions、Trade ID、Buy/Sell、Quantity、Trade Price、Trade Date、Currency、FX Rate to Base。成交时间范围需覆盖当前持仓的建仓记录。")
+                    }
                 }
 
                 Section("连接") {
@@ -99,8 +108,12 @@ struct IBKRFlexView: View {
 
                     statusView
 
-                    Link(destination: URL(string: "https://www.ibkrguides.com/advisorportal/ug/flex-web-service.htm")!) {
-                        Label("查看 IBKR Flex 配置说明", systemImage: "arrow.up.right.square")
+                    Link(destination: URL(string: "https://www.ibkrguides.com/clientportal/performanceandstatements/activityflex.htm")!) {
+                        Label("如何创建 Activity Flex Query", systemImage: "arrow.up.right.square")
+                    }
+
+                    Link(destination: URL(string: "https://www.ibkrguides.com/clientportal/performanceandstatements/flex-web-service.htm")!) {
+                        Label("如何启用 Flex Web Service 并生成 Token", systemImage: "arrow.up.right.square")
                     }
                 }
 
