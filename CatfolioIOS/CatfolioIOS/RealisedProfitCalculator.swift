@@ -173,9 +173,21 @@ enum RealisedProfitCalculator {
                 return ($0.tradeID ?? "") < ($1.tradeID ?? "")
             }
 
+        let catalog = try? StockSplitCatalog.bundled.get()
+
         for transaction in ordered {
             let key = "\(transaction.accountKey)|\(transaction.ticker.uppercased())"
             let rate = LocalPortfolioEngine.usdRate(for: transaction.currency)
+
+            // Put every row on today's share basis before matching. A purchase
+            // of 100 shares that later split 4-for-1 is 400 shares at a quarter
+            // the price; a sale made before that split is on the old basis too.
+            // Quantity times price is unchanged, so cost basis survives intact.
+            let split = catalog?.adjustment(
+                ticker: transaction.ticker, from: transaction.date
+            ) ?? 1
+            let quantity = abs(transaction.quantity) * split
+            let price = split > 0 ? transaction.price / split : transaction.price
 
             if isBuy(transaction.action) {
                 // A purchase in an unconvertible currency cannot seed a basis.
@@ -183,15 +195,15 @@ enum RealisedProfitCalculator {
                 // as unavailable rather than silently mispricing them.
                 guard let rate, rate.isFinite else { continue }
                 lotsByPosition[key, default: []].append(Lot(
-                    quantity: abs(transaction.quantity),
-                    costPerShareUSD: transaction.price * rate
+                    quantity: quantity,
+                    costPerShareUSD: price * rate
                 ))
                 continue
             }
 
             // Every sale consumes lots, broker-reported ones included, so the
             // FIFO position stays correct for the sales that must be rebuilt.
-            let saleQuantity = abs(transaction.quantity)
+            let saleQuantity = quantity
             var remaining = saleQuantity
             var lots = lotsByPosition[key] ?? []
             var matchedCostUSD = 0.0
@@ -222,7 +234,7 @@ enum RealisedProfitCalculator {
                 sales.append(RealisedSale(date: transaction.date, outcome: .unavailable))
                 continue
             }
-            let profit = transaction.price * rate * saleQuantity - matchedCostUSD
+            let profit = price * rate * saleQuantity - matchedCostUSD
             guard profit.isFinite else {
                 sales.append(RealisedSale(date: transaction.date, outcome: .unavailable))
                 continue
