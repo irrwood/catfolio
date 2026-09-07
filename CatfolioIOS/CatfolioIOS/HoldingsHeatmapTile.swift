@@ -170,7 +170,7 @@ struct HoldingsHeatmapTile: View {
             let source = directHolding == nil ? "ETF 穿透持仓" : "直接与 ETF 合并持仓"
             return "\(name)，\(source)，仓位 \(DisplayFormat.percent(fraction * 100, signed: false))，\(model.performanceTitle) \(changeText)"
         case let .remainder(count):
-            return "其他 \(count) 项持仓，打开明细"
+            return "其他 \(count) 项合并持仓"
         }
     }
 }

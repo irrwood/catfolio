@@ -14,12 +14,11 @@ struct HoldingsHeatmapView: View {
     let lookThroughRows: [ETFLookThroughRow]?
     let lookThroughDailyChanges: [String: Double]
     let onSelect: (Holding) -> Void
-    let onShowAll: () -> Void
 
     private let maximumHoldingTiles = 20
     private let minimumIndividualFraction = 0.008
     private let groupedScreenInset: CGFloat = 16
-    private var heatmapHeight: CGFloat { usesETFLookThrough ? 700 : 580 }
+    private let heatmapHeight: CGFloat = 700
 
     var body: some View {
         let sectorGroups = groupsBySector ? makeSectorGroups() : []
@@ -330,8 +329,6 @@ struct HoldingsHeatmapView: View {
     private func select(_ model: HoldingsHeatmapTile.Model) {
         if let holding = model.holding {
             onSelect(holding)
-        } else if model.isRemainder {
-            onShowAll()
         }
     }
 }
@@ -379,7 +376,7 @@ private struct HoldingsHeatmapTileCloud: View {
                         model: model,
                         fraction: model.portfolioFraction,
                         size: frame.size,
-                        action: model.holding != nil || model.isRemainder
+                        action: model.holding != nil
                             ? { onSelect(model) }
                             : nil
                     )

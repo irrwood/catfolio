@@ -13,6 +13,7 @@ struct CatfolioIOSApp: App {
         WindowGroup {
             RootTabView()
                 .fontDesign(.rounded)
+                .task { ReferenceCatalogs.warm() }
                 .environment(model)
                 .tint(CatfolioTheme.accent)
                 .preferredColorScheme(preferredColorScheme)

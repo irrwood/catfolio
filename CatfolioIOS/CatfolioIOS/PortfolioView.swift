@@ -1518,10 +1518,7 @@ private struct PortfolioDetailsCard: View {
                             ? etfResponse?.rows
                             : nil,
                         lookThroughDailyChanges: etfConstituentDailyChanges,
-                        onSelect: onSelect,
-                        onShowAll: {
-                            tableMode = heatmapLooksThroughETF ? "ETF 穿透" : "持仓"
-                        }
+                        onSelect: onSelect
                     )
                 } else {
                     etfTable

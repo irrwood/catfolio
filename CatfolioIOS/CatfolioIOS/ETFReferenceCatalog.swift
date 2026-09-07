@@ -49,6 +49,19 @@ struct ETFReferenceCatalog: Decodable, Sendable {
     let listings: [String: Listing]
     let sources: [String: Source]
 
+    /// Listing ids grouped by upper-cased ticker.
+    ///
+    /// Built once at decode. Without it `matches` walks all 1,477 listings
+    /// and sorts them, which is fine from a search field and ruinous from a
+    /// view body — the holding detail page asks for a fund's fee every time
+    /// it renders a frame, and that scan was the hitch while scrolling it.
+    private var listingIDsByTicker: [String: [String]] = [:]
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, temporalBasis, productIdentity, expenseRatioUnit
+        case products, listings, sources
+    }
+
     enum CatalogError: Error { case missingResource, invalidCatalog }
     static let bundled = Result { try load() }
 
@@ -60,7 +73,14 @@ struct ETFReferenceCatalog: Decodable, Sendable {
     }
 
     static func decode(_ data: Data) throws -> Self {
-        let result = try JSONDecoder().decode(Self.self, from: data)
+        var result = try JSONDecoder().decode(Self.self, from: data)
+        result.listingIDsByTicker = Dictionary(
+            grouping: result.listings.values.compactMap { listing -> (String, String)? in
+                guard let ticker = listing.ticker.verifiedValue?.uppercased() else { return nil }
+                return (ticker, listing.id)
+            },
+            by: \.0
+        ).mapValues { $0.map(\.1).sorted() }
         guard result.schemaVersion == 2, result.productIdentity == "ISIN_SHARE_CLASS",
               result.temporalBasis == "SNAPSHOT_ONLY", result.expenseRatioUnit == "FRACTION",
               result.products.allSatisfy({ key, p in key == p.id && key == "ISIN:" + (p.isin.verifiedValue ?? "") }),
@@ -75,11 +95,19 @@ struct ETFReferenceCatalog: Decodable, Sendable {
     func matches(symbol: String, exchange: String? = nil, provider: String? = nil) -> [Listing] {
         let symbol = symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !symbol.isEmpty else { return [] }
-        return listings.values.filter { listing in
-            if let exchange, listing.exchange.verifiedValue != exchange && listing.mic.verifiedValue != exchange { return false }
-            if let provider { return listing.providerAliases.verifiedValue?[provider]?.uppercased() == symbol }
-            return listing.ticker.verifiedValue?.uppercased() == symbol
-        }.sorted { $0.id < $1.id }
+
+        // A provider alias is a separate namespace with no index, so that
+        // query still scans. Everything else goes through the ticker index.
+        guard provider == nil else {
+            return listings.values.filter {
+                $0.providerAliases.verifiedValue?[provider!]?.uppercased() == symbol
+            }.sorted { $0.id < $1.id }
+        }
+
+        return (listingIDsByTicker[symbol] ?? []).compactMap { listings[$0] }.filter { listing in
+            guard let exchange else { return true }
+            return listing.exchange.verifiedValue == exchange || listing.mic.verifiedValue == exchange
+        }
     }
 
     /// Ambiguity is unresolved, never the first dictionary entry.
