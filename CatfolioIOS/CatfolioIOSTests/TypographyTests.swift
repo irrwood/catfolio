@@ -86,4 +86,21 @@ final class TypographyTests: XCTestCase {
             )
         }
     }
+
+    /// The width axis lives on SF Pro. SF Rounded ships one width, so a
+    /// number asking to compress would silently get nothing — the API does
+    /// not offer it rather than accepting it and ignoring it.
+    func testWidthIsOfferedOnlyWhereTheFaceHasIt() {
+        // Compiles only because appText takes `width` and appNumber does not.
+        _ = Text("1D").appText(.footnote, width: .compressed)
+        _ = Text("1234").appNumber(.footnote)
+    }
+
+    /// The two range pickers were drawn independently, one in SF Pro and one
+    /// in SF Rounded, and only one of them could honour the compression it
+    /// asked for. Both go through the same token now.
+    func testCompressedLabelsUseTheFootnoteToken() {
+        XCTAssertEqual(TypeScale.footnote.size, 14)
+        XCTAssertEqual(TypeScale.footnote.textStyle, .footnote)
+    }
 }

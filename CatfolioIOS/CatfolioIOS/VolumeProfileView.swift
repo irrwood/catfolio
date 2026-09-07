@@ -994,8 +994,7 @@ private struct SecurityPriceRangePicker: View {
                     selection = choice
                 } label: {
                     Text(choice)
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                        .fontWidth(.compressed)
+                        .appText(.footnote, weight: .medium, width: .compressed)
                         .foregroundStyle(foreground(for: choice))
                         .frame(width: 44, height: 30)
                         .background {

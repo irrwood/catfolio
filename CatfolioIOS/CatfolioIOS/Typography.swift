@@ -134,6 +134,7 @@ enum Typography {
 private struct ScaledFont: ViewModifier {
     let weight: Font.Weight
     let design: Font.Design
+    let width: Font.Width
     let monospacedDigit: Bool
     let lineSpacing: CGFloat
     let tracking: CGFloat
@@ -143,11 +144,13 @@ private struct ScaledFont: ViewModifier {
         scale: TypeScale,
         weight: Font.Weight?,
         design: Font.Design,
+        width: Font.Width,
         monospacedDigit: Bool,
         tracking: CGFloat
     ) {
         self.weight = weight ?? scale.weight
         self.design = design
+        self.width = width
         self.monospacedDigit = monospacedDigit
         self.lineSpacing = scale.lineSpacing
         self.tracking = tracking
@@ -155,9 +158,10 @@ private struct ScaledFont: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        let font = Font.system(size: size, weight: weight, design: design)
+        var font = Font.system(size: size, weight: weight, design: design).width(width)
+        if monospacedDigit { font = font.monospacedDigit() }
         return content
-            .font(monospacedDigit ? font.monospacedDigit() : font)
+            .font(font)
             .tracking(tracking)
             .lineSpacing(lineSpacing)
     }
@@ -165,9 +169,21 @@ private struct ScaledFont: ViewModifier {
 
 extension View {
     /// Body copy, labels, names — SF Pro at a token size.
-    func appText(_ scale: TypeScale, weight: Font.Weight? = nil) -> some View {
+    ///
+    /// `width` is for a run of options that has to fit a fixed rail — a
+    /// segmented range picker, say. It narrows the letterforms rather than
+    /// shrinking them, so the labels stay the same height as everything
+    /// around them instead of quietly becoming a size smaller. The width axis
+    /// belongs to SF Pro, which is why this is on `appText` and not on
+    /// `appNumber`: SF Rounded ships one width and asking it to compress does
+    /// nothing.
+    func appText(
+        _ scale: TypeScale,
+        weight: Font.Weight? = nil,
+        width: Font.Width = .standard
+    ) -> some View {
         modifier(ScaledFont(
-            scale: scale, weight: weight, design: .default,
+            scale: scale, weight: weight, design: .default, width: width,
             monospacedDigit: false, tracking: 0
         ))
     }
@@ -180,7 +196,7 @@ extension View {
     /// `numericTransition` where the value animates.
     func appNumber(_ scale: TypeScale, weight: Font.Weight? = nil) -> some View {
         modifier(ScaledFont(
-            scale: scale, weight: weight, design: .rounded,
+            scale: scale, weight: weight, design: .rounded, width: .standard,
             monospacedDigit: true, tracking: 0
         ))
     }
@@ -188,7 +204,7 @@ extension View {
     /// Text set in capitals, with the letterspacing capitals need.
     func appCaps(_ scale: TypeScale, weight: Font.Weight? = nil) -> some View {
         modifier(ScaledFont(
-            scale: scale, weight: weight ?? .medium, design: .default,
+            scale: scale, weight: weight ?? .medium, design: .default, width: .standard,
             monospacedDigit: false, tracking: scale.capsTracking
         ))
     }
