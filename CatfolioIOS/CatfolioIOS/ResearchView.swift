@@ -85,6 +85,26 @@ struct ResearchView: View {
         default: ("chart.xyaxis.line", CatfolioTheme.neutralIcon)
         }
     }
+    /// A sector is read by how far it moved, not by the level of its proxy
+    /// ETF, so these cells lead with the change and keep the ticker as a
+    /// caption — the mirror of the benchmark cells above.
+    private static func sectorGlyph(_ symbol: String) -> (name: String, tint: Color) {
+        switch symbol {
+        case "XLK": ("cpu", CatfolioPalette.blue500)
+        case "XLV": ("cross.case.fill", CatfolioPalette.rose500)
+        case "XLF": ("banknote.fill", CatfolioPalette.teal500)
+        case "XLE": ("fuelpump.fill", CatfolioPalette.coral500)
+        case "XLI": ("gearshape.fill", CatfolioPalette.sky700)
+        case "XLY": ("cart.fill", CatfolioPalette.violet500)
+        case "XLP": ("basket.fill", CatfolioPalette.green500)
+        case "XLU": ("bolt.fill", CatfolioPalette.yellow300)
+        case "XLRE": ("house.fill", CatfolioPalette.magenta500)
+        case "XLB": ("cube.fill", CatfolioPalette.teal400)
+        case "XLC": ("antenna.radiowaves.left.and.right", CatfolioPalette.violet700)
+        default: ("square.grid.2x2.fill", CatfolioTheme.neutralIcon)
+        }
+    }
+
     private static let sectors = [("XLK", "科技"), ("XLV", "医疗"), ("XLF", "金融"), ("XLE", "能源"), ("XLI", "工业"), ("XLY", "可选消费"), ("XLP", "必需消费"), ("XLU", "公用事业"), ("XLRE", "房地产"), ("XLB", "材料"), ("XLC", "通信")]
 
     private var accountScope: String {
@@ -145,9 +165,16 @@ struct ResearchView: View {
             Section("持仓跌幅榜") { moversSection(positive: false) }
                 .headerProminence(.increased)
             Section {
-                ForEach(Self.sectors.filter { matches("\($0.0) \($0.1)") }, id: \.0) { symbol, title in
-                    marketRow(symbol: symbol, title: "\(title) · \(symbol)", sparkline: false)
+                LazyVGrid(
+                    columns: [GridItem(.flexible(), spacing: 20), GridItem(.flexible(), spacing: 20)],
+                    alignment: .leading,
+                    spacing: 22
+                ) {
+                    ForEach(Self.sectors.filter { matches("\($0.0) \($0.1)") }, id: \.0) { symbol, title in
+                        sectorCell(symbol: symbol, title: title)
+                    }
                 }
+                .padding(.vertical, 6)
             } header: { Text("板块表现").headerProminence(.increased) } footer: {
                 Text("行业 ETF 作为美国板块代理；数值为最近两个可用收盘价的变化，非盘中实时行情。来源：现有 Yahoo 行情服务及本机缓存。每项分别显示数据日期。")
             }
@@ -313,6 +340,41 @@ struct ResearchView: View {
                     Text(latest.id).font(.caption2).foregroundStyle(.tertiary)
                 }
             }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func sectorCell(symbol: String, title: String) -> some View {
+        let snapshot = markets.first { $0.id == symbol }
+        let glyph = Self.sectorGlyph(symbol)
+        let change = snapshot?.changePercent
+        return VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 5) {
+                Image(systemName: glyph.name)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(glyph.tint)
+                    .frame(width: 18, alignment: .leading)
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            if let change {
+                Text(DisplayFormat.percent(change, signed: true))
+                    .font(.title3.weight(.bold))
+                    .monospacedDigit()
+                    .foregroundStyle(change >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            } else {
+                Text("暂无数据").font(.subheadline).foregroundStyle(.secondary)
+            }
+
+            Text(snapshot?.latest.map { "\(symbol) · \($0.id)" } ?? symbol)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
