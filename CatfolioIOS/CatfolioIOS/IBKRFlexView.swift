@@ -126,7 +126,8 @@ struct IBKRFlexView: View {
                                 ? (context.isCreating ? "正在创建" : "正在同步")
                                 : (context.isCreating ? "创建 IBKR 账户" : "同步 \(snapshot.positions.count) 项到 Catfolio"),
                             systemImage: "tray.and.arrow.down.fill",
-                            isDisabled: isWorking || !hasValidNickname
+                            isDisabled: !hasValidNickname,
+                            isBusy: isWorking
                         ) {
                             showsSyncConfirmation = true
                         }
@@ -138,7 +139,8 @@ struct IBKRFlexView: View {
                         GlassPrimaryButton(
                             title: context.isCreating ? "保存并创建账户" : "保存凭证",
                             systemImage: "tray.and.arrow.down.fill",
-                            isDisabled: isWorking || !hasCompleteCredentials || !hasValidNickname
+                            isDisabled: !hasCompleteCredentials || !hasValidNickname,
+                            isBusy: isWorking
                         ) {
                             Task { await saveAndClose() }
                         }

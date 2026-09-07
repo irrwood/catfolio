@@ -78,7 +78,8 @@ struct Trading212View: View {
                                 ? (context.isCreating ? "正在创建" : "正在同步")
                                 : (context.isCreating ? "创建 Trading 212 账户" : "同步 \(snapshot.positions.count) 项到 Catfolio"),
                             systemImage: "tray.and.arrow.down.fill",
-                            isDisabled: isWorking || !hasValidNickname
+                            isDisabled: !hasValidNickname,
+                            isBusy: isWorking
                         ) {
                             showsSyncConfirmation = true
                         }
@@ -86,7 +87,7 @@ struct Trading212View: View {
                         GlassPrimaryButton(
                             title: isWorking ? "正在读取" : "读取并预览持仓",
                             systemImage: "arrow.down.circle",
-                            isDisabled: isWorking
+                            isBusy: isWorking
                         ) {
                             Task { await preview() }
                         }

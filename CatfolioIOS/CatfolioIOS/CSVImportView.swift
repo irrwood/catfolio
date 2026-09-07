@@ -71,7 +71,8 @@ struct CSVImportView: View {
                                 ? "正在导入"
                                 : (context.isCreating ? "创建 CSV 账户" : "导入并更新账户"),
                             systemImage: "arrow.down.doc",
-                            isDisabled: isImporting || (context.isCreating && nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            isDisabled: context.isCreating && nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                            isBusy: isImporting
                         ) {
                             showsImportConfirmation = true
                         }

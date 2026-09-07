@@ -3,8 +3,8 @@ import SwiftUI
 import UIKit
 
 /// Shared treatment for the oversized financial values used as page and card
-/// headlines. Figma uses regular Montserrat numerals with a smaller, slightly
-/// heavier currency/sign prefix rather than one uniform font weight.
+/// headlines. Both home headlines use medium Montserrat, with a smaller
+/// currency/sign prefix aligned to the numeral baseline.
 struct CatfolioDisplayAmountText: View {
     let text: String
     var size: CGFloat = 32
@@ -22,7 +22,7 @@ struct CatfolioDisplayAmountText: View {
             Text(parts.prefix)
                 .font(.custom("Montserrat-Medium", size: symbolSize, relativeTo: .largeTitle))
             Text(parts.number)
-                .font(.custom("Montserrat-Regular", size: size, relativeTo: .largeTitle))
+                .font(.custom("Montserrat-Medium", size: size, relativeTo: .largeTitle))
         }
         .tracking(size * 0.05)
         .monospacedDigit()
@@ -947,10 +947,6 @@ struct ChartTimeRangePicker<Value: Hashable>: View {
     var body: some View {
         HStack(spacing: 0) {
             ForEach(choices, id: \.self) { choice in
-                if choice != choices.first {
-                    Spacer(minLength: 0)
-                }
-
                 Button {
                     selection = choice
                 } label: {
@@ -979,13 +975,12 @@ struct ChartTimeRangePicker<Value: Hashable>: View {
                         ))
                 }
                 .buttonStyle(.plain)
-                .frame(width: ChartTimeRangePickerMetrics.itemWidth)
-                .frame(maxHeight: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(Rectangle())
                 .accessibilityAddTraits(selection == choice ? .isSelected : [])
             }
         }
-        .frame(maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, ChartTimeRangePickerMetrics.horizontalInset)
         .disabled(isDisabled)
         .opacity(isDisabled ? 0.55 : 1)
@@ -1060,7 +1055,16 @@ struct ToolbarIconButton: View {
 struct GlassPrimaryButton: View {
     let title: String
     var systemImage: String? = nil
+    /// Not ready to be tapped — an incomplete form, say. Renders as a plain
+    /// disabled button.
     var isDisabled = false
+    /// Work actually in flight. Renders the spinner.
+    ///
+    /// Separate from `isDisabled` because a form that is merely incomplete is
+    /// not loading anything: every connector screen passed its "nickname is
+    /// empty" check here and so showed a permanent spinner before the user had
+    /// typed a thing, which reads as a hang.
+    var isBusy = false
     let action: () -> Void
 
     var body: some View {
@@ -1073,13 +1077,13 @@ struct GlassPrimaryButton: View {
                     .buttonStyle(.borderedProminent)
             }
         }
-        .disabled(isDisabled)
+        .disabled(isDisabled || isBusy)
     }
 
     private var button: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                if isDisabled {
+                if isBusy {
                     ProgressView()
                         .controlSize(.small)
                 } else if let systemImage {
@@ -1429,6 +1433,7 @@ enum DisplayFormat {
         signed: Bool = false,
         fractionDigits: Int? = nil
     ) -> String {
+        guard value.isFinite else { return "—" }
         let targetCurrency: String
         let adjusted: Double
         if let currency {

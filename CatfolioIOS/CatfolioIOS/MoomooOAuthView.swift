@@ -80,7 +80,8 @@ struct MoomooOAuthView: View {
                                     ? (context.isCreating ? "正在创建" : "正在同步")
                                     : (context.isCreating ? "创建 Moomoo 账户" : "同步 \(snapshot.positions.count) 项到 Catfolio"),
                                 systemImage: "tray.and.arrow.down.fill",
-                                isDisabled: isWorking || !hasValidNickname
+                                isDisabled: !hasValidNickname,
+                                isBusy: isWorking
                             ) {
                                 showsSyncConfirmation = true
                             }
@@ -88,7 +89,7 @@ struct MoomooOAuthView: View {
                             GlassPrimaryButton(
                                 title: isWorking ? "正在读取" : "读取并预览持仓",
                                 systemImage: "arrow.down.circle",
-                                isDisabled: isWorking
+                                isBusy: isWorking
                             ) {
                                 Task { await preview() }
                             }
@@ -97,7 +98,7 @@ struct MoomooOAuthView: View {
                         GlassPrimaryButton(
                             title: isWorking ? "正在连接" : "登录 Moomoo",
                             systemImage: "person.badge.key",
-                            isDisabled: isWorking
+                            isBusy: isWorking
                         ) {
                             Task { await connect() }
                         }
