@@ -73,14 +73,41 @@ struct TodayDetailView: View {
 
     // MARK: - Sector attribution
 
-    private struct SectorAmount { let sector: PortfolioSector; let amount: Double }
+    /// A sector, what it moved, and which holdings put it there.
+    ///
+    /// `sector == nil` is the unclassified bucket, kept as a first-class row so
+    /// its members can be inspected — that list is also the shortest path to
+    /// knowing which tickers still need reference data.
+    struct SectorBreakdown: Identifiable {
+        struct Component: Identifiable {
+            let holding: Holding
+            /// The slice of this holding's move attributed to the sector.
+            let amount: Double
+            /// How much of the holding landed here. Below 1 for a fund spread
+            /// across sectors.
+            let fraction: Double
+            let isLookThrough: Bool
+
+            var id: String { holding.ticker }
+        }
+
+        let sector: PortfolioSector?
+        let amount: Double
+        let components: [Component]
+
+        var id: String { sector?.rawValue ?? "unclassified" }
+        var displayName: String { sector?.displayName ?? "未分类" }
+        var symbolName: String { sector?.symbolName ?? "questionmark.circle" }
+    }
 
     /// Each holding's move is spread by its own sector split, so a fund
     /// contributes to several sectors and a single stock to one. The part no
     /// source can classify is kept aside rather than redistributed.
-    private var sectorTotals: (rows: [SectorAmount], unclassified: Double, lookThroughUsed: Bool, unclassifiedWeight: Double) {
+    private var sectorTotals: (rows: [SectorBreakdown], lookThroughUsed: Bool, unclassifiedWeight: Double) {
         var totals: [PortfolioSector: Double] = [:]
+        var members: [PortfolioSector: [SectorBreakdown.Component]] = [:]
         var unclassified = 0.0
+        var unclassifiedMembers: [SectorBreakdown.Component] = []
         var usedLookThrough = false
         var unclassifiedValue = 0.0
         var totalValue = 0.0
@@ -92,24 +119,47 @@ struct TodayDetailView: View {
             )
             if split.isLookThrough { usedLookThrough = true }
             for (sector, weight) in split.weights {
-                totals[sector, default: 0] += contribution.amount * weight
+                let slice = contribution.amount * weight
+                totals[sector, default: 0] += slice
+                members[sector, default: []].append(
+                    .init(holding: contribution.holding, amount: slice,
+                          fraction: weight, isLookThrough: split.isLookThrough)
+                )
             }
-            unclassified += contribution.amount * split.unclassifiedFraction
+            let gap = split.unclassifiedFraction
+            if gap > 0.0001 {
+                unclassified += contribution.amount * gap
+                unclassifiedMembers.append(
+                    .init(holding: contribution.holding, amount: contribution.amount * gap,
+                          fraction: gap, isLookThrough: split.isLookThrough)
+                )
+            }
 
             let value = contribution.holding.marketValue
             if value.isFinite {
                 totalValue += value
-                unclassifiedValue += value * split.unclassifiedFraction
+                unclassifiedValue += value * gap
             }
         }
-        let rows = totals
-            .map { SectorAmount(sector: $0.key, amount: $0.value) }
-            .sorted { abs($0.amount) > abs($1.amount) }
-        return (rows, unclassified, usedLookThrough, totalValue > 0 ? unclassifiedValue / totalValue : 0)
+
+        var rows = totals.map { sector, amount in
+            SectorBreakdown(
+                sector: sector, amount: amount,
+                components: (members[sector] ?? []).sorted { abs($0.amount) > abs($1.amount) }
+            )
+        }
+        .sorted { abs($0.amount) > abs($1.amount) }
+
+        if !unclassifiedMembers.isEmpty {
+            rows.append(SectorBreakdown(
+                sector: nil, amount: unclassified,
+                components: unclassifiedMembers.sorted { abs($0.amount) > abs($1.amount) }
+            ))
+        }
+        return (rows, usedLookThrough, totalValue > 0 ? unclassifiedValue / totalValue : 0)
     }
 
-    private var sectorRows: [SectorAmount] { sectorTotals.rows }
-    private var unclassifiedAmount: Double { sectorTotals.unclassified }
+    private var sectorRows: [SectorBreakdown] { sectorTotals.rows }
     private var unclassifiedShare: Double { sectorTotals.unclassifiedWeight }
 
     private var sectorFootnote: String {
@@ -125,7 +175,7 @@ struct TodayDetailView: View {
     }
 
     private func sectorRow(
-        name: String, symbolName: String, amount: Double, isUnclassified: Bool = false
+        name: String, symbolName: String, amount: Double, count: Int, isUnclassified: Bool = false
     ) -> some View {
         let tint = isUnclassified
             ? Color.secondary
@@ -135,9 +185,14 @@ struct TodayDetailView: View {
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(isUnclassified ? Color.secondary : CatfolioTheme.accent)
                 .frame(width: 20)
-            Text(name)
-                .font(.body)
-                .foregroundStyle(isUnclassified ? .secondary : .primary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(name)
+                    .font(.body)
+                    .foregroundStyle(isUnclassified ? .secondary : .primary)
+                Text("\(count) 项")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
             Spacer(minLength: 8)
             Text(DisplayFormat.money(amount, signed: true, fractionDigits: 2))
                 .font(.body.weight(.medium)).monospacedDigit()
@@ -181,22 +236,20 @@ struct TodayDetailView: View {
                 .padding(.vertical, 6)
             }
 
-            if !sectorRows.isEmpty || unclassifiedAmount != 0 {
+            if !sectorRows.isEmpty {
                 Section {
-                    ForEach(sectorRows, id: \.sector) { row in
-                        sectorRow(
-                            name: row.sector.displayName,
-                            symbolName: row.sector.symbolName,
-                            amount: row.amount
-                        )
-                    }
-                    if abs(unclassifiedAmount) > 0.005 || unclassifiedShare > 0.005 {
-                        sectorRow(
-                            name: "未分类",
-                            symbolName: "questionmark.circle",
-                            amount: unclassifiedAmount,
-                            isUnclassified: true
-                        )
+                    ForEach(sectorRows) { row in
+                        NavigationLink {
+                            SectorMembersView(breakdown: row)
+                        } label: {
+                            sectorRow(
+                                name: row.displayName,
+                                symbolName: row.symbolName,
+                                amount: row.amount,
+                                count: row.components.count,
+                                isUnclassified: row.sector == nil
+                            )
+                        }
                     }
                 } header: {
                     Text("按行业")
@@ -273,5 +326,75 @@ struct TodayDetailView: View {
             }
         }
         .padding(.vertical, 3)
+    }
+}
+
+/// Which holdings put a sector where it is.
+///
+/// A fund appears with the share of it that belongs here, so a row reading
+/// "38% 计入本行业" is legible as an attribution rather than mistaken for the
+/// fund's whole move.
+private struct SectorMembersView: View {
+    let breakdown: TodayDetailView.SectorBreakdown
+
+    var body: some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Image(systemName: breakdown.symbolName)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(breakdown.sector == nil ? Color.secondary : CatfolioTheme.accent)
+                        Text(breakdown.displayName)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text(DisplayFormat.money(breakdown.amount, signed: true, fractionDigits: 2))
+                        .font(.largeTitle.weight(.bold))
+                        .monospacedDigit()
+                        .foregroundStyle(breakdown.amount >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
+                }
+                .padding(.vertical, 6)
+            }
+
+            Section {
+                ForEach(breakdown.components) { component in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(component.holding.shortName)
+                                .font(.body)
+                                .lineLimit(1)
+                            Spacer(minLength: 8)
+                            Text(DisplayFormat.money(component.amount, signed: true, fractionDigits: 2))
+                                .font(.body.weight(.medium)).monospacedDigit()
+                                .foregroundStyle(component.amount >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
+                        }
+                        HStack(spacing: 6) {
+                            Text(component.holding.ticker)
+                                .font(.caption).monospacedDigit()
+                                .foregroundStyle(.tertiary)
+                            if component.fraction < 0.999 {
+                                Text("成分穿透 \(percentText(component.fraction)) 计入本行业")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            } header: {
+                Text("\(breakdown.components.count) 项持仓")
+            } footer: {
+                if breakdown.sector == nil {
+                    Text("这些标的没有可用的行业资料，主要是非美股上市证券。补齐后会自动归入对应行业。")
+                }
+            }
+        }
+        .navigationTitle(breakdown.displayName)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func percentText(_ fraction: Double) -> String {
+        (fraction * 100).formatted(.number.precision(.fractionLength(fraction < 0.1 ? 1 : 0))) + "%"
     }
 }
