@@ -141,7 +141,7 @@ enum IBKRFlexError: LocalizedError {
         case let .service(code, message):
             "IBKR Flex \(code)：\(message)"
         case .generationTimedOut:
-            "IBKR 报表仍在生成，请稍后再试"
+            "IBKR 仍在生成报表。首次同步或时间跨度较长时可能需要几分钟，稍等片刻再试即可。"
         case .noPositions:
             "Flex 报表没有 Open Positions；请在 Query 中加入该栏目和 Summary 明细"
         case let .noImportablePositions(warnings):
@@ -169,7 +169,10 @@ struct IBKRFlexClient {
         }
     }
 
-    func fetchOpenPositions(credentials: IBKRFlexCredentials) async throws -> IBKRFlexSnapshot {
+    func fetchOpenPositions(
+        credentials: IBKRFlexCredentials,
+        onProgress: (@Sendable (Int) -> Void)? = nil
+    ) async throws -> IBKRFlexSnapshot {
         let requestURL = try url(
             base: Self.sendRequestURL,
             queryItems: [
@@ -190,8 +193,17 @@ struct IBKRFlexClient {
         }
         try validate(responseURL: responseURL)
 
-        for attempt in 0..<6 {
-            try await Task.sleep(for: .milliseconds(attempt == 0 ? 1_200 : 2_000))
+        // IBKR generates the report on demand. A first run over a year of
+        // history across four sections routinely takes a minute or more, so
+        // the old six-attempt / 11-second budget reported a normal wait as a
+        // failure. Back off instead of hammering, and keep waiting for as long
+        // as someone would plausibly stand watching a spinner.
+        let waits: [Double] = [1.5, 2, 3, 4, 5, 6, 8, 10, 10, 12, 15, 15, 20, 20, 20, 20]
+        var elapsed = 0.0
+        for wait in waits {
+            try await Task.sleep(for: .seconds(wait))
+            elapsed += wait
+            onProgress?(Int(elapsed))
             let statementURL = try url(
                 base: responseURL,
                 queryItems: [

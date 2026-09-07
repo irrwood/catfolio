@@ -1,4 +1,28 @@
 import SwiftUI
+import UIKit
+
+/// A ready-made brief for IBKR's own configuration assistant.
+///
+/// Phrased as a description of the data wanted, not as a list of UI settings:
+/// the assistant rejects a configuration spec ("please describe the specific
+/// account data you need"). The three constraints that silently break the sync
+/// are therefore carried as properties of the data — every individual
+/// execution, position totals rather than lots, XML — rather than as switches
+/// to flip.
+enum IBKRFlexQueryBrief {
+    static let prompt = """
+    I need an Activity Flex Query covering four kinds of account data:
+
+    - My trades: every individual execution, including the FX rate to my base     currency and the realized P/L on each one.
+    - My open positions: one row per position at summary level, not broken     down into individual tax lots.
+    - My account information, including the account's base currency.
+    - My cash transactions, so I can see dividends and interest.
+
+    Please deliver it as XML rather than CSV, covering the last 365 days, and     include all available fields in each of those four areas.
+
+    When it is created, please tell me the Query ID.
+    """
+}
 
 struct IBKRFlexView: View {
     @Environment(\.dismiss) private var dismiss
@@ -17,7 +41,14 @@ struct IBKRFlexView: View {
     @State private var showsSyncConfirmation = false
     @State private var nickname = ""
     @State private var usesLegacyCredentials = false
+    @State private var didCopyBrief = false
 
+    // Credentials are normally keyed by account ID, but that ID only arrives
+    // with the first successful report — which IBKR can take minutes to
+    // generate. Without somewhere to park them, everything typed is lost the
+    // moment the sheet is dismissed.
+    private static let pendingTokenKey = "ibkr.flex.pending.token"
+    private static let pendingQueryIDKey = "ibkr.flex.pending.query-id"
     private static let legacyTokenKey = "ibkr.flex.token"
     private static let legacyQueryIDKey = "ibkr.flex.query-id"
 
@@ -71,10 +102,10 @@ struct IBKRFlexView: View {
                     // query never mention the ID — it only appears in the list
                     // afterwards. Saying so here saves a hunt.
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("两个凭证来自同一个页面的不同区域：Client Portal → Performance & Reports → Flex Queries。")
+                        Text("两个凭证都在 Client Portal → Performance & Reports → Flex Queries 这一页。")
                         Text("Token：该页 Flex Web Service Configuration 区域 → 齿轮图标 → 启用后点 Generate A New Token。")
-                        Text("Query ID：在 Activity Flex Query 区域点 + 建好查询后，回到列表就能在查询名称旁看到那串数字。创建向导本身不会显示它。")
-                        Text("查询输出请选 XML，并加入 Account Information → Base Currency、Open Positions → Summary，以及 Trades → Executions、Trade ID、Buy/Sell、Quantity、Trade Price、Trade Date、Currency、FX Rate to Base。成交时间范围需覆盖当前持仓的建仓记录。")
+                        Text("Query ID：建好查询后回到列表，数字在查询名称旁；创建向导里不显示。")
+                        Text("查询怎么配，用下面的「复制配置提示词」交给 IBKR 的助手即可。持仓超过一年的话，把 Period 改到覆盖最早的建仓日。")
                     }
                 }
 
@@ -104,9 +135,35 @@ struct IBKRFlexView: View {
                         ) {
                             Task { await testFlex() }
                         }
+
+                        if !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                           !queryID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Button {
+                                savePendingCredentials()
+                                dismiss()
+                            } label: {
+                                Label("先保存凭证，稍后再同步", systemImage: "tray.and.arrow.down")
+                            }
+                            .disabled(isWorking)
+                        }
                     }
 
                     statusView
+
+                    Button {
+                        UIPasteboard.general.string = IBKRFlexQueryBrief.prompt
+                        withAnimation { didCopyBrief = true }
+                        Task {
+                            try? await Task.sleep(for: .seconds(2))
+                            withAnimation { didCopyBrief = false }
+                        }
+                    } label: {
+                        Label(
+                            didCopyBrief ? "已复制，去 IBKR 粘贴给它的助手" : "复制配置提示词",
+                            systemImage: didCopyBrief ? "checkmark.circle.fill" : "doc.on.doc"
+                        )
+                    }
+                    .foregroundStyle(didCopyBrief ? Color.green : Color.accentColor)
 
                     Link(destination: URL(string: "https://www.ibkrguides.com/clientportal/performanceandstatements/activityflex.htm")!) {
                         Label("如何创建 Activity Flex Query", systemImage: "arrow.up.right.square")
@@ -242,7 +299,16 @@ struct IBKRFlexView: View {
             }
         } else {
             nickname = model.suggestedAccountNickname()
+            token = KeychainStore.string(for: Self.pendingTokenKey) ?? ""
+            queryID = KeychainStore.string(for: Self.pendingQueryIDKey) ?? ""
         }
+    }
+
+    /// Parks the credentials so the report can finish generating in its own
+    /// time. Nothing is synced yet; reopening this screen restores them.
+    private func savePendingCredentials() {
+        try? KeychainStore.set(token.trimmingCharacters(in: .whitespacesAndNewlines), for: Self.pendingTokenKey)
+        try? KeychainStore.set(queryID.trimmingCharacters(in: .whitespacesAndNewlines), for: Self.pendingQueryIDKey)
     }
 
     private func credentials() throws -> IBKRFlexCredentials {
@@ -255,6 +321,8 @@ struct IBKRFlexView: View {
             try KeychainStore.set(credentials.queryID, for: Self.queryIDKey(accountID: accountID))
         }
         usesLegacyCredentials = false
+        try? KeychainStore.set("", for: Self.pendingTokenKey)
+        try? KeychainStore.set("", for: Self.pendingQueryIDKey)
     }
 
     private func testFlex() async {
@@ -263,7 +331,14 @@ struct IBKRFlexView: View {
         defer { isWorking = false }
         do {
             let credentials = try credentials()
-            let fetched = try await IBKRFlexClient().fetchOpenPositions(credentials: credentials)
+            let fetched = try await IBKRFlexClient().fetchOpenPositions(
+                    credentials: credentials,
+                    onProgress: { seconds in
+                        Task { @MainActor in
+                            status = .working("IBKR 正在生成报表… 已等待 \(seconds) 秒")
+                        }
+                    }
+                )
             let result = snapshotForContext(fetched)
             guard !result.positions.isEmpty else {
                 status = .failure(context.isCreating
@@ -295,7 +370,14 @@ struct IBKRFlexView: View {
             if let snapshot, snapshotCredentials == credentials {
                 currentSnapshot = snapshot
             } else {
-                let fetched = try await IBKRFlexClient().fetchOpenPositions(credentials: credentials)
+                let fetched = try await IBKRFlexClient().fetchOpenPositions(
+                    credentials: credentials,
+                    onProgress: { seconds in
+                        Task { @MainActor in
+                            status = .working("IBKR 正在生成报表… 已等待 \(seconds) 秒")
+                        }
+                    }
+                )
                 currentSnapshot = snapshotForContext(fetched)
                 snapshot = currentSnapshot
                 snapshotCredentials = credentials
