@@ -174,6 +174,13 @@ struct HistoryView: View {
     private var taxYearBasis: TaxYearBasis {
         TaxYearBasis(rawValue: taxYearBasisRaw) ?? .calendar
     }
+
+    /// The scope applies to the whole page, so dividends and interest can be
+    /// read a year at a time too — not just disposals.
+    private func inScope(_ date: String) -> Bool {
+        guard let selectedTaxYear else { return true }
+        return taxYearBasis.label(for: date) == selectedTaxYear
+    }
     @State private var isLoading = true
     @State private var isSyncing = false
     @State private var errorMessage: String?
@@ -220,6 +227,14 @@ struct HistoryView: View {
                 if #available(iOS 26.0, *) {
                     ToolbarSpacer(.fixed, placement: .topBarTrailing)
                 }
+            }
+            ToolbarItem(id: "history-scope", placement: .topBarTrailing) {
+                taxYearPicker
+                    .disabled(isLoading)
+                    .tint(.primary)
+            }
+            if #available(iOS 26.0, *) {
+                ToolbarSpacer(.fixed, placement: .topBarTrailing)
             }
             ToolbarItem(id: "history-export", placement: .topBarTrailing) {
                 Button("Download History", systemImage: "arrow.down.doc") {
@@ -271,15 +286,12 @@ struct HistoryView: View {
             categorySection
 
             Section {
-                if category == .orders {
-                    HStack {
-                        Text("统计范围")
-                        Spacer(minLength: 12)
-                        taxYearPicker
-                    }
-                }
                 ForEach(summaryMetrics) { metric in
                     summaryRow(metric)
+                }
+            } footer: {
+                if let explanation = realisedExplanation {
+                    Text(explanation)
                 }
             }
 
@@ -369,9 +381,44 @@ struct HistoryView: View {
                 }
             }
         } label: {
-            Label(selectedTaxYear ?? "全部年份", systemImage: "calendar")
-                .font(.subheadline)
+            if let selectedTaxYear {
+                Label(selectedTaxYear, systemImage: "calendar")
+                    .font(.subheadline)
+            } else {
+                Label("统计范围", systemImage: "calendar")
+                    .labelStyle(.iconOnly)
+            }
         }
+        .accessibilityLabel("统计范围")
+        .accessibilityValue(selectedTaxYear ?? "全部年份")
+    }
+
+    /// Explains how the rows relate, rather than restating their counts.
+    ///
+    /// The per-currency broker row is the exact record; the combined total
+    /// converts it at today's rate and so will not tie out to what was
+    /// actually received. Nothing above says that, and for an account whose
+    /// disposals are entirely broker-reported, recounting them here would add
+    /// nothing at all.
+    private var realisedExplanation: String? {
+        guard category == .orders else { return nil }
+        let calculation = realisedCalculation
+        guard calculation.saleCount > 0 else { return nil }
+        var parts: [String] = []
+        if !calculation.brokerTotals.isEmpty {
+            parts.append("原币那行是券商记录的精确值；合计按当前汇率折算，不等于成交当时的金额")
+        }
+        if calculation.estimatedCount > 0 {
+            parts.append("估算部分由本地 FIFO 重建，不适合直接用于报税")
+        }
+        if calculation.unavailableCount > 0 {
+            parts.append("缺买入成本的 \(calculation.unavailableCount) 笔未计入任何合计")
+        }
+        if !calculation.unconvertibleCurrencies.isEmpty {
+            let names = calculation.unconvertibleCurrencies.sorted().joined(separator: "/")
+            parts.append("\(names) 缺汇率，只出现在原币行")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: "。") + "。"
     }
 
     private var realisedSummaryMetrics: [HistorySummaryMetric] {
@@ -667,6 +714,7 @@ struct HistoryView: View {
         allActivities
             .filter { effectiveAccountIDs.contains($0.transaction.accountKey) }
             .filter { category.includes($0.kind) }
+            .filter { inScope($0.transaction.date) }
             .sorted {
                 if $0.transaction.date == $1.transaction.date { return $0.id > $1.id }
                 return $0.transaction.date > $1.transaction.date
@@ -724,10 +772,14 @@ struct HistoryView: View {
     private func totalUSD(for kind: PortfolioActivityKind) -> Double {
         allActivities
             .filter { effectiveAccountIDs.contains($0.transaction.accountKey) && $0.kind == kind }
+            .filter { inScope($0.transaction.date) }
             .reduce(0) { $0 + $1.amountUSD }
     }
 
-    private var scopedTransactions: [LocalTransactionRecord] {
+    /// Account-scoped but never year-scoped: FIFO has to see the whole
+    /// history, or a lot bought outside the selected year stops backing the
+    /// sale it actually settled.
+    private var accountTransactions: [LocalTransactionRecord] {
         allActivities
             .filter { effectiveAccountIDs.contains($0.transaction.accountKey) }
             .map(\.transaction)
@@ -736,13 +788,13 @@ struct HistoryView: View {
     /// Every tax year present in the ledger, newest first. FIFO runs across
     /// the whole history inside the calculator; only the results are grouped.
     private var realisedByTaxYear: [(label: String, summary: RealisedProfitSummary)] {
-        RealisedProfitCalculator.summarize(transactions: scopedTransactions, basis: taxYearBasis)
+        RealisedProfitCalculator.summarize(transactions: accountTransactions, basis: taxYearBasis)
             .filter { $0.summary.saleCount > 0 }
     }
 
     private var realisedCalculation: RealisedProfitSummary {
         guard let year = selectedTaxYear else {
-            return RealisedProfitCalculator.summarize(transactions: scopedTransactions)
+            return RealisedProfitCalculator.summarize(transactions: accountTransactions)
         }
         return realisedByTaxYear.first { $0.label == year }?.summary ?? RealisedProfitSummary()
     }
