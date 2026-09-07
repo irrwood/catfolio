@@ -6,23 +6,23 @@ import UIKit
 /// The screens were built against a four-weight Montserrat helper that each
 /// of three files declared for itself. Rather than touch several hundred call
 /// sites at once, the helper stays and its body moved: sizes still arrive as
-/// points, but the face is now SF Pro and the nearest scale token supplies
+/// points, but the face is now SF Rounded and the nearest scale token supplies
 /// the Dynamic Type ramp. New code should call `appText` / `appNumber`.
 enum LegacyType {
     static func regular(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .system(size: scaled(size, style), weight: .regular)
+        .system(size: scaled(size, style), weight: .regular, design: .rounded)
     }
 
     static func medium(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .system(size: scaled(size, style), weight: .medium)
+        .system(size: scaled(size, style), weight: .medium, design: .rounded)
     }
 
     static func semibold(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .system(size: scaled(size, style), weight: .semibold)
+        .system(size: scaled(size, style), weight: .semibold, design: .rounded)
     }
 
     static func italic(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .system(size: scaled(size, style), weight: .regular).italic()
+        .system(size: scaled(size, style), weight: .regular, design: .rounded).italic()
     }
 
     private static func scaled(_ size: CGFloat, _ style: Font.TextStyle) -> CGFloat {

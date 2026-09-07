@@ -12,6 +12,7 @@ struct CatfolioIOSApp: App {
     var body: some Scene {
         WindowGroup {
             RootTabView()
+                .fontDesign(.rounded)
                 .environment(model)
                 .tint(CatfolioTheme.accent)
                 .preferredColorScheme(preferredColorScheme)

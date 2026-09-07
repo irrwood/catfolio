@@ -2289,7 +2289,7 @@ private struct HoldingRow: View {
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
                             HStack(spacing: 2) {
                                 Text(DisplayFormat.shares(holding.shares))
-                                    .appNumber(.caption)
+                                    .appNumber(.caption, monospaced: false)
                                 Text(holding.ticker)
                                     .appText(.caption, weight: .medium)
                             }
@@ -2373,7 +2373,7 @@ private struct HoldingIdentity: View {
 
             HStack(spacing: 2) {
                 Text(DisplayFormat.shares(holding.shares))
-                    .appNumber(.caption)
+                    .appNumber(.caption, monospaced: false)
                 Text(holding.ticker)
                     .appText(.caption, weight: .medium)
             }

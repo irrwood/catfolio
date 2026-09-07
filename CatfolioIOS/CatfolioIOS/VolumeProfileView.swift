@@ -994,7 +994,7 @@ private struct SecurityPriceRangePicker: View {
                     selection = choice
                 } label: {
                     Text(choice)
-                        .appText(.footnote, weight: .medium, width: .compressed)
+                        .appText(.footnote, weight: .medium)
                         .foregroundStyle(foreground(for: choice))
                         .frame(width: 44, height: 30)
                         .background {
@@ -1320,7 +1320,7 @@ private struct HoldingDetailHeader: View {
 
                 HStack(spacing: 8) {
                     Text(DisplayFormat.shares(holding.shares))
-                        .appNumber(.label)
+                        .appNumber(.label, monospaced: false)
                     Text(holding.ticker.uppercased())
                         .appCaps(.label)
                 }

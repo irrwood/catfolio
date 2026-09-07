@@ -87,19 +87,32 @@ final class TypographyTests: XCTestCase {
         }
     }
 
-    /// The width axis lives on SF Pro. SF Rounded ships one width, so a
-    /// number asking to compress would silently get nothing — the API does
-    /// not offer it rather than accepting it and ignoring it.
-    func testWidthIsOfferedOnlyWhereTheFaceHasIt() {
-        // Compiles only because appText takes `width` and appNumber does not.
-        _ = Text("1D").appText(.footnote, width: .compressed)
-        _ = Text("1234").appNumber(.footnote)
+    /// Every token is one face now, so a call site cannot pick a different
+    /// one by accident. What still differs between text and figures is the
+    /// digit width and the weight, not the typeface.
+    func testFiguresAreSetHeavierThanProse() {
+        for scale in TypeScale.allCases {
+            XCTAssertNotEqual(
+                scale.numberWeight, .regular,
+                "\(scale) sets figures at regular; SF Rounded goes thin there"
+            )
+        }
+        XCTAssertEqual(TypeScale.body.weight, .regular)
+        XCTAssertEqual(TypeScale.body.numberWeight, .medium)
+    }
+
+    /// A figure that never changes gains nothing from fixed-width digits and
+    /// pays for them in visible gaps around every 1.
+    func testProportionalDigitsAreAvailable() {
+        _ = Text("33.0386").appNumber(.caption, monospaced: false)
+        _ = Text("$4,687.13").appNumber(.body)
     }
 
     /// The two range pickers were drawn independently, one in SF Pro and one
-    /// in SF Rounded, and only one of them could honour the compression it
-    /// asked for. Both go through the same token now.
-    func testCompressedLabelsUseTheFootnoteToken() {
+    /// in SF Rounded. Both are the same token now, and neither compresses:
+    /// SF Rounded has a single width, so the option was removed rather than
+    /// left in place to be ignored.
+    func testRangePickersUseTheFootnoteToken() {
         XCTAssertEqual(TypeScale.footnote.size, 14)
         XCTAssertEqual(TypeScale.footnote.textStyle, .footnote)
     }

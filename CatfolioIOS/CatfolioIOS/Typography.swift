@@ -8,10 +8,13 @@ import UIKit
 /// below are the ones the screens already used, deduplicated: sizes that sat
 /// one point apart were doing the same job and now share a token.
 ///
-/// Text is SF Pro and numbers are SF Rounded. That split is deliberate — the
-/// rounded face reads as the "value" voice throughout the app, and it is the
-/// face Apple ships with the tallest, most even numerals, so a column of
-/// figures aligns optically as well as metrically.
+/// Everything is SF Rounded. Figures additionally get fixed-width digits via
+/// `appNumber`, which is what keeps a changing value from resizing its own
+/// frame; the face itself no longer distinguishes text from values.
+///
+/// One consequence is deliberate: SF Rounded ships a single width, so there
+/// is no compressed cut to fall back on when a row of labels is tight. Tokens
+/// and layout have to make the room instead.
 enum TypeScale: CaseIterable, Sendable {
     /// The oversized money headline on Home and on the returns card.
     case display
@@ -72,6 +75,25 @@ enum TypeScale: CaseIterable, Sendable {
         }
     }
 
+    /// The weight a figure is set at, which is one step above the weight the
+    /// same token gives prose.
+    ///
+    /// SF Rounded reads lighter than SF Pro at the same nominal weight — the
+    /// rounded terminals take ink out of every stroke ending — and a figure
+    /// has no word shape to help it hold together, so at small sizes a
+    /// regular-weight number goes thin and washes out against the label
+    /// beside it. Prose does not have that problem and is left alone.
+    var numberWeight: Font.Weight {
+        switch weight {
+        case .ultraLight: .thin
+        case .thin: .light
+        case .light: .regular
+        case .regular: .medium
+        case .medium: .semibold
+        default: weight
+        }
+    }
+
     /// Extra leading, on top of the face's own. Zero for anything that is a
     /// single line by construction: adding leading there only pads the frame.
     var lineSpacing: CGFloat {
@@ -116,13 +138,13 @@ enum TypeScale: CaseIterable, Sendable {
 /// the reader changes their text size.
 enum Typography {
     static func text(_ scale: TypeScale, weight: Font.Weight? = nil) -> Font {
-        .system(size: scaled(scale), weight: weight ?? scale.weight)
+        .system(size: scaled(scale), weight: weight ?? scale.weight, design: .rounded)
     }
 
     /// SF Rounded with fixed-width digits, so a changing value never changes
     /// the width of its own frame.
     static func number(_ scale: TypeScale, weight: Font.Weight? = nil) -> Font {
-        .system(size: scaled(scale), weight: weight ?? scale.weight, design: .rounded)
+        .system(size: scaled(scale), weight: weight ?? scale.numberWeight, design: .rounded)
             .monospacedDigit()
     }
 
@@ -134,7 +156,6 @@ enum Typography {
 private struct ScaledFont: ViewModifier {
     let weight: Font.Weight
     let design: Font.Design
-    let width: Font.Width
     let monospacedDigit: Bool
     let lineSpacing: CGFloat
     let tracking: CGFloat
@@ -144,13 +165,11 @@ private struct ScaledFont: ViewModifier {
         scale: TypeScale,
         weight: Font.Weight?,
         design: Font.Design,
-        width: Font.Width,
         monospacedDigit: Bool,
         tracking: CGFloat
     ) {
         self.weight = weight ?? scale.weight
         self.design = design
-        self.width = width
         self.monospacedDigit = monospacedDigit
         self.lineSpacing = scale.lineSpacing
         self.tracking = tracking
@@ -158,7 +177,7 @@ private struct ScaledFont: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        var font = Font.system(size: size, weight: weight, design: design).width(width)
+        var font = Font.system(size: size, weight: weight, design: design)
         if monospacedDigit { font = font.monospacedDigit() }
         return content
             .font(font)
@@ -168,22 +187,15 @@ private struct ScaledFont: ViewModifier {
 }
 
 extension View {
-    /// Body copy, labels, names — SF Pro at a token size.
+    /// Body copy, labels, names.
     ///
-    /// `width` is for a run of options that has to fit a fixed rail — a
-    /// segmented range picker, say. It narrows the letterforms rather than
-    /// shrinking them, so the labels stay the same height as everything
-    /// around them instead of quietly becoming a size smaller. The width axis
-    /// belongs to SF Pro, which is why this is on `appText` and not on
-    /// `appNumber`: SF Rounded ships one width and asking it to compress does
-    /// nothing.
-    func appText(
-        _ scale: TypeScale,
-        weight: Font.Weight? = nil,
-        width: Font.Width = .standard
-    ) -> some View {
+    /// There is no `width` parameter. SF Rounded has a single width, so a
+    /// request to compress would be accepted and silently ignored — which is
+    /// exactly how the two range pickers came to look different from each
+    /// other while their code read the same.
+    func appText(_ scale: TypeScale, weight: Font.Weight? = nil) -> some View {
         modifier(ScaledFont(
-            scale: scale, weight: weight, design: .default, width: width,
+            scale: scale, weight: weight, design: .rounded,
             monospacedDigit: false, tracking: 0
         ))
     }
@@ -191,20 +203,31 @@ extension View {
     /// Any figure the reader might compare against another figure — money,
     /// percentages, share counts, dates, axis ticks.
     ///
-    /// SF Rounded with fixed-width digits. The fixed width is what stops a
-    /// live value from shifting its neighbours as it ticks; pair it with
-    /// `numericTransition` where the value animates.
-    func appNumber(_ scale: TypeScale, weight: Font.Weight? = nil) -> some View {
+    /// Digits are fixed-width by default, which is what stops a live value
+    /// from resizing its own frame as it ticks and shoving its neighbours
+    /// around; pair it with `numericTransition` where the value animates.
+    ///
+    /// That width is not free. A fixed-width `1` is padded out to the width
+    /// of an `8`, so a figure with several 1s in it — `11.834`, `$1,141.70` —
+    /// carries visible gaps its neighbours do not. Pass `monospaced: false`
+    /// for a figure that never changes and sits in no column: a share count,
+    /// a settled date. It keeps the face and the weight, and loses only the
+    /// padding it had no use for.
+    func appNumber(
+        _ scale: TypeScale,
+        weight: Font.Weight? = nil,
+        monospaced: Bool = true
+    ) -> some View {
         modifier(ScaledFont(
-            scale: scale, weight: weight, design: .rounded, width: .standard,
-            monospacedDigit: true, tracking: 0
+            scale: scale, weight: weight ?? scale.numberWeight, design: .rounded,
+            monospacedDigit: monospaced, tracking: 0
         ))
     }
 
     /// Text set in capitals, with the letterspacing capitals need.
     func appCaps(_ scale: TypeScale, weight: Font.Weight? = nil) -> some View {
         modifier(ScaledFont(
-            scale: scale, weight: weight ?? .medium, design: .default, width: .standard,
+            scale: scale, weight: weight ?? .medium, design: .rounded,
             monospacedDigit: false, tracking: scale.capsTracking
         ))
     }

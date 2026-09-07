@@ -954,7 +954,7 @@ struct ChartTimeRangePicker<Value: Hashable>: View {
                     selection = choice
                 } label: {
                     Text(title(choice))
-                        .appText(.footnote, weight: selection == choice ? .semibold : .medium, width: .compressed)
+                        .appText(.footnote, weight: selection == choice ? .semibold : .medium)
                         .foregroundStyle(textColor(for: choice))
                         .lineLimit(1)
                         .frame(
