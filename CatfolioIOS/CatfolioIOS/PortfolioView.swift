@@ -42,22 +42,27 @@ private struct PortfolioHomePageBackdrop: View {
     let colorScheme: ColorScheme
 
     var body: some View {
-        VStack(spacing: 0) {
-            PortfolioHomeTopBackground(colorScheme: colorScheme)
-                .frame(height: 520)
+        ZStack(alignment: .top) {
+            // This explicit terminal fill is independent of the scroll
+            // content's height, so bottom rubber-banding can never expose the
+            // NavigationStack or TabView background.
+            (colorScheme == .light ? Color.white : Color.black)
 
-            // Keep the terminal colour of the hero behind the chart while the
-            // scroll view is being rubber-banded. The opaque sections below
-            // cover this extension in the resting state.
-            (colorScheme == .light
-                ? Color(red: 0.886, green: 0.941, blue: 0.969)
-                : Color(red: 0.192, green: 0.208, blue: 0.235))
-                .frame(height: 180)
+            VStack(spacing: 0) {
+                PortfolioHomeTopBackground(colorScheme: colorScheme)
+                    .frame(height: 520)
 
-            colorScheme == .light
-                ? Color.white
-                : Color.black
+                // Extend the hero's terminal colour beneath its opaque card.
+                // It remains visible only during top-edge rubber-banding.
+                (colorScheme == .light
+                    ? Color(red: 0.886, green: 0.941, blue: 0.969)
+                    : Color(red: 0.192, green: 0.208, blue: 0.235))
+                    .frame(height: 180)
+
+                Spacer(minLength: 0)
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea()
     }
 }
@@ -66,72 +71,98 @@ struct PortfolioView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedHolding: Holding?
+    @State private var showsTodayDetail = false
+    @Namespace private var todayZoom
+
+    private var previewsLoading: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--show-portfolio-loading")
+        #else
+        false
+        #endif
+    }
 
     var body: some View {
         NavigationStack {
             ScrollViewReader { scrollProxy in
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        PortfolioRefreshTimestamp(
-                            date: model.localUpdatedAt,
-                            isRefreshing: model.isPortfolioLoading
-                        )
-
-                        if let overview = model.overview, let chart = model.portfolioChart {
-                            CostMarketCard(overview: overview, response: chart)
-                                .id(model.portfolioChartRevision)
-
-                            TodayContributionCard(
-                                holdings: model.holdings,
-                                dailyChanges: model.holdingDailyChanges,
-                                benchmarkChange: model.benchmarkDailyChange,
-                                isLoading: model.isHoldingDailyChangesLoading
-                            ) { holding in
-                                selectedHolding = holding
-                            }
-                            .id("today-contribution")
-
-                            PortfolioDetailsCard(holdings: model.holdings) { holding in
-                                selectedHolding = holding
-                            }
-                            .id("portfolio-details")
-                        } else if model.isPortfolioLoading {
-                            PortfolioLoadingView()
-                        } else if let error = model.portfolioError {
-                            ContentUnavailableView("还没有本机持仓", systemImage: "iphone.gen3.slash", description: Text(error))
-                                .frame(minHeight: 420)
-                        }
-                    }
-                    .padding(.bottom, 16)
-                }
-                .background {
+                ZStack {
                     PortfolioHomePageBackdrop(colorScheme: colorScheme)
-                }
-                // Keep native rubber-banding intact: UIRefreshControl relies on
-                // the full pull distance and release transition to trigger.
-                .scrollBounceBehavior(.always, axes: .vertical)
-                .refreshable { await model.refreshPortfolio() }
-                .task {
-                    if model.overview == nil && !model.isPortfolioLoading {
-                        await model.refreshPortfolio()
+
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            PortfolioRefreshTimestamp(
+                                date: model.localUpdatedAt,
+                                isRefreshing: model.isPortfolioLoading
+                            )
+
+                            if previewsLoading {
+                                PortfolioLoadingView()
+                            } else if model.holdings.isEmpty, model.overview != nil {
+                                PortfolioLoadingView(isAnimating: model.isPortfolioLoading)
+                            } else if let overview = model.overview, let chart = model.portfolioChart {
+                                CostMarketCard(overview: overview, response: chart)
+                                    .id(model.portfolioChartRevision)
+
+                                TodayContributionCard(
+                                    holdings: model.holdings,
+                                    dailyChanges: model.holdingDailyChanges,
+                                    benchmarkChange: model.benchmarkDailyChange,
+                                    isLoading: model.isHoldingDailyChangesLoading,
+                                    onOpenDetail: { showsTodayDetail = true }
+                                ) { holding in
+                                    selectedHolding = holding
+                                }
+                                .id("today-contribution")
+                                .matchedTransitionSource(id: "today-detail", in: todayZoom)
+
+                                PortfolioDetailsCard(holdings: model.holdings) { holding in
+                                    selectedHolding = holding
+                                }
+                                .id("portfolio-details")
+                            } else if model.isPortfolioLoading {
+                                PortfolioLoadingView()
+                            } else if let error = model.portfolioError {
+                                ContentUnavailableView {
+                                    Label("暂时无法加载", systemImage: "wifi.exclamationmark")
+                                } description: {
+                                    Text(error)
+                                } actions: {
+                                    Button("重试") { Task { await model.refreshPortfolio() } }
+                                }
+                                .frame(minHeight: 420)
+                            } else {
+                                PortfolioLoadingView()
+                            }
+                        }
+                        .padding(.bottom, 16)
                     }
-                    let arguments = ProcessInfo.processInfo.arguments
-                    if arguments.contains("--show-volume"), selectedHolding == nil {
-                        let requestedTicker = arguments
-                            .first(where: { $0.hasPrefix("--show-volume-ticker=") })?
-                            .split(separator: "=", maxSplits: 1)
-                            .last
-                            .map { String($0).uppercased() }
-                        selectedHolding = requestedTicker.flatMap { ticker in
-                            model.holdings.first { $0.ticker.uppercased() == ticker }
-                        } ?? model.holdings.first
-                    }
-                    if arguments.contains("--show-heatmap") {
-                        try? await Task.sleep(for: .milliseconds(250))
-                        scrollProxy.scrollTo("portfolio-details", anchor: .top)
-                    } else if arguments.contains("--show-today-contribution") {
-                        try? await Task.sleep(for: .milliseconds(250))
-                        scrollProxy.scrollTo("today-contribution", anchor: .top)
+                    .background(Color.clear)
+                    // Keep native rubber-banding intact: UIRefreshControl relies on
+                    // the full pull distance and release transition to trigger.
+                    .scrollBounceBehavior(.always, axes: .vertical)
+                    .refreshable { await model.refreshPortfolio() }
+                    .task {
+                        if model.overview == nil && !model.isPortfolioLoading {
+                            await model.refreshPortfolio()
+                        }
+                        let arguments = ProcessInfo.processInfo.arguments
+                        if arguments.contains("--show-volume"), selectedHolding == nil {
+                            let requestedTicker = arguments
+                                .first(where: { $0.hasPrefix("--show-volume-ticker=") })?
+                                .split(separator: "=", maxSplits: 1)
+                                .last
+                                .map { String($0).uppercased() }
+                            selectedHolding = requestedTicker.flatMap { ticker in
+                                model.holdings.first { $0.ticker.uppercased() == ticker }
+                            } ?? model.holdings.first
+                        }
+                        if arguments.contains("--show-heatmap") {
+                            try? await Task.sleep(for: .milliseconds(250))
+                            scrollProxy.scrollTo("portfolio-details", anchor: .top)
+                        } else if arguments.contains("--show-today-contribution") {
+                            try? await Task.sleep(for: .milliseconds(250))
+                            scrollProxy.scrollTo("today-contribution", anchor: .top)
+                        }
                     }
                 }
                 .sheet(item: $selectedHolding) { holding in
@@ -140,6 +171,14 @@ struct PortfolioView: View {
                         .presentationDetents([.large])
                         .presentationDragIndicator(.hidden)
                         .presentationBackground(Color(uiColor: .systemBackground))
+                }
+                .navigationDestination(isPresented: $showsTodayDetail) {
+                    TodayDetailView(
+                        holdings: model.holdings,
+                        dailyChanges: model.holdingDailyChanges,
+                        benchmarkChange: model.benchmarkDailyChange
+                    )
+                    .navigationTransition(.zoom(sourceID: "today-detail", in: todayZoom))
                 }
             }
         }
@@ -193,22 +232,19 @@ private struct TodayContributionCard: View {
     let dailyChanges: [String: Double]
     let benchmarkChange: Double?
     let isLoading: Bool
+    var onOpenDetail: (() -> Void)? = nil
     let onSelect: (Holding) -> Void
 
     @State private var direction: Direction = TodayContributionCard.launchDirection
-    @State private var displayedDirection: Direction = TodayContributionCard.launchDirection
-    @State private var logoSwitchScale: CGFloat = 1
-    @State private var barHeightFactor: CGFloat = 1
-    @State private var isDirectionSwitching = false
-    @State private var directionSwitchTask: Task<Void, Never>?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var barRevealProgress: CGFloat = 0
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("catfolio.haptics") private var hapticsEnabled = true
 
     private var contributions: [Contribution] {
         holdings.compactMap { holding in
             let key = holding.ticker.uppercased()
-            guard let change = holding.todayChangePercent ?? dailyChanges[key],
+            guard let change = dailyChanges[key] ?? holding.todayChangePercent,
                   change.isFinite,
                   holding.marketValue.isFinite else { return nil }
             let factor = 1 + change / 100
@@ -238,11 +274,16 @@ private struct TodayContributionCard: View {
 
     private var visibleContributions: [Contribution] {
         let filtered = contributions.filter { contribution in
-            displayedDirection == .gains ? contribution.amount > 0 : contribution.amount < 0
+            direction == .gains ? contribution.amount > 0 : contribution.amount < 0
         }
         return Array(filtered.sorted { lhs, rhs in
-            displayedDirection == .gains ? lhs.amount > rhs.amount : lhs.amount < rhs.amount
+            direction == .gains ? lhs.amount > rhs.amount : lhs.amount < rhs.amount
         }.prefix(5))
+    }
+
+    private var barAnimationKey: String {
+        let directionKey = direction == .gains ? "gains" : "losses"
+        return ([directionKey] + visibleContributions.map(\.id)).joined(separator: "|")
     }
 
     var body: some View {
@@ -251,16 +292,26 @@ private struct TodayContributionCard: View {
 
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("TODAY")
-                        .font(PortfolioHomeTypography.semibold(12, relativeTo: .caption))
-                        .tracking(2)
-                        .foregroundStyle(.primary)
-                        .frame(height: 17, alignment: .topLeading)
+                    HStack(spacing: 4) {
+                        Text("TODAY")
+                            .font(PortfolioHomeTypography.semibold(12, relativeTo: .caption))
+                            .tracking(2)
+                            .foregroundStyle(.primary)
+                        if onOpenDetail != nil {
+                            Image(systemName: "chevron.right")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(height: 17, alignment: .topLeading)
+                    .contentShape(Rectangle())
+                    .onTapGesture { onOpenDetail?() }
+                    .accessibilityAddTraits(onOpenDetail == nil ? [] : .isButton)
+                    .accessibilityLabel("今日盈亏详情")
 
                     Group {
-                        if isAwaitingContributions {
-                            Text("—")
-                                .font(PortfolioHomeTypography.medium(32, relativeTo: .largeTitle))
+                        if contributions.isEmpty {
+                            HomeSkeletonBlock(width: 133, height: 22, color: HomeSkeletonStyle.color(for: colorScheme))
                                 .accessibilityLabel("正在计算今日贡献")
                         } else {
                             CatfolioDisplayAmountText(
@@ -273,9 +324,13 @@ private struct TodayContributionCard: View {
                     .frame(height: 39, alignment: .leading)
 
                     HStack(spacing: 5) {
-                        if isAwaitingContributions {
-                            Text("正在更新今日数据")
-                                .foregroundStyle(.secondary)
+                        if contributions.isEmpty {
+                            if isAwaitingContributions {
+                                HomeSkeletonBlock(width: 168, height: 11, color: HomeSkeletonStyle.color(for: colorScheme))
+                            } else {
+                                Text("行情暂不可用")
+                                    .foregroundStyle(.secondary)
+                            }
                         } else {
                             Text(DisplayFormat.percent(totalPercent))
                                 .foregroundStyle(.primary)
@@ -300,13 +355,13 @@ private struct TodayContributionCard: View {
             .frame(height: 106, alignment: .top)
 
             Group {
-                if isLoading && contributions.isEmpty {
-                    ProgressView("正在计算今日贡献")
-                        .frame(maxWidth: .infinity, minHeight: 167)
+                if contributions.isEmpty {
+                    TodayContributionLoadingBars(isAnimating: isAwaitingContributions)
+                        .frame(height: 167, alignment: .top)
                 } else if visibleContributions.isEmpty {
                     ContentUnavailableView(
-                        displayedDirection == .gains ? "今天暂无上涨持仓" : "今天暂无下跌持仓",
-                        systemImage: displayedDirection == .gains ? "arrow.up.right" : "arrow.down.right"
+                        direction == .gains ? "今天暂无上涨持仓" : "今天暂无下跌持仓",
+                        systemImage: direction == .gains ? "arrow.up.right" : "arrow.down.right"
                     )
                     .frame(maxWidth: .infinity, minHeight: 167)
                 } else {
@@ -318,11 +373,27 @@ private struct TodayContributionCard: View {
             .offset(y: 139)
         }
         .frame(height: 326)
+        .task(id: barAnimationKey) {
+            var resetTransaction = Transaction(animation: nil)
+            resetTransaction.disablesAnimations = true
+            withTransaction(resetTransaction) {
+                barRevealProgress = reduceMotion ? 1 : 0
+            }
+
+            guard !reduceMotion, !visibleContributions.isEmpty else { return }
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            withAnimation(TodayContributionAnimation.reveal) {
+                barRevealProgress = 1
+            }
+        }
+        .onChange(of: reduceMotion) { _, isReduced in
+            if isReduced {
+                barRevealProgress = 1
+            }
+        }
         .sensoryFeedback(.selection, trigger: direction) { _, _ in hapticsEnabled }
         .accessibilityElement(children: .contain)
-        .onDisappear {
-            directionSwitchTask?.cancel()
-        }
     }
 
     @ViewBuilder
@@ -347,7 +418,7 @@ private struct TodayContributionCard: View {
         if colorScheme == .light {
             shape.fill(Color.white)
         } else {
-            let showsGains = displayedDirection == .gains
+            let showsGains = direction == .gains
             let baseColor = showsGains
                 ? Color(red: 0, green: 0.255, blue: 0)
                 : Color(red: 0.22, green: 0.031, blue: 0.02)
@@ -371,7 +442,7 @@ private struct TodayContributionCard: View {
                         .offset(x: 220, y: -92)
                 }
                 .clipShape(shape)
-                .animation(.easeOut(duration: 0.18), value: displayedDirection)
+                .animation(.easeOut(duration: 0.18), value: direction)
         }
     }
 
@@ -388,11 +459,8 @@ private struct TodayContributionCard: View {
                             holding: contribution.holding,
                             amount: contribution.amount,
                             relativeHeight: rankHeights[index],
-                            isGain: displayedDirection == .gains,
-                            animationDelay: Double(index) * 0.045,
-                            logoSwitchScale: logoSwitchScale,
-                            heightFactor: barHeightFactor,
-                            isDirectionSwitching: isDirectionSwitching
+                            isGain: direction == .gains,
+                            growth: barRevealProgress
                         ) {
                             onSelect(contribution.holding)
                         }
@@ -444,56 +512,21 @@ private struct TodayContributionCard: View {
 
     private func switchDirection(to value: Direction) {
         guard value != direction else { return }
-
-        directionSwitchTask?.cancel()
-        direction = value
-
-        guard !reduceMotion else {
-            displayedDirection = value
-            logoSwitchScale = 1
-            barHeightFactor = 1
-            isDirectionSwitching = false
-            return
+        // Reset the one shared progress value in the same transaction that
+        // swaps the ranking. The incoming five bars therefore never render a
+        // stale fully-grown frame before their common reveal begins.
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            barRevealProgress = reduceMotion ? 1 : 0
+            direction = value
         }
+    }
+}
 
-        // A quick reversal before the midpoint keeps the currently displayed
-        // content and simply restores its logo to full size.
-        guard value != displayedDirection else {
-            isDirectionSwitching = false
-            withAnimation(.timingCurve(0.12, 0.72, 0.22, 1, duration: 0.16)) {
-                logoSwitchScale = 1
-                barHeightFactor = 1
-            }
-            return
-        }
-
-        isDirectionSwitching = true
-        withAnimation(.timingCurve(0.55, 0, 0.88, 0.32, duration: 0.16)) {
-            logoSwitchScale = 0.001
-            barHeightFactor = 0.35
-        }
-
-        directionSwitchTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(160))
-            guard !Task.isCancelled else { return }
-
-            // Swap the data and logo only while the old logo is at its minimum.
-            displayedDirection = value
-            logoSwitchScale = 0.001
-            barHeightFactor = 0.35
-
-            // One continuous curve now handles rebound, restrained overshoot,
-            // and settling. The previous separate 1.02 -> 1 transaction was
-            // short enough to read as an extra kick on the final frame.
-            withAnimation(.timingCurve(0.16, 0.72, 0.24, 1.04, duration: 0.33)) {
-                logoSwitchScale = 1
-                barHeightFactor = 1
-            }
-
-            try? await Task.sleep(for: .milliseconds(330))
-            guard !Task.isCancelled else { return }
-            isDirectionSwitching = false
-        }
+private enum TodayContributionAnimation {
+    static var reveal: Animation {
+        .timingCurve(0.16, 1, 0.30, 1, duration: 0.34)
     }
 }
 
@@ -502,14 +535,9 @@ private struct TodayContributionBar: View {
     let amount: Double
     let relativeHeight: Double
     let isGain: Bool
-    let animationDelay: Double
-    let logoSwitchScale: CGFloat
-    let heightFactor: CGFloat
-    let isDirectionSwitching: Bool
+    let growth: CGFloat
     let action: () -> Void
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var growth: CGFloat = 0
     @State private var resolvedBrandColor: Color?
     @State private var isHovering = false
 
@@ -538,20 +566,11 @@ private struct TodayContributionBar: View {
     }
 
     private var renderedBarHeight: CGFloat {
-        // Keep one continuous height expression throughout the transition.
-        // Switching formulas when `isDirectionSwitching` became false could
-        // replace the final presentation frame a fraction early and look like
-        // a small jump at the end of the rebound.
-        max(24, barHeight * growth * heightFactor)
+        max(0, barHeight * growth)
     }
 
     private var renderedCornerRadius: CGFloat {
         min(12, renderedBarHeight / 2)
-    }
-
-    private var switchContentOpacity: CGFloat {
-        guard isDirectionSwitching else { return 1 }
-        return min(max((heightFactor - 0.35) / 0.22, 0), 1)
     }
 
     var body: some View {
@@ -580,7 +599,7 @@ private struct TodayContributionBar: View {
                                     .opacity(0.40)
                             }
                             .compositingGroup()
-                            .opacity(growth * switchContentOpacity)
+                            .opacity(growth)
 
                         Text(amountText)
                             .font(PortfolioHomeTypography.semibold(12, relativeTo: .caption).monospacedDigit())
@@ -590,7 +609,7 @@ private struct TodayContributionBar: View {
                             .minimumScaleFactor(0.62)
                             .padding(.horizontal, 4)
                             .padding(.top, 14)
-                            .opacity(growth * switchContentOpacity)
+                            .opacity(growth)
                     }
                     .frame(height: renderedBarHeight)
                     .clipShape(fillShape, style: FillStyle(antialiased: true))
@@ -598,7 +617,7 @@ private struct TodayContributionBar: View {
                 .frame(maxWidth: .infinity, minHeight: 146, maxHeight: 146, alignment: .bottom)
 
                 contributionLogo
-                    .scaleEffect((0.76 + growth * 0.24) * logoSwitchScale)
+                    .scaleEffect(0.76 + growth * 0.24)
                     .opacity(growth)
                     .offset(y: 131)
             }
@@ -608,27 +627,6 @@ private struct TodayContributionBar: View {
         .onHover { isHovering = $0 }
         .accessibilityLabel("\(holding.shortName)，今日贡献 \(DisplayFormat.money(amount, signed: true, fractionDigits: 2))")
         .accessibilityHint("打开个股详情")
-        .onAppear {
-            if isDirectionSwitching {
-                growth = 1
-                return
-            }
-
-            guard !reduceMotion else {
-                growth = 1
-                return
-            }
-
-            growth = 0
-            withAnimation(.spring(duration: 0.46, bounce: 0.16).delay(animationDelay)) {
-                growth = 1
-            }
-        }
-        .onChange(of: reduceMotion) { _, isReduced in
-            if isReduced {
-                growth = 1
-            }
-        }
     }
 
     private var contributionLogo: some View {
@@ -896,7 +894,10 @@ private struct ContributionBarButtonStyle: ButtonStyle {
 private enum PortfolioHeroChartLayout {
     static let sectionHeight: CGFloat = 461
     static let plotTop: CGFloat = 118
-    static let plotHeight: CGFloat = 299
+    // Keep the UIKit-backed chart's frame entirely above the range picker.
+    // A visual overlap can still intercept taps even when the chart's own
+    // gesture overlay is inset, particularly with iOS 26 dark rendering.
+    static let plotHeight: CGFloat = 280
     static let pickerTop: CGFloat = 398
     static let pickerHeight: CGFloat = 62
 }
@@ -913,6 +914,7 @@ private struct CostMarketCard: View {
     @State private var range = "3M"
     @State private var selectedDate: Date?
     @State private var measuredRange: ChartDateRange?
+    @State private var showsNetDeposit = true
     @Environment(\.colorScheme) private var colorScheme
 
     private let choices = ["1D", "1W", "1M", "3M", "YTD", "1Y", "MAX"]
@@ -963,6 +965,9 @@ private struct CostMarketCard: View {
     }
 
     private var rangePerformance: (amount: Double, percentage: Double) {
+        if let measurement = measuredPoints {
+            return costMarketChange(from: measurement.start, to: measurement.end)
+        }
         guard range != "MAX",
               let start = rangeData.rows.first,
               let end = selectedPoint,
@@ -975,30 +980,15 @@ private struct CostMarketCard: View {
         // that movement with the matching change in the cost/deposit line so
         // the header describes investment performance for the visible window,
         // rather than mistaking a contribution for a gain.
-        let marketMovement = end.marketValue - start.marketValue
-        let contributionMovement = end.cost - start.cost
-        let amount = marketMovement - contributionMovement
-        let percentage = start.marketValue == 0 ? 0 : amount / start.marketValue * 100
-        return (amount, percentage)
-    }
-
-    private var measuredChange: Double? {
-        measuredPoints.map { $0.end.marketValue - $0.start.marketValue }
-    }
-
-    private var measuredChangePercentage: Double? {
-        guard let measurement = measuredPoints,
-              measurement.start.marketValue != 0 else { return measuredPoints == nil ? nil : 0 }
-        return (measurement.end.marketValue - measurement.start.marketValue)
-            / measurement.start.marketValue * 100
+        return costMarketChange(from: start, to: end)
     }
 
     private var displayedPrimaryAmount: Double {
-        measuredChange ?? displayedMarketValue
+        displayedMarketValue
     }
 
     private var financialAccent: Color {
-        let value = measuredChange ?? rangePerformance.amount
+        let value = rangePerformance.amount
         if value >= 0 {
             return colorScheme == .light
                 ? Color(red: 0, green: 0.53, blue: 0.14)
@@ -1023,10 +1013,10 @@ private struct CostMarketCard: View {
             CatfolioDisplayAmountText(
                 text: DisplayFormat.money(
                     displayedPrimaryAmount,
-                    signed: measuredChange != nil,
+                    signed: false,
                     fractionDigits: 2
                 ),
-                color: measuredChange == nil ? .primary : financialAccent
+                color: .primary
             )
             .contentTransition(.numericText(value: displayedPrimaryAmount))
             .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: displayedPrimaryAmount)
@@ -1035,15 +1025,7 @@ private struct CostMarketCard: View {
 
             HStack(spacing: 4) {
                 let summaryAccent = colorScheme == .light ? Color.primary : financialAccent
-                if measuredChange != nil, let measuredChangePercentage {
-                    Text(DisplayFormat.percent(abs(measuredChangePercentage), signed: false))
-                        .foregroundStyle(summaryAccent)
-                        .contentTransition(.numericText(value: measuredChangePercentage))
-                        .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: measuredChangePercentage)
-
-                    Text("·")
-                        .foregroundStyle(.tertiary)
-                } else {
+                Group {
                     Text(DisplayFormat.money(rangePerformance.amount, signed: true))
                         .foregroundStyle(summaryAccent)
                         .contentTransition(.numericText(value: rangePerformance.amount))
@@ -1052,7 +1034,7 @@ private struct CostMarketCard: View {
                     Text("·")
                         .foregroundStyle(.tertiary)
 
-                    Text(DisplayFormat.percent(abs(rangePerformance.percentage), signed: false))
+                    Text(DisplayFormat.percent(rangePerformance.percentage, signed: false))
                         .foregroundStyle(summaryAccent)
                         .contentTransition(.numericText(value: rangePerformance.percentage))
                         .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: rangePerformance.percentage)
@@ -1061,10 +1043,20 @@ private struct CostMarketCard: View {
                         .foregroundStyle(.tertiary)
                 }
 
-                HStack(spacing: 4) {
-                    Text(measuredChange == nil ? "NET DEPOSIT" : "ENDING VALUE")
-                    Text(DisplayFormat.money(measuredChange == nil ? displayedCost : displayedMarketValue))
+                Button {
+                    showsNetDeposit.toggle()
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("NET DEPOSIT")
+                        Text(DisplayFormat.money(displayedCost))
+                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .opacity(showsNetDeposit ? 1 : 0.45)
+                .accessibilityLabel("净入金线")
+                .accessibilityValue(showsNetDeposit ? "显示" : "隐藏")
+                .accessibilityHint("轻点切换显示或隐藏")
                 .foregroundStyle(Color.primary.opacity(colorScheme == .light ? 0.30 : 0.50))
             }
             .font(PortfolioHomeTypography.medium(14, relativeTo: .subheadline).monospacedDigit())
@@ -1139,6 +1131,7 @@ private struct CostMarketCard: View {
         } else if data.rows.count > 1 {
             FastCostMarketPlot(
                 data: data,
+                showsNetDeposit: showsNetDeposit,
                 transitionKey: range,
                 selectedPoint: selectedDate == nil && measuredRange == nil ? nil : selectedPoint,
                 measuredRange: measuredRange,
@@ -1234,6 +1227,7 @@ private struct CostMarketCard: View {
 /// of Swift Charts marks. All filtering, sampling and domains are cached once.
 private struct FastCostMarketPlot: View {
     let data: CostMarketRangeData
+    let showsNetDeposit: Bool
     let transitionKey: String
     let selectedPoint: CostMarketPlotPoint?
     let measuredRange: ChartDateRange?
@@ -1270,7 +1264,7 @@ private struct FastCostMarketPlot: View {
             latestPointUsesGlass: false
         )
         StandardLineChart(
-            series: [marketSeries, costSeries],
+            series: showsNetDeposit ? [marketSeries, costSeries] : [marketSeries],
             interactionDates: data.rows.map(\.date),
             domain: data.domain,
             yTicks: (0..<5).map { index in
@@ -1281,7 +1275,6 @@ private struct FastCostMarketPlot: View {
             axisWidth: 0,
             topInset: 0,
             bottomHeight: bottomHeight,
-            interactionBottomInset: 20,
             leadingLineOverflow: 0,
             trailingEndpointInset: 21,
             gridOpacity: 0,
@@ -1289,8 +1282,8 @@ private struct FastCostMarketPlot: View {
             selectedDate: selectedPoint?.date,
             measuredRange: measuredRange,
             selectionIndicatorLabel: selectionIndicatorLabel,
-            selectionSeriesIDs: ["market", "cost"],
-            rangeSeriesIDs: ["market", "cost"],
+            selectionSeriesIDs: showsNetDeposit ? ["market", "cost"] : ["market"],
+            rangeSeriesIDs: showsNetDeposit ? ["market", "cost"] : ["market"],
             rangePrimarySeriesID: "market",
             dimsFutureDuringSelection: true,
             yAxisLabel: { _ in "" },
@@ -1403,6 +1396,15 @@ private struct CostMarketRangeData {
         let after = rows[lower]
         return abs(before.date.timeIntervalSince(date)) <= abs(after.date.timeIntervalSince(date)) ? before : after
     }
+}
+
+/// Change in the chart's cost-adjusted value, not a ledger-backed TWR/IRR.
+/// Inputs share the chart's reporting currency; do not convert either endpoint twice.
+private func costMarketChange(
+    from start: CostMarketPlotPoint, to end: CostMarketPlotPoint
+) -> (amount: Double, percentage: Double) {
+    let amount = (end.marketValue - start.marketValue) - (end.cost - start.cost)
+    return (amount, start.marketValue == 0 ? 0 : amount / start.marketValue * 100)
 }
 
 private struct CostMarketPlotPoint: Identifiable {
@@ -2193,13 +2195,14 @@ private struct HoldingRow: View {
                     )
                 }
             } else {
-                HStack(alignment: .center, spacing: 10) {
+                HStack(alignment: .center, spacing: 8) {
                     AssetLogo(ticker: holding.ticker, logoSymbol: holding.logoSymbol, size: 40)
 
                     VStack(alignment: .leading, spacing: 5) {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text(holding.shortName)
-                                .font(PortfolioHomeTypography.medium(17, relativeTo: .headline))
+                                .font(PortfolioHomeTypography.medium(16, relativeTo: .headline))
+                                .tracking(0.16)
                                 .foregroundStyle(.primary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
@@ -2208,19 +2211,21 @@ private struct HoldingRow: View {
                             Spacer(minLength: 4)
 
                             Text(DisplayFormat.money(holding.marketValue, fractionDigits: 2))
-                                .font(PortfolioHomeTypography.medium(17, relativeTo: .headline).monospacedDigit())
-                                .tracking(1.36)
+                                .font(PortfolioHomeTypography.medium(16, relativeTo: .headline).monospacedDigit())
+                                .tracking(0.16)
                                 .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
                         }
 
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            HStack(spacing: 8) {
+                            HStack(spacing: 2) {
                                 Text(DisplayFormat.shares(holding.shares))
+                                    .font(PortfolioHomeTypography.medium(12, relativeTo: .caption).monospacedDigit())
+                                    .tracking(0.12)
                                 Text(holding.ticker)
+                                    .font(PortfolioHomeTypography.medium(12, relativeTo: .caption))
+                                    .tracking(0.12)
                             }
-                                .font(PortfolioHomeTypography.medium(13, relativeTo: .caption).monospacedDigit())
-                                .tracking(1.04)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
@@ -2228,13 +2233,7 @@ private struct HoldingRow: View {
 
                             Spacer(minLength: 2)
 
-                            Text(profitDescription)
-                                .font(PortfolioHomeTypography.medium(13, relativeTo: .caption).monospacedDigit())
-                                .tracking(1.04)
-                                .foregroundStyle(rowAccent)
-                                .lineLimit(1)
-                                .fixedSize(horizontal: true, vertical: false)
-                                .layoutPriority(2)
+                            performanceLabel
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -2258,6 +2257,34 @@ private struct HoldingRow: View {
         return "\(DisplayFormat.money(performance.amount, signed: true, fractionDigits: 2)) · \(DisplayFormat.percent(performance.percent))"
     }
 
+    @ViewBuilder
+    private var performanceLabel: some View {
+        if let performance {
+            HStack(spacing: 2) {
+                Text(DisplayFormat.money(performance.amount, signed: true, fractionDigits: 2))
+                    .tracking(0.12)
+                Circle()
+                    .fill(rowAccent)
+                    .frame(width: 2, height: 2)
+                    .accessibilityHidden(true)
+                Text(DisplayFormat.percent(performance.percent))
+                    .tracking(0.12)
+            }
+            .font(PortfolioHomeTypography.medium(12, relativeTo: .caption).monospacedDigit())
+            .foregroundStyle(rowAccent)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .layoutPriority(2)
+        } else {
+            Text("暂无数据")
+                .font(PortfolioHomeTypography.medium(12, relativeTo: .caption))
+                .foregroundStyle(rowAccent)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(2)
+        }
+    }
+
     private var rowAccent: Color {
         if (performance?.amount ?? 0) >= 0 {
             return Color(red: 1 / 255, green: 184 / 255, blue: 1 / 255)
@@ -2271,13 +2298,21 @@ private struct HoldingIdentity: View {
     let compact: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 5) {
             Text(holding.shortName)
-                .font(PortfolioHomeTypography.semibold(17, relativeTo: .headline))
+                .font(PortfolioHomeTypography.medium(16, relativeTo: .headline))
+                .tracking(0.16)
                 .foregroundStyle(.primary)
                 .lineLimit(compact ? 1 : nil)
-            Text("\(DisplayFormat.shares(holding.shares)) \(holding.ticker)")
-                .font(PortfolioHomeTypography.semibold(13, relativeTo: .caption).monospacedDigit())
+
+            HStack(spacing: 2) {
+                Text(DisplayFormat.shares(holding.shares))
+                    .font(PortfolioHomeTypography.medium(12, relativeTo: .caption).monospacedDigit())
+                    .tracking(0.12)
+                Text(holding.ticker)
+                    .font(PortfolioHomeTypography.medium(12, relativeTo: .caption))
+                    .tracking(0.12)
+            }
                 .foregroundStyle(.secondary)
                 .lineLimit(compact ? 1 : nil)
         }
@@ -2293,12 +2328,14 @@ private struct HoldingMetrics: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(alignment: alignment, spacing: 3) {
+        VStack(alignment: alignment, spacing: 5) {
             Text(DisplayFormat.money(holding.marketValue, fractionDigits: 2))
-                .font(PortfolioHomeTypography.semibold(17, relativeTo: .headline).monospacedDigit())
+                .font(PortfolioHomeTypography.medium(16, relativeTo: .headline).monospacedDigit())
+                .tracking(0.16)
                 .lineLimit(compact ? 1 : nil)
             Text(performanceText)
-            .font(PortfolioHomeTypography.semibold(13, relativeTo: .caption).monospacedDigit())
+            .font(PortfolioHomeTypography.medium(12, relativeTo: .caption).monospacedDigit())
+            .tracking(0.12)
             .foregroundStyle(
                 (performance?.amount ?? 0) >= 0
                     ? (colorScheme == .light
@@ -2317,119 +2354,212 @@ private struct HoldingMetrics: View {
     }
 }
 
-private struct PortfolioLoadingView: View {
-    @Environment(\.colorScheme) private var colorScheme
+private enum HomeSkeletonStyle {
+    static func color(for scheme: ColorScheme) -> Color {
+        scheme == .light ? Color(white: 244.0 / 255.0) : Color(white: 0.12)
+    }
+}
+
+private struct HomeSkeletonBlock: View {
+    let width: CGFloat
+    let height: CGFloat
+    let color: Color
 
     var body: some View {
+        RoundedRectangle(cornerRadius: 4)
+            .fill(color)
+            .frame(width: width, height: height)
+    }
+}
+
+private struct TodayContributionLoadingBars: View {
+    @Environment(\.colorScheme) private var colorScheme
+    var isAnimating = true
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 6) {
+            ForEach(0..<5, id: \.self) { _ in
+                VStack(spacing: -13) {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(LinearGradient(
+                            colors: [HomeSkeletonStyle.color(for: colorScheme), Color(uiColor: .systemBackground)],
+                            startPoint: .top, endPoint: .bottom
+                        ))
+                        .overlay {
+                            ContributionStripePattern(color: Color(uiColor: .systemBackground))
+                                .opacity(0.45)
+                                .mask(LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom))
+                        }
+                        .clipShape(.rect(cornerRadius: 12))
+                        .frame(height: 140)
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(HomeSkeletonStyle.color(for: colorScheme))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color(uiColor: .systemBackground), lineWidth: 2)
+                        }
+                        .frame(width: 30, height: 30)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+private struct TodayLoadingHeader: View {
+    @Environment(\.colorScheme) private var colorScheme
+    var isAnimating = true
+
+    var body: some View {
+        let color = HomeSkeletonStyle.color(for: colorScheme)
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 12) {
+                HomeSkeletonBlock(width: 52, height: 10, color: color)
+                HomeSkeletonBlock(width: 133, height: 22, color: color)
+                HStack(spacing: 4) {
+                    HomeSkeletonBlock(width: 46, height: 11, color: color)
+                    HomeSkeletonBlock(width: 71, height: 11, color: color)
+                    HomeSkeletonBlock(width: 39, height: 11, color: color)
+                }
+            }
+            Spacer(minLength: 8)
+            HStack(spacing: 2) {
+                Image(systemName: "arrow.up")
+                    .frame(width: 44, height: 38)
+                    .background(Color(uiColor: .systemBackground), in: Capsule())
+                Image(systemName: "arrow.down")
+                    .frame(width: 44, height: 38)
+            }
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(Color.primary.opacity(0.10))
+            .padding(3)
+            .background(color, in: Capsule())
+        }
+    }
+}
+
+private struct PortfolioLoadingView: View {
+    @Environment(\.colorScheme) private var colorScheme
+    var isAnimating = true
+
+    var body: some View {
+        let color = HomeSkeletonStyle.color(for: colorScheme)
         VStack(spacing: 0) {
-            PortfolioChartLoadingPlaceholder()
+            PortfolioChartLoadingPlaceholder(isAnimating: isAnimating)
                 .frame(height: PortfolioHeroChartLayout.sectionHeight)
 
-            ZStack(alignment: .topLeading) {
-                UnevenRoundedRectangle(
-                    topLeadingRadius: 38,
-                    bottomLeadingRadius: 0,
-                    bottomTrailingRadius: 0,
-                    topTrailingRadius: 38,
-                    style: .continuous
-                )
-                .fill(colorScheme == .light ? Color.white : Color.black)
-
-                VStack(alignment: .leading, spacing: 7) {
-                    Capsule().fill(Color.primary.opacity(0.10)).frame(width: 54, height: 10)
-                    Capsule().fill(Color.primary.opacity(0.12)).frame(width: 180, height: 30)
-                    Capsule().fill(Color.primary.opacity(0.08)).frame(width: 210, height: 12)
-                }
-                .padding(.top, 30)
-                .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
-
-                HStack(alignment: .bottom, spacing: 6) {
-                    ForEach([140.0, 102.0, 85.0, 76.0, 64.0], id: \.self) { height in
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(CatfolioPalette.contributionGreen.opacity(0.16))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: height)
-                    }
-                }
-                .frame(height: 140, alignment: .bottom)
-                .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
-                .offset(y: 139)
-            }
-            .frame(height: 326)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Capsule()
-                    .fill(Color.primary.opacity(0.12))
-                    .frame(width: 170, height: 28)
-                    .padding(.bottom, 14)
-                ForEach(0..<6, id: \.self) { _ in
-                    HStack(spacing: 13) {
-                        RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.12)).frame(width: 40, height: 40)
-                        VStack(alignment: .leading, spacing: 7) {
-                            Capsule().fill(Color.secondary.opacity(0.12)).frame(width: 120, height: 14)
-                            Capsule().fill(Color.secondary.opacity(0.09)).frame(width: 90, height: 11)
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 7) {
-                            Capsule().fill(Color.secondary.opacity(0.12)).frame(width: 88, height: 14)
-                            Capsule().fill(Color.secondary.opacity(0.09)).frame(width: 105, height: 11)
-                        }
-                    }
-                    .frame(height: 64)
-                }
+            VStack(spacing: 33) {
+                TodayLoadingHeader(isAnimating: isAnimating)
+                TodayContributionLoadingBars(isAnimating: isAnimating)
             }
             .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
-            .padding(.top, 24)
-            .background(colorScheme == .light ? Color.white : Color.black)
+            .padding(.vertical, 30)
+            .frame(height: 326, alignment: .top)
+            .background(
+                Color(uiColor: .systemBackground),
+                in: UnevenRoundedRectangle(topLeadingRadius: 38, topTrailingRadius: 38)
+            )
+
+            VStack(spacing: 18) {
+                HStack {
+                    HomeSkeletonBlock(width: 118, height: 22, color: color)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.primary.opacity(0.10))
+                    Spacer()
+                    Image(systemName: "line.3.horizontal.decrease")
+                        .font(.system(size: 20))
+                        .foregroundStyle(Color.primary.opacity(0.10))
+                        .frame(width: 58, height: 44)
+                        .background(color, in: Capsule())
+                }
+                HStack(spacing: 10) {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(color).frame(width: 40, height: 40)
+                    VStack(alignment: .leading, spacing: 10) {
+                        HomeSkeletonBlock(width: 63, height: 14, color: color)
+                        HStack(spacing: 8) {
+                            HomeSkeletonBlock(width: 59, height: 10, color: color)
+                            HomeSkeletonBlock(width: 40, height: 10, color: color)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    VStack(alignment: .trailing, spacing: 10) {
+                        HomeSkeletonBlock(width: 94, height: 14, color: color)
+                        HStack(spacing: 4) {
+                            HomeSkeletonBlock(width: 79, height: 10, color: color)
+                            HomeSkeletonBlock(width: 45, height: 10, color: color)
+                        }
+                    }
+                }
+                .frame(height: 64)
+            }
+            .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
+            .padding(.vertical, 24)
+            .frame(maxWidth: .infinity, minHeight: 240, alignment: .top)
+            .background(Color(uiColor: .systemBackground))
         }
-        .redacted(reason: .placeholder)
-        .accessibilityLabel("正在读取投资组合")
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isAnimating ? "正在读取投资组合" : "暂无持仓数据")
     }
 }
 
 private struct PortfolioChartLoadingPlaceholder: View {
     @Environment(\.colorScheme) private var colorScheme
+    var isAnimating = true
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            PortfolioHomeTopBackground(colorScheme: colorScheme)
-            VStack(alignment: .leading, spacing: 5) {
-                Capsule()
-                    .fill(Color.primary.opacity(0.10))
-                    .frame(width: 76, height: 10)
-                Capsule()
-                    .fill(Color.primary.opacity(0.12))
-                    .frame(width: 190, height: 30)
-                Capsule()
-                    .fill(Color.primary.opacity(0.09))
-                    .frame(width: 265, height: 12)
+            VStack(alignment: .leading, spacing: 12) {
+                HomeSkeletonBlock(width: 72, height: 10, color: .white)
+                HomeSkeletonBlock(width: 172, height: 22, color: .white)
+                HStack(spacing: 4) {
+                    HomeSkeletonBlock(width: 65, height: 11, color: .white)
+                    HomeSkeletonBlock(width: 38, height: 11, color: .white)
+                    HomeSkeletonBlock(width: 104, height: 11, color: .white)
+                    HomeSkeletonBlock(width: 68, height: 11, color: .white)
+                }
             }
+            .opacity(colorScheme == .light ? 0.5 : 0.15)
             .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
             .padding(.top, 15)
 
-            Canvas { context, size in
-                var path = Path()
-                path.move(to: CGPoint(x: 0, y: size.height * 0.76))
-                path.addCurve(
-                    to: CGPoint(x: size.width, y: size.height * 0.28),
-                    control1: CGPoint(x: size.width * 0.30, y: size.height * 0.30),
-                    control2: CGPoint(x: size.width * 0.68, y: size.height * 0.58)
-                )
-                context.stroke(path, with: .color(Color.white.opacity(0.22)), lineWidth: 3)
+            GeometryReader { geometry in
+                Image("HomeSkeletonLineOne")
+                    .resizable()
+                    .frame(width: geometry.size.width * 407.169 / 402,
+                           height: geometry.size.height * 187.016 / 226)
+                    .offset(x: -geometry.size.width * 24 / 402)
+                Image("HomeSkeletonLineTwo")
+                    .resizable()
+                    .frame(width: geometry.size.width * 416 / 402,
+                           height: geometry.size.height * 155 / 226)
+                    .offset(x: -geometry.size.width * 34 / 402,
+                            y: geometry.size.height * 72 / 226)
             }
             .frame(height: PortfolioHeroChartLayout.plotHeight)
+            .opacity(colorScheme == .light ? 1 : 0.22)
             .offset(y: PortfolioHeroChartLayout.plotTop)
 
             HStack(spacing: 0) {
                 ForEach(0..<7, id: \.self) { index in
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(index == 3 ? Color.primary.opacity(0.09) : Color.clear)
-                        .frame(maxWidth: .infinity)
+                    HomeSkeletonBlock(
+                        width: [12.0, 15, 14, 17, 20, 12, 23][index],
+                        height: 11, color: .white
+                    )
+                    .frame(width: 44, height: 30)
+                    .background(index == 3 ? Color.white.opacity(0.5) : .clear,
+                                in: RoundedRectangle(cornerRadius: 10))
+                    .frame(maxWidth: .infinity)
                 }
             }
-            .frame(height: 30)
-            .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
-            .offset(y: PortfolioHeroChartLayout.pickerTop + 16)
+            .frame(height: PortfolioHeroChartLayout.pickerHeight)
+            .opacity(colorScheme == .light ? 1 : 0.22)
+            .padding(.horizontal, 16)
+            .offset(y: PortfolioHeroChartLayout.pickerTop)
         }
+        .frame(height: PortfolioHeroChartLayout.sectionHeight, alignment: .topLeading)
     }
 }

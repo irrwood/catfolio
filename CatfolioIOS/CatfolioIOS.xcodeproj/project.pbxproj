@@ -53,6 +53,7 @@
 		A199000000000000000000AA /* RealisedProfitCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AA /* RealisedProfitCalculator.swift */; };
 		A199000000000000000000AB /* FMPRateLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AB /* FMPRateLimiter.swift */; };
 		A199000000000000000000AC /* NasdaqAnalystClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AC /* NasdaqAnalystClient.swift */; };
+		A199000000000000000000AE /* TodayDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AE /* TodayDetailView.swift */; };
 		A19900000000000000000001 /* ResearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000001 /* ResearchView.swift */; };
 		A19900000000000000000002 /* StockScreenerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000002 /* StockScreenerView.swift */; };
 		A19900000000000000000003 /* AnalystConsensusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000003 /* AnalystConsensusView.swift */; };
@@ -118,6 +119,7 @@
 		B199000000000000000000AA /* RealisedProfitCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealisedProfitCalculator.swift; sourceTree = "<group>"; };
 		B199000000000000000000AB /* FMPRateLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FMPRateLimiter.swift; sourceTree = "<group>"; };
 		B199000000000000000000AC /* NasdaqAnalystClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NasdaqAnalystClient.swift; sourceTree = "<group>"; };
+		B199000000000000000000AE /* TodayDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayDetailView.swift; sourceTree = "<group>"; };
 		B199000000000000000000B0 /* CatfolioIOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CatfolioIOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B199000000000000000000B1 /* MoneyWeightedReturnCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyWeightedReturnCalculatorTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000B2 /* LocalPortfolioEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalPortfolioEngineTests.swift; sourceTree = "<group>"; };
@@ -195,6 +197,7 @@
 				B199000000000000000000AA /* RealisedProfitCalculator.swift */,
 				B199000000000000000000AB /* FMPRateLimiter.swift */,
 				B199000000000000000000AC /* NasdaqAnalystClient.swift */,
+				B199000000000000000000AE /* TodayDetailView.swift */,
 				B19900000000000000000001 /* ResearchView.swift */,
 				B19900000000000000000002 /* StockScreenerView.swift */,
 				B19900000000000000000003 /* AnalystConsensusView.swift */,
@@ -424,6 +427,7 @@
 				A199000000000000000000AA /* RealisedProfitCalculator.swift in Sources */,
 				A199000000000000000000AB /* FMPRateLimiter.swift in Sources */,
 				A199000000000000000000AC /* NasdaqAnalystClient.swift in Sources */,
+				A199000000000000000000AE /* TodayDetailView.swift in Sources */,
 				A19900000000000000000001 /* ResearchView.swift in Sources */,
 				A19900000000000000000002 /* StockScreenerView.swift in Sources */,
 				A19900000000000000000003 /* AnalystConsensusView.swift in Sources */,
