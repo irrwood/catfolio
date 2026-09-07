@@ -130,10 +130,10 @@ struct MoomooOAuthView: View {
                                 Spacer()
                                 VStack(alignment: .trailing, spacing: 2) {
                                     Text(DisplayFormat.shares(position.quantityValue))
-                                        .font(.body.monospacedDigit())
+                                        .appNumber(.subheading)
                                     if let marketValue = position.marketValueValue {
                                         Text(DisplayFormat.money(marketValue, currency: position.currency))
-                                            .font(.caption.monospacedDigit())
+                                            .appNumber(.caption)
                                             .foregroundStyle(.secondary)
                                     }
                                 }

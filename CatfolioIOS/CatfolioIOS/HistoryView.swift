@@ -475,7 +475,7 @@ struct HistoryView: View {
     private func summaryRow(_ metric: HistorySummaryMetric) -> some View {
         LabeledContent(metric.title) {
             Text(metric.value)
-                .monospacedDigit()
+                .appNumber(.body, weight: .semibold)
                 .foregroundStyle(metric.color)
         }
     }
@@ -632,14 +632,14 @@ struct HistoryView: View {
                     // or profit. Keep both buys and sells unsigned and neutral.
                     signed: !isOrder
                 ))
-                .font(.body.weight(.semibold).monospacedDigit())
+                .appNumber(.subheading, weight: .semibold)
                 .foregroundStyle(isOrder ? Color.primary : amountColor(activity.nativeAmount))
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
 
                 if isOrder {
                     Text("\(DisplayFormat.shares(activity.transaction.quantity)) shares")
-                        .font(.caption.monospacedDigit())
+                        .appNumber(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 } else if activity.kind == .dividend, activity.transaction.ticker != "CASH" {

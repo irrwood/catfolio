@@ -499,7 +499,7 @@ private struct FinancialRows: View {
                         .fontWeight(index == 0 || row.2 ? .semibold : .regular)
                     Spacer(minLength: 16)
                     Text(row.1.map { FinancialAmountFormatter.string($0, currency: currency) } ?? "—")
-                        .font(.body.monospacedDigit())
+                        .appNumber(.subheading)
                         .fontWeight(index == 0 || row.2 ? .semibold : .regular)
                 }
                 .padding(.vertical, 15)

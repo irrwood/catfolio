@@ -113,9 +113,9 @@ struct CSVImportView: View {
                                 Spacer()
                                 VStack(alignment: .trailing, spacing: 2) {
                                     Text(DisplayFormat.shares(holding.shares))
-                                        .font(.body.monospacedDigit())
+                                        .appNumber(.subheading)
                                     Text("均价 \(DisplayFormat.money(holding.averageCost, currency: holding.currency))")
-                                        .font(.caption.monospacedDigit())
+                                        .appNumber(.caption)
                                         .foregroundStyle(.secondary)
                                 }
                             }

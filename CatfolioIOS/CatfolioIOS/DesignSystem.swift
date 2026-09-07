@@ -3,8 +3,12 @@ import SwiftUI
 import UIKit
 
 /// Shared treatment for the oversized financial values used as page and card
-/// headlines. Both home headlines use medium Montserrat, with a smaller
-/// currency/sign prefix aligned to the numeral baseline.
+/// headlines: SF Rounded, with a smaller currency/sign prefix aligned to the
+/// numeral baseline.
+///
+/// No manual tracking. The 5% letterspacing here was cut for Montserrat,
+/// whose numerals are narrow; SF carries Apple's own optical tracking per
+/// size, and adding to it at display sizes visibly loosens the figure.
 struct CatfolioDisplayAmountText: View {
     let text: String
     var size: CGFloat = 32
@@ -20,11 +24,10 @@ struct CatfolioDisplayAmountText: View {
         let parts = splitText
         HStack(alignment: .firstTextBaseline, spacing: 0) {
             Text(parts.prefix)
-                .font(.custom("Montserrat-Medium", size: symbolSize, relativeTo: .largeTitle))
+                .font(.system(size: symbolSize, weight: .medium, design: .rounded))
             Text(parts.number)
-                .font(.custom("Montserrat-Medium", size: size, relativeTo: .largeTitle))
+                .font(.system(size: size, weight: .medium, design: .rounded))
         }
-        .tracking(size * 0.05)
         .monospacedDigit()
         .foregroundStyle(color)
         .lineLimit(1)
@@ -453,12 +456,12 @@ struct ChartRangeSummary: View {
             HStack(alignment: .firstTextBaseline, spacing: 16) {
                 Spacer(minLength: 0)
                 Text(primaryValue)
-                    .font(.subheadline.weight(.bold).monospacedDigit())
+                    .appNumber(.callout, weight: .bold)
                     .foregroundStyle(color)
                     .lineLimit(1)
 
                 Text(secondaryValue)
-                    .font(.subheadline.weight(.bold).monospacedDigit())
+                    .appNumber(.callout, weight: .bold)
                     .foregroundStyle(color)
                     .lineLimit(1)
             }
@@ -953,7 +956,6 @@ struct ChartTimeRangePicker<Value: Hashable>: View {
                     Text(title(choice))
                         .font(.system(size: 14, weight: selection == choice ? .semibold : .medium))
                         .fontWidth(.compressed)
-                        .tracking(0.7)
                         .foregroundStyle(textColor(for: choice))
                         .lineLimit(1)
                         .frame(

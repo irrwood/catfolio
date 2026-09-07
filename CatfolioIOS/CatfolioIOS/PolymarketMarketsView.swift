@@ -450,7 +450,7 @@ private struct PolymarketMarketRow: View {
 
             VStack(alignment: .trailing, spacing: 3) {
                 Text(probabilityText)
-                    .font(.title3.weight(.bold).monospacedDigit())
+                    .appNumber(.heading, weight: .bold)
                     .foregroundStyle(CatfolioStyle.blue)
                 Text(outcomeText)
                     .font(.caption2.weight(.semibold))

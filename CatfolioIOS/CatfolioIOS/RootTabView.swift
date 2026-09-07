@@ -9,13 +9,13 @@ struct RootTabView: View {
         case portfolio
         case returns
         case settings
-        case assistant
     }
 
     @AppStorage(DisplayCurrency.preferenceKey) private var displayCurrencyRawValue = DisplayCurrency.usd.rawValue
     @AppStorage(CompanyNameDisplay.preferenceKey) private var companyNameDisplayRawValue = CompanyNameDisplay.original.rawValue
     @State private var selection: Destination
     @State private var showsAIAssistant: Bool
+    @Namespace private var assistantZoom
 
     init() {
         let arguments = ProcessInfo.processInfo.arguments
@@ -38,9 +38,21 @@ struct RootTabView: View {
     }
 
     var body: some View {
-        TabView(selection: systemTabSelection) {
+        NavigationStack {
+            rootTabs
+                .navigationDestination(isPresented: $showsAIAssistant) {
+                    AIAssistantPage()
+                        .toolbarVisibility(.hidden, for: .navigationBar)
+                        .navigationTransition(.zoom(sourceID: "ai-bubble", in: assistantZoom))
+                }
+        }
+    }
+
+    private var rootTabs: some View {
+        TabView(selection: $selection) {
             Tab(value: .portfolio) {
                 PortfolioView()
+                    .toolbarVisibility(.hidden, for: .tabBar)
             } label: {
                 tabIcon(
                     for: .portfolio,
@@ -52,6 +64,7 @@ struct RootTabView: View {
 
             Tab(value: .returns) {
                 ReturnsView()
+                    .toolbarVisibility(.hidden, for: .tabBar)
             } label: {
                 tabIcon(
                     for: .returns,
@@ -63,6 +76,7 @@ struct RootTabView: View {
 
             Tab(value: .settings) {
                 SettingsView()
+                    .toolbarVisibility(.hidden, for: .tabBar)
             } label: {
                 tabIcon(
                     for: .settings,
@@ -72,42 +86,70 @@ struct RootTabView: View {
                 )
             }
 
-            // Search-role tabs receive the system's trailing circular placement
-            // on iOS 26. The selection binding turns that native item into the
-            // existing floating-assistant action without replacing its artwork.
-            Tab(value: .assistant, role: .search) {
-                Color.clear
-            } label: {
+        }
+        .id(presentationPreferencesID)
+        .tint(.primary)
+        .navigationTitle(selection == .settings ? "设置" : (selection == .returns ? "Performance" : ""))
+        .navigationBarTitleDisplayMode(.large)
+        .toolbarVisibility(selection == .portfolio ? .hidden : .visible, for: .navigationBar)
+        .toolbarVisibility(.hidden, for: .tabBar)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            navigationBar
+        }
+    }
+
+    private var navigationBar: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 0) {
+                navigationButton(.portfolio, selected: "TabPortfolioSelected", unselected: "TabPortfolioUnselected", label: "持仓")
+                navigationButton(.returns, selected: "TabPerformanceSelected", unselected: "TabPerformanceUnselected", label: "收益")
+                navigationButton(.settings, selected: "TabSettingsSelected", unselected: "TabSettingsUnselected", label: "设置")
+            }
+            .padding(4)
+            .navigationGlass()
+
+            Button(action: presentAI) {
                 Image("TabAI")
                     .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
                     .frame(width: TabBarMetrics.iconSize, height: TabBarMetrics.iconSize)
-                    .accessibilityLabel("AI 助手")
+                    .frame(width: 56, height: 56)
+                    .contentShape(Circle())
             }
+            .buttonStyle(.plain)
+            .navigationGlass()
+            .matchedTransitionSource(id: "ai-bubble", in: assistantZoom) { source in
+                source.clipShape(
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                )
+            }
+            .accessibilityLabel("AI 助手")
         }
-        .id(presentationPreferencesID)
-        .tint(.primary)
-        .catfolioTabBarBehavior()
-        .allowsHitTesting(!showsAIAssistant)
-        .accessibilityHidden(showsAIAssistant)
-        .overlay {
-            AIFloatingAssistantLayer(isPresented: $showsAIAssistant)
-                .ignoresSafeArea(.container, edges: .all)
-        }
+        .padding(.horizontal, 20)
     }
 
-    private var systemTabSelection: Binding<Destination> {
-        Binding(
-            get: { selection },
-            set: { destination in
-                if destination == .assistant {
-                    presentAI()
-                } else {
-                    selection = destination
+    private func navigationButton(
+        _ destination: Destination,
+        selected: String,
+        unselected: String,
+        label: String
+    ) -> some View {
+        Button {
+            selection = destination
+        } label: {
+            tabIcon(for: destination, selectedAsset: selected, unselectedAsset: unselected, accessibilityLabel: label)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background {
+                    if selection == destination {
+                        Capsule().fill(.primary.opacity(0.07))
+                    }
                 }
-            }
-        )
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selection == destination ? .isSelected : [])
     }
 
     private func tabIcon(
@@ -126,5 +168,16 @@ struct RootTabView: View {
 
     private func presentAI() {
         showsAIAssistant = true
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func navigationGlass() -> some View {
+        if #available(iOS 26.0, *) {
+            glassEffect(.regular.interactive(), in: Capsule())
+        } else {
+            background(.ultraThinMaterial, in: Capsule())
+        }
     }
 }

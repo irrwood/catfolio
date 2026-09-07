@@ -125,10 +125,10 @@ struct Trading212View: View {
                                 Spacer()
                                 VStack(alignment: .trailing, spacing: 2) {
                                     Text(DisplayFormat.shares(position.quantity))
-                                        .font(.body.monospacedDigit())
+                                        .appNumber(.subheading)
                                     if let currentPrice = position.currentPrice {
                                         Text(DisplayFormat.money(position.quantity * currentPrice, currency: position.currency))
-                                            .font(.caption.monospacedDigit())
+                                            .appNumber(.caption)
                                             .foregroundStyle(.secondary)
                                     }
                                 }

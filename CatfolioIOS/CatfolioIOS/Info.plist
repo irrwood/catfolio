@@ -27,13 +27,6 @@
 	</dict>
 	<key>UILaunchScreen</key>
 	<dict/>
-	<key>UIAppFonts</key>
-	<array>
-		<string>Montserrat-Regular.ttf</string>
-		<string>Montserrat-Medium.ttf</string>
-		<string>Montserrat-SemiBold.ttf</string>
-		<string>Montserrat-Italic.ttf</string>
-	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

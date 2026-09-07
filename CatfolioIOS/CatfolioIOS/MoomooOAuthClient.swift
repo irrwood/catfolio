@@ -707,6 +707,9 @@ private final class MoomooLoopbackListener: @unchecked Sendable {
     private var callbackContinuation: CheckedContinuation<URL, Error>?
     private var pendingCallback: Result<URL, Error>?
     private var hasFinished = false
+    // Accessed only on the listener queue. Cancelling NWListener alone does
+    // not close TCP connections it has already accepted.
+    private var connections: [ObjectIdentifier: NWConnection] = [:]
 
     init(port: UInt16) throws {
         guard let port = NWEndpoint.Port(rawValue: port) else {
@@ -744,7 +747,12 @@ private final class MoomooLoopbackListener: @unchecked Sendable {
             ))
         }
         defer { timeoutTask.cancel() }
-        return try await awaitCallback()
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await awaitCallback()
+        } onCancel: {
+            self.cancel(with: CancellationError())
+        }
     }
 
     private func awaitCallback() async throws -> URL {
@@ -783,6 +791,11 @@ private final class MoomooLoopbackListener: @unchecked Sendable {
     }
 
     private func receiveRequest(from connection: NWConnection, buffer: Data) {
+        lock.lock()
+        let finished = hasFinished
+        lock.unlock()
+        guard !finished else { connection.cancel(); return }
+        connections[ObjectIdentifier(connection)] = connection
         connection.start(queue: queue)
         receiveMore(from: connection, buffer: buffer)
     }
@@ -794,6 +807,7 @@ private final class MoomooLoopbackListener: @unchecked Sendable {
             if let data { accumulated.append(data) }
             if accumulated.count > 16_384 {
                 self.sendResponse(to: connection, status: "413 Payload Too Large", message: "请求过大")
+                self.finish(.failure(MoomooOpenAPIError.authorizationFailed("OAuth 回调请求过大")))
                 return
             }
             if accumulated.range(of: Data("\r\n\r\n".utf8)) != nil || isComplete {
@@ -821,6 +835,9 @@ private final class MoomooLoopbackListener: @unchecked Sendable {
     }
 
     private func sendResponse(to connection: NWConnection, status: String, message: String) {
+        connections.removeValue(forKey: ObjectIdentifier(connection))
+        // Allow the response to drain, but never retain a stalled peer.
+        queue.asyncAfter(deadline: .now() + 2) { connection.cancel() }
         let body = "<!doctype html><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\"><title>Catfolio</title><body style=\"font:17px -apple-system;padding:40px;line-height:1.5\"><h2>Catfolio</h2><p>\(message)</p></body>"
         let bodyData = Data(body.utf8)
         let headers = "HTTP/1.1 \(status)\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(bodyData.count)\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n"
@@ -849,6 +866,10 @@ private final class MoomooLoopbackListener: @unchecked Sendable {
         if continuation == nil { pendingCallback = result }
         lock.unlock()
         listener.cancel()
+        queue.async { [self] in
+            connections.values.forEach { $0.cancel() }
+            connections.removeAll()
+        }
         continuation?.resume(with: result)
     }
 }

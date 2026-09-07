@@ -44,7 +44,7 @@ enum LocalServiceError: LocalizedError {
         case .noHistoricalPrices:
             "无法读取历史价格，请检查行情 API 设置与网络后重试"
         case .noSupportedETF:
-            "当前组合中没有可穿透的 ETF（支持 VUAG、VUSA、SPY、VOO、IVV、EQQQ、XS2D）"
+            "当前组合中的 ETF 暂无可用持仓快照"
         }
     }
 }
@@ -1123,6 +1123,39 @@ struct LocalMarketDataClient {
             )
             guard let change = Self.latestDailyChange(in: histories[symbol]) else { return }
             result[holding.ticker.uppercased()] = change
+        }
+    }
+
+    /// Fetches changes for a bounded list of ETF constituents without creating
+    /// synthetic portfolio holdings. Callers keep this list small so enabling
+    /// look-through does not fan out across an entire index.
+    func dailyChanges(tickers: [String]) async -> [String: Double] {
+        let tickers = tickers
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
+            .filter { !$0.isEmpty && $0 != "ETF 其他" }
+            .uniqued()
+        guard !tickers.isEmpty else { return [:] }
+
+        let endDate = Date.now
+        let startDate = Calendar(identifier: .gregorian).date(
+            byAdding: .day,
+            value: -14,
+            to: endDate
+        ) ?? endDate
+        let start = DayDateCodec.string(from: startDate)
+        let end = DayDateCodec.string(from: endDate)
+        let symbolByTicker = Dictionary(uniqueKeysWithValues: tickers.map {
+            ($0, Self.yahooSymbol(ticker: $0, currency: "USD"))
+        })
+        let histories = await historicalCloses(
+            symbols: Array(Set(symbolByTicker.values)),
+            from: start,
+            to: end
+        )
+
+        return symbolByTicker.reduce(into: [String: Double]()) { result, entry in
+            guard let change = Self.latestDailyChange(in: histories[entry.value]) else { return }
+            result[entry.key] = change
         }
     }
 
@@ -3246,10 +3279,23 @@ enum LocalETFLookThrough {
         var fromETFUSD: Double
     }
 
+    private struct HoldingsCatalog: Decodable {
+        let schemaVersion: Int
+        let funds: [String: Dataset]
+    }
+
+    private static let additionalDatasets: [String: Dataset] = {
+        guard let url = Bundle.main.url(forResource: "etf_holdings", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let catalog = try? JSONDecoder().decode(HoldingsCatalog.self, from: data),
+              catalog.schemaVersion == 1 else { return [:] }
+        return catalog.funds
+    }()
+
     private static let funds: [String: FundDefinition] = {
         let sp500 = FundDefinition(resource: "sp500_holdings", label: "S&P 500")
         let nasdaq100 = FundDefinition(resource: "eqqq_holdings", label: "EQQQ")
-        return [
+        var definitions: [String: FundDefinition] = [
             "VUAG": sp500, "VUAG.L": sp500,
             "VUSA": sp500, "VUSA.L": sp500,
             "SPY": sp500, "VOO": sp500, "IVV": sp500,
@@ -3262,6 +3308,11 @@ enum LocalETFLookThrough {
             "EQQQ": nasdaq100, "EQQQ.L": nasdaq100,
             "EQQU": nasdaq100, "EQQU.L": nasdaq100,
         ]
+        // Exact fund snapshots take precedence over the historical index proxy.
+        for ticker in additionalDatasets.keys {
+            definitions[ticker] = FundDefinition(resource: ticker, label: ticker)
+        }
+        return definitions
     }()
 
     static func make(document: LocalPortfolioDocument, basis: ETFLookThroughBasis) throws -> ETFLookThroughResponse {
@@ -3272,6 +3323,10 @@ enum LocalETFLookThrough {
         let requiredResources = Set(etfs.compactMap { funds[$0.ticker.uppercased()]?.resource })
         var datasets: [String: Dataset] = [:]
         for resource in requiredResources {
+            if let dataset = additionalDatasets[resource] {
+                datasets[resource] = dataset
+                continue
+            }
             guard let url = Bundle.main.url(forResource: resource, withExtension: "json"),
                   let dataset = try? JSONDecoder().decode(Dataset.self, from: Data(contentsOf: url)) else {
                 throw LocalServiceError.invalidResponse
@@ -3355,7 +3410,7 @@ enum LocalETFLookThrough {
         let covered = max(0, 100 - otherWeight)
         if otherFromETFUSD > 0.001 {
             rows.append(ETFLookThroughRow(
-                ticker: "ETF 其他", logoSymbol: nil, name: "基金现金及衍生品",
+                ticker: "ETF 其他", logoSymbol: nil, name: "基金现金、衍生品及未识别部分",
                 directUSD: 0, fromETFUSD: otherFromETFUSD,
                 totalUSD: otherFromETFUSD, etfWeightPercent: otherWeight, sector: "ETF / Other"
             ))

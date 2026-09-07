@@ -1,22 +1,6 @@
 import SwiftUI
 
-private enum PortfolioHomeTypography {
-    static func regular(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("Montserrat-Regular", size: size, relativeTo: style)
-    }
-
-    static func medium(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("Montserrat-Medium", size: size, relativeTo: style)
-    }
-
-    static func semibold(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("Montserrat-SemiBold", size: size, relativeTo: style)
-    }
-
-    static func italic(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("Montserrat-Italic", size: size, relativeTo: style)
-    }
-}
+private typealias PortfolioHomeTypography = LegacyType
 
 private struct PortfolioHomeTopBackground: View {
     let colorScheme: ColorScheme
@@ -194,9 +178,8 @@ private struct PortfolioRefreshTimestamp: View {
         Group {
             if let date {
                 Text("更新于 \(date.formatted(.dateTime.hour().minute()))")
-                    .font(PortfolioHomeTypography.medium(11, relativeTo: .caption2))
+                    .appNumber(.micro)
                     .foregroundStyle(Color.primary.opacity(0.44))
-                    .monospacedDigit()
                     .lineLimit(1)
             }
         }
@@ -294,8 +277,7 @@ private struct TodayContributionCard: View {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 4) {
                         Text("TODAY")
-                            .font(PortfolioHomeTypography.semibold(12, relativeTo: .caption))
-                            .tracking(2)
+                            .appCaps(.caption, weight: .semibold)
                             .foregroundStyle(.primary)
                         if onOpenDetail != nil {
                             Image(systemName: "chevron.right")
@@ -340,8 +322,7 @@ private struct TodayContributionCard: View {
                                 .foregroundStyle(Color.primary.opacity(0.5))
                         }
                     }
-                    .font(PortfolioHomeTypography.medium(14, relativeTo: .subheadline).monospacedDigit())
-                    .tracking(0.65)
+                    .appNumber(.footnote)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
                     .frame(height: 20, alignment: .bottomLeading)
@@ -602,8 +583,7 @@ private struct TodayContributionBar: View {
                             .opacity(growth)
 
                         Text(amountText)
-                            .font(PortfolioHomeTypography.semibold(12, relativeTo: .caption).monospacedDigit())
-                            .tracking(1.25)
+                            .appNumber(.caption, weight: .semibold)
                             .foregroundStyle(.white)
                             .lineLimit(1)
                             .minimumScaleFactor(0.62)
@@ -652,7 +632,7 @@ private struct TodayContributionBar: View {
                 .number.precision(.fractionLength(2))
             )
         )
-            .font(.caption2.weight(.bold).monospacedDigit())
+            .appNumber(.micro, weight: .bold)
             .foregroundStyle(colorScheme == .dark ? Color.white : accent)
             .lineLimit(1)
             .minimumScaleFactor(0.48)
@@ -1002,8 +982,7 @@ private struct CostMarketCard: View {
         ZStack(alignment: .topLeading) {
             HStack(spacing: 4) {
                 Text("CATFOLIO")
-                    .font(PortfolioHomeTypography.semibold(12, relativeTo: .caption))
-                    .tracking(1.2)
+                    .appCaps(.caption, weight: .semibold)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 6, weight: .bold))
             }
@@ -1048,7 +1027,9 @@ private struct CostMarketCard: View {
                 } label: {
                     HStack(spacing: 4) {
                         Text("NET DEPOSIT")
+                            .appCaps(.footnote)
                         Text(DisplayFormat.money(displayedCost))
+                            .numericTransition(displayedCost)
                     }
                     .contentShape(Rectangle())
                 }
@@ -1059,8 +1040,7 @@ private struct CostMarketCard: View {
                 .accessibilityHint("轻点切换显示或隐藏")
                 .foregroundStyle(Color.primary.opacity(colorScheme == .light ? 0.30 : 0.50))
             }
-            .font(PortfolioHomeTypography.medium(14, relativeTo: .subheadline).monospacedDigit())
-            .tracking(1.45)
+            .appNumber(.footnote)
             .lineLimit(1)
             .minimumScaleFactor(0.62)
             .offset(x: CatfolioStyle.pageHorizontalInset, y: 75)
@@ -1171,8 +1151,7 @@ private struct CostMarketCard: View {
         return VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(values.enumerated()), id: \.offset) { index, value in
                 Text(compactAxisValue(value))
-                    .font(PortfolioHomeTypography.italic(14, relativeTo: .caption).monospacedDigit())
-                    .tracking(1.4)
+                    .appNumber(.footnote)
                 if index < values.count - 1 { Spacer() }
             }
         }
@@ -1432,6 +1411,9 @@ private struct PortfolioDetailsCard: View {
     @State private var etfError: String?
     @State private var isLoadingETF = false
     @State private var loadedETFHoldingsKey = ""
+    @State private var etfConstituentDailyChanges: [String: Double] = [:]
+    @State private var loadedETFConstituentChangesKey = ""
+    @State private var isLoadingETFConstituentChanges = false
     @State private var etfVisibleLimit = 20
     @State private var etfSortField = ETFExposureSortField.totalExposure
     @State private var etfSortAscending = false
@@ -1439,6 +1421,11 @@ private struct PortfolioDetailsCard: View {
     @AppStorage("portfolio.holdings.sortField") private var holdingSortFieldRawValue = HoldingSortField.marketValue.rawValue
     @AppStorage("portfolio.holdings.sortAscending") private var holdingSortAscending = false
     @State private var holdingPerformancePeriod: HoldingPerformancePeriod = .holdingPeriod
+    @State private var heatmapPerformancePeriod: HoldingPerformancePeriod = .today
+    @State private var heatmapGroupsBySector = ProcessInfo.processInfo.arguments
+        .contains("--group-heatmap-by-sector")
+    @State private var heatmapLooksThroughETF = ProcessInfo.processInfo.arguments
+        .contains("--look-through-heatmap-etf")
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -1468,8 +1455,11 @@ private struct PortfolioDetailsCard: View {
                             .scaledToFit()
                             .frame(width: 24, height: 24)
                     }
-                    .font(PortfolioHomeTypography.medium(colorScheme == .light ? 28 : 32, relativeTo: .largeTitle))
-                    .tracking(colorScheme == .light ? 1.4 : 1.6)
+                    .font(.system(
+                        size: colorScheme == .light ? 28 : 32,
+                        weight: .medium,
+                        design: .rounded
+                    ).monospacedDigit())
                     .foregroundStyle(.primary)
                 }
                 .buttonStyle(.plain)
@@ -1490,15 +1480,12 @@ private struct PortfolioDetailsCard: View {
                 } else if tableMode == "ETF 穿透" {
                     ETFExposureSortMenu(field: $etfSortField, ascending: $etfSortAscending)
                 } else {
-                    HStack(spacing: 6) {
-                        if model.isHoldingDailyChangesLoading {
-                            ProgressView()
-                                .controlSize(.small)
-                        }
-                        Text("今日")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
+                    HeatmapPerformancePeriodMenu(
+                        period: $heatmapPerformancePeriod,
+                        groupsBySector: $heatmapGroupsBySector,
+                        looksThroughETF: $heatmapLooksThroughETF,
+                        usesGlass: headerUsesGlass
+                    )
                 }
                 }
             }
@@ -1521,9 +1508,20 @@ private struct PortfolioDetailsCard: View {
                     HoldingsHeatmapView(
                         holdings: holdings,
                         dailyChanges: model.holdingDailyChanges,
-                        isLoading: model.isHoldingDailyChangesLoading,
+                        isLoading: model.isHoldingDailyChangesLoading
+                            || (heatmapLooksThroughETF
+                                && (isLoadingETF || isLoadingETFConstituentChanges)),
+                        performancePeriod: heatmapPerformancePeriod,
+                        groupsBySector: heatmapGroupsBySector,
+                        usesETFLookThrough: heatmapLooksThroughETF,
+                        lookThroughRows: loadedETFHoldingsKey == etfHoldingsKey
+                            ? etfResponse?.rows
+                            : nil,
+                        lookThroughDailyChanges: etfConstituentDailyChanges,
                         onSelect: onSelect,
-                        onShowAll: { tableMode = "持仓" }
+                        onShowAll: {
+                            tableMode = heatmapLooksThroughETF ? "ETF 穿透" : "持仓"
+                        }
                     )
                 } else {
                     etfTable
@@ -1534,12 +1532,18 @@ private struct PortfolioDetailsCard: View {
         .padding(.top, 24)
         .padding(.bottom, 18)
         .background(colorScheme == .light ? Color.white : Color(red: 0, green: 0.008, blue: 0))
-        .task(id: "\(tableMode)-\(etfHoldingsKey)") {
+        .task(id: "\(tableMode)-\(etfHoldingsKey)-\(heatmapLooksThroughETF)") {
             if tableMode == "ETF 穿透" {
                 guard etfResponse == nil || loadedETFHoldingsKey != etfHoldingsKey else { return }
                 await loadETF()
             } else if tableMode == "热力图" {
                 await model.refreshHoldingDailyChanges()
+                if heatmapLooksThroughETF {
+                    if etfResponse == nil || loadedETFHoldingsKey != etfHoldingsKey {
+                        await loadETF()
+                    }
+                    await loadETFConstituentDailyChanges()
+                }
             }
         }
         .onChange(of: etfSortField) { _, _ in etfVisibleLimit = 20 }
@@ -1799,11 +1803,32 @@ private struct PortfolioDetailsCard: View {
         do {
             etfResponse = try await model.loadETFLookThrough(basis: .market)
             loadedETFHoldingsKey = etfHoldingsKey
+            etfConstituentDailyChanges = [:]
+            loadedETFConstituentChangesKey = ""
             etfVisibleLimit = 20
         } catch {
             etfResponse = nil
             etfError = error.localizedDescription
         }
+    }
+
+    private func loadETFConstituentDailyChanges() async {
+        guard let rows = etfResponse?.rows,
+              loadedETFHoldingsKey == etfHoldingsKey else { return }
+        let tickers = rows
+            .filter { $0.totalUSD.isFinite && $0.totalUSD > 0 && $0.ticker != "ETF 其他" }
+            .sorted { $0.totalUSD > $1.totalUSD }
+            .prefix(HoldingsHeatmapView.maximumLookThroughTiles)
+            .map(\.ticker)
+        let signature = "\(etfHoldingsKey)|\(tickers.map { $0.uppercased() }.joined(separator: ","))"
+        guard signature != loadedETFConstituentChangesKey else { return }
+
+        isLoadingETFConstituentChanges = true
+        defer { isLoadingETFConstituentChanges = false }
+        let changes = await LocalMarketDataClient().dailyChanges(tickers: tickers)
+        guard !Task.isCancelled, loadedETFHoldingsKey == etfHoldingsKey else { return }
+        etfConstituentDailyChanges = changes
+        loadedETFConstituentChangesKey = signature
     }
 }
 
@@ -1834,7 +1859,7 @@ private enum HoldingSortField: String, CaseIterable, Identifiable {
     }
 }
 
-private enum HoldingPerformancePeriod: String, CaseIterable, Identifiable {
+enum HoldingPerformancePeriod: String, CaseIterable, Identifiable {
     case today
     case holdingPeriod
 
@@ -1852,6 +1877,52 @@ private enum HoldingPerformancePeriod: String, CaseIterable, Identifiable {
         case .today: "sun.max"
         case .holdingPeriod: "calendar.badge.clock"
         }
+    }
+}
+
+private struct HeatmapPerformancePeriodMenu: View {
+    @Binding var period: HoldingPerformancePeriod
+    @Binding var groupsBySector: Bool
+    @Binding var looksThroughETF: Bool
+    var usesGlass = false
+
+    var body: some View {
+        Menu {
+            Section("收益时间") {
+                ForEach(HoldingPerformancePeriod.allCases) { option in
+                    Button {
+                        period = option
+                    } label: {
+                        Label(
+                            option.title,
+                            systemImage: period == option ? "checkmark" : option.systemImage
+                        )
+                    }
+                }
+            }
+
+            Divider()
+
+            Section("布局") {
+                Toggle("按板块分组", isOn: $groupsBySector)
+                Toggle("穿透 ETF", isOn: $looksThroughETF)
+            }
+        } label: {
+            Image("PortfolioHeaderSort")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 24, height: 24)
+                .frame(width: 58, height: 44)
+                .modifier(PortfolioHeaderMaterialControl(usesGlass: usesGlass))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .menuOrder(.fixed)
+        .accessibilityLabel(
+            "热力图筛选：\(period.title)，\(groupsBySector ? "按板块分组" : "不分组")，"
+                + (looksThroughETF ? "已穿透 ETF" : "未穿透 ETF")
+        )
     }
 }
 
@@ -1883,8 +1954,7 @@ private struct HoldingSortMenu: View {
     var body: some View {
         menu
         .buttonStyle(.plain)
-        .font(PortfolioHomeTypography.medium(14, relativeTo: .subheadline))
-        .tracking(0.7)
+        .appText(.footnote, weight: .medium)
         .foregroundStyle(.secondary)
         .accessibilityLabel("筛选：\(performancePeriod.title)；排序：\(field.title)，\(ascending ? "升序" : "降序")")
     }
@@ -2039,7 +2109,7 @@ private struct ETFSummaryMetric: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.subheadline.weight(.bold).monospacedDigit())
+                .appNumber(.callout, weight: .bold)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
@@ -2073,16 +2143,16 @@ private struct ETFExposureRow: View {
                             Text("\(formattedShares(directHolding.shares)) 股")
                         }
                     }
-                    .font(.caption.weight(.semibold).monospacedDigit())
+                    .appNumber(.caption, weight: .semibold)
                     .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 VStack(alignment: .trailing, spacing: 3) {
                     Text(DisplayFormat.money(row.totalUSD, fractionDigits: 2))
-                        .font(.subheadline.weight(.bold).monospacedDigit())
+                        .appNumber(.callout, weight: .bold)
                     Text(DisplayFormat.percent(portfolioWeight * 100, signed: false))
-                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .appNumber(.caption, weight: .semibold)
                         .foregroundStyle(.secondary)
                 }
                 .layoutPriority(2)
@@ -2112,7 +2182,7 @@ private struct ETFExposureRow: View {
                     )
                     .foregroundStyle(directHolding.unrealized >= 0 ? CatfolioPalette.green500 : CatfolioPalette.rose500)
                 }
-                .font(.caption2.weight(.semibold).monospacedDigit())
+                .appNumber(.micro, weight: .semibold)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.68)
@@ -2129,7 +2199,7 @@ private struct ETFExposureRow: View {
                 .fill(color)
                 .frame(width: 7, height: 7)
             Text("\(title) \(DisplayFormat.money(value))")
-                .font(.caption2.weight(.semibold).monospacedDigit())
+                .appNumber(.micro, weight: .semibold)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
@@ -2201,8 +2271,7 @@ private struct HoldingRow: View {
                     VStack(alignment: .leading, spacing: 5) {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text(holding.shortName)
-                                .font(PortfolioHomeTypography.medium(16, relativeTo: .headline))
-                                .tracking(0.16)
+                                .appText(.body, weight: .medium)
                                 .foregroundStyle(.primary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
@@ -2211,8 +2280,8 @@ private struct HoldingRow: View {
                             Spacer(minLength: 4)
 
                             Text(DisplayFormat.money(holding.marketValue, fractionDigits: 2))
-                                .font(PortfolioHomeTypography.medium(16, relativeTo: .headline).monospacedDigit())
-                                .tracking(0.16)
+                                .appNumber(.body)
+                                .numericTransition(holding.marketValue)
                                 .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
                         }
@@ -2220,11 +2289,9 @@ private struct HoldingRow: View {
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
                             HStack(spacing: 2) {
                                 Text(DisplayFormat.shares(holding.shares))
-                                    .font(PortfolioHomeTypography.medium(12, relativeTo: .caption).monospacedDigit())
-                                    .tracking(0.12)
+                                    .appNumber(.caption)
                                 Text(holding.ticker)
-                                    .font(PortfolioHomeTypography.medium(12, relativeTo: .caption))
-                                    .tracking(0.12)
+                                    .appText(.caption, weight: .medium)
                             }
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
@@ -2262,15 +2329,15 @@ private struct HoldingRow: View {
         if let performance {
             HStack(spacing: 2) {
                 Text(DisplayFormat.money(performance.amount, signed: true, fractionDigits: 2))
-                    .tracking(0.12)
+                    .numericTransition(performance.amount)
                 Circle()
                     .fill(rowAccent)
                     .frame(width: 2, height: 2)
                     .accessibilityHidden(true)
                 Text(DisplayFormat.percent(performance.percent))
-                    .tracking(0.12)
+                    .numericTransition(performance.percent)
             }
-            .font(PortfolioHomeTypography.medium(12, relativeTo: .caption).monospacedDigit())
+            .appNumber(.caption)
             .foregroundStyle(rowAccent)
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
@@ -2300,18 +2367,15 @@ private struct HoldingIdentity: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(holding.shortName)
-                .font(PortfolioHomeTypography.medium(16, relativeTo: .headline))
-                .tracking(0.16)
+                .appText(.body, weight: .medium)
                 .foregroundStyle(.primary)
                 .lineLimit(compact ? 1 : nil)
 
             HStack(spacing: 2) {
                 Text(DisplayFormat.shares(holding.shares))
-                    .font(PortfolioHomeTypography.medium(12, relativeTo: .caption).monospacedDigit())
-                    .tracking(0.12)
+                    .appNumber(.caption)
                 Text(holding.ticker)
-                    .font(PortfolioHomeTypography.medium(12, relativeTo: .caption))
-                    .tracking(0.12)
+                    .appText(.caption, weight: .medium)
             }
                 .foregroundStyle(.secondary)
                 .lineLimit(compact ? 1 : nil)
@@ -2330,12 +2394,10 @@ private struct HoldingMetrics: View {
     var body: some View {
         VStack(alignment: alignment, spacing: 5) {
             Text(DisplayFormat.money(holding.marketValue, fractionDigits: 2))
-                .font(PortfolioHomeTypography.medium(16, relativeTo: .headline).monospacedDigit())
-                .tracking(0.16)
+                .appNumber(.body)
                 .lineLimit(compact ? 1 : nil)
             Text(performanceText)
-            .font(PortfolioHomeTypography.medium(12, relativeTo: .caption).monospacedDigit())
-            .tracking(0.12)
+            .appNumber(.caption)
             .foregroundStyle(
                 (performance?.amount ?? 0) >= 0
                     ? (colorScheme == .light

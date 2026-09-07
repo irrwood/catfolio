@@ -1,22 +1,6 @@
 import SwiftUI
 
-private enum HoldingDetailTypography {
-    static func regular(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("Montserrat-Regular", size: size, relativeTo: style)
-    }
-
-    static func medium(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("Montserrat-Medium", size: size, relativeTo: style)
-    }
-
-    static func semibold(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("Montserrat-SemiBold", size: size, relativeTo: style)
-    }
-
-    static func italic(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("Montserrat-Italic", size: size, relativeTo: style)
-    }
-}
+private typealias HoldingDetailTypography = LegacyType
 
 struct HoldingDetailView: View {
     @Environment(AppModel.self) private var model
@@ -334,8 +318,7 @@ private struct HoldingDetailAccountSelector: View {
                 Text(title)
                     .lineLimit(1)
                 Text(DisplayFormat.money(marketValue, currency: currency, fractionDigits: 0))
-                    .monospacedDigit()
-                    .tracking(2)
+                    .appNumber(.caption)
                     .foregroundStyle(Color.primary.opacity(0.50))
                     .lineLimit(1)
             }
@@ -1013,7 +996,6 @@ private struct SecurityPriceRangePicker: View {
                     Text(choice)
                         .font(.system(size: 14, weight: .medium, design: .rounded))
                         .fontWidth(.compressed)
-                        .tracking(0.7)
                         .foregroundStyle(foreground(for: choice))
                         .frame(width: 44, height: 30)
                         .background {
@@ -1142,11 +1124,9 @@ private struct SecurityPricePlot: View {
             rangeSeriesIDs: ["price"],
             rangePrimarySeriesID: "price",
             dimsFutureDuringSelection: true,
-            yAxisFont: HoldingDetailTypography.italic(14, relativeTo: .caption).monospacedDigit(),
-            yAxisTracking: 2,
+            yAxisFont: Typography.number(.footnote),
             yAxisColor: Color.primary.opacity(0.20),
-            referenceAxisFont: HoldingDetailTypography.italic(14, relativeTo: .caption).monospacedDigit(),
-            referenceAxisTracking: 2,
+            referenceAxisFont: Typography.number(.footnote, weight: .semibold),
             yAxisLabel: axisPriceLabel,
             xAxisLabel: { _ in "" },
             onSelect: onSelect,
@@ -1335,16 +1315,16 @@ private struct HoldingDetailHeader: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(displayName)
-                    .font(HoldingDetailTypography.semibold(17, relativeTo: .headline))
+                    .appText(.subheading, weight: .semibold)
                     .lineLimit(1)
                     .minimumScaleFactor(0.76)
 
                 HStack(spacing: 8) {
                     Text(DisplayFormat.shares(holding.shares))
-                        .tracking(1.04)
+                        .appNumber(.label)
                     Text(holding.ticker.uppercased())
+                        .appCaps(.label)
                 }
-                .font(HoldingDetailTypography.medium(13, relativeTo: .caption))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             }
@@ -1353,9 +1333,8 @@ private struct HoldingDetailHeader: View {
 
             VStack(alignment: .trailing, spacing: 5) {
                 Text(DisplayFormat.money(displayedPrice, currency: holding.quoteCurrency ?? "USD"))
-                    .font(HoldingDetailTypography.semibold(17, relativeTo: .headline).monospacedDigit())
-                    .tracking(1.36)
-                    .contentTransition(.numericText(value: displayedPrice))
+                    .appNumber(.subheading, weight: .semibold)
+                    .numericTransition(displayedPrice)
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
                     .allowsTightening(true)
@@ -1363,8 +1342,7 @@ private struct HoldingDetailHeader: View {
                     .multilineTextAlignment(.trailing)
                 if let todayChangePercent = todayChange {
                     Text(DisplayFormat.percent(todayChangePercent))
-                        .font(HoldingDetailTypography.medium(13, relativeTo: .caption).monospacedDigit())
-                        .tracking(1.04)
+                        .appNumber(.label)
                         .foregroundStyle(
                             todayChangePercent >= 0
                                 ? Color(red: 1 / 255, green: 184 / 255, blue: 1 / 255)
@@ -1597,7 +1575,7 @@ private struct HoldingDataRow: View {
             .accessibilityHidden(true)
 
             Text(model.title.uppercased())
-                .font(HoldingDetailTypography.medium(13, relativeTo: .caption))
+                .appCaps(.label)
                 .foregroundStyle(.primary.opacity(0.50))
                 .lineLimit(1)
                 .minimumScaleFactor(0.74)
@@ -1605,8 +1583,7 @@ private struct HoldingDataRow: View {
             Spacer(minLength: 8)
 
             Text(model.value)
-                .font(HoldingDetailTypography.semibold(13, relativeTo: .subheadline).monospacedDigit())
-                .tracking(1.4)
+                .appNumber(.label, weight: .semibold)
                 .foregroundStyle(model.color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.66)
@@ -1638,13 +1615,13 @@ private struct HoldingMetric: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.body.weight(.bold).monospacedDigit())
+                .appNumber(.subheading, weight: .bold)
                 .foregroundStyle(color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
             if let detail {
                 Text(detail)
-                    .font(.caption.weight(.semibold).monospacedDigit())
+                    .appNumber(.caption, weight: .semibold)
                     .foregroundStyle(color)
             }
         }
@@ -1881,8 +1858,7 @@ private struct HoldingPredictionMarketRow: View {
 
             VStack(alignment: .trailing, spacing: 3) {
                 Text(probabilityText)
-                    .font(HoldingDetailTypography.medium(16, relativeTo: .headline).monospacedDigit())
-                    .tracking(-0.16)
+                    .appNumber(.body)
                     .foregroundStyle(outcomeColor)
                 Text(market.outcome)
                     .font(HoldingDetailTypography.regular(13, relativeTo: .caption))
@@ -2145,7 +2121,7 @@ private struct FiftyTwoWeekRange: View {
                     .minimumScaleFactor(0.72)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
-            .font(HoldingDetailTypography.medium(15, relativeTo: .subheadline).monospacedDigit())
+            .appNumber(.callout)
             .foregroundStyle(rangeLabelColor)
             .frame(width: size.width)
             .position(x: size.width / 2, y: 129)
@@ -3222,11 +3198,10 @@ private struct VolumeDistributionPlot: View {
     ) -> some View {
         (
             Text(title)
-                .font(.caption2.weight(.semibold))
+                .font(Typography.text(.micro, weight: .semibold))
             + Text(" \(money(price))")
-                .font(.caption2.weight(.bold).monospacedDigit())
+                .font(Typography.number(.micro, weight: .bold))
         )
-        .fontDesign(.rounded)
         .foregroundStyle(foreground)
         .lineLimit(1)
         .minimumScaleFactor(0.58)
@@ -3237,7 +3212,7 @@ private struct VolumeDistributionPlot: View {
 
     private func edgePriceLabel(price: Double) -> some View {
         Text(money(price))
-            .font(.caption2.weight(.semibold).monospacedDigit())
+            .appNumber(.micro, weight: .semibold)
             .fontDesign(.rounded)
             .foregroundStyle(.white)
             .lineLimit(1)
@@ -3245,7 +3220,7 @@ private struct VolumeDistributionPlot: View {
 
     private func axisPricePill(price: Double, width: CGFloat) -> some View {
         let label = Text(money(price, fractionDigits: 2))
-            .font(.caption2.weight(.semibold).monospacedDigit())
+            .appNumber(.micro, weight: .semibold)
             .fontDesign(.rounded)
             .foregroundStyle(.white)
             .lineLimit(1)

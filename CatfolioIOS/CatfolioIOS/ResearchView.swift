@@ -297,8 +297,7 @@ struct ResearchView: View {
             if let value = snapshot?.latest?.value {
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
                     Text(value / (symbol == "^TNX" ? 1 : 1), format: .number.precision(.fractionLength(2)))
-                        .font(.title2.weight(.bold))
-                        .monospacedDigit()
+                        .appNumber(.title, weight: .bold)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                     if symbol == "^TNX" {
@@ -314,11 +313,11 @@ struct ResearchView: View {
             if let snapshot {
                 if symbol == "^TNX", let change = snapshot.changeBasisPoints {
                     Text("\(change >= 0 ? "+" : "")\(change.formatted(.number.precision(.fractionLength(1)))) bps")
-                        .font(.footnote.weight(.medium)).monospacedDigit()
+                        .appNumber(.footnote, weight: .medium)
                         .foregroundStyle(.secondary)
                 } else if let change = snapshot.changePercent {
                     Text(DisplayFormat.percent(change, signed: true))
-                        .font(.footnote.weight(.medium)).monospacedDigit()
+                        .appNumber(.footnote, weight: .medium)
                         .foregroundStyle(tint)
                 }
 
@@ -362,8 +361,7 @@ struct ResearchView: View {
 
             if let change {
                 Text(DisplayFormat.percent(change, signed: true))
-                    .font(.title3.weight(.bold))
-                    .monospacedDigit()
+                    .appNumber(.heading, weight: .bold)
                     .foregroundStyle(change >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -405,11 +403,11 @@ struct ResearchView: View {
                 if let snapshot {
                     if symbol == "^TNX", let change = snapshot.changeBasisPoints {
                         Text("\(change >= 0 ? "+" : "")\(change.formatted(.number.precision(.fractionLength(1)))) bps")
-                            .font(.subheadline.weight(.medium)).monospacedDigit()
+                            .appNumber(.callout, weight: .medium)
                             .foregroundStyle(.secondary)
                     } else if let change = snapshot.changePercent {
                         Text(DisplayFormat.percent(change, signed: true))
-                            .font(.subheadline.weight(.medium)).monospacedDigit()
+                            .appNumber(.callout, weight: .medium)
                             .foregroundStyle(tint)
                     }
                 }

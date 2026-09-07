@@ -228,10 +228,8 @@ struct StandardLineChart: View {
     let rangePrimarySeriesID: String?
     let dimsFutureDuringSelection: Bool
     let yAxisFont: Font
-    let yAxisTracking: CGFloat
     let yAxisColor: Color
     let referenceAxisFont: Font
-    let referenceAxisTracking: CGFloat
     let yAxisLabel: (Double) -> String
     let xAxisLabel: (Date) -> String
     let onSelect: ((Date) -> Void)?
@@ -279,11 +277,9 @@ struct StandardLineChart: View {
         rangeSeriesIDs: Set<String> = [],
         rangePrimarySeriesID: String? = nil,
         dimsFutureDuringSelection: Bool = false,
-        yAxisFont: Font = .caption2.weight(.medium).monospacedDigit(),
-        yAxisTracking: CGFloat = 0,
+        yAxisFont: Font = Typography.number(.nano),
         yAxisColor: Color = .secondary,
-        referenceAxisFont: Font = .caption2.weight(.semibold).monospacedDigit(),
-        referenceAxisTracking: CGFloat = 0,
+        referenceAxisFont: Font = Typography.number(.nano, weight: .semibold),
         yAxisLabel: @escaping (Double) -> String,
         xAxisLabel: @escaping (Date) -> String,
         onSelect: ((Date) -> Void)? = nil,
@@ -315,10 +311,8 @@ struct StandardLineChart: View {
         self.rangePrimarySeriesID = rangePrimarySeriesID
         self.dimsFutureDuringSelection = dimsFutureDuringSelection
         self.yAxisFont = yAxisFont
-        self.yAxisTracking = yAxisTracking
         self.yAxisColor = yAxisColor
         self.referenceAxisFont = referenceAxisFont
-        self.referenceAxisTracking = referenceAxisTracking
         self.yAxisLabel = yAxisLabel
         self.xAxisLabel = xAxisLabel
         self.onSelect = onSelect
@@ -1335,7 +1329,6 @@ struct StandardLineChart: View {
             if shouldShowAxisTick(entry.element, plot: plot) {
                 Text(yAxisLabel(entry.element))
                     .font(yAxisFont)
-                    .tracking(yAxisTracking)
                     .foregroundStyle(yAxisColor)
                     .position(
                         x: yAxisSide == .leading ? axisWidth / 2 : plot.maxX + axisWidth / 2,
@@ -1366,7 +1359,6 @@ struct StandardLineChart: View {
         ForEach(referenceLines) { reference in
             Text(reference.label)
                 .font(referenceAxisFont)
-                .tracking(referenceAxisTracking)
                 .foregroundStyle(reference.color)
                 .position(
                     x: yAxisSide == .leading ? axisWidth / 2 : plot.maxX + axisWidth / 2,
@@ -1383,7 +1375,7 @@ struct StandardLineChart: View {
                 Spacer()
                 Text(xAxisLabel(last))
             }
-            .font(.caption2.weight(.medium))
+            .font(Typography.text(.micro))
             .foregroundStyle(.secondary)
             .frame(width: plot.width)
             .offset(x: plot.minX, y: plot.maxY + 6)
@@ -1599,7 +1591,7 @@ private struct StandardLineChartDateBubble: View {
 
     var body: some View {
         let content = Text(label)
-            .font(.caption.weight(.semibold).monospacedDigit())
+            .font(Typography.number(.caption, weight: .semibold))
             .foregroundStyle(.secondary)
             .lineLimit(1)
             .padding(.horizontal, 12)
@@ -1795,10 +1787,10 @@ struct StandardLineChartPlaceholder: View {
                 .fill(Color.secondary.opacity(0.055))
             VStack(spacing: 9) {
                 Image(systemName: "chart.xyaxis.line")
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(Typography.text(.title, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(Typography.text(.callout, weight: .semibold))
                 Text(message)
                     .font(.caption)
                     .foregroundStyle(.secondary)

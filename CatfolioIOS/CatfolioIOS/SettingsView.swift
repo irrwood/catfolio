@@ -328,7 +328,7 @@ struct SettingsView: View {
                     .font(.body)
                     .foregroundStyle(.primary)
                 Text("\(model.accounts.count) 个账户 · \(DisplayFormat.money(allAccountsMarketValueUSD))")
-                    .font(.subheadline.monospacedDigit())
+                    .appNumber(.callout)
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -361,7 +361,7 @@ struct SettingsView: View {
                         Text(account.awaitsFirstSync
                             ? "等待首次同步"
                             : "\(account.positionCount) 项 · \(DisplayFormat.money(account.marketValueUSD))")
-                            .font(.subheadline.monospacedDigit())
+                            .appNumber(.callout)
                             .foregroundStyle(account.awaitsFirstSync ? CatfolioTheme.accent : .secondary)
                             .lineLimit(1)
                     }
@@ -500,7 +500,7 @@ private struct AccountDetailView: View {
                         .font(.largeTitle.bold())
                         .lineLimit(2)
                     Text(DisplayFormat.money(account.marketValueUSD))
-                        .font(.title2.bold().monospacedDigit())
+                        .appNumber(.title, weight: .bold)
                     Text("\(account.positionCount) 个持仓")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -737,7 +737,7 @@ private struct AccountDetailView: View {
             Spacer(minLength: 8)
             if let detail {
                 Text(detail)
-                    .font(.subheadline.monospacedDigit())
+                    .appNumber(.callout)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -837,7 +837,7 @@ private struct AccountTransactionsView: View {
                             Text(transaction.date)
                             Spacer()
                             Text(transactionDetail(transaction))
-                                .monospacedDigit()
+                                .appNumber(.caption)
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)

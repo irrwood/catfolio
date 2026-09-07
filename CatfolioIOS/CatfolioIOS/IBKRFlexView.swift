@@ -198,10 +198,10 @@ struct IBKRFlexView: View {
                                 Spacer()
                                 VStack(alignment: .trailing, spacing: 2) {
                                     Text(DisplayFormat.shares(position.quantity))
-                                        .font(.body.monospacedDigit())
+                                        .appNumber(.subheading)
                                     if let marketValue = position.marketValue {
                                         Text(DisplayFormat.money(marketValue, currency: position.currency))
-                                            .font(.caption.monospacedDigit())
+                                            .appNumber(.caption)
                                             .foregroundStyle(.secondary)
                                     }
                                 }

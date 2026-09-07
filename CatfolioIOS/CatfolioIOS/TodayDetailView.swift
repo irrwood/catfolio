@@ -195,7 +195,7 @@ struct TodayDetailView: View {
             }
             Spacer(minLength: 8)
             Text(DisplayFormat.money(amount, signed: true, fractionDigits: 2))
-                .font(.body.weight(.medium)).monospacedDigit()
+                .appNumber(.subheading, weight: .medium)
                 .foregroundStyle(tint)
         }
         .padding(.vertical, 1)
@@ -209,8 +209,7 @@ struct TodayDetailView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     Text(DisplayFormat.money(total, signed: true, fractionDigits: 2))
-                        .font(.largeTitle.weight(.bold))
-                        .monospacedDigit()
+                        .appNumber(.display, weight: .bold)
                         .foregroundStyle(total >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
                         .contentTransition(.numericText(value: total))
                     if let benchmarkChange, benchmarkChange.isFinite {
@@ -221,7 +220,7 @@ struct TodayDetailView: View {
                             Text("S&P 500")
                                 .font(.subheadline).foregroundStyle(.secondary)
                             Text(DisplayFormat.percent(benchmarkChange, signed: true))
-                                .font(.subheadline.weight(.medium)).monospacedDigit()
+                                .appNumber(.callout, weight: .medium)
                                 .foregroundStyle(benchmarkChange >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
                         }
                         .padding(.top, 2)
@@ -306,7 +305,7 @@ struct TodayDetailView: View {
                     .lineLimit(1)
                 Spacer(minLength: 8)
                 Text(DisplayFormat.money(contribution.amount, signed: true, fractionDigits: 2))
-                    .font(.body.weight(.semibold)).monospacedDigit()
+                    .appNumber(.subheading, weight: .semibold)
                     .foregroundStyle(tint)
             }
             HStack(spacing: 8) {
@@ -320,7 +319,7 @@ struct TodayDetailView: View {
                 }
                 .frame(height: 5)
                 Text(DisplayFormat.percent(contribution.changePercent, signed: true))
-                    .font(.caption).monospacedDigit()
+                    .appNumber(.caption)
                     .foregroundStyle(.secondary)
                     .frame(width: 62, alignment: .trailing)
             }
@@ -366,12 +365,12 @@ private struct SectorMembersView: View {
                                 .lineLimit(1)
                             Spacer(minLength: 8)
                             Text(DisplayFormat.money(component.amount, signed: true, fractionDigits: 2))
-                                .font(.body.weight(.medium)).monospacedDigit()
+                                .appNumber(.subheading, weight: .medium)
                                 .foregroundStyle(component.amount >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
                         }
                         HStack(spacing: 6) {
                             Text(component.holding.ticker)
-                                .font(.caption).monospacedDigit()
+                                .appNumber(.caption)
                                 .foregroundStyle(.tertiary)
                             if component.fraction < 0.999 {
                                 Text("成分穿透 \(percentText(component.fraction)) 计入本行业")

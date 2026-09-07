@@ -1,18 +1,6 @@
 import SwiftUI
 
-private enum ReturnsAnalyticsTypography {
-    static func medium(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("Montserrat-Medium", size: size, relativeTo: style)
-    }
-
-    static func semibold(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("Montserrat-SemiBold", size: size, relativeTo: style)
-    }
-
-    static func italic(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("Montserrat-Italic", size: size, relativeTo: style)
-    }
-}
+private typealias ReturnsAnalyticsTypography = LegacyType
 
 struct ReturnsAnalyticsView: View {
     let response: ReturnsAnalyticsResponse
@@ -113,7 +101,7 @@ private struct DrawdownCard: View {
                 Spacer(minLength: 8)
 
                 Text("最大回撤 \(DisplayFormat.ratioPercent(series.maxDrawdown))")
-                    .font(ReturnsAnalyticsTypography.semibold(13, relativeTo: .subheadline).monospacedDigit())
+                    .appNumber(.label, weight: .semibold)
                     .foregroundStyle(CatfolioStyle.blue)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
@@ -128,7 +116,7 @@ private struct DrawdownCard: View {
                         Text(DisplayFormat.ratioPercent(point.drawdown))
                             .foregroundStyle(point.drawdown < 0 ? CatfolioStyle.blue : .secondary)
                     }
-                    .font(ReturnsAnalyticsTypography.medium(12, relativeTo: .footnote).monospacedDigit())
+                    .appNumber(.caption)
                 }
 
                 DrawdownPlot(
@@ -260,8 +248,7 @@ private struct DrawdownPlot: View {
             transitionKey: transitionKey,
             selectedDate: selectedDate,
             selectionSeriesIDs: ["drawdown"],
-            yAxisFont: ReturnsAnalyticsTypography.italic(12, relativeTo: .caption2),
-            yAxisTracking: 0.12,
+            yAxisFont: Typography.number(.micro),
             yAxisColor: Color.secondary.opacity(0.48),
             yAxisLabel: { "\(Int($0))%" },
             xAxisLabel: { _ in "" },
@@ -313,7 +300,7 @@ private struct ValuationMatrixCard: View {
 
                 if let selectedBubble {
                     Text(selectedSummary(selectedBubble))
-                        .font(ReturnsAnalyticsTypography.medium(12, relativeTo: .footnote).monospacedDigit())
+                        .appNumber(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.72)
@@ -450,7 +437,7 @@ private struct ValuationBubblePlot: View {
             let suffix = abs(value - domain.xMaximum) < 0.001 ? "× P/E" : "×"
             context.draw(
                 Text("\(Int(value))\(suffix)")
-                    .font(ReturnsAnalyticsTypography.italic(11, relativeTo: .caption2).monospacedDigit())
+                    .font(Typography.number(.micro))
                     .foregroundStyle(Color.secondary.opacity(0.62)),
                 at: CGPoint(x: x, y: plot.maxY + 10),
                 anchor: .top
@@ -465,7 +452,7 @@ private struct ValuationBubblePlot: View {
             context.stroke(line, with: .color(Color.secondary.opacity(0.10)), lineWidth: 0.7)
             context.draw(
                 Text("\(Int(value))%")
-                    .font(ReturnsAnalyticsTypography.italic(11, relativeTo: .caption2).monospacedDigit())
+                    .font(Typography.number(.micro))
                     .foregroundStyle(Color.secondary.opacity(0.62)),
                 at: CGPoint(x: plot.minX - 8, y: y),
                 anchor: .trailing

@@ -4,7 +4,6 @@ struct ReturnsView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        NavigationStack {
             ScrollView {
                 VStack(spacing: 64) {
                     ReturnsComparisonPanel()
@@ -27,6 +26,9 @@ struct ReturnsView: View {
                 .padding(.bottom, 72)
             }
             .background(Color(uiColor: .systemBackground))
+            .navigationTitle("Performance")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbarVisibility(.visible, for: .navigationBar)
             .refreshable { await model.refreshReturnsPage() }
             .task {
                 if (model.comparison == nil || model.returnsAnalytics == nil),
@@ -35,8 +37,6 @@ struct ReturnsView: View {
                     await model.refreshReturnsPage()
                 }
             }
-        }
-        .toolbar(.hidden, for: .navigationBar)
     }
 }
 
@@ -51,32 +51,8 @@ struct ReturnsComparisonPanel: View {
     @State private var timeRange = ReturnsTimeRange.initialValue
     @State private var selectedDate: Date?
 
-    private var showsLoadingDesignState: Bool {
-        (model.comparison == nil && model.isReturnsLoading)
-            || ProcessInfo.processInfo.arguments.contains("--show-returns-loading-state")
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Group {
-                if showsLoadingDesignState {
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(Color.primary.opacity(0.05))
-                        .frame(width: 188, height: 20)
-                        .accessibilityHidden(true)
-                } else {
-                    Text("Performance")
-                        .font(ReturnsTypography.medium(28, relativeTo: .title))
-                        .tracking(0.28)
-                        .foregroundStyle(Color.primary)
-                        .lineLimit(1)
-                }
-            }
-                .frame(height: 34, alignment: .leading)
-                .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
-                .padding(.top, 8)
-                .padding(.bottom, 10)
-
             if let comparison = model.comparison {
                 ReturnsChart(
                     comparison: comparison,
@@ -153,19 +129,7 @@ private enum ReturnsChartMode: String, CaseIterable {
     static let displayOrder: [ReturnsChartMode] = [.twr, .mwr, .cashFlowMatched]
 }
 
-private enum ReturnsTypography {
-    static func medium(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("Montserrat-Medium", size: size, relativeTo: style)
-    }
-
-    static func semibold(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("Montserrat-SemiBold", size: size, relativeTo: style)
-    }
-
-    static func italic(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("Montserrat-Italic", size: size, relativeTo: style)
-    }
-}
+private typealias ReturnsTypography = LegacyType
 
 private enum ReturnsChartLayout {
     static let contentHorizontalInset: CGFloat = 20
@@ -423,8 +387,7 @@ private struct ReturnsSeriesPlaceholderCard: View {
     var body: some View {
         HStack(spacing: 8) {
             Text(title)
-                .font(ReturnsTypography.semibold(11, relativeTo: .caption))
-                .tracking(2)
+                .appCaps(.micro, weight: .semibold)
                 .lineLimit(1)
             Spacer(minLength: 0)
             Capsule()
@@ -858,8 +821,7 @@ private struct FastReturnsPlot: View {
             measuredRange: measuredRange,
             rangeSeriesIDs: [ReturnsSeriesStyle.portfolio],
             rangePrimarySeriesID: ReturnsSeriesStyle.portfolio,
-            yAxisFont: ReturnsTypography.italic(12, relativeTo: .caption2),
-            yAxisTracking: 0.12,
+            yAxisFont: Typography.number(.micro),
             yAxisColor: Color.secondary.opacity(0.48),
             yAxisLabel: axisLabel,
             xAxisLabel: shortDate,
@@ -1318,9 +1280,7 @@ private struct CompactSeriesValue: View {
                 .layoutPriority(2)
 
             Text(formattedAmount)
-                .font(ReturnsTypography.medium(12, relativeTo: .caption))
-                .tracking(0.4)
-                .monospacedDigit()
+                .appNumber(.caption)
                 .foregroundStyle(secondaryValueColor)
                 .contentTransition(.numericText(value: amountValue ?? 0))
                 .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: amountValue)
@@ -1329,8 +1289,7 @@ private struct CompactSeriesValue: View {
                 .frame(maxWidth: .infinity, alignment: .trailing)
 
             Text(formattedReturn)
-                .font(ReturnsTypography.medium(11, relativeTo: .caption))
-                .tracking(0.4)
+                .appNumber(.micro)
                 .monospacedDigit()
                 .foregroundStyle(primaryTextColor)
                 .contentTransition(.numericText(value: returnValue ?? 0))

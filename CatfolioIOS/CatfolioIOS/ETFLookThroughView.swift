@@ -121,7 +121,7 @@ struct ETFLookThroughView: View {
     }
 
     private func footerText(for response: ETFLookThroughResponse) -> String {
-        let base = "直接持仓始终按当前市值；\(basis.title)按基金权重拆分后加入直接市值。ETF 权重来自 App 内置的官方基金持仓快照。"
+        let base = "直接持仓始终按当前市值；\(basis.title)按基金权重拆分后加入直接市值。使用内置的有日期基金持仓快照；部分原有产品共用同指数基金快照。未支持的 ETF 保留原持仓，覆盖率仅统计已展开的 ETF。未识别成分和未分配权重计入 ETF 其他。"
         let xs2dAliases = Set(["XS2D", "XS2D.L", "DBPG", "DBPG.DE", "XS2L", "XS2L.MI"])
         guard response.etfTickers.contains(where: { xs2dAliases.contains($0.uppercased()) }) else {
             return base
@@ -155,7 +155,7 @@ private struct ETFLookThroughRowView: View {
 
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(DisplayFormat.money(row.totalUSD))
-                        .font(.body.weight(.semibold).monospacedDigit())
+                        .appNumber(.subheading, weight: .semibold)
                     if row.etfWeightPercent > 0 {
                         Text("ETF 权重 \(DisplayFormat.percent(row.etfWeightPercent, signed: false))")
                             .font(.caption2)
@@ -188,7 +188,7 @@ private struct ETFLookThroughRowView: View {
                 Spacer()
                 if row.fromETFUSD > 0 {
                     Text("间接 \(DisplayFormat.percent(indirectRatio * 100, signed: false))")
-                        .font(.caption2.monospacedDigit())
+                        .appNumber(.micro)
                         .foregroundStyle(.tertiary)
                 }
             }
@@ -203,7 +203,7 @@ private struct ETFLookThroughRowView: View {
                 .fill(color)
                 .frame(width: 7, height: 7)
             Text("\(title) \(DisplayFormat.money(value))")
-                .font(.caption.monospacedDigit())
+                .appNumber(.caption)
                 .foregroundStyle(.secondary)
         }
     }

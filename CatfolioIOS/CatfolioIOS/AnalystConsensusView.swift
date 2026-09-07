@@ -213,7 +213,7 @@ private struct AnalystConsensusContent: View {
                     Text("\(totals[0]) 看跌").foregroundStyle(.red)
                     Spacer(); Text("\(totals[1]) 中性").foregroundStyle(.secondary)
                     Spacer(); Text("\(totals[2]) 看涨").foregroundStyle(.green)
-                }.font(.subheadline).monospacedDigit()
+                }.appNumber(.callout)
                 GeometryReader { geo in
                     HStack(spacing: 0) {
                         ForEach(0..<3) { index in
@@ -258,7 +258,7 @@ private struct AnalystConsensusContent: View {
     }
     private func metric(_ title: String, value: Double?) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(value.map { $0.formatted(.currency(code: "USD")) } ?? "—").font(.subheadline.weight(.semibold)).monospacedDigit()
+            Text(value.map { $0.formatted(.currency(code: "USD")) } ?? "—").appNumber(.callout, weight: .semibold)
             Text(title).font(.caption).foregroundStyle(.secondary)
         }
     }

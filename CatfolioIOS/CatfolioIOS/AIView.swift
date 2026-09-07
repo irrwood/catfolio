@@ -562,22 +562,89 @@ private struct PortfolioAttentionReportView: View {
     }
 }
 
-private struct PortfolioAttentionCard: View {
+struct PortfolioAttentionCard: View {
+    #if DEBUG
+    static var researchPreviewReport: PortfolioAttentionReport { FakeAIContent.attentionReport }
+    #endif
     let row: PortfolioAttentionHolding
+    var prominent = false
+    @Namespace private var zoom
+    @State private var showsDetail = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        Group {
+            if prominent {
+                Button { showsDetail = true } label: {
+                    PortfolioAttentionCardContent(row: row, expanded: false, prominent: true)
+                }
+                .navigationDestination(isPresented: $showsDetail) {
+                    PortfolioAttentionDetail(row: row)
+                        .navigationTransition(.zoom(sourceID: row.id, in: zoom))
+                }
+            } else {
+                NavigationLink {
+                    PortfolioAttentionDetail(row: row)
+                        .navigationTransition(.zoom(sourceID: row.id, in: zoom))
+                } label: {
+                    PortfolioAttentionCardContent(row: row, expanded: false)
+                        .contentShape(RoundedRectangle(cornerRadius: 16))
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("放大查看持仓分析详情")
+        .matchedTransitionSource(id: row.id, in: zoom)
+    }
+}
+
+private struct PortfolioAttentionDetail: View {
+    let row: PortfolioAttentionHolding
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ScrollView {
+            PortfolioAttentionCardContent(row: row, expanded: true)
+                .padding()
+                .textSelection(.enabled)
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
+        .navigationTitle(row.ticker)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarVisibility(.visible, for: .navigationBar)
+        .overlay(alignment: .trailing) {
+            // Keep the additional left-swipe gesture at the right edge so the
+            // article and signal chips retain their normal scrolling gestures.
+            Color.clear.frame(width: 24)
+                .contentShape(Rectangle())
+                .accessibilityHidden(true)
+                .gesture(DragGesture(minimumDistance: 24).onEnded { value in
+                    let delta = value.translation
+                    if delta.width < -80 && abs(delta.width) > abs(delta.height) * 2 {
+                        dismiss()
+                    }
+                })
+        }
+    }
+}
+
+private struct PortfolioAttentionCardContent: View {
+    let row: PortfolioAttentionHolding
+    let expanded: Bool
+    var prominent = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: prominent ? 16 : 9) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(row.ticker).font(.headline)
-                    Text(row.name).font(.caption).foregroundStyle(.secondary)
+                    Text(row.ticker).font(prominent ? .title2.bold() : .headline)
+                    Text(row.name).font(prominent ? .subheadline : .caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Text(attentionText)
                     .font(.caption2.weight(.bold))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
+                    .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
                     .overlay(Capsule().strokeBorder(attentionBorder, lineWidth: 1))
             }
 
@@ -592,7 +659,7 @@ private struct PortfolioAttentionCard: View {
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 7)
                             .padding(.vertical, 3)
-                            .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
+                            .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
                     }
                 }
             }
@@ -608,7 +675,7 @@ private struct PortfolioAttentionCard: View {
                     .foregroundStyle(.secondary)
             }
 
-            DisclosureGroup("查看分析") {
+            if expanded {
                 VStack(alignment: .leading, spacing: 10) {
                     AttentionTextSection(title: "发生了什么", text: row.thesis.whatChanged)
                     AttentionTextSection(title: "为什么值得关注", text: row.thesis.whyItMatters)
@@ -634,13 +701,25 @@ private struct PortfolioAttentionCard: View {
                     }
                 }
                 .padding(.top, 8)
+            } else {
+                Label("查看详情", systemImage: "arrow.up.left.and.arrow.down.right")
+                    .font(.caption).foregroundStyle(.secondary)
             }
-            .font(.caption.weight(.semibold))
-            .tint(.primary)
         }
-        .padding(15)
-        .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color(uiColor: .separator).opacity(0.35), lineWidth: 1))
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .padding(prominent ? 20 : 15)
+        .background {
+            if !prominent {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(uiColor: .systemBackground))
+            }
+        }
+        .overlay {
+            if !prominent {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(Color(uiColor: .separator).opacity(0.35), lineWidth: 1)
+            }
+        }
     }
 
     private var attentionText: String {
@@ -758,7 +837,7 @@ private struct MarkdownMessageText: View {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("\(index + 1).")
-                            .font(.body.monospacedDigit().weight(.semibold))
+                            .appNumber(.subheading, weight: .semibold)
                             .foregroundStyle(.secondary)
                         inlineText(item)
                             .font(.body)
@@ -1195,454 +1274,51 @@ private struct AIComposer: View {
     }
 }
 
-struct AIFloatingAssistantLayer: View {
-    @Binding var isPresented: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isPanelMounted = false
-    @State private var presentationProgress: CGFloat = 0
-    @State private var isClosing = false
-    @State private var horizontalDragOffset: CGFloat = 0
-    @State private var tossVerticalOffset: CGFloat = 0
-    @State private var horizontalDragLocked: Bool?
+/// The presentation host owns the zoom geometry and interactive dismissal.
+struct AIAssistantPage: View {
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                if isPanelMounted {
-                    Color.black
-                        .opacity(0.18 * clampedPresentationProgress)
-                        .contentShape(Rectangle())
-                        .onTapGesture { }
-                        .accessibilityHidden(true)
-
-                    assistantPanel(
-                        in: proxy.size,
-                        safeAreaInsets: proxy.safeAreaInsets
-                    )
-                }
-            }
+        AIView(isEmbedded: true)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .task(id: isPresented) {
-            await animatePresentation(presenting: isPresented)
-        }
-    }
-
-    private func assistantPanel(
-        in availableSize: CGSize,
-        safeAreaInsets: EdgeInsets
-    ) -> some View {
-        let expandedWidth = availableSize.width
-        let expandedHeight = availableSize.height
-        let initialScale = sourceScale(for: availableSize)
-        // Keep the spring's tiny overshoot in geometry; opacity and corner
-        // calculations stay clamped separately. This is the subtle settle seen
-        // in the reference instead of a hard stop at full-screen.
-        let motionProgress = max(presentationProgress, 0)
-        let panelScale = initialScale + (1 - initialScale) * motionProgress
-        let sourceAnchor = sourceAnchor(
-            in: availableSize,
-            safeAreaInsets: safeAreaInsets,
-            initialScale: initialScale
-        )
-
-        return AIFloatingPanel(
-            presentationProgress: clampedPresentationProgress,
-            panelScale: panelScale
-        ) {
-            isPresented = false
-        }
-        .frame(width: expandedWidth, height: expandedHeight)
-        .scaleEffect(panelScale, anchor: sourceAnchor)
-        .opacity(min(clampedPresentationProgress / 0.08, 1))
-        .scaleEffect(dragScale(panelWidth: expandedWidth))
-        .offset(x: horizontalDragOffset, y: tossVerticalOffset)
-        .rotationEffect(
-            dragRotation(panelWidth: expandedWidth),
-            anchor: .bottom
-        )
-        .simultaneousGesture(
-            horizontalDismissGesture(
-                panelWidth: expandedWidth,
-                availableSize: availableSize
-            ),
-            including: .all
-        )
-        .frame(
-            maxWidth: .infinity,
-            maxHeight: .infinity,
-            alignment: .top
-        )
-        .accessibilityAddTraits(.isModal)
-        .accessibilityHidden(clampedPresentationProgress < 0.98)
-    }
-
-    private func horizontalDismissGesture(
-        panelWidth: CGFloat,
-        availableSize: CGSize
-    ) -> some Gesture {
-        DragGesture(minimumDistance: 2, coordinateSpace: .global)
-            .onChanged { value in
-                guard presentationProgress >= 0.98, !isClosing else { return }
-
-                if horizontalDragLocked == nil {
-                    let horizontalDistance = abs(value.translation.width)
-                    let verticalDistance = abs(value.translation.height)
-                    if horizontalDistance >= 6,
-                       horizontalDistance > verticalDistance * 0.72 {
-                        horizontalDragLocked = true
-                    } else if verticalDistance >= 14,
-                              verticalDistance > horizontalDistance * 1.25 {
-                        horizontalDragLocked = false
-                    } else {
-                        return
-                    }
+            .overlay(alignment: .topTrailing) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.body.weight(.medium))
+                        .frame(width: 48, height: 48)
+                        .contentShape(Circle())
+                        .floatingGlassSurface(in: Circle())
                 }
-
-                guard horizontalDragLocked == true else { return }
-                horizontalDragOffset = resistedDragOffset(
-                    for: value.translation.width,
-                    panelWidth: panelWidth
-                )
-            }
-            .onEnded { value in
-                defer { horizontalDragLocked = nil }
-                guard presentationProgress >= 0.98, !isClosing else { return }
-
-                let translation = value.translation.width
-                let isHorizontalGesture = horizontalDragLocked == true
-                    || abs(translation) > abs(value.translation.height) * 0.72
-                guard isHorizontalGesture else { return }
-
-                let projectedTranslation = value.predictedEndTranslation.width
-                let projectedMomentum = abs(projectedTranslation - translation)
-                let passedDistanceThreshold = abs(translation) >= panelWidth * 0.15
-                let passedVelocityThreshold = projectedMomentum >= 45
-                    && abs(projectedTranslation) >= panelWidth * 0.30
-
-                if passedDistanceThreshold || passedVelocityThreshold {
-                    tossPanelAway(
-                        translation: translation,
-                        projectedTranslation: projectedTranslation,
-                        panelWidth: panelWidth,
-                        availableSize: availableSize
-                    )
-                } else {
-                    restoreDraggedPanel()
-                }
-            }
-    }
-
-    private func dragRotation(panelWidth: CGFloat) -> Angle {
-        guard panelWidth > 0 else { return .zero }
-        let progress = min(max(horizontalDragOffset / panelWidth, -1), 1)
-        return .degrees(Double(progress * 3.2))
-    }
-
-    private func dragScale(panelWidth: CGFloat) -> CGFloat {
-        guard panelWidth > 0 else { return 1 }
-        let progress = min(abs(horizontalDragOffset) / (panelWidth * 0.50), 1)
-        return 1 - progress * 0.10
-    }
-
-    /// Keeps the panel attached to the gesture at first, then progressively
-    /// increases resistance like a system rubber-band interaction.
-    private func resistedDragOffset(
-        for translation: CGFloat,
-        panelWidth: CGFloat
-    ) -> CGFloat {
-        guard panelWidth > 0 else { return translation }
-        let magnitude = abs(translation)
-        let directDistance = panelWidth * 0.16
-        guard magnitude > directDistance else { return translation }
-
-        let excess = magnitude - directDistance
-        let remainingDistance = max(panelWidth - directDistance, 1)
-        let rubberBandedExcess = (
-            1 - 1 / (excess * 0.62 / remainingDistance + 1)
-        ) * remainingDistance
-        let resistedMagnitude = directDistance + rubberBandedExcess
-        return translation < 0 ? -resistedMagnitude : resistedMagnitude
-    }
-
-    private var clampedPresentationProgress: CGFloat {
-        min(max(presentationProgress, 0), 1)
-    }
-
-    private func sourceScale(for availableSize: CGSize) -> CGFloat {
-        guard availableSize.width > 0 else { return 0.10 }
-        return min(max(44 / availableSize.width, 0.09), 0.12)
-    }
-
-    /// Matches the centre of the tiny destination card to the trailing AI tab
-    /// item. Solving the scale-anchor equation avoids the sideways jump caused
-    /// by using `.bottomTrailing` directly.
-    private func sourceAnchor(
-        in availableSize: CGSize,
-        safeAreaInsets: EdgeInsets,
-        initialScale: CGFloat
-    ) -> UnitPoint {
-        guard availableSize.width > 0, availableSize.height > 0 else {
-            return .bottomTrailing
-        }
-
-        let bottomInset = safeAreaInsets.bottom > 0 ? safeAreaInsets.bottom : 34
-        let sourceCenter = CGPoint(
-            x: availableSize.width - 52,
-            y: availableSize.height - bottomInset - 15
-        )
-        let remainingScale = max(1 - initialScale, 0.01)
-        let anchorX = (
-            sourceCenter.x - initialScale * availableSize.width / 2
-        ) / remainingScale
-        let anchorY = (
-            sourceCenter.y - initialScale * availableSize.height / 2
-        ) / remainingScale
-
-        return UnitPoint(
-            x: min(max(anchorX / availableSize.width, 0), 1),
-            y: min(max(anchorY / availableSize.height, 0), 1)
-        )
-    }
-
-    private func tossPanelAway(
-        translation: CGFloat,
-        projectedTranslation: CGFloat,
-        panelWidth: CGFloat,
-        availableSize: CGSize
-    ) {
-        UIApplication.shared.sendAction(
-            #selector(UIResponder.resignFirstResponder),
-            to: nil,
-            from: nil,
-            for: nil
-        )
-
-        guard !reduceMotion else {
-            resetDismissalGestureState()
-            isPresented = false
-            return
-        }
-
-        isClosing = true
-        let directionalTranslation = abs(projectedTranslation) > abs(translation)
-            ? projectedTranslation
-            : translation
-        let direction: CGFloat = directionalTranslation < 0 ? -1 : 1
-        let horizontalTarget = direction * (availableSize.width + panelWidth * 0.7)
-
-        withAnimation(.spring(duration: 0.26, bounce: 0.08)) {
-            horizontalDragOffset = horizontalTarget
-            tossVerticalOffset = availableSize.height * 0.14
-        }
-
-        Task { @MainActor in
-            do {
-                try await Task.sleep(for: .milliseconds(115))
-            } catch {
-                return
-            }
-            isPresented = false
-        }
-    }
-
-    private func restoreDraggedPanel() {
-        if reduceMotion {
-            resetDismissalGestureState()
-            return
-        }
-
-        withAnimation(.spring(duration: 0.34, bounce: 0.18)) {
-            horizontalDragOffset = 0
-            tossVerticalOffset = 0
-        }
-    }
-
-    private func resetDismissalGestureState() {
-        horizontalDragOffset = 0
-        tossVerticalOffset = 0
-        horizontalDragLocked = nil
-    }
-
-    private func animatePresentation(presenting: Bool) async {
-        if !presenting {
-            UIApplication.shared.sendAction(
-                #selector(UIResponder.resignFirstResponder),
-                to: nil,
-                from: nil,
-                for: nil
-            )
-        }
-
-        if reduceMotion {
-            presentationProgress = presenting ? 1 : 0
-            isPanelMounted = presenting
-            resetDismissalGestureState()
-            return
-        }
-
-        if presenting {
-            isClosing = false
-            resetDismissalGestureState()
-            presentationProgress = 0
-            isPanelMounted = true
-            do {
-                // Let SwiftUI commit the source-sized card before starting the
-                // matched zoom. This prevents the first frame from flashing full-screen.
-                try await Task.sleep(for: .milliseconds(12))
-            } catch { return }
-
-            withAnimation(.spring(duration: 0.31, bounce: 0.10)) {
-                presentationProgress = 1
-            }
-        } else {
-            guard isPanelMounted else { return }
-
-            if isClosing,
-               abs(horizontalDragOffset) > 0.5 || abs(tossVerticalOffset) > 0.5 {
-                do {
-                    try await Task.sleep(for: .milliseconds(150))
-                } catch { return }
-                isPanelMounted = false
-                presentationProgress = 0
-                resetDismissalGestureState()
-                return
-            }
-
-            isClosing = true
-            // The return path is deliberately shorter and accelerating: it
-            // reads as the card being pulled back into the tab-bar source and
-            // avoids a half-size spring plateau before removal.
-            withAnimation(.timingCurve(0.45, 0, 1, 1, duration: 0.17)) {
-                presentationProgress = 0
-            }
-            do {
-                try await Task.sleep(for: .milliseconds(190))
-            } catch { return }
-
-            isPanelMounted = false
-            resetDismissalGestureState()
-        }
-    }
-}
-
-private struct AIFloatingPanel: View {
-    let presentationProgress: CGFloat
-    let panelScale: CGFloat
-    let onClose: () -> Void
-
-    var body: some View {
-        ZStack {
-            panelSurface
-
-            AIView(
-                isEmbedded: true,
-                loadsHistoryOnAppear: true,
-                showsComposer: true
-            )
-                .opacity(contentOpacity)
-                .allowsHitTesting(presentationProgress >= 0.98)
-
-            closeButton
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)
+                .accessibilityLabel("关闭 AI 投资助手")
                 .padding(14)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .opacity(contentOpacity)
-                .allowsHitTesting(presentationProgress >= 0.98)
-        }
-        .clipShape(panelShape)
-        .contentShape(Rectangle())
-        .shadow(
-            color: .black.opacity(0.24 * (1 - presentationProgress)),
-            radius: 24,
-            y: 12
-        )
-        .environment(\.colorScheme, .dark)
-    }
-
-    private var panelShape: RoundedRectangle {
-        RoundedRectangle(
-            cornerRadius: panelCornerRadius,
-            style: .continuous
-        )
-    }
-
-    private var panelCornerRadius: CGFloat {
-        let visualRadius = 24 * (1 - presentationProgress)
-        return visualRadius / max(panelScale, 0.08)
-    }
-
-    private var contentOpacity: Double {
-        min(max((presentationProgress - 0.04) / 0.18, 0), 1)
-    }
-
-    @ViewBuilder
-    private var panelSurface: some View {
-        if #available(iOS 26.0, *) {
-            Color.clear
-                .glassEffect(
-                    .regular.tint(.black.opacity(0.22)),
-                    in: panelShape
-                )
-                .overlay { expandedPanelBase }
-                .overlay {
-                    expandedPanelTint
-                }
-        } else {
-            panelShape
-                .fill(.ultraThinMaterial)
-                .overlay { expandedPanelBase }
-                .overlay { expandedPanelTint }
-                .overlay {
-                    panelShape.stroke(.white.opacity(0.16), lineWidth: 0.5)
-                }
-        }
-    }
-
-    private var expandedPanelBase: some View {
-        panelShape
-            .fill(.white)
-    }
-
-    private var expandedPanelTint: some View {
-        panelShape
-            .fill(
+            }
+            .background {
                 LinearGradient(
-                    stops: panelGradientStops,
+                    stops: [
+                        .init(color: .black, location: 0.25828),
+                        .init(
+                            color: Color(red: 9.0 / 255.0, green: 117.0 / 255.0, blue: 224.0 / 255.0),
+                            location: 0.83985
+                        ),
+                        .init(
+                            color: Color(red: 131.0 / 255.0, green: 193.0 / 255.0, blue: 1)
+                                .opacity(0.20),
+                            location: 1
+                        ),
+                    ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
-            )
-    }
-
-    private var panelGradientStops: [Gradient.Stop] {
-        return [
-            .init(color: .black, location: 0.25828),
-            .init(
-                color: Color(red: 9.0 / 255.0, green: 117.0 / 255.0, blue: 224.0 / 255.0),
-                location: 0.83985
-            ),
-            .init(
-                color: Color(red: 131.0 / 255.0, green: 193.0 / 255.0, blue: 255.0 / 255.0)
-                    .opacity(0.20),
-                location: 1
-            ),
-        ]
-    }
-
-    private var closeButton: some View {
-        Button(action: onClose) {
-            Image(systemName: "xmark")
-                .font(.body.weight(.medium))
-                .frame(width: 48, height: 48)
-                .contentShape(Circle())
-                .floatingGlassSurface(in: Circle())
-        }
-        .buttonStyle(.plain)
-        .keyboardShortcut(.cancelAction)
-        .accessibilityLabel("关闭 AI 投资助手")
+                .background(.white)
+                .ignoresSafeArea()
+            }
+            .preferredColorScheme(.dark)
     }
 }
-
 private extension View {
     @ViewBuilder
     func floatingGlassSurface<S: Shape>(in shape: S, tint: Color? = nil) -> some View {
