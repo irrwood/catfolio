@@ -1399,6 +1399,25 @@ private struct HoldingPositionDetails: View {
             : Color(red: 227 / 255, green: 0, blue: 69 / 255)
     }
 
+    /// The fund's own annual charge, and what that costs on this position.
+    ///
+    /// A percentage alone is unreadable at this scale — 0.03% and 0.30% look
+    /// alike — so the money it comes to at the current value is shown beside
+    /// it. It is a run rate at today's price, not a fee already paid, and not
+    /// a figure to subtract from a return that already has it deducted.
+    private var expenseRatioRow: HoldingDataRow.Model? {
+        guard let catalog = try? ETFReferenceCatalog.bundled.get(),
+              let fee = catalog.expenseRatio(brokerSymbol: holding.ticker) else { return nil }
+        let percent = fee.rate * 100
+        let rate = percent.formatted(.number.precision(.fractionLength(2...4)))
+        let annual = DisplayFormat.money(holding.marketValue * fee.rate, fractionDigits: 2)
+        return .init(
+            title: "Expense Ratio",
+            icon: .expenseRatio,
+            value: "\(rate)%  ·  \(annual)/yr"
+        )
+    }
+
     private var rows: [HoldingDataRow.Model] {
         [
             .init(
@@ -1447,7 +1466,7 @@ private struct HoldingPositionDetails: View {
                 value: "\(DisplayFormat.money(holding.unrealized, signed: true))  ·  \(DisplayFormat.percent(holding.unrealizedPercent))",
                 color: profitColor
             ),
-        ]
+        ] + [expenseRatioRow].compactMap { $0 }
     }
 
     var body: some View {
@@ -1502,6 +1521,7 @@ private enum HoldingDataIcon {
     case fxImpact
     case proportion
     case unrealisedProfitLoss
+    case expenseRatio
 
     /// Exact vector exports from the latest Figma icon source node 139:2920,
     /// as used by the Data section at node 115:5140. Rows that are not
@@ -1515,7 +1535,7 @@ private enum HoldingDataIcon {
         case .fxImpact: "HoldingDataFXImpact"
         case .proportion: "HoldingDataProportion"
         case .unrealisedProfitLoss: "HoldingDataUnrealisedPnL"
-        case .shares, .averageCost: nil
+        case .shares, .averageCost, .expenseRatio: nil
         }
     }
 
@@ -1529,6 +1549,7 @@ private enum HoldingDataIcon {
         case .fxImpact: "arrow.left.arrow.right"
         case .proportion: "chart.pie"
         case .unrealisedProfitLoss: "chart.line.uptrend.xyaxis"
+        case .expenseRatio: "percent"
         }
     }
 
@@ -1539,6 +1560,7 @@ private enum HoldingDataIcon {
         case .shares: 21
         case .cost, .averageCost: 19
         case .fxImpact, .proportion, .unrealisedProfitLoss: 20
+        case .expenseRatio: 19
         }
     }
 }
@@ -2267,16 +2289,6 @@ enum VolumeProfileInterpretation {
         let hasLower: Bool
     }
 
-    struct VisualGaps: Equatable {
-        let upper: Double
-        let lower: Double
-    }
-
-    struct BoundaryConnections: Equatable {
-        let upper: Bool
-        let lower: Bool
-    }
-
     struct BinSlice: Equatable {
         let priceLow: Double
         let priceHigh: Double
@@ -2306,88 +2318,20 @@ enum VolumeProfileInterpretation {
         )
     }
 
-    /// Returns the full visual gap at each value-area boundary. A gap is only
-    /// introduced when real positive-volume regions touch on both sides and
-    /// both have enough pixels to remain legible. Narrow regions retain their
-    /// complete price span rather than being consumed by decoration.
-    static func visualGaps(
-        upperBoundaryConnected: Bool,
-        lowerBoundaryConnected: Bool,
-        upperPixelSpan: Double,
-        mainPixelSpan: Double,
-        lowerPixelSpan: Double,
-        preferred: Double = 8
-    ) -> VisualGaps {
-        func adaptiveGap(isConnected: Bool, tailSpan: Double) -> Double {
-            guard isConnected,
-                  tailSpan.isFinite,
-                  mainPixelSpan.isFinite,
-                  preferred.isFinite,
-                  preferred > 0,
-                  tailSpan >= preferred * 1.5,
-                  mainPixelSpan >= preferred * 1.5 else { return 0 }
-            return min(preferred, tailSpan / 3, mainPixelSpan / 3)
-        }
-
-        return VisualGaps(
-            upper: adaptiveGap(isConnected: upperBoundaryConnected, tailSpan: upperPixelSpan),
-            lower: adaptiveGap(isConnected: lowerBoundaryConnected, tailSpan: lowerPixelSpan)
-        )
-    }
-
-    /// A decorative gap is appropriate only when positive-volume data reaches
-    /// the same value-area boundary from both sides. A zero-volume bin or a
-    /// missing price interval leaves the real data gap untouched.
-    static func boundaryConnections(
-        bins: [(priceLow: Double, priceHigh: Double, volume: Double)],
-        valueAreaLow: Double,
-        valueAreaHigh: Double
-    ) -> BoundaryConnections {
-        guard valueAreaLow.isFinite,
-              valueAreaHigh.isFinite,
-              valueAreaHigh > valueAreaLow else {
-            return BoundaryConnections(upper: false, lower: false)
-        }
-
-        let validBins = bins.filter {
-            $0.volume.isFinite
-                && $0.volume > 0
-                && $0.priceLow.isFinite
-                && $0.priceHigh.isFinite
-                && $0.priceHigh > $0.priceLow
-        }
-        let tolerance = max(0.000_000_001, (valueAreaHigh - valueAreaLow) * 0.000_000_001)
-
-        func hasVolumeImmediatelyBelow(_ boundary: Double) -> Bool {
-            validBins.contains {
-                $0.priceLow < boundary && $0.priceHigh >= boundary - tolerance
-            }
-        }
-
-        func hasVolumeImmediatelyAbove(_ boundary: Double) -> Bool {
-            validBins.contains {
-                $0.priceHigh > boundary && $0.priceLow <= boundary + tolerance
-            }
-        }
-
-        return BoundaryConnections(
-            upper: hasVolumeImmediatelyBelow(valueAreaHigh)
-                && hasVolumeImmediatelyAbove(valueAreaHigh),
-            lower: hasVolumeImmediatelyBelow(valueAreaLow)
-                && hasVolumeImmediatelyAbove(valueAreaLow)
-        )
-    }
-
     static func curveVerticalHandle(distance: Double) -> Double {
         guard distance.isFinite, distance > 0 else { return 0 }
         return distance / 3
     }
 
-    static func positiveRuns(
+    /// Builds one continuous price profile. Real zero-volume buckets are kept as
+    /// zero-width anchors, and missing price intervals receive a synthetic
+    /// zero-volume anchor. The renderer can therefore keep one silhouette and
+    /// taper empty regions into a narrow visual neck instead of separate islands.
+    static func continuousSlices(
         bins: [(priceLow: Double, priceHigh: Double, volume: Double)],
         lowerBound: Double,
         upperBound: Double
-    ) -> [[BinSlice]] {
+    ) -> [BinSlice] {
         guard lowerBound.isFinite,
               upperBound.isFinite,
               upperBound > lowerBound else { return [] }
@@ -2400,37 +2344,30 @@ enum VolumeProfileInterpretation {
                 && $0.priceHigh > $0.priceLow
         }.sorted { ($0.priceLow + $0.priceHigh) < ($1.priceLow + $1.priceHigh) }
 
-        var runs: [[BinSlice]] = []
-        var current: [BinSlice] = []
-        var previousHigh: Double?
-
-        func appendCurrentRun() {
-            guard !current.isEmpty else { return }
-            runs.append(current)
-            current.removeAll(keepingCapacity: true)
-            previousHigh = nil
-        }
+        var slices: [BinSlice] = []
+        var previousHigh = lowerBound
+        var hasPositiveVolume = false
 
         for bin in sortedBins {
             let clippedLow = max(bin.priceLow, lowerBound)
             let clippedHigh = min(bin.priceHigh, upperBound)
             guard clippedHigh > clippedLow else { continue }
-            guard bin.volume > 0 else {
-                appendCurrentRun()
-                continue
+            let tolerance = max(0.000_000_001, max(abs(previousHigh), abs(clippedLow)) * 0.000_000_001)
+            if clippedLow > previousHigh + tolerance {
+                slices.append(BinSlice(priceLow: previousHigh, priceHigh: clippedLow, volume: 0))
             }
-
-            if let previousHigh {
-                let tolerance = max(0.000_000_001, max(abs(previousHigh), abs(clippedLow)) * 0.000_000_001)
-                if clippedLow > previousHigh + tolerance {
-                    appendCurrentRun()
-                }
-            }
-            current.append(BinSlice(priceLow: clippedLow, priceHigh: clippedHigh, volume: bin.volume))
-            previousHigh = clippedHigh
+            slices.append(BinSlice(priceLow: clippedLow, priceHigh: clippedHigh, volume: bin.volume))
+            hasPositiveVolume = hasPositiveVolume || bin.volume > 0
+            previousHigh = max(previousHigh, clippedHigh)
         }
-        appendCurrentRun()
-        return runs
+        let trailingTolerance = max(
+            0.000_000_001,
+            max(abs(previousHigh), abs(upperBound)) * 0.000_000_001
+        )
+        if previousHigh < upperBound - trailingTolerance {
+            slices.append(BinSlice(priceLow: previousHigh, priceHigh: upperBound, volume: 0))
+        }
+        return hasPositiveVolume ? slices : []
     }
 
     static func constrainedCornerRadius(
@@ -2734,34 +2671,13 @@ private struct VolumeDistributionPlot: View {
         sourceBins.filter { $0.volume > 0 }
     }
 
-    private var tailPresence: VolumeProfileInterpretation.TailPresence {
-        VolumeProfileInterpretation.tailPresence(
-            bins: sourceBins.map { ($0.priceLow, $0.priceHigh, $0.volume) },
-            valueAreaLow: valueAreaLow,
-            valueAreaHigh: valueAreaHigh
-        )
-    }
-
-    private var boundaryConnections: VolumeProfileInterpretation.BoundaryConnections {
-        VolumeProfileInterpretation.boundaryConnections(
-            bins: sourceBins.map { ($0.priceLow, $0.priceHigh, $0.volume) },
-            valueAreaLow: valueAreaLow,
-            valueAreaHigh: valueAreaHigh
-        )
-    }
-
-    /// Produces independent positive-volume runs inside one price band.
-    /// Zero-volume slots and missing price intervals terminate a run, so the
-    /// renderer never bridges them with an invented solid shape.
-    private func drawableRuns(lowerBound: Double, upperBound: Double) -> [[VolumeProfileBin]] {
-        VolumeProfileInterpretation.positiveRuns(
+    private func drawableProfile(lowerBound: Double, upperBound: Double) -> [VolumeProfileBin] {
+        VolumeProfileInterpretation.continuousSlices(
             bins: sourceBins.map { ($0.priceLow, $0.priceHigh, $0.volume) },
             lowerBound: lowerBound,
             upperBound: upperBound
-        ).map { run in
-            run.map {
-                VolumeProfileBin(priceLow: $0.priceLow, priceHigh: $0.priceHigh, volume: $0.volume)
-            }
+        ).map {
+            VolumeProfileBin(priceLow: $0.priceLow, priceHigh: $0.priceHigh, volume: $0.volume)
         }
     }
 
@@ -2796,19 +2712,8 @@ private struct VolumeDistributionPlot: View {
                 : size.height
             let profileHigh = positiveBins.last?.priceHigh ?? valueAreaHigh
             let profileLow = positiveBins.first?.priceLow ?? valueAreaLow
-            let profileTopY = profileHigh.isFinite
-                ? yPosition(for: profileHigh, height: size.height)
-                : valueAreaHighY
-            let profileBottomY = profileLow.isFinite
-                ? yPosition(for: profileLow, height: size.height)
-                : valueAreaLowY
-            let visualGaps = VolumeProfileInterpretation.visualGaps(
-                upperBoundaryConnected: boundaryConnections.upper,
-                lowerBoundaryConnected: boundaryConnections.lower,
-                upperPixelSpan: Double(max(0, valueAreaHighY - profileTopY)),
-                mainPixelSpan: Double(max(0, valueAreaLowY - valueAreaHighY)),
-                lowerPixelSpan: Double(max(0, profileBottomY - valueAreaLowY))
-            )
+            let profileTopY = yPosition(for: profileHigh, height: size.height)
+            let profileBottomY = yPosition(for: profileLow, height: size.height)
             let currentY = currentPrice.map { yPosition(for: $0, height: size.height) }
             let costY = holdingCost.map { yPosition(for: $0, height: size.height) }
             let hasValidPeak = profile.pointOfControl.isFinite && profile.pointOfControl > 0
@@ -2838,73 +2743,68 @@ private struct VolumeDistributionPlot: View {
 
             ZStack(alignment: .topLeading) {
                 Canvas { context, canvasSize in
-                    let pricePerPoint = (domain.upperBound - domain.lowerBound)
-                        / Double(max(canvasSize.height - 2 * verticalPlotInset, 1))
-                    let upperGapPrice = visualGaps.upper * pricePerPoint
-                    let lowerGapPrice = visualGaps.lower * pricePerPoint
-                    var bands: [(runs: [[VolumeProfileBin]], color: Color, stripe: Color)] = []
+                    let bins = drawableProfile(
+                        lowerBound: domain.lowerBound,
+                        upperBound: domain.upperBound
+                    )
+                    let silhouette = silhouettePath(
+                        bins: bins,
+                        maximumVolume: maximumVolume,
+                        plotWidth: plotWidth,
+                        height: canvasSize.height
+                    )
+                    let actualProfileRegion = Path(CGRect(
+                        x: 0,
+                        y: profileTopY,
+                        width: plotWidth,
+                        height: max(0, profileBottomY - profileTopY)
+                    ))
 
-                    if hasValidValueArea {
-                        if tailPresence.hasUpper {
-                            bands.append((
-                                drawableRuns(
-                                    lowerBound: valueAreaHigh + upperGapPrice / 2,
-                                    upperBound: profileHigh
-                                ),
-                                volumeProfileTailBlue,
-                                .white.opacity(0.38)
-                            ))
-                        }
-                        bands.append((
-                            drawableRuns(
-                                lowerBound: valueAreaLow + lowerGapPrice / 2,
-                                upperBound: valueAreaHigh - upperGapPrice / 2
-                            ),
-                            volumeProfileBlue,
-                            .white.opacity(0.24)
-                        ))
-                        if tailPresence.hasLower {
-                            bands.append((
-                                drawableRuns(
-                                    lowerBound: profileLow,
-                                    upperBound: valueAreaLow - lowerGapPrice / 2
-                                ),
-                                volumeProfileTailBlue,
-                                .white.opacity(0.38)
-                            ))
-                        }
-                    } else {
-                        bands.append((
-                            drawableRuns(lowerBound: profileLow, upperBound: profileHigh),
-                            volumeProfileBlue,
-                            .white.opacity(0.24)
-                        ))
+                    // Prices outside the historical bins are a visual extension
+                    // only. The weak fill keeps the price relationship legible;
+                    // all profile calculations still use the original bins.
+                    context.fill(silhouette, with: .color(volumeProfileExtensionBlue))
+                    context.drawLayer { layer in
+                        layer.clip(to: silhouette)
+                        layer.fill(actualProfileRegion, with: .color(volumeProfileBlue))
                     }
 
-                    for band in bands {
-                        for run in band.runs {
-                            let silhouette = silhouettePath(
-                                bins: run,
-                                maximumVolume: maximumVolume,
-                                plotWidth: plotWidth,
-                                height: canvasSize.height
-                            )
-                            context.fill(silhouette, with: .color(band.color))
-                            context.drawLayer { layer in
-                                layer.clip(to: silhouette)
-
-                                var stripes = Path()
-                                var x = -canvasSize.height
-                                while x < plotWidth + canvasSize.height {
-                                    // The Figma bands descend from left to right,
-                                    // opposite to the former fine hatch direction.
-                                    stripes.move(to: CGPoint(x: x, y: 0))
-                                    stripes.addLine(to: CGPoint(x: x + canvasSize.height, y: canvasSize.height))
-                                    x += 30
-                                }
-                                layer.stroke(stripes, with: .color(band.stripe), lineWidth: 11)
-                            }
+                    if hasValidValueArea {
+                        var tailRegions = Path()
+                        tailRegions.addRect(CGRect(
+                            x: 0,
+                            y: 0,
+                            width: plotWidth,
+                            height: max(0, valueAreaHighY)
+                        ))
+                        tailRegions.addRect(CGRect(
+                            x: 0,
+                            y: valueAreaLowY,
+                            width: plotWidth,
+                            height: max(0, canvasSize.height - valueAreaLowY)
+                        ))
+                        context.drawLayer { layer in
+                            layer.clip(to: silhouette)
+                            layer.clip(to: actualProfileRegion)
+                            layer.fill(tailRegions, with: .color(volumeProfileTailBlue))
                         }
+                    }
+
+                    var stripes = Path()
+                    var x = -canvasSize.height
+                    while x < plotWidth + canvasSize.height {
+                        stripes.move(to: CGPoint(x: x, y: 0))
+                        stripes.addLine(to: CGPoint(x: x + canvasSize.height, y: canvasSize.height))
+                        x += 30
+                    }
+                    context.drawLayer { layer in
+                        layer.clip(to: silhouette)
+                        layer.stroke(stripes, with: .color(.white.opacity(0.12)), lineWidth: 11)
+                    }
+                    context.drawLayer { layer in
+                        layer.clip(to: silhouette)
+                        layer.clip(to: actualProfileRegion)
+                        layer.stroke(stripes, with: .color(.white.opacity(0.20)), lineWidth: 11)
                     }
                 }
 
@@ -3043,6 +2943,10 @@ private struct VolumeDistributionPlot: View {
         colorScheme == .dark
             ? Color(red: 113 / 255, green: 151 / 255, blue: 224 / 255)
             : Color(red: 188 / 255, green: 211 / 255, blue: 1)
+    }
+
+    private var volumeProfileExtensionBlue: Color {
+        volumeProfileTailBlue.opacity(colorScheme == .dark ? 0.30 : 0.42)
     }
 
     private var volumeSelectionBlue: Color {
@@ -3266,13 +3170,18 @@ private struct VolumeDistributionPlot: View {
 
         var displayValues = filtered
         if let peakIndex = bins.indices.max(by: { bins[$0].volume < bins[$1].volume }) {
-            // Preserve this run's true scale against the global maximum. A
-            // tail run must never be independently expanded to full width.
+            // Preserve the profile's true scale against the global maximum.
             displayValues[peakIndex] = normalized[peakIndex]
         }
 
-        return displayValues.map { value in
-            plotWidth * CGFloat(max(0, value))
+        return displayValues.indices.map { index in
+            if normalized[index] == 0 {
+                // The smoothed value forms a narrow visual neck across empty
+                // buckets. Four points is only a topology floor: it keeps the
+                // silhouette visibly whole without suggesting material volume.
+                return min(plotWidth, max(4, plotWidth * CGFloat(displayValues[index])))
+            }
+            return plotWidth * CGFloat(max(0, displayValues[index]))
         }
     }
 
