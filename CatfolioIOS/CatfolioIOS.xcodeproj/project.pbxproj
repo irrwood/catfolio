@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A19800000000000000000003 /* CompanyReferenceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000003 /* CompanyReferenceCatalog.swift */; };
+		A19800000000000000000004 /* company_reference.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000004 /* company_reference.json */; };
+		A19800000000000000000001 /* USStockClassificationCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000001 /* USStockClassificationCatalog.swift */; };
+		A19800000000000000000002 /* us_stock_classifications.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000002 /* us_stock_classifications.json */; };
 		A10000000000000000000001 /* CatfolioIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* CatfolioIOSApp.swift */; };
 		A10000000000000000000002 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* Models.swift */; };
 		A10000000000000000000003 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003 /* APIClient.swift */; };
@@ -54,6 +58,7 @@
 		A199000000000000000000AB /* FMPRateLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AB /* FMPRateLimiter.swift */; };
 		A199000000000000000000AC /* NasdaqAnalystClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AC /* NasdaqAnalystClient.swift */; };
 		A199000000000000000000AE /* TodayDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AE /* TodayDetailView.swift */; };
+		A199000000000000000000AF /* SectorAttribution.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AF /* SectorAttribution.swift */; };
 		A19900000000000000000001 /* ResearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000001 /* ResearchView.swift */; };
 		A19900000000000000000002 /* StockScreenerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000002 /* StockScreenerView.swift */; };
 		A19900000000000000000003 /* AnalystConsensusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000003 /* AnalystConsensusView.swift */; };
@@ -68,6 +73,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		B19800000000000000000003 /* CompanyReferenceCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyReferenceCatalog.swift; sourceTree = "<group>"; };
+		B19800000000000000000004 /* company_reference.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = company_reference.json; sourceTree = "<group>"; };
+		B19800000000000000000001 /* USStockClassificationCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USStockClassificationCatalog.swift; sourceTree = "<group>"; };
+		B19800000000000000000002 /* us_stock_classifications.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = us_stock_classifications.json; sourceTree = "<group>"; };
 		B19900000000000000000001 /* ResearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResearchView.swift; sourceTree = "<group>"; };
 		B19900000000000000000002 /* StockScreenerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockScreenerView.swift; sourceTree = "<group>"; };
 		B19900000000000000000003 /* AnalystConsensusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalystConsensusView.swift; sourceTree = "<group>"; };
@@ -120,6 +129,7 @@
 		B199000000000000000000AB /* FMPRateLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FMPRateLimiter.swift; sourceTree = "<group>"; };
 		B199000000000000000000AC /* NasdaqAnalystClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NasdaqAnalystClient.swift; sourceTree = "<group>"; };
 		B199000000000000000000AE /* TodayDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayDetailView.swift; sourceTree = "<group>"; };
+		B199000000000000000000AF /* SectorAttribution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttribution.swift; sourceTree = "<group>"; };
 		B199000000000000000000B0 /* CatfolioIOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CatfolioIOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B199000000000000000000B1 /* MoneyWeightedReturnCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyWeightedReturnCalculatorTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000B2 /* LocalPortfolioEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalPortfolioEngineTests.swift; sourceTree = "<group>"; };
@@ -161,6 +171,8 @@
 		D10000000000000000000002 /* CatfolioIOS */ = {
 			isa = PBXGroup;
 			children = (
+				B19800000000000000000003 /* CompanyReferenceCatalog.swift */,
+				B19800000000000000000001 /* USStockClassificationCatalog.swift */,
 				B10000000000000000000001 /* CatfolioIOSApp.swift */,
 				B10000000000000000000002 /* Models.swift */,
 				B10000000000000000000003 /* APIClient.swift */,
@@ -198,6 +210,7 @@
 				B199000000000000000000AB /* FMPRateLimiter.swift */,
 				B199000000000000000000AC /* NasdaqAnalystClient.swift */,
 				B199000000000000000000AE /* TodayDetailView.swift */,
+				B199000000000000000000AF /* SectorAttribution.swift */,
 				B19900000000000000000001 /* ResearchView.swift */,
 				B19900000000000000000002 /* StockScreenerView.swift */,
 				B19900000000000000000003 /* AnalystConsensusView.swift */,
@@ -213,6 +226,8 @@
 			isa = PBXGroup;
 			children = (
 				B10000000000000000000027 /* AssetLogos */,
+				B19800000000000000000004 /* company_reference.json */,
+				B19800000000000000000002 /* us_stock_classifications.json */,
 				D10000000000000000000005 /* ETF */,
 				D10000000000000000000006 /* Fonts */,
 			);
@@ -371,6 +386,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A19800000000000000000004 /* company_reference.json in Resources */,
+				A19800000000000000000002 /* us_stock_classifications.json in Resources */,
 				A1000000000000000000000B /* Assets.xcassets in Resources */,
 				A10000000000000000000025 /* AssetLogos in Resources */,
 				A10000000000000000000017 /* sp500_holdings.json in Resources */,
@@ -391,6 +408,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A19800000000000000000003 /* CompanyReferenceCatalog.swift in Sources */,
+				A19800000000000000000001 /* USStockClassificationCatalog.swift in Sources */,
 				A10000000000000000000001 /* CatfolioIOSApp.swift in Sources */,
 				A10000000000000000000002 /* Models.swift in Sources */,
 				A10000000000000000000003 /* APIClient.swift in Sources */,
@@ -428,6 +447,7 @@
 				A199000000000000000000AB /* FMPRateLimiter.swift in Sources */,
 				A199000000000000000000AC /* NasdaqAnalystClient.swift in Sources */,
 				A199000000000000000000AE /* TodayDetailView.swift in Sources */,
+				A199000000000000000000AF /* SectorAttribution.swift in Sources */,
 				A19900000000000000000001 /* ResearchView.swift in Sources */,
 				A19900000000000000000002 /* StockScreenerView.swift in Sources */,
 				A19900000000000000000003 /* AnalystConsensusView.swift in Sources */,

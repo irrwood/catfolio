@@ -71,6 +71,81 @@ struct TodayDetailView: View {
         return "\(leader.holding.shortName) 贡献了今日 \(share.formatted(.number.precision(.fractionLength(0))))% 的\(verb)"
     }
 
+    // MARK: - Sector attribution
+
+    private struct SectorAmount { let sector: PortfolioSector; let amount: Double }
+
+    /// Each holding's move is spread by its own sector split, so a fund
+    /// contributes to several sectors and a single stock to one. The part no
+    /// source can classify is kept aside rather than redistributed.
+    private var sectorTotals: (rows: [SectorAmount], unclassified: Double, lookThroughUsed: Bool, unclassifiedWeight: Double) {
+        var totals: [PortfolioSector: Double] = [:]
+        var unclassified = 0.0
+        var usedLookThrough = false
+        var unclassifiedValue = 0.0
+        var totalValue = 0.0
+
+        for contribution in contributions {
+            let split = SectorAttribution.split(
+                ticker: contribution.holding.ticker,
+                name: contribution.holding.displayName
+            )
+            if split.isLookThrough { usedLookThrough = true }
+            for (sector, weight) in split.weights {
+                totals[sector, default: 0] += contribution.amount * weight
+            }
+            unclassified += contribution.amount * split.unclassifiedFraction
+
+            let value = contribution.holding.marketValue
+            if value.isFinite {
+                totalValue += value
+                unclassifiedValue += value * split.unclassifiedFraction
+            }
+        }
+        let rows = totals
+            .map { SectorAmount(sector: $0.key, amount: $0.value) }
+            .sorted { abs($0.amount) > abs($1.amount) }
+        return (rows, unclassified, usedLookThrough, totalValue > 0 ? unclassifiedValue / totalValue : 0)
+    }
+
+    private var sectorRows: [SectorAmount] { sectorTotals.rows }
+    private var unclassifiedAmount: Double { sectorTotals.unclassified }
+    private var unclassifiedShare: Double { sectorTotals.unclassifiedWeight }
+
+    private var sectorFootnote: String {
+        var parts: [String] = []
+        if sectorTotals.lookThroughUsed {
+            parts.append("指数基金按其成分股的行业构成分摊，非逐只成分的当日涨跌")
+        }
+        if unclassifiedShare > 0.005 {
+            let pct = (unclassifiedShare * 100).formatted(.number.precision(.fractionLength(0)))
+            parts.append("未分类占当前市值 \(pct)%，主要是非美股上市标的，行业资料暂未覆盖")
+        }
+        return parts.isEmpty ? "行业来自打包的美股公司资料，用于当前归类，不适用于历史回溯。" : parts.joined(separator: "。") + "。"
+    }
+
+    private func sectorRow(
+        name: String, symbolName: String, amount: Double, isUnclassified: Bool = false
+    ) -> some View {
+        let tint = isUnclassified
+            ? Color.secondary
+            : (amount >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
+        return HStack(spacing: 10) {
+            Image(systemName: symbolName)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(isUnclassified ? Color.secondary : CatfolioTheme.accent)
+                .frame(width: 20)
+            Text(name)
+                .font(.body)
+                .foregroundStyle(isUnclassified ? .secondary : .primary)
+            Spacer(minLength: 8)
+            Text(DisplayFormat.money(amount, signed: true, fractionDigits: 2))
+                .font(.body.weight(.medium)).monospacedDigit()
+                .foregroundStyle(tint)
+        }
+        .padding(.vertical, 1)
+    }
+
     var body: some View {
         List {
             Section {
@@ -104,6 +179,31 @@ struct TodayDetailView: View {
                     }
                 }
                 .padding(.vertical, 6)
+            }
+
+            if !sectorRows.isEmpty || unclassifiedAmount != 0 {
+                Section {
+                    ForEach(sectorRows, id: \.sector) { row in
+                        sectorRow(
+                            name: row.sector.displayName,
+                            symbolName: row.sector.symbolName,
+                            amount: row.amount
+                        )
+                    }
+                    if abs(unclassifiedAmount) > 0.005 || unclassifiedShare > 0.005 {
+                        sectorRow(
+                            name: "未分类",
+                            symbolName: "questionmark.circle",
+                            amount: unclassifiedAmount,
+                            isUnclassified: true
+                        )
+                    }
+                } header: {
+                    Text("按行业")
+                } footer: {
+                    Text(sectorFootnote)
+                }
+                .headerProminence(.increased)
             }
 
             if !gainers.isEmpty {
