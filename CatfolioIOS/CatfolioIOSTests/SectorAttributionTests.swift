@@ -109,3 +109,57 @@ final class SectorOverrideTests: XCTestCase {
         }
     }
 }
+
+
+/// `Holding.sector` was `nil` for every position, so anything downstream that
+/// asked got nothing. These pin what the model now carries.
+final class HoldingSectorTests: XCTestCase {
+
+    private func position(_ ticker: String, currency: String = "USD") -> LocalPositionRecord {
+        LocalPositionRecord(
+            ticker: ticker, name: ticker, shares: 10, averageCost: 100,
+            currency: currency, quotePrice: 110, quoteCurrency: currency,
+            source: "test", openedDate: nil
+        )
+    }
+
+    private func sector(for ticker: String, currency: String = "USD") throws -> String? {
+        let document = LocalPortfolioDocument(
+            schemaVersion: 4, source: "test", updatedAt: Date(), marketDataUpdatedAt: nil,
+            positions: [position(ticker, currency: currency)], snapshots: [], transactions: []
+        )
+        let holdings = try LocalPortfolioEngine.presentation(for: document).2
+        return try XCTUnwrap(holdings.first).sector
+    }
+
+    func testUSStockGetsItsSectorFromTheBundledReference() throws {
+        XCTAssertEqual(try sector(for: "AMD"), "科技")
+        XCTAssertEqual(try sector(for: "XOM"), "能源")
+    }
+
+    func testNonUSListingFallsBackToTheOverrideTable() throws {
+        XCTAssertEqual(try sector(for: "AZN.L", currency: "GBX"), "医疗保健")
+        XCTAssertEqual(try sector(for: "0388.HK", currency: "HKD"), "金融")
+    }
+
+    /// A fund is spread across sectors. Naming one of them on the holding
+    /// would assert something untrue, so it stays empty and callers that want
+    /// the spread ask SectorAttribution for it.
+    func testFundHasNoSingleSector() throws {
+        XCTAssertNil(try sector(for: "VOO"))
+        XCTAssertNil(try sector(for: "SPY"))
+    }
+
+    func testUnknownSymbolStaysEmpty() throws {
+        XCTAssertNil(try sector(for: "NOTREAL.XX"))
+    }
+
+    func testPrimarySectorAgreesWithTheSplitForSingleSectorHoldings() {
+        for ticker in ["AMD", "KO", "AZN.L", "SAP.DE"] {
+            let split = SectorAttribution.split(ticker: ticker, name: ticker)
+            XCTAssertEqual(
+                SectorAttribution.primarySector(ticker: ticker), split.weights.first?.key, ticker
+            )
+        }
+    }
+}

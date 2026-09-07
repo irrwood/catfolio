@@ -115,6 +115,21 @@ enum SectorAttribution {
         return .unclassified
     }
 
+    /// The single sector a security belongs to, for the model's own field.
+    ///
+    /// A fund deliberately returns `nil`: it is spread across sectors, and
+    /// naming one of them on the holding would assert something false. Callers
+    /// that want the spread ask for `split(ticker:name:)` instead.
+    static func primarySector(ticker: String) -> PortfolioSector? {
+        let symbol = ticker.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard fundComposition(for: symbol) == nil else { return nil }
+        let split = split(ticker: symbol, name: "")
+        guard split.weights.count == 1, let only = split.weights.first, only.value > 0.999 else {
+            return nil
+        }
+        return only.key
+    }
+
     private static let fundCache = FundCompositionCache()
 
     private static func fundComposition(for symbol: String) -> SectorSplit? {

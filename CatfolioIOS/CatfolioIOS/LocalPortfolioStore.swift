@@ -1838,7 +1838,10 @@ enum LocalPortfolioEngine {
                 ticker: position.ticker,
                 logoSymbol: position.ticker,
                 displayName: position.name.isEmpty ? position.ticker : position.name,
-                sector: nil,
+                // Funds resolve to nil rather than to one of the sectors they
+                // hold; anything wanting their spread asks SectorAttribution
+                // for it directly.
+                sector: SectorAttribution.primarySector(ticker: position.ticker)?.displayName,
                 source: position.source,
                 shares: position.shares,
                 averageCost: position.averageCost,
