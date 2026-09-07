@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "provenance": "hand-classified",
+  "note": "Non-US listings that the bundled US company reference does not cover. These are hand-assigned from the issuer's principal business, not taken from a licensed classification, and are not GICS. Superseded automatically once a covering entry appears in company_reference.json.",
+  "sectorVocabulary": "FMP",
+  "entries": {
+    "0388.HK": { "sector": "Financial Services", "name": "Hong Kong Exchanges and Clearing" },
+    "0669.HK": { "sector": "Industrials", "name": "Techtronic Industries" },
+    "1299.HK": { "sector": "Financial Services", "name": "AIA Group" },
+    "2318.HK": { "sector": "Financial Services", "name": "Ping An Insurance" },
+    "2388.HK": { "sector": "Financial Services", "name": "BOC Hong Kong" },
+
+    "6758.T": { "sector": "Technology", "name": "Sony Group" },
+    "6861.T": { "sector": "Technology", "name": "Keyence" },
+    "7203.T": { "sector": "Consumer Cyclical", "name": "Toyota Motor" },
+
+    "AIR.PA": { "sector": "Industrials", "name": "Airbus" },
+    "ALV.DE": { "sector": "Financial Services", "name": "Allianz" },
+    "ASML.AS": { "sector": "Technology", "name": "ASML Holding" },
+    "BAS.DE": { "sector": "Basic Materials", "name": "BASF" },
+    "BNP.PA": { "sector": "Financial Services", "name": "BNP Paribas" },
+    "DTE.DE": { "sector": "Communication Services", "name": "Deutsche Telekom" },
+    "MC.PA": { "sector": "Consumer Cyclical", "name": "LVMH" },
+    "OR.PA": { "sector": "Consumer Defensive", "name": "L'Oreal" },
+    "SAP.DE": { "sector": "Technology", "name": "SAP" },
+    "SIE.DE": { "sector": "Industrials", "name": "Siemens" },
+
+    "AZN.L": { "sector": "Healthcare", "name": "AstraZeneca" },
+    "BA.L": { "sector": "Industrials", "name": "BAE Systems" },
+    "BARC.L": { "sector": "Financial Services", "name": "Barclays" },
+    "CPG.L": { "sector": "Consumer Cyclical", "name": "Compass Group" },
+    "DGE.L": { "sector": "Consumer Defensive", "name": "Diageo" },
+    "GSK.L": { "sector": "Healthcare", "name": "GSK" },
+    "HSBA.L": { "sector": "Financial Services", "name": "HSBC Holdings" },
+    "LSEG.L": { "sector": "Financial Services", "name": "London Stock Exchange Group" },
+    "NG.L": { "sector": "Utilities", "name": "National Grid" },
+    "REL.L": { "sector": "Industrials", "name": "RELX" },
+    "RIO.L": { "sector": "Basic Materials", "name": "Rio Tinto" },
+    "SHEL.L": { "sector": "Energy", "name": "Shell" },
+    "ULVR.L": { "sector": "Consumer Defensive", "name": "Unilever" },
+    "VOD.L": { "sector": "Communication Services", "name": "Vodafone Group" },
+
+    "CNQ.TO": { "sector": "Energy", "name": "Canadian Natural Resources" },
+    "RY.TO": { "sector": "Financial Services", "name": "Royal Bank of Canada" },
+    "SHOP.TO": { "sector": "Technology", "name": "Shopify" },
+
+    "BHP.AX": { "sector": "Basic Materials", "name": "BHP Group" },
+    "CSL.AX": { "sector": "Healthcare", "name": "CSL Limited" },
+    "WES.AX": { "sector": "Consumer Cyclical", "name": "Wesfarmers" },
+
+    "C6L.SI": { "sector": "Industrials", "name": "Singapore Airlines" },
+    "D05.SI": { "sector": "Financial Services", "name": "DBS Group Holdings" },
+    "O39.SI": { "sector": "Financial Services", "name": "OCBC Bank" }
+  }
+}

@@ -101,12 +101,18 @@ enum SectorAttribution {
     static func split(ticker: String, name: String) -> SectorSplit {
         let symbol = ticker.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         if let fund = fundComposition(for: symbol) { return fund }
-        guard let catalog = try? CompanyReferenceCatalog.bundled.get(),
-              let entry = catalog.entry(symbol: symbol, market: "US"),
-              let sector = PortfolioSector(sourceName: entry.sector) else {
-            return .unclassified
+
+        // The generated reference wins, so a hand-assigned sector is dropped
+        // the moment a covering entry ships rather than shadowing it.
+        if let catalog = try? CompanyReferenceCatalog.bundled.get(),
+           let entry = catalog.entry(symbol: symbol, market: "US"),
+           let sector = PortfolioSector(sourceName: entry.sector) {
+            return SectorSplit(weights: [sector: 1], isLookThrough: false)
         }
-        return SectorSplit(weights: [sector: 1], isLookThrough: false)
+        if let sector = SectorOverrides.shared.sector(for: symbol) {
+            return SectorSplit(weights: [sector: 1], isLookThrough: false)
+        }
+        return .unclassified
     }
 
     private static let fundCache = FundCompositionCache()
@@ -175,4 +181,42 @@ private final class FundCompositionCache: @unchecked Sendable {
             isLookThrough: true
         )
     }
+}
+
+
+/// Hand-assigned sectors for listings the generated US reference does not
+/// cover.
+///
+/// These are read off the issuer's principal business, not taken from a
+/// licensed classification, so they are consulted only after the generated
+/// data has had its say — a covering entry appearing upstream silently
+/// retires the hand-written one.
+final class SectorOverrides: @unchecked Sendable {
+    static let shared = SectorOverrides()
+
+    private struct Payload: Decodable {
+        struct Entry: Decodable { let sector: String }
+        let entries: [String: Entry]
+    }
+
+    private let table: [String: PortfolioSector]
+
+    init(bundle: Bundle = .main) {
+        guard let url = bundle.url(forResource: "sector_overrides", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let payload = try? JSONDecoder().decode(Payload.self, from: data) else {
+            table = [:]
+            return
+        }
+        table = payload.entries.reduce(into: [:]) { result, pair in
+            guard let sector = PortfolioSector(sourceName: pair.value.sector) else { return }
+            result[pair.key.uppercased()] = sector
+        }
+    }
+
+    func sector(for symbol: String) -> PortfolioSector? {
+        table[symbol.uppercased()]
+    }
+
+    var count: Int { table.count }
 }
