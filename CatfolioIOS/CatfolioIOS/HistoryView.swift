@@ -168,6 +168,12 @@ struct HistoryView: View {
     @State private var ledger = PortfolioActivityLedger(accounts: [], transactions: [], securityNames: [:])
     @State private var selectedAccountIDs: Set<String>?
     @State private var category: HistoryCategory = .all
+    @AppStorage("history.taxYearBasis") private var taxYearBasisRaw = TaxYearBasis.calendar.rawValue
+    @State private var selectedTaxYear: String?
+
+    private var taxYearBasis: TaxYearBasis {
+        TaxYearBasis(rawValue: taxYearBasisRaw) ?? .calendar
+    }
     @State private var isLoading = true
     @State private var isSyncing = false
     @State private var errorMessage: String?
@@ -265,6 +271,13 @@ struct HistoryView: View {
             categorySection
 
             Section {
+                if category == .orders {
+                    HStack {
+                        Text("统计范围")
+                        Spacer(minLength: 12)
+                        taxYearPicker
+                    }
+                }
                 ForEach(summaryMetrics) { metric in
                     summaryRow(metric)
                 }
@@ -300,18 +313,6 @@ struct HistoryView: View {
             await synchronizeTrading212History()
             await loadLedger(showLoading: false)
         }
-        .overlay(alignment: .top) {
-            if isSyncing {
-                Label("Updating History", systemImage: "arrow.triangle.2.circlepath")
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(.regularMaterial, in: Capsule())
-                    .padding(.top, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
-        .animation(.snappy, value: isSyncing)
     }
 
     private var summaryMetrics: [HistorySummaryMetric] {
@@ -349,29 +350,50 @@ struct HistoryView: View {
     /// sale is valued at today's rate regardless of when it settled. The
     /// broker's own exact figures are therefore still shown unconverted, in
     /// their own currency, rather than being replaced by the converted total.
+    private var taxYearPicker: some View {
+        Menu {
+            Picker("口径", selection: $taxYearBasisRaw) {
+                ForEach(TaxYearBasis.allCases) { Text($0.title).tag($0.rawValue) }
+            }
+            Divider()
+            Button {
+                selectedTaxYear = nil
+            } label: {
+                Label("全部年份", systemImage: selectedTaxYear == nil ? "checkmark" : "infinity")
+            }
+            ForEach(realisedByTaxYear, id: \.label) { entry in
+                Button {
+                    selectedTaxYear = entry.label
+                } label: {
+                    Label(entry.label, systemImage: selectedTaxYear == entry.label ? "checkmark" : "calendar")
+                }
+            }
+        } label: {
+            Label(selectedTaxYear ?? "全部年份", systemImage: "calendar")
+                .font(.subheadline)
+        }
+    }
+
     private var realisedSummaryMetrics: [HistorySummaryMetric] {
         let calculation = realisedCalculation
         guard calculation.saleCount > 0 else {
-            return [HistorySummaryMetric(title: "已实现盈亏 · 暂无卖出", value: "—", color: .secondary)]
+            let title = selectedTaxYear.map { "\($0) · 没有卖出记录" } ?? "已实现盈亏 · 暂无卖出"
+            return [HistorySummaryMetric(title: title, value: "—", color: .secondary)]
         }
         let total = calculation.saleCount
         let valued = calculation.brokerCount + calculation.estimatedCount
         var metrics: [HistorySummaryMetric] = []
 
+        let scope = selectedTaxYear.map { "\($0) · " } ?? ""
         if valued > 0 {
-            var notes: [String] = []
-            if calculation.estimatedCount > 0 {
-                notes.append("含 \(calculation.estimatedCount) 笔估算")
-            }
-            if calculation.unavailableCount > 0 {
-                notes.append("\(calculation.unavailableCount) 笔缺成本未计入")
-            }
-            if !calculation.unconvertibleCurrencies.isEmpty {
-                notes.append("\(calculation.unconvertibleCurrencies.sorted().joined(separator: "/")) 未计入")
-            }
-            let suffix = notes.isEmpty ? "" : "（\(notes.joined(separator: "，"))）"
+            // The estimate and missing-basis counts get their own rows below,
+            // so repeating them here only pushed the amount onto a second line.
+            // An unconvertible currency has no row of its own, so it stays.
+            let suffix = calculation.unconvertibleCurrencies.isEmpty
+                ? ""
+                : "（\(calculation.unconvertibleCurrencies.sorted().joined(separator: "/")) 未计入）"
             metrics.append(HistorySummaryMetric(
-                title: "已实现盈亏 · 合计\(suffix)",
+                title: "\(scope)已实现盈亏\(selectedTaxYear == nil ? " · 合计" : "")\(suffix)",
                 value: DisplayFormat.money(calculation.combinedUSD, signed: true),
                 color: calculation.combinedUSD >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger))
         }
@@ -705,12 +727,24 @@ struct HistoryView: View {
             .reduce(0) { $0 + $1.amountUSD }
     }
 
+    private var scopedTransactions: [LocalTransactionRecord] {
+        allActivities
+            .filter { effectiveAccountIDs.contains($0.transaction.accountKey) }
+            .map(\.transaction)
+    }
+
+    /// Every tax year present in the ledger, newest first. FIFO runs across
+    /// the whole history inside the calculator; only the results are grouped.
+    private var realisedByTaxYear: [(label: String, summary: RealisedProfitSummary)] {
+        RealisedProfitCalculator.summarize(transactions: scopedTransactions, basis: taxYearBasis)
+            .filter { $0.summary.saleCount > 0 }
+    }
+
     private var realisedCalculation: RealisedProfitSummary {
-        RealisedProfitCalculator.summarize(
-            transactions: allActivities
-                .filter { effectiveAccountIDs.contains($0.transaction.accountKey) }
-                .map(\.transaction)
-        )
+        guard let year = selectedTaxYear else {
+            return RealisedProfitCalculator.summarize(transactions: scopedTransactions)
+        }
+        return realisedByTaxYear.first { $0.label == year }?.summary ?? RealisedProfitSummary()
     }
 
     private func account(for id: String) -> PortfolioAccount? {
