@@ -59,7 +59,7 @@ struct SettingsView: View {
                     connector("Moomoo", detail: "通过 OAuth 授权创建账户", icon: "person.badge.key.fill", tint: CatfolioTheme.moomoo) {
                         showsMoomooOAuth = true
                     }
-                    connector("Interactive Brokers", detail: "使用 Flex Web Service 创建账户", icon: "bolt.horizontal.circle.fill", tint: CatfolioTheme.interactiveBrokers) {
+                    connector("Interactive Brokers", detail: "使用 Flex Web Service 创建账户", icon: "doc.text.fill", tint: CatfolioTheme.interactiveBrokers) {
                         showsIBKRFlex = true
                     }
                     connector("CSV 导入", detail: "从交易记录创建账户", icon: "doc.badge.plus", tint: CatfolioTheme.csvImport) {
@@ -306,8 +306,7 @@ struct SettingsView: View {
                 }
             }
         } icon: {
-            Image(systemName: icon)
-                .foregroundStyle(tint)
+            SettingsGlyph(symbol: icon, tint: tint)
         }
     }
 
@@ -1959,5 +1958,29 @@ private struct LocalServiceDetailView: View {
 
     private func announce(_ message: String) {
         UIAccessibility.post(notification: .announcement, argument: message)
+    }
+}
+
+/// The tinted rounded-square an iOS settings row puts its symbol in.
+///
+/// The rows previously drew a bare tinted glyph, which left each symbol a
+/// different optical weight and width — a `globe` outline and a
+/// `chart.pie.fill` next to each other read as two different kinds of
+/// control. Boxing them equalises that: the tile is the constant, the symbol
+/// varies inside it, and the row's text starts at the same x every time.
+private struct SettingsGlyph: View {
+    let symbol: String
+    let tint: Color
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 7, style: .continuous)
+            .fill(tint.gradient)
+            .frame(width: 29, height: 29)
+            .overlay {
+                Image(systemName: symbol)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            .accessibilityHidden(true)
     }
 }
