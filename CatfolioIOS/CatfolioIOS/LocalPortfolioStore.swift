@@ -1,10 +1,97 @@
 import Foundation
+import CryptoKit
 
 enum LocalMarketQuoteKey {
     static func make(ticker: String, currency: String) -> String {
         "\(ticker.uppercased())|\(currency.uppercased())"
     }
 }
+
+/// Only reports imported broker Results. Completeness of the broker's entire
+/// history cannot be inferred merely from having a Result for every local row.
+struct LocalBrokerResultSummary {
+    var totals: [String: Decimal] = [:]
+    var saleCount = 0
+    var missingCount = 0
+
+    init(transactions: [LocalTransactionRecord]) {
+        for transaction in transactions {
+            let action = transaction.action.trimmingCharacters(in: .whitespacesAndNewlines)
+                .uppercased().replacingOccurrences(of: "-", with: "_").replacingOccurrences(of: " ", with: "_")
+            guard ["SELL", "SELL_SHORT"].contains(action) else { continue }
+            saleCount += 1
+            let currency = transaction.realisedProfitLossCurrency?
+                .trimmingCharacters(in: .whitespacesAndNewlines).uppercased() ?? ""
+            guard let value = transaction.realisedProfitLoss, value.isFinite,
+                  currency.count == 3, currency.utf8.allSatisfy({ (65...90).contains($0) }),
+                  let decimal = Decimal(string: String(value), locale: Locale(identifier: "en_US_POSIX")) else {
+                missingCount += 1
+                continue
+            }
+            totals[currency, default: 0] += decimal
+        }
+    }
+}
+
+#if DEBUG
+enum FoundationRegressionChecks {
+    static var emptyFixture: LocalPortfolioDocument {
+        let transaction = LocalTransactionRecord(date: "2026-01-02", action: "SELL", ticker: "TEST", quantity: 1,
+            price: 100, currency: "USD", source: "CSV", accountID: "closed", accountName: "已清仓测试账户",
+            tradeID: "test-sale", realisedProfitLoss: 2.5, realisedProfitLossCurrency: "GBP")
+        var transactions = [transaction]
+        if ProcessInfo.processInfo.arguments.contains("--verify-partial-results") {
+            transactions.append(LocalTransactionRecord(date: "2026-01-02", action: "SELL", ticker: "MISSING",
+                quantity: 1, price: 200, currency: "USD", source: "CSV", accountID: "closed",
+                accountName: "已清仓测试账户", tradeID: "test-missing"))
+        }
+        return LocalPortfolioDocument(source: "CSV", updatedAt: Date(), positions: [], snapshots: [], transactions: transactions)
+    }
+    static func run() throws -> String {
+        var passed: [String] = []
+        func check(_ condition: Bool, _ name: String) throws {
+            guard condition else { throw LocalPortfolioError.invalidCSV("REGRESSION FAILED: \(name)") }
+            passed.append("PASS: \(name)")
+        }
+        let doc = emptyFixture
+        try check(doc.accounts.count == 1 && doc.accounts[0].positionCount == 0, "closed account remains visible")
+        try check(doc.scoped(to: [doc.accounts[0].id]).transactions?.count == 1, "closed account history scope")
+        let presentation = try LocalPortfolioEngine.presentation(for: doc)
+        try check(presentation.2.isEmpty, "zero positions presentation succeeds")
+        let csv = """
+        Action,Time,Ticker,No. of shares,Price / share,Currency (Price / share),Result,Currency (Result)
+        Market buy,2026-01-01 10:00:00,TEST,1,100,USD,,
+        Market buy,2026-01-01 10:00:00,TEST,1,100,USD,,
+        Market sell,2026-01-02 10:00:00,TEST,2,110,USD,12.34,GBP
+        """
+        let parsed = try LocalCSVImporter.parse(Data(csv.utf8))
+        let repeated = try LocalCSVImporter.parse(Data(csv.utf8))
+        try check(parsed.0.isEmpty && parsed.1.count == 3, "fully closed CSV accepted")
+        try check(Set(parsed.1.map(\.id)).count == 3, "identical fills remain separate")
+        try check(parsed.1.map(\.id) == repeated.1.map(\.id), "reimport IDs are stable")
+        try check(parsed.1.last?.realisedProfitLoss == 12.34 && parsed.1.last?.realisedProfitLossCurrency == "GBP", "CSV Result and currency retained")
+        try check(parsed.1.allSatisfy { $0.executedAt != nil }, "execution times retained")
+        try check(LocalPortfolioEngine.usdRate(for: "UNKNOWN") == nil, "unknown currency never assumes parity")
+        let pound = try LocalPortfolioEngine.usd(1, currency: "GBP")
+        let pence = try LocalPortfolioEngine.usd(100, currency: "GBX")
+        try check(abs(pound - pence) < 1e-9, "GBP and GBX use one FX source")
+        try check(DisplayFormat.money(.nan) == "—", "unavailable money does not display zero")
+        func sale(_ result: Double?, _ currency: String?) -> LocalTransactionRecord {
+            LocalTransactionRecord(date: "2026-01-02", action: "SELL", ticker: "TEST", quantity: 1,
+                price: 100, currency: "USD", source: "CSV", accountID: nil, accountName: nil, realisedProfitLoss: result,
+                realisedProfitLossCurrency: currency)
+        }
+        let partial = LocalBrokerResultSummary(transactions: [sale(2.5, "GBP"), sale(nil, nil)])
+        try check(partial.missingCount == 1 && partial.saleCount == 2 && partial.totals["GBP"] == Decimal(string: "2.5"), "partial Results never include proceeds or estimates")
+        let multiple = LocalBrokerResultSummary(transactions: [sale(0, "GBP"), sale(-1.25, " gbp "), sale(3, "USD")])
+        try check(multiple.missingCount == 0 && multiple.totals["GBP"] == Decimal(string: "-1.25") && multiple.totals["USD"] == 3, "zero negative and mixed currency Results stay in native currency")
+        let missing = LocalBrokerResultSummary(transactions: [sale(2.5, nil), sale(.nan, "GBP")])
+        try check(missing.missingCount == 2 && missing.totals.isEmpty, "missing currency and invalid Results remain unavailable")
+        try check(LocalBrokerResultSummary(transactions: []).saleCount == 0, "no sales is distinct from zero profit")
+        return passed.joined(separator: "\n")
+    }
+}
+#endif
 
 /// Trading 212's London suffix identifies the exchange, not whether a price is
 /// expressed in pounds or pence. Keep this aligned with the desktop importer,
@@ -47,6 +134,31 @@ enum InstrumentCurrencyRules {
         let normalized = ticker.uppercased()
         guard !normalized.contains("."), londonPriceCurrencies[normalized] != nil else { return nil }
         return "\(normalized).L"
+    }
+
+    static func marketPriceScale(symbol: String, targetCurrency: String) -> Double {
+        guard symbol.uppercased().hasSuffix(".L"),
+              let listingCurrency = knownPriceCurrency(for: symbol) else { return 1 }
+        switch (listingCurrency, targetCurrency.uppercased()) {
+        case ("GBX", "GBP"): return 0.01
+        case ("GBP", "GBX"): return 100
+        default: return 1
+        }
+    }
+
+    /// Normalize explicit provider units before bars enter the shared caches.
+    /// Yahoo's case-sensitive `GBp` means pence, whereas `GBP` means pounds.
+    static func providerPriceScale(symbol: String, sourceCurrency: String?) -> Double? {
+        guard symbol.uppercased().hasSuffix(".L"),
+              let target = knownPriceCurrency(for: symbol) else { return 1 }
+        guard let sourceCurrency else { return nil }
+        let source = sourceCurrency == "GBp" ? "GBX" : sourceCurrency.uppercased()
+        if source == target { return 1 }
+        switch (source, target) {
+        case ("GBX", "GBP"): return 0.01
+        case ("GBP", "GBX"): return 100
+        default: return nil
+        }
     }
 }
 
@@ -256,8 +368,28 @@ struct LocalPortfolioSnapshotRecord: Codable, Equatable {
     }
 }
 
-struct LocalTransactionRecord: Codable, Equatable {
+extension LocalTransactionRecord {
+    var legacyTrading212ID: String? {
+        guard source == "Trading 212", tradeID?.isEmpty == false else { return nil }
+        return "\(accountKey)|" + [date, action.uppercased(), ticker.uppercased(), String(quantity), String(price)].joined(separator: "|")
+    }
+    /// Keep the broker's amount/currency pair through lightweight refreshes.
+    func preservingBrokerResult(from previous: LocalTransactionRecord?) -> LocalTransactionRecord {
+        guard (realisedProfitLoss == nil || realisedProfitLossCurrency?.isEmpty != false),
+              let previous, previous.id == id,
+              let result = previous.realisedProfitLoss, result.isFinite,
+              let resultCurrency = previous.realisedProfitLossCurrency, !resultCurrency.isEmpty else { return self }
+        return LocalTransactionRecord(date: date, action: action, ticker: ticker,
+            quantity: quantity, price: price, currency: currency, source: source,
+            accountID: accountID, accountName: accountName, tradeID: tradeID,
+            brokerFXRate: brokerFXRate, entryMethod: entryMethod,
+            realisedProfitLoss: result, realisedProfitLossCurrency: resultCurrency, executedAt: executedAt)
+    }
+}
+
+struct LocalTransactionRecord: Codable, Equatable, Identifiable {
     let date: String
+    var executedAt: String? = nil
     let action: String
     let ticker: String
     let quantity: Double
@@ -288,9 +420,11 @@ struct LocalTransactionRecord: Codable, Equatable {
         brokerFXRate: Double? = nil,
         entryMethod: String? = nil,
         realisedProfitLoss: Double? = nil,
-        realisedProfitLossCurrency: String? = nil
+        realisedProfitLossCurrency: String? = nil,
+        executedAt: String? = nil
     ) {
         self.date = date
+        self.executedAt = executedAt
         self.action = action
         self.ticker = ticker
         self.quantity = quantity
@@ -311,6 +445,21 @@ struct LocalTransactionRecord: Codable, Equatable {
         return "\(source)|\(identifier)"
     }
 
+    /// Stable across decoding and broker refreshes, while matching the
+    /// transaction merge/deduplication semantics used by the local store.
+    var id: String {
+        let fallbackParts = [
+            executedAt ?? date,
+            action.uppercased(),
+            ticker.uppercased(),
+            String(quantity),
+            String(price),
+        ] + (source == "Trading 212" ? [] : [currency.uppercased()])
+        let recordID = tradeID.flatMap { $0.isEmpty ? nil : $0 }
+            ?? fallbackParts.joined(separator: "|")
+        return "\(accountKey)|\(recordID)"
+    }
+
     func renamedAccount(to name: String) -> LocalTransactionRecord {
         LocalTransactionRecord(
             date: date,
@@ -326,7 +475,8 @@ struct LocalTransactionRecord: Codable, Equatable {
             brokerFXRate: brokerFXRate,
             entryMethod: entryMethod,
             realisedProfitLoss: realisedProfitLoss,
-            realisedProfitLossCurrency: realisedProfitLossCurrency
+            realisedProfitLossCurrency: realisedProfitLossCurrency,
+            executedAt: executedAt
         )
     }
 
@@ -345,7 +495,8 @@ struct LocalTransactionRecord: Codable, Equatable {
             brokerFXRate: brokerFXRate,
             entryMethod: entryMethod,
             realisedProfitLoss: realisedProfitLoss,
-            realisedProfitLossCurrency: realisedProfitLossCurrency
+            realisedProfitLossCurrency: realisedProfitLossCurrency,
+            executedAt: executedAt
         )
     }
 }
@@ -390,7 +541,7 @@ enum AccountNaming {
     }
 }
 
-struct PortfolioAccount: Identifiable, Equatable {
+struct PortfolioAccount: Identifiable, Equatable, Codable {
     let id: String
     let accountID: String?
     let source: String
@@ -401,6 +552,15 @@ struct PortfolioAccount: Identifiable, Equatable {
     let manualTransactionCount: Int
     let hasCSVImport: Bool
     let marketValueUSD: Double
+
+    /// Registered but never synced.
+    ///
+    /// Derived rather than stored: an account only reaches `knownAccounts`
+    /// with no positions and no transactions when it was created ahead of its
+    /// first sync, and the flag clears itself the moment anything lands.
+    var awaitsFirstSync: Bool {
+        positionCount == 0 && transactionCount == 0
+    }
 
     var brokerName: String {
         switch source {
@@ -493,6 +653,7 @@ struct LocalPortfolioDocument: Codable, Equatable {
     var positions: [LocalPositionRecord]
     var snapshots: [LocalPortfolioSnapshotRecord]
     var transactions: [LocalTransactionRecord]? = nil
+    var knownAccounts: [PortfolioAccount]? = nil
 
     static let empty = LocalPortfolioDocument(
         source: "local",
@@ -504,16 +665,21 @@ struct LocalPortfolioDocument: Codable, Equatable {
 
 extension LocalPortfolioDocument {
     var accounts: [PortfolioAccount] {
-        Dictionary(grouping: positions, by: \.accountKey)
-            .map { key, accountPositions in
+        let grouped = Dictionary(grouping: positions, by: \.accountKey)
+        let history = Dictionary(grouping: transactions ?? [], by: \.accountKey)
+        let saved = Dictionary((knownAccounts ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+        return Set(grouped.keys).union(history.keys).union(saved.keys)
+            .map { key in
+                let accountPositions = grouped[key] ?? []
                 let firstPosition = accountPositions.first
+                let transaction = history[key]?.first
                 let fallbackCurrency = firstPosition?.source == "Trading 212" ? "GBP" : (firstPosition?.currency ?? "USD")
                 return PortfolioAccount(
                     id: key,
-                    accountID: firstPosition?.accountID,
-                    source: firstPosition?.source ?? "本机",
-                    name: firstPosition?.resolvedAccountName ?? "本机账户",
-                    baseCurrency: firstPosition?.accountCurrency ?? fallbackCurrency,
+                    accountID: firstPosition?.accountID ?? saved[key]?.accountID ?? transaction?.accountID,
+                    source: firstPosition?.source ?? saved[key]?.source ?? transaction?.source ?? "本机",
+                    name: firstPosition?.resolvedAccountName ?? saved[key]?.name ?? transaction?.accountName ?? "本机账户",
+                    baseCurrency: firstPosition?.accountCurrency ?? saved[key]?.baseCurrency ?? transaction?.realisedProfitLossCurrency ?? fallbackCurrency,
                     positionCount: accountPositions.count,
                     transactionCount: transactions?.filter { $0.accountKey == key }.count ?? 0,
                     manualTransactionCount: transactions?.filter {
@@ -532,7 +698,7 @@ extension LocalPortfolioDocument {
     }
 
     func scoped(to selectedAccountKeys: Set<String>) -> LocalPortfolioDocument {
-        let availableKeys = Set(positions.map(\.accountKey))
+        let availableKeys = Set(accounts.map(\.id))
         let effectiveKeys = selectedAccountKeys.intersection(availableKeys)
         let selectedPositions = positions.filter { effectiveKeys.contains($0.accountKey) }
         let selectedTransactions = transactions?.filter { effectiveKeys.contains($0.accountKey) }
@@ -564,7 +730,8 @@ extension LocalPortfolioDocument {
             marketDataUpdatedAt: marketDataUpdatedAt,
             positions: selectedPositions,
             snapshots: selectedSnapshots,
-            transactions: selectedTransactions
+            transactions: selectedTransactions,
+            knownAccounts: accounts.filter { effectiveKeys.contains($0.id) }
         )
     }
 }
@@ -1132,6 +1299,11 @@ actor LocalPortfolioStore {
     static let shared = LocalPortfolioStore()
 
     private let fileURL: URL
+    private(set) var recoveryNotice: String?
+
+    init(fileURL: URL) {
+        self.fileURL = fileURL
+    }
 
     init(fileManager: FileManager = .default) {
         let root = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -1144,21 +1316,45 @@ actor LocalPortfolioStore {
         let data = try Data(contentsOf: fileURL)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let document = try decoder.decode(LocalPortfolioDocument.self, from: data)
+        let document: LocalPortfolioDocument
+        do {
+            document = try decoder.decode(LocalPortfolioDocument.self, from: data)
+        } catch is DecodingError {
+            let backup = try archivePortfolio(reason: "corrupt")
+            recoveryNotice = "组合文件无法读取，已备份为 \(backup.lastPathComponent)。请重新导入组合；原始数据保留在本机备份中。"
+            return .empty
+        }
         let migrated = try migrateKnownInstrumentCurrencies(in: document)
         if migrated != document { try save(migrated) }
         return migrated
+    }
+
+    /// Move before resetting so a failed backup never destroys the original.
+    @discardableResult
+    func resetPortfolio() throws -> URL? {
+        let backup = FileManager.default.fileExists(atPath: fileURL.path)
+            ? try archivePortfolio(reason: "reset") : nil
+        recoveryNotice = nil
+        return backup
+    }
+
+    private func archivePortfolio(reason: String) throws -> URL {
+        let backup = fileURL.deletingLastPathComponent()
+            .appendingPathComponent("portfolio-\(reason)-\(UUID().uuidString).json")
+        try FileManager.default.moveItem(at: fileURL, to: backup)
+        return backup
     }
 
     func replace(
         positions: [LocalPositionRecord],
         source: String,
         transactions: [LocalTransactionRecord]? = nil,
-        replacingAccountsOnly: Bool = false
+        replacingAccountsOnly: Bool = false,
+        syncedAccounts: [PortfolioAccount] = []
     ) throws -> LocalPortfolioDocument {
-        guard !positions.isEmpty else { throw LocalPortfolioError.noPortfolio }
-        let previous = (try? load()) ?? .empty
-        let incomingAccountKeys = Set(positions.map(\.accountKey))
+        let previous = try load()
+        let incomingAccountKeys = Set(positions.map(\.accountKey)).union(syncedAccounts.map(\.id)).union((transactions ?? []).map(\.accountKey))
+        guard !replacingAccountsOnly || !incomingAccountKeys.isEmpty else { throw LocalPortfolioError.noPortfolio }
         let combinedPositions = previous.positions.filter { position in
             replacingAccountsOnly
                 ? !incomingAccountKeys.contains(position.accountKey)
@@ -1190,11 +1386,12 @@ actor LocalPortfolioStore {
         let sources = Set(combinedPositions.map(\.source)).sorted()
         let combinedTransactions: [LocalTransactionRecord]
         if let transactions {
+            let previousByID = Dictionary((previous.transactions ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
             combinedTransactions = (previous.transactions ?? []).filter { transaction in
                 replacingAccountsOnly
                     ? !incomingAccountKeys.contains(transaction.accountKey)
                     : transaction.source != source
-            } + transactions
+            } + transactions.map { $0.preservingBrokerResult(from: previousByID[$0.id]) }
         } else {
             combinedTransactions = previous.transactions ?? []
         }
@@ -1205,7 +1402,8 @@ actor LocalPortfolioStore {
             marketDataUpdatedAt: now,
             positions: combinedPositions,
             snapshots: snapshots,
-            transactions: combinedTransactions
+            transactions: combinedTransactions,
+            knownAccounts: Array(Dictionary((previous.accounts + syncedAccounts).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last }).values)
         )
         try save(document)
         return document
@@ -1261,7 +1459,7 @@ actor LocalPortfolioStore {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw LocalPortfolioError.writeFailed }
         var document = try load()
-        guard document.positions.contains(where: { $0.accountKey == accountKey }) else {
+        guard document.accounts.contains(where: { $0.id == accountKey }) else {
             return document
         }
         document.positions = document.positions.map {
@@ -1270,6 +1468,13 @@ actor LocalPortfolioStore {
         document.transactions = document.transactions?.map {
             $0.accountKey == accountKey ? $0.renamedAccount(to: name) : $0
         }
+        document.knownAccounts = document.accounts.map { account in
+            PortfolioAccount(id: account.id, accountID: account.accountID, source: account.source,
+                name: account.id == accountKey ? name : account.name, baseCurrency: account.baseCurrency,
+                positionCount: account.positionCount, transactionCount: account.transactionCount,
+                manualTransactionCount: account.manualTransactionCount, hasCSVImport: account.hasCSVImport,
+                marketValueUSD: account.marketValueUSD)
+        }
         document.updatedAt = Date()
         try save(document)
         return document
@@ -1277,7 +1482,7 @@ actor LocalPortfolioStore {
 
     func appendHistoricalTransaction(_ transaction: LocalTransactionRecord) throws -> LocalPortfolioDocument {
         var document = try load()
-        guard document.positions.contains(where: { $0.accountKey == transaction.accountKey }) else {
+        guard document.accounts.contains(where: { $0.id == transaction.accountKey }) else {
             throw LocalPortfolioError.noPortfolio
         }
         var transactions = document.transactions ?? []
@@ -1293,32 +1498,25 @@ actor LocalPortfolioStore {
         var document = try load()
         var transactionsByKey: [String: LocalTransactionRecord] = [:]
 
-        func identity(_ transaction: LocalTransactionRecord) -> String {
-            let fallbackParts = [
-                    transaction.date,
-                    transaction.action.uppercased(),
-                    transaction.ticker.uppercased(),
-                    String(transaction.quantity),
-                    String(transaction.price),
-                ] + (transaction.source == "Trading 212" ? [] : [transaction.currency.uppercased()])
-            let recordID = transaction.tradeID.flatMap { $0.isEmpty ? nil : $0 }
-                ?? fallbackParts.joined(separator: "|")
-            return "\(transaction.accountKey)|\(recordID)"
-        }
-
         let existing = document.transactions ?? []
         for transaction in existing {
-            transactionsByKey[identity(transaction)] = transaction
+            transactionsByKey[transaction.id] = transaction
         }
         for transaction in incoming {
-            transactionsByKey[identity(transaction)] = transaction
+            // v3 records had no fill ID. Replace their exact legacy fingerprint
+            // as v4 IDs arrive, rather than counting old and new rows twice.
+            if let legacyID = transaction.legacyTrading212ID,
+               transactionsByKey[legacyID]?.tradeID == nil {
+                transactionsByKey.removeValue(forKey: legacyID)
+            }
+            transactionsByKey[transaction.id] = transaction.preservingBrokerResult(from: transactionsByKey[transaction.id])
         }
         let merged = transactionsByKey.values.sorted {
-            if $0.date == $1.date { return identity($0) < identity($1) }
+            if $0.date == $1.date { return $0.id < $1.id }
             return $0.date < $1.date
         }
         let sortedExisting = existing.sorted {
-            if $0.date == $1.date { return identity($0) < identity($1) }
+            if $0.date == $1.date { return $0.id < $1.id }
             return $0.date < $1.date
         }
         guard merged != sortedExisting else { return document }
@@ -1335,17 +1533,7 @@ actor LocalPortfolioStore {
         var removed = 0
         document.transactions = transactions.filter { transaction in
             guard transaction.accountKey == accountKey else { return true }
-            let fallbackParts = [
-                    transaction.date,
-                    transaction.action.uppercased(),
-                    transaction.ticker.uppercased(),
-                    String(transaction.quantity),
-                    String(transaction.price),
-                ] + (transaction.source == "Trading 212" ? [] : [transaction.currency.uppercased()])
-            let identity = transaction.tradeID.flatMap { $0.isEmpty ? nil : $0 }
-                ?? fallbackParts.joined(separator: "|")
-            let key = "\(transaction.accountKey)|\(identity)"
-            guard seen.insert(key).inserted else {
+            guard seen.insert(transaction.id).inserted else {
                 removed += 1
                 return false
             }
@@ -1358,13 +1546,27 @@ actor LocalPortfolioStore {
         return (document, removed)
     }
 
+    /// Creates an account that has nothing in it yet, so a broker connection
+    /// can be saved and shown while its first report is still generating.
+    func registerAccount(_ account: PortfolioAccount) throws -> LocalPortfolioDocument {
+        var document = try load()
+        var known = document.knownAccounts ?? []
+        known.removeAll { $0.id == account.id }
+        known.append(account)
+        document.knownAccounts = known
+        document.updatedAt = Date()
+        try save(document)
+        return document
+    }
+
     func removeAccount(_ accountKey: String) throws -> LocalPortfolioDocument {
         var document = try load()
-        guard document.positions.contains(where: { $0.accountKey == accountKey }) else {
+        guard document.accounts.contains(where: { $0.id == accountKey }) else {
             return document
         }
         document.positions.removeAll { $0.accountKey == accountKey }
         document.transactions?.removeAll { $0.accountKey == accountKey }
+        document.knownAccounts?.removeAll { $0.id == accountKey }
         document.snapshots = document.snapshots.compactMap { snapshot in
             guard let accountTotals = snapshot.accountTotals else { return nil }
             var remainingTotals = accountTotals
@@ -1453,7 +1655,8 @@ actor LocalPortfolioStore {
                 brokerFXRate: transaction.brokerFXRate,
                 entryMethod: transaction.entryMethod,
                 realisedProfitLoss: transaction.realisedProfitLoss,
-                realisedProfitLossCurrency: transaction.realisedProfitLossCurrency
+                realisedProfitLossCurrency: transaction.realisedProfitLossCurrency,
+                executedAt: transaction.executedAt
             )
         }
         guard positions != source.positions || transactions != source.transactions else { return source }
@@ -1486,6 +1689,50 @@ actor LocalPortfolioStore {
     }
 }
 
+final class LocalCurrentFXCache: @unchecked Sendable {
+    static let shared = LocalCurrentFXCache()
+    private let lock = NSLock()
+    private var records: [String: Record]
+    struct Record: Codable { let rate: Double; let date: String }
+    private init() {
+        records = UserDefaults.standard.data(forKey: "catfolio.currentFX.v1")
+            .flatMap { try? JSONDecoder().decode([String: Record].self, from: $0) } ?? [:]
+    }
+    func record(_ currency: String) -> Record? {
+        lock.lock(); defer { lock.unlock() }
+        return records[currency]
+    }
+    func update(_ incoming: [String: Record]) {
+        lock.lock(); defer { lock.unlock() }
+        records.merge(incoming) { _, new in new }
+        if let data = try? JSONEncoder().encode(records) { UserDefaults.standard.set(data, forKey: "catfolio.currentFX.v1") }
+    }
+}
+
+actor LocalCurrentFXRefresh {
+    static let shared = LocalCurrentFXRefresh()
+    private var lastAttempt = Date.distantPast
+    private var running = false
+    func refresh() async {
+        guard !running, Date().timeIntervalSince(lastAttempt) > 1800 else { return }
+        running = true; lastAttempt = Date()
+        defer { running = false }
+        let currencies = ["GBP", "EUR", "HKD", "CAD", "AUD", "SGD", "JPY", "CNY", "CNH"]
+        let end = Date()
+        let start = end.addingTimeInterval(-10 * 86400)
+        let history = await LocalMarketDataClient().historicalCloses(symbols: currencies.map { "\($0)USD=X" },
+            from: DayDateCodec.string(from: start), to: DayDateCodec.string(from: end))
+        guard !Task.isCancelled else { return }
+        var rates: [String: LocalCurrentFXCache.Record] = [:]
+        for currency in currencies {
+            if let latest = history["\(currency)USD=X"]?.filter({ $0.value.isFinite && $0.value > 0 }).max(by: { $0.key < $1.key }) {
+                rates[currency] = .init(rate: latest.value, date: latest.key)
+            }
+        }
+        LocalCurrentFXCache.shared.update(rates)
+    }
+}
+
 enum LocalPortfolioEngine {
     struct Totals {
         let cost: Double
@@ -1515,7 +1762,17 @@ enum LocalPortfolioEngine {
     }
 
     static func usdRate(for currency: String) -> Double? {
-        usdRates[currency.uppercased()]
+        let code = currency.uppercased()
+        if code == "USD" { return 1 }
+        if code == "GBX" { return usdRate(for: "GBP").map { $0 / 100 } }
+        return LocalCurrentFXCache.shared.record(code)?.rate ?? usdRates[code]
+    }
+
+    static var fxStatus: String {
+        if let record = LocalCurrentFXCache.shared.record(DisplayCurrency.current == .usd ? "GBP" : DisplayCurrency.current.rawValue) {
+            return "汇率缓存 · \(record.date)；缺失币种使用离线估值。历史快照保留原记录汇率。"
+        }
+        return "汇率未更新 · 使用离线估值，不适用于历史成交对账。"
     }
 
     static func totals(for positions: [LocalPositionRecord]) throws -> Totals {
@@ -1531,7 +1788,6 @@ enum LocalPortfolioEngine {
     static func presentation(
         for document: LocalPortfolioDocument
     ) throws -> (PortfolioOverview, PortfolioChartResponse, [Holding]) {
-        guard !document.positions.isEmpty else { throw LocalPortfolioError.noPortfolio }
         let totals = try totals(for: document.positions)
         let displayPositions = consolidated(document.positions)
         let unrealized = totals.marketValue - totals.cost
@@ -1812,9 +2068,15 @@ enum LocalCSVImporter {
         let price: Double
         let currency: String
         let name: String
+        let reference: String?
+        let realisedProfitLoss: Double?
+        let realisedProfitLossCurrency: String?
     }
 
     static let aliases: [String: [String]] = [
+        "result": ["result", "realised profit loss", "realized profit loss"],
+        "resultCurrency": ["currency result", "result currency"],
+        "reference": ["id", "reference", "trade id"],
         "date": [
             "date", "trade date", "transaction date", "time", "date time", "datetime",
             "timestamp", "execution time", "executed at", "created at", "closing time",
@@ -1839,7 +2101,7 @@ enum LocalCSVImporter {
             "价格", "每股价格", "成交价", "执行价格",
         ],
         "currency": [
-            "currency", "ccy", "curr", "currency price", "currency price share",
+            "currency price share", "price currency", "currency price", "currency", "ccy", "curr",
             "price currency", "货币", "币种", "价格币种",
         ],
         "name": [
@@ -1866,6 +2128,12 @@ enum LocalCSVImporter {
         let normalized = header.map(normalizeHeader)
         var result: [String: Int] = [:]
         for (key, choices) in aliases {
+            // Prefer exact column names. "Result" must never resolve to
+            // "Currency (Result)" just because that column occurs first.
+            if let exact = choices.compactMap({ normalized.firstIndex(of: normalizeHeader($0)) }).first {
+                result[key] = exact
+                continue
+            }
             for choice in choices {
                 let alias = normalizeHeader(choice)
                 if let index = normalized.firstIndex(where: { headerMatches($0, alias: alias) }) {
@@ -1910,6 +2178,7 @@ enum LocalCSVImporter {
 
         var transactions: [Transaction] = []
         var warnings: [String] = []
+        var rowOccurrences: [String: Int] = [:]
         for (offset, row) in records.dropFirst(headerIndex + 1).enumerated() {
             do {
                 func field(_ name: String) -> String {
@@ -1927,6 +2196,14 @@ enum LocalCSVImporter {
                     reportedCurrency.isEmpty ? nil : reportedCurrency,
                     rawTicker: rawTicker
                 )
+                let result = action == "SELL" ? numericValue(field("result")) : nil
+                let resultCurrency = field("resultCurrency").uppercased()
+                let canonical = [field("date"), action, ticker, String(quantity), String(price), currency].joined(separator: "|")
+                let digest = SHA256.hash(data: Data(canonical.utf8)).map { String(format: "%02x", $0) }.joined()
+                rowOccurrences[digest, default: 0] += 1
+                if result != nil && resultCurrency.isEmpty {
+                    warnings.append("第 \(headerIndex + offset + 2) 行：Result 缺少币种，不计入券商已实现盈亏。")
+                }
                 transactions.append(Transaction(
                     date: try date(field("date")),
                     action: action,
@@ -1934,7 +2211,10 @@ enum LocalCSVImporter {
                     quantity: quantity,
                     price: price,
                     currency: currency.isEmpty ? "USD" : currency,
-                    name: field("name")
+                    name: field("name"),
+                    reference: field("reference").isEmpty ? "csv-\(digest)-\(rowOccurrences[digest]!)" : field("reference"),
+                    realisedProfitLoss: result,
+                    realisedProfitLossCurrency: resultCurrency.isEmpty ? nil : resultCurrency
                 ))
             } catch {
                 warnings.append("第 \(headerIndex + offset + 2) 行：\(error.localizedDescription)")
@@ -1986,7 +2266,6 @@ enum LocalCSVImporter {
                 openedDate: state.openedDate.map { DayDateFormatter.shared.string(from: $0) }
             )
         }.sorted { $0.ticker < $1.ticker }
-        guard !positions.isEmpty else { throw LocalPortfolioError.invalidCSV("没有未平仓持仓") }
         let imported = positions.map {
             CSVImportedHolding(ticker: $0.ticker, name: $0.name, shares: $0.shares, averageCost: $0.averageCost, currency: $0.currency)
         }
@@ -2001,7 +2280,11 @@ enum LocalCSVImporter {
                 source: "CSV",
                 accountID: nil,
                 accountName: "CSV",
-                entryMethod: "csv"
+                tradeID: $0.reference,
+                entryMethod: "csv",
+                realisedProfitLoss: $0.realisedProfitLoss,
+                realisedProfitLossCurrency: $0.realisedProfitLossCurrency,
+                executedAt: ISO8601DateFormatter().string(from: $0.date)
             )
         }
         return (positions, storedTransactions, CSVImportResult(

@@ -30,6 +30,7 @@ final class AppModel {
     private(set) var returnsAnalyticsRevision = 0
     private(set) var isFakeDataMode = UserDefaults.standard.bool(forKey: "catfolio.fakeDataMode")
     var fakeDataModeError: String?
+    var portfolioRecoveryNotice: String?
 
     var returnsWarning: String? {
         let values = [comparisonWarning, analyticsWarning]
@@ -72,35 +73,39 @@ final class AppModel {
         do {
             var loaded = try await loadActiveDocument()
             guard generation == portfolioRequestGeneration else { return }
+            // Publish disk data before any network work. Slow/offline quote
+            // providers must never hold the entire home screen in a skeleton.
+            try await apply(loaded)
             if !isFakeDataMode {
                 loaded = try await mergeCachedTrading212History(into: loaded)
+                guard generation == portfolioRequestGeneration else { return }
+                try await apply(loaded)
+            }
+            guard !loaded.positions.isEmpty else {
+                isHoldingDailyChangesLoading = false
+                return
+            }
+            async let dailyRefresh: Void = refreshHoldingDailyChanges()
+            if !isFakeDataMode {
+                async let fxRefresh: Void = LocalCurrentFXRefresh.shared.refresh()
                 let quotes = await LocalMarketDataClient().latestQuotes(for: loaded.positions)
+                await fxRefresh
                 guard generation == portfolioRequestGeneration else { return }
                 if !quotes.isEmpty {
                     loaded = try await LocalPortfolioStore.shared.updateMarketQuotes(quotes)
                 }
             }
+            await dailyRefresh
             guard generation == portfolioRequestGeneration else { return }
-            try apply(loaded)
-            // Refresh the two independent market-data surfaces together. TODAY
-            // must not rely on PortfolioView's one-shot task, otherwise a pull
-            // refresh clears its values and leaves the chart empty.
-            async let chartRefresh: Void = enrichPortfolioChart(from: document, generation: generation)
-            async let dailyRefresh: Void = refreshHoldingDailyChanges()
-            _ = await (chartRefresh, dailyRefresh)
+            try await apply(loaded, invalidatesDailyChanges: false)
+            // Historical chart enrichment is independent of the already
+            // published positions and daily contributions.
+            await enrichPortfolioChart(from: document, generation: generation)
         } catch {
             guard generation == portfolioRequestGeneration else { return }
-            overview = nil
-            portfolioChart = nil
-            portfolioChartRevision &+= 1
-            holdings = []
-            accounts = []
-            selectedAccountKeys = []
-            localSource = "尚未导入"
-            localUpdatedAt = nil
-            holdingDailyChanges = [:]
-            benchmarkDailyChange = nil
-            holdingDailyChangesSignature = ""
+            // Retain the last usable local presentation on refresh failure.
+            // An error is not an empty account and must not erase its bars.
+            isHoldingDailyChangesLoading = false
             portfolioError = error.localizedDescription
         }
     }
@@ -108,8 +113,8 @@ final class AppModel {
     private func mergeCachedTrading212History(
         into loaded: LocalPortfolioDocument
     ) async throws -> LocalPortfolioDocument {
-        let slots = Set(loaded.positions.compactMap { position -> Int? in
-            guard position.source == "Trading 212", let accountID = position.accountID else { return nil }
+        let slots = Set(loaded.accounts.compactMap { account -> Int? in
+            guard account.source == "Trading 212", let accountID = account.accountID else { return nil }
             return Int(accountID.replacingOccurrences(of: "account-", with: ""))
         })
         let credentials = slots.sorted().compactMap { slot -> Trading212AccountCredentials? in
@@ -129,9 +134,9 @@ final class AppModel {
         )
         guard !cached.isEmpty else { return loaded }
         var accountNames: [String: String] = [:]
-        for position in loaded.positions {
-            if let accountID = position.accountID {
-                accountNames[accountID] = position.resolvedAccountName
+        for account in loaded.accounts where account.source == "Trading 212" {
+            if let accountID = account.accountID {
+                accountNames[accountID] = account.name
             }
         }
         let local = cached.map { transaction in
@@ -147,8 +152,10 @@ final class AppModel {
                 accountID: accountID,
                 accountName: accountNames[accountID],
                 tradeID: transaction.reference,
+                brokerFXRate: transaction.brokerFXRate,
                 realisedProfitLoss: transaction.realisedProfitLoss,
-                realisedProfitLossCurrency: transaction.realisedProfitLossCurrency
+                realisedProfitLossCurrency: transaction.realisedProfitLossCurrency,
+                executedAt: transaction.executedAt
             )
         }
         return try await LocalPortfolioStore.shared.mergeTransactions(local)
@@ -170,7 +177,6 @@ final class AppModel {
             guard generation == returnsRequestGeneration else { return }
             let scoped = selectedDocument(from: loaded)
             document = scoped
-            let localFallback = try LocalPortfolioEngine.comparison(for: scoped)
             do {
                 let enriched = try await LocalMarketDataClient().comparison(document: scoped)
                 guard generation == returnsRequestGeneration else { return }
@@ -178,6 +184,10 @@ final class AppModel {
                 comparisonRevision &+= 1
                 comparisonWarning = enriched.warnings?.joined(separator: "\n")
             } catch {
+                guard generation == returnsRequestGeneration else { return }
+                let localFallback = try await Task.detached(priority: .userInitiated) {
+                    try LocalPortfolioEngine.comparison(for: scoped)
+                }.value
                 guard generation == returnsRequestGeneration else { return }
                 comparison = localFallback
                 comparisonRevision &+= 1
@@ -440,7 +450,10 @@ final class AppModel {
         let loaded = try await loadActiveDocument()
         return (loaded.transactions ?? [])
             .filter { $0.accountKey == accountID }
-            .sorted { $0.date > $1.date }
+            .sorted {
+                if $0.date == $1.date { return $0.id < $1.id }
+                return $0.date > $1.date
+            }
     }
 
     func activityLedger() async throws -> PortfolioActivityLedger {
@@ -461,6 +474,21 @@ final class AppModel {
             },
             securityNames: names
         )
+    }
+
+    /// Creates the account up front so a broker connection is visible and
+    /// editable while its first report is still being generated.
+    func registerPendingAccount(
+        id: String, source: String, name: String, baseCurrency: String
+    ) async throws {
+        let saved = try await LocalPortfolioStore.shared.registerAccount(
+            PortfolioAccount(
+                id: id, accountID: nil, source: source, name: name,
+                baseCurrency: baseCurrency, positionCount: 0, transactionCount: 0,
+                manualTransactionCount: 0, hasCSVImport: false, marketValueUSD: 0
+            )
+        )
+        try await apply(activeDocument(from: saved))
     }
 
     func renameAccount(_ accountID: String, to name: String) async throws {
@@ -513,6 +541,39 @@ final class AppModel {
         if !accounts.isEmpty {
             await refreshReturnsPage()
         }
+    }
+
+    func resetLocalPortfolio() async throws {
+        invalidateInFlightRequests()
+        returnsPageTask?.cancel()
+        returnsPageRequestGeneration &+= 1
+        let backup = try await LocalPortfolioStore.shared.resetPortfolio()
+        isFakeDataMode = false
+        UserDefaults.standard.set(false, forKey: Self.fakeDataModeKey)
+        UserDefaults.standard.removeObject(forKey: Self.selectedAccountsKey)
+        UserDefaults.standard.removeObject(forKey: Self.selectsAllAccountsKey)
+        document = .empty
+        overview = nil
+        portfolioChart = nil
+        holdings = []
+        accounts = []
+        selectedAccountKeys = []
+        holdingDailyChanges = [:]
+        holdingDailyChangesSignature = ""
+        comparison = nil
+        returnsAnalytics = nil
+        comparisonWarning = nil
+        analyticsWarning = nil
+        portfolioError = nil
+        returnsError = nil
+        localSource = "尚未导入"
+        localUpdatedAt = nil
+        portfolioChartRevision &+= 1
+        comparisonRevision &+= 1
+        returnsAnalyticsRevision &+= 1
+        portfolioRecoveryNotice = backup.map {
+            "本机组合已重置，原数据备份为 \($0.lastPathComponent)。券商授权和 AI 对话已保留。"
+        } ?? "本机组合已重置。券商授权和 AI 对话已保留。"
     }
 
     func suggestedAccountNickname(detectedName: String? = nil) -> String {
@@ -586,7 +647,7 @@ final class AppModel {
             transactions: namedTransactions,
             replacingAccountsOnly: replacingAccountsOnly
         )
-        try apply(activeDocument(from: saved))
+        try await apply(activeDocument(from: saved))
         await enrichPortfolioChart(from: document, generation: generation)
         return result
     }
@@ -645,8 +706,10 @@ final class AppModel {
                 accountName: accountNames["account-\(transaction.accountSlot)"]
                     ?? (transaction.accountSlot == 1 ? "Trading 212 · ISA" : "Trading 212 · Invest"),
                 tradeID: transaction.reference,
+                brokerFXRate: transaction.brokerFXRate,
                 realisedProfitLoss: transaction.realisedProfitLoss,
-                realisedProfitLossCurrency: transaction.realisedProfitLossCurrency
+                realisedProfitLossCurrency: transaction.realisedProfitLossCurrency,
+                executedAt: transaction.executedAt
             )
         }
         let enriched = await LocalFXImpactCalculator().enrich(
@@ -662,13 +725,23 @@ final class AppModel {
             source: "Trading 212",
             warnings: warnings,
             transactions: snapshot.hasCompleteTransactionHistory ? transactions : nil,
-            replacingAccountsOnly: replacingAccountsOnly
+            replacingAccountsOnly: replacingAccountsOnly,
+            syncedAccounts: snapshot.syncedAccounts.map { account in
+                PortfolioAccount(
+                    id: account.id, accountID: account.accountID, source: account.source,
+                    name: account.accountID.flatMap { accountNames[$0] } ?? account.name,
+                    baseCurrency: account.baseCurrency, positionCount: account.positionCount,
+                    transactionCount: account.transactionCount,
+                    manualTransactionCount: account.manualTransactionCount,
+                    hasCSVImport: account.hasCSVImport, marketValueUSD: account.marketValueUSD
+                )
+            }
         )
         if !snapshot.hasCompleteTransactionHistory, !transactions.isEmpty {
             invalidateInFlightRequests()
             let generation = portfolioRequestGeneration
             let merged = try await LocalPortfolioStore.shared.mergeTransactions(transactions)
-            try apply(activeDocument(from: merged))
+            try await apply(activeDocument(from: merged))
             await enrichPortfolioChart(from: document, generation: generation)
         }
         return result
@@ -830,7 +903,8 @@ final class AppModel {
         source: String,
         warnings: [String],
         transactions: [LocalTransactionRecord]? = nil,
-        replacingAccountsOnly: Bool = false
+        replacingAccountsOnly: Bool = false,
+        syncedAccounts: [PortfolioAccount] = []
     ) async throws -> CSVImportResult {
         invalidateInFlightRequests()
         let generation = portfolioRequestGeneration
@@ -839,9 +913,10 @@ final class AppModel {
             positions: positions,
             source: source,
             transactions: transactions,
-            replacingAccountsOnly: replacingAccountsOnly
+            replacingAccountsOnly: replacingAccountsOnly,
+            syncedAccounts: syncedAccounts
         )
-        try apply(activeDocument(from: saved))
+        try await apply(activeDocument(from: saved))
         await enrichPortfolioChart(from: document, generation: generation)
         return CSVImportResult(
             ok: true, holdingsCount: positions.count, transactionsCount: nil,
@@ -852,16 +927,22 @@ final class AppModel {
         )
     }
 
-    private func apply(_ loaded: LocalPortfolioDocument) throws {
+    private func apply(_ loaded: LocalPortfolioDocument, invalidatesDailyChanges: Bool = true) async throws {
+        let generation = portfolioRequestGeneration
         let previousDailyChanges = holdingDailyChanges
         let scoped = selectedDocument(from: loaded)
-        let presentation = try LocalPortfolioEngine.presentation(for: scoped)
+        let presentation = try await Task.detached(priority: .userInitiated) {
+            try LocalPortfolioEngine.presentation(for: scoped)
+        }.value
+        guard generation == portfolioRequestGeneration else { return }
         document = scoped
         overview = presentation.0
         portfolioChart = presentation.1
         portfolioChartRevision &+= 1
         holdings = presentation.2
-        dailyChangesRequestGeneration &+= 1
+        if invalidatesDailyChanges {
+            dailyChangesRequestGeneration &+= 1
+        }
         let activeTickers = Set(presentation.2.map { $0.ticker.uppercased() })
         holdingDailyChanges = previousDailyChanges.filter {
             activeTickers.contains($0.key) && $0.value.isFinite
@@ -871,8 +952,10 @@ final class AppModel {
                 holdingDailyChanges[holding.ticker.uppercased()] = value
             }
         }
-        holdingDailyChangesSignature = ""
-        isHoldingDailyChangesLoading = !presentation.2.isEmpty
+        if invalidatesDailyChanges {
+            holdingDailyChangesSignature = ""
+            isHoldingDailyChangesLoading = !presentation.2.isEmpty
+        }
         localSource = scoped.source
         localUpdatedAt = loaded.marketDataUpdatedAt ?? loaded.updatedAt
         comparison = nil
@@ -895,8 +978,14 @@ final class AppModel {
     }
 
     private func loadActiveDocument() async throws -> LocalPortfolioDocument {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--verify-empty-account") { return FoundationRegressionChecks.emptyFixture }
+        #endif
         if isFakeDataMode { return FakePortfolioGenerator.make() }
         let loaded = try await LocalPortfolioStore.shared.load()
+        if let notice = await LocalPortfolioStore.shared.recoveryNotice {
+            portfolioRecoveryNotice = notice
+        }
         return loaded
     }
 

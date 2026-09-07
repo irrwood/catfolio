@@ -47,6 +47,9 @@ struct IBKRFlexView: View {
     // with the first successful report — which IBKR can take minutes to
     // generate. Without somewhere to park them, everything typed is lost the
     // moment the sheet is dismissed.
+    /// The IBKR account ID is only known once a report arrives, so the
+    /// placeholder carries a fixed key until the first sync replaces it.
+    private static let pendingAccountID = "ibkr-flex-pending"
     private static let pendingTokenKey = "ibkr.flex.pending.token"
     private static let pendingQueryIDKey = "ibkr.flex.pending.query-id"
     private static let legacyTokenKey = "ibkr.flex.token"
@@ -128,24 +131,24 @@ struct IBKRFlexView: View {
                             showsSyncConfirmation = true
                         }
                     } else {
+                        // Saving no longer waits on a report IBKR may take
+                        // minutes to build. The account is created now and
+                        // shows as awaiting its first sync; the credentials
+                        // can be revisited by opening it again.
                         GlassPrimaryButton(
-                            title: isWorking ? "正在读取" : "读取并预览持仓",
-                            systemImage: "arrow.down.circle",
-                            isDisabled: isWorking
+                            title: context.isCreating ? "保存并创建账户" : "保存凭证",
+                            systemImage: "tray.and.arrow.down.fill",
+                            isDisabled: isWorking || !hasCompleteCredentials || !hasValidNickname
                         ) {
-                            Task { await testFlex() }
+                            Task { await saveAndClose() }
                         }
 
-                        if !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                           !queryID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            Button {
-                                savePendingCredentials()
-                                dismiss()
-                            } label: {
-                                Label("先保存凭证，稍后再同步", systemImage: "tray.and.arrow.down")
-                            }
-                            .disabled(isWorking)
+                        Button {
+                            Task { await testFlex() }
+                        } label: {
+                            Label(isWorking ? "正在读取" : "现在就读取持仓", systemImage: "arrow.down.circle")
                         }
+                        .disabled(isWorking || !hasCompleteCredentials)
                     }
 
                     statusView
@@ -306,6 +309,35 @@ struct IBKRFlexView: View {
 
     /// Parks the credentials so the report can finish generating in its own
     /// time. Nothing is synced yet; reopening this screen restores them.
+    private var hasCompleteCredentials: Bool {
+        !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !queryID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Stores the credentials and, when creating, puts the account on screen
+    /// straight away rather than making the first report a precondition.
+    private func saveAndClose() async {
+        savePendingCredentials()
+        guard context.isCreating else {
+            status = .success("凭证已保存。")
+            dismiss()
+            return
+        }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            try await model.registerPendingAccount(
+                id: Self.pendingAccountID,
+                source: "IBKR Flex",
+                name: nickname.trimmingCharacters(in: .whitespacesAndNewlines),
+                baseCurrency: "USD"
+            )
+            dismiss()
+        } catch {
+            status = .failure("无法创建账户：\(error.localizedDescription)")
+        }
+    }
+
     private func savePendingCredentials() {
         try? KeychainStore.set(token.trimmingCharacters(in: .whitespacesAndNewlines), for: Self.pendingTokenKey)
         try? KeychainStore.set(queryID.trimmingCharacters(in: .whitespacesAndNewlines), for: Self.pendingQueryIDKey)
@@ -323,6 +355,9 @@ struct IBKRFlexView: View {
         usesLegacyCredentials = false
         try? KeychainStore.set("", for: Self.pendingTokenKey)
         try? KeychainStore.set("", for: Self.pendingQueryIDKey)
+        // The real accounts have arrived under their own IBKR IDs, so the
+        // placeholder that stood in for them has nothing left to represent.
+        Task { try? await model.deleteAccount(Self.pendingAccountID) }
     }
 
     private func testFlex() async {
