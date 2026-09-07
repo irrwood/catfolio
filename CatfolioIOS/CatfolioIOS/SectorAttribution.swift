@@ -137,67 +137,57 @@ enum SectorAttribution {
     }
 }
 
-/// Constituent snapshots are bundled and never change at runtime, so each
-/// fund's sector mix is computed once.
+/// Sector composition per tracked index, with the funds that track it.
+///
+/// Keyed by index rather than by fund because a dozen products track the same
+/// one: SPY, VOO, IVV, CSPX, VUAG.L and VUSA.L are all the S&P 500, differing
+/// only by issuer, listing and share class. Holding the mapping in a resource
+/// rather than in a Swift literal means widening coverage is a data change —
+/// the previous hard-coded list recognised eleven tickers, all of them ones a
+/// single portfolio happened to contain.
 private final class FundCompositionCache: @unchecked Sendable {
-    private struct Constituent: Decodable {
-        let sector: String?
-        let weight: Double
-
-        enum CodingKeys: String, CodingKey {
-            case sector
-            case weight = "weight_percent"
-        }
+    private struct Payload: Decodable {
+        let indices: [String: [String: Double]]
+        let aliases: [String: String]
     }
 
-    private struct Dataset: Decodable { let rows: [Constituent] }
-
-    /// Same aliases the look-through screen already recognises.
-    private static let resources: [String: String] = [
-        "SPY": "sp500_holdings", "VOO": "sp500_holdings", "IVV": "sp500_holdings",
-        "VUAG": "sp500_holdings", "VUAG.L": "sp500_holdings",
-        "VUSA": "sp500_holdings", "VUSA.L": "sp500_holdings",
-        "EQQQ": "eqqq_holdings", "EQQQ.L": "eqqq_holdings",
-        "EQQU": "eqqq_holdings", "EQQU.L": "eqqq_holdings",
-    ]
-
     private let lock = NSLock()
-    private var cache: [String: SectorSplit?] = [:]
+    private var loaded = false
+    private var byFund: [String: SectorSplit] = [:]
 
     func composition(for symbol: String) -> SectorSplit? {
         lock.lock()
         defer { lock.unlock() }
-        if let cached = cache[symbol] { return cached }
-        let value = Self.load(symbol: symbol)
-        cache[symbol] = value
-        return value
+        if !loaded {
+            loaded = true
+            byFund = Self.load()
+        }
+        return byFund[symbol.uppercased()]
     }
 
-    private static func load(symbol: String) -> SectorSplit? {
-        guard let resource = resources[symbol],
-              let url = Bundle.main.url(forResource: resource, withExtension: "json", subdirectory: "ETF")
-                ?? Bundle.main.url(forResource: resource, withExtension: "json"),
+    private static func load() -> [String: SectorSplit] {
+        guard let url = Bundle.main.url(forResource: "etf_sector_composition", withExtension: "json"),
               let data = try? Data(contentsOf: url),
-              let dataset = try? JSONDecoder().decode(Dataset.self, from: data) else { return nil }
+              let payload = try? JSONDecoder().decode(Payload.self, from: data) else { return [:] }
 
-        var weights: [PortfolioSector: Double] = [:]
-        var total = 0.0
-        for row in dataset.rows where row.weight.isFinite && row.weight > 0 {
-            total += row.weight
-            guard let sector = PortfolioSector(sourceName: row.sector) else { continue }
-            weights[sector, default: 0] += row.weight
+        var splits: [String: SectorSplit] = [:]
+        for (index, weights) in payload.indices {
+            var mapped: [PortfolioSector: Double] = [:]
+            for (raw, weight) in weights where weight > 0 {
+                guard let sector = PortfolioSector(rawValue: raw) else { continue }
+                mapped[sector, default: 0] += weight
+            }
+            guard !mapped.isEmpty else { continue }
+            splits[index] = SectorSplit(weights: mapped, isLookThrough: true)
         }
-        guard total > 0 else { return nil }
-        // Normalised against the snapshot's own total, so a fund whose
-        // constituents are partly unclassified reports the gap rather than
-        // inflating the sectors it does know.
-        return SectorSplit(
-            weights: weights.mapValues { $0 / total },
-            isLookThrough: true
-        )
+        // A fund whose index has no composition resolves to nothing rather
+        // than to a neighbouring index's mix.
+        return payload.aliases.reduce(into: [:]) { result, pair in
+            guard let split = splits[pair.value] else { return }
+            result[pair.key.uppercased()] = split
+        }
     }
 }
-
 
 /// Hand-assigned sectors for listings the generated US reference does not
 /// cover.

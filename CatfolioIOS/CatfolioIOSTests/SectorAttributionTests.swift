@@ -166,3 +166,68 @@ final class HoldingSectorTests: XCTestCase {
         }
     }
 }
+
+
+/// Look-through used to recognise eleven tickers, all of them ones a single
+/// portfolio happened to hold. Coverage is now a data file keyed by index.
+final class FundLookThroughTests: XCTestCase {
+
+    private func split(_ ticker: String) -> SectorSplit {
+        SectorAttribution.split(ticker: ticker, name: ticker)
+    }
+
+    func testFundsTrackingTheSameIndexResolveIdentically() {
+        // S&P 500, across issuers, listings and share classes.
+        let sp500 = ["SPY", "VOO", "IVV", "CSPX.L", "VUAG.L", "VUSA.L", "SXR8.DE"]
+        let reference = split("VOO").weights
+        XCTAssertFalse(reference.isEmpty)
+        for ticker in sp500 {
+            XCTAssertEqual(split(ticker).weights, reference, ticker)
+        }
+    }
+
+    func testCoverageReachesBeyondOnePortfolio() {
+        // None of these were recognised before; all are widely held.
+        for ticker in ["QQQ", "VT", "VWRL.L", "IWDA.L", "VWCE.DE", "EEM", "VWO", "IWM", "IEFA", "IEMG"] {
+            XCTAssertFalse(split(ticker).weights.isEmpty, "\(ticker) should look through")
+            XCTAssertTrue(split(ticker).isLookThrough, ticker)
+        }
+    }
+
+    func testDifferentIndicesDiffer() {
+        XCTAssertNotEqual(split("VOO").weights, split("QQQ").weights, "S&P 500 is not the Nasdaq-100")
+        XCTAssertNotEqual(split("IEMG").weights, split("IEFA").weights, "emerging is not developed")
+    }
+
+    /// The Nasdaq-100 is famously concentrated; the S&P 500 less so. A mix-up
+    /// between indices would show up here.
+    func testCompositionsLookLikeTheirIndex() throws {
+        let ndx = try XCTUnwrap(split("QQQ").weights[.technology])
+        let spx = try XCTUnwrap(split("VOO").weights[.technology])
+
+        XCTAssertGreaterThan(ndx, 0.4)
+        XCTAssertGreaterThan(ndx, spx)
+    }
+
+    /// Weights are normalised over the classified part, so they never exceed 1
+    /// and the remainder is reported rather than absorbed.
+    func testWeightsNeverExceedOne() {
+        for ticker in ["VOO", "QQQ", "VT", "IEMG", "IWM"] {
+            let split = split(ticker)
+            XCTAssertLessThanOrEqual(split.classifiedFraction, 1.0001, ticker)
+            XCTAssertGreaterThanOrEqual(split.unclassifiedFraction, -0.0001, ticker)
+        }
+    }
+
+    /// A fund nobody has mapped resolves to nothing, not to a nearby index.
+    func testUnknownFundDoesNotGuess() {
+        XCTAssertTrue(split("NOTAFUND").weights.isEmpty)
+        XCTAssertFalse(split("NOTAFUND").isLookThrough)
+    }
+
+    /// An individual stock must never be treated as a fund.
+    func testStocksAreNotLookedThrough() {
+        XCTAssertFalse(split("AMD").isLookThrough)
+        XCTAssertEqual(split("AMD").weights.count, 1)
+    }
+}

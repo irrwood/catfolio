@@ -12,6 +12,7 @@
 		A19800000000000000000004 /* company_reference.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000004 /* company_reference.json */; };
 		A19800000000000000000009 /* sector_overrides.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000009 /* sector_overrides.json */; };
 		A19800000000000000000011 /* stock_splits.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000011 /* stock_splits.json */; };
+		A19800000000000000000012 /* etf_sector_composition.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000012 /* etf_sector_composition.json */; };
 		A10000000000000000000001 /* CatfolioIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* CatfolioIOSApp.swift */; };
 		A10000000000000000000002 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* Models.swift */; };
 		A10000000000000000000003 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003 /* APIClient.swift */; };
@@ -83,6 +84,7 @@
 		B19800000000000000000004 /* company_reference.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = company_reference.json; sourceTree = "<group>"; };
 		B19800000000000000000009 /* sector_overrides.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = sector_overrides.json; sourceTree = "<group>"; };
 		B19800000000000000000011 /* stock_splits.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = stock_splits.json; sourceTree = "<group>"; };
+		B19800000000000000000012 /* etf_sector_composition.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = etf_sector_composition.json; sourceTree = "<group>"; };
 		B19900000000000000000001 /* ResearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResearchView.swift; sourceTree = "<group>"; };
 		B19900000000000000000002 /* StockScreenerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockScreenerView.swift; sourceTree = "<group>"; };
 		B19900000000000000000003 /* AnalystConsensusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalystConsensusView.swift; sourceTree = "<group>"; };
@@ -240,6 +242,7 @@
 				B19800000000000000000004 /* company_reference.json */,
 				B19800000000000000000009 /* sector_overrides.json */,
 				B19800000000000000000011 /* stock_splits.json */,
+				B19800000000000000000012 /* etf_sector_composition.json */,
 				D10000000000000000000005 /* ETF */,
 				D10000000000000000000006 /* Fonts */,
 			);
@@ -405,6 +408,7 @@
 				A19800000000000000000004 /* company_reference.json in Resources */,
 				A19800000000000000000009 /* sector_overrides.json in Resources */,
 				A19800000000000000000011 /* stock_splits.json in Resources */,
+				A19800000000000000000012 /* etf_sector_composition.json in Resources */,
 				A1000000000000000000000B /* Assets.xcassets in Resources */,
 				A10000000000000000000025 /* AssetLogos in Resources */,
 				A10000000000000000000017 /* sp500_holdings.json in Resources */,
