@@ -719,10 +719,12 @@ struct LocalReturnsAnalyticsClient {
         ["VUAG.L": "S&P 500 Fund", "VUSA.L": "S&P 500 Fund"][symbol] ?? symbol
     }
 
+    /// Was a private 60-entry table built for an older, UK-heavy portfolio; it
+    /// resolved 3 of the current 86 holdings and sent the rest to "Other".
+    /// Now shares the app's resolver: generated US reference, then the
+    /// hand-written table for listings it does not cover.
     private static func sector(for ticker: String) -> String {
-        var base = ticker.uppercased().replacingOccurrences(of: ".L", with: "")
-        base = base.replacingOccurrences(of: "_EQ", with: "")
-        return sectorByTicker[base] ?? "Other / Unclassified"
+        SectorAttribution.primarySector(ticker: ticker)?.displayName ?? "未分类"
     }
 
     private static func unique(_ values: [String]) -> [String] {
@@ -730,31 +732,4 @@ struct LocalReturnsAnalyticsClient {
         return values.filter { !$0.isEmpty && seen.insert($0).inserted }
     }
 
-    // Keep this mapping aligned with the Web analytics layer. It intentionally
-    // remains local/approximate so the same holding receives the same color.
-    private static let sectorByTicker: [String: String] = [
-        "AAPL": "Technology", "AVGO": "Technology", "CHKP": "Technology",
-        "GOOG": "Communication Services", "GOOGL": "Communication Services",
-        "META": "Communication Services", "MRVL": "Technology", "MSFT": "Technology",
-        "NVDA": "Technology", "ORCL": "Technology", "PANW": "Technology",
-        "QCOM": "Technology", "SNOW": "Technology", "ZS": "Technology",
-        "BARC": "Financials", "BATS": "Consumer Staples", "BRK.B": "Financials",
-        "BRK-B": "Financials", "CEG": "Utilities", "CLS": "Technology",
-        "EQGB": "ETF / Multi-Asset", "FTNT": "Technology",
-        "GAW": "Consumer Discretionary", "GSK": "Healthcare", "LGEN": "Financials",
-        "LLOY": "Financials", "MNG": "Financials", "NG": "Utilities",
-        "NXT": "Consumer Discretionary", "OKTA": "Technology", "OSB": "Financials",
-        "PHNX": "Financials", "PHP": "Real Estate", "RR": "Industrials",
-        "RWE": "Utilities", "SGLN": "Commodities", "SIE": "Industrials",
-        "SILG": "Commodities", "VUAG": "ETF / S&P 500", "VUSA": "ETF / S&P 500",
-        "VHVG": "ETF / Global Equity", "VEUA": "ETF / Europe Equity",
-        "XUSE": "ETF / S&P 500", "NOK": "Communication Equipment",
-        "GEV": "Industrials", "AES": "Utilities", "ANAE": "ETF / Clean Energy",
-        "ANRJ": "ETF / Clean Energy", "AV": "Financials", "CNA": "Utilities",
-        "CNX1": "ETF / Nasdaq 100", "CUKX": "ETF / UK Equity", "ENL1": "Utilities",
-        "ENR": "Industrials", "FPP": "Consumer Discretionary",
-        "IBEE": "ETF / Clean Energy", "IITU": "ETF / Technology",
-        "SOHO": "Real Estate", "SPGP": "Commodities", "SSLN": "Commodities",
-        "VIEP": "ETF / Europe Equity"
-    ]
 }
