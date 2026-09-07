@@ -71,6 +71,18 @@ struct HoldingDetailView: View {
                                 selectedReturn: priceSelection?.returnPercent
                             )
 
+                            if let disclosure = displayedHolding.publicDisclosure {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("披露持仓 · " + disclosure.amountLabel)
+                                    Text("报告期 " + disclosure.reportDates.joined(separator: " / "))
+                                    Text("申报 " + disclosure.filedDates.joined(separator: " / "))
+                                    if let instrument = disclosure.instrumentLabel { Text("期权标的申报价值 · " + instrument) }
+                                    ForEach(disclosure.sourceURLs, id: \.self) { raw in
+                                        if let url = URL(string: raw), url.scheme == "https" { Link("查看原始披露", destination: url) }
+                                    }
+                                }.font(.caption).foregroundStyle(.secondary).padding(20)
+                            }
+
                             if let priceHistory {
                                 SecurityPriceChart(
                                     history: priceHistory,
@@ -1366,6 +1378,14 @@ private struct HoldingDetailHeader: View {
 private struct HoldingPositionDetails: View {
     let holding: Holding
 
+    /// Resolved off the main thread, because reaching for it here would not
+    /// be a lookup — it is the first touch of a 6 MB package, and on the
+    /// launch where nothing has decoded it yet that cost lands inside
+    /// whichever frame the section first appears in. The row is absent until
+    /// the answer arrives, which is the correct state anyway: most holdings
+    /// are shares and never get one.
+    @State private var expenseRatio: Double?
+
     private var costBasis: Double {
         holding.marketValue - holding.unrealized
     }
@@ -1383,11 +1403,9 @@ private struct HoldingPositionDetails: View {
     /// it. It is a run rate at today's price, not a fee already paid, and not
     /// a figure to subtract from a return that already has it deducted.
     private var expenseRatioRow: HoldingDataRow.Model? {
-        guard let catalog = try? ETFReferenceCatalog.bundled.get(),
-              let fee = catalog.expenseRatio(brokerSymbol: holding.ticker) else { return nil }
-        let percent = fee.rate * 100
-        let rate = percent.formatted(.number.precision(.fractionLength(2...4)))
-        let annual = DisplayFormat.money(holding.marketValue * fee.rate, fractionDigits: 2)
+        guard let expenseRatio else { return nil }
+        let rate = (expenseRatio * 100).formatted(.number.precision(.fractionLength(2...4)))
+        let annual = DisplayFormat.money(holding.marketValue * expenseRatio, fractionDigits: 2)
         return .init(
             title: "Expense Ratio",
             icon: .expenseRatio,
@@ -1395,12 +1413,19 @@ private struct HoldingPositionDetails: View {
         )
     }
 
+    private func loadExpenseRatio() async {
+        let ticker = holding.ticker
+        expenseRatio = await Task.detached(priority: .userInitiated) {
+            try? ETFReferenceCatalog.bundled.get().expenseRatio(brokerSymbol: ticker)?.rate
+        }.value
+    }
+
     private var rows: [HoldingDataRow.Model] {
         [
             .init(
                 title: "Value",
                 icon: .value,
-                value: DisplayFormat.money(holding.marketValue),
+                value: holding.displayedMarketValue,
                 color: Color(red: 1 / 255, green: 184 / 255, blue: 1 / 255)
             ),
             .init(
@@ -1457,6 +1482,8 @@ private struct HoldingPositionDetails: View {
                 }
             }
         }
+        .animation(.snappy(duration: 0.2), value: expenseRatio)
+        .task(id: holding.ticker) { await loadExpenseRatio() }
     }
 
     private var fxTitle: String {
