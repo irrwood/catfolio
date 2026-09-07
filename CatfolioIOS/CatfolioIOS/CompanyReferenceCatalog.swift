@@ -44,6 +44,11 @@ struct CompanyReferenceCatalog: Decodable, Sendable {
     let scope: String
     let temporalBasis: String
     let aliases: [String: String]
+    /// Broker-facing ticker to primary key, spanning markets: `NG.L` is
+    /// `GB:NG`, not the US `NG`. Generated from published exchange-suffix
+    /// conventions rather than queried per broker, so a symbol absent here is
+    /// resolved as a US listing rather than guessed at.
+    let brokerAliases: [String: String]
     let entries: [String: Entry]
 
     enum CatalogError: Error { case missingResource, invalidCatalog }
@@ -68,6 +73,10 @@ struct CompanyReferenceCatalog: Decodable, Sendable {
               catalog.aliases.allSatisfy({ key, target in
                   key != target && catalog.entries[key] == nil && catalog.entries[target] != nil
                       && key.split(separator: ":").first == target.split(separator: ":").first
+              }),
+              catalog.brokerAliases.allSatisfy({ key, target in
+                  key != target && catalog.entries[key] == nil && catalog.entries[target] != nil
+                      && key == key.uppercased()
               }) else { throw CatalogError.invalidCatalog }
         return catalog
     }
@@ -75,6 +84,19 @@ struct CompanyReferenceCatalog: Decodable, Sendable {
     func entry(symbol: String, market: String) -> Entry? {
         let key = "\(market.uppercased()):\(symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased())"
         return entries[aliases[key] ?? key]
+    }
+
+    /// Resolves a ticker in the shape a broker reports it, where the listing
+    /// market is carried by a suffix rather than stated: `NG.L` is National
+    /// Grid in London, and must not collide with NovaGold, the US `NG`.
+    ///
+    /// A symbol the alias table does not carry falls through to
+    /// `defaultMarket`, so the common US case stays an exact lookup instead of
+    /// a market inferred from the symbol's shape.
+    func entry(brokerSymbol: String, defaultMarket: String = "US") -> Entry? {
+        let symbol = brokerSymbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if let key = brokerAliases[symbol], let entry = entries[key] { return entry }
+        return entry(symbol: symbol, market: defaultMarket)
     }
 
     /// Exact symbols rank first, then prefixes, then company-name matches.

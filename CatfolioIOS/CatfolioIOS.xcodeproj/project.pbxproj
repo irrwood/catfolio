@@ -10,7 +10,6 @@
 		A1C000000000000000000001 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = B1C000000000000000000001 /* AppIcon.icon */; };
 		A19800000000000000000003 /* CompanyReferenceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000003 /* CompanyReferenceCatalog.swift */; };
 		A19800000000000000000004 /* company_reference.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000004 /* company_reference.json */; };
-		A19800000000000000000009 /* sector_overrides.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000009 /* sector_overrides.json */; };
 		A19800000000000000000011 /* stock_splits.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000011 /* stock_splits.json */; };
 		A19800000000000000000012 /* etf_sector_composition.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000012 /* etf_sector_composition.json */; };
 		A10000000000000000000001 /* CatfolioIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* CatfolioIOSApp.swift */; };
@@ -82,7 +81,6 @@
 		B1C000000000000000000001 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		B19800000000000000000003 /* CompanyReferenceCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyReferenceCatalog.swift; sourceTree = "<group>"; };
 		B19800000000000000000004 /* company_reference.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = company_reference.json; sourceTree = "<group>"; };
-		B19800000000000000000009 /* sector_overrides.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = sector_overrides.json; sourceTree = "<group>"; };
 		B19800000000000000000011 /* stock_splits.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = stock_splits.json; sourceTree = "<group>"; };
 		B19800000000000000000012 /* etf_sector_composition.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = etf_sector_composition.json; sourceTree = "<group>"; };
 		B19900000000000000000001 /* ResearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResearchView.swift; sourceTree = "<group>"; };
@@ -240,7 +238,6 @@
 			children = (
 				B10000000000000000000027 /* AssetLogos */,
 				B19800000000000000000004 /* company_reference.json */,
-				B19800000000000000000009 /* sector_overrides.json */,
 				B19800000000000000000011 /* stock_splits.json */,
 				B19800000000000000000012 /* etf_sector_composition.json */,
 				D10000000000000000000005 /* ETF */,
@@ -406,7 +403,6 @@
 			files = (
 				A1C000000000000000000001 /* AppIcon.icon in Resources */,
 				A19800000000000000000004 /* company_reference.json in Resources */,
-				A19800000000000000000009 /* sector_overrides.json in Resources */,
 				A19800000000000000000011 /* stock_splits.json in Resources */,
 				A19800000000000000000012 /* etf_sector_composition.json in Resources */,
 				A1000000000000000000000B /* Assets.xcassets in Resources */,

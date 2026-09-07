@@ -52,16 +52,18 @@ final class PortfolioSectorTests: XCTestCase {
     }
 }
 
-/// The hand-written table for listings the generated US reference misses.
-final class SectorOverrideTests: XCTestCase {
+/// Non-US listings, resolved through the broker-facing alias table rather
+/// than a hand-written stopgap.
+final class InternationalListingTests: XCTestCase {
 
-    func testBundledOverridesLoad() {
-        XCTAssertGreaterThan(SectorOverrides.shared.count, 30, "resource missing from the bundle?")
+    private func sector(_ symbol: String) throws -> PortfolioSector? {
+        let entry = try CompanyReferenceCatalog.bundled.get().entry(brokerSymbol: symbol)
+        return PortfolioSector(sourceName: entry?.sector)
     }
 
-    /// Spot checks across each market the table exists to cover. A wrong
+    /// Spot checks across the markets the reference claims to cover. A wrong
     /// sector here is silent, so the obvious ones are pinned.
-    func testKnownListingsResolve() {
+    func testKnownListingsResolve() throws {
         let expected: [String: PortfolioSector] = [
             "AZN.L": .healthcare,
             "SHEL.L": .energy,
@@ -85,31 +87,59 @@ final class SectorOverrideTests: XCTestCase {
             "CNQ.TO": .energy,
         ]
         for (symbol, sector) in expected {
-            XCTAssertEqual(SectorOverrides.shared.sector(for: symbol), sector, symbol)
+            XCTAssertEqual(try self.sector(symbol), sector, symbol)
         }
     }
 
-    func testLookupIsCaseInsensitive() {
-        XCTAssertEqual(SectorOverrides.shared.sector(for: "azn.l"), .healthcare)
+    /// The reason the alias table exists. Several London and Toronto tickers
+    /// spell the same letters as an unrelated US listing, and resolving one to
+    /// the other misfiles the position without any visible failure.
+    func testSuffixedTickersDoNotCollideWithUSListings() throws {
+        let catalog = try CompanyReferenceCatalog.bundled.get()
+        let collisions: [(broker: String, key: String, us: String)] = [
+            ("NG.L", "GB:NG", "US:NG"),        // National Grid vs NovaGold
+            ("BA.L", "GB:BA", "US:BA"),        // BAE Systems vs Boeing
+            ("RY.TO", "CA:RY", "US:RY"),       // Royal Bank vs Ryman Hospitality
+            ("BHP.AX", "AU:BHP", "US:BHP"),    // the Australian line, not the ADR
+        ]
+        for case let (broker, key, us) in collisions {
+            let entry = catalog.entry(brokerSymbol: broker)
+            XCTAssertEqual(entry.map { "\($0.market):\($0.symbol)" }, key, broker)
+            XCTAssertNotNil(catalog.entries[us], "\(us) should still exist in its own right")
+            XCTAssertNil(catalog.entries["US:\(broker)"], "\(broker) must not be filed as a US key")
+        }
     }
 
-    func testUnknownSymbolReturnsNil() {
-        XCTAssertNil(SectorOverrides.shared.sector(for: "NOTATICKER.XX"))
+    func testLookupIsCaseInsensitive() throws {
+        XCTAssertEqual(try sector("azn.l"), .healthcare)
     }
 
-    /// The generated reference is authoritative; the hand-written table only
-    /// fills gaps. If it ever shadowed a covered symbol, a stale hand entry
-    /// would quietly outrank fresher data.
-    func testOverridesDoNotShadowTheGeneratedReference() throws {
+    func testUnknownSymbolReturnsNil() throws {
+        XCTAssertNil(try sector("NOTATICKER.XX"))
+    }
+
+    /// An unsuffixed symbol must stay an exact US lookup rather than having a
+    /// market guessed for it.
+    func testBareSymbolsResolveAsUSListings() throws {
         let catalog = try CompanyReferenceCatalog.bundled.get()
         for symbol in ["AAPL", "AMD", "KO", "XOM", "WMT"] {
-            if catalog.entry(symbol: symbol, market: "US")?.sector != nil {
-                XCTAssertNil(
-                    SectorOverrides.shared.sector(for: symbol),
-                    "\(symbol) is already covered upstream and must not be hand-assigned"
-                )
-            }
+            let entry = catalog.entry(brokerSymbol: symbol)
+            XCTAssertEqual(entry?.market, "US", symbol)
+            XCTAssertEqual(entry?.symbol, symbol, symbol)
         }
+    }
+
+    /// Coverage is a property of the shipped resource, not of one portfolio.
+    /// If a rebuild silently narrowed to US-only again, this is what catches it.
+    func testReferenceSpansManyMarkets() throws {
+        let catalog = try CompanyReferenceCatalog.bundled.get()
+        let markets = Set(catalog.entries.values.map(\.market))
+        XCTAssertGreaterThan(markets.count, 20, "reference narrowed back to a handful of markets")
+        for market in ["GB", "JP", "HK", "DE", "FR", "CA", "AU", "NL", "SG", "CH"] {
+            XCTAssertTrue(markets.contains(market), "no \(market) listings in the reference")
+        }
+        let classified = catalog.entries.values.filter { PortfolioSector(sourceName: $0.sector) != nil }
+        XCTAssertGreaterThan(classified.count, 6000)
     }
 }
 

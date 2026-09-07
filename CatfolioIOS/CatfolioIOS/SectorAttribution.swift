@@ -93,23 +93,20 @@ struct SectorSplit: Sendable {
 enum SectorAttribution {
     /// Splits for every ticker the caller asks about.
     ///
-    /// Direct holdings resolve against the bundled US company reference; funds
-    /// resolve against their constituent snapshot. Neither source covers
-    /// non-US listings, so those come back unclassified and must be shown as
-    /// such — a sector breakdown that quietly drops half the portfolio is
-    /// worse than none.
+    /// Direct holdings resolve against the bundled company reference, which
+    /// spans 42 listing markets and reads the market off the broker's ticker
+    /// suffix; funds resolve against their constituent snapshot. The reference
+    /// carries a sector for a subset of the securities it lists, so anything
+    /// it does not classify comes back unclassified and must be shown as such
+    /// — a breakdown that quietly drops part of the portfolio is worse than
+    /// none.
     static func split(ticker: String, name: String) -> SectorSplit {
         let symbol = ticker.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         if let fund = fundComposition(for: symbol) { return fund }
 
-        // The generated reference wins, so a hand-assigned sector is dropped
-        // the moment a covering entry ships rather than shadowing it.
         if let catalog = try? CompanyReferenceCatalog.bundled.get(),
-           let entry = catalog.entry(symbol: symbol, market: "US"),
+           let entry = catalog.entry(brokerSymbol: symbol),
            let sector = PortfolioSector(sourceName: entry.sector) {
-            return SectorSplit(weights: [sector: 1], isLookThrough: false)
-        }
-        if let sector = SectorOverrides.shared.sector(for: symbol) {
             return SectorSplit(weights: [sector: 1], isLookThrough: false)
         }
         return .unclassified
@@ -187,41 +184,4 @@ private final class FundCompositionCache: @unchecked Sendable {
             result[pair.key.uppercased()] = split
         }
     }
-}
-
-/// Hand-assigned sectors for listings the generated US reference does not
-/// cover.
-///
-/// These are read off the issuer's principal business, not taken from a
-/// licensed classification, so they are consulted only after the generated
-/// data has had its say — a covering entry appearing upstream silently
-/// retires the hand-written one.
-final class SectorOverrides: @unchecked Sendable {
-    static let shared = SectorOverrides()
-
-    private struct Payload: Decodable {
-        struct Entry: Decodable { let sector: String }
-        let entries: [String: Entry]
-    }
-
-    private let table: [String: PortfolioSector]
-
-    init(bundle: Bundle = .main) {
-        guard let url = bundle.url(forResource: "sector_overrides", withExtension: "json"),
-              let data = try? Data(contentsOf: url),
-              let payload = try? JSONDecoder().decode(Payload.self, from: data) else {
-            table = [:]
-            return
-        }
-        table = payload.entries.reduce(into: [:]) { result, pair in
-            guard let sector = PortfolioSector(sourceName: pair.value.sector) else { return }
-            result[pair.key.uppercased()] = sector
-        }
-    }
-
-    func sector(for symbol: String) -> PortfolioSector? {
-        table[symbol.uppercased()]
-    }
-
-    var count: Int { table.count }
 }
