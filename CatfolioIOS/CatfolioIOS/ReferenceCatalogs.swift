@@ -3,7 +3,7 @@ import Foundation
 /// Decodes the bundled reference packages before a view asks for one.
 ///
 /// Both catalogs are `static let`, so the first caller pays for the decode:
-/// 6.4 MB of ETF reference and 11 MB of company reference. That caller was a
+/// 1.9 MB of fund fees and 11 MB of company reference. That caller was a
 /// view body — the holding detail page resolves a fund's fee and a sector as
 /// its Data section scrolls into view — so the decode landed on the main
 /// thread mid-gesture and stalled the scroll exactly once per launch.
@@ -18,7 +18,7 @@ enum ReferenceCatalogs {
     /// rather than as a crash at launch.
     static func warm() {
         Task.detached(priority: .userInitiated) {
-            _ = try? ETFReferenceCatalog.bundled.get()
+            _ = try? FundFeeCatalog.bundled.get()
             _ = try? CompanyReferenceCatalog.bundled.get()
             _ = try? StockSplitCatalog.bundled.get()
         }

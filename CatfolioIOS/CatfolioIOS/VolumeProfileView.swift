@@ -1326,7 +1326,7 @@ private struct HoldingPositionDetails: View {
     private func loadExpenseRatio() async {
         let ticker = holding.ticker
         expenseRatio = await Task.detached(priority: .userInitiated) {
-            try? ETFReferenceCatalog.bundled.get().expenseRatio(brokerSymbol: ticker)?.rate
+            try? FundFeeCatalog.bundled.get().fee(brokerSymbol: ticker)?.rate
         }.value
     }
 
