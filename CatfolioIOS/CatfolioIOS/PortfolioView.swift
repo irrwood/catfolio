@@ -1209,8 +1209,8 @@ private struct CostMarketCard: View {
         let value = rangePerformance.amount
         if value >= 0 {
             return colorScheme == .light
-                ? Color(red: 0, green: 0.53, blue: 0.14)
-                : Color(red: 0.204, green: 0.780, blue: 0.349)
+                ? CatfolioTheme.gain(for: .light)
+                : CatfolioTheme.gain(for: .dark)
         }
         return CatfolioPalette.rose500
     }
@@ -1521,7 +1521,7 @@ private struct FastCostMarketPlot: View {
             },
             color: colorScheme == .light
                 ? Color.white
-                : Color(red: 0.204, green: 0.780, blue: 0.349),
+                : CatfolioTheme.gain(for: .dark),
             lineWidth: 3,
             latestPointRadius: showsLatestPoint ? 5 : 0,
             latestPointColor: colorScheme == .light ? .black : nil,
@@ -2674,7 +2674,7 @@ private struct HoldingRow: View {
 
     private var rowAccent: Color {
         if (performance?.amount ?? 0) >= 0 {
-            return Color(red: 1 / 255, green: 184 / 255, blue: 1 / 255)
+            return CatfolioTheme.gainDefault
         }
         return CatfolioPalette.rose500
     }
@@ -2740,8 +2740,8 @@ private struct HoldingMetrics: View {
     private var performanceColor: Color {
         (performance?.amount ?? 0) >= 0
             ? (colorScheme == .light
-                ? Color(red: 0, green: 0.80, blue: 0.25)
-                : Color(red: 0.188, green: 0.820, blue: 0.345))
+                ? CatfolioTheme.gain(for: .light)
+                : CatfolioTheme.gain(for: .dark))
             : CatfolioPalette.rose500
     }
 

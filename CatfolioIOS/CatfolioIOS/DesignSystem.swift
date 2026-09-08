@@ -240,6 +240,31 @@ enum CatfolioTheme {
     static let neutralIcon = CatfolioPalette.neutral600
 
     static let disclosure = accent.opacity(0.68)
+
+    /// A rise and a fall. One definition each, resolved per appearance here
+    /// rather than at the call sites.
+    ///
+    /// There were nine different greens and five different reds in the app
+    /// all meaning these two things, because every screen picked its own. A
+    /// reader comparing two rows cannot tell a deliberate shade from an
+    /// accidental one, so there is exactly one of each and the light and dark
+    /// variants live together where they can be compared.
+    static func gain(for scheme: ColorScheme) -> Color {
+        scheme == .light
+            ? Color(red: 0, green: 0.53, blue: 0.14)
+            : Color(red: 0.204, green: 0.780, blue: 0.349)
+    }
+
+    static func loss(for scheme: ColorScheme) -> Color {
+        scheme == .light
+            ? CatfolioPalette.rose500
+            : Color(red: 1.000, green: 0.271, blue: 0.404)
+    }
+
+    /// For contexts with no `ColorScheme` to hand — a `Canvas` closure, a
+    /// value computed off the view tree. Prefer the scheme-aware pair.
+    static let gainDefault = Color(red: 0.204, green: 0.780, blue: 0.349)
+    static let lossDefault = CatfolioPalette.rose500
     static let settingsBackground = Color(uiColor: .systemGroupedBackground)
 
     static func pageBackground(for colorScheme: ColorScheme) -> Color {

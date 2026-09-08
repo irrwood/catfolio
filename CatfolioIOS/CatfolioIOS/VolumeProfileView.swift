@@ -1425,8 +1425,8 @@ private struct HoldingDetailHeader: View {
                         .appNumber(.label)
                         .foregroundStyle(
                             todayChangePercent >= 0
-                                ? Color(red: 1 / 255, green: 184 / 255, blue: 1 / 255)
-                                : Color(red: 227 / 255, green: 0, blue: 69 / 255)
+                                ? CatfolioTheme.gainDefault
+                                : CatfolioTheme.lossDefault
                         )
                 } else {
                     Text(L10n.text("Return —"))
@@ -1462,8 +1462,8 @@ private struct HoldingPositionDetails: View {
 
     private var profitColor: Color {
         holding.unrealized >= 0
-            ? Color(red: 1 / 255, green: 184 / 255, blue: 1 / 255)
-            : Color(red: 227 / 255, green: 0, blue: 69 / 255)
+            ? CatfolioTheme.gainDefault
+            : CatfolioTheme.lossDefault
     }
 
     /// The fund's own annual charge, and what that costs on this position.
@@ -1496,7 +1496,7 @@ private struct HoldingPositionDetails: View {
                 title: L10n.text("Value"),
                 icon: .value,
                 value: holding.displayedMarketValue,
-                color: Color(red: 1 / 255, green: 184 / 255, blue: 1 / 255)
+                color: CatfolioTheme.gainDefault
             ),
             .init(
                 title: L10n.text("Return"),
@@ -1580,8 +1580,8 @@ private struct HoldingPositionDetails: View {
 
     private var fxColor: Color {
         guard let value = holding.fxPnl else { return .secondary }
-        if value > 0 { return Color(red: 1 / 255, green: 184 / 255, blue: 1 / 255) }
-        if value < 0 { return Color(red: 227 / 255, green: 0, blue: 69 / 255) }
+        if value > 0 { return CatfolioTheme.gainDefault }
+        if value < 0 { return CatfolioTheme.lossDefault }
         return .secondary
     }
 }
