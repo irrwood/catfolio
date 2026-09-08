@@ -147,49 +147,6 @@ Use a restrained light palette inspired by Spade: pure white surfaces, neutral g
 - Info teal: secondary analytical indicators.
 - Cat green: brand icon background and rare brand moments, not generic success.
 
-### Where a Colour May Be Written
-
-This is the rule the rest of the section depends on, and it is enforced rather than encouraged. Before it existed the app carried nine different greens all meaning "this went up" and five reds meaning "this went down", because every screen picked its own. A reader comparing two rows cannot tell a deliberate shade from an accidental one.
-
-Colour literals live in one file. On iOS that is `DesignSystem.swift`; everywhere else, name a token.
-
-`scripts/check_ios_design.py` fails on a literal `Color(red:)`, `Color(white:)` or `Color(hue:)` written anywhere else. Files that predate the rule carry a budget equal to what they held the day it landed: the count may fall and never rise, so the debt drains without blocking work on the files that still carry it. Lower a budget when you clear one; delete the entry at zero.
-
-Choose in this order, and stop at the first that fits.
-
-1. **A system semantic colour.** `.primary`, `.secondary`, `.tertiary`, `Color(uiColor: .systemGroupedBackground)`, `.tint`. Text, backgrounds, separators, selection and disabled states are the platform's job — it already handles light and dark, contrast settings, and whatever the next OS changes. Reaching past it is how a card ends up a hand-picked grey that is lighter and bluer than the system's.
-2. **A semantic token** — `gain`, `loss`, `warning`, `accent`. One definition each, with its light and dark values written together where they can be compared. Ask for the meaning, never the hue.
-3. **A named entry in a categorical palette.** Series and sector colours come from an ordered list or an explicit map, assigned centrally. Never invented at a call site.
-4. **A brand colour**, from the one table of them, for a real brand only.
-
-There is no fifth option.
-
-### Semantic Colour
-
-| Role | Meaning | Notes |
-|---|---|---|
-| `gain` | A rise, a positive delta, a completed state | Scheme-aware; light is darker than dark, since a bright green on white fails contrast |
-| `loss` | A fall, a destructive action, a failure | Same |
-| `warning` | Stale data, waiting, caution | Not the accent — see below |
-| `accent` | Selection, the primary action, interactive affordances | Follows the app tint |
-
-Do not give one colour two jobs in the same view. An account row once used the accent both for "included in the portfolio" and for "waiting for its first sync", so an unsynced account read as a selected one.
-
-Prefer the scheme-aware form. A scheme-free default exists for contexts that have no `ColorScheme` — a `Canvas` closure, a value computed off the view tree — and is the only acceptable use of it.
-
-### Categorical Colour
-
-For series, sectors, and anything else where the colour identifies rather than means:
-
-- One colour per identity, in one table. A series' line and its chip read the same table, so they cannot diverge — the portfolio line was once teal while its own chip was green.
-- Where an identity has an obvious colour, give it that colour. Gold is gold. The reader's own portfolio is the same green a gain is.
-- Neighbours in the table must stay distinguishable from each other and from `gain` and `loss`, which are already on screen.
-- Do not reuse a semantic colour for an identity that is not that thing.
-
-### Brand Colour
-
-Only for a real brand — a broker, an issuer, a logo tint — and only from the brand table. A brand colour never carries product meaning: a red brand mark next to a red loss figure is two different reds saying two different things, and the reader has to work out which is which.
-
 ## Typography
 
 Use the native system UI font stack. On macOS this resolves to San Francisco through `-apple-system` / `BlinkMacSystemFont`; Chinese text uses PingFang. Windows uses Segoe UI. Do not load a web font for core product UI.
@@ -219,7 +176,7 @@ Use the native system UI font stack. On macOS this resolves to San Francisco thr
 - Body: 14px, 400 to 500 weight.
 - Table cell: 13 to 14px, 400 to 500 weight.
 - Metadata: 12 to 13px, muted.
-- Numbers: see Numerals below — alternate glyphs, fixed width by default, one weight step above prose.
+- Numbers: tabular numerals, 500 to 650 weight.
 
 ### Text Rules
 
@@ -229,39 +186,6 @@ Use the native system UI font stack. On macOS this resolves to San Francisco thr
 - Use sentence case for labels.
 - Use short labels in nav and controls.
 - Use muted labels and stronger values in label-value layouts.
-
-### Numerals
-
-Every figure in the product is set in the same face as the text around it, with three glyph substitutions and two rules about width. The app is a screen full of digits people compare against each other, and the default forms are optimised for reading prose.
-
-**Alternate forms.** Use SF's straight-sided six, straight-sided nine, and open four.
-
-- The default six and nine curl their terminals back toward the bowl, which closes the counter and makes them approach an eight at small sizes.
-- The default four is closed, which makes it approach a nine.
-- The straight-sided and open forms keep those counters open, so 6/8, 9/8 and 4/9 stay distinct in a dense column.
-
-On Apple platforms these are stylistic sets, applied through a font descriptor because SwiftUI has no API for stylistic sets on the system font:
-
-| Alternate | Stylistic set | Feature selector |
-|---|---:|---:|
-| Straight-sided six and nine | 1 | 2 |
-| Open four | 2 | 4 |
-
-The selector is `2n` for set `n`, per the `kStylisticAlternativesType` convention.
-
-Do not take the set numbers on trust. Which set carries which alternate is a property of the shipped font, and it has moved between OS releases; a descriptor naming a set the font does not have is accepted silently and changes nothing. Verify by rendering: draw `469` with and without the feature and compare the pixels, and draw `012357` both ways and confirm they are identical. If the first pair matches or the second pair differs, the mapping is wrong.
-
-Apply the alternates to figures only. Prose has no 6/8 confusion to solve, and the straight-sided forms in running text read as a second typeface.
-
-**Width.** Figures use fixed-width digits by default, so a value that changes cannot change the width of its own frame and shift what sits beside it. Pair that with a rolling numeric transition where the value animates.
-
-Turn fixed width off for a figure that never changes and sits in no column — a share count, a settled date. A fixed-width `1` is padded to the width of an `8`, so numbers with several 1s in them carry visible gaps, and a static figure gains nothing in return.
-
-**Weight.** Set figures one step heavier than the same size gives prose. A rounded face reads lighter than a standard one at the same nominal weight — the rounded terminals take ink out of every stroke ending — and a figure has no word shape holding it together, so at small sizes a regular-weight number washes out against its own label.
-
-**Where a figure's font may be built.** Only the type tokens. A font assembled at a call site from `Font.system(design: .rounded)` skips the alternates and the figure weight, which is how the oversized display amount ended up as the one number in the app without the straight-sided six and nine — visibly different from every figure beneath it. `scripts/check_ios_design.py` fails on a rounded system font built outside the token file. For a size the scale does not name, use `Typography.number(size:)`, which still applies both.
-
-**Tracking.** None. The system face carries the platform's optical tracking per size; adding to it visibly loosens display sizes. The one exception is text set in capitals, which needs roughly 6% of the size and does not get it from optical sizing.
 
 ## Spacing
 
