@@ -338,7 +338,7 @@ private struct HoldingDetailAccountSelector: View {
                 ForEach(options) { option in
                     accountButton(
                         id: option.id,
-                        title: conciseAccountName(option.displayName),
+                        title: conciseAccountName(L10n.accountName(option.displayName)),
                         marketValue: option.marketValue,
                         currency: option.currency,
                         isSelected: selectedAccountKeys.contains(option.id),
@@ -2310,7 +2310,7 @@ private struct FiftyTwoWeekRange: View {
     @ViewBuilder
     private func markerBubble(title: String, price: Double) -> some View {
         let label = Text("\(title) \(DisplayFormat.money(price, currency: currency))")
-            .font(.system(size: 12, weight: .semibold, design: .rounded).monospacedDigit())
+            .font(Typography.number(size: 12, weight: .semibold))
             .lineLimit(1)
             .padding(.horizontal, 12)
             .frame(height: 30)
@@ -2682,7 +2682,7 @@ struct PriceDistributionSection<Plot: View, Footer: View>: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(title).font(LegacyType.medium(19, relativeTo: .headline))
                 Spacer(minLength: 12)
-                Text(subtitle).font(.system(size: 15, weight: .medium, design: .rounded))
+                Text(subtitle).font(Typography.text(size: 15, weight: .medium))
                     .foregroundStyle(.primary.opacity(0.50))
             }.frame(height: 23)
             plot().padding(.top, 24)

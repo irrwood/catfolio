@@ -812,7 +812,7 @@ private struct FastReturnsPlot: View {
             GeometryReader { geometry in
                 ForEach(endpointLayouts(height: geometry.size.height)) { endpoint in
                     Text(endpoint.text)
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .font(Typography.text(size: 10, weight: .bold))
                         .foregroundStyle(Color.black)
                         .lineLimit(1)
                         .minimumScaleFactor(0.72)

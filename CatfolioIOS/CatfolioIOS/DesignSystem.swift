@@ -25,9 +25,9 @@ struct CatfolioDisplayAmountText: View {
         let parts = splitText
         HStack(alignment: .firstTextBaseline, spacing: 0) {
             Text(parts.prefix)
-                .font(.system(size: symbolSize, weight: .medium, design: .rounded))
+                .font(Typography.number(size: symbolSize))
             Text(parts.number)
-                .font(.system(size: size, weight: .medium, design: .rounded))
+                .font(Typography.number(size: size))
         }
         .monospacedDigit()
         .foregroundStyle(color)

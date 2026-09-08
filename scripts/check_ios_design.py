@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail when a colour is invented outside the design system.
+"""Fail when a colour or a font is invented outside the design system.
 
 Nine different greens all meant "this went up" and five reds meant "this went
 down", because every screen picked its own. A reader comparing two rows cannot
@@ -22,6 +22,13 @@ HOME = "DesignSystem.swift"
 # `.primary` and `Color(uiColor:)` are semantic and encouraged.
 LITERAL = re.compile(r"Color\(\s*(red|white|hue)\s*:")
 
+# Fonts built straight from `Font.system` with the rounded design bypass the
+# type tokens, and so miss the alternate digits and the figure weight. The
+# oversized display amount was built this way and was the one number in the
+# app without the straight-sided six and nine.
+FONT_HOME = {"Typography.swift", "LegacyType.swift"}
+BESPOKE_FONT = re.compile(r"design:\s*\.rounded")
+
 # What each file still carried when the rule landed. Lower is fine; higher
 # fails. Delete an entry once it reaches zero.
 GRANDFATHERED = {
@@ -38,6 +45,21 @@ GRANDFATHERED = {
 def main() -> int:
     failures: list[str] = []
     improved: list[str] = []
+
+    for path in sorted(ROOT.glob("*.swift")):
+        if path.name in FONT_HOME:
+            continue
+        hits = [
+            f"{path.name}:{n}"
+            for n, line in enumerate(path.read_text().splitlines(), 1)
+            if BESPOKE_FONT.search(line)
+        ]
+        if hits:
+            failures.append(
+                f"{path.name}: {len(hits)} font(s) built outside the type tokens\n    "
+                + "\n    ".join(hits)
+                + "\n    Use Typography.number(size:) or Typography.text(size:)."
+            )
 
     for path in sorted(ROOT.glob("*.swift")):
         if path.name == HOME:
@@ -63,7 +85,10 @@ def main() -> int:
         return 1
 
     total = sum(GRANDFATHERED.values())
-    print(f"OK: no new colour literals; {total} grandfathered across {len(GRANDFATHERED)} files.")
+    print(
+        f"OK: no new colour literals and no bespoke fonts; "
+        f"{total} colour literals grandfathered across {len(GRANDFATHERED)} files."
+    )
     for line in improved:
         print(f"  improved — {line} (lower the budget in this script)")
     return 0

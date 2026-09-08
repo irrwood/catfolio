@@ -148,6 +148,26 @@ enum Typography {
             .monospacedDigit()
     }
 
+    /// A figure at a size the scale does not name — the oversized headline,
+    /// a label sized to a Figma frame.
+    ///
+    /// Still goes through the alternates and fixed-width digits, because a
+    /// number set outside the scale is still a number: the display amount was
+    /// built straight from `Font.system` and so was the only figure in the
+    /// app without the straight-sided six and nine.
+    static func number(size: CGFloat, weight: Font.Weight = .medium) -> Font {
+        Font(NumericAlternates.font(
+            size: size,
+            weight: NumericAlternates.uiWeight(weight),
+            rounded: true
+        )).monospacedDigit()
+    }
+
+    /// Prose at a size the scale does not name.
+    static func text(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        .system(size: size, weight: weight, design: .rounded)
+    }
+
     private static func scaled(_ scale: TypeScale) -> CGFloat {
         UIFontMetrics(forTextStyle: scale.uiTextStyle).scaledValue(for: scale.size)
     }

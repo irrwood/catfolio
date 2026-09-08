@@ -153,7 +153,7 @@ This is the rule the rest of the section depends on, and it is enforced rather t
 
 Colour literals live in one file. On iOS that is `DesignSystem.swift`; everywhere else, name a token.
 
-`scripts/check_ios_colors.py` fails on a literal `Color(red:)`, `Color(white:)` or `Color(hue:)` written anywhere else. Files that predate the rule carry a budget equal to what they held the day it landed: the count may fall and never rise, so the debt drains without blocking work on the files that still carry it. Lower a budget when you clear one; delete the entry at zero.
+`scripts/check_ios_design.py` fails on a literal `Color(red:)`, `Color(white:)` or `Color(hue:)` written anywhere else. Files that predate the rule carry a budget equal to what they held the day it landed: the count may fall and never rise, so the debt drains without blocking work on the files that still carry it. Lower a budget when you clear one; delete the entry at zero.
 
 Choose in this order, and stop at the first that fits.
 
@@ -258,6 +258,8 @@ Apply the alternates to figures only. Prose has no 6/8 confusion to solve, and t
 Turn fixed width off for a figure that never changes and sits in no column — a share count, a settled date. A fixed-width `1` is padded to the width of an `8`, so numbers with several 1s in them carry visible gaps, and a static figure gains nothing in return.
 
 **Weight.** Set figures one step heavier than the same size gives prose. A rounded face reads lighter than a standard one at the same nominal weight — the rounded terminals take ink out of every stroke ending — and a figure has no word shape holding it together, so at small sizes a regular-weight number washes out against its own label.
+
+**Where a figure's font may be built.** Only the type tokens. A font assembled at a call site from `Font.system(design: .rounded)` skips the alternates and the figure weight, which is how the oversized display amount ended up as the one number in the app without the straight-sided six and nine — visibly different from every figure beneath it. `scripts/check_ios_design.py` fails on a rounded system font built outside the token file. For a size the scale does not name, use `Typography.number(size:)`, which still applies both.
 
 **Tracking.** None. The system face carries the platform's optical tracking per size; adding to it visibly loosens display sizes. The one exception is text set in capitals, which needs roughly 6% of the size and does not get it from optical sizing.
 

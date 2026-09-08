@@ -1770,11 +1770,7 @@ private struct PortfolioDetailsCard: View {
                             .scaledToFit()
                             .frame(width: 24, height: 24)
                     }
-                    .font(.system(
-                        size: colorScheme == .light ? 28 : 32,
-                        weight: .medium,
-                        design: .rounded
-                    ).monospacedDigit())
+                    .font(Typography.number(size: colorScheme == .light ? 28 : 32))
                     .foregroundStyle(.primary)
                 }
                 .buttonStyle(.plain)
