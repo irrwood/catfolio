@@ -657,6 +657,15 @@ struct LocalPortfolioDocument: Codable, Equatable {
     var snapshots: [LocalPortfolioSnapshotRecord]
     var transactions: [LocalTransactionRecord]? = nil
     var knownAccounts: [PortfolioAccount]? = nil
+    /// Set by the generators that invent a portfolio — demo mode, the
+    /// public-investor simulation. Nothing marked this way may leave the
+    /// device.
+    ///
+    /// A flag rather than an inspection of `source`: the demo document calls
+    /// itself "假数据（Trading 212 + Moomoo + IBKR）", which a check for
+    /// "demo" or "fake" sails straight past. Provenance is something a
+    /// producer states, not something a reader guesses.
+    var isSynthetic: Bool? = nil
 
     static let empty = LocalPortfolioDocument(
         source: "local",
@@ -996,7 +1005,8 @@ enum FakePortfolioGenerator {
             marketDataUpdatedAt: calendar.date(byAdding: .minute, value: -37, to: now) ?? now,
             positions: positions,
             snapshots: snapshots,
-            transactions: transactions
+            transactions: transactions,
+            isSynthetic: true
         )
     }
 
@@ -1225,7 +1235,8 @@ enum FakePortfolioGenerator {
             },
             positions: positions,
             snapshots: snapshots,
-            transactions: transactions
+            transactions: transactions,
+            isSynthetic: true
         )
     }
 
@@ -1793,7 +1804,7 @@ enum LocalPortfolioEngine {
     static func presentation(
         for document: LocalPortfolioDocument
     ) throws -> (PortfolioOverview, PortfolioChartResponse, [Holding]) {
-        if document.isPublicDisclosure { return try PublicInvestorAccountAdapter.presentation(for: document) }
+        if document.isPublicDisclosure && (document.positions.isEmpty || document.positions.contains(where: { $0.publicDisclosure != nil })) { return try PublicInvestorAccountAdapter.presentation(for: document) }
         let totals = try totals(for: document.positions)
         let displayPositions = consolidated(document.positions)
         let unrealized = totals.marketValue - totals.cost
