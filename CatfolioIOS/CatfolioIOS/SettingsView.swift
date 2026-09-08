@@ -580,8 +580,15 @@ private struct AccountDetailView: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 20) {
+        // A real List, not a ScrollView imitating one. The hand-rolled
+        // version matched the colours and metrics of the settings page it
+        // was pushed from and still read as slightly different, because row
+        // height, separator inset, tap highlight and Dynamic Type reflow are
+        // things the system does and a stack of VStacks does not. Built this
+        // way it matches by construction, and follows the platform when the
+        // platform changes.
+        List {
+            Section {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(account.displayName)
                         .font(.largeTitle.bold())
@@ -592,117 +599,96 @@ private struct AccountDetailView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                .padding(.top, 6)
+                .padding(.vertical, 8)
+                .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
 
                 if model.isFakeDataMode {
                     Label(L10n.text("这里是独立演示账户，与真实持仓无关。"), systemImage: "eye.slash.fill")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            CatfolioTheme.surface(for: colorScheme),
-                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        )
-                }
-
-                SettingsSectionBlock(title: L10n.text("账户信息")) {
-                    SettingsGroupCard {
-                        Button {
-                            accountNameDraft = account.displayName
-                            showsRenamePrompt = true
-                        } label: {
-                            detailActionRow(title: L10n.text("账户名称"), detail: account.displayName)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
-
-                        Divider()
-                        detailValueRow(title: L10n.text("账户类型"), value: account.accountType)
-                        Divider()
-                        detailValueRow(title: L10n.text("基础币种"), value: account.baseCurrency)
-                        Divider()
-                        detailValueRow(title: L10n.text("Broker"), value: account.brokerName)
-                    }
-                }
-
-                SettingsSectionBlock(title: L10n.text("数据来源")) {
-                    SettingsGroupCard {
-                        Button { activeSheet = syncSheet } label: {
-                            detailActionRow(
-                                title: primarySourceTitle,
-                                detail: primarySourceStatus
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
-
-                        if account.source != "CSV" {
-                            Divider()
-                            Button { activeSheet = .csv } label: {
-                                detailActionRow(title: L10n.text("CSV 导入"), detail: csvImportStatus)
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
-                        }
-
-                        Divider()
-                        Button { activeSheet = .manualTransaction } label: {
-                            detailActionRow(title: L10n.text("手动补充"), detail: L10n.text("\(manualTransactionCount) 笔"))
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
-                    }
-                }
-
-                SettingsSectionBlock(title: L10n.text("数据记录")) {
-                    SettingsGroupCard {
-                        NavigationLink {
-                            HistoryView(initialAccountIDs: [account.id])
-                                .environment(model)
-                        } label: {
-                            detailActionRow(
-                                title: L10n.text("History"),
-                                detail: L10n.text("\(account.transactionCount) 笔交易记录")
-                            )
-                        }
-                        .buttonStyle(.plain)
-
-                        Divider()
-                        Button { deduplicateTransactions() } label: {
-                            detailActionRow(
-                                title: L10n.text("数据匹配与去重"),
-                                detail: isWorking ? nil : dataMatchStatus,
-                                showsProgress: isWorking
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(isWorking || model.isFakeDataMode || model.isPublicInvestorMode)
-                    }
-                }
-
-                SettingsSectionBlock(title: L10n.text("账户设置")) {
-                    SettingsGroupCard {
-                        Button(role: .destructive) {
-                            showsDeleteConfirmation = true
-                        } label: {
-                            HStack {
-                                Text(L10n.text("删除账户"))
-                                    .font(.body.weight(.medium))
-                                    .foregroundStyle(CatfolioTheme.danger)
-                                Spacer()
-                            }
-                            .padding(.vertical, 13)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
-                    }
+                        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 8, trailing: 20))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 40)
+
+            Section(L10n.text("账户信息")) {
+                Button {
+                    accountNameDraft = account.displayName
+                    showsRenamePrompt = true
+                } label: {
+                    detailActionRow(title: L10n.text("账户名称"), detail: account.displayName)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
+
+                LabeledContent(L10n.text("账户类型"), value: account.accountType)
+                LabeledContent(L10n.text("基础币种"), value: account.baseCurrency)
+                LabeledContent(L10n.text("Broker"), value: account.brokerName)
+            }
+
+            Section(L10n.text("数据来源")) {
+                Button { activeSheet = syncSheet } label: {
+                    detailActionRow(title: primarySourceTitle, detail: primarySourceStatus)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
+
+                if account.source != "CSV" {
+                    Button { activeSheet = .csv } label: {
+                        detailActionRow(title: L10n.text("CSV 导入"), detail: csvImportStatus)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
+                }
+
+                Button { activeSheet = .manualTransaction } label: {
+                    detailActionRow(title: L10n.text("手动补充"), detail: L10n.text("\(manualTransactionCount) 笔"))
+                }
+                .buttonStyle(.plain)
+                .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
+            }
+
+            Section(L10n.text("数据记录")) {
+                // A NavigationLink draws its own chevron, so this row does
+                // not add one — two would be the giveaway that the list is
+                // hand-made.
+                NavigationLink {
+                    HistoryView(initialAccountIDs: [account.id])
+                        .environment(model)
+                } label: {
+                    LabeledContent(
+                        L10n.text("History"),
+                        value: L10n.text("\(account.transactionCount) 笔交易记录")
+                    )
+                }
+
+                Button { deduplicateTransactions() } label: {
+                    detailActionRow(
+                        title: L10n.text("数据匹配与去重"),
+                        detail: isWorking ? nil : dataMatchStatus,
+                        showsProgress: isWorking
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(isWorking || model.isFakeDataMode || model.isPublicInvestorMode)
+            }
+
+            Section(L10n.text("账户设置")) {
+                // The role paints it, rather than a literal colour: a
+                // destructive button in a list is already red, and already
+                // dims correctly when disabled.
+                Button(role: .destructive) {
+                    showsDeleteConfirmation = true
+                } label: {
+                    Text(L10n.text("删除账户"))
+                }
+                .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
+            }
         }
+        .listStyle(.insetGrouped)
         .background(CatfolioTheme.settingsBackground)
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
@@ -819,12 +805,11 @@ private struct AccountDetailView: View {
     ) -> some View {
         HStack(spacing: 10) {
             Text(title)
-                .font(.body.weight(.medium))
                 .foregroundStyle(.primary)
             Spacer(minLength: 8)
             if let detail {
                 Text(detail)
-                    .appNumber(.callout)
+                    .appNumber(.body)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -832,12 +817,13 @@ private struct AccountDetailView: View {
                 ProgressView()
                     .controlSize(.small)
             } else {
+                // Matches the chevron a NavigationLink row draws, for the
+                // rows that open a sheet instead of pushing.
                 Image(systemName: "chevron.forward")
-                    .font(.caption.bold())
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(.tertiary)
             }
         }
-        .padding(.vertical, 13)
         .contentShape(Rectangle())
     }
 
