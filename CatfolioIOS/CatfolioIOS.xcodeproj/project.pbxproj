@@ -61,6 +61,7 @@
 		A199000000000000000000AC /* NasdaqAnalystClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AC /* NasdaqAnalystClient.swift */; };
 		A199000000000000000000AE /* TodayDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AE /* TodayDetailView.swift */; };
 		A199000000000000000000AF /* SectorAttribution.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AF /* SectorAttribution.swift */; };
+		A19900000000000000FF80 /* CloudPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF80 /* CloudPreferences.swift */; };
 		A19900000000000000FF70 /* LedgerReconciliation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF70 /* LedgerReconciliation.swift */; };
 		A19900000000000000FF60 /* UKSection104Pool.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF60 /* UKSection104Pool.swift */; };
 		A19900000000000000FF50 /* UKShareMatching.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF50 /* UKShareMatching.swift */; };
@@ -84,6 +85,7 @@
 		A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B7 /* Trading212FillDecodingTests.swift */; };
 		A199000000000000000000AD /* NasdaqAnalystLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */; };
 		A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000C1 /* SectorAttributionTests.swift */; };
+		A19900000000000000FF81 /* CloudPreferencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF81 /* CloudPreferencesTests.swift */; };
 		A19900000000000000FF71 /* LedgerReconciliationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF71 /* LedgerReconciliationTests.swift */; };
 		A19900000000000000FF61 /* UKSection104PoolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF61 /* UKSection104PoolTests.swift */; };
 		A19900000000000000FF51 /* UKShareMatchingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF51 /* UKShareMatchingTests.swift */; };
@@ -155,6 +157,7 @@
 		B199000000000000000000AC /* NasdaqAnalystClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NasdaqAnalystClient.swift; sourceTree = "<group>"; };
 		B199000000000000000000AE /* TodayDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayDetailView.swift; sourceTree = "<group>"; };
 		B199000000000000000000AF /* SectorAttribution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttribution.swift; sourceTree = "<group>"; };
+		B19900000000000000FF80 /* CloudPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPreferences.swift; sourceTree = "<group>"; };
 		B19900000000000000FF70 /* LedgerReconciliation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerReconciliation.swift; sourceTree = "<group>"; };
 		B19900000000000000FF60 /* UKSection104Pool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UKSection104Pool.swift; sourceTree = "<group>"; };
 		B19900000000000000FF50 /* UKShareMatching.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UKShareMatching.swift; sourceTree = "<group>"; };
@@ -176,6 +179,7 @@
 		B199000000000000000000B7 /* Trading212FillDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212FillDecodingTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NasdaqAnalystLogicTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000C1 /* SectorAttributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttributionTests.swift; sourceTree = "<group>"; };
+		B19900000000000000FF81 /* CloudPreferencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPreferencesTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF71 /* LedgerReconciliationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerReconciliationTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF61 /* UKSection104PoolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UKSection104PoolTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF51 /* UKShareMatchingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UKShareMatchingTests.swift; sourceTree = "<group>"; };
@@ -259,6 +263,7 @@
 				B199000000000000000000AC /* NasdaqAnalystClient.swift */,
 				B199000000000000000000AE /* TodayDetailView.swift */,
 				B199000000000000000000AF /* SectorAttribution.swift */,
+				B19900000000000000FF80 /* CloudPreferences.swift */,
 				B19900000000000000FF70 /* LedgerReconciliation.swift */,
 				B19900000000000000FF60 /* UKSection104Pool.swift */,
 				B19900000000000000FF50 /* UKShareMatching.swift */,
@@ -335,6 +340,7 @@
 				B199000000000000000000B7 /* Trading212FillDecodingTests.swift */,
 				B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */,
 				B199000000000000000000C1 /* SectorAttributionTests.swift */,
+				B19900000000000000FF81 /* CloudPreferencesTests.swift */,
 				B19900000000000000FF71 /* LedgerReconciliationTests.swift */,
 				B19900000000000000FF61 /* UKSection104PoolTests.swift */,
 				B19900000000000000FF51 /* UKShareMatchingTests.swift */,
@@ -511,6 +517,7 @@
 				A199000000000000000000AC /* NasdaqAnalystClient.swift in Sources */,
 				A199000000000000000000AE /* TodayDetailView.swift in Sources */,
 				A199000000000000000000AF /* SectorAttribution.swift in Sources */,
+				A19900000000000000FF80 /* CloudPreferences.swift in Sources */,
 				A19900000000000000FF70 /* LedgerReconciliation.swift in Sources */,
 				A19900000000000000FF60 /* UKSection104Pool.swift in Sources */,
 				A19900000000000000FF50 /* UKShareMatching.swift in Sources */,
@@ -541,6 +548,7 @@
 				A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */,
 				A199000000000000000000AD /* NasdaqAnalystLogicTests.swift in Sources */,
 				A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */,
+				A19900000000000000FF81 /* CloudPreferencesTests.swift in Sources */,
 				A19900000000000000FF71 /* LedgerReconciliationTests.swift in Sources */,
 				A19900000000000000FF61 /* UKSection104PoolTests.swift in Sources */,
 				A19900000000000000FF51 /* UKShareMatchingTests.swift in Sources */,

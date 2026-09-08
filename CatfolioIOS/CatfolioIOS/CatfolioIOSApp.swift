@@ -14,6 +14,7 @@ struct CatfolioIOSApp: App {
             RootTabView()
                 .fontDesign(.rounded)
                 .task { ReferenceCatalogs.warm() }
+                .task { CloudPreferences.start() }
                 .environment(model)
                 .tint(CatfolioTheme.accent)
                 .preferredColorScheme(preferredColorScheme)
