@@ -446,7 +446,7 @@ struct OptionsOIView: View {
         .chartYAxisLabel(L10n.text("行权价 USD"))
         .chartXAxisLabel(L10n.text("Put ← OI 合约张数 → Call"))
         .chartXAxis { AxisMarks(values: .automatic(desiredCount: 3)) { value in
-            AxisGridLine(); AxisValueLabel { if let number = value.as(Double.self) { Text(abs(number), format: .number.notation(.compactName)) } }
+            AxisGridLine(); AxisValueLabel { if let number = value.as(Double.self) { Text(DisplayFormat.compact(abs(number), precision: .whole)) } }
         } }
         .frame(height: 303)
         .accessibilityLabel(L10n.text("按行权价排列的 Call 与 Put 未平仓合约分布，下方提供峰值和集中区数值"))

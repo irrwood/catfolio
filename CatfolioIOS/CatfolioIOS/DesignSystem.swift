@@ -1685,16 +1685,99 @@ enum DisplayFormat {
         return "\(adjusted >= 0 ? "+" : "-")\(text)"
     }
 
-    static func compactMoney(_ usdValue: Double) -> String {
-        let displayCurrency = DisplayCurrency.current
-        let converted = displayCurrency.fromUSD(usdValue)
-        let symbol = CurrencyFormatterCache.symbol(for: displayCurrency.rawValue)
-        let compact = abs(converted).formatted(
-            .number
-                .notation(.compactName)
-                .precision(.fractionLength(0...1))
-        )
-        return "\(converted < 0 ? "-" : "")\(symbol)\(compact)"
+    /// How an abbreviated figure is suffixed.
+    ///
+    /// The app had two answers and no rule. Statement lines and axis labels
+    /// divided by hand and appended a literal "M"; the contribution bars used
+    /// `.compactName`, which under zh-Hans says 万 and 亿 rather than K and M.
+    /// Both are defensible, but not in the same app, so the choice is named
+    /// here instead of being made again at each call site.
+    enum CompactStyle {
+        /// K / M / B / T, identical in every language.
+        case latin
+        /// The locale's own compact names — 万 and 亿 under zh-Hans.
+        case localised
+    }
+
+    /// How many digits an abbreviated figure keeps.
+    enum CompactPrecision {
+        /// Whole units. Axis labels, where a decimal point is noise.
+        case whole
+        /// Up to one decimal. The default for a figure read at a glance.
+        case tenth
+        /// Two decimals below 100 and none at or above it, which holds a
+        /// statement line to roughly three significant digits.
+        case statement
+
+        fileprivate var range: ClosedRange<Int> {
+            switch self {
+            case .whole: 0...0
+            case .tenth: 0...1
+            case .statement: 0...2
+            }
+        }
+    }
+
+    /// The one magnitude ladder. Everything abbreviated in this app comes
+    /// through here; nothing else divides by a million.
+    static func compact(
+        _ value: Double,
+        style: CompactStyle = .latin,
+        precision: CompactPrecision = .tenth
+    ) -> String {
+        guard value.isFinite else { return "—" }
+        if style == .localised {
+            return value.formatted(
+                .number.notation(.compactName).precision(.fractionLength(precision.range))
+            )
+        }
+        let magnitude = abs(value)
+        let scaled: Double
+        let suffix: String
+        switch magnitude {
+        case 1_000_000_000_000...: scaled = value / 1_000_000_000_000; suffix = "T"
+        case 1_000_000_000...: scaled = value / 1_000_000_000; suffix = "B"
+        case 1_000_000...: scaled = value / 1_000_000; suffix = "M"
+        case 1_000...: scaled = value / 1_000; suffix = "K"
+        default: scaled = value; suffix = ""
+        }
+        let digits: ClosedRange<Int>
+        if case .statement = precision {
+            digits = abs(scaled) >= 100 ? 0...0 : 2...2
+        } else {
+            digits = precision.range
+        }
+        return "\(scaled.formatted(.number.precision(.fractionLength(digits))))\(suffix)"
+    }
+
+    /// An abbreviated amount carrying its currency symbol.
+    static func compactMoney(
+        _ value: Double,
+        currency: String? = nil,
+        style: CompactStyle = .latin,
+        precision: CompactPrecision = .tenth
+    ) -> String {
+        guard value.isFinite else { return "—" }
+        let targetCurrency: String
+        let adjusted: Double
+        if let currency {
+            targetCurrency = currency.uppercased()
+            adjusted = value
+        } else {
+            let displayCurrency = DisplayCurrency.current
+            targetCurrency = displayCurrency.rawValue
+            adjusted = displayCurrency.fromUSD(value)
+        }
+        var symbol = CurrencyFormatterCache.symbol(for: targetCurrency)
+        // A currency with no glyph prints its code, and a code run straight
+        // into a digit reads as one token: "SEK1.00T". money() spaces these,
+        // so this does too.
+        if let last = symbol.last, last.isLetter { symbol += "\u{00A0}" }
+        let body = compact(abs(adjusted), style: style, precision: precision)
+        // The sign leads the whole amount. The statement formatter this
+        // replaced put it after the symbol — "$-1.50K" — which reads as a
+        // negative quantity of dollars rather than a negative amount.
+        return "\(adjusted < 0 ? "-" : "")\(symbol)\(body)"
     }
 
     static func percent(_ value: Double, signed: Bool = true) -> String {

@@ -510,26 +510,8 @@ private struct FinancialRows: View {
 }
 
 private enum FinancialAmountFormatter {
+    /// A statement line: the shared ladder, held to three significant digits.
     static func string(_ value: Double, currency: String) -> String {
-        let symbol: String
-        switch currency.uppercased() {
-        case "USD": symbol = "$"
-        case "GBP": symbol = "£"
-        case "EUR": symbol = "€"
-        case "JPY", "CNY": symbol = "¥"
-        default: symbol = "\(currency.uppercased()) "
-        }
-        let magnitude = abs(value)
-        let scaled: Double
-        let suffix: String
-        switch magnitude {
-        case 1_000_000_000_000...: scaled = value / 1_000_000_000_000; suffix = "T"
-        case 1_000_000_000...: scaled = value / 1_000_000_000; suffix = "B"
-        case 1_000_000...: scaled = value / 1_000_000; suffix = "M"
-        case 1_000...: scaled = value / 1_000; suffix = "K"
-        default: scaled = value; suffix = ""
-        }
-        let decimals = abs(scaled) >= 100 ? 0 : 2
-        return "\(symbol)\(scaled.formatted(.number.precision(.fractionLength(decimals))))\(suffix)"
+        DisplayFormat.compactMoney(value, currency: currency, precision: .statement)
     }
 }

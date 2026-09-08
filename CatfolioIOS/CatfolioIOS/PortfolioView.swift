@@ -873,8 +873,9 @@ private struct TodayContributionBar: View {
     /// the compact form drops them rather than carrying two decimals into a
     /// space that could not hold the digits.
     private var compactAmountText: String {
-        DisplayCurrency.current.fromUSD(abs(amount)).formatted(
-            .number.notation(.compactName).precision(.fractionLength(0...1))
+        DisplayFormat.compact(
+            DisplayCurrency.current.fromUSD(abs(amount)),
+            style: .localised
         )
     }
 
@@ -1487,14 +1488,7 @@ private struct CostMarketCard: View {
     }
 
     private func compactAxisValue(_ value: Double) -> String {
-        let magnitude = abs(value)
-        if magnitude >= 1_000_000 {
-            return "\((value / 1_000_000).formatted(.number.precision(.fractionLength(0))))M"
-        }
-        if magnitude >= 1_000 {
-            return "\((value / 1_000).formatted(.number.precision(.fractionLength(0))))K"
-        }
-        return value.formatted(.number.precision(.fractionLength(0)))
+        DisplayFormat.compact(value, precision: .whole)
     }
 
     private func rangeDateText(from start: Date, to end: Date) -> String {

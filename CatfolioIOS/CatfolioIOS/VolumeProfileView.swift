@@ -1941,7 +1941,7 @@ private struct HoldingPredictionMarketRow: View {
     private var activityText: String {
         let amount = market.volume24Hours > 0 ? market.volume24Hours : market.totalVolume
         let prefix = market.volume24Hours > 0 ? "24h" : "Total"
-        return "\(prefix) $\(amount.formatted(.number.notation(.compactName).precision(.fractionLength(0...1))))"
+        return "\(prefix) \(DisplayFormat.compactMoney(amount, currency: "USD"))"
     }
 
     var body: some View {
