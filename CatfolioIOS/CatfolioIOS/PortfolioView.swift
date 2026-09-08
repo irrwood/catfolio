@@ -402,13 +402,46 @@ private struct TodayContributionCard: View {
     var onTitleBottomPositionChange: ((CGFloat) -> Void)? = nil
     let onSelect: (Holding) -> Void
 
+    /// Derived once per view value rather than on every `body` pass.
+    ///
+    /// `body` reads this about ten times per evaluation — directly, and through
+    /// `totalAmount`, `totalPercent`, `isAwaitingContributions`, `barAnimationKey`
+    /// and `visibleContributions` — and it re-evaluates on every frame of the
+    /// bar-reveal animation. Each pass uppercased a ticker and hashed it into
+    /// `dailyChanges` for every holding. It depends only on `holdings` and
+    /// `dailyChanges`, never on `@State`, so SwiftUI rebuilds it exactly when
+    /// those inputs change.
+    private let contributions: [Contribution]
+
     @State private var direction: Direction = TodayContributionCard.launchDirection
     @State private var barRevealProgress: CGFloat = 0
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("catfolio.haptics") private var hapticsEnabled = true
 
-    private var contributions: [Contribution] {
+    init(
+        holdings: [Holding],
+        dailyChanges: [String: Double],
+        benchmarkChange: Double?,
+        isLoading: Bool,
+        onOpenDetail: (() -> Void)? = nil,
+        onTitleBottomPositionChange: ((CGFloat) -> Void)? = nil,
+        onSelect: @escaping (Holding) -> Void
+    ) {
+        self.holdings = holdings
+        self.dailyChanges = dailyChanges
+        self.benchmarkChange = benchmarkChange
+        self.isLoading = isLoading
+        self.onOpenDetail = onOpenDetail
+        self.onTitleBottomPositionChange = onTitleBottomPositionChange
+        self.onSelect = onSelect
+        self.contributions = Self.makeContributions(holdings: holdings, dailyChanges: dailyChanges)
+    }
+
+    private static func makeContributions(
+        holdings: [Holding],
+        dailyChanges: [String: Double]
+    ) -> [Contribution] {
         holdings.compactMap { holding in
             let key = holding.ticker.uppercased()
             guard let change = dailyChanges[key] ?? holding.todayChangePercent,
@@ -1914,29 +1947,40 @@ private struct PortfolioDetailsCard: View {
         HoldingSortField(rawValue: holdingSortFieldRawValue) ?? .marketValue
     }
 
+    private struct HoldingSortEntry {
+        let holding: Holding
+        let value: Double?
+    }
+
+    /// Decorate-sort-undecorate.
+    ///
+    /// `sorted(by:)` takes a comparator, so anything derived inside it runs
+    /// O(n log n) times — twice per comparison here. `performanceValues` uppercases
+    /// the ticker and hashes it into the daily-change dictionary, so deriving the
+    /// sort key once per holding drops that from ~2n log n allocations to n.
+    ///
+    /// `compareOptional` delegates to `compare` whenever both sides are present, and
+    /// `.marketValue` always is, so routing all three numeric fields through it
+    /// keeps the ordering identical to the previous per-case comparators.
     private var sortedHoldings: [Holding] {
-        holdings.sorted { left, right in
-            switch holdingSortField {
+        let field = holdingSortField
+        let entries = holdings.map { holding in
+            switch field {
             case .marketValue:
-                return compare(left.marketValue, right.marketValue, leftTicker: left.ticker, rightTicker: right.ticker)
+                HoldingSortEntry(holding: holding, value: holding.marketValue)
             case .unrealized:
-                return compareOptional(
-                    performanceValues(for: left)?.amount,
-                    performanceValues(for: right)?.amount,
-                    leftTicker: left.ticker,
-                    rightTicker: right.ticker
-                )
+                HoldingSortEntry(holding: holding, value: performanceValues(for: holding)?.amount)
             case .unrealizedPercent:
-                return compareOptional(
-                    performanceValues(for: left)?.percent,
-                    performanceValues(for: right)?.percent,
-                    leftTicker: left.ticker,
-                    rightTicker: right.ticker
-                )
+                HoldingSortEntry(holding: holding, value: performanceValues(for: holding)?.percent)
             case .name:
-                let comparison = left.shortName.localizedStandardCompare(right.shortName)
+                HoldingSortEntry(holding: holding, value: nil)
+            }
+        }
+        return entries.sorted { left, right in
+            guard field != .name else {
+                let comparison = left.holding.shortName.localizedStandardCompare(right.holding.shortName)
                 if comparison == .orderedSame {
-                    let tickerComparison = left.ticker.localizedStandardCompare(right.ticker)
+                    let tickerComparison = left.holding.ticker.localizedStandardCompare(right.holding.ticker)
                     return holdingSortAscending
                         ? tickerComparison == .orderedAscending
                         : tickerComparison == .orderedDescending

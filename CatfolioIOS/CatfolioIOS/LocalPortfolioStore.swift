@@ -686,7 +686,10 @@ extension LocalPortfolioDocument {
             .map { key in
                 let accountPositions = grouped[key] ?? []
                 let firstPosition = accountPositions.first
-                let transaction = history[key]?.first
+                // `history` already groups every transaction by account. Re-scanning
+                // the whole ledger for each account made this O(accounts x ledger).
+                let accountTransactions = history[key] ?? []
+                let transaction = accountTransactions.first
                 let fallbackCurrency = firstPosition?.source == "Trading 212" ? "GBP" : (firstPosition?.currency ?? "USD")
                 return PortfolioAccount(
                     id: key,
@@ -695,13 +698,13 @@ extension LocalPortfolioDocument {
                     name: firstPosition?.resolvedAccountName ?? saved[key]?.name ?? transaction?.accountName ?? "本机账户",
                     baseCurrency: firstPosition?.accountCurrency ?? saved[key]?.baseCurrency ?? transaction?.realisedProfitLossCurrency ?? fallbackCurrency,
                     positionCount: accountPositions.count,
-                    transactionCount: transactions?.filter { $0.accountKey == key }.count ?? 0,
-                    manualTransactionCount: transactions?.filter {
-                        $0.accountKey == key && $0.entryMethod == "manual"
-                    }.count ?? 0,
-                    hasCSVImport: firstPosition?.source == "CSV" || transactions?.contains {
-                        $0.accountKey == key && $0.entryMethod == "csv"
-                    } == true,
+                    transactionCount: accountTransactions.count,
+                    manualTransactionCount: accountTransactions.filter {
+                        $0.entryMethod == "manual"
+                    }.count,
+                    hasCSVImport: firstPosition?.source == "CSV" || accountTransactions.contains {
+                        $0.entryMethod == "csv"
+                    },
                     marketValueUSD: (try? LocalPortfolioEngine.totals(for: accountPositions).marketValue) ?? 0
                 )
             }

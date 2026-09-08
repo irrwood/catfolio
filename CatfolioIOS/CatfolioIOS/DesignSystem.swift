@@ -1595,6 +1595,58 @@ enum AssetBrandColor {
     }
 }
 
+/// Cached, fully-configured currency formatters.
+///
+/// `NumberFormatter` costs far more to allocate and configure than to run, and
+/// `DisplayFormat.money` is called once per figure in every holding row, so a
+/// single list re-render was building dozens of them. Formatters are keyed by
+/// their configuration and never mutated after being published, which is the
+/// documented-safe way to share one across threads.
+///
+/// The date side already avoids this cost (see `DayDateCodec` in Models.swift);
+/// this is the currency equivalent.
+private enum CurrencyFormatterCache {
+    private struct Key: Hashable {
+        let currencyCode: String
+        let minimumFractionDigits: Int
+        let maximumFractionDigits: Int
+    }
+
+    private static let lock = NSLock()
+    private static var formatters: [Key: NumberFormatter] = [:]
+
+    static func formatter(
+        currencyCode: String,
+        minimumFractionDigits: Int,
+        maximumFractionDigits: Int
+    ) -> NumberFormatter {
+        let key = Key(
+            currencyCode: currencyCode,
+            minimumFractionDigits: minimumFractionDigits,
+            maximumFractionDigits: maximumFractionDigits
+        )
+        lock.lock()
+        defer { lock.unlock() }
+        if let cached = formatters[key] { return cached }
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currencyCode
+        if currencyCode == "USD" {
+            formatter.currencySymbol = "$"
+        }
+        formatter.minimumFractionDigits = minimumFractionDigits
+        formatter.maximumFractionDigits = maximumFractionDigits
+        formatters[key] = formatter
+        return formatter
+    }
+
+    /// The currency symbol alone, for callers that render the number themselves.
+    static func symbol(for currencyCode: String) -> String {
+        formatter(currencyCode: currencyCode, minimumFractionDigits: 0, maximumFractionDigits: 2)
+            .currencySymbol ?? "\(currencyCode) "
+    }
+}
+
 enum DisplayFormat {
     static func shares(_ value: Double) -> String {
         value.formatted(
@@ -1623,14 +1675,11 @@ enum DisplayFormat {
             adjusted = displayCurrency.fromUSD(value)
         }
 
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = targetCurrency
-        if targetCurrency == "USD" {
-            formatter.currencySymbol = "$"
-        }
-        formatter.minimumFractionDigits = fractionDigits ?? 0
-        formatter.maximumFractionDigits = fractionDigits ?? (abs(adjusted) >= 1_000 ? 0 : 2)
+        let formatter = CurrencyFormatterCache.formatter(
+            currencyCode: targetCurrency,
+            minimumFractionDigits: fractionDigits ?? 0,
+            maximumFractionDigits: fractionDigits ?? (abs(adjusted) >= 1_000 ? 0 : 2)
+        )
         let text = formatter.string(from: NSNumber(value: abs(adjusted))) ?? "\(adjusted)"
         guard signed else { return text }
         return "\(adjusted >= 0 ? "+" : "-")\(text)"
@@ -1639,13 +1688,7 @@ enum DisplayFormat {
     static func compactMoney(_ usdValue: Double) -> String {
         let displayCurrency = DisplayCurrency.current
         let converted = displayCurrency.fromUSD(usdValue)
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = displayCurrency.rawValue
-        if displayCurrency == .usd {
-            formatter.currencySymbol = "$"
-        }
-        let symbol = formatter.currencySymbol ?? "\(displayCurrency.rawValue) "
+        let symbol = CurrencyFormatterCache.symbol(for: displayCurrency.rawValue)
         let compact = abs(converted).formatted(
             .number
                 .notation(.compactName)

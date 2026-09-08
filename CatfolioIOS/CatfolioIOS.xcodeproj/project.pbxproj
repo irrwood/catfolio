@@ -83,6 +83,8 @@
 		A199000000000000000000A1 /* MoneyWeightedReturnCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B1 /* MoneyWeightedReturnCalculatorTests.swift */; };
 		A199000000000000000000A2 /* LocalPortfolioEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B2 /* LocalPortfolioEngineTests.swift */; };
 		A199000000000000000000E4 /* PublicInvestorCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E4 /* PublicInvestorCatalogTests.swift */; };
+		A199000000000000000000E5 /* CurrencyFormattingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E5 /* CurrencyFormattingTests.swift */; };
+		A199000000000000000000E6 /* PortfolioAccountAggregationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E6 /* PortfolioAccountAggregationTests.swift */; };
 		A199000000000000000000A3 /* RealisedProfitCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */; };
 		A199000000000000000000A4 /* BrokerResultPreservationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B4 /* BrokerResultPreservationTests.swift */; };
 		A199000000000000000000A5 /* AnalystConsensusDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B5 /* AnalystConsensusDataTests.swift */; };
@@ -186,6 +188,8 @@
 		B199000000000000000000B1 /* MoneyWeightedReturnCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyWeightedReturnCalculatorTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000B2 /* LocalPortfolioEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalPortfolioEngineTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000E4 /* PublicInvestorCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicInvestorCatalogTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000E5 /* CurrencyFormattingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrencyFormattingTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000E6 /* PortfolioAccountAggregationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioAccountAggregationTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealisedProfitCalculatorTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000B4 /* BrokerResultPreservationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrokerResultPreservationTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000B5 /* AnalystConsensusDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalystConsensusDataTests.swift; sourceTree = "<group>"; };
@@ -355,6 +359,8 @@
                 B1D000000000000000000004 /* LocalizationTests.swift */,
 				B199000000000000000000B2 /* LocalPortfolioEngineTests.swift */,
 				B199000000000000000000E4 /* PublicInvestorCatalogTests.swift */,
+				B199000000000000000000E5 /* CurrencyFormattingTests.swift */,
+				B199000000000000000000E6 /* PortfolioAccountAggregationTests.swift */,
 				B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */,
 				B199000000000000000000B4 /* BrokerResultPreservationTests.swift */,
 				B199000000000000000000B5 /* AnalystConsensusDataTests.swift */,
@@ -580,6 +586,8 @@
                 A1D000000000000000000003 /* LocalizationTests.swift in Sources */,
 				A199000000000000000000A2 /* LocalPortfolioEngineTests.swift in Sources */,
 				A199000000000000000000E4 /* PublicInvestorCatalogTests.swift in Sources */,
+				A199000000000000000000E5 /* CurrencyFormattingTests.swift in Sources */,
+				A199000000000000000000E6 /* PortfolioAccountAggregationTests.swift in Sources */,
 				A199000000000000000000A3 /* RealisedProfitCalculatorTests.swift in Sources */,
 				A199000000000000000000A4 /* BrokerResultPreservationTests.swift in Sources */,
 				A199000000000000000000A5 /* AnalystConsensusDataTests.swift in Sources */,
