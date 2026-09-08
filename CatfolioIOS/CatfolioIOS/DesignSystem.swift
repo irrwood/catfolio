@@ -10,6 +10,7 @@ import UIKit
 /// whose numerals are narrow; SF carries Apple's own optical tracking per
 /// size, and adding to it at display sizes visibly loosens the figure.
 struct CatfolioDisplayAmountText: View {
+    @Environment(\.locale) private var appLocale
     let text: String
     var size: CGFloat = 32
     var symbolSize: CGFloat = 20.64
@@ -239,6 +240,7 @@ enum CatfolioTheme {
     static let neutralIcon = CatfolioPalette.neutral600
 
     static let disclosure = accent.opacity(0.68)
+    static let settingsBackground = Color(uiColor: .systemGroupedBackground)
 
     static func pageBackground(for colorScheme: ColorScheme) -> Color {
         colorScheme == .light ? CatfolioPalette.neutral50 : CatfolioPalette.neutral900
@@ -266,15 +268,15 @@ enum DisplayCurrency: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .usd: "USD · 美元"
-        case .gbp: "GBP · 英镑"
-        case .eur: "EUR · 欧元"
-        case .cny: "CNY · 人民币"
-        case .hkd: "HKD · 港币"
-        case .cad: "CAD · 加元"
-        case .aud: "AUD · 澳元"
-        case .sgd: "SGD · 新加坡元"
-        case .jpy: "JPY · 日元"
+        case .usd: L10n.text("USD · 美元")
+        case .gbp: L10n.text("GBP · 英镑")
+        case .eur: L10n.text("EUR · 欧元")
+        case .cny: L10n.text("CNY · 人民币")
+        case .hkd: L10n.text("HKD · 港币")
+        case .cad: L10n.text("CAD · 加元")
+        case .aud: L10n.text("AUD · 澳元")
+        case .sgd: L10n.text("SGD · 新加坡元")
+        case .jpy: L10n.text("JPY · 日元")
         }
     }
 
@@ -302,9 +304,9 @@ enum AppAppearance: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .system: "跟随系统"
-        case .light: "浅色"
-        case .dark: "深色"
+        case .system: L10n.text("跟随系统")
+        case .light: L10n.text("浅色")
+        case .dark: L10n.text("深色")
         }
     }
 
@@ -324,6 +326,13 @@ enum CompanyNameDisplay: String, CaseIterable, Identifiable {
     static let preferenceKey = "catfolio.companyNameDisplay"
 
     var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .original: L10n.text("原始名称")
+        case .chineseShort: L10n.text("中文简称")
+        }
+    }
 
     static var current: CompanyNameDisplay {
         let saved = UserDefaults.standard.string(forKey: preferenceKey)
@@ -440,6 +449,7 @@ struct ChartDateRange: Equatable {
 }
 
 struct ChartRangeSummary: View {
+    @Environment(\.locale) private var appLocale
     let dateText: String
     let primaryValue: String
     let secondaryValue: String
@@ -472,6 +482,7 @@ struct ChartRangeSummary: View {
 }
 
 struct ChartLegendItem: View {
+    @Environment(\.locale) private var appLocale
     let title: String
     let color: Color
 
@@ -731,6 +742,7 @@ struct ChartInteractionOverlay: UIViewRepresentable {
 /// the shared interaction state machine, so scroll arbitration, timing,
 /// haptics and cleanup cannot drift from time-series charts.
 struct ChartPointInteractionOverlay: View {
+    @Environment(\.locale) private var appLocale
     let onLocationChanged: (CGPoint) -> Void
     let onInteractionEnded: () -> Void
 
@@ -815,6 +827,7 @@ struct ContentCard: ViewModifier {
 }
 
 struct StatusNotice: View {
+    @Environment(\.locale) private var appLocale
     enum Kind {
         case error
         case success
@@ -890,6 +903,7 @@ extension View {
 }
 
 struct GlassChoiceBar: View {
+    @Environment(\.locale) private var appLocale
     let choices: [String]
     @Binding var selection: String
 
@@ -938,31 +952,140 @@ private enum ChartTimeRangePickerMetrics {
     static let cornerRadius: CGFloat = 10
 }
 
-struct ChartTimeRangePicker<Value: Hashable>: View {
+/// The single time-window vocabulary used by every chart in the app.
+/// The picker presents these eight ranges in five stable slots; tapping an
+/// already-selected slot advances to the next value in that slot.
+enum ChartTimeRange: String, CaseIterable, Identifiable {
+    case oneDay = "1D"
+    case oneWeek = "1W"
+    case oneMonth = "1M"
+    case twoMonths = "2M"
+    case yearToDate = "YTD"
+    case sixMonths = "6M"
+    case oneYear = "1Y"
+    case twoYears = "2Y"
+    case fiveYears = "5Y"
+    case maximum = "MAX"
 
-    let choices: [Value]
-    @Binding var selection: Value
+    var id: String { rawValue }
+    var title: String { L10n.label(rawValue) }
+
+    static let choiceGroups: [[ChartTimeRange]] = [
+        [.oneWeek, .oneDay],
+        [.oneMonth, .twoMonths],
+        [.yearToDate, .sixMonths],
+        [.oneYear, .twoYears],
+        // Paired like every other slot. MAX was the only singleton, so it
+        // was the one place a tap did nothing.
+        [.maximum, .fiveYears],
+    ]
+
+    func includes(
+        _ date: Date,
+        through lastDate: Date,
+        previousTradingDate: Date? = nil,
+        calendar: Calendar = financeCalendar
+    ) -> Bool {
+        let start: Date?
+        switch self {
+        case .oneDay:
+            start = previousTradingDate ?? lastDate
+        case .oneWeek:
+            start = calendar.date(byAdding: .day, value: -7, to: lastDate)
+        case .oneMonth:
+            start = calendar.date(byAdding: .month, value: -1, to: lastDate)
+        case .twoMonths:
+            start = calendar.date(byAdding: .month, value: -2, to: lastDate)
+        case .yearToDate:
+            start = calendar.date(from: calendar.dateComponents([.year], from: lastDate))
+        case .sixMonths:
+            start = calendar.date(byAdding: .month, value: -6, to: lastDate)
+        case .oneYear:
+            start = calendar.date(byAdding: .year, value: -1, to: lastDate)
+        case .twoYears:
+            start = calendar.date(byAdding: .year, value: -2, to: lastDate)
+        case .fiveYears:
+            start = calendar.date(byAdding: .year, value: -5, to: lastDate)
+        case .maximum:
+            start = nil
+        }
+        return start.map { date >= $0 } ?? true
+    }
+
+    static var financeCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+        return calendar
+    }
+}
+
+/// A compact Torph-style label transition for the grouped range picker.
+/// Characters keep their place-value slot, so unchanged glyphs stay still
+/// while changed glyphs travel vertically and cross-fade. The outer picker
+/// owns a fixed hit target, leaving this HStack free to animate its intrinsic
+/// width when a label changes between values such as `YTD` and `6M`.
+private struct ChartTimeRangeMorphingLabel: View {
+    @Environment(\.locale) private var appLocale
+    let text: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var characters: [(offset: Int, element: Character)] {
+        Array(text.enumerated())
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(characters, id: \.offset) { item in
+                Text(String(item.element))
+                    .id("\(item.offset)-\(item.element)")
+                    .transition(characterTransition)
+            }
+        }
+        .animation(textAnimation, value: text)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(text)
+    }
+
+    private var characterTransition: AnyTransition {
+        guard !reduceMotion else { return .identity }
+        return .asymmetric(
+            insertion: .offset(y: 5).combined(with: .opacity),
+            removal: .offset(y: -5).combined(with: .opacity)
+        )
+    }
+
+    private var textAnimation: Animation? {
+        guard !reduceMotion else { return nil }
+        return .spring(response: 0.32, dampingFraction: 0.82, blendDuration: 0.06)
+    }
+}
+
+struct ChartTimeRangePicker: View {
+    @Environment(\.locale) private var appLocale
+    @Binding var selection: ChartTimeRange
     var isDisabled = false
     var usesBrightSelectedBackground = false
-    let title: (Value) -> String
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(choices, id: \.self) { choice in
+            ForEach(ChartTimeRange.choiceGroups.indices, id: \.self) { index in
+                let group = ChartTimeRange.choiceGroups[index]
+                let choice = displayedChoice(in: group)
+                let isSelected = group.contains(selection)
                 Button {
-                    selection = choice
+                    select(group)
                 } label: {
-                    Text(title(choice))
-                        .appText(.footnote, weight: selection == choice ? .semibold : .medium)
-                        .foregroundStyle(textColor(for: choice))
+                    ChartTimeRangeMorphingLabel(text: choice.title)
+                        .appText(.footnote, weight: isSelected ? .semibold : .medium)
+                        .foregroundStyle(textColor(isSelected: isSelected))
                         .lineLimit(1)
                         .frame(
                             width: ChartTimeRangePickerMetrics.itemWidth,
                             height: ChartTimeRangePickerMetrics.itemHeight
                         )
                         .background {
-                            if selection == choice {
+                            if isSelected {
                                 RoundedRectangle(
                                     cornerRadius: ChartTimeRangePickerMetrics.cornerRadius,
                                     style: .continuous
@@ -978,7 +1101,8 @@ struct ChartTimeRangePicker<Value: Hashable>: View {
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(Rectangle())
-                .accessibilityAddTraits(selection == choice ? .isSelected : [])
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+                .accessibilityHint(accessibilityHint(for: group, displayedChoice: choice))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -987,8 +1111,31 @@ struct ChartTimeRangePicker<Value: Hashable>: View {
         .opacity(isDisabled ? 0.55 : 1)
     }
 
-    private func textColor(for choice: Value) -> Color {
-        if selection == choice {
+    private func displayedChoice(in group: [ChartTimeRange]) -> ChartTimeRange {
+        group.first(where: { $0 == selection }) ?? group[0]
+    }
+
+    private func select(_ group: [ChartTimeRange]) {
+        guard let first = group.first else { return }
+        guard let selectedIndex = group.firstIndex(of: selection) else {
+            selection = first
+            return
+        }
+        selection = group[(selectedIndex + 1) % group.count]
+    }
+
+    private func accessibilityHint(
+        for group: [ChartTimeRange],
+        displayedChoice: ChartTimeRange
+    ) -> String {
+        guard group.count > 1,
+              let index = group.firstIndex(of: displayedChoice) else { return "" }
+        let next = group[(index + 1) % group.count]
+        return L10n.text("再次轻点切换到 \(next.title)")
+    }
+
+    private func textColor(isSelected: Bool) -> Color {
+        if isSelected {
             return colorScheme == .light ? .black : .white
         }
         return colorScheme == .light ? Color.black.opacity(0.40) : Color.white.opacity(0.40)
@@ -1008,10 +1155,11 @@ struct ChartTimeRangePicker<Value: Hashable>: View {
 /// this beside `ChartTimeRangePicker` prevents each chart screen from
 /// inventing a different set of placeholder widths and selected-pill bounds.
 struct ChartTimeRangePickerSkeleton: View {
+    @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
 
-    var itemCount = 7
-    var selectedIndex = 3
+    var itemCount = ChartTimeRange.choiceGroups.count
+    var selectedIndex = 1
 
     private var skeletonColor: Color {
         colorScheme == .dark ? .white.opacity(0.09) : Color(white: 0.957)
@@ -1040,6 +1188,7 @@ struct ChartTimeRangePickerSkeleton: View {
 }
 
 struct ToolbarIconButton: View {
+    @Environment(\.locale) private var appLocale
     let systemImage: String
     let accessibilityLabel: String
     let action: () -> Void
@@ -1054,6 +1203,7 @@ struct ToolbarIconButton: View {
 }
 
 struct GlassPrimaryButton: View {
+    @Environment(\.locale) private var appLocale
     let title: String
     var systemImage: String? = nil
     /// Not ready to be tapped — an incomplete form, say. Renders as a plain
@@ -1198,6 +1348,7 @@ private actor AssetLogoRepository {
 }
 
 struct AssetLogo: View {
+    @Environment(\.locale) private var appLocale
     let ticker: String
     let logoSymbol: String?
     var size: CGFloat = 28

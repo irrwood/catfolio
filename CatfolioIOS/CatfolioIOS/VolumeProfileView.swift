@@ -3,8 +3,10 @@ import SwiftUI
 private typealias HoldingDetailTypography = LegacyType
 
 struct HoldingDetailView: View {
+    @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
 
     let holding: Holding
 
@@ -12,7 +14,6 @@ struct HoldingDetailView: View {
     @State private var errorMessage: String?
     @State private var priceHistory: SecurityPriceHistory?
     @State private var priceHistoryError: String?
-    @State private var priceSelection: SecurityPriceSelection?
     @State private var accountContext: HoldingDetailAccountContext?
     @State private var selectedAccountKeys: Set<String> = []
     @State private var presentationReady = false
@@ -30,12 +31,7 @@ struct HoldingDetailView: View {
     }
 
     private var showsInitialLoadingPlaceholder: Bool {
-        if ProcessInfo.processInfo.arguments.contains("--show-security-detail-loading") {
-            return true
-        }
-        let priceIsLoading = priceHistory == nil && priceHistoryError == nil
-        let profileIsLoading = profile == nil && errorMessage == nil
-        return priceIsLoading || profileIsLoading
+        ProcessInfo.processInfo.arguments.contains("--show-security-detail-loading")
     }
 
     private var showsDataDesignPreview: Bool {
@@ -61,40 +57,23 @@ struct HoldingDetailView: View {
                 } else if showsInitialLoadingPlaceholder {
                     HoldingDetailLoadingPlaceholder()
                 } else {
-                    LazyVStack(spacing: 0) {
+                    // Keep the header chart and its time picker resident while
+                    // they cross the scroll viewport boundary. Recycling this
+                    // outer container rebuilt every prepared chart range and
+                    // caused a hitch as the picker appeared or disappeared.
+                    // The lower, genuinely long section remains a LazyVStack.
+                    VStack(spacing: 0) {
                     if !showsVolumeFocusedPreview {
                         VStack(spacing: 0) {
-                            HoldingDetailHeader(
+                            HoldingDetailPriceSection(
                                 holding: displayedHolding,
                                 marketTodayChange: profile?.todayChangePercent,
-                                selectedPrice: priceSelection?.price,
-                                selectedReturn: priceSelection?.returnPercent
+                                priceHistory: priceHistory,
+                                priceHistoryError: priceHistoryError,
+                                presentationReady: presentationReady,
+                                averageCost: averageCostInQuoteCurrency,
+                                selectedAccountKeys: selectedAccountKeys
                             )
-
-                            if let priceHistory {
-                                SecurityPriceChart(
-                                    history: priceHistory,
-                                    averageCost: averageCostInQuoteCurrency,
-                                    selectedAccountKeys: selectedAccountKeys,
-                                    onSelectionChange: { priceSelection = $0 }
-                                )
-                            } else if let priceHistoryError {
-                                SecurityPriceChartState(
-                                    title: "暂无价格走势",
-                                    message: priceHistoryError,
-                                    isLoading: false
-                                )
-                            } else if presentationReady {
-                                SecurityPriceChartState(
-                                    title: "正在读取价格走势",
-                                    message: "正在整理历史行情与买卖记录",
-                                    isLoading: true
-                                )
-                            } else {
-                                Color.clear
-                                    .frame(height: SecurityPriceChartState.fixedHeight)
-                                    .accessibilityHidden(true)
-                            }
 
                             if let accountContext, accountContext.options.count > 1 {
                                 HoldingDetailAccountSelector(
@@ -123,21 +102,21 @@ struct HoldingDetailView: View {
                                 FiftyTwoWeekRange(
                                     low: low,
                                     high: high,
-                                    current: displayedHolding.quotePrice,
+                                    current: priceHistory?.latestAvailablePrice ?? displayedHolding.quotePrice,
                                     periodStart: profile.fiftyTwoWeekStartPrice,
                                     currency: profile.currency
                                 )
                             }
                         } else if let errorMessage {
                             VStack(alignment: .leading, spacing: 12) {
-                                Text("Volume Profile")
+                                Text(L10n.text("Volume Profile"))
                                     .font(HoldingDetailTypography.medium(19, relativeTo: .headline))
                                 StatusNotice(text: errorMessage, kind: .info)
                             }
                         } else if presentationReady {
                             HStack(spacing: 10) {
                                 ProgressView()
-                                Text("正在读取成交量与 52 周数据…")
+                                Text(L10n.text("正在读取成交量与 52 周数据…"))
                                     .foregroundStyle(.secondary)
                             }
                             .font(.subheadline)
@@ -149,11 +128,18 @@ struct HoldingDetailView: View {
                                 .accessibilityHidden(true)
                         }
 
+                        OptionsOIView(symbol: holding.ticker, currency: holding.quoteCurrency,
+                            price: priceHistory?.latestAvailablePrice ?? holding.quotePrice,
+                            costUSD: hasSelectedDetailAccounts ? VolumeProfileInterpretation.convertedPrice(
+                                displayedHolding.averageCost, from: displayedHolding.costCurrency, to: "USD",
+                                usdRate: LocalPortfolioEngine.usdRate(for:)) : nil)
+
                         if hasSelectedDetailAccounts {
                             HoldingPositionDetails(holding: displayedHolding)
                         }
 
-                        AnalystConsensusView(symbol: holding.ticker, currency: holding.quoteCurrency, price: holding.quotePrice)
+                        AnalystConsensusView(symbol: holding.ticker, currency: holding.quoteCurrency,
+                            price: priceHistory?.latestAvailablePrice ?? holding.quotePrice)
                             .padding(.horizontal, -8)
 
                         if CompanyFinancialsView.supports(holding) {
@@ -181,9 +167,12 @@ struct HoldingDetailView: View {
                     withTransaction(transaction) { presentationReady = true }
                 }
             }
-            .task(id: presentationReady) {
-                guard presentationReady, profile == nil, errorMessage == nil else { return }
-                await Task.yield()
+            // Start cache-backed work as soon as SwiftUI inserts the sheet,
+            // while the native presentation animation is still running. The
+            // available holding header renders immediately; only genuinely
+            // missing chart sections show their own loading treatment.
+            .task {
+                guard profile == nil, errorMessage == nil else { return }
                 do {
                     let loaded = try await model.volumeProfile(for: holding.ticker)
                     guard !Task.isCancelled else { return }
@@ -193,12 +182,10 @@ struct HoldingDetailView: View {
                     errorMessage = error.localizedDescription
                 }
             }
-            .task(id: presentationReady) {
-                guard presentationReady,
-                      accountContext == nil,
+            .task {
+                guard accountContext == nil,
                       priceHistory == nil,
                       priceHistoryError == nil else { return }
-                await Task.yield()
                 do {
                     let context = try await model.holdingDetailAccountContext(for: holding.ticker)
                     guard !Task.isCancelled else { return }
@@ -221,6 +208,12 @@ struct HoldingDetailView: View {
         .overlay(alignment: .top) {
             HoldingDetailModalHandle()
         }
+        .sensoryFeedback(
+            .impact(flexibility: .soft, intensity: 0.68),
+            trigger: presentationReady
+        ) { wasReady, isReady in
+            hapticsEnabled && !wasReady && isReady
+        }
     }
 
     private var averageCostInQuoteCurrency: Double? {
@@ -239,7 +232,6 @@ struct HoldingDetailView: View {
     private func selectAllDetailAccounts() {
         guard let accountContext else { return }
         selectedAccountKeys = accountContext.allAccountKeys
-        priceSelection = nil
     }
 
     private func toggleDetailAccount(_ accountKey: String) {
@@ -251,11 +243,67 @@ struct HoldingDetailView: View {
         } else {
             selectedAccountKeys.insert(accountKey)
         }
-        priceSelection = nil
+    }
+}
+
+/// Owns the fast-changing chart selection so dragging never invalidates the
+/// volume profile, 52-week range, financials and analyst sections below it.
+private struct HoldingDetailPriceSection: View {
+    let holding: Holding
+    let marketTodayChange: Double?
+    let priceHistory: SecurityPriceHistory?
+    let priceHistoryError: String?
+    let presentationReady: Bool
+    let averageCost: Double?
+    let selectedAccountKeys: Set<String>
+
+    @State private var priceSelection: SecurityPriceSelection?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HoldingDetailHeader(
+                holding: holding,
+                marketTodayChange: marketTodayChange,
+                selectedPrice: priceSelection?.price ?? priceHistory?.latestAvailablePrice,
+                selectedReturn: priceSelection?.returnPercent
+            )
+
+            if let priceHistory {
+                SecurityPriceChart(
+                    history: priceHistory,
+                    averageCost: averageCost,
+                    selectedAccountKeys: selectedAccountKeys,
+                    onSelectionChange: { selection in
+                        guard priceSelection != selection else { return }
+                        priceSelection = selection
+                    }
+                )
+            } else if let priceHistoryError {
+                SecurityPriceChartState(
+                    title: L10n.text("暂无价格走势"),
+                    message: priceHistoryError,
+                    isLoading: false
+                )
+            } else if presentationReady {
+                SecurityPriceChartState(
+                    title: L10n.text("正在读取价格走势"),
+                    message: L10n.text("正在整理历史行情与买卖记录"),
+                    isLoading: true
+                )
+            } else {
+                Color.clear
+                    .frame(height: SecurityPriceChartState.fixedHeight)
+                    .accessibilityHidden(true)
+            }
+        }
+        .onChange(of: selectedAccountKeys) { _, _ in
+            priceSelection = nil
+        }
     }
 }
 
 private struct HoldingDetailAccountSelector: View {
+    @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
 
     let options: [HoldingDetailAccountOption]
@@ -280,7 +328,7 @@ private struct HoldingDetailAccountSelector: View {
             HStack(spacing: 10) {
                 accountButton(
                     id: "all",
-                    title: "All",
+                    title: L10n.text("All"),
                     marketValue: allMarketValue,
                     currency: displayCurrency,
                     isSelected: selectedAccountKeys == allAccountKeys,
@@ -333,7 +381,7 @@ private struct HoldingDetailAccountSelector: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("holding-detail-account-\(id)")
         .accessibilityLabel(
-            "\(title)，持仓市值 \(DisplayFormat.money(marketValue, currency: currency))"
+            L10n.text("\(title)，持仓市值 \(DisplayFormat.money(marketValue, currency: currency))")
         )
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
@@ -375,6 +423,7 @@ private struct HoldingDetailAccountSelector: View {
 }
 
 private struct HoldingDetailModalHandle: View {
+    @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -395,6 +444,7 @@ private struct HoldingDetailModalHandle: View {
 }
 
 private struct HoldingDetailLoadingPlaceholder: View {
+    @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
 
     private var skeletonColor: Color {
@@ -441,7 +491,8 @@ private struct HoldingDetailLoadingPlaceholder: View {
 
                 StandardLineChartSkeleton(
                     leadingLineOverflow: 30,
-                    trailingEndpointInset: 9
+                    trailingEndpointInset: 9,
+                    showsSeries: false
                 )
                     .frame(height: 343)
 
@@ -485,7 +536,7 @@ private struct HoldingDetailLoadingPlaceholder: View {
         }
         .allowsHitTesting(false)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("正在加载个股详情")
+        .accessibilityLabel(L10n.text("正在加载个股详情"))
     }
 
     private var volumeProfileSkeleton: some View {
@@ -748,6 +799,7 @@ private struct HoldingDetailLoadingPlaceholder: View {
 }
 
 private struct SecurityPriceChartState: View {
+    @Environment(\.locale) private var appLocale
     static let fixedHeight: CGFloat = 405
 
     let title: String
@@ -760,7 +812,8 @@ private struct SecurityPriceChartState: View {
                 VStack(spacing: 0) {
                     StandardLineChartSkeleton(
                         leadingLineOverflow: 30,
-                        trailingEndpointInset: 9
+                        trailingEndpointInset: 9,
+                        showsSeries: false
                     )
                         .frame(height: 343)
 
@@ -784,23 +837,28 @@ private struct SecurityPriceChartState: View {
         }
         .frame(height: Self.fixedHeight)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("价格走势，\(title)，\(message)")
+        .accessibilityLabel(L10n.text("价格走势，\(title)，\(message)"))
     }
 }
 
 private struct SecurityPriceSelection: Equatable {
-    let price: Double
+    // Only a historical touch/measurement overrides the independent latest quote.
+    let price: Double?
     let returnPercent: Double
 }
 
 private struct SecurityPriceChart: View {
+    @Environment(\.locale) private var appLocale
     let history: SecurityPriceHistory
+    let averageCost: Double?
     let selectedAccountKeys: Set<String>
     let onSelectionChange: (SecurityPriceSelection?) -> Void
-    private let prepared: [ChartTimeRange: SecurityPriceRangeData]
+    @State private var prepared: SecurityPricePreparedData?
+    @State private var isPreparing = true
     @State private var range: ChartTimeRange
     @State private var selectedDate: Date?
     @State private var measuredRange: ChartDateRange?
+    @State private var lastHeaderPublishTime: TimeInterval = 0
 
     init(
         history: SecurityPriceHistory,
@@ -809,16 +867,9 @@ private struct SecurityPriceChart: View {
         onSelectionChange: @escaping (SecurityPriceSelection?) -> Void = { _ in }
     ) {
         self.history = history
+        self.averageCost = averageCost
         self.selectedAccountKeys = selectedAccountKeys
         self.onSelectionChange = onSelectionChange
-        prepared = Dictionary(uniqueKeysWithValues: ChartTimeRange.allCases.map {
-            ($0, SecurityPriceRangeData(
-                history: history,
-                range: $0,
-                averageCost: averageCost,
-                selectedAccountKeys: selectedAccountKeys
-            ))
-        })
         let arguments = ProcessInfo.processInfo.arguments
         _range = State(initialValue: arguments.contains("--show-security-chart-1d")
             ? .oneDay
@@ -826,7 +877,7 @@ private struct SecurityPriceChart: View {
     }
 
     private var data: SecurityPriceRangeData {
-        prepared[range] ?? prepared[.maximum]!
+        prepared?.data(for: range) ?? .empty
     }
 
     private var selectedPoint: SecurityPricePlotPoint? {
@@ -845,7 +896,9 @@ private struct SecurityPriceChart: View {
     var body: some View {
         VStack(spacing: 0) {
             Group {
-                if data.points.count > 1 {
+                if isPreparing {
+                    Color.clear
+                } else if data.points.count > 1 {
                     SecurityPricePlot(
                         data: data,
                         currency: history.currency,
@@ -857,42 +910,62 @@ private struct SecurityPriceChart: View {
                             guard measuredRange != nil || selectedDate != date else { return }
                             measuredRange = nil
                             selectedDate = date
-                            onSelectionChange(selection(at: date))
+                            publishInteractiveSelection(selection(at: date))
                         },
                         onMeasure: { measuredRange in
                             guard self.measuredRange != measuredRange else { return }
                             self.measuredRange = measuredRange
                             selectedDate = measuredRange.end
-                            onSelectionChange(selection(for: measuredRange))
+                            publishInteractiveSelection(selection(for: measuredRange))
                         },
                         onInteractionEnded: { _ in clearInteraction() }
                     )
                 } else {
                     StandardLineChartPlaceholder(
-                        title: "暂无日内行情",
-                        message: "Massive 与 Yahoo 暂未返回分钟级数据",
+                        title: L10n.text("暂无日内行情"),
+                        message: L10n.text("Massive 与 Yahoo 暂未返回分钟级数据"),
                         isLoading: false,
                         maximumLines: 2
                     )
                 }
             }
             .frame(height: 343)
-            .accessibilityLabel("\(history.ticker) 价格走势，买入点为绿色圆环，卖出点为黄色圆环，横向玻璃线为持仓成本")
+            .accessibilityLabel(L10n.text("\(history.ticker) 价格走势，买入点为绿色圆环，卖出点为黄色圆环，横向玻璃线为持仓成本"))
 
-            ChartTimeRangePicker(selection: $range)
+            ChartTimeRangePicker(selection: $range, isDisabled: isPreparing)
             .frame(height: 62)
-            .accessibilityLabel("价格走势时间范围")
+            .accessibilityLabel(L10n.text("价格走势时间范围"))
         }
         .frame(height: SecurityPriceChartState.fixedHeight, alignment: .top)
         .onChange(of: range) { _, _ in clearInteraction() }
         .onChange(of: selectedAccountKeys) { _, _ in clearInteraction() }
         .onDisappear { onSelectionChange(nil) }
+        .task(id: preparationSignature) {
+            isPreparing = true
+            let history = history
+            let averageCost = averageCost
+            let selectedAccountKeys = selectedAccountKeys
+            let prepared = await Task.detached(priority: .userInitiated) {
+                SecurityPricePreparedData(
+                    history: history,
+                    averageCost: averageCost,
+                    selectedAccountKeys: selectedAccountKeys
+                )
+            }.value
+            guard !Task.isCancelled else { return }
+            self.prepared = prepared
+            isPreparing = false
+            if selectedDate == nil, measuredRange == nil {
+                onSelectionChange(prepared.data(for: range).rangeSelection)
+            }
+        }
         .task(id: "\(range.rawValue)|\(selectionSignature)") {
             // Publish the selected time window even when the user is not
             // touching the chart. The header then uses the same start/end
             // basis as the line currently on screen.
             await Task.yield()
-            guard !Task.isCancelled, selectedDate == nil, measuredRange == nil else { return }
+            guard !Task.isCancelled, !isPreparing,
+                  selectedDate == nil, measuredRange == nil else { return }
             onSelectionChange(rangeSelection)
         }
         .onAppear {
@@ -904,6 +977,19 @@ private struct SecurityPriceChart: View {
 
     private var selectionSignature: String {
         selectedAccountKeys.sorted().joined(separator: "|")
+    }
+
+    private var preparationSignature: String {
+        let lastDaily = history.points.last
+        let lastMinute = history.intradayPoints.last
+        return [
+            history.ticker,
+            "\(history.points.count):\(lastDaily?.dateText ?? "-"):\(lastDaily?.close ?? 0)",
+            "\(history.intradayPoints.count):\(lastMinute?.dateText ?? "-"):\(lastMinute?.close ?? 0)",
+            "\(history.trades.count)",
+            "\(averageCost ?? 0)",
+            selectionSignature,
+        ].joined(separator: "|")
     }
 
     private func dateLabel(_ date: Date) -> String {
@@ -920,7 +1006,7 @@ private struct SecurityPriceChart: View {
     private var rangeSelection: SecurityPriceSelection? {
         guard let latest = data.points.last else { return nil }
         return SecurityPriceSelection(
-            price: latest.price,
+            price: nil,
             returnPercent: latest.returnPercent
         )
     }
@@ -938,11 +1024,23 @@ private struct SecurityPriceChart: View {
     private func clearInteraction() {
         selectedDate = nil
         measuredRange = nil
+        lastHeaderPublishTime = 0
         onSelectionChange(rangeSelection)
+    }
+
+    /// The crosshair and bubble stay local and update for every snapped point.
+    /// The large price text above the chart does not need 120 writes/second;
+    /// bounding that parent-facing update prevents repeated header layout.
+    private func publishInteractiveSelection(_ selection: SecurityPriceSelection?) {
+        let now = Date.timeIntervalSinceReferenceDate
+        guard now - lastHeaderPublishTime >= 1.0 / 30.0 else { return }
+        lastHeaderPublishTime = now
+        onSelectionChange(selection)
     }
 }
 
 private struct SecurityPriceCostLegend: View {
+    @Environment(\.locale) private var appLocale
     var body: some View {
         HStack(spacing: 5) {
             HStack(spacing: 2) {
@@ -952,16 +1050,17 @@ private struct SecurityPriceCostLegend: View {
                         .frame(width: 4, height: 2)
                 }
             }
-            Text("成本")
+            Text(L10n.text("成本"))
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("绿色虚线为持仓成本")
+        .accessibilityLabel(L10n.text("绿色虚线为持仓成本"))
     }
 }
 
 private struct SecurityPricePlot: View {
+    @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
 
     let data: SecurityPriceRangeData
@@ -1012,6 +1111,8 @@ private struct SecurityPricePlot: View {
             leadingLineOverflow: 30,
             gridOpacity: 0.08,
             transitionKey: transitionKey,
+            dataTransition: .viewportZoom,
+            animatesInitialAppearance: false,
             markers: data.trades.map { trade in
                 StandardLineChartMarker(
                     id: trade.id,
@@ -1065,7 +1166,30 @@ private struct SecurityPricePlot: View {
     }
 }
 
-private struct SecurityPriceRangeData {
+private final class SecurityPricePreparedData: @unchecked Sendable {
+    private let ranges: [ChartTimeRange: SecurityPriceRangeData]
+
+    init(
+        history: SecurityPriceHistory,
+        averageCost: Double?,
+        selectedAccountKeys: Set<String>
+    ) {
+        ranges = Dictionary(uniqueKeysWithValues: ChartTimeRange.allCases.map {
+            ($0, SecurityPriceRangeData(
+                history: history,
+                range: $0,
+                averageCost: averageCost,
+                selectedAccountKeys: selectedAccountKeys
+            ))
+        })
+    }
+
+    func data(for range: ChartTimeRange) -> SecurityPriceRangeData {
+        ranges[range] ?? ranges[.maximum] ?? .empty
+    }
+}
+
+private struct SecurityPriceRangeData: @unchecked Sendable {
     struct TradePoint: Identifiable {
         let trade: SecurityTrade
         let point: SecurityPricePlotPoint
@@ -1080,6 +1204,34 @@ private struct SecurityPriceRangeData {
     let isIntraday: Bool
     let isMaximumRange: Bool
 
+    static let empty = SecurityPriceRangeData(
+        points: [],
+        sampledPoints: [],
+        trades: [],
+        domain: -1...1,
+        averageCost: nil,
+        isIntraday: false,
+        isMaximumRange: false
+    )
+
+    private init(
+        points: [SecurityPricePlotPoint],
+        sampledPoints: [SecurityPricePlotPoint],
+        trades: [TradePoint],
+        domain: ClosedRange<Double>,
+        averageCost: Double?,
+        isIntraday: Bool,
+        isMaximumRange: Bool
+    ) {
+        self.points = points
+        self.sampledPoints = sampledPoints
+        self.trades = trades
+        self.domain = domain
+        self.averageCost = averageCost
+        self.isIntraday = isIntraday
+        self.isMaximumRange = isMaximumRange
+    }
+
     init(
         history: SecurityPriceHistory,
         range: ChartTimeRange,
@@ -1089,7 +1241,7 @@ private struct SecurityPriceRangeData {
         let usesIntraday = range == .oneDay
         isIntraday = usesIntraday
         isMaximumRange = range == .maximum
-        let source = usesIntraday ? history.intradayPoints : history.points
+        let source = usesIntraday ? history.intradayPoints : history.chartDailyPoints
         let all = source.map {
             SecurityPricePlotPoint(dateText: $0.dateText, date: $0.date, price: $0.close, returnPercent: 0)
         }.sorted { $0.date < $1.date }
@@ -1154,6 +1306,11 @@ private struct SecurityPriceRangeData {
         Self.nearestPoint(to: date, in: points)
     }
 
+    var rangeSelection: SecurityPriceSelection? {
+        guard let latest = points.last else { return nil }
+        return SecurityPriceSelection(price: nil, returnPercent: latest.returnPercent)
+    }
+
     private static func filtered(
         _ points: [SecurityPricePlotPoint],
         range: ChartTimeRange
@@ -1174,6 +1331,7 @@ private struct SecurityPriceRangeData {
         case .sixMonths: start = calendar.date(byAdding: .month, value: -6, to: last)
         case .oneYear: start = calendar.date(byAdding: .year, value: -1, to: last)
         case .twoYears: start = calendar.date(byAdding: .year, value: -2, to: last)
+        case .fiveYears: start = calendar.date(byAdding: .year, value: -5, to: last)
         case .maximum: start = nil
         }
         guard let start else { return points }
@@ -1210,6 +1368,7 @@ private struct SecurityPricePlotPoint: Identifiable {
 }
 
 private struct HoldingDetailHeader: View {
+    @Environment(\.locale) private var appLocale
     let holding: Holding
     let marketTodayChange: Double?
     let selectedPrice: Double?
@@ -1270,7 +1429,7 @@ private struct HoldingDetailHeader: View {
                                 : Color(red: 227 / 255, green: 0, blue: 69 / 255)
                         )
                 } else {
-                    Text("Return —")
+                    Text(L10n.text("Return —"))
                         .font(HoldingDetailTypography.medium(13, relativeTo: .caption))
                         .foregroundStyle(.secondary)
                 }
@@ -1286,6 +1445,7 @@ private struct HoldingDetailHeader: View {
 }
 
 private struct HoldingPositionDetails: View {
+    @Environment(\.locale) private var appLocale
     let holding: Holding
 
     /// Resolved off the main thread, because reaching for it here would not
@@ -1317,7 +1477,7 @@ private struct HoldingPositionDetails: View {
         let rate = (expenseRatio * 100).formatted(.number.precision(.fractionLength(2...4)))
         let annual = DisplayFormat.money(holding.marketValue * expenseRatio, fractionDigits: 2)
         return .init(
-            title: "Expense Ratio",
+            title: L10n.text("Expense Ratio"),
             icon: .expenseRatio,
             value: "\(rate)%  ·  \(annual)/yr"
         )
@@ -1333,28 +1493,28 @@ private struct HoldingPositionDetails: View {
     private var rows: [HoldingDataRow.Model] {
         [
             .init(
-                title: "Value",
+                title: L10n.text("Value"),
                 icon: .value,
                 value: holding.displayedMarketValue,
                 color: Color(red: 1 / 255, green: 184 / 255, blue: 1 / 255)
             ),
             .init(
-                title: "Return",
+                title: L10n.text("Return"),
                 icon: .returnValue,
                 value: DisplayFormat.percent(holding.unrealizedPercent)
             ),
             .init(
-                title: "Shares",
+                title: L10n.text("Shares"),
                 icon: .shares,
                 value: DisplayFormat.shares(holding.shares)
             ),
             .init(
-                title: "Cost",
+                title: L10n.text("Cost"),
                 icon: .cost,
                 value: DisplayFormat.money(costBasis)
             ),
             .init(
-                title: "Average Cost",
+                title: L10n.text("Average Cost"),
                 icon: .averageCost,
                 value: DisplayFormat.money(
                     holding.averageCost,
@@ -1368,12 +1528,12 @@ private struct HoldingPositionDetails: View {
                 color: fxColor
             ),
             .init(
-                title: "Proportion",
+                title: L10n.text("Proportion"),
                 icon: .proportion,
                 value: DisplayFormat.percent(holding.weight * 100, signed: false)
             ),
             .init(
-                title: "Unrealised P&L",
+                title: L10n.text("Unrealised P&L"),
                 icon: .unrealisedProfitLoss,
                 value: "\(DisplayFormat.money(holding.unrealized, signed: true))  ·  \(DisplayFormat.percent(holding.unrealizedPercent))",
                 color: profitColor
@@ -1383,7 +1543,7 @@ private struct HoldingPositionDetails: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("Data")
+            Text(L10n.text("Data"))
                 .font(HoldingDetailTypography.medium(19, relativeTo: .headline))
 
             VStack(spacing: 0) {
@@ -1480,6 +1640,7 @@ private enum HoldingDataIcon {
 }
 
 private struct HoldingDataRow: View {
+    @Environment(\.locale) private var appLocale
     struct Model {
         let title: String
         let icon: HoldingDataIcon
@@ -1540,6 +1701,7 @@ private struct HoldingDataRow: View {
 }
 
 private struct HoldingMetric: View {
+    @Environment(\.locale) private var appLocale
     let title: String
     let value: String
     var detail: String? = nil
@@ -1566,19 +1728,22 @@ private struct HoldingMetric: View {
 }
 
 private struct HoldingFinancialCard: View {
+    @Environment(\.locale) private var appLocale
     let holding: Holding
+    @State private var showsFinancials = false
+    @Namespace private var zoom
 
     var body: some View {
-        NavigationLink {
-            CompanyFinancialsView(holding: holding)
+        Button {
+            showsFinancials = true
         } label: {
             HStack(alignment: .center, spacing: 14) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Financial")
+                    Text(L10n.text("Financial"))
                         .appText(.subheading, weight: .medium)
                         .foregroundStyle(.primary)
 
-                    Text("Profit and Loss Statement, Balance Sheet and Cash Flow")
+                    Text(L10n.text("Profit and Loss Statement, Balance Sheet and Cash Flow"))
                         .appText(.label, weight: .medium)
                         .foregroundStyle(.primary.opacity(0.50))
                         .lineSpacing(2)
@@ -1600,11 +1765,21 @@ private struct HoldingFinancialCard: View {
             .holdingDetailGlassCard()
         }
         .buttonStyle(.plain)
+        .matchedTransitionSource(id: holding.ticker, in: zoom)
         .accessibilityHint("Open reported company financials")
+        .sheet(isPresented: $showsFinancials) {
+            NavigationStack {
+                CompanyFinancialsView(holding: holding)
+            }
+            .navigationTransition(.zoom(sourceID: holding.ticker, in: zoom))
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
     }
 }
 
 private struct HoldingPredictionMarketsCard: View {
+    @Environment(\.locale) private var appLocale
     let holding: Holding
 
     @Environment(\.openURL) private var openURL
@@ -1619,7 +1794,7 @@ private struct HoldingPredictionMarketsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                Text("Predicting markets")
+                Text(L10n.text("Predicting markets"))
                     .font(HoldingDetailTypography.medium(17, relativeTo: .headline))
 
                 Spacer(minLength: 8)
@@ -1634,7 +1809,7 @@ private struct HoldingPredictionMarketsCard: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 .disabled(isLoading)
-                .accessibilityLabel("Refresh predicting markets")
+                .accessibilityLabel(L10n.text("Refresh predicting markets"))
             }
 
             Group {
@@ -1656,7 +1831,7 @@ private struct HoldingPredictionMarketsCard: View {
                     .font(.system(size: 17, weight: .regular))
                     .frame(width: 24, height: 24)
 
-                Text("Prediction-market probabilities are based on trading prices and are not facts or investment advice.")
+                Text(L10n.text("Prediction-market probabilities are based on trading prices and are not facts or investment advice."))
                     .font(HoldingDetailTypography.regular(11.5, relativeTo: .caption))
                     .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1705,7 +1880,7 @@ private struct HoldingPredictionMarketsCard: View {
             }
         }
         .allowsHitTesting(false)
-        .accessibilityLabel("Loading prediction markets")
+        .accessibilityLabel(L10n.text("Loading prediction markets"))
     }
 
     private var predictionEmptyState: some View {
@@ -1745,6 +1920,7 @@ private struct HoldingPredictionMarketsCard: View {
 }
 
 private struct HoldingPredictionMarketRow: View {
+    @Environment(\.locale) private var appLocale
     let market: PolymarketRelatedMarket
 
     private var isNegativeOutcome: Bool {
@@ -1782,7 +1958,7 @@ private struct HoldingPredictionMarketRow: View {
                     Text(activityText)
                     if let endDate = market.endDate {
                         Text("·")
-                        Text("Until \(endDate.formatted(.dateTime.day().month(.abbreviated)))")
+                        Text(L10n.text("Until \(endDate.formatted(.dateTime.day().month(.abbreviated)))"))
                     }
                 }
                 .font(HoldingDetailTypography.regular(13, relativeTo: .caption))
@@ -1860,6 +2036,7 @@ extension View {
 }
 
 private struct FiftyTwoWeekRange: View {
+    @Environment(\.locale) private var appLocale
     let low: Double
     let high: Double
     let current: Double
@@ -1874,10 +2051,8 @@ private struct FiftyTwoWeekRange: View {
     private let tickWidth: CGFloat = 4
     private let tickHeight: CGFloat = 98
     private let currentTickHeight: CGFloat = 110
-    /// Keep the marker visually aligned at y = 0 while giving its glow room to render.
-    /// Canvas clips filters to its own bounds, which otherwise flattens the top cap.
-    private let markerTopOverflow: CGFloat = 12
-
+    private let selectedPushPadding: CGFloat = 2
+    private let specialMarkerSnapRadius: CGFloat = 12
     private var currentTickWidth: CGFloat {
         colorScheme == .dark ? 6 : 7
     }
@@ -1939,6 +2114,10 @@ private struct FiftyTwoWeekRange: View {
             : Color(red: 240 / 255, green: 240 / 255, blue: 240 / 255)
     }
 
+    private var inactiveTickGlowColor: Color {
+        .white.opacity(0.18)
+    }
+
     private var rangeLabelColor: Color {
         colorScheme == .dark
             ? .white.opacity(0.36)
@@ -1947,7 +2126,7 @@ private struct FiftyTwoWeekRange: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("52-Week Range")
+            Text(L10n.text("52-Week Range"))
                 .font(HoldingDetailTypography.medium(19, relativeTo: .headline))
                 .frame(height: 23, alignment: .leading)
 
@@ -1963,7 +2142,7 @@ private struct FiftyTwoWeekRange: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
-        .accessibilityHint("按住并横向拖动可查看任意价格")
+        .accessibilityHint(L10n.text("按住并横向拖动可查看任意价格"))
     }
 
     @ViewBuilder
@@ -1976,66 +2155,58 @@ private struct FiftyTwoWeekRange: View {
         let currentX = xPosition(
             for: currentIndex,
             currentIndex: currentIndex,
+            selectedIndex: selectedIndex,
             width: size.width
         )
         let rangeStartX = startIndex.map {
-            xPosition(for: $0, currentIndex: currentIndex, width: size.width)
+            xPosition(
+                for: $0,
+                currentIndex: currentIndex,
+                selectedIndex: selectedIndex,
+                width: size.width
+            )
         } ?? currentX
         ZStack(alignment: .topLeading) {
-            Canvas { context, canvasSize in
-                for index in 0..<markerCount {
+            ZStack(alignment: .topLeading) {
+                ForEach(0..<markerCount, id: \.self) { index in
                     let isCurrent = index == currentIndex
                     let isSelected = selectedIndex == index
                     let isActiveTick = isCurrent || isSelected
                     let isHighlighted = isCurrent || highlightedRange?.contains(index) == true
                     let width = isActiveTick ? currentTickWidth : tickWidth
                     let height = isActiveTick ? currentTickHeight : tickHeight
-                    let rect = CGRect(
-                        x: xPosition(
-                            for: index,
-                            currentIndex: currentIndex,
-                            width: canvasSize.width
-                        ) - width / 2,
-                        y: markerTopOverflow + (isActiveTick ? 0 : 6),
+                    let showsCurrentGlow = selectedIndex == nil && isCurrent
+                    let x = xPosition(
+                        for: index,
+                        currentIndex: currentIndex,
+                        selectedIndex: selectedIndex,
+                        width: size.width
+                    )
+
+                    rangeTick(
+                        isCurrent: isCurrent,
+                        isHighlighted: isHighlighted,
+                        showsGlow: isSelected || showsCurrentGlow,
+                        x: x,
+                        rangeStartX: rangeStartX,
+                        rangeEndX: currentX,
                         width: width,
                         height: height
                     )
-                    let path = Path(roundedRect: rect, cornerRadius: width / 2)
-                    let fill: GraphicsContext.Shading
-                    if isActiveTick {
-                        fill = .color(performanceColor)
-                    } else if isHighlighted {
-                        fill = .linearGradient(
-                            Gradient(colors: highlightedGradientColors),
-                            startPoint: CGPoint(x: rangeStartX, y: 0),
-                            endPoint: CGPoint(x: currentX, y: 0)
-                        )
-                    } else {
-                        fill = .color(inactiveTickColor)
-                    }
-                    let showsCurrentGlow = selectedIndex == nil && isCurrent
-
-                    if isSelected || showsCurrentGlow {
-                        context.drawLayer { layer in
-                            layer.addFilter(.shadow(
-                                color: performanceGlowColor,
-                                radius: isCurrent ? 8 : 5
-                            ))
-                            layer.fill(path, with: fill)
-                        }
-                    } else {
-                        context.fill(path, with: fill)
-                    }
-
+                    .position(x: x, y: (isActiveTick ? 0 : 6) + height / 2)
                 }
             }
-            .frame(width: size.width, height: size.height + markerTopOverflow)
-            .offset(y: -markerTopOverflow)
+            .frame(width: size.width, height: size.height, alignment: .topLeading)
+            .animation(
+                .spring(response: 0.24, dampingFraction: 0.72, blendDuration: 0.08),
+                value: selectedIndex
+            )
 
             if let selectedIndex {
                 let selectedX = xPosition(
                     for: selectedIndex,
                     currentIndex: currentIndex,
+                    selectedIndex: selectedIndex,
                     width: size.width
                 )
                 let bubble = bubbleDetails(
@@ -2053,11 +2224,11 @@ private struct FiftyTwoWeekRange: View {
             }
 
             HStack(spacing: 12) {
-                Text("Lowest \(DisplayFormat.money(low, currency: currency))")
+                Text(L10n.text("Lowest \(DisplayFormat.money(low, currency: currency))"))
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text("\(DisplayFormat.money(high, currency: currency)) Highest")
+                Text(L10n.text("\(DisplayFormat.money(high, currency: currency)) Highest"))
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
                     .frame(maxWidth: .infinity, alignment: .trailing)
@@ -2085,24 +2256,64 @@ private struct FiftyTwoWeekRange: View {
         }
     }
 
+    @ViewBuilder
+    private func rangeTick(
+        isCurrent: Bool,
+        isHighlighted: Bool,
+        showsGlow: Bool,
+        x: CGFloat,
+        rangeStartX: CGFloat,
+        rangeEndX: CGFloat,
+        width: CGFloat,
+        height: CGFloat
+    ) -> some View {
+        let rectMinX = x - width / 2
+        let localStartX = (rangeStartX - rectMinX) / max(width, 0.001)
+        let localEndX = (rangeEndX - rectMinX) / max(width, 0.001)
+        let usesVisibleGlow = showsGlow && (isCurrent || colorScheme == .dark)
+
+        Group {
+            if isCurrent {
+                Capsule().fill(performanceColor)
+            } else if isHighlighted {
+                Capsule().fill(
+                    LinearGradient(
+                        colors: highlightedGradientColors,
+                        startPoint: UnitPoint(x: localStartX, y: 0.5),
+                        endPoint: UnitPoint(x: localEndX, y: 0.5)
+                    )
+                )
+            } else {
+                Capsule().fill(inactiveTickColor)
+            }
+        }
+        .frame(width: width, height: height)
+        .shadow(
+            color: usesVisibleGlow
+                ? (isHighlighted ? performanceGlowColor : inactiveTickGlowColor)
+                : .clear,
+            radius: usesVisibleGlow ? (isCurrent ? 8 : 5) : 0
+        )
+    }
+
     private func bubbleDetails(
         for index: Int,
         currentIndex: Int,
         startIndex: Int?
     ) -> (title: String, price: Double) {
-        if index == currentIndex { return ("现价", current) }
-        if index == startIndex, let periodStart { return ("周期开始", periodStart) }
+        if index == currentIndex { return (L10n.text("现价"), current) }
+        if index == startIndex, let periodStart { return (L10n.text("周期开始"), periodStart) }
         let fraction = Double(index) / Double(max(markerCount - 1, 1))
-        return ("价格", low + (high - low) * fraction)
+        return (L10n.text("价格"), low + (high - low) * fraction)
     }
 
     @ViewBuilder
     private func markerBubble(title: String, price: Double) -> some View {
         let label = Text("\(title) \(DisplayFormat.money(price, currency: currency))")
-            .font(.system(size: 10, weight: .semibold, design: .rounded).monospacedDigit())
+            .font(.system(size: 12, weight: .semibold, design: .rounded).monospacedDigit())
             .lineLimit(1)
-            .padding(.horizontal, 9)
-            .frame(height: 24)
+            .padding(.horizontal, 12)
+            .frame(height: 30)
 
         if #available(iOS 26.0, *) {
             label.glassEffect(.clear.interactive(), in: Capsule())
@@ -2117,7 +2328,7 @@ private struct FiftyTwoWeekRange: View {
     }
 
     private func bubbleX(_ rawX: CGFloat, width: CGFloat) -> CGFloat {
-        let inset: CGFloat = 58
+        let inset: CGFloat = 72
         return min(width - inset, max(inset, rawX))
     }
 
@@ -2131,39 +2342,89 @@ private struct FiftyTwoWeekRange: View {
     }
 
     private func markerIndex(at x: CGFloat, currentIndex: Int, width: CGFloat) -> Int {
-        (0..<markerCount).min { lhs, rhs in
-            abs(xPosition(for: lhs, currentIndex: currentIndex, width: width) - x)
-                < abs(xPosition(for: rhs, currentIndex: currentIndex, width: width) - x)
+        let startIndex = startPosition.map(markerIndex)
+        let specialIndices = [currentIndex, startIndex]
+            .compactMap { $0 }
+            .reduce(into: [Int]()) { indices, index in
+                if !indices.contains(index) { indices.append(index) }
+            }
+        let nearestSpecial = specialIndices
+            .map { index in
+                (
+                    index: index,
+                    distance: abs(xPosition(
+                        for: index,
+                        currentIndex: currentIndex,
+                        selectedIndex: nil,
+                        width: width
+                    ) - x)
+                )
+            }
+            .min { $0.distance < $1.distance }
+
+        if let nearestSpecial, nearestSpecial.distance <= specialMarkerSnapRadius {
+            return nearestSpecial.index
+        }
+
+        return (0..<markerCount).min { lhs, rhs in
+            abs(xPosition(
+                for: lhs,
+                currentIndex: currentIndex,
+                selectedIndex: nil,
+                width: width
+            ) - x)
+                < abs(xPosition(
+                    for: rhs,
+                    currentIndex: currentIndex,
+                    selectedIndex: nil,
+                    width: width
+                ) - x)
         } ?? currentIndex
     }
 
     private func xPosition(
         for index: Int,
         currentIndex: Int,
+        selectedIndex: Int?,
         width: CGFloat
     ) -> CGFloat {
         guard markerCount > 1 else { return width / 2 }
         let currentExtraWidth = currentTickWidth - tickWidth
-        let totalTickWidth = CGFloat(markerCount) * tickWidth + currentExtraWidth
+        let hasSeparateSelection = selectedIndex.map { $0 != currentIndex } ?? false
+        let selectedSlotWidth = currentTickWidth + selectedPushPadding * 2
+        let selectedExtraWidth = hasSeparateSelection ? selectedSlotWidth - tickWidth : 0
+        let totalTickWidth = CGFloat(markerCount) * tickWidth
+            + currentExtraWidth
+            + selectedExtraWidth
         let gap = max(0.5, (width - totalTickWidth) / CGFloat(markerCount - 1))
-        let itemWidth = index == currentIndex ? currentTickWidth : tickWidth
+        let isSelected = selectedIndex == index && index != currentIndex
+        let itemSlotWidth = isSelected
+            ? selectedSlotWidth
+            : (index == currentIndex ? currentTickWidth : tickWidth)
         let precedingCurrentExtra = index > currentIndex ? currentExtraWidth : 0
+        let precedingSelectedExtra: CGFloat
+        if let selectedIndex, selectedIndex != currentIndex, index > selectedIndex {
+            precedingSelectedExtra = selectedExtraWidth
+        } else {
+            precedingSelectedExtra = 0
+        }
         return CGFloat(index) * (tickWidth + gap)
             + precedingCurrentExtra
-            + itemWidth / 2
+            + precedingSelectedExtra
+            + itemSlotWidth / 2
     }
 
     private var accessibilityText: String {
         var components = [
-            "52 周最低 \(DisplayFormat.money(low, currency: currency))",
-            "最高 \(DisplayFormat.money(high, currency: currency))",
-            "当前价格 \(DisplayFormat.money(current, currency: currency))",
+            L10n.text("52 周最低 \(DisplayFormat.money(low, currency: currency))"),
+            L10n.text("最高 \(DisplayFormat.money(high, currency: currency))"),
+            L10n.text("当前价格 \(DisplayFormat.money(current, currency: currency))"),
         ]
         if let periodStart {
-            components.append("52 周前价格 \(DisplayFormat.money(periodStart, currency: currency))")
+            components.append(L10n.text("52 周前价格 \(DisplayFormat.money(periodStart, currency: currency))"))
         }
         if let changePercent {
-            components.append("52 周变化 \(DisplayFormat.percent(changePercent))")
+            components.append(L10n.text("52 周变化 \(DisplayFormat.percent(changePercent))"))
         }
         return components.joined(separator: "，")
     }
@@ -2312,7 +2573,7 @@ enum VolumeProfileInterpretation {
               valueAreaHigh.isFinite,
               valueAreaHigh > valueAreaLow else {
             return Result(
-                text: "当前价格或主成交区数据暂不可用。",
+                text: L10n.text("当前价格或主成交区数据暂不可用。"),
                 pricePosition: .unavailable,
                 costPosition: .unavailable,
                 isNearPointOfControl: false,
@@ -2320,7 +2581,7 @@ enum VolumeProfileInterpretation {
             )
         }
 
-        let period = sessions > 0 ? "过去\(sessions)个交易日" : "所选历史区间"
+        let period = sessions > 0 ? L10n.text("过去\(sessions)个交易日") : L10n.text("所选历史区间")
         let areaWidth = valueAreaHigh - valueAreaLow
         let isNearPointOfControl = pointOfControl.map { point in
             point.isFinite
@@ -2333,14 +2594,14 @@ enum VolumeProfileInterpretation {
         var priceText: String
         if quote < valueAreaLow {
             pricePosition = .below
-            priceText = "当前价格低于\(period)的主要成交区域，说明市场相对于所选历史成交区域处于弱势位置。"
+            priceText = L10n.text("当前价格低于\(period)的主要成交区域，说明市场相对于所选历史成交区域处于弱势位置。")
         } else if quote > valueAreaHigh {
             pricePosition = .above
-            priceText = "当前价格已高于\(period)的主要成交密集区，说明市场相对于所选历史成交区域处于较高位置。"
+            priceText = L10n.text("当前价格已高于\(period)的主要成交密集区，说明市场相对于所选历史成交区域处于较高位置。")
         } else {
             pricePosition = .inside
-            priceText = "当前价格位于\(period)的主成交区内"
-            priceText += isNearPointOfControl ? "，且接近成交峰值。" : "。"
+            priceText = L10n.text("当前价格位于\(period)的主成交区内")
+            priceText += isNearPointOfControl ? L10n.text("，且接近成交峰值。") : "。"
         }
 
         guard let cost, cost.isFinite, cost > 0 else {
@@ -2359,13 +2620,13 @@ enum VolumeProfileInterpretation {
         let costText: String
         if differenceFraction <= costParityFraction {
             costPosition = .aligned
-            costText = "你的持仓成本与现价基本持平。"
+            costText = L10n.text("你的持仓成本与现价基本持平。")
         } else if cost < quote {
             costPosition = .belowCurrent
-            costText = "你的持仓成本低于现价\(percentageText(differencePercent))%，目前持仓处于盈利状态。"
+            costText = L10n.text("你的持仓成本低于现价\(percentageText(differencePercent))%，目前持仓处于盈利状态。")
         } else {
             costPosition = .aboveCurrent
-            costText = "你的持仓成本高于现价\(percentageText(differencePercent))%，当前持仓处于浮亏状态。"
+            costText = L10n.text("你的持仓成本高于现价\(percentageText(differencePercent))%，当前持仓处于浮亏状态。")
         }
 
         return Result(
@@ -2409,7 +2670,30 @@ enum VolumeProfileInterpretation {
     }
 }
 
+/// Shared VP/OI section chrome; each plot keeps its own financial semantics.
+struct PriceDistributionSection<Plot: View, Footer: View>: View {
+    @Environment(\.locale) private var appLocale
+    let title: String
+    let subtitle: String
+    @ViewBuilder let plot: () -> Plot
+    @ViewBuilder let footer: () -> Footer
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title).font(LegacyType.medium(19, relativeTo: .headline))
+                Spacer(minLength: 12)
+                Text(subtitle).font(.system(size: 15, weight: .medium, design: .rounded))
+                    .foregroundStyle(.primary.opacity(0.50))
+            }.frame(height: 23)
+            plot().padding(.top, 24)
+            footer().font(LegacyType.medium(15, relativeTo: .subheadline))
+                .foregroundStyle(.secondary).padding(.top, 12)
+        }.transaction { $0.animation = nil }
+    }
+}
+
 private struct VolumePriceChart: View {
+    @Environment(\.locale) private var appLocale
     let profile: VolumeProfile
     let holding: Holding
     let showsHoldingCost: Bool
@@ -2492,19 +2776,7 @@ private struct VolumePriceChart: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Volume Profile")
-                    .font(HoldingDetailTypography.medium(19, relativeTo: .headline))
-
-                Spacer(minLength: 12)
-
-                Text("\(profile.sessions) 个交易日")
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                    .foregroundStyle(.primary.opacity(0.50))
-            }
-            .frame(height: 23)
-
+        PriceDistributionSection(title: L10n.text("Volume Profile"), subtitle: L10n.text("\(profile.sessions) 个交易日")) {
             VolumeDistributionPlot(
                 profile: profile,
                 valueAreaLow: displayedValueArea.low,
@@ -2516,8 +2788,7 @@ private struct VolumePriceChart: View {
                 onSelectionChanged: updateSelection
             )
             .frame(height: 303)
-            .padding(.top, 24)
-
+        } footer: {
             VStack(alignment: .leading, spacing: 8) {
                 Text(interpretation.text)
                     .foregroundStyle(.secondary)
@@ -2527,10 +2798,7 @@ private struct VolumePriceChart: View {
                 Text(profile.asOf)
                     .foregroundStyle(.secondary)
             }
-            .font(HoldingDetailTypography.medium(15, relativeTo: .subheadline))
-            .padding(.top, 12)
         }
-        .transaction { transaction in transaction.animation = nil }
     }
 
     private func updateSelection(_ price: Double?) {
@@ -2545,6 +2813,7 @@ private struct VolumePriceChart: View {
 }
 
 private struct VolumeDistributionPlot: View {
+    @Environment(\.locale) private var appLocale
     let profile: VolumeProfile
     let valueAreaLow: Double
     let valueAreaHigh: Double
@@ -2762,7 +3031,7 @@ private struct VolumeDistributionPlot: View {
 
                 if let currentPrice, let currentY {
                     markerPill(
-                        title: "当前价格",
+                        title: L10n.text("当前价格"),
                         price: currentPrice,
                         foreground: currentPriceText,
                         background: currentPriceTint,
@@ -2774,7 +3043,7 @@ private struct VolumeDistributionPlot: View {
 
                 if hasValidPeak {
                     peakMarkerPill(
-                        title: "成交峰值",
+                        title: L10n.text("成交峰值"),
                         price: profile.pointOfControl,
                         width: peakMarkerWidth
                     )
@@ -2784,7 +3053,7 @@ private struct VolumeDistributionPlot: View {
 
                 if let holdingCost, let costY {
                     markerPill(
-                        title: "持仓成本",
+                        title: L10n.text("持仓成本"),
                         price: holdingCost,
                         foreground: volumeCostText,
                         background: volumeCostGreen,
@@ -2830,9 +3099,9 @@ private struct VolumeDistributionPlot: View {
     }
 
     private var accessibilityLabel: String {
-        var parts = ["成交量价格分布", "成交峰值 \(money(profile.pointOfControl))"]
-        if let currentPrice { parts.insert("当前价格 \(money(currentPrice))", at: 1) }
-        if let holdingCost { parts.append("持仓成本 \(money(holdingCost))") }
+        var parts = [L10n.text("成交量价格分布"), L10n.text("成交峰值 \(money(profile.pointOfControl))")]
+        if let currentPrice { parts.insert(L10n.text("当前价格 \(money(currentPrice))"), at: 1) }
+        if let holdingCost { parts.append(L10n.text("持仓成本 \(money(holdingCost))")) }
         return parts.joined(separator: "，")
     }
 

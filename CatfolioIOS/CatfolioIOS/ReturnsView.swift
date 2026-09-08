@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ReturnsView: View {
+    @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
 
     var body: some View {
@@ -26,7 +27,7 @@ struct ReturnsView: View {
                 .padding(.bottom, 72)
             }
             .background(Color(uiColor: .systemBackground))
-            .navigationTitle("Performance")
+            .navigationTitle(L10n.text("Performance"))
             .navigationBarTitleDisplayMode(.large)
             .toolbarVisibility(.visible, for: .navigationBar)
             .refreshable { await model.refreshReturnsPage() }
@@ -41,6 +42,7 @@ struct ReturnsView: View {
 }
 
 struct ReturnsComparisonPanel: View {
+    @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @State private var chartMode: ReturnsChartMode = {
         let arguments = ProcessInfo.processInfo.arguments
@@ -48,7 +50,20 @@ struct ReturnsComparisonPanel: View {
         if arguments.contains("--show-mwr") { return .mwr }
         return .twr
     }()
-    @State private var timeRange = ReturnsTimeRange.initialValue
+    @State private var timeRange: ChartTimeRange = {
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("--show-returns-1d") { return .oneDay }
+        if arguments.contains("--show-returns-1w") { return .oneWeek }
+        if arguments.contains("--show-returns-1m") { return .oneMonth }
+        if arguments.contains("--show-returns-2m")
+            || arguments.contains("--show-returns-3m") { return .twoMonths }
+        if arguments.contains("--show-returns-ytd") { return .yearToDate }
+        if arguments.contains("--show-returns-6m") { return .sixMonths }
+        if arguments.contains("--show-returns-2y") { return .twoYears }
+        if arguments.contains("--show-returns-all")
+            || arguments.contains("--show-returns-max") { return .maximum }
+        return .oneMonth
+    }()
     @State private var selectedDate: Date?
 
     var body: some View {
@@ -65,15 +80,15 @@ struct ReturnsComparisonPanel: View {
                 ReturnsComparisonPlaceholder(
                     mode: $chartMode,
                     timeRange: $timeRange,
-                    title: "正在加载收益数据",
-                    message: "正在整理组合与基准的历史记录",
+                    title: L10n.text("正在加载收益数据"),
+                    message: L10n.text("正在整理组合与基准的历史记录"),
                     isLoading: true
                 )
             } else if let error = model.returnsError {
                 ReturnsComparisonPlaceholder(
                     mode: $chartMode,
                     timeRange: $timeRange,
-                    title: "暂无收益记录",
+                    title: L10n.text("暂无收益记录"),
                     message: error,
                     isLoading: false
                 )
@@ -122,7 +137,7 @@ private enum ReturnsChartMode: String, CaseIterable {
         switch self {
         case .twr: "TWR"
         case .mwr: "MWR"
-        case .cashFlowMatched: "Flow Mirror"
+        case .cashFlowMatched: L10n.text("Flow Mirror")
         }
     }
 
@@ -145,75 +160,19 @@ private enum ReturnsChartLayout {
     static let modePickerHorizontalInset: CGFloat = 20
 }
 
-private enum ReturnsTimeRange: String, CaseIterable, Identifiable {
-    case oneDay = "1D"
-    case oneWeek = "1W"
-    case oneMonth = "1M"
-    case threeMonths = "3M"
-    case yearToDate = "YTD"
-    case oneYear = "1Y"
-    case maximum = "MAX"
-
-    var id: String { rawValue }
-
-    static var initialValue: ReturnsTimeRange {
-        let arguments = ProcessInfo.processInfo.arguments
-        if arguments.contains("--show-returns-1d") { return .oneDay }
-        if arguments.contains("--show-returns-1w") { return .oneWeek }
-        if arguments.contains("--show-returns-1m") { return .oneMonth }
-        if arguments.contains("--show-returns-3m") { return .threeMonths }
-        if arguments.contains("--show-returns-ytd") { return .yearToDate }
-        if arguments.contains("--show-returns-all") || arguments.contains("--show-returns-max") { return .maximum }
-        return .threeMonths
-    }
-
-    func includes(
-        _ date: Date,
-        through lastDate: Date,
-        previousTradingDate: Date?,
-        calendar: Calendar
-    ) -> Bool {
-        let start: Date?
-        switch self {
-        case .oneDay:
-            start = previousTradingDate ?? lastDate
-        case .oneWeek:
-            start = calendar.date(byAdding: .day, value: -7, to: lastDate)
-        case .oneMonth:
-            start = calendar.date(byAdding: .month, value: -1, to: lastDate)
-        case .threeMonths:
-            start = calendar.date(byAdding: .month, value: -3, to: lastDate)
-        case .yearToDate:
-            start = calendar.date(from: calendar.dateComponents([.year], from: lastDate))
-        case .oneYear:
-            start = calendar.date(byAdding: .year, value: -1, to: lastDate)
-        case .maximum:
-            start = nil
-        }
-        return start.map { date >= $0 } ?? true
-    }
-
-    static var financeCalendar: Calendar {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
-        return calendar
-    }
-}
-
 private struct ReturnsTimeRangeControl: View {
-    @Binding var selection: ReturnsTimeRange
+    @Environment(\.locale) private var appLocale
+    @Binding var selection: ChartTimeRange
     var isDisabled = false
 
     var body: some View {
         ChartTimeRangePicker(
-            choices: ReturnsTimeRange.allCases,
             selection: $selection,
-            isDisabled: isDisabled,
-            title: { $0.rawValue }
+            isDisabled: isDisabled
         )
         .frame(height: ReturnsChartLayout.rangePickerHeight)
         .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
-        .accessibilityLabel("收益图表时间范围")
+        .accessibilityLabel(L10n.text("收益图表时间范围"))
     }
 }
 
@@ -228,16 +187,24 @@ private enum ReturnsSeriesStyle {
         "DIA", "IWM", "VEU",
         "GLD", "VOO", "VTI",
     ]
+    /// One colour per series, used by the line and by the chip above it.
+    ///
+    /// Where a series has an obvious colour, it gets it: gold is gold, and
+    /// the reader's own portfolio is the same green the app uses for a gain
+    /// everywhere else. The rest are chosen to stay apart from each other and
+    /// from those two.
     static let colors: [String: Color] = [
-        portfolio: Color(red: 0.000, green: 0.882, blue: 0.698),
+        portfolio: Color(red: 0.004, green: 0.722, blue: 0.004),
         "SPY": Color(red: 1.000, green: 0.584, blue: 0.000),
         "QQQ": Color(red: 0.204, green: 0.459, blue: 1.000),
         "VTI": Color(red: 0.890, green: 0.000, blue: 0.271),
         "VOO": Color(red: 0.780, green: 0.000, blue: 0.910),
         "DIA": Color(red: 0.627, green: 0.804, blue: 1.000),
         "IWM": Color(red: 1.000, green: 0.824, blue: 0.741),
-        "VEU": Color(red: 0.784, green: 0.804, blue: 0.000),
-        "GLD": Color(red: 0.004, green: 0.722, blue: 0.004),
+        // Freed by the portfolio moving to green, and far enough from the
+        // gold below to stay separable.
+        "VEU": Color(red: 0.000, green: 0.882, blue: 0.698),
+        "GLD": Color(red: 1.000, green: 0.769, blue: 0.169),
     ]
 
     static func color(for series: String) -> Color {
@@ -245,19 +212,21 @@ private enum ReturnsSeriesStyle {
     }
 
     static func title(for series: String) -> String {
-        series == portfolio ? "MY" : series
+        series == portfolio ? L10n.text("MY") : series
     }
 
+    /// The chip takes the line's colour. It used to hold its own value for
+    /// the portfolio, so the line was teal and the chip above it green — two
+    /// colours for one series, which is the one thing a legend must not do.
     static func chipColor(for series: String) -> Color {
-        series == portfolio
-            ? Color(red: 0.004, green: 0.722, blue: 0.004)
-            : color(for: series)
+        color(for: series)
     }
 }
 
 private struct ReturnsComparisonPlaceholder: View {
+    @Environment(\.locale) private var appLocale
     @Binding var mode: ReturnsChartMode
-    @Binding var timeRange: ReturnsTimeRange
+    @Binding var timeRange: ChartTimeRange
     let title: String
     let message: String
     let isLoading: Bool
@@ -273,7 +242,8 @@ private struct ReturnsComparisonPlaceholder: View {
                     topInset: 0,
                     leadingLineOverflow: 65,
                     trailingEndpointInset: 9,
-                    seriesCount: ReturnsSeriesStyle.displayOrder.count
+                    seriesCount: ReturnsSeriesStyle.displayOrder.count,
+                    showsSeries: false
                 )
                 .frame(height: ReturnsChartLayout.plotHeight)
                 .padding(.top, ReturnsChartLayout.plotTopSpacing)
@@ -291,7 +261,7 @@ private struct ReturnsComparisonPlaceholder: View {
             }
 
             if isLoading {
-                ChartTimeRangePickerSkeleton(itemCount: ReturnsTimeRange.allCases.count)
+                ChartTimeRangePickerSkeleton()
                     .frame(height: ReturnsChartLayout.rangePickerHeight)
                     .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
             } else {
@@ -302,7 +272,7 @@ private struct ReturnsComparisonPlaceholder: View {
                 if isLoading {
                     ReturnsModePickerSkeleton()
                 } else {
-                    Picker("图表口径", selection: $mode) {
+                    Picker(L10n.text("图表口径"), selection: $mode) {
                         ForEach(ReturnsChartMode.displayOrder, id: \.self) { chartMode in
                             Text(chartMode.displayTitle).tag(chartMode)
                         }
@@ -321,6 +291,7 @@ private struct ReturnsComparisonPlaceholder: View {
 }
 
 private struct ReturnsModePickerSkeleton: View {
+    @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
 
     private var skeletonColor: Color {
@@ -342,6 +313,7 @@ private struct ReturnsModePickerSkeleton: View {
 }
 
 private struct ReturnsSeriesPlaceholderGrid: View {
+    @Environment(\.locale) private var appLocale
     let mode: ReturnsChartMode
 
     var body: some View {
@@ -380,6 +352,7 @@ private struct ReturnsSeriesPlaceholderGrid: View {
 }
 
 private struct ReturnsSeriesPlaceholderCard: View {
+    @Environment(\.locale) private var appLocale
     let title: String
     let color: Color
     let mode: ReturnsChartMode
@@ -409,6 +382,7 @@ private struct ReturnsSeriesPlaceholderCard: View {
 }
 
 private struct ReturnsPlotPlaceholder: View {
+    @Environment(\.locale) private var appLocale
     let title: String
     let message: String
     let isLoading: Bool
@@ -440,9 +414,10 @@ private struct ReturnsPlotPlaceholder: View {
 }
 
 private struct ReturnsChart: View {
+    @Environment(\.locale) private var appLocale
     let comparison: ComparisonResponse
     @Binding var mode: ReturnsChartMode
-    @Binding var timeRange: ReturnsTimeRange
+    @Binding var timeRange: ChartTimeRange
     @Binding var selectedDate: Date?
     @State private var visibleSeries = Set(ReturnsSeriesStyle.displayOrder)
     @State private var measuredRange: ChartDateRange?
@@ -453,7 +428,7 @@ private struct ReturnsChart: View {
     init(
         comparison: ComparisonResponse,
         mode: Binding<ReturnsChartMode>,
-        timeRange: Binding<ReturnsTimeRange>,
+        timeRange: Binding<ChartTimeRange>,
         selectedDate: Binding<Date?>
     ) {
         self.comparison = comparison
@@ -489,14 +464,15 @@ private struct ReturnsChart: View {
                     topInset: 0,
                     leadingLineOverflow: 65,
                     trailingEndpointInset: 9,
-                    seriesCount: ReturnsSeriesStyle.displayOrder.count
+                    seriesCount: ReturnsSeriesStyle.displayOrder.count,
+                    showsSeries: false
                 )
                 .frame(height: ReturnsChartLayout.plotHeight)
                 .padding(.top, ReturnsChartLayout.plotTopSpacing)
                 .padding(.trailing, ReturnsChartLayout.contentHorizontalInset)
             } else if !hasDrawableLine {
                 ReturnsPlotPlaceholder(
-                    title: "暂无可绘制数据",
+                    title: L10n.text("暂无可绘制数据"),
                     message: emptyChartDescription,
                     isLoading: false
                 )
@@ -530,7 +506,7 @@ private struct ReturnsChart: View {
                 .frame(height: ReturnsChartLayout.plotHeight)
                 .padding(.top, ReturnsChartLayout.plotTopSpacing)
                 .padding(.trailing, ReturnsChartLayout.contentHorizontalInset)
-                .accessibilityLabel("组合与基准的 \(timeRange.rawValue) \(mode.rawValue) 对比图，长按后单指拖动查看单日，保持第一指并加入第二指测量区间")
+                .accessibilityLabel(L10n.text("组合与基准的 \(timeRange.rawValue) \(mode.displayTitle) 对比图，长按后单指拖动查看单日，保持第一指并加入第二指测量区间"))
                 .overlay(alignment: .topLeading) {
                     if let measurement {
                         ChartRangeSummary(
@@ -548,7 +524,7 @@ private struct ReturnsChart: View {
             }
 
             if isChartLoading {
-                ChartTimeRangePickerSkeleton(itemCount: ReturnsTimeRange.allCases.count)
+                ChartTimeRangePickerSkeleton()
                     .frame(height: ReturnsChartLayout.rangePickerHeight)
                     .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
             } else {
@@ -559,14 +535,14 @@ private struct ReturnsChart: View {
                 if isChartLoading {
                     ReturnsModePickerSkeleton()
                 } else {
-                    Picker("图表口径", selection: $mode) {
+                    Picker(L10n.text("图表口径"), selection: $mode) {
                         ForEach(ReturnsChartMode.displayOrder, id: \.self) { chartMode in
                             Text(chartMode.displayTitle).tag(chartMode)
                         }
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
-                    .accessibilityLabel("收益图表口径")
+                    .accessibilityLabel(L10n.text("收益图表口径"))
                 }
             }
             .frame(height: ReturnsChartLayout.modePickerHeight)
@@ -621,7 +597,7 @@ private struct ReturnsChart: View {
                         }
                         .buttonStyle(.plain)
                         .frame(width: cardWidth)
-                        .accessibilityValue(item.isVisible ? "已显示" : "已隐藏")
+                        .accessibilityValue(item.isVisible ? L10n.text("已显示") : L10n.text("已隐藏"))
                     }
                 }
                 .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
@@ -654,12 +630,12 @@ private struct ReturnsChart: View {
     private var emptyChartDescription: String {
         if mode == .cashFlowMatched {
             return comparison.warnings?.first
-                ?? "首页的历史市值与成本路径至少需要两个数据点。"
+                ?? L10n.text("首页的历史市值与成本路径至少需要两个数据点。")
         }
         if mode == .mwr {
-            return "MWR 至少需要两个日期的组合价值与一笔有效现金流。"
+            return L10n.text("MWR 至少需要两个日期的组合价值与一笔有效现金流。")
         }
-        return "请先同步一次持仓，然后下拉刷新。"
+        return L10n.text("请先同步一次持仓，然后下拉刷新。")
     }
 
     private func values(on date: Date?) -> [ReturnsSelectedValue] {
@@ -702,7 +678,7 @@ private struct ReturnsChart: View {
             return ReturnsRangeMeasurement(
                 dateText: "\(rangeDate(measuredRange.start)) – \(rangeDate(measuredRange.end))",
                 primaryValue: DisplayFormat.ratioPercent(endReturn),
-                secondaryValue: "累计收益变化 \(sign)\(changeInPercentagePoints.formatted(.number.precision(.fractionLength(1)))) pp",
+                secondaryValue: L10n.text("累计收益变化 \(sign)\(changeInPercentagePoints.formatted(.number.precision(.fractionLength(1)))) pp"),
                 color: changeInPercentagePoints >= 0 ? CatfolioStyle.green : CatfolioStyle.red
             )
         }
@@ -715,7 +691,7 @@ private struct ReturnsChart: View {
         return ReturnsRangeMeasurement(
             dateText: "\(rangeDate(start.date)) – \(rangeDate(end.date))",
             primaryValue: "\(sign)\(change.formatted(.number.precision(.fractionLength(1)))) pp",
-            secondaryValue: "至 \(DisplayFormat.percent(end.value))",
+            secondaryValue: L10n.text("至 \(DisplayFormat.percent(end.value))"),
             color: change >= 0 ? CatfolioStyle.green : CatfolioStyle.red
         )
     }
@@ -770,6 +746,7 @@ private struct ReturnsRangeMeasurement {
 /// Nine Swift Charts series create hundreds of main-thread view nodes. Canvas
 /// draws the same native chart in one pass and keeps tab switching responsive.
 private struct FastReturnsPlot: View {
+    @Environment(\.locale) private var appLocale
     let grouped: [String: [ReturnsSeriesPoint]]
     let dates: [Date]
     let domain: ClosedRange<Double>
@@ -817,6 +794,8 @@ private struct FastReturnsPlot: View {
             bottomHeight: bottomHeight,
             leadingLineOverflow: 65,
             transitionKey: transitionKey,
+            dataTransition: .viewportZoom,
+            animatesInitialAppearance: false,
             selectedDate: selectedDate,
             measuredRange: measuredRange,
             rangeSeriesIDs: [ReturnsSeriesStyle.portfolio],
@@ -981,9 +960,9 @@ private struct ReturnsPreparedRange {
 }
 
 private final class ReturnsPreparedData: @unchecked Sendable {
-    private let cashFlowMatchedRanges: [ReturnsTimeRange: ReturnsPreparedRange]
-    private let twrRanges: [ReturnsTimeRange: ReturnsPreparedRange]
-    private let mwrRanges: [ReturnsTimeRange: ReturnsPreparedRange]
+    private let cashFlowMatchedRanges: [ChartTimeRange: ReturnsPreparedRange]
+    private let twrRanges: [ChartTimeRange: ReturnsPreparedRange]
+    private let mwrRanges: [ChartTimeRange: ReturnsPreparedRange]
     private let cashFlowValuesByDate: [Date: [String: Double]]
 
     init(comparison: ComparisonResponse) {
@@ -1038,10 +1017,10 @@ private final class ReturnsPreparedData: @unchecked Sendable {
 
     func displayData(
         mode: ReturnsChartMode,
-        range: ReturnsTimeRange,
+        range: ChartTimeRange,
         visibleSeries: Set<String>
     ) -> ReturnsDisplayData {
-        let ranges: [ReturnsTimeRange: ReturnsPreparedRange]
+        let ranges: [ChartTimeRange: ReturnsPreparedRange]
         switch mode {
         case .cashFlowMatched: ranges = cashFlowMatchedRanges
         case .twr: ranges = twrRanges
@@ -1130,14 +1109,14 @@ private final class ReturnsPreparedData: @unchecked Sendable {
         from points: [ReturnsSeriesPoint],
         suppliedReturns: [ReturnsSeriesPoint],
         mode: ReturnsChartMode
-    ) -> [ReturnsTimeRange: ReturnsPreparedRange] {
+    ) -> [ChartTimeRange: ReturnsPreparedRange] {
         guard let lastDate = points.map(\.date).max() else {
-            return Dictionary(uniqueKeysWithValues: ReturnsTimeRange.allCases.map { ($0, .empty) })
+            return Dictionary(uniqueKeysWithValues: ChartTimeRange.allCases.map { ($0, .empty) })
         }
-        let calendar = ReturnsTimeRange.financeCalendar
+        let calendar = ChartTimeRange.financeCalendar
         let tradingDates = Array(Set(points.map(\.date))).sorted()
         let previousTradingDate = tradingDates.dropLast().last
-        return Dictionary(uniqueKeysWithValues: ReturnsTimeRange.allCases.map { range in
+        return Dictionary(uniqueKeysWithValues: ChartTimeRange.allCases.map { range in
             let filtered = points.filter {
                 range.includes(
                     $0.date,
@@ -1260,6 +1239,7 @@ private struct ReturnsSelectedValue: Identifiable {
 }
 
 private struct CompactSeriesValue: View {
+    @Environment(\.locale) private var appLocale
     let title: String
     let value: Double?
     let amountValue: Double?
@@ -1331,6 +1311,7 @@ private struct CompactSeriesValue: View {
 }
 
 private struct ReturnsSeriesCardSurface: View {
+    @Environment(\.locale) private var appLocale
     let color: Color
     let isVisible: Bool
     @Environment(\.colorScheme) private var colorScheme
