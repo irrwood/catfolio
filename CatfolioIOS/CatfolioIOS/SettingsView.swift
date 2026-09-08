@@ -17,6 +17,7 @@ struct SettingsView: View {
     @State private var showsPortfolioResetConfirmation = false
     @State private var isResettingPortfolio = false
     @State private var portfolioResetError: String?
+    @State private var reconciliation: LedgerReconciliation.Report?
     #if DEBUG
     @State private var showsScreenerPreview = ProcessInfo.processInfo.arguments.contains("--show-screener")
     @State private var showsHistoryPreview = ProcessInfo.processInfo.arguments.contains("--show-history-preview")
@@ -29,6 +30,7 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+                PublicInvestorSettingsSection()
                 if !model.accounts.isEmpty {
                     Section("账户范围") {
                         allAccountsRow
@@ -151,6 +153,24 @@ struct SettingsView: View {
                         icon: "chart.pie.fill",
                         tint: CatfolioTheme.services
                     )
+                    if let reconciliation, !reconciliation.reconciles {
+                        settingsValueRow(
+                            title: "交易记录",
+                            value: "\(reconciliation.mismatches.count) 项对不上",
+                            icon: "exclamationmark.triangle.fill",
+                            tint: CatfolioTheme.warning
+                        )
+                        Text(reconciliationDetail(reconciliation))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else if let reconciliation {
+                        settingsValueRow(
+                            title: "交易记录",
+                            value: "\(reconciliation.transactionCount) 笔 · 与持仓一致",
+                            icon: "checkmark.seal.fill",
+                            tint: CatfolioTheme.positive
+                        )
+                    }
                     if let updatedAt = model.localUpdatedAt {
                         settingsValueRow(
                             title: "行情更新",
@@ -173,6 +193,7 @@ struct SettingsView: View {
                     }
                     .disabled(model.isPortfolioLoading)
                     .accessibilityHint("开启后仅显示独立合成的标的、账户、交易和收益曲线")
+                    .disabled(model.isPublicInvestorMode)
 
                     if let error = model.fakeDataModeError {
                         Label(error, systemImage: "exclamationmark.circle.fill")
@@ -185,7 +206,7 @@ struct SettingsView: View {
                     Button("重置本机组合数据", systemImage: "trash", role: .destructive) {
                         showsPortfolioResetConfirmation = true
                     }
-                    .disabled(isResettingPortfolio || model.isPortfolioLoading || model.isReturnsLoading)
+                    .disabled(isResettingPortfolio || model.isPortfolioLoading || model.isReturnsLoading || model.isPublicInvestorMode)
                 } header: {
                     Text("本机组合数据")
                 } footer: {
@@ -228,6 +249,7 @@ struct SettingsView: View {
                 showsLocalServices = arguments.contains("--show-local-services")
                     || arguments.contains { $0.hasPrefix("--show-local-service-") }
                 if model.overview == nil { await model.refreshPortfolio() }
+                await loadReconciliation()
             }
             .confirmationDialog("重置本机组合数据？", isPresented: $showsPortfolioResetConfirmation, titleVisibility: .visible) {
                 Button("备份并重置", role: .destructive) {
@@ -286,6 +308,51 @@ struct SettingsView: View {
                 .minute()
                 .locale(Locale(identifier: "zh_CN"))
         )
+    }
+
+    /// Checks the ledger against the holdings, off the main actor.
+    ///
+    /// Runs whether or not anything is currently asking the ledger a
+    /// question, because the whole point is that an incomplete history is
+    /// silent until something downstream produces a number from it.
+    private func loadReconciliation() async {
+        let accountIDs = model.accounts.map(\.id)
+        var transactions: [LocalTransactionRecord] = []
+        for id in accountIDs {
+            transactions += (try? await model.transactions(for: id)) ?? []
+        }
+        guard !transactions.isEmpty || !model.holdings.isEmpty else { return }
+        let holdings = model.holdings.map { (ticker: $0.ticker, shares: $0.shares) }
+        reconciliation = await Task.detached(priority: .utility) {
+            LedgerReconciliation.report(
+                transactions: transactions,
+                holdings: holdings,
+                splits: try? StockSplitCatalog.bundled.get()
+            )
+        }.value
+    }
+
+    /// Says what does not add up, and what to do about it.
+    ///
+    /// Deliberately concrete about the direction: shares the ledger accounts
+    /// for but are not held means disposals are missing, which is what a
+    /// sync that returned only purchases looks like. The opposite reads as a
+    /// transfer in or a missed acquisition. The remedy is the same, but a
+    /// reader trying to work out whether to trust a number is not helped by
+    /// being told only that something is wrong.
+    private func reconciliationDetail(_ report: LedgerReconciliation.Report) -> String {
+        var parts: [String] = []
+        if report.hasUnexplainedDisposals {
+            let disposed = report.fullyDisposed
+            parts.append(disposed > 0
+                ? "账本记录的股数多于实际持仓，其中 \(disposed) 项已清仓却没有卖出记录"
+                : "账本记录的股数多于实际持仓，可能缺少卖出记录")
+        }
+        if report.hasUnexplainedHoldings {
+            parts.append("有持仓在账本里找不到买入记录")
+        }
+        parts.append("重新同步以补齐；在补齐前，按税务口径的成本与损益不会计算。")
+        return parts.joined(separator: "。")
     }
 
     private func nativeSettingsLabel(
@@ -358,7 +425,7 @@ struct SettingsView: View {
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                         Text(account.awaitsFirstSync
-                            ? "等待首次同步"
+                            ? (model.isPublicInvestorMode ? "暂无数据" : "等待首次同步")
                             : "\(account.positionCount) 项 · \(DisplayFormat.money(account.marketValueUSD))")
                             .appNumber(.callout)
                             .foregroundStyle(account.awaitsFirstSync ? CatfolioTheme.accent : .secondary)
@@ -527,7 +594,7 @@ private struct AccountDetailView: View {
                             detailActionRow(title: "账户名称", detail: account.displayName)
                         }
                         .buttonStyle(.plain)
-                        .disabled(model.isFakeDataMode)
+                        .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
 
                         Divider()
                         detailValueRow(title: "账户类型", value: account.accountType)
@@ -547,7 +614,7 @@ private struct AccountDetailView: View {
                             )
                         }
                         .buttonStyle(.plain)
-                        .disabled(model.isFakeDataMode)
+                        .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
 
                         if account.source != "CSV" {
                             Divider()
@@ -555,7 +622,7 @@ private struct AccountDetailView: View {
                                 detailActionRow(title: "CSV 导入", detail: csvImportStatus)
                             }
                             .buttonStyle(.plain)
-                            .disabled(model.isFakeDataMode)
+                            .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
                         }
 
                         Divider()
@@ -563,7 +630,7 @@ private struct AccountDetailView: View {
                             detailActionRow(title: "手动补充", detail: "\(manualTransactionCount) 笔")
                         }
                         .buttonStyle(.plain)
-                        .disabled(model.isFakeDataMode)
+                        .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
                     }
                 }
 
@@ -589,7 +656,7 @@ private struct AccountDetailView: View {
                             )
                         }
                         .buttonStyle(.plain)
-                        .disabled(isWorking || model.isFakeDataMode)
+                        .disabled(isWorking || model.isFakeDataMode || model.isPublicInvestorMode)
                     }
                 }
 
@@ -608,7 +675,7 @@ private struct AccountDetailView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .disabled(model.isFakeDataMode)
+                        .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
                     }
                 }
             }
