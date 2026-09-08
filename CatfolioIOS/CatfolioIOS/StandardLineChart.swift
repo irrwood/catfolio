@@ -157,6 +157,14 @@ enum StandardLineChartAxisSide: Equatable {
     case trailing
 }
 
+enum StandardLineChartDataTransition: Equatable {
+    case morph
+    /// Interpolate the visible date/value viewport while drawing the union of
+    /// the old and new samples. With a shared latest date this behaves like a
+    /// trailing-anchored camera zoom instead of reshaping the curve in place.
+    case viewportZoom
+}
+
 private struct StandardLineChartRevision: Equatable {
     let transitionKey: String
     let contentFingerprint: String
@@ -218,6 +226,9 @@ struct StandardLineChart: View {
     let gridDash: [CGFloat]
     let gridOpacity: Double
     let transitionKey: String
+    let dataTransition: StandardLineChartDataTransition
+    let animatesInitialAppearance: Bool
+    let revealsInitialAppearance: Bool
     let markers: [StandardLineChartMarker]
     let referenceLines: [StandardLineChartReferenceLine]
     let selectedDate: Date?
@@ -248,6 +259,9 @@ struct StandardLineChart: View {
     @State private var transitionProgress: CGFloat = 1
     @State private var transitionGeneration = 0
     @State private var needsInitialTransition: Bool
+    @State private var initialRevealProgress: CGFloat
+    @State private var needsInitialReveal: Bool
+    @State private var initialRevealCancelled = false
     @State private var lastHapticDates: [Date] = []
     @State private var lastSelectionHapticTime: TimeInterval = 0
     @State private var selectionHapticDriver = StandardLineChartHapticDriver()
@@ -268,6 +282,9 @@ struct StandardLineChart: View {
         gridDash: [CGFloat] = [],
         gridOpacity: Double = 0.12,
         transitionKey: String,
+        dataTransition: StandardLineChartDataTransition = .morph,
+        animatesInitialAppearance: Bool = true,
+        revealsInitialAppearance: Bool = false,
         markers: [StandardLineChartMarker] = [],
         referenceLines: [StandardLineChartReferenceLine] = [],
         selectedDate: Date? = nil,
@@ -301,6 +318,9 @@ struct StandardLineChart: View {
         self.gridDash = gridDash
         self.gridOpacity = gridOpacity
         self.transitionKey = transitionKey
+        self.dataTransition = dataTransition
+        self.animatesInitialAppearance = animatesInitialAppearance
+        self.revealsInitialAppearance = revealsInitialAppearance
         self.markers = markers
         self.referenceLines = referenceLines
         self.selectedDate = selectedDate
@@ -324,13 +344,15 @@ struct StandardLineChart: View {
             dates: sortedDates,
             domain: domain
         )
-        let startsFromLoading = !loadingSeries.isEmpty
+        let startsFromLoading = animatesInitialAppearance && !revealsInitialAppearance && !loadingSeries.isEmpty
         _presentedSeries = State(initialValue: startsFromLoading ? loadingSeries : series)
         _presentedMarkers = State(initialValue: startsFromLoading ? [] : markers)
         _presentedDates = State(initialValue: sortedDates)
         _presentedDomain = State(initialValue: domain)
         _outgoingDomain = State(initialValue: domain)
         _needsInitialTransition = State(initialValue: startsFromLoading)
+        _initialRevealProgress = State(initialValue: revealsInitialAppearance ? 0 : 1)
+        _needsInitialReveal = State(initialValue: revealsInitialAppearance)
     }
 
     var body: some View {
@@ -347,45 +369,60 @@ struct StandardLineChart: View {
                 }
                 .allowsHitTesting(false)
 
-                ZStack(alignment: .topLeading) {
-                    StandardLineChartTransitionDriver(progress: transitionProgress) { progress in
-                        Canvas { context, _ in
-                            var lineContext = context
-                            lineContext.translateBy(x: lineLayerBleed, y: 0)
-                            lineContext.clip(to: Path(CGRect(
-                                x: plot.minX - lineLayerBleed,
-                                y: plot.minY,
-                                width: plot.width + lineLayerBleed,
-                                height: plot.height
-                            )))
-                            if !outgoingSeries.isEmpty, progress < 1 {
-                                drawMorphedBase(
-                                    progress: progress,
-                                    context: &lineContext,
-                                    plot: plot
-                                )
-                            } else {
-                                drawBase(
-                                    series: presentedSeries,
-                                    markers: presentedMarkers,
-                                    dates: presentedDates,
-                                    valueDomain: presentedDomain,
-                                    xOffset: 0,
-                                    opacity: 1,
-                                    context: &lineContext,
-                                    plot: plot
-                                )
+                StandardLineChartTransitionDriver(progress: initialRevealProgress) { rawReveal in
+                    let reveal = reduceMotion || initialRevealCancelled ? CGFloat(1) : Self.easeOutQuart(rawReveal)
+                    ZStack(alignment: .topLeading) {
+                        StandardLineChartTransitionDriver(progress: transitionProgress) { progress in
+                            Canvas { context, _ in
+                                var lineContext = context
+                                lineContext.translateBy(x: lineLayerBleed, y: 0)
+                                lineContext.clip(to: Path(CGRect(
+                                    x: plot.minX - lineLayerBleed,
+                                    y: plot.minY,
+                                    width: plot.width + lineLayerBleed,
+                                    height: plot.height
+                                )))
+                                if reveal < 1 {
+                                    lineContext.clip(to: Path(CGRect(
+                                        x: plot.minX - lineLayerBleed,
+                                        y: plot.minY,
+                                        width: max(0, (plot.width - trailingEndpointInset) * reveal + lineLayerBleed),
+                                        height: plot.height
+                                    )))
+                                }
+                                if !outgoingSeries.isEmpty, progress < 1 {
+                                    drawMorphedBase(
+                                        progress: progress,
+                                        context: &lineContext,
+                                        plot: plot
+                                    )
+                                } else {
+                                    drawBase(
+                                        series: presentedSeries,
+                                        markers: presentedMarkers,
+                                        dates: presentedDates,
+                                        valueDomain: presentedDomain,
+                                        xOffset: 0,
+                                        opacity: 1,
+                                        context: &lineContext,
+                                        plot: plot
+                                    )
+                                }
                             }
                         }
-                    }
-                    .frame(width: geometry.size.width + lineLayerBleed)
-                    .offset(x: -lineLayerBleed)
+                        .frame(width: geometry.size.width + lineLayerBleed)
+                        .offset(x: -lineLayerBleed)
 
-                    StandardLineChartTransitionDriver(progress: transitionProgress) { progress in
-                        endpointLayer(plot: plot, progress: progress)
-                    }
+                        StandardLineChartTransitionDriver(progress: transitionProgress) { progress in
+                            if reveal < 1 {
+                                revealingEndpoints(plot: plot, progress: reveal)
+                            } else {
+                                endpointLayer(plot: plot, progress: progress)
+                            }
+                        }
 
-                    referenceLineLayer(plot: plot)
+                        referenceLineLayer(plot: plot)
+                    }
                 }
                 // Plain endpoints punch their centre through the complete
                 // series layer before drawing the coloured ring. This reveals
@@ -450,6 +487,7 @@ struct StandardLineChart: View {
             }
         }
         .onAppear {
+            startInitialRevealIfNeeded()
             startInitialTransitionIfNeeded()
         }
     }
@@ -488,6 +526,15 @@ struct StandardLineChart: View {
     }
 
     private func transitionToLatestData() {
+        if revealsInitialAppearance {
+            var transaction = Transaction(animation: nil)
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                needsInitialReveal = false
+                initialRevealCancelled = true
+                initialRevealProgress = 1
+            }
+        }
         needsInitialTransition = false
         guard !reduceMotion else {
             syncLatestData()
@@ -522,6 +569,49 @@ struct StandardLineChart: View {
     private func startInitialTransitionIfNeeded() {
         guard needsInitialTransition else { return }
         transitionToLatestData()
+    }
+
+    private static func easeOutQuart(_ progress: CGFloat) -> CGFloat {
+        let t = min(1, max(0, progress))
+        return 1 - pow(1 - t, 4)
+    }
+
+    private func startInitialRevealIfNeeded() {
+        guard needsInitialReveal else { return }
+        needsInitialReveal = false
+        guard !reduceMotion else {
+            initialRevealProgress = 1
+            return
+        }
+        // Ease in the renderer so the sweep and its endpoint share the exact
+        // quartic curve, rather than a cubic Bezier approximation.
+        withAnimation(.linear(duration: 0.9)) {
+            initialRevealProgress = 1
+        }
+    }
+
+    @ViewBuilder
+    private func revealingEndpoints(plot: CGRect, progress: CGFloat) -> some View {
+        if let start = presentedDates.first, let end = presentedDates.last {
+            let date = interpolatedDate(from: start, to: end, progress: progress)
+            ForEach(presentedSeries) { item in
+                if let first = item.points.first, date >= first.date,
+                   let last = item.points.last, let radius = item.latestPointRadius {
+                    let headDate = min(date, last.date)
+                    let position = CGPoint(
+                        x: x(for: headDate, in: plot, dates: presentedDates),
+                        y: y(for: interpolatedValue(at: headDate, in: item.points), in: plot, domain: presentedDomain)
+                    )
+                    if item.latestPointUsesGlass {
+                        StandardLineChartGlassEndpoint(color: item.latestPointColor ?? item.color, radius: radius)
+                            .position(position)
+                    } else {
+                        StandardLineChartPlainEndpoint(color: item.latestPointColor ?? item.color, radius: radius)
+                            .position(position)
+                    }
+                }
+            }
+        }
     }
 
     private func syncLatestData() {
@@ -683,11 +773,41 @@ struct StandardLineChart: View {
         let presentedIDs = Set(presentedSeries.map(\.id))
 
         for incoming in presentedSeries where !incoming.points.isEmpty {
-            if let outgoing = outgoingByID[incoming.id], !outgoing.points.isEmpty {
-                drawMorphedSeries(
-                    from: outgoing,
-                    to: incoming,
-                    progress: progress,
+            if let outgoing = outgoingByID[incoming.id],
+               !outgoing.points.isEmpty,
+               !outgoing.isLoadingPlaceholder {
+                if dataTransition == .viewportZoom {
+                    drawViewportZoomedSeries(
+                        from: outgoing,
+                        to: incoming,
+                        progress: progress,
+                        context: &context,
+                        plot: plot
+                    )
+                } else {
+                    drawMorphedSeries(
+                        from: outgoing,
+                        to: incoming,
+                        progress: progress,
+                        context: &context,
+                        plot: plot
+                    )
+                }
+            } else if let outgoing = outgoingByID[incoming.id], outgoing.isLoadingPlaceholder {
+                // Fade in rather than morph. A placeholder is a flat line at
+                // an arbitrary level with an arbitrary value domain, so
+                // interpolating geometry from it to real data sweeps the
+                // whole series across the plot — the line appearing to fall
+                // in from above the chart, and garbled frames when the range
+                // changes while a placeholder is still on screen. There is
+                // no correspondence between the two to animate.
+                drawBase(
+                    series: [incoming],
+                    markers: [],
+                    dates: presentedDates,
+                    valueDomain: presentedDomain,
+                    xOffset: 0,
+                    opacity: Double(progress),
                     context: &context,
                     plot: plot
                 )
@@ -719,6 +839,72 @@ struct StandardLineChart: View {
         }
 
         drawMorphedMarkers(progress: progress, context: &context, plot: plot)
+    }
+
+    private func drawViewportZoomedSeries(
+        from outgoing: StandardLineChartSeries,
+        to incoming: StandardLineChartSeries,
+        progress: CGFloat,
+        context: inout GraphicsContext,
+        plot: CGRect
+    ) {
+        guard let oldStart = outgoingDates.first,
+              let oldEnd = outgoingDates.last,
+              let newStart = presentedDates.first,
+              let newEnd = presentedDates.last else { return }
+
+        let visibleStart = interpolatedDate(from: oldStart, to: newStart, progress: progress)
+        let visibleEnd = interpolatedDate(from: oldEnd, to: newEnd, progress: progress)
+        guard visibleEnd > visibleStart else { return }
+
+        let visibleDomain = interpolatedDomain(
+            from: outgoingDomain,
+            to: presentedDomain,
+            progress: progress
+        )
+        var samplesByDate: [Date: StandardLineChartPoint] = [:]
+        for point in outgoing.points {
+            samplesByDate[point.date] = point
+        }
+        // Prefer the incoming point when both sampled ranges contain the same
+        // date so the final frame is pixel-identical to the selected range.
+        for point in incoming.points {
+            samplesByDate[point.date] = point
+        }
+        let samples = samplesByDate.values.sorted { $0.date < $1.date }
+
+        drawPath(
+            samples,
+            series: incoming,
+            opacity: 1,
+            dates: [visibleStart, visibleEnd],
+            valueDomain: visibleDomain,
+            context: &context,
+            plot: plot
+        )
+    }
+
+    private func interpolatedDate(
+        from start: Date,
+        to end: Date,
+        progress: CGFloat
+    ) -> Date {
+        Date(timeIntervalSinceReferenceDate:
+            start.timeIntervalSinceReferenceDate
+                + (end.timeIntervalSinceReferenceDate - start.timeIntervalSinceReferenceDate)
+                * Double(progress)
+        )
+    }
+
+    private func interpolatedDomain(
+        from start: ClosedRange<Double>,
+        to end: ClosedRange<Double>,
+        progress: CGFloat
+    ) -> ClosedRange<Double> {
+        let progress = Double(progress)
+        let lower = start.lowerBound + (end.lowerBound - start.lowerBound) * progress
+        let upper = start.upperBound + (end.upperBound - start.upperBound) * progress
+        return lower...max(lower + 0.000_001, upper)
     }
 
     private func drawMorphedSeries(
@@ -1051,12 +1237,38 @@ struct StandardLineChart: View {
         ZStack(alignment: .topLeading) {
             ForEach(presentedSeries) { item in
                 if progress < 1, let outgoing = outgoingByID[item.id] {
-                    morphedEndpoint(
-                        from: outgoing,
-                        to: item,
-                        progress: progress,
-                        plot: plot
-                    )
+                    if dataTransition == .viewportZoom,
+                       !outgoing.isLoadingPlaceholder,
+                       let oldStart = outgoingDates.first,
+                       let oldEnd = outgoingDates.last,
+                       let newStart = presentedDates.first,
+                       let newEnd = presentedDates.last {
+                        // The stroke projects values through the animated
+                        // domain. Interpolating screen positions instead takes
+                        // a different path as the domain's span changes.
+                        let endpointSeries = (outgoing.points.last?.date ?? .distantPast)
+                            > (item.points.last?.date ?? .distantPast) ? outgoing : item
+                        endpoint(
+                            for: endpointSeries,
+                            dates: [
+                                interpolatedDate(from: oldStart, to: newStart, progress: progress),
+                                interpolatedDate(from: oldEnd, to: newEnd, progress: progress),
+                            ],
+                            valueDomain: interpolatedDomain(
+                                from: outgoingDomain,
+                                to: presentedDomain,
+                                progress: progress
+                            ),
+                            plot: plot
+                        )
+                    } else {
+                        morphedEndpoint(
+                            from: outgoing,
+                            to: item,
+                            progress: progress,
+                            plot: plot
+                        )
+                    }
                 } else {
                     endpoint(
                         for: item,
@@ -1683,6 +1895,7 @@ struct StandardLineChartSkeleton: View {
     var leadingLineOverflow: CGFloat = 0
     var trailingEndpointInset: CGFloat = 0
     var seriesCount: Int = 1
+    var showsSeries = true
     var showsEndpointLabels = false
 
     private var skeletonColor: Color {
@@ -1699,8 +1912,9 @@ struct StandardLineChartSkeleton: View {
             )
             ZStack(alignment: .topLeading) {
                 Canvas { context, _ in
-                    let count = max(1, min(seriesCount, 8))
-                    for seriesIndex in 0..<count {
+                    if showsSeries {
+                        let count = max(1, min(seriesCount, 8))
+                        for seriesIndex in 0..<count {
                         let yFractions = StandardLineChartLoadingTemplate.yFractions(
                             seriesIndex: seriesIndex,
                             seriesCount: count
@@ -1740,6 +1954,7 @@ struct StandardLineChartSkeleton: View {
                             with: .color(skeletonColor),
                             lineWidth: 1.2
                         )
+                        }
                     }
                 }
 
