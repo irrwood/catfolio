@@ -78,14 +78,14 @@ private enum PortfolioActivityKind: Equatable {
 
     var title: String {
         switch self {
-        case .buy: "Buy"
-        case .sell: "Sell"
-        case .dividend: "Dividend"
-        case .deposit: "Deposit"
-        case .withdrawal: "Withdrawal"
-        case .transfer: "Transfer"
-        case .interest: "Interest"
-        case .other: "Account activity"
+        case .buy: L10n.text("Buy")
+        case .sell: L10n.text("Sell")
+        case .dividend: L10n.text("Dividend")
+        case .deposit: L10n.text("Deposit")
+        case .withdrawal: L10n.text("Withdrawal")
+        case .transfer: L10n.text("Transfer")
+        case .interest: L10n.text("Interest")
+        case .other: L10n.text("Account activity")
         }
     }
 
@@ -136,15 +136,15 @@ private struct PortfolioActivity: Identifiable {
     var title: String {
         switch kind {
         case .interest:
-            "Interest on cash"
+            L10n.text("Interest on cash")
         case .deposit:
-            "Cash deposit"
+            L10n.text("Cash deposit")
         case .withdrawal:
-            "Cash withdrawal"
+            L10n.text("Cash withdrawal")
         case .transfer:
-            transaction.ticker == "CASH" ? "Cash transfer" : transaction.ticker
+            transaction.ticker == "CASH" ? L10n.text("Cash transfer") : transaction.ticker
         case .other:
-            transaction.ticker == "CASH" ? "Account activity" : transaction.ticker
+            transaction.ticker == "CASH" ? L10n.text("Account activity") : transaction.ticker
         default:
             securityName.isEmpty ? transaction.ticker : securityName
         }
@@ -166,6 +166,7 @@ private struct HistorySummaryMetric: Identifiable {
 }
 
 struct HistoryView: View {
+    @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var categorySelection
@@ -212,7 +213,7 @@ struct HistoryView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let errorMessage {
                 ContentUnavailableView(
-                    "Unable to load History",
+                    L10n.text("Unable to load History"),
                     systemImage: "exclamationmark.triangle",
                     description: Text(errorMessage)
                 )
@@ -220,7 +221,7 @@ struct HistoryView: View {
                 historyList
             }
         }
-        .navigationTitle("History")
+        .navigationTitle(L10n.text("History"))
         .navigationBarTitleDisplayMode(.large)
         .toolbarVisibility(.visible, for: .navigationBar)
         .toolbarVisibility(.hidden, for: .tabBar)
@@ -244,7 +245,7 @@ struct HistoryView: View {
                 ToolbarSpacer(.fixed, placement: .topBarTrailing)
             }
             ToolbarItem(id: "history-export", placement: .topBarTrailing) {
-                Button("Download History", systemImage: "arrow.down.doc") {
+                Button(L10n.text("Download History"), systemImage: "arrow.down.doc") {
                     prepareExport()
                 }
                 .labelStyle(.iconOnly)
@@ -262,16 +263,19 @@ struct HistoryView: View {
                 exportError = error.localizedDescription
             }
         }
-        .alert("Unable to export History", isPresented: Binding(
+        .alert(L10n.text("Unable to export History"), isPresented: Binding(
             get: { exportError != nil },
             set: { if !$0 { exportError = nil } }
         )) {
-            Button("OK", role: .cancel) { exportError = nil }
+            Button(L10n.text("OK"), role: .cancel) { exportError = nil }
         } message: {
             Text(exportError ?? "")
         }
         .onChange(of: selectedAccountIDs) {
-            Task { await loadScopedHoldings() }
+            Task {
+                await loadScopedHoldings()
+                await loadMatchedDisposals()
+            }
         }
         .task {
             await loadLedger()
@@ -362,11 +366,11 @@ struct HistoryView: View {
         if charges.isEmpty {
             Section {
                 ContentUnavailableView(
-                    "没有可计费的基金",
+                    L10n.text("没有可计费的基金"),
                     systemImage: "creditcard",
                     description: Text(scopedHoldings.isEmpty
-                        ? "所选账户暂无持仓。"
-                        : "所选账户的持仓里没有找到已公布费率的基金。个股不收管理费。")
+                        ? L10n.text("所选账户暂无持仓。")
+                        : L10n.text("所选账户的持仓里没有找到已公布费率的基金。个股不收管理费。"))
                 )
                 .frame(maxWidth: .infinity)
                 .listRowBackground(Color.clear)
@@ -375,25 +379,25 @@ struct HistoryView: View {
             let total = charges.reduce(0) { $0 + $1.annual }
             let fundValue = charges.reduce(0) { $0 + $1.holding.marketValue }
             Section {
-                LabeledContent("年费用合计") {
+                LabeledContent(L10n.text("年费用合计")) {
                     Text(DisplayFormat.money(total, fractionDigits: 2))
                         .appNumber(.body, weight: .semibold)
                 }
-                LabeledContent("基金市值") {
+                LabeledContent(L10n.text("基金市值")) {
                     Text(DisplayFormat.money(fundValue))
                         .appNumber(.body)
                 }
-                LabeledContent("加权费率") {
+                LabeledContent(L10n.text("加权费率")) {
                     Text(fundValue > 0
                          ? (total / fundValue * 100).formatted(.number.precision(.fractionLength(2...3))) + "%"
                          : "—")
                         .appNumber(.body)
                 }
             } footer: {
-                Text("按当前市值和公布的年费率估算的运行成本，不是已扣除的金额。基金费用在基金内部按日计提，不会出现在交易流水里，也已经反映在净值中——不要再从收益里减一次。")
+                Text(L10n.text("按当前市值和公布的年费率估算的运行成本，不是已扣除的金额。基金费用在基金内部按日计提，不会出现在交易流水里，也已经反映在净值中——不要再从收益里减一次。"))
             }
 
-            Section("按持仓") {
+            Section(L10n.text("按持仓")) {
                 ForEach(charges, id: \.holding.id) { charge in
                     feeRow(charge)
                 }
@@ -420,7 +424,7 @@ struct HistoryView: View {
                         .formatted(.number.precision(.fractionLength(2...4))) + "%")
                     // A published figure and an estimate are not the same
                     // claim, and the package distinguishes them.
-                    if !charge.isVerified { Text("估算") }
+                    if !charge.isVerified { Text(L10n.text("估算")) }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -430,7 +434,7 @@ struct HistoryView: View {
                 Text(DisplayFormat.money(charge.annual, fractionDigits: 2))
                     .appNumber(.subheading, weight: .semibold)
                     .lineLimit(1)
-                Text("每年")
+                Text(L10n.text("每年"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -445,15 +449,15 @@ struct HistoryView: View {
         case .fees: []
         case .all:
             [
-                HistorySummaryMetric(title: "Activity", value: "\(filteredActivities.count)", color: .primary),
-                HistorySummaryMetric(title: "Accounts", value: "\(selectedAccounts.count)", color: .secondary),
+                HistorySummaryMetric(title: L10n.text("Activity"), value: "\(filteredActivities.count)", color: .primary),
+                HistorySummaryMetric(title: L10n.text("Accounts"), value: "\(selectedAccounts.count)", color: .secondary),
             ]
         case .orders:
             realisedSummaryMetrics
         case .dividends:
             [
                 HistorySummaryMetric(
-                    title: "Total dividends",
+                    title: L10n.text("Total dividends"),
                     value: DisplayFormat.money(totalUSD(for: .dividend)),
                     color: CatfolioTheme.positive
                 )
@@ -461,7 +465,7 @@ struct HistoryView: View {
         case .interest:
             [
                 HistorySummaryMetric(
-                    title: "Total interest",
+                    title: L10n.text("Total interest"),
                     value: DisplayFormat.money(totalUSD(for: .interest)),
                     color: CatfolioTheme.positive
                 )
@@ -478,14 +482,14 @@ struct HistoryView: View {
     /// their own currency, rather than being replaced by the converted total.
     private var taxYearPicker: some View {
         Menu {
-            Picker("口径", selection: $taxYearBasisRaw) {
+            Picker(L10n.text("口径"), selection: $taxYearBasisRaw) {
                 ForEach(TaxYearBasis.allCases) { Text($0.title).tag($0.rawValue) }
             }
             Divider()
             Button {
                 selectedTaxYear = nil
             } label: {
-                Label("全部年份", systemImage: selectedTaxYear == nil ? "checkmark" : "infinity")
+                Label(L10n.text("全部年份"), systemImage: selectedTaxYear == nil ? "checkmark" : "infinity")
             }
             ForEach(realisedByTaxYear, id: \.label) { entry in
                 Button {
@@ -499,12 +503,12 @@ struct HistoryView: View {
                 Label(selectedTaxYear, systemImage: "calendar")
                     .font(.subheadline)
             } else {
-                Label("统计范围", systemImage: "calendar")
+                Label(L10n.text("统计范围"), systemImage: "calendar")
                     .labelStyle(.iconOnly)
             }
         }
-        .accessibilityLabel("统计范围")
-        .accessibilityValue(selectedTaxYear ?? "全部年份")
+        .accessibilityLabel(L10n.text("统计范围"))
+        .accessibilityValue(selectedTaxYear ?? L10n.text("全部年份"))
     }
 
     /// Explains how the rows relate, rather than restating their counts.
@@ -520,17 +524,17 @@ struct HistoryView: View {
         guard calculation.saleCount > 0 else { return nil }
         var parts: [String] = []
         if !calculation.brokerTotals.isEmpty {
-            parts.append("原币那行是券商记录的精确值；合计按当前汇率折算，不等于成交当时的金额")
+            parts.append(L10n.text("原币那行是券商记录的精确值；合计按当前汇率折算，不等于成交当时的金额"))
         }
         if calculation.estimatedCount > 0 {
-            parts.append("估算部分由本地 FIFO 重建，不适合直接用于报税")
+            parts.append(L10n.text("估算部分由本地 FIFO 重建，不适合直接用于报税"))
         }
         if calculation.unavailableCount > 0 {
-            parts.append("缺买入成本的 \(calculation.unavailableCount) 笔未计入任何合计")
+            parts.append(L10n.text("缺买入成本的 \(calculation.unavailableCount) 笔未计入任何合计"))
         }
         if !calculation.unconvertibleCurrencies.isEmpty {
             let names = calculation.unconvertibleCurrencies.sorted().joined(separator: "/")
-            parts.append("\(names) 缺汇率，只出现在原币行")
+            parts.append(L10n.text("\(names) 缺汇率，只出现在原币行"))
         }
         return parts.isEmpty ? nil : parts.joined(separator: "。") + "。"
     }
@@ -538,7 +542,7 @@ struct HistoryView: View {
     private var realisedSummaryMetrics: [HistorySummaryMetric] {
         let calculation = realisedCalculation
         guard calculation.saleCount > 0 else {
-            let title = selectedTaxYear.map { "\($0) · 没有卖出记录" } ?? "已实现盈亏 · 暂无卖出"
+            let title = selectedTaxYear.map { L10n.text("\($0) · 没有卖出记录") } ?? L10n.text("已实现盈亏 · 暂无卖出")
             return [HistorySummaryMetric(title: title, value: "—", color: .secondary)]
         }
         let total = calculation.saleCount
@@ -552,9 +556,9 @@ struct HistoryView: View {
             // An unconvertible currency has no row of its own, so it stays.
             let suffix = calculation.unconvertibleCurrencies.isEmpty
                 ? ""
-                : "（\(calculation.unconvertibleCurrencies.sorted().joined(separator: "/")) 未计入）"
+                : L10n.text("（\(calculation.unconvertibleCurrencies.sorted().joined(separator: "/")) 未计入）")
             metrics.append(HistorySummaryMetric(
-                title: "\(scope)已实现盈亏\(selectedTaxYear == nil ? " · 合计" : "")\(suffix)",
+                title: L10n.text("\(scope)已实现盈亏\(selectedTaxYear == nil ? L10n.text(" · 合计") : "")\(suffix)"),
                 value: DisplayFormat.money(calculation.combinedUSD, signed: true),
                 color: calculation.combinedUSD >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger))
         }
@@ -566,20 +570,20 @@ struct HistoryView: View {
                     currency: currency, signed: true, fractionDigits: 2)
             }.joined(separator: " · ")
             metrics.append(HistorySummaryMetric(
-                title: "券商 Result · \(calculation.brokerCount)/\(total) 笔 · 原币",
+                title: L10n.text("券商 Result · \(calculation.brokerCount)/\(total) 笔 · 原币"),
                 value: values, color: .secondary))
         }
 
         if calculation.estimatedCount > 0 {
             metrics.append(HistorySummaryMetric(
-                title: "本地估算 · \(calculation.estimatedCount)/\(total) 笔 · 按当前汇率",
+                title: L10n.text("本地估算 · \(calculation.estimatedCount)/\(total) 笔 · 按当前汇率"),
                 value: DisplayFormat.money(calculation.estimatedUSD, signed: true),
                 color: .secondary))
         }
 
         if calculation.unavailableCount > 0 {
             metrics.append(HistorySummaryMetric(
-                title: "缺买入成本 · \(calculation.unavailableCount)/\(total) 笔",
+                title: L10n.text("缺买入成本 · \(calculation.unavailableCount)/\(total) 笔"),
                 value: "—", color: .secondary))
         }
 
@@ -599,7 +603,7 @@ struct HistoryView: View {
             Button {
                 selectedAccountIDs = nil
             } label: {
-                Label("All Accounts", systemImage: isAllAccountsSelected ? "checkmark" : "person.2")
+                Label(L10n.text("All Accounts"), systemImage: isAllAccountsSelected ? "checkmark" : "person.2")
             }
 
             Divider()
@@ -619,7 +623,7 @@ struct HistoryView: View {
                 .labelStyle(.iconOnly)
         }
         .menuActionDismissBehavior(.disabled)
-        .accessibilityLabel("Account filter")
+        .accessibilityLabel(L10n.text("Account filter"))
         .accessibilityValue(accountFilterTitle)
     }
 
@@ -685,7 +689,7 @@ struct HistoryView: View {
                 category = option
             }
         } label: {
-            Text(option.rawValue)
+            Text(L10n.label(option.rawValue))
                 .font(.body.weight(.medium))
                 .foregroundStyle(isSelected ? Color.primary : Color.secondary)
                 .lineLimit(1)
@@ -756,7 +760,7 @@ struct HistoryView: View {
                 .minimumScaleFactor(0.72)
 
                 if isOrder {
-                    Text("\(DisplayFormat.shares(activity.transaction.quantity)) shares")
+                    Text(L10n.text("\(DisplayFormat.shares(activity.transaction.quantity)) shares"))
                         .appNumber(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -796,12 +800,12 @@ struct HistoryView: View {
     private func matchingText(sameDay: Double, later: [(String, Double)]) -> String {
         var parts: [String] = []
         if sameDay > 0 {
-            parts.append("\(DisplayFormat.shares(sameDay)) 股与当日买入配对")
+            parts.append(L10n.text("\(DisplayFormat.shares(sameDay)) 股与当日买入配对"))
         }
         for (date, quantity) in later {
-            parts.append("\(DisplayFormat.shares(quantity)) 股与 \(shortDate(date)) 的买入配对")
+            parts.append(L10n.text("\(DisplayFormat.shares(quantity)) 股与 \(shortDate(date)) 的买入配对"))
         }
-        return parts.joined(separator: "；") + "（英国 30 天规则，未计入 Section 104 池）"
+        return parts.joined(separator: "；") + L10n.text("（英国 30 天规则，未计入 Section 104 池）")
     }
 
     private func shortDate(_ iso: String) -> String {
@@ -906,15 +910,15 @@ struct HistoryView: View {
     }
 
     private var accountFilterTitle: String {
-        if isAllAccountsSelected { return "All Accounts" }
+        if isAllAccountsSelected { return L10n.text("All Accounts") }
         let accounts = selectedAccounts
-        guard let first = accounts.first else { return "No Accounts" }
+        guard let first = accounts.first else { return L10n.text("No Accounts") }
         if accounts.count == 1 { return accountNickname(first) }
         return "\(accountNickname(first)) + \(accounts.count - 1)"
     }
 
     private var emptyTitle: String {
-        effectiveAccountIDs.isEmpty ? "No accounts selected" : "No \(category.rawValue.lowercased())"
+        effectiveAccountIDs.isEmpty ? L10n.text("No accounts selected") : L10n.text("No \(L10n.label(category.rawValue))")
     }
 
     private var emptySystemImage: String {
@@ -922,8 +926,8 @@ struct HistoryView: View {
     }
 
     private var emptyDescription: String {
-        if effectiveAccountIDs.isEmpty { return "Choose at least one account from the account filter." }
-        return "Activity appears here after a broker sync, CSV import, or manual entry."
+        if effectiveAccountIDs.isEmpty { return L10n.text("Choose at least one account from the account filter.") }
+        return L10n.text("Activity appears here after a broker sync, CSV import, or manual entry.")
     }
 
     private func totalUSD(for kind: PortfolioActivityKind) -> Double {
@@ -947,25 +951,32 @@ struct HistoryView: View {
     /// Disposals that were matched against an acquisition rather than the
     /// pool, keyed by the ledger row they came from.
     ///
-    /// Computed once for the whole page: the matching runs per security, and
-    /// asking per row would redo the same walk for every sale of the same
-    /// ticker.
-    private var matchedDisposals: [String: UKShareMatching.Disposal] {
-        let splits = try? StockSplitCatalog.bundled.get()
-        let tickers = Set(
-            accountTransactions
-                .filter { $0.action.uppercased() == "SELL" }
-                .map { $0.ticker.uppercased() }
-        )
-        var byRow: [String: UKShareMatching.Disposal] = [:]
-        for ticker in tickers {
-            for disposal in UKShareMatching.disposals(
-                ticker: ticker, transactions: accountTransactions, splits: splits
-            ) where !disposal.isFullyFromPool {
-                byRow[disposal.sourceID] = disposal
+    /// Held in state and computed once per ledger, never in the body. As a
+    /// computed property this ran on every row: the matcher walks the whole
+    /// transaction list once per security, so rendering N rows cost N × T × X
+    /// and the screen simply never finished. That is the second time this
+    /// page has been given an expensive answer to a per-row question.
+    @State private var matchedDisposals: [String: UKShareMatching.Disposal] = [:]
+
+    private func loadMatchedDisposals() async {
+        let transactions = accountTransactions
+        matchedDisposals = await Task.detached(priority: .userInitiated) {
+            let splits = try? StockSplitCatalog.bundled.get()
+            let tickers = Set(
+                transactions
+                    .filter { $0.action.uppercased() == "SELL" }
+                    .map { $0.ticker.uppercased() }
+            )
+            var byRow: [String: UKShareMatching.Disposal] = [:]
+            for ticker in tickers {
+                for disposal in UKShareMatching.disposals(
+                    ticker: ticker, transactions: transactions, splits: splits
+                ) where !disposal.isFullyFromPool {
+                    byRow[disposal.sourceID] = disposal
+                }
             }
-        }
-        return byRow
+            return byRow
+        }.value
     }
 
     private var realisedByTaxYear: [(label: String, summary: RealisedProfitSummary)] {
@@ -1030,8 +1041,8 @@ struct HistoryView: View {
     private func dateGroupTitle(_ text: String) -> String {
         guard let date = localDate(from: text) else { return text }
         let calendar = Calendar.current
-        if calendar.isDateInToday(date) { return "Today" }
-        if calendar.isDateInYesterday(date) { return "Yesterday" }
+        if calendar.isDateInToday(date) { return L10n.text("Today") }
+        if calendar.isDateInYesterday(date) { return L10n.text("Yesterday") }
         return date.formatted(.dateTime.month(.wide).day().year())
     }
 
@@ -1049,6 +1060,7 @@ struct HistoryView: View {
             ledger = try await model.activityLedger()
             errorMessage = nil
             await loadScopedHoldings()
+            await loadMatchedDisposals()
         } catch {
             errorMessage = error.localizedDescription
         }
