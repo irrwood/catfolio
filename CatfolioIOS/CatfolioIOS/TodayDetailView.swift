@@ -7,6 +7,7 @@ import SwiftUI
 /// generated — the summary line is a sort, not a model's opinion, so it cannot
 /// be wrong in a way the numbers beside it are not.
 struct TodayDetailView: View {
+    @Environment(\.locale) private var appLocale
     struct Contribution: Identifiable {
         let holding: Holding
         let changePercent: Double
@@ -59,7 +60,7 @@ struct TodayDetailView: View {
 
         // A day is only "driven" if the net is a real share of what moved.
         guard abs(total) >= grossMovement * 0.2 else {
-            return "涨跌基本抵消：合计变动 \(DisplayFormat.money(grossMovement, fractionDigits: 0))，净额 \(DisplayFormat.money(total, signed: true, fractionDigits: 2))"
+            return L10n.text("涨跌基本抵消：合计变动 \(DisplayFormat.money(grossMovement, fractionDigits: 0))，净额 \(DisplayFormat.money(total, signed: true, fractionDigits: 2))")
         }
 
         // The leader has to move the same way the day did.
@@ -67,8 +68,8 @@ struct TodayDetailView: View {
         guard let leader = sameDirection.max(by: { abs($0.amount) < abs($1.amount) }) else { return nil }
         let share = min(100, abs(leader.amount) / abs(total) * 100)
         guard share.isFinite, share >= 15 else { return nil }
-        let verb = total >= 0 ? "涨幅" : "跌幅"
-        return "\(leader.holding.shortName) 贡献了今日 \(share.formatted(.number.precision(.fractionLength(0))))% 的\(verb)"
+        let verb = total >= 0 ? L10n.text("涨幅") : L10n.text("跌幅")
+        return L10n.text("\(leader.holding.shortName) 贡献了今日 \(share.formatted(.number.precision(.fractionLength(0))))% 的\(verb)")
     }
 
     // MARK: - Sector attribution
@@ -96,7 +97,7 @@ struct TodayDetailView: View {
         let components: [Component]
 
         var id: String { sector?.rawValue ?? "unclassified" }
-        var displayName: String { sector?.displayName ?? "未分类" }
+        var displayName: String { sector.map { L10n.label($0.displayName) } ?? L10n.text("未分类") }
         var symbolName: String { sector?.symbolName ?? "questionmark.circle" }
     }
 
@@ -165,13 +166,13 @@ struct TodayDetailView: View {
     private var sectorFootnote: String {
         var parts: [String] = []
         if sectorTotals.lookThroughUsed {
-            parts.append("指数基金按其成分股的行业构成分摊，非逐只成分的当日涨跌")
+            parts.append(L10n.text("指数基金按其成分股的行业构成分摊，非逐只成分的当日涨跌"))
         }
         if unclassifiedShare > 0.005 {
             let pct = (unclassifiedShare * 100).formatted(.number.precision(.fractionLength(0)))
-            parts.append("未分类占当前市值 \(pct)%，主要是非美股上市标的，行业资料暂未覆盖")
+            parts.append(L10n.text("未分类占当前市值 \(pct)%，主要是非美股上市标的，行业资料暂未覆盖"))
         }
-        return parts.isEmpty ? "行业来自打包的美股公司资料，用于当前归类，不适用于历史回溯。" : parts.joined(separator: "。") + "。"
+        return parts.isEmpty ? L10n.text("行业来自打包的美股公司资料，用于当前归类，不适用于历史回溯。") : parts.joined(separator: "。") + "。"
     }
 
     private func sectorRow(
@@ -189,7 +190,7 @@ struct TodayDetailView: View {
                 Text(name)
                     .font(.body)
                     .foregroundStyle(isUnclassified ? .secondary : .primary)
-                Text("\(count) 项")
+                Text(L10n.text("\(count) 项"))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -205,7 +206,7 @@ struct TodayDetailView: View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("今日盈亏")
+                    Text(L10n.text("今日盈亏"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     Text(DisplayFormat.money(total, signed: true, fractionDigits: 2))
@@ -217,7 +218,7 @@ struct TodayDetailView: View {
                             Image(systemName: "chart.line.uptrend.xyaxis")
                                 .font(.footnote.weight(.semibold))
                                 .foregroundStyle(CatfolioTheme.accent)
-                            Text("S&P 500")
+                            Text("SPY")
                                 .font(.subheadline).foregroundStyle(.secondary)
                             Text(DisplayFormat.percent(benchmarkChange, signed: true))
                                 .appNumber(.callout, weight: .medium)
@@ -251,7 +252,7 @@ struct TodayDetailView: View {
                         }
                     }
                 } header: {
-                    Text("按行业")
+                    Text(L10n.text("按行业"))
                 } footer: {
                     Text(sectorFootnote)
                 }
@@ -262,7 +263,7 @@ struct TodayDetailView: View {
                 Section {
                     ForEach(gainers) { contributionRow($0) }
                 } header: {
-                    Text("推动上涨 · \(gainers.count) 项")
+                    Text(L10n.text("推动上涨 · \(gainers.count) 项"))
                 }
                 .headerProminence(.increased)
             }
@@ -271,7 +272,7 @@ struct TodayDetailView: View {
                 Section {
                     ForEach(losers) { contributionRow($0) }
                 } header: {
-                    Text("拖累下跌 · \(losers.count) 项")
+                    Text(L10n.text("拖累下跌 · \(losers.count) 项"))
                 }
                 .headerProminence(.increased)
             }
@@ -279,20 +280,20 @@ struct TodayDetailView: View {
             if contributions.isEmpty {
                 Section {
                     ContentUnavailableView(
-                        "暂无今日行情",
+                        L10n.text("暂无今日行情"),
                         systemImage: "chart.bar.xaxis",
-                        description: Text("持仓的当日涨跌还没有读取到。")
+                        description: Text(L10n.text("持仓的当日涨跌还没有读取到。"))
                     )
                 }
             } else {
                 Section {
-                    Text("按持仓当前市值和当日涨跌推算，未计入今日的买入卖出。行情为各标的最近可用报价。")
+                    Text(L10n.text("按持仓当前市值和当日涨跌推算，未计入今日的买入卖出。行情为各标的最近可用报价。"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
         }
-        .navigationTitle("今日")
+        .navigationTitle(L10n.text("今日"))
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -334,6 +335,7 @@ struct TodayDetailView: View {
 /// "38% 计入本行业" is legible as an attribution rather than mistaken for the
 /// fund's whole move.
 private struct SectorMembersView: View {
+    @Environment(\.locale) private var appLocale
     let breakdown: TodayDetailView.SectorBreakdown
 
     var body: some View {
@@ -373,7 +375,7 @@ private struct SectorMembersView: View {
                                 .appNumber(.caption)
                                 .foregroundStyle(.tertiary)
                             if component.fraction < 0.999 {
-                                Text("成分穿透 \(percentText(component.fraction)) 计入本行业")
+                                Text(L10n.text("成分穿透 \(percentText(component.fraction)) 计入本行业"))
                                     .font(.caption)
                                     .foregroundStyle(.tertiary)
                             }
@@ -382,10 +384,10 @@ private struct SectorMembersView: View {
                     .padding(.vertical, 2)
                 }
             } header: {
-                Text("\(breakdown.components.count) 项持仓")
+                Text(L10n.text("\(breakdown.components.count) 项持仓"))
             } footer: {
                 if breakdown.sector == nil {
-                    Text("这些标的没有可用的行业资料，主要是非美股上市证券。补齐后会自动归入对应行业。")
+                    Text(L10n.text("这些标的没有可用的行业资料，主要是非美股上市证券。补齐后会自动归入对应行业。"))
                 }
             }
         }

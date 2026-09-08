@@ -176,7 +176,7 @@ Use the native system UI font stack. On macOS this resolves to San Francisco thr
 - Body: 14px, 400 to 500 weight.
 - Table cell: 13 to 14px, 400 to 500 weight.
 - Metadata: 12 to 13px, muted.
-- Numbers: tabular numerals, 500 to 650 weight.
+- Numbers: see Numerals below — alternate glyphs, fixed width by default, one weight step above prose.
 
 ### Text Rules
 
@@ -186,6 +186,37 @@ Use the native system UI font stack. On macOS this resolves to San Francisco thr
 - Use sentence case for labels.
 - Use short labels in nav and controls.
 - Use muted labels and stronger values in label-value layouts.
+
+### Numerals
+
+Every figure in the product is set in the same face as the text around it, with three glyph substitutions and two rules about width. The app is a screen full of digits people compare against each other, and the default forms are optimised for reading prose.
+
+**Alternate forms.** Use SF's straight-sided six, straight-sided nine, and open four.
+
+- The default six and nine curl their terminals back toward the bowl, which closes the counter and makes them approach an eight at small sizes.
+- The default four is closed, which makes it approach a nine.
+- The straight-sided and open forms keep those counters open, so 6/8, 9/8 and 4/9 stay distinct in a dense column.
+
+On Apple platforms these are stylistic sets, applied through a font descriptor because SwiftUI has no API for stylistic sets on the system font:
+
+| Alternate | Stylistic set | Feature selector |
+|---|---:|---:|
+| Straight-sided six and nine | 1 | 2 |
+| Open four | 2 | 4 |
+
+The selector is `2n` for set `n`, per the `kStylisticAlternativesType` convention.
+
+Do not take the set numbers on trust. Which set carries which alternate is a property of the shipped font, and it has moved between OS releases; a descriptor naming a set the font does not have is accepted silently and changes nothing. Verify by rendering: draw `469` with and without the feature and compare the pixels, and draw `012357` both ways and confirm they are identical. If the first pair matches or the second pair differs, the mapping is wrong.
+
+Apply the alternates to figures only. Prose has no 6/8 confusion to solve, and the straight-sided forms in running text read as a second typeface.
+
+**Width.** Figures use fixed-width digits by default, so a value that changes cannot change the width of its own frame and shift what sits beside it. Pair that with a rolling numeric transition where the value animates.
+
+Turn fixed width off for a figure that never changes and sits in no column — a share count, a settled date. A fixed-width `1` is padded to the width of an `8`, so numbers with several 1s in them carry visible gaps, and a static figure gains nothing in return.
+
+**Weight.** Set figures one step heavier than the same size gives prose. A rounded face reads lighter than a standard one at the same nominal weight — the rounded terminals take ink out of every stroke ending — and a figure has no word shape holding it together, so at small sizes a regular-weight number washes out against its own label.
+
+**Tracking.** None. The system face carries the platform's optical tracking per size; adding to it visibly loosens display sizes. The one exception is text set in capitals, which needs roughly 6% of the size and does not get it from optical sizing.
 
 ## Spacing
 

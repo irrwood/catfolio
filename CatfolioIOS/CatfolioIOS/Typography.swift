@@ -153,10 +153,71 @@ enum Typography {
     }
 }
 
+/// SF's alternate digit forms.
+///
+/// The default six and nine curl their terminals back toward the bowl and the
+/// four is closed, which at small sizes and in a dense column makes 6/8, 9/8
+/// and 4/9 harder to tell apart than they need to be. SF ships straight-sided
+/// and open alternates for exactly this, and a portfolio is a screen full of
+/// digits people are comparing.
+///
+/// Applied through a font descriptor because SwiftUI has no API for stylistic
+/// sets on the system font. `Font(_: UIFont)` keeps the size that
+/// `@ScaledMetric` already resolved, so Dynamic Type still works.
+enum NumericAlternates {
+    /// Stylistic set numbers, not raw selectors. Selector is `2n` for set n,
+    /// per the `kStylisticAlternativesType` convention.
+    ///
+    /// Verified by rendering, not assumed: the mapping of set number to glyph
+    /// is a property of the shipped font, and Apple has changed which set
+    /// carries which alternate between releases.
+    static let straightSidedSixAndNine = 1
+    static let openFour = 2
+
+    private static let cache = NSCache<NSString, UIFont>()
+
+    static func font(size: CGFloat, weight: UIFont.Weight, rounded: Bool) -> UIFont {
+        let key = "\(size)-\(weight.rawValue)-\(rounded)" as NSString
+        if let cached = cache.object(forKey: key) { return cached }
+
+        var descriptor = UIFont.systemFont(ofSize: size, weight: weight).fontDescriptor
+        if rounded, let round = descriptor.withDesign(.rounded) { descriptor = round }
+        descriptor = descriptor.addingAttributes([
+            .featureSettings: [straightSidedSixAndNine, openFour].map { set in
+                [
+                    UIFontDescriptor.FeatureKey.type: kStylisticAlternativesType,
+                    UIFontDescriptor.FeatureKey.selector: set * 2,
+                ]
+            },
+        ])
+        let font = UIFont(descriptor: descriptor, size: size)
+        cache.setObject(font, forKey: key)
+        return font
+    }
+
+    static func uiWeight(_ weight: Font.Weight) -> UIFont.Weight {
+        switch weight {
+        case .ultraLight: .ultraLight
+        case .thin: .thin
+        case .light: .light
+        case .medium: .medium
+        case .semibold: .semibold
+        case .bold: .bold
+        case .heavy: .heavy
+        case .black: .black
+        default: .regular
+        }
+    }
+}
+
 private struct ScaledFont: ViewModifier {
     let weight: Font.Weight
     let design: Font.Design
     let monospacedDigit: Bool
+    /// Only figures get the alternates; prose has no 6/8 confusion to solve
+    /// and the straight-sided forms read as a different typeface in running
+    /// text.
+    let usesAlternateDigits: Bool
     let lineSpacing: CGFloat
     let tracking: CGFloat
     @ScaledMetric private var size: CGFloat
@@ -166,18 +227,29 @@ private struct ScaledFont: ViewModifier {
         weight: Font.Weight?,
         design: Font.Design,
         monospacedDigit: Bool,
+        usesAlternateDigits: Bool = false,
         tracking: CGFloat
     ) {
         self.weight = weight ?? scale.weight
         self.design = design
         self.monospacedDigit = monospacedDigit
+        self.usesAlternateDigits = usesAlternateDigits
         self.lineSpacing = scale.lineSpacing
         self.tracking = tracking
         _size = ScaledMetric(wrappedValue: scale.size, relativeTo: scale.textStyle)
     }
 
     func body(content: Content) -> some View {
-        var font = Font.system(size: size, weight: weight, design: design)
+        var font: Font
+        if usesAlternateDigits {
+            font = Font(NumericAlternates.font(
+                size: size,
+                weight: NumericAlternates.uiWeight(weight),
+                rounded: design == .rounded
+            ))
+        } else {
+            font = Font.system(size: size, weight: weight, design: design)
+        }
         if monospacedDigit { font = font.monospacedDigit() }
         return content
             .font(font)
@@ -220,7 +292,7 @@ extension View {
     ) -> some View {
         modifier(ScaledFont(
             scale: scale, weight: weight ?? scale.numberWeight, design: .rounded,
-            monospacedDigit: monospaced, tracking: 0
+            monospacedDigit: monospaced, usesAlternateDigits: true, tracking: 0
         ))
     }
 

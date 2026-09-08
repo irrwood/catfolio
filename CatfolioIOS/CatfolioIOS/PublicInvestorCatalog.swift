@@ -97,13 +97,17 @@ struct PublicInvestor: Decodable, Identifiable {
     let activities: [PublicInvestorActivity]
     let history: [PublicInvestorSnapshot]?
     var id: String { investorId }
+    /// Localised. The catalogue's own `displayName` is the filer's legal name
+    /// as it appears in the disclosure and stays untranslated; this is the
+    /// label the reader picks from, and a Chinese name in an English build
+    /// reads as an untranslated string rather than a deliberate one.
     var title: String {
         switch id {
-        case "pelosi": "南希·佩洛西"
-        case "hh": "段永平 / H&H"
-        case "berkshire": "巴菲特 / Berkshire"
-        case "scion": "Michael Burry / Scion"
-        case "musk": "埃隆·马斯克"
+        case "pelosi": L10n.text("南希·佩洛西")
+        case "hh": L10n.text("段永平 / H&H")
+        case "berkshire": L10n.text("巴菲特 / Berkshire")
+        case "scion": L10n.text("Michael Burry / Scion")
+        case "musk": L10n.text("埃隆·马斯克")
         default: displayName
         }
     }

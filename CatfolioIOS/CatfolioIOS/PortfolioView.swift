@@ -573,9 +573,9 @@ private struct TodayContributionCard: View {
     private var benchmarkSummary: some View {
         if let benchmarkChange, benchmarkChange.isFinite {
             let difference = totalPercent - benchmarkChange
-            Text("\(difference >= 0 ? "+" : "-")S&P 500 \(DisplayFormat.percent(abs(difference), signed: false))")
+            Text("\(difference >= 0 ? "+" : "-")SPY \(DisplayFormat.percent(abs(difference), signed: false))")
         } else {
-            Text(L10n.text("S&P 500 暂无数据"))
+            Text(L10n.text("SPY 暂无数据"))
         }
     }
 
@@ -2651,7 +2651,7 @@ private struct HoldingRow: View {
                 Text(DisplayFormat.money(performance.amount, signed: true, fractionDigits: 2))
                     .numericTransition(performance.amount)
                 Circle()
-                    .fill(rowAccent)
+                    .fill(.secondary)
                     .frame(width: 2, height: 2)
                     .accessibilityHidden(true)
                 Text(DisplayFormat.percent(performance.percent))
@@ -2718,17 +2718,31 @@ private struct HoldingMetrics: View {
             Text(holding.displayedMarketValue)
                 .appNumber(.body)
                 .lineLimit(compact ? 1 : nil)
-            Text(performanceText)
+            // The separator is punctuation, not data. Carrying the gain or
+            // loss colour it reads as part of the figure, and a row of red
+            // dots between red numbers is noise the eye has to filter.
+            Group {
+                if let performance {
+                    Text(DisplayFormat.money(performance.amount, signed: true, fractionDigits: 2))
+                        .foregroundStyle(performanceColor)
+                    + Text(" · ").foregroundStyle(.secondary)
+                    + Text(DisplayFormat.percent(performance.percent))
+                        .foregroundStyle(performanceColor)
+                } else {
+                    Text(performanceText).foregroundStyle(.secondary)
+                }
+            }
             .appNumber(.caption)
-            .foregroundStyle(
-                (performance?.amount ?? 0) >= 0
-                    ? (colorScheme == .light
-                        ? Color(red: 0, green: 0.80, blue: 0.25)
-                        : Color(red: 0.188, green: 0.820, blue: 0.345))
-                    : CatfolioPalette.rose500
-            )
             .lineLimit(compact ? 1 : nil)
         }
+    }
+
+    private var performanceColor: Color {
+        (performance?.amount ?? 0) >= 0
+            ? (colorScheme == .light
+                ? Color(red: 0, green: 0.80, blue: 0.25)
+                : Color(red: 0.188, green: 0.820, blue: 0.345))
+            : CatfolioPalette.rose500
     }
 
     private var performanceText: String {

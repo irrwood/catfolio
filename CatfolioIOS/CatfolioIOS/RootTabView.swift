@@ -1,8 +1,24 @@
 import SwiftUI
 
 struct RootTabView: View {
+    @Environment(\.locale) private var appLocale
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Two sizes for the tab bar, and the gap between them is the feature.
+    ///
+    /// The first pass moved the icon by 4pt and the row height by 4pt, which
+    /// is a change you can measure and cannot see — the bar appeared not to
+    /// respond to the gesture at all. Shrinking is only worth doing if the
+    /// reader notices it happen, so the compact state now takes about a
+    /// quarter off the icon and a quarter off the height.
     private enum TabBarMetrics {
-        static let iconSize: CGFloat = 27
+        static let regularIconSize: CGFloat = 27
+        static let compactIconSize: CGFloat = 20
+        static let regularControlSize: CGFloat = 56
+        static let compactControlSize: CGFloat = 42
+        static let regularTabButtonHeight: CGFloat = 48
+        static let compactTabButtonHeight: CGFloat = 36
+        static let nativeVerticalOffset: CGFloat = 6
+        static let compactVerticalOffset: CGFloat = 6
     }
 
     private enum Destination: Hashable {
@@ -15,6 +31,8 @@ struct RootTabView: View {
     @AppStorage(CompanyNameDisplay.preferenceKey) private var companyNameDisplayRawValue = CompanyNameDisplay.original.rawValue
     @State private var selection: Destination
     @State private var showsAIAssistant: Bool
+    @State private var isTabBarCompact = false
+    @State private var lastVerticalDragTranslation: CGFloat = 0
     @Namespace private var assistantZoom
 
     init() {
@@ -58,7 +76,7 @@ struct RootTabView: View {
                     for: .portfolio,
                     selectedAsset: "TabPortfolioSelected",
                     unselectedAsset: "TabPortfolioUnselected",
-                    accessibilityLabel: "持仓"
+                    accessibilityLabel: L10n.text("持仓")
                 )
             }
 
@@ -70,7 +88,7 @@ struct RootTabView: View {
                     for: .returns,
                     selectedAsset: "TabPerformanceSelected",
                     unselectedAsset: "TabPerformanceUnselected",
-                    accessibilityLabel: "收益"
+                    accessibilityLabel: L10n.text("收益")
                 )
             }
 
@@ -82,30 +100,31 @@ struct RootTabView: View {
                     for: .settings,
                     selectedAsset: "TabSettingsSelected",
                     unselectedAsset: "TabSettingsUnselected",
-                    accessibilityLabel: "设置"
+                    accessibilityLabel: L10n.text("设置")
                 )
             }
 
         }
         .id(presentationPreferencesID)
         .tint(.primary)
-        .navigationTitle(selection == .settings ? "设置" : (selection == .returns ? "Performance" : ""))
+        .navigationTitle(selection == .settings ? L10n.text("设置") : (selection == .returns ? L10n.text("Performance") : ""))
         .navigationBarTitleDisplayMode(.large)
         .toolbarVisibility(selection == .portfolio ? .hidden : .visible, for: .navigationBar)
         .toolbarVisibility(.hidden, for: .tabBar)
+        .simultaneousGesture(tabBarResizeGesture, including: .subviews)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             navigationBar
         }
     }
 
     private var navigationBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: isTabBarCompact ? 10 : 12) {
             HStack(spacing: 0) {
-                navigationButton(.portfolio, selected: "TabPortfolioSelected", unselected: "TabPortfolioUnselected", label: "持仓")
-                navigationButton(.returns, selected: "TabPerformanceSelected", unselected: "TabPerformanceUnselected", label: "收益")
-                navigationButton(.settings, selected: "TabSettingsSelected", unselected: "TabSettingsUnselected", label: "设置")
+                navigationButton(.portfolio, selected: "TabPortfolioSelected", unselected: "TabPortfolioUnselected", label: L10n.text("持仓"))
+                navigationButton(.returns, selected: "TabPerformanceSelected", unselected: "TabPerformanceUnselected", label: L10n.text("收益"))
+                navigationButton(.settings, selected: "TabSettingsSelected", unselected: "TabSettingsUnselected", label: L10n.text("设置"))
             }
-            .padding(4)
+            .padding(isTabBarCompact ? 2 : 4)
             .navigationGlass()
 
             Button(action: presentAI) {
@@ -113,8 +132,8 @@ struct RootTabView: View {
                     .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: TabBarMetrics.iconSize, height: TabBarMetrics.iconSize)
-                    .frame(width: 56, height: 56)
+                    .frame(width: tabIconSize, height: tabIconSize)
+                    .frame(width: tabControlSize, height: tabControlSize)
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
@@ -124,9 +143,15 @@ struct RootTabView: View {
                     RoundedRectangle(cornerRadius: 28, style: .continuous)
                 )
             }
-            .accessibilityLabel("AI 助手")
+            .accessibilityLabel(L10n.text("AI 助手"))
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, isTabBarCompact ? 28 : 20)
+        // Match the lower visual baseline of iOS 26/27's floating tab bar
+        // while the safe-area inset continues reserving content space.
+        .offset(y: TabBarMetrics.nativeVerticalOffset + (isTabBarCompact
+            ? TabBarMetrics.compactVerticalOffset
+            : 0))
+        .animation(reduceMotion ? nil : .smooth(duration: 0.28), value: isTabBarCompact)
     }
 
     private func navigationButton(
@@ -140,7 +165,9 @@ struct RootTabView: View {
         } label: {
             tabIcon(for: destination, selectedAsset: selected, unselectedAsset: unselected, accessibilityLabel: label)
                 .frame(maxWidth: .infinity)
-                .frame(height: 48)
+                .frame(height: isTabBarCompact
+                    ? TabBarMetrics.compactTabButtonHeight
+                    : TabBarMetrics.regularTabButtonHeight)
                 .background {
                     if selection == destination {
                         Capsule().fill(.primary.opacity(0.07))
@@ -162,8 +189,42 @@ struct RootTabView: View {
             .renderingMode(.template)
             .resizable()
             .scaledToFit()
-            .frame(width: TabBarMetrics.iconSize, height: TabBarMetrics.iconSize)
+            .frame(width: tabIconSize, height: tabIconSize)
             .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var tabIconSize: CGFloat {
+        isTabBarCompact ? TabBarMetrics.compactIconSize : TabBarMetrics.regularIconSize
+    }
+
+    private var tabControlSize: CGFloat {
+        isTabBarCompact ? TabBarMetrics.compactControlSize : TabBarMetrics.regularControlSize
+    }
+
+    private var tabBarResizeGesture: some Gesture {
+        DragGesture(minimumDistance: 10, coordinateSpace: .global)
+            .onChanged { value in
+                let vertical = value.translation.height
+                let horizontal = value.translation.width
+                guard abs(vertical) > abs(horizontal) * 1.2 else { return }
+
+                let delta = vertical - lastVerticalDragTranslation
+                guard abs(delta) >= 6 else { return }
+                lastVerticalDragTranslation = vertical
+                let shouldCompact = delta < 0
+                guard shouldCompact != isTabBarCompact else { return }
+
+                if reduceMotion {
+                    isTabBarCompact = shouldCompact
+                } else {
+                    withAnimation(.smooth(duration: 0.28)) {
+                        isTabBarCompact = shouldCompact
+                    }
+                }
+            }
+            .onEnded { _ in
+                lastVerticalDragTranslation = 0
+            }
     }
 
     private func presentAI() {
