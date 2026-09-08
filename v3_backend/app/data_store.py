@@ -20,6 +20,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -27,6 +28,65 @@ from .cache import cached
 from .settings import FUNDAMENTALS_CACHE, LIVE_MARKET_CACHE, MARKET_REFRESH_TTL_SECONDS, ROOT, V2_DIR
 
 _DEMO_FLAG = V2_DIR / "demo_mode.flag"
+
+# Fan-out limits for the per-symbol refresh loops. Each loop used to pay one
+# whole network round trip at a time, so a refresh cost
+# len(symbols) x (latency + throttle) even though the requests are independent.
+#
+# The MIN_INTERVAL values are the same throttles the serial loops spent in
+# time.sleep() between calls, now applied to the *aggregate* rate instead of
+# between consecutive calls on one thread. Nothing here asks a third party for
+# data faster than the serial version did; the win is that latency overlaps
+# instead of accumulating. Raise these only if your API plan allows it.
+QUOTE_FETCH_WORKERS = int(os.environ.get("CATFOLIO_QUOTE_WORKERS", "8"))
+QUOTE_FETCH_MIN_INTERVAL = float(os.environ.get("CATFOLIO_QUOTE_MIN_INTERVAL", "0.04"))
+AFTER_HOURS_WORKERS = int(os.environ.get("CATFOLIO_AFTER_HOURS_WORKERS", "4"))
+AFTER_HOURS_MIN_INTERVAL = float(os.environ.get("CATFOLIO_AFTER_HOURS_MIN_INTERVAL", "0.35"))
+FMP_FETCH_WORKERS = int(os.environ.get("CATFOLIO_FMP_WORKERS", "4"))
+
+
+def _rate_limiter(min_interval: float):
+    """Return a wait() that admits at most one caller per `min_interval`.
+
+    Threads reserve their slot under the lock and sleep outside it, so the
+    dispenser itself never becomes the bottleneck.
+    """
+    lock = threading.Lock()
+    next_slot = [0.0]
+
+    def wait():
+        if min_interval <= 0:
+            return
+        with lock:
+            start = max(time.monotonic(), next_slot[0])
+            next_slot[0] = start + min_interval
+        delay = start - time.monotonic()
+        if delay > 0:
+            time.sleep(delay)
+
+    return wait
+
+
+def _parallel_map(items, worker, *, max_workers, min_interval=0.0):
+    """Map `worker` over `items` concurrently, returning results in input order.
+
+    Input order is preserved regardless of completion order so warnings and
+    cache rows stay reproducible. `worker` is expected to handle its own
+    failures and return them; an exception escaping it aborts the whole map.
+    """
+    items = list(items)
+    if not items:
+        return []
+    wait = _rate_limiter(min_interval)
+
+    def run(item):
+        wait()
+        return worker(item)
+
+    if len(items) == 1 or max_workers <= 1:
+        return [run(item) for item in items]
+    with ThreadPoolExecutor(max_workers=min(max_workers, len(items))) as pool:
+        return list(pool.map(run, items))
 
 
 def public_demo_mode() -> bool:
@@ -460,17 +520,26 @@ def refresh_market_quotes(force=False):
     }
     started = time.time()
 
-    for symbol in fetch_symbols:
+    def _fetch_quote(symbol):
         try:
             quote = fetch_yahoo_chart(symbol)
-            if quote:
-                quote["quote_as_of_unix"] = now
-                quotes[symbol] = quote
-            else:
-                warnings.append(f"Yahoo chart empty: {symbol}")
         except Exception as exc:
-            warnings.append(f"Yahoo chart failed {symbol}: {type(exc).__name__} {str(exc)[:100]}")
-        time.sleep(0.04)
+            return symbol, None, f"Yahoo chart failed {symbol}: {type(exc).__name__} {str(exc)[:100]}"
+        if not quote:
+            return symbol, None, f"Yahoo chart empty: {symbol}"
+        quote["quote_as_of_unix"] = now
+        return symbol, quote, None
+
+    for symbol, quote, warning in _parallel_map(
+        fetch_symbols,
+        _fetch_quote,
+        max_workers=QUOTE_FETCH_WORKERS,
+        min_interval=QUOTE_FETCH_MIN_INTERVAL,
+    ):
+        if quote is not None:
+            quotes[symbol] = quote
+        if warning:
+            warnings.append(warning)
 
     rows = []
     for row in holdings:
@@ -595,6 +664,35 @@ def _fmp_symbol_candidates(holding):
     return candidates
 
 
+_FMP_TTM_ENDPOINTS = (
+    ("ratios-ttm", None),
+    ("key-metrics-ttm", None),
+    ("income-statement-growth", {"limit": 1}),
+    ("profile", None),
+)
+
+
+def _fmp_snapshot(symbol, token):
+    """Fetch the four independent FMP endpoints for one symbol concurrently.
+
+    They used to run back to back, so every candidate symbol cost four serial
+    round trips before the next holding was even started. Failure semantics are
+    unchanged: the first error aborts the candidate, and the caller moves on.
+    """
+    def call(spec):
+        endpoint, params = spec
+        try:
+            return _fmp_stable_json(endpoint, symbol, token, params), None
+        except Exception as exc:
+            return None, exc
+
+    results = _parallel_map(_FMP_TTM_ENDPOINTS, call, max_workers=FMP_FETCH_WORKERS)
+    for _, exc in results:
+        if exc is not None:
+            raise exc
+    return tuple(payload for payload, _ in results)
+
+
 def _first_number(payload, *keys):
     if isinstance(payload, list):
         payload = payload[0] if payload else {}
@@ -614,10 +712,7 @@ def _refresh_fundamentals_fmp(holdings, token):
         last_error = None
         for symbol in _fmp_symbol_candidates(holding):
             try:
-                ratios = _fmp_stable_json("ratios-ttm", symbol, token)
-                metrics = _fmp_stable_json("key-metrics-ttm", symbol, token)
-                growth = _fmp_stable_json("income-statement-growth", symbol, token, {"limit": 1})
-                profile = _fmp_stable_json("profile", symbol, token)
+                ratios, metrics, growth, profile = _fmp_snapshot(symbol, token)
                 trailing_pe = _first_number(ratios, "priceToEarningsRatioTTM", "priceEarningsRatioTTM") or _first_number(metrics, "peRatioTTM") or _first_number(profile, "pe")
                 price_to_sales = _first_number(ratios, "priceToSalesRatioTTM") or _first_number(metrics, "priceToSalesRatioTTM", "evToSalesTTM")
                 price_to_book = _first_number(ratios, "priceToBookRatioTTM") or _first_number(metrics, "pbRatioTTM", "priceToBookRatioTTM")
@@ -925,32 +1020,42 @@ def refresh_after_hours(force=False):
     rows = []
     warnings = []
 
-    for ticker in tickers:
+    def _fetch_after_hours(ticker):
         try:
             data = _fetch_open_close(api_key, ticker, today_str)
-            if data.get("status") != "OK":
-                warnings.append(f"{ticker}: API status={data.get('status')}")
-                continue
-
-            close = data.get("close")
-            after = data.get("afterHours")
-            pre = data.get("preMarket")
-
-            if close and after and close != 0:
-                change_pct = (after - close) / close * 100
-                if abs(change_pct) >= 1.0:  # Filter: only show moves >= 1%
-                    rows.append({
-                        "ticker": ticker,
-                        "symbol": data.get("symbol", ticker),
-                        "close": close,
-                        "after_hours": after,
-                        "pre_market": pre,
-                        "change_pct": round(change_pct, 2),
-                        "volume": data.get("volume"),
-                    })
         except Exception as exc:
-            warnings.append(f"{ticker} after-hours fetch failed: {type(exc).__name__} {str(exc)[:100]}")
-        time.sleep(0.35)  # Rate limit: ~3 calls/sec
+            return None, f"{ticker} after-hours fetch failed: {type(exc).__name__} {str(exc)[:100]}"
+        if data.get("status") != "OK":
+            return None, f"{ticker}: API status={data.get('status')}"
+
+        close = data.get("close")
+        after = data.get("afterHours")
+        pre = data.get("preMarket")
+
+        if close and after and close != 0:
+            change_pct = (after - close) / close * 100
+            if abs(change_pct) >= 1.0:  # Filter: only show moves >= 1%
+                return {
+                    "ticker": ticker,
+                    "symbol": data.get("symbol", ticker),
+                    "close": close,
+                    "after_hours": after,
+                    "pre_market": pre,
+                    "change_pct": round(change_pct, 2),
+                    "volume": data.get("volume"),
+                }, None
+        return None, None
+
+    for row, warning in _parallel_map(
+        tickers,
+        _fetch_after_hours,
+        max_workers=AFTER_HOURS_WORKERS,
+        min_interval=AFTER_HOURS_MIN_INTERVAL,  # Rate limit: ~3 calls/sec
+    ):
+        if row is not None:
+            rows.append(row)
+        if warning:
+            warnings.append(warning)
 
     # Sort by absolute change descending
     rows.sort(key=lambda r: abs(r["change_pct"]), reverse=True)
