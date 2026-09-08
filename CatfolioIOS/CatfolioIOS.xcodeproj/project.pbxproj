@@ -61,6 +61,7 @@
 		A199000000000000000000AC /* NasdaqAnalystClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AC /* NasdaqAnalystClient.swift */; };
 		A199000000000000000000AE /* TodayDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AE /* TodayDetailView.swift */; };
 		A199000000000000000000AF /* SectorAttribution.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AF /* SectorAttribution.swift */; };
+		A19900000000000000FF50 /* UKShareMatching.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF50 /* UKShareMatching.swift */; };
 		A19900000000000000FF31 /* FXImpactCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF31 /* FXImpactCalculator.swift */; };
 		A19900000000000000FF30 /* GBPFXRates.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF30 /* GBPFXRates.swift */; };
 		A19900000000000000FF20 /* FundFeeCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF20 /* FundFeeCatalog.swift */; };
@@ -81,6 +82,7 @@
 		A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B7 /* Trading212FillDecodingTests.swift */; };
 		A199000000000000000000AD /* NasdaqAnalystLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */; };
 		A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000C1 /* SectorAttributionTests.swift */; };
+		A19900000000000000FF51 /* UKShareMatchingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF51 /* UKShareMatchingTests.swift */; };
 		A19900000000000000FF40 /* FXImpactTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF40 /* FXImpactTests.swift */; };
 		A19900000000000000FF21 /* FundFeeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF21 /* FundFeeTests.swift */; };
 		A199000000000000000000D7 /* TypographyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D7 /* TypographyTests.swift */; };
@@ -149,6 +151,7 @@
 		B199000000000000000000AC /* NasdaqAnalystClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NasdaqAnalystClient.swift; sourceTree = "<group>"; };
 		B199000000000000000000AE /* TodayDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayDetailView.swift; sourceTree = "<group>"; };
 		B199000000000000000000AF /* SectorAttribution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttribution.swift; sourceTree = "<group>"; };
+		B19900000000000000FF50 /* UKShareMatching.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UKShareMatching.swift; sourceTree = "<group>"; };
 		B19900000000000000FF31 /* FXImpactCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FXImpactCalculator.swift; sourceTree = "<group>"; };
 		B19900000000000000FF30 /* GBPFXRates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GBPFXRates.swift; sourceTree = "<group>"; };
 		B19900000000000000FF20 /* FundFeeCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundFeeCatalog.swift; sourceTree = "<group>"; };
@@ -167,6 +170,7 @@
 		B199000000000000000000B7 /* Trading212FillDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212FillDecodingTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NasdaqAnalystLogicTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000C1 /* SectorAttributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttributionTests.swift; sourceTree = "<group>"; };
+		B19900000000000000FF51 /* UKShareMatchingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UKShareMatchingTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF40 /* FXImpactTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FXImpactTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF21 /* FundFeeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundFeeTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000D7 /* TypographyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypographyTests.swift; sourceTree = "<group>"; };
@@ -247,6 +251,7 @@
 				B199000000000000000000AC /* NasdaqAnalystClient.swift */,
 				B199000000000000000000AE /* TodayDetailView.swift */,
 				B199000000000000000000AF /* SectorAttribution.swift */,
+				B19900000000000000FF50 /* UKShareMatching.swift */,
 				B19900000000000000FF31 /* FXImpactCalculator.swift */,
 				B19900000000000000FF30 /* GBPFXRates.swift */,
 				B19900000000000000FF20 /* FundFeeCatalog.swift */,
@@ -320,6 +325,7 @@
 				B199000000000000000000B7 /* Trading212FillDecodingTests.swift */,
 				B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */,
 				B199000000000000000000C1 /* SectorAttributionTests.swift */,
+				B19900000000000000FF51 /* UKShareMatchingTests.swift */,
 				B19900000000000000FF40 /* FXImpactTests.swift */,
 				B19900000000000000FF21 /* FundFeeTests.swift */,
 				B199000000000000000000D7 /* TypographyTests.swift */,
@@ -493,6 +499,7 @@
 				A199000000000000000000AC /* NasdaqAnalystClient.swift in Sources */,
 				A199000000000000000000AE /* TodayDetailView.swift in Sources */,
 				A199000000000000000000AF /* SectorAttribution.swift in Sources */,
+				A19900000000000000FF50 /* UKShareMatching.swift in Sources */,
 				A19900000000000000FF31 /* FXImpactCalculator.swift in Sources */,
 				A19900000000000000FF30 /* GBPFXRates.swift in Sources */,
 				A19900000000000000FF20 /* FundFeeCatalog.swift in Sources */,
@@ -520,6 +527,7 @@
 				A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */,
 				A199000000000000000000AD /* NasdaqAnalystLogicTests.swift in Sources */,
 				A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */,
+				A19900000000000000FF51 /* UKShareMatchingTests.swift in Sources */,
 				A19900000000000000FF40 /* FXImpactTests.swift in Sources */,
 				A19900000000000000FF21 /* FundFeeTests.swift in Sources */,
 				A199000000000000000000D7 /* TypographyTests.swift in Sources */,

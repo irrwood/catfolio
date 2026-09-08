@@ -619,6 +619,10 @@ struct HistoryView: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+                if let disposal = matchedDisposals[activity.transaction.id] {
+                    matchingNote(disposal)
+                }
             }
 
             Spacer(minLength: 8)
@@ -650,6 +654,45 @@ struct HistoryView: View {
             }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// States which acquisitions a disposal was matched against.
+    ///
+    /// A statement about what the rule did to transactions that already
+    /// happened — not a suggestion about what to do next. The window runs
+    /// forward from the sale, so this can appear on a row that was correct
+    /// when it was written and matched weeks later by a repurchase.
+    @ViewBuilder
+    private func matchingNote(_ disposal: UKShareMatching.Disposal) -> some View {
+        let sameDay = disposal.matches.filter { $0.rule == .sameDay }.reduce(0) { $0 + $1.quantity }
+        let later = disposal.matches.compactMap { match -> (String, Double)? in
+            guard case .thirtyDay(let acquired) = match.rule else { return nil }
+            return (acquired, match.quantity)
+        }
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.caption2)
+            Text(matchingText(sameDay: sameDay, later: later))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+    }
+
+    private func matchingText(sameDay: Double, later: [(String, Double)]) -> String {
+        var parts: [String] = []
+        if sameDay > 0 {
+            parts.append("\(DisplayFormat.shares(sameDay)) 股与当日买入配对")
+        }
+        for (date, quantity) in later {
+            parts.append("\(DisplayFormat.shares(quantity)) 股与 \(shortDate(date)) 的买入配对")
+        }
+        return parts.joined(separator: "；") + "（英国 30 天规则，未计入 Section 104 池）"
+    }
+
+    private func shortDate(_ iso: String) -> String {
+        guard let date = DayDateFormatter.shared.date(from: String(iso.prefix(10))) else { return iso }
+        return date.formatted(.dateTime.month(.abbreviated).day())
     }
 
     @ViewBuilder
@@ -787,6 +830,30 @@ struct HistoryView: View {
 
     /// Every tax year present in the ledger, newest first. FIFO runs across
     /// the whole history inside the calculator; only the results are grouped.
+    /// Disposals that were matched against an acquisition rather than the
+    /// pool, keyed by the ledger row they came from.
+    ///
+    /// Computed once for the whole page: the matching runs per security, and
+    /// asking per row would redo the same walk for every sale of the same
+    /// ticker.
+    private var matchedDisposals: [String: UKShareMatching.Disposal] {
+        let splits = try? StockSplitCatalog.bundled.get()
+        let tickers = Set(
+            accountTransactions
+                .filter { $0.action.uppercased() == "SELL" }
+                .map { $0.ticker.uppercased() }
+        )
+        var byRow: [String: UKShareMatching.Disposal] = [:]
+        for ticker in tickers {
+            for disposal in UKShareMatching.disposals(
+                ticker: ticker, transactions: accountTransactions, splits: splits
+            ) where !disposal.isFullyFromPool {
+                byRow[disposal.sourceID] = disposal
+            }
+        }
+        return byRow
+    }
+
     private var realisedByTaxYear: [(label: String, summary: RealisedProfitSummary)] {
         RealisedProfitCalculator.summarize(transactions: accountTransactions, basis: taxYearBasis)
             .filter { $0.summary.saleCount > 0 }
