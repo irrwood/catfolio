@@ -71,18 +71,6 @@ struct HoldingDetailView: View {
                                 selectedReturn: priceSelection?.returnPercent
                             )
 
-                            if let disclosure = displayedHolding.publicDisclosure {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text("披露持仓 · " + disclosure.amountLabel)
-                                    Text("报告期 " + disclosure.reportDates.joined(separator: " / "))
-                                    Text("申报 " + disclosure.filedDates.joined(separator: " / "))
-                                    if let instrument = disclosure.instrumentLabel { Text("期权标的申报价值 · " + instrument) }
-                                    ForEach(disclosure.sourceURLs, id: \.self) { raw in
-                                        if let url = URL(string: raw), url.scheme == "https" { Link("查看原始披露", destination: url) }
-                                    }
-                                }.font(.caption).foregroundStyle(.secondary).padding(20)
-                            }
-
                             if let priceHistory {
                                 SecurityPriceChart(
                                     history: priceHistory,
@@ -166,6 +154,7 @@ struct HoldingDetailView: View {
                         }
 
                         AnalystConsensusView(symbol: holding.ticker, currency: holding.quoteCurrency, price: holding.quotePrice)
+                            .padding(.horizontal, -8)
 
                         if CompanyFinancialsView.supports(holding) {
                             HoldingFinancialCard(holding: holding)
@@ -456,7 +445,7 @@ private struct HoldingDetailLoadingPlaceholder: View {
                 )
                     .frame(height: 343)
 
-                SecurityPriceRangePickerSkeleton()
+                ChartTimeRangePickerSkeleton()
                     .frame(height: 62)
 
                 ScrollView(.horizontal) {
@@ -775,7 +764,7 @@ private struct SecurityPriceChartState: View {
                     )
                         .frame(height: 343)
 
-                    SecurityPriceRangePickerSkeleton()
+                    ChartTimeRangePickerSkeleton()
                         .frame(height: 62)
                 }
             } else {
@@ -799,54 +788,17 @@ private struct SecurityPriceChartState: View {
     }
 }
 
-private struct SecurityPriceRangePickerSkeleton: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    private let widths: [CGFloat] = [12, 15, 14, 17, 20, 12, 23]
-
-    private var skeletonColor: Color {
-        colorScheme == .dark ? .white.opacity(0.09) : Color(white: 0.957)
-    }
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(widths.enumerated()), id: \.offset) { index, width in
-                ZStack {
-                    if index == 3 {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(skeletonColor)
-                            .frame(width: 44, height: 30)
-                    }
-
-                    Capsule()
-                        .fill(index == 3
-                            ? (colorScheme == .dark ? Color.black.opacity(0.55) : .white)
-                            : skeletonColor)
-                        .frame(width: width, height: 11)
-                }
-                .frame(maxWidth: .infinity)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 16)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-}
-
 private struct SecurityPriceSelection: Equatable {
     let price: Double
     let returnPercent: Double
 }
 
 private struct SecurityPriceChart: View {
-    private static let choices = ["1D", "1W", "1M", "3M", "YTD", "1Y", "MAX"]
-
     let history: SecurityPriceHistory
     let selectedAccountKeys: Set<String>
     let onSelectionChange: (SecurityPriceSelection?) -> Void
-    private let prepared: [String: SecurityPriceRangeData]
-    @State private var range: String
+    private let prepared: [ChartTimeRange: SecurityPriceRangeData]
+    @State private var range: ChartTimeRange
     @State private var selectedDate: Date?
     @State private var measuredRange: ChartDateRange?
 
@@ -859,7 +811,7 @@ private struct SecurityPriceChart: View {
         self.history = history
         self.selectedAccountKeys = selectedAccountKeys
         self.onSelectionChange = onSelectionChange
-        prepared = Dictionary(uniqueKeysWithValues: Self.choices.map {
+        prepared = Dictionary(uniqueKeysWithValues: ChartTimeRange.allCases.map {
             ($0, SecurityPriceRangeData(
                 history: history,
                 range: $0,
@@ -869,12 +821,12 @@ private struct SecurityPriceChart: View {
         })
         let arguments = ProcessInfo.processInfo.arguments
         _range = State(initialValue: arguments.contains("--show-security-chart-1d")
-            ? "1D"
-            : arguments.contains("--show-security-chart-max") ? "MAX" : "1Y")
+            ? .oneDay
+            : arguments.contains("--show-security-chart-max") ? .maximum : .oneYear)
     }
 
     private var data: SecurityPriceRangeData {
-        prepared[range] ?? prepared["MAX"]!
+        prepared[range] ?? prepared[.maximum]!
     }
 
     private var selectedPoint: SecurityPricePlotPoint? {
@@ -897,7 +849,7 @@ private struct SecurityPriceChart: View {
                     SecurityPricePlot(
                         data: data,
                         currency: history.currency,
-                        transitionKey: "\(range)|\(selectionSignature)",
+                        transitionKey: "\(range.rawValue)|\(selectionSignature)",
                         selectedPoint: selectedDate == nil && measuredRange == nil ? nil : selectedPoint,
                         measuredRange: measuredRange,
                         selectionIndicatorLabel: selectionIndicatorLabel,
@@ -927,10 +879,7 @@ private struct SecurityPriceChart: View {
             .frame(height: 343)
             .accessibilityLabel("\(history.ticker) 价格走势，买入点为绿色圆环，卖出点为黄色圆环，横向玻璃线为持仓成本")
 
-            SecurityPriceRangePicker(
-                choices: Self.choices,
-                selection: $range
-            )
+            ChartTimeRangePicker(selection: $range)
             .frame(height: 62)
             .accessibilityLabel("价格走势时间范围")
         }
@@ -938,7 +887,7 @@ private struct SecurityPriceChart: View {
         .onChange(of: range) { _, _ in clearInteraction() }
         .onChange(of: selectedAccountKeys) { _, _ in clearInteraction() }
         .onDisappear { onSelectionChange(nil) }
-        .task(id: "\(range)|\(selectionSignature)") {
+        .task(id: "\(range.rawValue)|\(selectionSignature)") {
             // Publish the selected time window even when the user is not
             // touching the chart. The header then uses the same start/end
             // basis as the line currently on screen.
@@ -948,8 +897,8 @@ private struct SecurityPriceChart: View {
         }
         .onAppear {
             let arguments = ProcessInfo.processInfo.arguments
-            if arguments.contains("--show-security-chart-1d") { range = "1D" }
-            if arguments.contains("--show-security-chart-max") { range = "MAX" }
+            if arguments.contains("--show-security-chart-1d") { range = .oneDay }
+            if arguments.contains("--show-security-chart-max") { range = .maximum }
         }
     }
 
@@ -990,51 +939,6 @@ private struct SecurityPriceChart: View {
         selectedDate = nil
         measuredRange = nil
         onSelectionChange(rangeSelection)
-    }
-}
-
-private struct SecurityPriceRangePicker: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    let choices: [String]
-    @Binding var selection: String
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(choices, id: \.self) { choice in
-                Button {
-                    selection = choice
-                } label: {
-                    Text(choice)
-                        .appText(.footnote, weight: .medium)
-                        .foregroundStyle(foreground(for: choice))
-                        .frame(width: 44, height: 30)
-                        .background {
-                            if selection == choice {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(selectedBackground)
-                            }
-                        }
-                        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity)
-                .accessibilityAddTraits(selection == choice ? .isSelected : [])
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 16)
-    }
-
-    private var selectedBackground: Color {
-        colorScheme == .dark ? .white : .black.opacity(0.06)
-    }
-
-    private func foreground(for choice: String) -> Color {
-        if selection == choice {
-            return colorScheme == .dark ? .black : .primary
-        }
-        return .primary.opacity(0.40)
     }
 }
 
@@ -1178,13 +1082,13 @@ private struct SecurityPriceRangeData {
 
     init(
         history: SecurityPriceHistory,
-        range: String,
+        range: ChartTimeRange,
         averageCost: Double?,
         selectedAccountKeys: Set<String>
     ) {
-        let usesIntraday = range == "1D"
+        let usesIntraday = range == .oneDay
         isIntraday = usesIntraday
-        isMaximumRange = range == "MAX"
+        isMaximumRange = range == .maximum
         let source = usesIntraday ? history.intradayPoints : history.points
         let all = source.map {
             SecurityPricePlotPoint(dateText: $0.dateText, date: $0.date, price: $0.close, returnPercent: 0)
@@ -1252,19 +1156,25 @@ private struct SecurityPriceRangeData {
 
     private static func filtered(
         _ points: [SecurityPricePlotPoint],
-        range: String
+        range: ChartTimeRange
     ) -> [SecurityPricePlotPoint] {
         guard let last = points.last?.date else { return [] }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         let start: Date?
         switch range {
-        case "1W": start = calendar.date(byAdding: .day, value: -7, to: last)
-        case "1M": start = calendar.date(byAdding: .month, value: -1, to: last)
-        case "3M": start = calendar.date(byAdding: .month, value: -3, to: last)
-        case "YTD": start = calendar.date(from: DateComponents(year: calendar.component(.year, from: last), month: 1, day: 1))
-        case "1Y": start = calendar.date(byAdding: .year, value: -1, to: last)
-        default: start = nil
+        case .oneDay: start = nil
+        case .oneWeek: start = calendar.date(byAdding: .day, value: -7, to: last)
+        case .oneMonth: start = calendar.date(byAdding: .month, value: -1, to: last)
+        case .twoMonths: start = calendar.date(byAdding: .month, value: -2, to: last)
+        case .yearToDate:
+            start = calendar.date(from: DateComponents(
+                year: calendar.component(.year, from: last), month: 1, day: 1
+            ))
+        case .sixMonths: start = calendar.date(byAdding: .month, value: -6, to: last)
+        case .oneYear: start = calendar.date(byAdding: .year, value: -1, to: last)
+        case .twoYears: start = calendar.date(byAdding: .year, value: -2, to: last)
+        case .maximum: start = nil
         }
         guard let start else { return points }
         let result = points.filter { $0.date >= start }
@@ -1665,11 +1575,11 @@ private struct HoldingFinancialCard: View {
             HStack(alignment: .center, spacing: 14) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Financial")
-                        .font(HoldingDetailTypography.medium(17, relativeTo: .headline))
+                        .appText(.subheading, weight: .medium)
                         .foregroundStyle(.primary)
 
                     Text("Profit and Loss Statement, Balance Sheet and Cash Flow")
-                        .font(HoldingDetailTypography.medium(13, relativeTo: .subheadline))
+                        .appText(.label, weight: .medium)
                         .foregroundStyle(.primary.opacity(0.50))
                         .lineSpacing(2)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1900,7 +1810,7 @@ private struct HoldingPredictionMarketRow: View {
     }
 }
 
-private struct HoldingDetailGlassCardModifier: ViewModifier {
+struct HoldingDetailGlassCardModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
 
     private var shape: RoundedRectangle {
@@ -1938,7 +1848,12 @@ private struct HoldingDetailGlassCardModifier: ViewModifier {
     }
 }
 
-private extension View {
+/// The card shell the holding detail page uses for its tappable rows.
+///
+/// Not file-private any more: three cards across two files present the same
+/// affordance, and a second hand-rolled copy of the glass, the radius and the
+/// border is how two rows on one page end up looking almost alike.
+extension View {
     func holdingDetailGlassCard() -> some View {
         modifier(HoldingDetailGlassCardModifier())
     }

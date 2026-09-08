@@ -43,13 +43,26 @@ actor AnalystConsensusClient {
     /// spent re-deriving them — and on a shared quota that is what tips the
     /// other cards into 429. A non-USD holding is now rejected without
     /// spending a request at all.
+    /// An unknown currency is not assumed to be USD: comparing a target price
+    /// against a quote in another unit is worse than showing nothing. Exposed
+    /// so the card can say so without offering a button that cannot work.
+    nonisolated static func supports(currency: String?) -> Bool {
+        currency?.uppercased() == "USD"
+    }
+
+    /// What is already in hand, if it is still fresh. Costs no request, so a
+    /// holding visited twice in an hour shows its card straight away.
+    func cached(symbol: String) -> AnalystConsensusData? {
+        guard let cached = cache[symbol],
+              Date().timeIntervalSince(cached.fetchedAt) < 3600 else { return nil }
+        return cached
+    }
+
     func load(symbol: String, currency: String?, price: Double?) async throws -> AnalystConsensusData {
-        // An unknown currency is not assumed to be USD: comparing a target
-        // price against a quote in another unit is worse than showing nothing.
-        guard currency?.uppercased() == "USD" else {
+        guard Self.supports(currency: currency) else {
             throw ScreenFailure.message("暂仅支持美元报价的证券，目标价不与其他币种混用。")
         }
-        if let cached = cache[symbol], Date().timeIntervalSince(cached.fetchedAt) < 3600 { return cached }
+        if let cached = cached(symbol: symbol) { return cached }
         let client = StockScreenDataClient.shared
         let query = ["symbol": symbol]
         var warnings: [String] = []
@@ -124,46 +137,88 @@ struct AnalystConsensusView: View {
     @State private var loading = false
     @Namespace private var zoom
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("分析师一致预期").font(.headline)
-                Spacer()
-                if let data {
-                    NavigationLink {
-                        AnalystConsensusDetails(data: data, symbol: symbol)
-                            .navigationTransition(.zoom(sourceID: symbol, in: zoom))
-                    } label: { Label("查看详情", systemImage: "chevron.right").font(.subheadline) }
-                        .matchedTransitionSource(id: symbol, in: zoom)
-                }
-            }
-            VStack(alignment: .leading, spacing: 24) {
-                if loading { ProgressView("读取分析师数据…") }
-                if let data {
-                    AnalystConsensusContent(data: data)
-                    // Previously only reachable through 查看详情, which is the
-                    // one place a user will not look when a half-empty card
-                    // says there is no data.
-                    ForEach(data.warnings, id: \.self) { warning in
-                        Text(warning).font(.footnote).foregroundStyle(.secondary)
-                    }
-                }
-                if let error {
-                    Text(error).font(.subheadline).foregroundStyle(.secondary)
-                    Button("重试") { Task { await load() } }.disabled(loading)
-                } else if data == nil && !loading {
-                    // Belt and braces: this card must never render as an empty box.
-                    Text("暂无分析师数据。").font(.subheadline).foregroundStyle(.secondary)
-                    Button("重试") { Task { await load() } }
-                }
-            }
-            .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
-            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color(uiColor: .separator).opacity(0.3)))
+    /// One line saying what the analysts think, for the collapsed row.
+    private var summary: String? {
+        guard let data else { return nil }
+        var parts: [String] = []
+        if let consensus = AnalystConsensusContent.ratingLabel(for: data.consensus) { parts.append(consensus) }
+        if data.total > 0 { parts.append("\(data.total) 份评级") }
+        if let mean = data.mean, mean.isFinite {
+            parts.append("均价 " + DisplayFormat.money(mean, currency: "USD"))
         }
-        .task(id: symbol) { await load() }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
+
+    private var subtitle: String {
+        if let error { return error }
+        if let summary { return summary }
+        guard AnalystConsensusClient.supports(currency: currency) else {
+            return "暂仅支持美元报价的证券，目标价不与其他币种混用。"
+        }
+        return "评级、目标价与分析师覆盖 · 按需读取"
+    }
+
+    var body: some View {
+        Group {
+            if let data {
+                NavigationLink {
+                    AnalystConsensusDetails(data: data, symbol: symbol)
+                        .navigationTransition(.zoom(sourceID: symbol, in: zoom))
+                } label: { card }
+                .buttonStyle(.plain)
+                .matchedTransitionSource(id: symbol, in: zoom)
+                .accessibilityHint("查看分析师评级与目标价")
+            } else {
+                Button { Task { await load() } } label: { card }
+                    .buttonStyle(.plain)
+                    .disabled(loading || !AnalystConsensusClient.supports(currency: currency))
+                    .accessibilityHint("读取分析师评级与目标价")
+            }
+        }
+        // Appearing costs nothing. Every holding detail firing a request as it
+        // opened spent the page's shared FMP budget on a card most visits
+        // never look at, and scrolling past a holding spent it too.
+        .task(id: symbol) {
+            data = await AnalystConsensusClient.shared.cached(symbol: symbol.uppercased())
+        }
+    }
+
+    /// Deliberately the same shape as the Financial row beside it: same
+    /// title size, same secondary line, same chevron, same glass. Two rows
+    /// offering the same thing should not look like two different features.
+    private var card: some View {
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("分析师一致预期")
+                    .appText(.subheading, weight: .medium)
+                    .foregroundStyle(.primary)
+
+                Text(subtitle)
+                    .appText(.label, weight: .medium)
+                    .foregroundStyle(.primary.opacity(0.50))
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: 237, alignment: .leading)
+            .layoutPriority(1)
+
+            Spacer(minLength: 0)
+
+            if loading {
+                ProgressView().controlSize(.small).frame(width: 12, height: 24)
+            } else if data != nil || AnalystConsensusClient.supports(currency: currency) {
+                Image(systemName: data == nil ? "arrow.down.circle" : "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 12, height: 24)
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, minHeight: 105, alignment: .leading)
+        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .holdingDetailGlassCard()
+    }
+
     @MainActor private func load() async {
         // No `guard !loading` here. `.task(id:)` restarts this on re-entry, and
         // bailing out because a superseded run had not finished unwinding left
@@ -189,15 +244,22 @@ struct AnalystConsensusView: View {
 
 private struct AnalystConsensusContent: View {
     let data: AnalystConsensusData
-    private var ratingLabel: String {
-        switch data.consensus?.lowercased() {
+
+    /// Returns nil for a consensus the provider did not give, so the caller
+    /// can leave it out of a summary line rather than print a placeholder.
+    static func ratingLabel(for consensus: String?) -> String? {
+        switch consensus?.lowercased() {
         case "strong buy", "strongbuy": "强烈买入"
         case "buy": "买入"
         case "hold", "neutral": "中性"
         case "sell": "卖出"
         case "strong sell", "strongsell": "强烈卖出"
-        default: "评级分布"
+        default: nil
         }
+    }
+
+    private var ratingLabel: String {
+        Self.ratingLabel(for: data.consensus) ?? "评级分布"
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
