@@ -1,3 +1,5 @@
+from collections import namedtuple
+
 from .cache import cached
 from .sp500_holdings import sp500_holdings_dataset
 
@@ -269,9 +271,23 @@ def holdings_by_ticker(snapshot):
     return {row.get("ticker"): row for row in snapshot["portfolio"].get("holdings", []) if row.get("ticker")}
 
 
-def exposure_value_usd(ticker, snapshot, basis="market"):
-    holdings = holdings_by_ticker(snapshot)
-    market = market_by_ticker(snapshot)
+SnapshotIndex = namedtuple("SnapshotIndex", ("holdings", "market"))
+
+
+def snapshot_index(snapshot):
+    """Build the two ticker indexes once for a batch of exposure lookups.
+
+    ``exposure_value_usd`` needs both, and is called once per holding by
+    ``etf_lookthrough``, ``chart_exposure`` and ``lab_symbols``. Rebuilding the
+    dicts inside the callee made all three quadratic in the number of holdings,
+    so anything looking up more than one ticker builds this once and passes it
+    down.
+    """
+    return SnapshotIndex(holdings_by_ticker(snapshot), market_by_ticker(snapshot))
+
+
+def exposure_value_usd(ticker, snapshot, basis="market", index=None):
+    holdings, market = snapshot_index(snapshot) if index is None else index
     if basis == "market":
         row = market.get(ticker, {})
         if row.get("market_value_usd") is not None:
@@ -330,10 +346,11 @@ def portfolio_summary(snapshot):
 
 
 def etf_lookthrough(snapshot, basis="cost"):
-    holdings = holdings_by_ticker(snapshot)
-    etf_total = sum(exposure_value_usd(ticker, snapshot, basis=basis) for ticker in SP500_ETF_TICKERS)
+    index = snapshot_index(snapshot)
+    holdings = index.holdings
+    etf_total = sum(exposure_value_usd(ticker, snapshot, basis=basis, index=index) for ticker in SP500_ETF_TICKERS)
     direct = {
-        ticker: exposure_value_usd(ticker, snapshot, basis=basis)
+        ticker: exposure_value_usd(ticker, snapshot, basis=basis, index=index)
         for ticker in holdings
         if ticker not in SP500_ETF_TICKERS
     }
@@ -378,9 +395,11 @@ def etf_lookthrough(snapshot, basis="cost"):
                 "sector": "ETF / Other",
             }
         )
+    seen_tickers = {row["ticker"] for row in rows}
     for ticker, value in direct.items():
-        if ticker in {row["ticker"] for row in rows}:
+        if ticker in seen_tickers:
             continue
+        seen_tickers.add(ticker)
         holding = holdings.get(ticker, {})
         rows.append(
             {
@@ -409,12 +428,13 @@ def etf_lookthrough(snapshot, basis="cost"):
 
 
 def chart_exposure(snapshot):
-    holdings = holdings_by_ticker(snapshot)
+    index = snapshot_index(snapshot)
+    holdings = index.holdings
     market_lookthrough = etf_lookthrough(snapshot, basis="market")
     direct_children = [
         {
             "name": ticker,
-            "value": exposure_value_usd(ticker, snapshot, basis="market"),
+            "value": exposure_value_usd(ticker, snapshot, basis="market", index=index),
             "currency": holding.get("cost_currency"),
         }
         for ticker, holding in holdings.items()

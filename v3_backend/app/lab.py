@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from .analytics import _num, exposure_value_usd, holdings_by_ticker, market_by_ticker
+from .analytics import _num, exposure_value_usd, holdings_by_ticker, market_by_ticker, snapshot_index
 from .cache import cached
 from .data_store import current_snapshot, demo_mode, load_json
 from .settings import LAB_HISTORY_CACHE, LAB_HISTORY_TTL_SECONDS, ROOT, V2_DIR
@@ -439,7 +439,12 @@ def history_cache_age_seconds():
 
 def lab_symbols(snapshot, max_symbols=35):
     holdings = snapshot["portfolio"].get("holdings", [])
-    ranked = sorted(holdings, key=lambda row: exposure_value_usd(row.get("ticker"), snapshot, basis="market"), reverse=True)
+    index = snapshot_index(snapshot)
+    ranked = sorted(
+        holdings,
+        key=lambda row: exposure_value_usd(row.get("ticker"), snapshot, basis="market", index=index),
+        reverse=True,
+    )
     symbols = []
     for row in ranked:
         symbol = row.get("yahoo_symbol") or row.get("ticker")
