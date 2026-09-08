@@ -35,6 +35,10 @@ enum UKShareMatching {
     struct Match: Equatable, Sendable {
         let rule: Rule
         let quantity: Double
+        /// The ledger row of the acquisition this portion was matched to, so
+        /// a caller costing the disposal can find what was actually paid for
+        /// it. Nil for the pool portion, which has no single acquisition.
+        var acquisitionID: String? = nil
     }
 
     struct Disposal: Equatable, Sendable {
@@ -103,8 +107,8 @@ enum UKShareMatching {
         guard entries.contains(where: { !$0.isBuy }) else { return [] }
         entries.sort { $0.date < $1.date }
 
-        var acquisitions = entries.enumerated().filter { $0.element.isBuy }
-            .map { (index: $0.offset, date: $0.element.date, remaining: $0.element.quantity) }
+        var acquisitions = entries.filter(\.isBuy)
+            .map { (id: $0.id, date: $0.date, remaining: $0.quantity) }
 
         var results: [Disposal] = []
         for entry in entries where !entry.isBuy {
@@ -121,7 +125,11 @@ enum UKShareMatching {
                     let taken = min(outstanding, acquisitions[index].remaining)
                     acquisitions[index].remaining -= taken
                     outstanding -= taken
-                    matches.append(Match(rule: rule(acquisitions[index].date), quantity: taken))
+                    matches.append(Match(
+                        rule: rule(acquisitions[index].date),
+                        quantity: taken,
+                        acquisitionID: acquisitions[index].id
+                    ))
                 }
             }
             consume(where: { $0 == entry.date }, rule: { _ in .sameDay })

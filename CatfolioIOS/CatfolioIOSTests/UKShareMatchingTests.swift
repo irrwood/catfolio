@@ -4,6 +4,12 @@ import XCTest
 /// UK share matching: same day, then the 30 days after, then the pool.
 final class UKShareMatchingTests: XCTestCase {
 
+    /// Compares what the assertions are about — which rule, how many shares —
+    /// without the ledger row id, which is an identifier rather than a claim.
+    private func shape(_ matches: [UKShareMatching.Match]) -> [UKShareMatching.Match] {
+        matches.map { .init(rule: $0.rule, quantity: $0.quantity) }
+    }
+
     private func tx(_ action: String, _ date: String, _ qty: Double, price: Double = 10)
         -> LocalTransactionRecord {
         LocalTransactionRecord(
@@ -36,7 +42,7 @@ final class UKShareMatchingTests: XCTestCase {
             tx("SELL", "2026-05-01", 400),
         ])
         XCTAssertEqual(disposals.count, 1)
-        XCTAssertEqual(disposals[0].matches, [.init(rule: .section104, quantity: 400)])
+        XCTAssertEqual(shape(disposals[0].matches), [.init(rule: .section104, quantity: 400)])
         XCTAssertTrue(disposals[0].isFullyFromPool)
     }
 
@@ -49,7 +55,7 @@ final class UKShareMatchingTests: XCTestCase {
             tx("SELL", "2026-05-01", 500),
             tx("BUY", "2026-05-15", 200),
         ])
-        XCTAssertEqual(disposals[0].matches, [
+        XCTAssertEqual(shape(disposals[0].matches), [
             .init(rule: .thirtyDay(acquired: "2026-05-15"), quantity: 200),
             .init(rule: .section104, quantity: 300),
         ])
@@ -84,7 +90,7 @@ final class UKShareMatchingTests: XCTestCase {
             tx("SELL", "2026-05-01", 500),
             tx("BUY", "2026-05-01", 100),
         ])
-        XCTAssertEqual(disposals[0].matches, [
+        XCTAssertEqual(shape(disposals[0].matches), [
             .init(rule: .sameDay, quantity: 100),
             .init(rule: .thirtyDay(acquired: "2026-05-08"), quantity: 300),
             .init(rule: .section104, quantity: 100),
