@@ -2,9 +2,11 @@ import SwiftUI
 import UIKit
 
 struct SettingsView: View {
+    @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let showsCloseButton: Bool
+    @AppStorage(AppLanguage.preferenceKey) private var languageRawValue = AppLanguage.system.rawValue
     @AppStorage("catfolio.haptics") private var hapticsEnabled = true
     @AppStorage(AppAppearance.preferenceKey) private var appearanceRawValue = AppAppearance.system.rawValue
     @AppStorage(DisplayCurrency.preferenceKey) private var displayCurrencyRawValue = DisplayCurrency.usd.rawValue
@@ -22,6 +24,7 @@ struct SettingsView: View {
     @State private var showsScreenerPreview = ProcessInfo.processInfo.arguments.contains("--show-screener")
     @State private var showsHistoryPreview = ProcessInfo.processInfo.arguments.contains("--show-history-preview")
     @State private var showsResearchPreview = ProcessInfo.processInfo.arguments.contains("--preview-research-analysis")
+    @State private var showsOIPreview = ProcessInfo.processInfo.arguments.contains("--preview-options-oi")
     #endif
 
     init(showsCloseButton: Bool = false) {
@@ -32,21 +35,21 @@ struct SettingsView: View {
         Form {
                 PublicInvestorSettingsSection()
                 if !model.accounts.isEmpty {
-                    Section("账户范围") {
+                    Section(L10n.text("账户范围")) {
                         allAccountsRow
                         ForEach(model.accounts) { account in
                             accountScopeRow(account)
                         }
                     }
 
-                    Section("账户活动") {
+                    Section(L10n.text("账户活动")) {
                         NavigationLink {
                             HistoryView()
                                 .environment(model)
                         } label: {
                             nativeSettingsLabel(
-                                title: "History",
-                                detail: "跨账户资产活动流水",
+                                title: L10n.text("History"),
+                                detail: L10n.text("跨账户资产活动流水"),
                                 icon: "clock.arrow.circlepath",
                                 tint: CatfolioTheme.services
                             )
@@ -54,27 +57,37 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("新建账户") {
-                    connector("Trading 212", detail: "使用只读 API 创建账户", icon: "chart.line.uptrend.xyaxis", tint: CatfolioTheme.trading212) {
+                Section(L10n.text("新建账户")) {
+                    connector("Trading 212", detail: L10n.text("使用只读 API 创建账户"), icon: "chart.line.uptrend.xyaxis", tint: CatfolioTheme.trading212) {
                         showsTrading212 = true
                     }
-                    connector("Moomoo", detail: "通过 OAuth 授权创建账户", icon: "person.badge.key.fill", tint: CatfolioTheme.moomoo) {
+                    connector("Moomoo", detail: L10n.text("通过 OAuth 授权创建账户"), icon: "person.badge.key.fill", tint: CatfolioTheme.moomoo) {
                         showsMoomooOAuth = true
                     }
-                    connector("Interactive Brokers", detail: "使用 Flex Web Service 创建账户", icon: "doc.text.fill", tint: CatfolioTheme.interactiveBrokers) {
+                    connector("Interactive Brokers", detail: L10n.text("使用 Flex Web Service 创建账户"), icon: "doc.text.fill", tint: CatfolioTheme.interactiveBrokers) {
                         showsIBKRFlex = true
                     }
-                    connector("CSV 导入", detail: "从交易记录创建账户", icon: "doc.badge.plus", tint: CatfolioTheme.csvImport) {
+                    connector(L10n.text("CSV 导入"), detail: L10n.text("从交易记录创建账户"), icon: "doc.badge.plus", tint: CatfolioTheme.csvImport) {
                         showsCSVImport = true
                     }
+                    Button {} label: {
+                        nativeSettingsLabel(
+                            title: L10n.text("拍照 AI 添加持仓"),
+                            detail: L10n.text("本地模型识别添加，需 iOS 27 支持"),
+                            icon: "camera.fill",
+                            tint: CatfolioTheme.accent
+                        )
+                    }
+                    .disabled(true)
+                    .accessibilityHint(L10n.text("功能暂未开放"))
                 }
 
-                Section("行情与 AI") {
+                Section(L10n.text("行情与 AI")) {
                     NavigationLink {
                         ResearchView()
                     } label: {
                         nativeSettingsLabel(
-                            title: "研究",
+                            title: L10n.text("研究"),
                             icon: "chart.xyaxis.line",
                             tint: CatfolioTheme.accent
                         )
@@ -83,12 +96,12 @@ struct SettingsView: View {
                         StockScreenerView()
                     } label: {
                         nativeSettingsLabel(
-                            title: "选股器",
+                            title: L10n.text("选股器"),
                             icon: "line.3.horizontal.decrease",
                             tint: CatfolioTheme.preference
                         )
                     }
-                    connector("服务商", detail: "行情、估值与 AI 密钥", icon: "key.fill", tint: CatfolioTheme.services) {
+                    connector(L10n.text("服务商"), detail: L10n.text("行情、估值与 AI 密钥"), icon: "key.fill", tint: CatfolioTheme.services) {
                         showsLocalServices = true
                     }
                 }
@@ -96,67 +109,79 @@ struct SettingsView: View {
                 Section {
                     Toggle(isOn: $hapticsEnabled) {
                         nativeSettingsLabel(
-                            title: "触控反馈",
+                            title: L10n.text("触控反馈"),
                             icon: "hand.tap.fill",
                             tint: CatfolioTheme.warning
                         )
                     }
 
                     settingsPickerRow(
-                        title: "外观",
+                        title: L10n.text("语言"),
+                        icon: "character.bubble",
+                        tint: CatfolioTheme.preference,
+                        selection: $languageRawValue
+                    ) {
+                        ForEach(AppLanguage.allCases) { language in
+                            Text(language.title).tag(language.rawValue)
+                        }
+                    }
+                    .accessibilityIdentifier("settings.language")
+
+                    settingsPickerRow(
+                        title: L10n.text("外观"),
                         icon: "circle.lefthalf.filled",
                         tint: CatfolioTheme.accent,
                         selection: $appearanceRawValue
                     ) {
                         ForEach(AppAppearance.allCases) { appearance in
-                            Text(appearance.title).tag(appearance.rawValue)
+                            Text(L10n.label(appearance.title)).tag(appearance.rawValue)
                         }
                     }
 
                     settingsPickerRow(
-                        title: "公司名称",
+                        title: L10n.text("公司名称"),
                         icon: "character.bubble.fill",
                         tint: CatfolioTheme.preference,
                         selection: $companyNameDisplayRawValue
                     ) {
                         ForEach(CompanyNameDisplay.allCases) { display in
-                            Text(display.rawValue).tag(display.rawValue)
+                            Text(display.title).tag(display.rawValue)
                         }
                     }
 
                     settingsPickerRow(
-                        title: "数据货币",
+                        title: L10n.text("数据货币"),
                         icon: "globe",
                         tint: CatfolioTheme.services,
                         selection: $displayCurrencyRawValue
                     ) {
                         ForEach(DisplayCurrency.allCases) { currency in
-                            Text(currency.title).tag(currency.rawValue)
+                            Text(L10n.label(currency.title)).tag(currency.rawValue)
                         }
                     }
                 } header: {
-                    Text("偏好设置")
+                    Text(L10n.text("偏好设置"))
                 } footer: {
                     Text(LocalPortfolioEngine.fxStatus)
                 }
 
-                Section("本机数据") {
+                Section(L10n.text("本机数据")) {
                     settingsValueRow(
-                        title: "数据来源",
+                        title: L10n.text("数据来源"),
                         value: model.localSource,
                         icon: "iphone.gen3",
                         tint: CatfolioTheme.localData
                     )
                     settingsValueRow(
-                        title: "持仓",
-                        value: "\(model.holdings.count) 项",
+                        title: L10n.text("持仓"),
+                        value: L10n.text("\(model.holdings.count) 项"),
                         icon: "chart.pie.fill",
                         tint: CatfolioTheme.services
                     )
                     if let reconciliation, !reconciliation.reconciles {
                         settingsValueRow(
-                            title: "交易记录",
-                            value: "\(reconciliation.mismatches.count) 项对不上",
+                            title: L10n.text("交易记录"),
+                            value: L10n.text("\(reconciliation.mismatches.count) 项对不上"),
                             icon: "exclamationmark.triangle.fill",
                             tint: CatfolioTheme.warning
                         )
@@ -165,50 +190,29 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     } else if let reconciliation {
                         settingsValueRow(
-                            title: "交易记录",
-                            value: "\(reconciliation.transactionCount) 笔 · 与持仓一致",
+                            title: L10n.text("交易记录"),
+                            value: L10n.text("\(reconciliation.transactionCount) 笔 · 与持仓一致"),
                             icon: "checkmark.seal.fill",
                             tint: CatfolioTheme.positive
                         )
                     }
                     if let updatedAt = model.localUpdatedAt {
                         settingsValueRow(
-                            title: "行情更新",
+                            title: L10n.text("行情更新"),
                             value: compactDate(updatedAt),
                             icon: "clock.fill",
                             tint: CatfolioTheme.warning
                         )
                     }
-                    Toggle(isOn: Binding(
-                        get: { model.isFakeDataMode },
-                        set: { enabled in
-                            Task { await model.setFakeDataMode(enabled) }
-                        }
-                    )) {
-                        nativeSettingsLabel(
-                            title: "假数据模式",
-                            icon: "eye.slash.fill",
-                            tint: CatfolioTheme.accent
-                        )
-                    }
-                    .disabled(model.isPortfolioLoading)
-                    .accessibilityHint("开启后仅显示独立合成的标的、账户、交易和收益曲线")
-                    .disabled(model.isPublicInvestorMode)
-
-                    if let error = model.fakeDataModeError {
-                        Label(error, systemImage: "exclamationmark.circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(CatfolioTheme.danger)
-                    }
                 }
 
                 Section {
-                    Button("重置本机组合数据", systemImage: "trash", role: .destructive) {
+                    Button(L10n.text("重置本机组合数据"), systemImage: "trash", role: .destructive) {
                         showsPortfolioResetConfirmation = true
                     }
                     .disabled(isResettingPortfolio || model.isPortfolioLoading || model.isReturnsLoading || model.isPublicInvestorMode)
                 } header: {
-                    Text("本机组合数据")
+                    Text(L10n.text("本机组合数据"))
                 } footer: {
                     if let notice = model.portfolioRecoveryNotice {
                         Text(notice)
@@ -216,9 +220,9 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("关于") {
+                Section(L10n.text("关于")) {
                     settingsValueRow(
-                        title: "版本",
+                        title: L10n.text("版本"),
                         value: appVersion,
                         icon: "info.circle.fill",
                         tint: CatfolioTheme.neutralIcon
@@ -226,17 +230,24 @@ struct SettingsView: View {
                 }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(CatfolioTheme.settingsBackground)
+        .contentMargins(.bottom, 96, for: .scrollContent)
             #if DEBUG
             .navigationDestination(isPresented: $showsScreenerPreview) { StockScreenerView() }
             .navigationDestination(isPresented: $showsHistoryPreview) { HistoryView().environment(model) }
             .navigationDestination(isPresented: $showsResearchPreview) { ResearchView().environment(model) }
+            .navigationDestination(isPresented: $showsOIPreview) {
+                ScrollView { OptionsOIView(symbol: "TEST", currency: "USD", price: 108, costUSD: 104).padding(24) }
+                    .navigationTitle(L10n.text("OI 布局验证"))
+            }
             #endif
             .toolbar {
                 if showsCloseButton {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("关闭", systemImage: "xmark") { dismiss() }
+                        Button(L10n.text("关闭"), systemImage: "xmark") { dismiss() }
                             .labelStyle(.iconOnly)
-                            .accessibilityLabel("关闭设置")
+                            .accessibilityLabel(L10n.text("关闭设置"))
                     }
                 }
             }
@@ -251,8 +262,8 @@ struct SettingsView: View {
                 if model.overview == nil { await model.refreshPortfolio() }
                 await loadReconciliation()
             }
-            .confirmationDialog("重置本机组合数据？", isPresented: $showsPortfolioResetConfirmation, titleVisibility: .visible) {
-                Button("备份并重置", role: .destructive) {
+            .confirmationDialog(L10n.text("重置本机组合数据？"), isPresented: $showsPortfolioResetConfirmation, titleVisibility: .visible) {
+                Button(L10n.text("备份并重置"), role: .destructive) {
                     isResettingPortfolio = true
                     Task {
                         defer { isResettingPortfolio = false }
@@ -261,13 +272,13 @@ struct SettingsView: View {
                     }
                 }
             } message: {
-                Text("将清空当前持仓、交易和历史快照，并保留一份本机备份。券商授权、API 密钥及 AI 对话会保留。")
+                Text(L10n.text("将清空当前持仓、交易和历史快照，并保留一份本机备份。券商授权、API 密钥及 AI 对话会保留。"))
             }
-            .alert("无法重置组合", isPresented: Binding(
+            .alert(L10n.text("无法重置组合"), isPresented: Binding(
                 get: { portfolioResetError != nil },
                 set: { if !$0 { portfolioResetError = nil } }
             )) {
-                Button("好", role: .cancel) { portfolioResetError = nil }
+                Button(L10n.text("好"), role: .cancel) { portfolioResetError = nil }
             } message: {
                 Text(portfolioResetError ?? "")
             }
@@ -306,7 +317,7 @@ struct SettingsView: View {
                 .day()
                 .hour()
                 .minute()
-                .locale(Locale(identifier: "zh_CN"))
+                .locale(Locale(identifier: AppLanguage.currentIdentifier))
         )
     }
 
@@ -345,13 +356,13 @@ struct SettingsView: View {
         if report.hasUnexplainedDisposals {
             let disposed = report.fullyDisposed
             parts.append(disposed > 0
-                ? "账本记录的股数多于实际持仓，其中 \(disposed) 项已清仓却没有卖出记录"
-                : "账本记录的股数多于实际持仓，可能缺少卖出记录")
+                ? L10n.text("账本记录的股数多于实际持仓，其中 \(disposed) 项已清仓却没有卖出记录")
+                : L10n.text("账本记录的股数多于实际持仓，可能缺少卖出记录"))
         }
         if report.hasUnexplainedHoldings {
-            parts.append("有持仓在账本里找不到买入记录")
+            parts.append(L10n.text("有持仓在账本里找不到买入记录"))
         }
-        parts.append("重新同步以补齐；在补齐前，按税务口径的成本与损益不会计算。")
+        parts.append(L10n.text("重新同步以补齐；在补齐前，按税务口径的成本与损益不会计算。"))
         return parts.joined(separator: "。")
     }
 
@@ -381,8 +392,8 @@ struct SettingsView: View {
         HStack(spacing: 0) {
             accountSelectionButton(
                 selected: model.selectedAccountKeys.count == model.accounts.count,
-                label: "全部账户",
-                selectedAccessibilityLabel: "全部账户已计入"
+                label: L10n.text("全部账户"),
+                selectedAccessibilityLabel: L10n.text("全部账户已计入")
             ) {
                 if model.selectedAccountKeys.count != model.accounts.count {
                     Task { await model.selectAllAccounts() }
@@ -390,11 +401,11 @@ struct SettingsView: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("全部账户")
+                Text(L10n.text("全部账户"))
                     .font(.body)
                     .foregroundStyle(.primary)
-                Text("\(model.accounts.count) 个账户 · \(DisplayFormat.money(allAccountsMarketValueUSD))")
-                    .appNumber(.callout)
+                Text(L10n.text("\(model.accounts.count) 个账户 · \(DisplayFormat.money(allAccountsMarketValueUSD))"))
+                    .appNumber(.footnote)
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -425,10 +436,14 @@ struct SettingsView: View {
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                         Text(account.awaitsFirstSync
-                            ? (model.isPublicInvestorMode ? "暂无数据" : "等待首次同步")
-                            : "\(account.positionCount) 项 · \(DisplayFormat.money(account.marketValueUSD))")
-                            .appNumber(.callout)
-                            .foregroundStyle(account.awaitsFirstSync ? CatfolioTheme.accent : .secondary)
+                            ? (model.isPublicInvestorMode ? L10n.text("暂无数据") : L10n.text("等待首次同步"))
+                            : L10n.text("\(account.positionCount) 项 · \(DisplayFormat.money(account.marketValueUSD))"))
+                            .appNumber(.footnote)
+                            // Not the accent: in this row the accent already
+                            // means "included in the portfolio", and reusing
+                            // it for a sync state makes an unsynced account
+                            // read as a selected one.
+                            .foregroundStyle(account.awaitsFirstSync ? Color.orange : .secondary)
                             .lineLimit(1)
                     }
                     Spacer(minLength: 8)
@@ -436,7 +451,7 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
             }
-            .accessibilityHint("进入账户详情")
+            .accessibilityHint(L10n.text("进入账户详情"))
         }
     }
 
@@ -449,12 +464,17 @@ struct SettingsView: View {
         Button(action: action) {
             Group {
                 if selected {
+                    // Tint rather than a literal blue: this is the same
+                    // affordance Calendar uses for "include this in the
+                    // view", and it is expected to follow the app's tint and
+                    // the reader's accessibility settings, not a brand value
+                    // frozen at design time.
                     Image(systemName: "checkmark.circle.fill")
                         .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, CatfolioTheme.accent)
+                        .foregroundStyle(Color(uiColor: .systemBackground), .tint)
                 } else {
                     Image(systemName: "circle")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.tertiary)
                 }
             }
                 .imageScale(.large)
@@ -463,9 +483,9 @@ struct SettingsView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
-        .accessibilityLabel(selected ? (selectedAccessibilityLabel ?? "不计入\(label)") : "计入\(label)")
-        .accessibilityValue(selected ? "已选择" : "未选择")
-        .accessibilityHint("只更改全局组合的账户范围")
+        .accessibilityLabel(selected ? (selectedAccessibilityLabel ?? L10n.text("不计入\(label)")) : L10n.text("计入\(label)"))
+        .accessibilityValue(selected ? L10n.text("已选择") : L10n.text("未选择"))
+        .accessibilityHint(L10n.text("只更改全局组合的账户范围"))
     }
 
     private func connector(
@@ -540,6 +560,7 @@ private struct AccountNotice: Identifiable {
 }
 
 private struct AccountDetailView: View {
+    @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -552,7 +573,7 @@ private struct AccountDetailView: View {
     @State private var accountNameDraft = ""
     @State private var notice: AccountNotice?
     @State private var isWorking = false
-    @State private var dataMatchStatus = "无异常"
+    @State private var dataMatchStatus = L10n.text("无异常")
 
     private var account: PortfolioAccount {
         model.accounts.first(where: { $0.id == accountID }) ?? initialAccount
@@ -567,14 +588,14 @@ private struct AccountDetailView: View {
                         .lineLimit(2)
                     Text(DisplayFormat.money(account.marketValueUSD))
                         .appNumber(.title, weight: .bold)
-                    Text("\(account.positionCount) 个持仓")
+                    Text(L10n.text("\(account.positionCount) 个持仓"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
                 .padding(.top, 6)
 
                 if model.isFakeDataMode {
-                    Label("这里是独立演示账户，与真实持仓无关。", systemImage: "eye.slash.fill")
+                    Label(L10n.text("这里是独立演示账户，与真实持仓无关。"), systemImage: "eye.slash.fill")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .padding(12)
@@ -585,27 +606,27 @@ private struct AccountDetailView: View {
                         )
                 }
 
-                SettingsSectionBlock(title: "账户信息") {
+                SettingsSectionBlock(title: L10n.text("账户信息")) {
                     SettingsGroupCard {
                         Button {
                             accountNameDraft = account.displayName
                             showsRenamePrompt = true
                         } label: {
-                            detailActionRow(title: "账户名称", detail: account.displayName)
+                            detailActionRow(title: L10n.text("账户名称"), detail: account.displayName)
                         }
                         .buttonStyle(.plain)
                         .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
 
                         Divider()
-                        detailValueRow(title: "账户类型", value: account.accountType)
+                        detailValueRow(title: L10n.text("账户类型"), value: account.accountType)
                         Divider()
-                        detailValueRow(title: "基础币种", value: account.baseCurrency)
+                        detailValueRow(title: L10n.text("基础币种"), value: account.baseCurrency)
                         Divider()
-                        detailValueRow(title: "Broker", value: account.brokerName)
+                        detailValueRow(title: L10n.text("Broker"), value: account.brokerName)
                     }
                 }
 
-                SettingsSectionBlock(title: "数据来源") {
+                SettingsSectionBlock(title: L10n.text("数据来源")) {
                     SettingsGroupCard {
                         Button { activeSheet = syncSheet } label: {
                             detailActionRow(
@@ -619,7 +640,7 @@ private struct AccountDetailView: View {
                         if account.source != "CSV" {
                             Divider()
                             Button { activeSheet = .csv } label: {
-                                detailActionRow(title: "CSV 导入", detail: csvImportStatus)
+                                detailActionRow(title: L10n.text("CSV 导入"), detail: csvImportStatus)
                             }
                             .buttonStyle(.plain)
                             .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
@@ -627,22 +648,22 @@ private struct AccountDetailView: View {
 
                         Divider()
                         Button { activeSheet = .manualTransaction } label: {
-                            detailActionRow(title: "手动补充", detail: "\(manualTransactionCount) 笔")
+                            detailActionRow(title: L10n.text("手动补充"), detail: L10n.text("\(manualTransactionCount) 笔"))
                         }
                         .buttonStyle(.plain)
                         .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
                     }
                 }
 
-                SettingsSectionBlock(title: "数据记录") {
+                SettingsSectionBlock(title: L10n.text("数据记录")) {
                     SettingsGroupCard {
                         NavigationLink {
                             HistoryView(initialAccountIDs: [account.id])
                                 .environment(model)
                         } label: {
                             detailActionRow(
-                                title: "History",
-                                detail: "\(account.transactionCount) 笔交易记录"
+                                title: L10n.text("History"),
+                                detail: L10n.text("\(account.transactionCount) 笔交易记录")
                             )
                         }
                         .buttonStyle(.plain)
@@ -650,7 +671,7 @@ private struct AccountDetailView: View {
                         Divider()
                         Button { deduplicateTransactions() } label: {
                             detailActionRow(
-                                title: "数据匹配与去重",
+                                title: L10n.text("数据匹配与去重"),
                                 detail: isWorking ? nil : dataMatchStatus,
                                 showsProgress: isWorking
                             )
@@ -660,13 +681,13 @@ private struct AccountDetailView: View {
                     }
                 }
 
-                SettingsSectionBlock(title: "账户设置") {
+                SettingsSectionBlock(title: L10n.text("账户设置")) {
                     SettingsGroupCard {
                         Button(role: .destructive) {
                             showsDeleteConfirmation = true
                         } label: {
                             HStack {
-                                Text("删除账户")
+                                Text(L10n.text("删除账户"))
                                     .font(.body.weight(.medium))
                                     .foregroundStyle(CatfolioTheme.danger)
                                 Spacer()
@@ -682,23 +703,23 @@ private struct AccountDetailView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 40)
         }
-        .background(CatfolioTheme.pageBackground(for: colorScheme))
+        .background(CatfolioTheme.settingsBackground)
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
-        .alert("编辑账户名称", isPresented: $showsRenamePrompt) {
-            TextField("账户名称", text: $accountNameDraft)
-            Button("取消", role: .cancel) {}
-            Button("保存") { renameAccount() }
+        .alert(L10n.text("编辑账户名称"), isPresented: $showsRenamePrompt) {
+            TextField(L10n.text("账户名称"), text: $accountNameDraft)
+            Button(L10n.text("取消"), role: .cancel) {}
+            Button(L10n.text("保存")) { renameAccount() }
                 .disabled(accountNameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         } message: {
-            Text("名称只保存在这台 iPhone 上。")
+            Text(L10n.text("名称只保存在这台 iPhone 上。"))
         }
-        .alert("删除账户？", isPresented: $showsDeleteConfirmation) {
-            Button("取消", role: .cancel) {}
-            Button("删除", role: .destructive) { deleteAccount() }
+        .alert(L10n.text("删除账户？"), isPresented: $showsDeleteConfirmation) {
+            Button(L10n.text("取消"), role: .cancel) {}
+            Button(L10n.text("删除"), role: .destructive) { deleteAccount() }
         } message: {
-            Text("将删除 \(account.displayName) 的持仓、交易和历史快照，此操作无法撤销。")
+            Text(L10n.text("将删除 \(account.displayName) 的持仓、交易和历史快照，此操作无法撤销。"))
         }
         .alert(
             Text(notice?.title ?? ""),
@@ -710,7 +731,7 @@ private struct AccountDetailView: View {
             ),
             presenting: notice
         ) { _ in
-            Button("好", role: .cancel) { notice = nil }
+            Button(L10n.text("好"), role: .cancel) { notice = nil }
         } message: { notice in
             Text(notice.message)
         }
@@ -749,28 +770,28 @@ private struct AccountDetailView: View {
 
     private var primarySourceTitle: String {
         switch account.source {
-        case "Trading 212": "Trading 212 同步"
-        case "Moomoo": "Moomoo 同步"
-        case "IBKR Flex": "IBKR 同步"
-        case "CSV": "CSV 导入"
-        case "假数据": "本机演示数据"
+        case "Trading 212": L10n.text("Trading 212 同步")
+        case "Moomoo": L10n.text("Moomoo 同步")
+        case "IBKR Flex": L10n.text("IBKR 同步")
+        case "CSV": L10n.text("CSV 导入")
+        case "假数据": L10n.text("本机演示数据")
         default: account.syncedSourceTitle
         }
     }
 
     private var primarySourceStatus: String {
-        if account.source == "假数据" { return "已启用" }
-        let connection = account.source == "CSV" ? "已导入" : "已连接"
+        if account.source == "假数据" { return L10n.text("已启用") }
+        let connection = account.source == "CSV" ? L10n.text("已导入") : L10n.text("已连接")
         guard let updatedAt = model.localUpdatedAt else { return connection }
         let interval = max(0, Date().timeIntervalSince(updatedAt))
-        if interval < 60 { return "\(connection) · 刚刚同步" }
-        if interval < 3_600 { return "\(connection) · \(max(1, Int(interval / 60))) 分钟前" }
-        if interval < 86_400 { return "\(connection) · \(max(1, Int(interval / 3_600))) 小时前" }
+        if interval < 60 { return L10n.text("\(connection) · 刚刚同步") }
+        if interval < 3_600 { return L10n.text("\(connection) · \(max(1, Int(interval / 60))) 分钟前") }
+        if interval < 86_400 { return L10n.text("\(connection) · \(max(1, Int(interval / 3_600))) 小时前") }
         return "\(connection) · \(updatedAt.formatted(.dateTime.month().day()))"
     }
 
     private var csvImportStatus: String {
-        account.hasCSVImport ? "已导入" : "未导入"
+        account.hasCSVImport ? L10n.text("已导入") : L10n.text("未导入")
     }
 
     private var manualTransactionCount: Int {
@@ -826,7 +847,7 @@ private struct AccountDetailView: View {
             do {
                 try await model.renameAccount(accountID, to: name)
             } catch {
-                notice = AccountNotice(title: "无法保存名称", message: error.localizedDescription)
+                notice = AccountNotice(title: L10n.text("无法保存名称"), message: error.localizedDescription)
             }
         }
     }
@@ -837,14 +858,14 @@ private struct AccountDetailView: View {
             defer { isWorking = false }
             do {
                 let removed = try await model.deduplicateTransactions(for: accountID)
-                dataMatchStatus = removed == 0 ? "无异常" : "已处理 \(removed) 笔"
+                dataMatchStatus = removed == 0 ? L10n.text("无异常") : L10n.text("已处理 \(removed) 笔")
                 notice = AccountNotice(
-                    title: "数据去重完成",
-                    message: removed == 0 ? "未发现重复交易。" : "已移除 \(removed) 笔重复交易。"
+                    title: L10n.text("数据去重完成"),
+                    message: removed == 0 ? L10n.text("未发现重复交易。") : L10n.text("已移除 \(removed) 笔重复交易。")
                 )
             } catch {
-                dataMatchStatus = "检查失败"
-                notice = AccountNotice(title: "去重失败", message: error.localizedDescription)
+                dataMatchStatus = L10n.text("检查失败")
+                notice = AccountNotice(title: L10n.text("去重失败"), message: error.localizedDescription)
             }
         }
     }
@@ -855,15 +876,15 @@ private struct AccountDetailView: View {
                 try await model.deleteAccount(accountID)
                 dismiss()
             } catch {
-                notice = AccountNotice(title: "无法删除账户", message: error.localizedDescription)
+                notice = AccountNotice(title: L10n.text("无法删除账户"), message: error.localizedDescription)
             }
         }
     }
 }
 
 private struct AccountTransactionsView: View {
+    @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
-    @Environment(\.colorScheme) private var colorScheme
     let account: PortfolioAccount
     @State private var transactions: [LocalTransactionRecord] = []
     @State private var errorMessage: String?
@@ -874,15 +895,15 @@ private struct AccountTransactionsView: View {
         Group {
             if let errorMessage {
                 ContentUnavailableView(
-                    "无法读取交易",
+                    L10n.text("无法读取交易"),
                     systemImage: "exclamationmark.triangle",
                     description: Text(errorMessage)
                 )
             } else if transactions.isEmpty {
                 ContentUnavailableView(
-                    "暂无交易记录",
+                    L10n.text("暂无交易记录"),
                     systemImage: "list.bullet.rectangle",
-                    description: Text("可以通过同步、CSV 导入或手动补充添加历史交易。")
+                    description: Text(L10n.text("可以通过同步、CSV 导入或手动补充添加历史交易。"))
                 )
             } else {
                 List(transactions) { transaction in
@@ -912,7 +933,7 @@ private struct AccountTransactionsView: View {
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
-                .background(CatfolioTheme.pageBackground(for: colorScheme))
+                .background(CatfolioTheme.settingsBackground)
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
@@ -930,9 +951,9 @@ private struct AccountTransactionsView: View {
                 .background(.ultraThinMaterial)
             }
         }
-        .background(CatfolioTheme.pageBackground(for: colorScheme))
+        .background(CatfolioTheme.settingsBackground)
         .tint(CatfolioTheme.accent)
-        .navigationTitle("交易记录")
+        .navigationTitle(L10n.text("交易记录"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: account.id) {
             await loadLocalTransactions()
@@ -943,10 +964,10 @@ private struct AccountTransactionsView: View {
 
     private func actionTitle(_ action: String) -> String {
         switch action.uppercased() {
-        case "BUY": "买入"
-        case "SELL": "卖出"
-        case "DIVIDEND": "股息"
-        case "INTEREST": "利息"
+        case "BUY": L10n.text("买入")
+        case "SELL": L10n.text("卖出")
+        case "DIVIDEND": L10n.text("股息")
+        case "INTEREST": L10n.text("利息")
         default: action
         }
     }
@@ -979,7 +1000,7 @@ private struct AccountTransactionsView: View {
               !apiSecret.isEmpty else { return }
 
         isSyncingHistory = true
-        syncMessage = "正在补齐 Trading 212 成交、分红与利息…"
+        syncMessage = L10n.text("正在补齐 Trading 212 成交、分红与利息…")
         defer { isSyncingHistory = false }
 
         do {
@@ -1002,21 +1023,21 @@ private struct AccountTransactionsView: View {
                     return
                 }
                 syncMessage = snapshot.transactionHistoryStatus
-                    ?? "历史记录较多，正在等待下一批…"
+                    ?? L10n.text("历史记录较多，正在等待下一批…")
                 try await Task.sleep(for: .seconds(62))
             }
         } catch is CancellationError {
             return
         } catch {
-            syncMessage = "同步失败：\(error.localizedDescription)"
+            syncMessage = L10n.text("同步失败：\(error.localizedDescription)")
         }
     }
 }
 
 private struct ManualTransactionView: View {
+    @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
     let account: PortfolioAccount
 
     @State private var date = Date()
@@ -1041,23 +1062,23 @@ private struct ManualTransactionView: View {
         NavigationStack {
             Form {
                 Section {
-                    LabeledContent("账户", value: account.displayName)
-                    DatePicker("交易日期", selection: $date, displayedComponents: .date)
-                    Picker("交易类型", selection: $action) {
-                        Text("买入").tag("BUY")
-                        Text("卖出").tag("SELL")
+                    LabeledContent(L10n.text("账户"), value: account.displayName)
+                    DatePicker(L10n.text("交易日期"), selection: $date, displayedComponents: .date)
+                    Picker(L10n.text("交易类型"), selection: $action) {
+                        Text(L10n.text("买入")).tag("BUY")
+                        Text(L10n.text("卖出")).tag("SELL")
                     }
                 }
 
-                Section("交易内容") {
-                    TextField("代码，如 AAPL", text: $ticker)
+                Section(L10n.text("交易内容")) {
+                    TextField(L10n.text("代码，如 AAPL"), text: $ticker)
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
-                    TextField("数量", text: $quantity)
+                    TextField(L10n.text("数量"), text: $quantity)
                         .keyboardType(.decimalPad)
-                    TextField("成交价", text: $price)
+                    TextField(L10n.text("成交价"), text: $price)
                         .keyboardType(.decimalPad)
-                    Picker("币种", selection: $currency) {
+                    Picker(L10n.text("币种"), selection: $currency) {
                         ForEach(DisplayCurrency.allCases) { currency in
                             Text(currency.rawValue).tag(currency)
                         }
@@ -1072,15 +1093,15 @@ private struct ManualTransactionView: View {
                 }
             }
             .scrollContentBackground(.hidden)
-            .background(CatfolioTheme.pageBackground(for: colorScheme))
-            .navigationTitle("补充历史交易")
+            .background(CatfolioTheme.settingsBackground)
+            .navigationTitle(L10n.text("补充历史交易"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(L10n.text("取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { save() }
+                    Button(L10n.text("保存")) { save() }
                         .disabled(!canSave)
                 }
             }
@@ -1113,6 +1134,7 @@ private struct ManualTransactionView: View {
 }
 
 private struct SettingsSectionBlock<Content: View>: View {
+    @Environment(\.locale) private var appLocale
     let title: String
     let footer: String?
     @ViewBuilder let content: Content
@@ -1146,6 +1168,7 @@ private struct SettingsSectionBlock<Content: View>: View {
 }
 
 private struct SettingsGroupCard<Content: View>: View {
+    @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
     @ViewBuilder let content: Content
 
@@ -1166,6 +1189,7 @@ private struct SettingsGroupCard<Content: View>: View {
 }
 
 private struct SettingsDivider: View {
+    @Environment(\.locale) private var appLocale
     var body: some View {
         Divider()
             .padding(.leading, 66)
@@ -1173,6 +1197,7 @@ private struct SettingsDivider: View {
 }
 
 private struct SettingsIcon: View {
+    @Environment(\.locale) private var appLocale
     let systemName: String
     let tint: Color
 
@@ -1211,20 +1236,20 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
 
     var purpose: String {
         switch self {
-        case .massive: "美股成交量与历史行情"
-        case .fmp: "估值矩阵与行情备用"
-        case .deepSeek: "云端问答与自动回退"
+        case .massive: L10n.text("美股成交量与历史行情")
+        case .fmp: L10n.text("估值矩阵与行情备用")
+        case .deepSeek: L10n.text("云端问答与自动回退")
         }
     }
 
     var detail: String {
         switch self {
         case .massive:
-            "读取美股日线价格与成交量，用于计算成交量分布、VAH、POC 和 VAL。"
+            L10n.text("读取美股日线价格与成交量，用于计算成交量分布、VAH、POC 和 VAL。")
         case .fmp:
-            "读取估值矩阵需要的 P/E、EPS 与营收成长数据，并作为历史行情备用。"
+            L10n.text("读取估值矩阵需要的 P/E、EPS 与营收成长数据，并作为历史行情备用。")
         case .deepSeek:
-            "选择 DeepSeek 或自动模式需要回退时，组合摘要和问题会直接发送给 DeepSeek，不经过 Mac 或 Catfolio 服务端。"
+            L10n.text("选择 DeepSeek 或自动模式需要回退时，组合摘要和问题会直接发送给 DeepSeek，不经过 Mac 或 Catfolio 服务端。")
         }
     }
 
@@ -1259,7 +1284,7 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
             }
             group.addTask {
                 try await Task.sleep(nanoseconds: 35_000_000_000)
-                throw LocalServiceError.remote("验证超时，请检查网络后重试")
+                throw LocalServiceError.remote(L10n.text("验证超时，请检查网络后重试"))
             }
             defer { group.cancelAll() }
             guard let result = try await group.next() else {
@@ -1273,12 +1298,12 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
         switch self {
         case .massive:
             let sessions = try await LocalMarketDataClient().testMassiveConnection(apiKey: apiKey)
-            return "连接成功，已读取 AAPL 的 \(sessions) 个交易日"
+            return L10n.text("连接成功，已读取 AAPL 的 \(sessions) 个交易日")
         case .fmp:
             return try await LocalReturnsAnalyticsClient().testFMPValuationConnection(apiKey: apiKey)
         case .deepSeek:
             try await LocalAIClient().testDeepSeekConnection(apiKey: apiKey)
-            return "连接成功，DeepSeek 模型列表可用"
+            return L10n.text("连接成功，DeepSeek 模型列表可用")
         }
     }
 }
@@ -1290,9 +1315,9 @@ private enum LocalServiceStatus: Equatable {
 
     var title: String {
         switch self {
-        case .unconfigured: "未配置"
-        case .configured: "已配置"
-        case .verified: "验证通过"
+        case .unconfigured: L10n.text("未配置")
+        case .configured: L10n.text("已配置")
+        case .verified: L10n.text("验证通过")
         }
     }
 
@@ -1313,8 +1338,8 @@ private enum LocalServiceStatus: Equatable {
 }
 
 private struct LocalServicesSettingsView: View {
+    @Environment(\.locale) private var appLocale
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
     @AppStorage(AIProviderPreference.storageKey) private var aiProviderRaw = AIProviderPreference.automatic.rawValue
     @AppStorage(CodexOAuthClient.connectedStorageKey) private var codexConnected = false
     @State private var path: [LocalServiceProvider] = []
@@ -1326,11 +1351,11 @@ private struct LocalServicesSettingsView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 20) {
                     StatusNotice(
-                        text: "行情密钥和 ChatGPT 登录都只保存在此 iPhone。",
+                        text: L10n.text("行情密钥和 ChatGPT 登录都只保存在此 iPhone。"),
                         kind: .info
                     )
 
-                    SettingsSectionBlock(title: "行情与估值") {
+                    SettingsSectionBlock(title: L10n.text("行情与估值")) {
                         SettingsGroupCard {
                             providerLink(.massive)
                             SettingsDivider()
@@ -1341,7 +1366,7 @@ private struct LocalServicesSettingsView: View {
                             Image(systemName: "globe.americas.fill")
                                 .foregroundStyle(CatfolioTheme.accent)
                                 .frame(width: 20)
-                            Text("Yahoo Finance 无需密钥；自动用于回撤与历史价格，也会在 Massive 不可用时补充成交量行情。")
+                            Text(L10n.text("Yahoo Finance 无需密钥；自动用于回撤与历史价格，也会在 Massive 不可用时补充成交量行情。"))
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -1353,13 +1378,13 @@ private struct LocalServicesSettingsView: View {
                     SettingsSectionBlock(title: "AI") {
                         SettingsGroupCard {
                             VStack(alignment: .leading, spacing: 10) {
-                                Text("默认模型")
+                                Text(L10n.text("默认模型"))
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(.secondary)
 
-                                Picker("默认模型", selection: $aiProviderRaw) {
+                                Picker(L10n.text("默认模型"), selection: $aiProviderRaw) {
                                     ForEach(AIProviderPreference.allCases) { provider in
-                                        Text(provider.title).tag(provider.rawValue)
+                                        Text(L10n.label(provider.title)).tag(provider.rawValue)
                                     }
                                 }
                                 .pickerStyle(.segmented)
@@ -1397,12 +1422,12 @@ private struct LocalServicesSettingsView: View {
                 .padding(.top, 12)
                 .padding(.bottom, 48)
             }
-            .background(CatfolioTheme.pageBackground(for: colorScheme))
-            .navigationTitle("服务商")
+            .background(CatfolioTheme.settingsBackground)
+            .navigationTitle(L10n.text("服务商"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }
+                    Button(L10n.text("完成")) { dismiss() }
                 }
             }
             .navigationDestination(for: LocalServiceProvider.self) { provider in
@@ -1433,7 +1458,7 @@ private struct LocalServicesSettingsView: View {
                     Text("ChatGPT Codex")
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.primary)
-                    Text("使用 ChatGPT 订阅进行组合问答")
+                    Text(L10n.text("使用 ChatGPT 订阅进行组合问答"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -1442,7 +1467,7 @@ private struct LocalServicesSettingsView: View {
 
                 HStack(spacing: 4) {
                     Image(systemName: codexConnected ? "checkmark.circle.fill" : "circle")
-                    Text(codexConnected ? "已连接" : "未连接")
+                    Text(codexConnected ? L10n.text("已连接") : L10n.text("未连接"))
                 }
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(codexConnected ? CatfolioTheme.positive : Color.secondary)
@@ -1462,8 +1487,8 @@ private struct LocalServicesSettingsView: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("ChatGPT Codex，使用 ChatGPT 订阅进行组合问答")
-        .accessibilityValue(codexConnected ? "已连接" : "未连接")
+        .accessibilityLabel(L10n.text("ChatGPT Codex，使用 ChatGPT 订阅进行组合问答"))
+        .accessibilityValue(codexConnected ? L10n.text("已连接") : L10n.text("未连接"))
     }
 
     private func providerLink(_ provider: LocalServiceProvider) -> some View {
@@ -1504,7 +1529,7 @@ private struct LocalServicesSettingsView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(provider.title)，\(provider.purpose)")
         .accessibilityValue(status.title)
-        .accessibilityHint("打开服务商设置")
+        .accessibilityHint(L10n.text("打开服务商设置"))
     }
 
     private func refreshStatuses() {
@@ -1532,6 +1557,7 @@ private struct LocalServicesSettingsView: View {
 }
 
 private struct CodexOAuthSettingsView: View {
+    @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openURL) private var openURL
     @AppStorage(CodexOAuthClient.connectedStorageKey) private var connected = false
@@ -1548,7 +1574,7 @@ private struct CodexOAuthSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("连接状态")
+                    Text(L10n.text("连接状态"))
                         .font(.headline)
                         .foregroundStyle(.secondary)
 
@@ -1558,14 +1584,14 @@ private struct CodexOAuthSettingsView: View {
                             tint: CatfolioTheme.services
                         )
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(connected ? "已连接 ChatGPT" : "尚未连接")
+                            Text(connected ? L10n.text("已连接 ChatGPT") : L10n.text("尚未连接"))
                                 .font(.title3.weight(.bold))
                             if connected {
                                 Text([accountEmail, planLabel].filter { !$0.isEmpty }.joined(separator: " · "))
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             } else {
-                                Text("授权令牌保存在此 iPhone 的 Keychain 中。")
+                                Text(L10n.text("授权令牌保存在此 iPhone 的 Keychain 中。"))
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
@@ -1581,7 +1607,7 @@ private struct CodexOAuthSettingsView: View {
 
                 if let loginSession {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("一次性验证码")
+                        Text(L10n.text("一次性验证码"))
                             .font(.headline)
                             .foregroundStyle(.secondary)
                         HStack {
@@ -1589,7 +1615,7 @@ private struct CodexOAuthSettingsView: View {
                                 .font(.title2.monospaced().weight(.bold))
                                 .textSelection(.enabled)
                             Spacer()
-                            Button(didCopyCode ? "已复制" : "复制") {
+                            Button(didCopyCode ? L10n.text("已复制") : L10n.text("复制")) {
                                 UIPasteboard.general.string = loginSession.userCode
                                 didCopyCode = true
                                 UINotificationFeedbackGenerator().notificationOccurred(.success)
@@ -1601,7 +1627,7 @@ private struct CodexOAuthSettingsView: View {
                             .buttonStyle(.bordered)
                             .foregroundStyle(didCopyCode ? CatfolioTheme.positive : CatfolioTheme.services)
                         }
-                        Button("打开 ChatGPT 登录页", systemImage: "safari") {
+                        Button(L10n.text("打开 ChatGPT 登录页"), systemImage: "safari") {
                             openURL(loginSession.verificationURL)
                         }
                         .buttonStyle(.borderedProminent)
@@ -1620,7 +1646,7 @@ private struct CodexOAuthSettingsView: View {
 
                 if connected {
                     Button(role: .destructive, action: logout) {
-                        Label(isWorking ? "正在断开…" : "退出 ChatGPT", systemImage: "rectangle.portrait.and.arrow.right")
+                        Label(isWorking ? L10n.text("正在断开…") : L10n.text("退出 ChatGPT"), systemImage: "rectangle.portrait.and.arrow.right")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
@@ -1630,7 +1656,7 @@ private struct CodexOAuthSettingsView: View {
                     Button(action: startLogin) {
                         HStack(spacing: 8) {
                             if isWorking { ProgressView().tint(.white) }
-                            Text(isWorking ? "等待网页授权…" : "登录 ChatGPT")
+                            Text(isWorking ? L10n.text("等待网页授权…") : L10n.text("登录 ChatGPT"))
                         }
                         .frame(maxWidth: .infinity)
                     }
@@ -1642,7 +1668,7 @@ private struct CodexOAuthSettingsView: View {
             .padding(16)
             .padding(.bottom, 32)
         }
-        .background(CatfolioTheme.pageBackground(for: colorScheme))
+        .background(CatfolioTheme.settingsBackground)
         .navigationTitle("ChatGPT Codex")
         .navigationBarTitleDisplayMode(.inline)
         .task { await refreshStatus() }
@@ -1699,7 +1725,7 @@ private struct CodexOAuthSettingsView: View {
     private func resumeLogin(client: CodexOAuthClient, session: CodexLoginSession) {
         pollingTask?.cancel()
         isWorking = true
-        feedback = LocalServiceFeedback(text: "正在确认网页授权…", kind: .info)
+        feedback = LocalServiceFeedback(text: L10n.text("正在确认网页授权…"), kind: .info)
         pollingTask = Task {
             do {
                 try await waitForLogin(client: client, session: session, pollImmediately: true)
@@ -1733,14 +1759,14 @@ private struct CodexOAuthSettingsView: View {
                 connected = true
                 loginSession = nil
                 isWorking = false
-                feedback = LocalServiceFeedback(text: "ChatGPT 已连接", kind: .success)
+                feedback = LocalServiceFeedback(text: L10n.text("ChatGPT 已连接"), kind: .success)
                 return
             }
             if let error = status.error, !status.pending {
                 throw LocalServiceError.remote(error)
             }
         }
-        throw LocalServiceError.remote("登录等待超时，请重新开始")
+        throw LocalServiceError.remote(L10n.text("登录等待超时，请重新开始"))
     }
 
     private func logout() {
@@ -1751,7 +1777,7 @@ private struct CodexOAuthSettingsView: View {
                 try await CodexOAuthClient().logout()
                 connected = false
                 loginSession = nil
-                feedback = LocalServiceFeedback(text: "已退出 ChatGPT", kind: .success)
+                feedback = LocalServiceFeedback(text: L10n.text("已退出 ChatGPT"), kind: .success)
             } catch {
                 feedback = LocalServiceFeedback(text: error.localizedDescription, kind: .error)
             }
@@ -1766,6 +1792,7 @@ private struct LocalServiceFeedback {
 }
 
 private struct LocalServiceDetailView: View {
+    @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
     let provider: LocalServiceProvider
     let onStatusChanged: (LocalServiceStatus) -> Void
@@ -1787,7 +1814,7 @@ private struct LocalServiceDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 26) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("服务用途")
+                    Text(L10n.text("服务用途"))
                         .font(.headline)
                         .foregroundStyle(.secondary)
 
@@ -1811,16 +1838,16 @@ private struct LocalServiceDetailView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("API 密钥")
+                    Text(L10n.text("API 密钥"))
                         .font(.headline)
                         .foregroundStyle(.secondary)
 
                     HStack(spacing: 4) {
                         Group {
                             if revealsKey {
-                                TextField("输入 \(provider.shortTitle) API Key", text: $apiKey)
+                                TextField(L10n.text("输入 \(provider.shortTitle) API Key"), text: $apiKey)
                             } else {
-                                SecureField("输入 \(provider.shortTitle) API Key", text: $apiKey)
+                                SecureField(L10n.text("输入 \(provider.shortTitle) API Key"), text: $apiKey)
                             }
                         }
                         .font(.body.monospaced())
@@ -1838,7 +1865,7 @@ private struct LocalServiceDetailView: View {
                                 .frame(width: 44, height: 44)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(revealsKey ? "隐藏 API 密钥" : "显示 API 密钥")
+                        .accessibilityLabel(revealsKey ? L10n.text("隐藏 API 密钥") : L10n.text("显示 API 密钥"))
                     }
                     .padding(.leading, 16)
                     .padding(.trailing, 6)
@@ -1853,7 +1880,7 @@ private struct LocalServiceDetailView: View {
                     }
                     .disabled(isTesting)
 
-                    Label("仅保存在此 iPhone 的 Keychain", systemImage: "lock.shield.fill")
+                    Label(L10n.text("仅保存在此 iPhone 的 Keychain"), systemImage: "lock.shield.fill")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -1871,7 +1898,7 @@ private struct LocalServiceDetailView: View {
                                 ProgressView()
                                     .tint(.white)
                             }
-                            Text(isTesting ? "正在验证…" : "保存并验证")
+                            Text(isTesting ? L10n.text("正在验证…") : L10n.text("保存并验证"))
                                 .font(.headline)
                         }
                         .frame(maxWidth: .infinity)
@@ -1881,13 +1908,13 @@ private struct LocalServiceDetailView: View {
                     .buttonBorderShape(.roundedRectangle(radius: CatfolioStyle.cardRadius))
                     .tint(CatfolioTheme.accent)
                     .disabled(trimmedKey.isEmpty || isTesting)
-                    .accessibilityLabel(isTesting ? "正在验证" : "保存并验证")
-                    .accessibilityHint("保存 API 密钥并验证连接")
+                    .accessibilityLabel(isTesting ? L10n.text("正在验证") : L10n.text("保存并验证"))
+                    .accessibilityHint(L10n.text("保存 API 密钥并验证连接"))
 
                     Button {
                         saveWithoutValidation()
                     } label: {
-                        Text("仅保存，不验证")
+                        Text(L10n.text("仅保存，不验证"))
                             .font(.body.weight(.semibold))
                             .frame(maxWidth: .infinity)
                             .frame(minHeight: 52)
@@ -1896,12 +1923,12 @@ private struct LocalServiceDetailView: View {
                     .buttonBorderShape(.roundedRectangle(radius: CatfolioStyle.cardRadius))
                     .tint(CatfolioTheme.accent)
                     .disabled(trimmedKey.isEmpty || isTesting)
-                    .accessibilityLabel("仅保存，不验证")
-                    .accessibilityHint("保存 API 密钥但不验证连接")
+                    .accessibilityLabel(L10n.text("仅保存，不验证"))
+                    .accessibilityHint(L10n.text("保存 API 密钥但不验证连接"))
                 }
 
                 if !originalKey.isEmpty {
-                    Button("移除此密钥", role: .destructive) {
+                    Button(L10n.text("移除此密钥"), role: .destructive) {
                         showsRemoveConfirmation = true
                     }
                     .font(.body.weight(.semibold))
@@ -1914,7 +1941,7 @@ private struct LocalServiceDetailView: View {
             .padding(.top, 18)
             .padding(.bottom, 32)
         }
-        .background(CatfolioTheme.pageBackground(for: colorScheme))
+        .background(CatfolioTheme.settingsBackground)
         .navigationTitle(provider.shortTitle)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { loadKeyIfNeeded() }
@@ -1927,14 +1954,14 @@ private struct LocalServiceDetailView: View {
             if edited != originalKey { feedback = nil }
         }
         .confirmationDialog(
-            "移除 \(provider.title) 密钥？",
+            L10n.text("移除 \(provider.title) 密钥？"),
             isPresented: $showsRemoveConfirmation,
             titleVisibility: .visible
         ) {
-            Button("移除密钥", role: .destructive) { removeKey() }
-            Button("取消", role: .cancel) {}
+            Button(L10n.text("移除密钥"), role: .destructive) { removeKey() }
+            Button(L10n.text("取消"), role: .cancel) {}
         } message: {
-            Text("移除后，依赖此服务的数据可能无法加载。")
+            Text(L10n.text("移除后，依赖此服务的数据可能无法加载。"))
         }
     }
 
@@ -1960,7 +1987,7 @@ private struct LocalServiceDetailView: View {
             do {
                 try KeychainStore.set(candidate, for: provider.keychainKey)
             } catch {
-                let saveMessage = "连接已验证，但无法保存到 Keychain：\(error.localizedDescription)"
+                let saveMessage = L10n.text("连接已验证，但无法保存到 Keychain：\(error.localizedDescription)")
                 feedback = LocalServiceFeedback(text: saveMessage, kind: .error)
                 announce(saveMessage)
                 return
@@ -1975,10 +2002,10 @@ private struct LocalServiceDetailView: View {
         } catch is CancellationError {
             return
         } catch {
-            let suffix = originalKey.isEmpty ? "未保存这次输入。" : "原密钥未更改。"
+            let suffix = originalKey.isEmpty ? L10n.text("未保存这次输入。") : L10n.text("原密钥未更改。")
             let message = "\(error.localizedDescription) \(suffix)"
             feedback = LocalServiceFeedback(text: message, kind: .error)
-            announce("验证失败。\(message)")
+            announce(L10n.text("验证失败。\(message)"))
         }
     }
 
@@ -1993,15 +2020,15 @@ private struct LocalServiceDetailView: View {
         do {
             try KeychainStore.set(trimmedKey, for: provider.keychainKey)
             originalKey = trimmedKey
-            feedback = LocalServiceFeedback(text: "已安全保存到此 iPhone", kind: .success)
+            feedback = LocalServiceFeedback(text: L10n.text("已安全保存到此 iPhone"), kind: .success)
             onStatusChanged(.configured)
             if provider == .fmp {
                 Task { await LocalReturnsAnalyticsClient.resetFailedFundamentalAttempts() }
             }
-            announce("密钥已保存")
+            announce(L10n.text("密钥已保存"))
         } catch {
             feedback = LocalServiceFeedback(text: error.localizedDescription, kind: .error)
-            announce("保存失败。\(error.localizedDescription)")
+            announce(L10n.text("保存失败。\(error.localizedDescription)"))
         }
     }
 
@@ -2011,15 +2038,15 @@ private struct LocalServiceDetailView: View {
             apiKey = ""
             originalKey = ""
             revealsKey = false
-            feedback = LocalServiceFeedback(text: "密钥已从此 iPhone 移除", kind: .info)
+            feedback = LocalServiceFeedback(text: L10n.text("密钥已从此 iPhone 移除"), kind: .info)
             onStatusChanged(.unconfigured)
             if provider == .fmp {
                 Task { await LocalReturnsAnalyticsClient.resetFailedFundamentalAttempts() }
             }
-            announce("密钥已移除")
+            announce(L10n.text("密钥已移除"))
         } catch {
             feedback = LocalServiceFeedback(text: error.localizedDescription, kind: .error)
-            announce("移除失败。\(error.localizedDescription)")
+            announce(L10n.text("移除失败。\(error.localizedDescription)"))
         }
     }
 
@@ -2036,6 +2063,7 @@ private struct LocalServiceDetailView: View {
 /// control. Boxing them equalises that: the tile is the constant, the symbol
 /// varies inside it, and the row's text starts at the same x every time.
 private struct SettingsGlyph: View {
+    @Environment(\.locale) private var appLocale
     let symbol: String
     let tint: Color
 
