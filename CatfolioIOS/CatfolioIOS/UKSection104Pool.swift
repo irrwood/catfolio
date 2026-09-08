@@ -170,7 +170,6 @@ enum UKSection104Pool {
                 continue
             }
 
-            let unitProceeds = event.quantity > 0 ? event.amount / event.quantity : 0
             var cost = 0.0
             var matchedQuantity = 0.0
             var fromPool = event.quantity

@@ -1150,9 +1150,15 @@ private struct SettingsSectionBlock<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 7) {
+            // A grouped-list section header, not a page title. At title3
+            // semibold in the primary colour these read as headings of equal
+            // weight to the screen's own title, which is why the page looked
+            // like several stacked pages rather than one list.
             Text(title)
-                .font(.title3.weight(.semibold))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             content
@@ -1180,10 +1186,14 @@ private struct SettingsGroupCard<Content: View>: View {
         VStack(spacing: 0) {
             content
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 16)
         .background(
-            CatfolioTheme.surface(for: colorScheme),
-            in: RoundedRectangle(cornerRadius: 24, style: .continuous)
+            // The system's grouped-row fill rather than a hand-picked grey.
+            // The previous one was #2C3334 — lighter than the native
+            // #1C1C1E and faintly blue, so every card floated off the page
+            // as a pale slab instead of sitting in it.
+            Color(uiColor: .secondarySystemGroupedBackground),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
         )
     }
 }
