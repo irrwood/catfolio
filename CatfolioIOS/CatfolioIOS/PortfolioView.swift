@@ -3,13 +3,15 @@ import SwiftUI
 private typealias PortfolioHomeTypography = LegacyType
 
 private struct PortfolioHomeTopBackground: View {
+    @Environment(\.locale) private var appLocale
     let colorScheme: ColorScheme
 
     var body: some View {
         LinearGradient(
             stops: colorScheme == .light
                 ? [
-                    .init(color: Color(red: 0.541, green: 0.788, blue: 0.918), location: 0),
+                    // Figma 223:31122: #9ADCFF.
+                    .init(color: Color(red: 154 / 255, green: 220 / 255, blue: 1), location: 0),
                     .init(color: .white, location: 1),
                 ]
                 : [
@@ -23,18 +25,32 @@ private struct PortfolioHomeTopBackground: View {
 }
 
 private struct PortfolioHomePageBackdrop: View {
+    @Environment(\.locale) private var appLocale
     let colorScheme: ColorScheme
+    let scrollOffset: CGFloat
+    let fadeStartOffset: CGFloat?
+
+    private var gradientDismissalProgress: CGFloat {
+        guard let start = fadeStartOffset else { return 0 }
+        let end = start + PortfolioContentSheetLayout.backdropFadeDistance
+        let linear = min(max((scrollOffset - start) / max(end - start, 1), 0), 1)
+
+        // The gradient remains intact until TODAY has completely crossed the
+        // top of the screen, then settles as the rest of that card scrolls out.
+        return linear * linear * (3 - 2 * linear)
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
             (colorScheme == .light ? Color.white : Color.black)
 
             // Figma 223:31122 uses one uninterrupted viewport gradient from
-            // #8AC9EA to the terminal page surface. Keeping it fixed behind
+            // #9ADCFF to the terminal page surface. Keeping it fixed behind
             // the native ScrollView also makes rubber-banding reveal the same
             // background instead of a separate pale-blue extension band.
             PortfolioHomeTopBackground(colorScheme: colorScheme)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .opacity(1 - gradientDismissalProgress)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea()
@@ -48,10 +64,14 @@ private enum PortfolioContentSheetLayout {
     // and opened to the full canvas width.
     static let widthExpansionDistance: CGFloat = 263
     static let transitionHeight: CGFloat = 326
+    // TODAY sits 30pt from the card top and is 17pt tall. Once it has left the
+    // screen, use the card's remaining travel to finish the colour transition.
+    static let backdropFadeDistance: CGFloat = transitionHeight - 47
     static let topRadius: CGFloat = 38
 }
 
 private struct PortfolioContentSheet<Content: View>: View {
+    @Environment(\.locale) private var appLocale
     let scrollOffset: CGFloat
     let content: Content
     @Environment(\.colorScheme) private var colorScheme
@@ -69,6 +89,10 @@ private struct PortfolioContentSheet<Content: View>: View {
         PortfolioContentSheetLayout.initialHorizontalInset * (1 - widthProgress)
     }
 
+    private var settlingProgress: CGFloat {
+        widthProgress
+    }
+
     private var sheetShape: UnevenRoundedRectangle {
         UnevenRoundedRectangle(
             topLeadingRadius: PortfolioContentSheetLayout.topRadius,
@@ -83,8 +107,10 @@ private struct PortfolioContentSheet<Content: View>: View {
         content
             .background {
                 PortfolioContentSheetBackground(
-                    colorScheme: colorScheme
+                    colorScheme: colorScheme,
+                    settlingProgress: settlingProgress
                 )
+                .allowsHitTesting(false)
             }
             .clipShape(sheetShape)
             .padding(.horizontal, horizontalInset)
@@ -93,7 +119,9 @@ private struct PortfolioContentSheet<Content: View>: View {
 }
 
 private struct PortfolioContentSheetBackground: View {
+    @Environment(\.locale) private var appLocale
     let colorScheme: ColorScheme
+    let settlingProgress: CGFloat
 
     private var terminalColor: Color {
         colorScheme == .light ? .white : .black
@@ -114,7 +142,7 @@ private struct PortfolioContentSheetBackground: View {
         if #available(iOS 26.0, *) {
             Color.clear
                 .glassEffect(
-                    .clear.interactive(),
+                    .clear,
                     in: sheetShape
                 )
         } else {
@@ -137,6 +165,12 @@ private struct PortfolioContentSheetBackground: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
+
+                // The passive sheet must not use Glass.interactive(): its
+                // system press highlight flashes white across this large
+                // surface. Instead, scrolling continuously settles the glass
+                // into the terminal page colour in step with width expansion.
+                terminalColor.opacity(settlingProgress)
             }
             .frame(height: PortfolioContentSheetLayout.transitionHeight)
 
@@ -146,11 +180,13 @@ private struct PortfolioContentSheetBackground: View {
 }
 
 struct PortfolioView: View {
+    @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedHolding: Holding?
     @State private var showsTodayDetail = false
     @State private var homeScrollOffset: CGFloat = 0
+    @State private var todayTitleExitScrollOffset: CGFloat?
     @Namespace private var todayZoom
 
     private var previewsLoading: Bool {
@@ -165,34 +201,43 @@ struct PortfolioView: View {
         NavigationStack {
             ScrollViewReader { scrollProxy in
                 ZStack {
-                    PortfolioHomePageBackdrop(colorScheme: colorScheme)
+                    PortfolioHomePageBackdrop(
+                        colorScheme: colorScheme,
+                        scrollOffset: homeScrollOffset,
+                        fadeStartOffset: todayTitleExitScrollOffset
+                    )
 
                     ScrollView {
-                        LazyVStack(spacing: 0) {
+                        // The hero is visually pinned with an offset while the
+                        // foreground sheet scrolls over it. A LazyVStack judges
+                        // visibility from the hero's untransformed layout frame,
+                        // so it used to recycle the entire chart exactly when the
+                        // range picker crossed the sheet edge. There are only two
+                        // structural children here; keep them resident and let the
+                        // long content inside them own any useful laziness.
+                        VStack(spacing: 0) {
                             PortfolioRefreshTimestamp(
                                 date: model.localUpdatedAt,
                                 isRefreshing: model.isPortfolioLoading
                             )
 
-                            if model.isPublicInvestorMode {
-                                Text(model.publicDisclosureSummary?.usesUpperBoundEstimate == true
-                                    ? "公开投资者账户 · 佩洛西按披露上限估算"
-                                    : "公开投资者账户 · 披露持仓，非实时账户")
-                                    .font(.caption).foregroundStyle(.secondary)
-                                    .padding(.horizontal, 20).padding(.vertical, 8)
-                            }
-
                             if previewsLoading {
                                 PortfolioLoadingView()
                             } else if model.holdings.isEmpty, model.overview != nil {
                                 if model.isPublicInvestorMode {
-                                    ContentUnavailableView("暂无持仓数据", systemImage: "person.crop.circle", description: Text("请在设置中选择人物；马斯克目前暂无记录。"))
+                                    ContentUnavailableView(L10n.text("暂无持仓数据"), systemImage: "person.crop.circle", description: Text(L10n.text("请在设置中选择账户。")))
                                 } else {
                                     PortfolioLoadingView(isAnimating: model.isPortfolioLoading)
                                 }
                             } else if let overview = model.overview, let chart = model.portfolioChart {
-                                CostMarketCard(overview: overview, response: chart)
-                                    .id(model.portfolioChartRevision)
+                                CostMarketCard(
+                                    overview: overview,
+                                    response: chart,
+                                    isAwaitingEnrichedHistory: model.isPortfolioChartLoading
+                                )
+                                    // Account changes start a new chart; quote and
+                                    // history revisions update the existing one.
+                                    .id(model.selectedAccountKeys.sorted())
                                     // Keep the hero visually fixed in its original
                                     // scroll slot. The foreground sheet below moves
                                     // normally and therefore covers it as it rises.
@@ -206,7 +251,13 @@ struct PortfolioView: View {
                                             dailyChanges: model.holdingDailyChanges,
                                             benchmarkChange: model.benchmarkDailyChange,
                                             isLoading: model.isHoldingDailyChangesLoading,
-                                            onOpenDetail: { showsTodayDetail = true }
+                                            onOpenDetail: { showsTodayDetail = true },
+                                            onTitleBottomPositionChange: { titleBottomY in
+                                                let exitOffset = homeScrollOffset + titleBottomY
+                                                if todayTitleExitScrollOffset.map({ abs($0 - exitOffset) > 0.5 }) ?? true {
+                                                    todayTitleExitScrollOffset = exitOffset
+                                                }
+                                            }
                                         ) { holding in
                                             selectedHolding = holding
                                         }
@@ -224,18 +275,21 @@ struct PortfolioView: View {
                                 PortfolioLoadingView()
                             } else if let error = model.portfolioError {
                                 ContentUnavailableView {
-                                    Label("暂时无法加载", systemImage: "wifi.exclamationmark")
+                                    Label(L10n.text("暂时无法加载"), systemImage: "wifi.exclamationmark")
                                 } description: {
                                     Text(error)
                                 } actions: {
-                                    Button("重试") { Task { await model.refreshPortfolio() } }
+                                    Button(L10n.text("重试")) { Task { await model.refreshPortfolio() } }
                                 }
                                 .frame(minHeight: 420)
                             } else {
                                 PortfolioLoadingView()
                             }
                         }
-                        .padding(.bottom, 16)
+                        // Leave a deliberate scroll tail above the floating
+                        // custom tab bar so the final portfolio content can
+                        // settle fully in view instead of ending beneath it.
+                        .padding(.bottom, 96)
                     }
                     .background(Color.clear)
                     .onScrollGeometryChange(for: CGFloat.self) { geometry in
@@ -298,13 +352,14 @@ struct PortfolioView: View {
 }
 
 private struct PortfolioRefreshTimestamp: View {
+    @Environment(\.locale) private var appLocale
     let date: Date?
     let isRefreshing: Bool
 
     var body: some View {
         Group {
             if let date {
-                Text("更新于 \(date.formatted(.dateTime.hour().minute()))")
+                Text(L10n.text("更新于 \(date.formatted(.dateTime.hour().minute()))"))
                     .appNumber(.micro)
                     .foregroundStyle(Color.primary.opacity(0.44))
                     .lineLimit(1)
@@ -316,11 +371,12 @@ private struct PortfolioRefreshTimestamp: View {
         .opacity(isRefreshing ? 1 : 0)
         .animation(.easeOut(duration: 0.18), value: isRefreshing)
         .accessibilityHidden(!isRefreshing)
-        .accessibilityLabel(date.map { "数据更新于 \($0.formatted(.dateTime.hour().minute()))" } ?? "")
+        .accessibilityLabel(date.map { L10n.text("数据更新于 \($0.formatted(.dateTime.hour().minute()))") } ?? "")
     }
 }
 
 private struct TodayContributionCard: View {
+    @Environment(\.locale) private var appLocale
     private enum Direction: Hashable {
         case gains
         case losses
@@ -343,6 +399,7 @@ private struct TodayContributionCard: View {
     let benchmarkChange: Double?
     let isLoading: Bool
     var onOpenDetail: (() -> Void)? = nil
+    var onTitleBottomPositionChange: ((CGFloat) -> Void)? = nil
     let onSelect: (Holding) -> Void
 
     @State private var direction: Direction = TodayContributionCard.launchDirection
@@ -401,11 +458,12 @@ private struct TodayContributionCard: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             todayBackground
+                .allowsHitTesting(false)
 
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 4) {
-                        Text("TODAY")
+                        Text(L10n.text("TODAY"))
                             .appCaps(.caption, weight: .semibold)
                             .foregroundStyle(.primary)
                         if onOpenDetail != nil {
@@ -417,13 +475,18 @@ private struct TodayContributionCard: View {
                     .frame(height: 17, alignment: .topLeading)
                     .contentShape(Rectangle())
                     .onTapGesture { onOpenDetail?() }
+                    .onGeometryChange(for: CGFloat.self) { geometry in
+                        geometry.frame(in: .global).maxY
+                    } action: { _, newValue in
+                        onTitleBottomPositionChange?(newValue)
+                    }
                     .accessibilityAddTraits(onOpenDetail == nil ? [] : .isButton)
-                    .accessibilityLabel("今日盈亏详情")
+                    .accessibilityLabel(L10n.text("今日盈亏详情"))
 
                     Group {
                         if contributions.isEmpty {
                             HomeSkeletonBlock(width: 133, height: 22, color: HomeSkeletonStyle.color(for: colorScheme))
-                                .accessibilityLabel("正在计算今日贡献")
+                                .accessibilityLabel(L10n.text("正在计算今日贡献"))
                         } else {
                             CatfolioDisplayAmountText(
                                 text: DisplayFormat.money(totalAmount, signed: true, fractionDigits: 2),
@@ -439,7 +502,7 @@ private struct TodayContributionCard: View {
                             if isAwaitingContributions {
                                 HomeSkeletonBlock(width: 168, height: 11, color: HomeSkeletonStyle.color(for: colorScheme))
                             } else {
-                                Text("行情暂不可用")
+                                Text(L10n.text("行情暂不可用"))
                                     .foregroundStyle(.secondary)
                             }
                         } else {
@@ -470,7 +533,7 @@ private struct TodayContributionCard: View {
                         .frame(height: 167, alignment: .top)
                 } else if visibleContributions.isEmpty {
                     ContentUnavailableView(
-                        direction == .gains ? "今天暂无上涨持仓" : "今天暂无下跌持仓",
+                        direction == .gains ? L10n.text("今天暂无上涨持仓") : L10n.text("今天暂无下跌持仓"),
                         systemImage: direction == .gains ? "arrow.up.right" : "arrow.down.right"
                     )
                     .frame(maxWidth: .infinity, minHeight: 167)
@@ -512,7 +575,7 @@ private struct TodayContributionCard: View {
             let difference = totalPercent - benchmarkChange
             Text("\(difference >= 0 ? "+" : "-")S&P 500 \(DisplayFormat.percent(abs(difference), signed: false))")
         } else {
-            Text("S&P 500 暂无数据")
+            Text(L10n.text("S&P 500 暂无数据"))
         }
     }
 
@@ -624,7 +687,7 @@ private struct TodayContributionCard: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(value == .gains ? "上涨贡献" : "下跌贡献")
+        .accessibilityLabel(value == .gains ? L10n.text("上涨贡献") : L10n.text("下跌贡献"))
         .accessibilityAddTraits(direction == value ? .isSelected : [])
     }
 
@@ -649,6 +712,7 @@ private enum TodayContributionAnimation {
 }
 
 private struct TodayContributionBar: View {
+    @Environment(\.locale) private var appLocale
     let holding: Holding
     let amount: Double
     let relativeHeight: Double
@@ -719,14 +783,23 @@ private struct TodayContributionBar: View {
                             .compositingGroup()
                             .opacity(growth)
 
-                        Text(amountText)
-                            .appNumber(.caption, weight: .semibold)
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.62)
-                            .padding(.horizontal, 4)
-                            .padding(.top, 14)
-                            .opacity(growth)
+                        // Full figure while it fits, abbreviated when it does
+                        // not. A bar's width is whatever is left after the
+                        // others take theirs, so the same number fits on a
+                        // two-bar day and not on a six-bar one — which is why
+                        // this asks the layout rather than guessing from the
+                        // magnitude. Shrinking to fit was the previous
+                        // answer, and at a nine-figure total it produced a
+                        // truncated string with no decimal point in it.
+                        ViewThatFits(in: .horizontal) {
+                            barAmountLabel(amountText)
+                            barAmountLabel(compactAmountText)
+                            barAmountLabel(compactAmountText)
+                                .minimumScaleFactor(0.62)
+                        }
+                        .padding(.horizontal, 4)
+                        .padding(.top, 14)
+                        .opacity(growth)
                     }
                     .frame(height: renderedBarHeight)
                     .clipShape(fillShape, style: FillStyle(antialiased: true))
@@ -742,8 +815,8 @@ private struct TodayContributionBar: View {
         }
         .buttonStyle(ContributionBarButtonStyle(isHovering: isHovering))
         .onHover { isHovering = $0 }
-        .accessibilityLabel("\(holding.shortName)，今日贡献 \(DisplayFormat.money(amount, signed: true, fractionDigits: 2))")
-        .accessibilityHint("打开个股详情")
+        .accessibilityLabel(L10n.text("\(holding.shortName)，今日贡献 \(DisplayFormat.money(amount, signed: true, fractionDigits: 2))"))
+        .accessibilityHint(L10n.text("打开个股详情"))
     }
 
     private var contributionLogo: some View {
@@ -761,6 +834,22 @@ private struct TodayContributionBar: View {
         DisplayCurrency.current.fromUSD(abs(amount)).formatted(
             .number.precision(.fractionLength(2))
         )
+    }
+
+    /// The same amount, abbreviated. Pence are noise at this magnitude, so
+    /// the compact form drops them rather than carrying two decimals into a
+    /// space that could not hold the digits.
+    private var compactAmountText: String {
+        DisplayCurrency.current.fromUSD(abs(amount)).formatted(
+            .number.notation(.compactName).precision(.fractionLength(0...1))
+        )
+    }
+
+    private func barAmountLabel(_ text: String) -> some View {
+        Text(text)
+            .appNumber(.caption, weight: .semibold)
+            .foregroundStyle(.white)
+            .lineLimit(1)
     }
 
     private var amountBubble: some View {
@@ -885,6 +974,7 @@ private struct TodayContributionBar: View {
 }
 
 private struct ContributionStripePattern: View {
+    @Environment(\.locale) private var appLocale
     let color: Color
 
     var body: some View {
@@ -918,6 +1008,7 @@ private struct ContributionStripePattern: View {
 /// and raised logo lens. Accent colour is intentionally restrained: the light
 /// source is rendered behind/inside the shell rather than painted onto it.
 private struct ContributionGlassSurface<S: InsettableShape>: View {
+    @Environment(\.locale) private var appLocale
     let shape: S
     let tint: Color
     let secondaryTint: Color
@@ -1023,16 +1114,19 @@ private enum PortfolioHeroChartLayout {
 }
 
 private struct CostMarketCard: View {
+    @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
 
     let overview: PortfolioOverview
     let warning: String?
     let response: PortfolioChartResponse
+    let isAwaitingEnrichedHistory: Bool
     @State private var prepared: CostMarketPreparedData?
     @State private var isPreparing = true
+    @State private var hasPreparedAllRanges = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @State private var range = ChartTimeRange.oneMonth
+    @State private var range = ChartTimeRange.yearToDate
     @State private var selectedDate: Date?
     @State private var measuredRange: ChartDateRange?
     @State private var showsNetDeposit = true
@@ -1043,13 +1137,18 @@ private struct CostMarketCard: View {
     }
 
     private var isChartLoading: Bool {
-        isPreparing || forcesChartLoadingState
+        forcesChartLoadingState || (prepared == nil && (isPreparing || isAwaitingEnrichedHistory))
     }
 
-    init(overview: PortfolioOverview, response: PortfolioChartResponse) {
+    init(
+        overview: PortfolioOverview,
+        response: PortfolioChartResponse,
+        isAwaitingEnrichedHistory: Bool
+    ) {
         self.overview = overview
         self.warning = response.warning
         self.response = response
+        self.isAwaitingEnrichedHistory = isAwaitingEnrichedHistory
     }
 
     private var rangeData: CostMarketRangeData {
@@ -1116,15 +1215,34 @@ private struct CostMarketCard: View {
         return CatfolioPalette.rose500
     }
 
+    /// Nil while the reader is looking at their own portfolio.
+    private var portfolioOwnerName: String? {
+        PublicInvestorNaming.title(
+            selection: model.publicInvestorSelection,
+            isDemo: model.isFakeDataMode,
+            isInvestorMode: model.isPublicInvestorMode
+        )
+    }
+
     var body: some View {
         let data = rangeData
         ZStack(alignment: .topLeading) {
             HStack(spacing: 4) {
-                Text(model.isPublicInvestorMode ? "披露市值 · USD" : "CATFOLIO")
-                    .appCaps(.caption, weight: .semibold)
+                // Whose portfolio this is. Left as "CATFOLIO" the header
+                // labels someone else's holdings with the reader's own app
+                // name, which is exactly the wrong thing to say above a
+                // total that is not theirs.
+                if let owner = portfolioOwnerName {
+                    Text(owner)
+                        .appText(.caption, weight: .semibold)
+                } else {
+                    Text("CATFOLIO")
+                        .appCaps(.caption, weight: .semibold)
+                }
                 Image(systemName: "chevron.down")
                     .font(.system(size: 6, weight: .bold))
             }
+            .lineLimit(1)
             .foregroundStyle(.primary)
             .offset(x: CatfolioStyle.pageHorizontalInset, y: 15)
 
@@ -1142,10 +1260,6 @@ private struct CostMarketCard: View {
             .offset(x: CatfolioStyle.pageHorizontalInset, y: 32)
 
             HStack(spacing: 4) {
-                if model.isPublicInvestorMode {
-                    Text("报告期 " + (model.publicDisclosureSummary?.reportDates.joined(separator: " / ") ?? "—"))
-                        .foregroundStyle(.secondary)
-                } else {
                 let summaryAccent = colorScheme == .light ? Color.primary : financialAccent
                 Group {
                     Text(DisplayFormat.money(rangePerformance.amount, signed: true))
@@ -1169,7 +1283,7 @@ private struct CostMarketCard: View {
                     showsNetDeposit.toggle()
                 } label: {
                     HStack(spacing: 4) {
-                        Text("NET DEPOSIT")
+                        Text(L10n.text("NET DEPOSIT"))
                             .appCaps(.footnote)
                         Text(DisplayFormat.money(displayedCost))
                             .numericTransition(displayedCost)
@@ -1178,11 +1292,10 @@ private struct CostMarketCard: View {
                 }
                 .buttonStyle(.plain)
                 .opacity(showsNetDeposit ? 1 : 0.45)
-                .accessibilityLabel("净入金线")
-                .accessibilityValue(showsNetDeposit ? "显示" : "隐藏")
-                .accessibilityHint("轻点切换显示或隐藏")
+                .accessibilityLabel(L10n.text("净入金线"))
+                .accessibilityValue(showsNetDeposit ? L10n.text("显示") : L10n.text("隐藏"))
+                .accessibilityHint(L10n.text("轻点切换显示或隐藏"))
                 .foregroundStyle(Color.primary.opacity(colorScheme == .light ? 0.30 : 0.50))
-            }
             }
             .appNumber(.footnote)
             .lineLimit(1)
@@ -1203,33 +1316,61 @@ private struct CostMarketCard: View {
 
             ChartTimeRangePicker(
                 selection: $range,
-                isDisabled: isChartLoading,
+                isDisabled: isChartLoading || !hasPreparedAllRanges,
                 usesBrightSelectedBackground: true
             )
             .frame(height: PortfolioHeroChartLayout.pickerHeight)
             .contentShape(Rectangle())
             .offset(y: PortfolioHeroChartLayout.pickerTop)
             .zIndex(2)
-            .accessibilityLabel("成本与市值时间范围")
+            .accessibilityLabel(L10n.text("成本与市值时间范围"))
         }
         .frame(height: PortfolioHeroChartLayout.sectionHeight, alignment: .topLeading)
-        .task {
+        .task(id: "\(model.portfolioChartRevision)-\(isAwaitingEnrichedHistory)") {
+            // Keep the last prepared curve mounted during background refresh.
+            // Interim snapshot-only responses must not replace enriched history.
+            guard !isAwaitingEnrichedHistory else { return }
             let response = response
-            let prepared = await Task.detached(priority: .userInitiated) {
-                CostMarketPreparedData(response: response)
+            let initialRange = range
+            let initialRanges: [ChartTimeRange] = initialRange == .maximum
+                ? [.maximum]
+                : [initialRange, .maximum]
+            let source = await Task.detached(priority: .userInitiated) {
+                CostMarketPreparedSource(response: response)
             }.value
             guard !Task.isCancelled else { return }
-            self.prepared = prepared
-            if prepared.data(for: range).rows.count <= 1,
+            if !hasPreparedAllRanges {
+                let initial = await Task.detached(priority: .userInitiated) {
+                    CostMarketPreparedData(source: source, requestedRanges: initialRanges)
+                }.value
+                guard !Task.isCancelled else { return }
+                self.prepared = initial
+                if initial.data(for: range).rows.count <= 1,
+                   initial.data(for: .maximum).rows.count > 1 {
+                    range = .maximum
+                }
+                isPreparing = false
+                applyLaunchSelectionIfNeeded()
+            }
+
+            // The first visible plot should not wait for every alternate
+            // range. Fill those caches at lower priority after the default
+            // range is already on screen; the picker stays disabled until the
+            // complete set is ready, so it can never select an empty cache.
+            // On refresh, keep the existing complete cache interactive until
+            // its replacement is ready; never dim the picker for background work.
+            let complete = await Task.detached(priority: .utility) {
+                CostMarketPreparedData(source: source)
+            }.value
+            guard !Task.isCancelled else { return }
+            self.prepared = complete
+            hasPreparedAllRanges = true
+            if complete.data(for: range).rows.count <= 1,
                let availableRange = ChartTimeRange.allCases.first(where: {
-                   prepared.data(for: $0).rows.count > 1
+                   complete.data(for: $0).rows.count > 1
                }) {
-                // A sparse history can contain one old point plus today. Do
-                // not leave the default 3M filter on a single point.
                 range = availableRange
             }
-            isPreparing = false
-            applyLaunchSelectionIfNeeded()
         }
         .onChange(of: range) { _, _ in
             var transaction = Transaction(animation: nil)
@@ -1243,7 +1384,7 @@ private struct CostMarketCard: View {
 
     @ViewBuilder
     private func chartContent(data: CostMarketRangeData) -> some View {
-        if isChartLoading {
+        if forcesChartLoadingState {
             StandardLineChartSkeleton(
                 axisWidth: 0,
                 topInset: 0,
@@ -1251,7 +1392,13 @@ private struct CostMarketCard: View {
                 seriesCount: 2
             )
                 .accessibilityElement()
-                .accessibilityLabel("正在准备历史数据")
+                .accessibilityLabel(L10n.text("正在准备历史数据"))
+        } else if isChartLoading {
+            // A generic curve looks like real portfolio data. Keep this area
+            // quiet until a cache- or history-backed series is available.
+            Color.clear
+                .accessibilityElement()
+                .accessibilityLabel(L10n.text("正在准备历史数据"))
         } else if data.rows.count > 1 {
             FastCostMarketPlot(
                 data: data,
@@ -1277,11 +1424,11 @@ private struct CostMarketCard: View {
                     measuredRange = nil
                 }
             )
-            .accessibilityLabel("成本与市值对比图，长按后单指拖动查看单日，保持第一指并加入第二指测量区间")
+            .accessibilityLabel(L10n.text("成本与市值对比图，长按后单指拖动查看单日，保持第一指并加入第二指测量区间"))
         } else {
             StandardLineChartPlaceholder(
-                title: "历史数据不足",
-                message: warning ?? "该时间范围内没有足够的成本与市值记录。",
+                title: L10n.text("历史数据不足"),
+                message: warning ?? L10n.text("该时间范围内没有足够的成本与市值记录。"),
                 isLoading: false
             )
         }
@@ -1348,8 +1495,10 @@ private struct CostMarketCard: View {
 }
 
 /// Canvas keeps a range switch to one draw pass instead of rebuilding hundreds
-/// of Swift Charts marks. All filtering, sampling and domains are cached once.
+/// of Swift Charts marks. Filtering and domains are cached once; every range
+/// keeps the original daily vertices so viewport zooms preserve the same curve.
 private struct FastCostMarketPlot: View {
+    @Environment(\.locale) private var appLocale
     let data: CostMarketRangeData
     let showsNetDeposit: Bool
     let transitionKey: String
@@ -1408,6 +1557,9 @@ private struct FastCostMarketPlot: View {
             trailingEndpointInset: 21,
             gridOpacity: 0,
             transitionKey: "\(transitionKey)-\(colorScheme == .light ? "light" : "dark")",
+            dataTransition: .viewportZoom,
+            animatesInitialAppearance: false,
+            revealsInitialAppearance: true,
             selectedDate: selectedPoint?.date,
             measuredRange: measuredRange,
             selectionIndicatorLabel: selectionIndicatorLabel,
@@ -1430,14 +1582,16 @@ private struct FastCostMarketPlot: View {
     }
 }
 
-private final class CostMarketPreparedData: @unchecked Sendable {
-    private let ranges: [ChartTimeRange: CostMarketRangeData]
+private final class CostMarketPreparedSource: @unchecked Sendable {
+    let points: [CostMarketPlotPoint]
+    let lastDate: Date?
+    let previousTradingDate: Date?
 
     init(response: PortfolioChartResponse) {
         let source = response.positionHistory.rows.isEmpty
             ? [response.currentPoint]
             : response.positionHistory.rows
-        let points = source.compactMap { row -> CostMarketPlotPoint? in
+        points = source.compactMap { row -> CostMarketPlotPoint? in
             guard row.marketValue.isFinite, row.cost.isFinite,
                   let date = DayDateCodec.date(from: row.dateText) else { return nil }
             return CostMarketPlotPoint(
@@ -1447,17 +1601,28 @@ private final class CostMarketPreparedData: @unchecked Sendable {
                 cost: row.cost
             )
         }.sorted { $0.date < $1.date }
+        lastDate = points.last?.date
+        previousTradingDate = points.dropLast().last?.date
+    }
+}
 
-        guard let last = points.last?.date else {
+private final class CostMarketPreparedData: @unchecked Sendable {
+    private let ranges: [ChartTimeRange: CostMarketRangeData]
+
+    init(
+        source: CostMarketPreparedSource,
+        requestedRanges: [ChartTimeRange] = ChartTimeRange.allCases
+    ) {
+        let points = source.points
+
+        guard let last = source.lastDate else {
             ranges = [:]
             return
         }
 
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        let previousTradingDate = points.dropLast().last?.date
-
-        ranges = Dictionary(uniqueKeysWithValues: ChartTimeRange.allCases.map { range in
+        ranges = Dictionary(uniqueKeysWithValues: requestedRanges.map { range in
             // Portfolio history is daily rather than intraday. Use the latest
             // two trading snapshots so 1D still shows the day-over-day move
             // instead of collapsing to an unhelpful single point.
@@ -1465,7 +1630,7 @@ private final class CostMarketPreparedData: @unchecked Sendable {
                 range.includes(
                     $0.date,
                     through: last,
-                    previousTradingDate: previousTradingDate,
+                    previousTradingDate: source.previousTradingDate,
                     calendar: calendar
                 )
             }
@@ -1479,9 +1644,9 @@ private final class CostMarketPreparedData: @unchecked Sendable {
 
     private static func prepare(_ points: [CostMarketPlotPoint]) -> CostMarketRangeData {
         guard !points.isEmpty else { return .empty }
-        let step = max(1, Int(ceil(Double(points.count) / 90)))
-        var sampled = Array(stride(from: 0, to: points.count, by: step)).map { points[$0] }
-        if sampled.last?.id != points.last?.id, let last = points.last { sampled.append(last) }
+        // Range-dependent decimation changes the curve at shared dates. Keep
+        // every daily vertex so the transition's union and the resting path
+        // have identical geometry inside the final viewport.
 
         var minimum = Double.greatestFiniteMagnitude
         var maximum = -Double.greatestFiniteMagnitude
@@ -1493,7 +1658,7 @@ private final class CostMarketPreparedData: @unchecked Sendable {
         let padding = span * 0.12
         return CostMarketRangeData(
             rows: points,
-            plottedRows: sampled,
+            plottedRows: points,
             domain: max(0, minimum - padding)...(maximum + padding)
         )
     }
@@ -1545,6 +1710,7 @@ private struct CostMarketPlotPoint: Identifiable {
 }
 
 private struct PortfolioDetailsCard: View {
+    @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
     let holdings: [Holding]
@@ -1583,17 +1749,17 @@ private struct PortfolioDetailsCard: View {
                     Button {
                         tableMode = "持仓"
                     } label: {
-                        Label("持仓明细", systemImage: tableMode == "持仓" ? "checkmark" : "list.bullet")
+                        Label(L10n.text("持仓明细"), systemImage: tableMode == "持仓" ? "checkmark" : "list.bullet")
                     }
                     Button {
                         tableMode = "热力图"
                     } label: {
-                        Label("持仓热力图", systemImage: tableMode == "热力图" ? "checkmark" : "rectangle.3.group")
+                        Label(L10n.text("持仓热力图"), systemImage: tableMode == "热力图" ? "checkmark" : "rectangle.3.group")
                     }
                     Button {
                         tableMode = "ETF 穿透"
                     } label: {
-                        Label("ETF 穿透", systemImage: tableMode == "ETF 穿透" ? "checkmark" : "square.3.layers.3d")
+                        Label(L10n.text("ETF 穿透"), systemImage: tableMode == "ETF 穿透" ? "checkmark" : "square.3.layers.3d")
                     }
                 } label: {
                     HStack(spacing: 0) {
@@ -1698,8 +1864,8 @@ private struct PortfolioDetailsCard: View {
 
     private var itemCount: String {
         switch tableMode {
-        case "ETF 穿透": "All \(etfResponse?.rows.count ?? 0)"
-        default: "All \(holdings.count)"
+        case "ETF 穿透": L10n.text("All \(etfResponse?.rows.count ?? 0)")
+        default: L10n.text("All \(holdings.count)")
         }
     }
 
@@ -1724,8 +1890,8 @@ private struct PortfolioDetailsCard: View {
 
     private var tableTitle: String {
         switch tableMode {
-        case "ETF 穿透": "ETF 穿透"
-        case "热力图": "持仓热力图"
+        case "ETF 穿透": L10n.text("ETF 穿透")
+        case "热力图": L10n.text("持仓热力图")
         default: "Catfolio"
         }
     }
@@ -1743,7 +1909,7 @@ private struct PortfolioDetailsCard: View {
                     )
                 }
                 .buttonStyle(.plain)
-                .accessibilityHint("打开成交量分析")
+                .accessibilityHint(L10n.text("打开成交量分析"))
             }
         }
     }
@@ -1836,7 +2002,7 @@ private struct PortfolioDetailsCard: View {
         if isLoadingETF, etfResponse == nil {
             HStack(spacing: 10) {
                 ProgressView()
-                Text("正在计算 ETF 底层持仓…")
+                Text(L10n.text("正在计算 ETF 底层持仓…"))
                     .foregroundStyle(.secondary)
                 Spacer()
             }
@@ -1849,16 +2015,16 @@ private struct PortfolioDetailsCard: View {
                 .frame(maxWidth: .infinity, minHeight: 90, alignment: .leading)
         } else if let response = etfResponse {
             HStack(spacing: 12) {
-                ETFSummaryMetric(title: "ETF 市值", value: DisplayFormat.money(response.etfTotalUSD))
-                ETFSummaryMetric(title: "底层证券", value: "\(response.constituentCount) 项")
+                ETFSummaryMetric(title: L10n.text("ETF 市值"), value: DisplayFormat.money(response.etfTotalUSD))
+                ETFSummaryMetric(title: L10n.text("底层证券"), value: L10n.text("\(response.constituentCount) 项"))
                 ETFSummaryMetric(
-                    title: "成分覆盖",
+                    title: L10n.text("成分覆盖"),
                     value: DisplayFormat.percent(response.coveredWeightPercent, signed: false)
                 )
             }
             .padding(.vertical, 10)
 
-            Text("\(response.etfTickers.joined(separator: " · ")) 按当前市值和基金权重拆开，再与相同股票的直接持仓合并。")
+            Text(L10n.text("\(response.etfTickers.joined(separator: " · ")) 按当前市值和基金权重拆开，再与相同股票的直接持仓合并。"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1879,7 +2045,7 @@ private struct PortfolioDetailsCard: View {
                     etfVisibleLimit += 20
                 } label: {
                     HStack {
-                        Text("显示更多")
+                        Text(L10n.text("显示更多"))
                         Spacer()
                         Text("\(visibleETFRows.count) / \(sortedETFRows.count)")
                             .foregroundStyle(.secondary)
@@ -1890,7 +2056,7 @@ private struct PortfolioDetailsCard: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityHint("再显示 20 项 ETF 底层持仓")
+                .accessibilityHint(L10n.text("再显示 20 项 ETF 底层持仓"))
             }
         }
     }
@@ -1989,19 +2155,19 @@ private enum HoldingSortField: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .marketValue: "市值"
-        case .unrealized: "盈利"
-        case .unrealizedPercent: "收益率"
-        case .name: "名称"
+        case .marketValue: L10n.text("市值")
+        case .unrealized: L10n.text("盈利")
+        case .unrealizedPercent: L10n.text("收益率")
+        case .name: L10n.text("名称")
         }
     }
 
     var compactTitle: String {
         switch self {
-        case .marketValue: "Mkt Cap"
-        case .unrealized: "P&L"
-        case .unrealizedPercent: "Return"
-        case .name: "Name"
+        case .marketValue: L10n.text("Mkt Cap")
+        case .unrealized: L10n.text("P&L")
+        case .unrealizedPercent: L10n.text("Return")
+        case .name: L10n.text("Name")
         }
     }
 }
@@ -2014,8 +2180,8 @@ enum HoldingPerformancePeriod: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .today: "今日"
-        case .holdingPeriod: "持有期"
+        case .today: L10n.text("今日")
+        case .holdingPeriod: L10n.text("持有期")
         }
     }
 
@@ -2028,6 +2194,7 @@ enum HoldingPerformancePeriod: String, CaseIterable, Identifiable {
 }
 
 private struct HeatmapPerformancePeriodMenu: View {
+    @Environment(\.locale) private var appLocale
     @Binding var period: HoldingPerformancePeriod
     @Binding var groupsBySector: Bool
     @Binding var looksThroughETF: Bool
@@ -2035,7 +2202,7 @@ private struct HeatmapPerformancePeriodMenu: View {
 
     var body: some View {
         Menu {
-            Section("收益时间") {
+            Section(L10n.text("收益时间")) {
                 ForEach(HoldingPerformancePeriod.allCases) { option in
                     Button {
                         period = option
@@ -2050,9 +2217,9 @@ private struct HeatmapPerformancePeriodMenu: View {
 
             Divider()
 
-            Section("布局") {
-                Toggle("按板块分组", isOn: $groupsBySector)
-                Toggle("穿透 ETF", isOn: $looksThroughETF)
+            Section(L10n.text("布局")) {
+                Toggle(L10n.text("按板块分组"), isOn: $groupsBySector)
+                Toggle(L10n.text("穿透 ETF"), isOn: $looksThroughETF)
             }
         } label: {
             Image("PortfolioHeaderSort")
@@ -2067,8 +2234,8 @@ private struct HeatmapPerformancePeriodMenu: View {
         .foregroundStyle(.secondary)
         .menuOrder(.fixed)
         .accessibilityLabel(
-            "热力图筛选：\(period.title)，\(groupsBySector ? "按板块分组" : "不分组")，"
-                + (looksThroughETF ? "已穿透 ETF" : "未穿透 ETF")
+            L10n.text("热力图筛选：\(period.title)，\(groupsBySector ? "按板块分组" : "不分组")，")
+                + (looksThroughETF ? L10n.text("已穿透 ETF") : L10n.text("未穿透 ETF"))
         )
     }
 }
@@ -2083,15 +2250,16 @@ private enum ETFExposureSortField: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .totalExposure: "总暴露"
-        case .indirectExposure: "ETF 间接"
-        case .directExposure: "直接持仓"
-        case .name: "名称"
+        case .totalExposure: L10n.text("总暴露")
+        case .indirectExposure: L10n.text("ETF 间接")
+        case .directExposure: L10n.text("直接持仓")
+        case .name: L10n.text("名称")
         }
     }
 }
 
 private struct HoldingSortMenu: View {
+    @Environment(\.locale) private var appLocale
     @Binding var field: HoldingSortField
     @Binding var ascending: Bool
     @Binding var performancePeriod: HoldingPerformancePeriod
@@ -2103,12 +2271,12 @@ private struct HoldingSortMenu: View {
         .buttonStyle(.plain)
         .appText(.footnote, weight: .medium)
         .foregroundStyle(.secondary)
-        .accessibilityLabel("筛选：\(performancePeriod.title)；排序：\(field.title)，\(ascending ? "升序" : "降序")")
+        .accessibilityLabel(L10n.text("筛选：\(performancePeriod.title)；排序：\(field.title)，\(ascending ? "升序" : "降序")"))
     }
 
     private var menu: some View {
         Menu {
-            Section("收益时间") {
+            Section(L10n.text("收益时间")) {
                 ForEach(HoldingPerformancePeriod.allCases) { period in
                     Button {
                         performancePeriod = period
@@ -2123,7 +2291,7 @@ private struct HoldingSortMenu: View {
 
             Divider()
 
-            Section("排序方式") {
+            Section(L10n.text("排序方式")) {
                 ForEach(HoldingSortField.allCases) { option in
                     Button {
                         field = option
@@ -2143,7 +2311,7 @@ private struct HoldingSortMenu: View {
                 ascending.toggle()
             } label: {
                 Label(
-                    ascending ? "改为降序" : "改为升序",
+                    ascending ? L10n.text("改为降序") : L10n.text("改为升序"),
                     systemImage: ascending ? "arrow.down" : "arrow.up"
                 )
             }
@@ -2200,6 +2368,7 @@ private struct PortfolioHeaderMidYPreferenceKey: PreferenceKey {
 }
 
 private struct ETFExposureSortMenu: View {
+    @Environment(\.locale) private var appLocale
     @Binding var field: ETFExposureSortField
     @Binding var ascending: Bool
 
@@ -2208,12 +2377,12 @@ private struct ETFExposureSortMenu: View {
         .buttonStyle(.plain)
         .font(.subheadline)
         .foregroundStyle(.secondary)
-        .accessibilityLabel("ETF 穿透排序：\(field.title)，\(ascending ? "升序" : "降序")")
+        .accessibilityLabel(L10n.text("ETF 穿透排序：\(field.title)，\(ascending ? "升序" : "降序")"))
     }
 
     private var menu: some View {
         Menu {
-            Section("排序方式") {
+            Section(L10n.text("排序方式")) {
                 ForEach(ETFExposureSortField.allCases) { option in
                     Button {
                         field = option
@@ -2231,7 +2400,7 @@ private struct ETFExposureSortMenu: View {
                 ascending.toggle()
             } label: {
                 Label(
-                    ascending ? "改为降序" : "改为升序",
+                    ascending ? L10n.text("改为降序") : L10n.text("改为升序"),
                     systemImage: ascending ? "arrow.down" : "arrow.up"
                 )
             }
@@ -2247,6 +2416,7 @@ private struct ETFExposureSortMenu: View {
 }
 
 private struct ETFSummaryMetric: View {
+    @Environment(\.locale) private var appLocale
     let title: String
     let value: String
 
@@ -2265,6 +2435,7 @@ private struct ETFSummaryMetric: View {
 }
 
 private struct ETFExposureRow: View {
+    @Environment(\.locale) private var appLocale
     let row: ETFLookThroughRow
     let directHolding: Holding?
     let portfolioTotal: Double
@@ -2287,7 +2458,7 @@ private struct ETFExposureRow: View {
                         Text(row.ticker)
                         if let directHolding {
                             Text("·")
-                            Text("\(formattedShares(directHolding.shares)) 股")
+                            Text(L10n.text("\(formattedShares(directHolding.shares)) 股"))
                         }
                     }
                     .appNumber(.caption, weight: .semibold)
@@ -2306,11 +2477,11 @@ private struct ETFExposureRow: View {
             }
 
             HStack(spacing: 12) {
-                exposureLabel("直接", value: row.directUSD, color: CatfolioPalette.blue500)
+                exposureLabel(L10n.text("直接"), value: row.directUSD, color: CatfolioPalette.blue500)
                 exposureLabel("ETF", value: row.fromETFUSD, color: CatfolioPalette.green500)
                 Spacer(minLength: 4)
                 if row.directUSD > 0, row.fromETFUSD > 0 {
-                    Text("重叠持仓")
+                    Text(L10n.text("重叠持仓"))
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(Color.orange)
                         .padding(.horizontal, 7)
@@ -2321,10 +2492,10 @@ private struct ETFExposureRow: View {
 
             if let directHolding {
                 HStack(spacing: 6) {
-                    Text("现价 \(DisplayFormat.money(directHolding.quotePrice, currency: directHolding.quoteCurrency))")
+                    Text(L10n.text("现价 \(DisplayFormat.money(directHolding.quotePrice, currency: directHolding.quoteCurrency))"))
                     Text("·")
                     Text(
-                        "盈亏 \(DisplayFormat.money(directHolding.unrealized, signed: true, fractionDigits: 2)) "
+                        L10n.text("盈亏 \(DisplayFormat.money(directHolding.unrealized, signed: true, fractionDigits: 2)) ")
                             + "(\(DisplayFormat.percent(directHolding.unrealizedPercent)))"
                     )
                     .foregroundStyle(directHolding.unrealized >= 0 ? CatfolioPalette.green500 : CatfolioPalette.rose500)
@@ -2384,6 +2555,7 @@ private extension Holding {
 }
 
 private struct HoldingRow: View {
+    @Environment(\.locale) private var appLocale
     let holding: Holding
     let performancePeriod: HoldingPerformancePeriod
     let dailyChangePercent: Double?
@@ -2459,7 +2631,7 @@ private struct HoldingRow: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "\(holding.shortName)，\(formattedShares) 股 \(holding.ticker)，市值 \(DisplayFormat.money(holding.marketValue))，\(performancePeriod.title)盈亏 \(profitDescription)"
+            L10n.text("\(holding.shortName)，\(formattedShares) 股 \(holding.ticker)，市值 \(DisplayFormat.money(holding.marketValue))，\(performancePeriod.title)盈亏 \(profitDescription)")
         )
     }
 
@@ -2468,7 +2640,7 @@ private struct HoldingRow: View {
     }
 
     private var profitDescription: String {
-        guard let performance else { return "暂无数据" }
+        guard let performance else { return L10n.text("暂无数据") }
         return "\(DisplayFormat.money(performance.amount, signed: true, fractionDigits: 2)) · \(DisplayFormat.percent(performance.percent))"
     }
 
@@ -2491,7 +2663,7 @@ private struct HoldingRow: View {
             .fixedSize(horizontal: true, vertical: false)
             .layoutPriority(2)
         } else {
-            Text("暂无数据")
+            Text(L10n.text("暂无数据"))
                 .font(PortfolioHomeTypography.medium(12, relativeTo: .caption))
                 .foregroundStyle(rowAccent)
                 .lineLimit(1)
@@ -2509,6 +2681,7 @@ private struct HoldingRow: View {
 }
 
 private struct HoldingIdentity: View {
+    @Environment(\.locale) private var appLocale
     let holding: Holding
     let compact: Bool
 
@@ -2532,6 +2705,7 @@ private struct HoldingIdentity: View {
 }
 
 private struct HoldingMetrics: View {
+    @Environment(\.locale) private var appLocale
     let holding: Holding
     let performance: HoldingPerformanceValues?
     let period: HoldingPerformancePeriod
@@ -2558,7 +2732,7 @@ private struct HoldingMetrics: View {
     }
 
     private var performanceText: String {
-        guard let performance else { return "\(period.title)暂无数据" }
+        guard let performance else { return L10n.text("\(period.title)暂无数据") }
         return "\(DisplayFormat.money(performance.amount, signed: true, fractionDigits: 2)) "
             + "· \(DisplayFormat.percent(performance.percent))"
     }
@@ -2571,6 +2745,7 @@ private enum HomeSkeletonStyle {
 }
 
 private struct HomeSkeletonBlock: View {
+    @Environment(\.locale) private var appLocale
     let width: CGFloat
     let height: CGFloat
     let color: Color
@@ -2583,6 +2758,7 @@ private struct HomeSkeletonBlock: View {
 }
 
 private struct TodayContributionLoadingBars: View {
+    @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
     var isAnimating = true
 
@@ -2618,6 +2794,7 @@ private struct TodayContributionLoadingBars: View {
 }
 
 private struct TodayLoadingHeader: View {
+    @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
     var isAnimating = true
 
@@ -2650,6 +2827,7 @@ private struct TodayLoadingHeader: View {
 }
 
 private struct PortfolioLoadingView: View {
+    @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
     var isAnimating = true
 
@@ -2712,11 +2890,12 @@ private struct PortfolioLoadingView: View {
         }
         .allowsHitTesting(false)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(isAnimating ? "正在读取投资组合" : "暂无持仓数据")
+        .accessibilityLabel(isAnimating ? L10n.text("正在读取投资组合") : L10n.text("暂无持仓数据"))
     }
 }
 
 private struct PortfolioChartLoadingPlaceholder: View {
+    @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
     var isAnimating = true
 

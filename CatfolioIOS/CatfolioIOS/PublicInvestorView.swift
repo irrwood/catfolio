@@ -36,11 +36,11 @@ struct PublicInvestorSettingsSection: View {
     }
 
     private var selectionSummary: String {
-        if PublicInvestorPreferences.isDemo(selection) { return PublicInvestorDemo.title }
-        guard case .success(let catalog) = PublicInvestorCatalog.loaded else { return L10n.text("数据不可用") }
-        let names = catalog.investors.filter { PublicInvestorPreferences.selectedIDs(selection).contains($0.id) }
-        if names.count == 1 { return names[0].title }
-        return names.isEmpty ? L10n.text("未选择") : L10n.text("已选 \(names.count) 个")
+        PublicInvestorNaming.title(
+            selection: selection,
+            isDemo: PublicInvestorPreferences.isDemo(selection),
+            isInvestorMode: true
+        ) ?? L10n.text("未选择")
     }
 
     /// Routes one switch to whichever engine the current selection names.
@@ -143,6 +143,29 @@ struct PublicInvestorSelectionView: View {
 
 /// The invented portfolio, named where the reader chooses it.
 enum PublicInvestorDemo {
-    static var title: String { L10n.text("测试数据 · 测试公司") }
+    static var title: String { L10n.text("测试数据") }
     static var subtitle: String { L10n.text("合成组合，非真实持仓") }
+}
+
+/// Names whose portfolio is on screen.
+///
+/// Shared so the settings row and the home header cannot drift: a header
+/// still reading "CATFOLIO" over someone else's holdings is the specific
+/// confusion this exists to prevent.
+enum PublicInvestorNaming {
+    /// Nil when the reader is looking at their own portfolio.
+    static func title(selection: String, isDemo: Bool, isInvestorMode: Bool) -> String? {
+        if isDemo { return PublicInvestorDemo.title }
+        guard isInvestorMode, case .success(let catalog) = PublicInvestorCatalog.loaded else { return nil }
+        let chosen = PublicInvestorPreferences.selectedIDs(selection)
+        let names = catalog.investors.filter { chosen.contains($0.id) }
+        switch names.count {
+        case 0: return nil
+        case 1: return names[0].title
+        // Two names fit; beyond that the header would be longer than the
+        // figure it labels.
+        case 2: return names.map(\.title).joined(separator: L10n.text(" · "))
+        default: return L10n.text("已选 \(names.count) 个")
+        }
+    }
 }
