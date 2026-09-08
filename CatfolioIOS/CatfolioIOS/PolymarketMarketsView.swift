@@ -484,8 +484,8 @@ private struct PolymarketMarketRow: View {
 
     private var activityText: String {
         let amount = market.volume24Hours > 0 ? market.volume24Hours : market.totalVolume
-        let prefix = market.volume24Hours > 0 ? "24h" : "累计"
-        return "\(prefix) $\(amount.formatted(.number.notation(.compactName).precision(.fractionLength(0...1))))"
+        let prefix = market.volume24Hours > 0 ? "24h" : L10n.text("累计")
+        return "\(prefix) \(DisplayFormat.compactMoney(amount, currency: "USD"))"
     }
 }
 
