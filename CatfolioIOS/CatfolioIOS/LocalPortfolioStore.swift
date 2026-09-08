@@ -163,6 +163,7 @@ enum InstrumentCurrencyRules {
 }
 
 struct LocalPositionRecord: Codable, Equatable {
+    var publicDisclosure: PublicAccountDisclosure? = nil
     let ticker: String
     let name: String
     let shares: Double
@@ -566,6 +567,7 @@ struct PortfolioAccount: Identifiable, Equatable, Codable {
         switch source {
         case "IBKR Flex": "IBKR"
         case "CSV": "CSV"
+        case "公开披露": name
         default: source
         }
     }
@@ -582,6 +584,7 @@ struct PortfolioAccount: Identifiable, Equatable, Codable {
         case "Moomoo": "Individual"
         case "CSV": "手动账户"
         case "假数据": "演示账户"
+        case "公开披露": "投资账户"
         default: "投资账户"
         }
     }
@@ -664,6 +667,8 @@ struct LocalPortfolioDocument: Codable, Equatable {
 }
 
 extension LocalPortfolioDocument {
+    var isPublicDisclosure: Bool { source == PublicInvestorAccountAdapter.source || positions.contains { $0.publicDisclosure != nil } }
+
     var accounts: [PortfolioAccount] {
         let grouped = Dictionary(grouping: positions, by: \.accountKey)
         let history = Dictionary(grouping: transactions ?? [], by: \.accountKey)
@@ -725,7 +730,7 @@ extension LocalPortfolioDocument {
         let selectedSources = Set(selectedPositions.map(\.source)).sorted()
         return LocalPortfolioDocument(
             schemaVersion: schemaVersion,
-            source: selectedSources.joined(separator: " + "),
+            source: isPublicDisclosure ? PublicInvestorAccountAdapter.source : selectedSources.joined(separator: " + "),
             updatedAt: updatedAt,
             marketDataUpdatedAt: marketDataUpdatedAt,
             positions: selectedPositions,
@@ -1779,8 +1784,8 @@ enum LocalPortfolioEngine {
         var cost = 0.0
         var marketValue = 0.0
         for position in positions {
-            cost += try usd(position.shares * position.averageCost, currency: position.currency)
-            marketValue += try usd(position.shares * position.quotePrice, currency: position.quoteCurrency)
+            cost += position.publicDisclosure == nil ? try usd(position.shares * position.averageCost, currency: position.currency) : .nan
+            marketValue += try usd(position.publicDisclosure.map { $0.value ?? .nan } ?? (position.shares * position.quotePrice), currency: position.quoteCurrency)
         }
         return Totals(cost: cost, marketValue: marketValue)
     }
@@ -1788,6 +1793,7 @@ enum LocalPortfolioEngine {
     static func presentation(
         for document: LocalPortfolioDocument
     ) throws -> (PortfolioOverview, PortfolioChartResponse, [Holding]) {
+        if document.isPublicDisclosure { return try PublicInvestorAccountAdapter.presentation(for: document) }
         let totals = try totals(for: document.positions)
         let displayPositions = consolidated(document.positions)
         let unrealized = totals.marketValue - totals.cost
@@ -1806,6 +1812,12 @@ enum LocalPortfolioEngine {
             todayPnl: 0,
             breadth: Breadth(up: 0, down: 0, flat: document.positions.count)
         )
+        // Decoded once for the whole page rather than per position: each is
+        // a bundled package, and a 135-position portfolio would otherwise ask
+        // for them 135 times.
+        let fxRates = try? GBPFXRates.bundled.get()
+        let splitCatalog = try? StockSplitCatalog.bundled.get()
+
         let rows = try displayPositions.map { position -> Holding in
             let costUSD = try usd(position.shares * position.averageCost, currency: position.currency)
             let marketUSD = try usd(position.shares * position.quotePrice, currency: position.quoteCurrency)
@@ -1829,6 +1841,20 @@ enum LocalPortfolioEngine {
                 fxPnlUSD = brokerPnlUSD - pnl
                 fxPnlStatus = "estimated"
                 fxPnlSource = "broker_total_pnl_residual"
+            } else if let fxRates, let reconstructed = FXImpactCalculator.impact(
+                ticker: position.ticker,
+                transactions: document.transactions ?? [],
+                rates: fxRates,
+                splits: splitCatalog
+            ) {
+                // No broker in this ledger reports an FX component, so
+                // without this every position showed "—". Rebuilt from the
+                // trade dates already on file and ECB's published rates.
+                fxPnlUSD = try usd(reconstructed.amount, currency: position.currency)
+                fxPnlStatus = reconstructed.isExact ? "reconstructed" : "estimated"
+                fxPnlSource = reconstructed.isExact
+                    ? "ecb_daily_on_trade_dates"
+                    : "ecb_daily_nearest_prior"
             } else {
                 fxPnlUSD = nil
                 fxPnlStatus = position.fxPnlStatus

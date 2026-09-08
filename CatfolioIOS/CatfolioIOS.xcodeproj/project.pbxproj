@@ -14,6 +14,7 @@
 		A19800000000000000000004 /* company_reference.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000004 /* company_reference.json */; };
 		A199000000000000000000E3 /* public_investors.json in Resources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E3 /* public_investors.json */; };
 		A19800000000000000000011 /* stock_splits.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000011 /* stock_splits.json */; };
+		A19900000000000000FF32 /* gbp_fx_daily.json in Resources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF32 /* gbp_fx_daily.json */; };
 		A19900000000000000FF22 /* fund_fees.json in Resources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF22 /* fund_fees.json */; };
 		A19800000000000000000012 /* etf_sector_composition.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000012 /* etf_sector_composition.json */; };
 		A19800000000000000000014 /* etf_holdings.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000014 /* etf_holdings.json */; };
@@ -60,6 +61,8 @@
 		A199000000000000000000AC /* NasdaqAnalystClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AC /* NasdaqAnalystClient.swift */; };
 		A199000000000000000000AE /* TodayDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AE /* TodayDetailView.swift */; };
 		A199000000000000000000AF /* SectorAttribution.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AF /* SectorAttribution.swift */; };
+		A19900000000000000FF31 /* FXImpactCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF31 /* FXImpactCalculator.swift */; };
+		A19900000000000000FF30 /* GBPFXRates.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF30 /* GBPFXRates.swift */; };
 		A19900000000000000FF20 /* FundFeeCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF20 /* FundFeeCatalog.swift */; };
 		A199000000000000000000D8 /* ReferenceCatalogs.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D8 /* ReferenceCatalogs.swift */; };
 		A199000000000000000000D6 /* LegacyType.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D6 /* LegacyType.swift */; };
@@ -78,6 +81,7 @@
 		A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B7 /* Trading212FillDecodingTests.swift */; };
 		A199000000000000000000AD /* NasdaqAnalystLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */; };
 		A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000C1 /* SectorAttributionTests.swift */; };
+		A19900000000000000FF40 /* FXImpactTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF40 /* FXImpactTests.swift */; };
 		A19900000000000000FF21 /* FundFeeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF21 /* FundFeeTests.swift */; };
 		A199000000000000000000D7 /* TypographyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D7 /* TypographyTests.swift */; };
 		A199000000000000000000D2 /* StockSplitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D2 /* StockSplitTests.swift */; };
@@ -93,6 +97,7 @@
 		B19800000000000000000004 /* company_reference.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = company_reference.json; sourceTree = "<group>"; };
 		B199000000000000000000E3 /* public_investors.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = public_investors.json; sourceTree = "<group>"; };
 		B19800000000000000000011 /* stock_splits.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = stock_splits.json; sourceTree = "<group>"; };
+		B19900000000000000FF32 /* gbp_fx_daily.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = gbp_fx_daily.json; sourceTree = "<group>"; };
 		B19900000000000000FF22 /* fund_fees.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = fund_fees.json; sourceTree = "<group>"; };
 		B19800000000000000000012 /* etf_sector_composition.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = etf_sector_composition.json; sourceTree = "<group>"; };
 		B19800000000000000000014 /* etf_holdings.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = etf_holdings.json; sourceTree = "<group>"; };
@@ -144,6 +149,8 @@
 		B199000000000000000000AC /* NasdaqAnalystClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NasdaqAnalystClient.swift; sourceTree = "<group>"; };
 		B199000000000000000000AE /* TodayDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayDetailView.swift; sourceTree = "<group>"; };
 		B199000000000000000000AF /* SectorAttribution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttribution.swift; sourceTree = "<group>"; };
+		B19900000000000000FF31 /* FXImpactCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FXImpactCalculator.swift; sourceTree = "<group>"; };
+		B19900000000000000FF30 /* GBPFXRates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GBPFXRates.swift; sourceTree = "<group>"; };
 		B19900000000000000FF20 /* FundFeeCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundFeeCatalog.swift; sourceTree = "<group>"; };
 		B199000000000000000000D8 /* ReferenceCatalogs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferenceCatalogs.swift; sourceTree = "<group>"; };
 		B199000000000000000000D6 /* LegacyType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyType.swift; sourceTree = "<group>"; };
@@ -160,6 +167,7 @@
 		B199000000000000000000B7 /* Trading212FillDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212FillDecodingTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NasdaqAnalystLogicTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000C1 /* SectorAttributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttributionTests.swift; sourceTree = "<group>"; };
+		B19900000000000000FF40 /* FXImpactTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FXImpactTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF21 /* FundFeeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundFeeTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000D7 /* TypographyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypographyTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000D2 /* StockSplitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockSplitTests.swift; sourceTree = "<group>"; };
@@ -239,6 +247,8 @@
 				B199000000000000000000AC /* NasdaqAnalystClient.swift */,
 				B199000000000000000000AE /* TodayDetailView.swift */,
 				B199000000000000000000AF /* SectorAttribution.swift */,
+				B19900000000000000FF31 /* FXImpactCalculator.swift */,
+				B19900000000000000FF30 /* GBPFXRates.swift */,
 				B19900000000000000FF20 /* FundFeeCatalog.swift */,
 				B199000000000000000000D8 /* ReferenceCatalogs.swift */,
 				B199000000000000000000D6 /* LegacyType.swift */,
@@ -262,6 +272,7 @@
 				B19800000000000000000004 /* company_reference.json */,
 				B199000000000000000000E3 /* public_investors.json */,
 				B19800000000000000000011 /* stock_splits.json */,
+				B19900000000000000FF32 /* gbp_fx_daily.json */,
 				B19900000000000000FF22 /* fund_fees.json */,
 				B19800000000000000000012 /* etf_sector_composition.json */,
 				B19800000000000000000014 /* etf_holdings.json */,
@@ -309,6 +320,7 @@
 				B199000000000000000000B7 /* Trading212FillDecodingTests.swift */,
 				B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */,
 				B199000000000000000000C1 /* SectorAttributionTests.swift */,
+				B19900000000000000FF40 /* FXImpactTests.swift */,
 				B19900000000000000FF21 /* FundFeeTests.swift */,
 				B199000000000000000000D7 /* TypographyTests.swift */,
 				B199000000000000000000D2 /* StockSplitTests.swift */,
@@ -421,6 +433,7 @@
 				A19800000000000000000004 /* company_reference.json in Resources */,
 				A199000000000000000000E3 /* public_investors.json in Resources */,
 				A19800000000000000000011 /* stock_splits.json in Resources */,
+				A19900000000000000FF32 /* gbp_fx_daily.json in Resources */,
 				A19900000000000000FF22 /* fund_fees.json in Resources */,
 				A19800000000000000000012 /* etf_sector_composition.json in Resources */,
 				A19800000000000000000014 /* etf_holdings.json in Resources */,
@@ -480,6 +493,8 @@
 				A199000000000000000000AC /* NasdaqAnalystClient.swift in Sources */,
 				A199000000000000000000AE /* TodayDetailView.swift in Sources */,
 				A199000000000000000000AF /* SectorAttribution.swift in Sources */,
+				A19900000000000000FF31 /* FXImpactCalculator.swift in Sources */,
+				A19900000000000000FF30 /* GBPFXRates.swift in Sources */,
 				A19900000000000000FF20 /* FundFeeCatalog.swift in Sources */,
 				A199000000000000000000D8 /* ReferenceCatalogs.swift in Sources */,
 				A199000000000000000000D6 /* LegacyType.swift in Sources */,
@@ -505,6 +520,7 @@
 				A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */,
 				A199000000000000000000AD /* NasdaqAnalystLogicTests.swift in Sources */,
 				A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */,
+				A19900000000000000FF40 /* FXImpactTests.swift in Sources */,
 				A19900000000000000FF21 /* FundFeeTests.swift in Sources */,
 				A199000000000000000000D7 /* TypographyTests.swift in Sources */,
 				A199000000000000000000D2 /* StockSplitTests.swift in Sources */,
