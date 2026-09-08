@@ -15,6 +15,118 @@ struct HoldingsHeatmapTile: View {
         let changePercent: Double?
         let performanceTitle: String
 
+        var performancePeriod: HoldingPerformancePeriod = .today
+        var isEstimated = false
+        var detailItems: [Model] = []
+
+        var leafItems: [Model] {
+            isRemainder ? detailItems.flatMap(\.leafItems) : [self]
+        }
+
+        struct PerformanceSummary {
+            let amount: Double
+            let referenceValue: Double
+            let knownCount: Int
+            let totalCount: Int
+            let isEstimated: Bool
+            var isComplete: Bool { totalCount > 0 && knownCount == totalCount }
+            /// The return over whatever is priced, not over everything.
+            ///
+            /// Requiring every leaf meant the merged block — which collects the
+            /// smallest holdings, the ones most often missing a quote — showed
+            /// nothing at all whenever a single one of thirty-odd lacked a
+            /// price. A return over the priced majority is worth more than a
+            /// blank, and `isComplete` still says whether it covers everything.
+            var percent: Double? {
+                referenceValue > 0 ? amount / referenceValue * 100 : nil
+            }
+        }
+
+        func performanceSummary(dailyChanges: [String: Double] = [:]) -> PerformanceSummary {
+            let leaves = leafItems
+            var amount = 0.0
+            var referenceValue = 0.0
+            var knownCount = 0
+            for item in leaves {
+                guard item.performancePeriod == performancePeriod,
+                      item.marketValue.isFinite, item.marketValue > 0 else { continue }
+                let reference: Double
+                if item.performancePeriod == .holdingPeriod, let holding = item.holding,
+                   !item.isEstimated {
+                    guard holding.publicDisclosure == nil, holding.averageCost > 0,
+                          holding.unrealized.isFinite else { continue }
+                    reference = item.marketValue - holding.unrealized
+                } else {
+                    let change = item.changePercent ?? (item.performancePeriod == .today ? dailyChanges[item.id.uppercased()] : nil)
+                    guard let change, change.isFinite, change > -100 else { continue }
+                    // Today's return is based on previous-close value; the
+                    // holding-period return is based on allocated cost.
+                    reference = item.marketValue / (1 + change / 100)
+                }
+                guard reference.isFinite, reference > 0 else { continue }
+                amount += item.marketValue - reference
+                referenceValue += reference
+                knownCount += 1
+            }
+            return PerformanceSummary(amount: amount, referenceValue: referenceValue,
+                                      knownCount: knownCount, totalCount: leaves.count,
+                                      isEstimated: leaves.contains(where: \.isEstimated))
+        }
+
+        static func remainder(id: String, items: [Model]) -> Model {
+            let leaves = items.flatMap(\.leafItems)
+            var result = Model(
+                id: id, content: .remainder(count: leaves.count),
+                marketValue: items.reduce(0) { $0 + $1.marketValue },
+                portfolioFraction: items.reduce(0) { $0 + $1.portfolioFraction },
+                changePercent: nil, performanceTitle: items.first?.performanceTitle ?? "",
+                performancePeriod: items.first?.performancePeriod ?? .today,
+                detailItems: leaves
+            )
+            let summary = result.performanceSummary()
+            result = Model(id: result.id, content: result.content, marketValue: result.marketValue,
+                           portfolioFraction: result.portfolioFraction, changePercent: summary.percent,
+                           performanceTitle: result.performanceTitle, performancePeriod: result.performancePeriod,
+                           isEstimated: summary.isEstimated, detailItems: leaves)
+            return result
+        }
+
+        /// A holding to open the security sheet with, for every row.
+        ///
+        /// A look-through constituent held only inside an ETF has no direct
+        /// position — no shares, no cost — which is why half the rows in a
+        /// sector sheet used to be inert while looking exactly like the rows
+        /// that were not. It does have a ticker, a return and a real exposure,
+        /// and that is enough for the price, volume and options sections.
+        ///
+        /// `shares == 0` is the signal: the detail sheet leaves its position
+        /// blocks out rather than filling them with zeros, and no cost basis is
+        /// invented for a position that does not exist.
+        var detailHolding: Holding? {
+            if let holding { return holding }
+            guard case let .exposure(row, _) = content else { return nil }
+            return Holding(
+                ticker: row.ticker,
+                logoSymbol: row.logoSymbol,
+                displayName: row.name,
+                sector: row.sector,
+                source: nil,
+                shares: 0,
+                averageCost: 0,
+                costCurrency: nil,
+                quotePrice: 0,
+                quoteCurrency: nil,
+                todayChangePercent: performancePeriod == .today ? changePercent : nil,
+                marketValue: marketValue,
+                weight: portfolioFraction,
+                unrealized: 0,
+                unrealizedPercent: 0,
+                fxPnl: nil,
+                fxPnlPercent: nil,
+                fxPnlStatus: nil,
+                fxPnlSource: nil
+            )
+        }
         var holding: Holding? {
             switch content {
             case let .holding(holding): holding
@@ -47,7 +159,35 @@ struct HoldingsHeatmapTile: View {
     }
 
     private var showsWeight: Bool {
-        size.width >= 108 && size.height >= 124
+        showsChange
+    }
+
+    private var identifierScale: TypeScale {
+        let side = min(size.width, size.height)
+        if side >= 160 { return .title }
+        if side >= 110 { return .heading }
+        if side >= 80 { return .body }
+        if side >= 56 { return .label }
+        if side >= 32 { return .caption }
+        return .nano
+    }
+
+    private var returnScale: TypeScale {
+        let side = min(size.width, size.height)
+        if side >= 160 { return .heading }
+        if side >= 110 { return .subheading }
+        if side >= 80 { return .callout }
+        return .label
+    }
+
+    /// A step below what it was at every size. The weight is the secondary
+    /// figure of the two and only has to be legible, not balanced against the
+    /// return, and giving the pair room matters more than its own size.
+    private var detailScale: TypeScale {
+        let side = min(size.width, size.height)
+        if side >= 160 { return .micro }
+        if side >= 80 { return .nano }
+        return .nano
     }
 
     var body: some View {
@@ -62,6 +202,9 @@ struct HoldingsHeatmapTile: View {
             }
         }
         .accessibilityLabel(accessibilityText)
+    /// Wherever a return is shown, so is the weight. These were 8pt apart in
+    /// height, which is why most mid-sized tiles carried one figure and not the
+    /// pair; the weight's own scale drops instead of the tile going without it.
     }
 
     private var tileBody: some View {
@@ -91,7 +234,14 @@ struct HoldingsHeatmapTile: View {
             securityContent(ticker: row.ticker, logoSymbol: row.logoSymbol)
 
         case .remainder:
-            Color.clear
+            let summary = model.performanceSummary()
+            VStack(spacing: 3) {
+                Text(L10n.text("其他"))
+                    .appText(identifierScale, weight: .semibold)
+                performanceLabels(change: summary.percent)
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.65)
         }
     }
 
@@ -105,10 +255,37 @@ struct HoldingsHeatmapTile: View {
                 Text(ticker)
                     .font(showsLogo ? .headline : .caption.bold())
                     .lineLimit(1)
-                    .minimumScaleFactor(0.62)
+                    .minimumScaleFactor(0.85)
+            } else if Self.canShowIdentifier(in: size) {
+                AssetLogo(ticker: ticker, logoSymbol: logoSymbol, size: min(22, min(size.width, size.height) - 6))
+            }
+        } else {
+            VStack(spacing: showsLogo ? 6 : 3) {
+                if showsLogo {
+                    AssetLogo(ticker: ticker, logoSymbol: logoSymbol)
+                }
+
+                if showsTicker {
+                    Text(ticker)
+                        .appText(identifierScale, weight: .semibold)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.62)
+                }
+
+                performanceLabels(change: model.changePercent)
             }
 
-            if showsChange, let change = model.changePercent {
+    /// The return sits above the weight, always.
+    ///
+    /// The weight used to slide up into the return's slot on a holding with no
+    /// quote, so the top figure on one tile was a return and on the next one a
+    /// weight — the same position meaning two different things. The row is held
+    /// instead. Hidden rather than filled with a dash: a dash reads as zero,
+    /// and an empty slot reads as missing, which is what it is.
+    @ViewBuilder
+    private func performanceLabels(change: Double?) -> some View {
+        if showsChange {
+            if let change {
                 Text(DisplayFormat.percent(change))
                     .appNumber(.callout, weight: .bold)
                     .foregroundStyle(changeColor)

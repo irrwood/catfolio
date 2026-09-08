@@ -26,6 +26,19 @@ struct HoldingDetailView: View {
         accountContext == nil || !selectedAccountKeys.isEmpty
     }
 
+    /// Whether there is a position behind this security at all.
+    ///
+    /// An ETF look-through constituent opens this screen with a real ticker and
+    /// a real quote but no shares and no cost. The position blocks are left out
+    /// rather than shown as zeros, and nothing invents a cost basis for it.
+    private var hasPosition: Bool {
+        displayedHolding.shares > 0
+    }
+
+    private var showsPosition: Bool {
+        hasSelectedDetailAccounts && hasPosition
+    }
+
     private var pageBackground: Color {
         colorScheme == .dark ? .black : .white
     }
@@ -93,7 +106,7 @@ struct HoldingDetailView: View {
                             VolumePriceChart(
                                 profile: profile,
                                 holding: displayedHolding,
-                                showsHoldingCost: hasSelectedDetailAccounts
+                                showsHoldingCost: showsPosition
                             )
 
                             if let high = profile.fiftyTwoWeekHigh,
@@ -130,11 +143,11 @@ struct HoldingDetailView: View {
 
                         OptionsOIView(symbol: holding.ticker, currency: holding.quoteCurrency,
                             price: priceHistory?.latestAvailablePrice ?? holding.quotePrice,
-                            costUSD: hasSelectedDetailAccounts ? VolumeProfileInterpretation.convertedPrice(
+                            costUSD: showsPosition ? VolumeProfileInterpretation.convertedPrice(
                                 displayedHolding.averageCost, from: displayedHolding.costCurrency, to: "USD",
                                 usdRate: LocalPortfolioEngine.usdRate(for:)) : nil)
 
-                        if hasSelectedDetailAccounts {
+                        if showsPosition {
                             HoldingPositionDetails(holding: displayedHolding)
                         }
 

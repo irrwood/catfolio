@@ -457,11 +457,16 @@ private struct HoldingsHeatmapSectorView: View {
                 in: CGSize(width: geometry.size.width, height: tileHeight)
             )
 
-            VStack(spacing: 0) {
-                if showsHeader {
-                    Button {
-                        onExpand(group)
-                    } label: {
+            Button {
+                onExpand(group)
+            } label: {
+                VStack(spacing: 0) {
+                    if showsHeader {
+                        // The sector names itself; the tally beside it was one
+                        // more figure competing with the ones inside the block,
+                        // and "其他 34" read as a holding called 其他 rather
+                        // than a count. It stays in the accessibility value,
+                        // where it costs no room.
                         HStack(spacing: 4) {
                             Text(group.title)
                                 .lineLimit(1)
@@ -534,16 +539,44 @@ private struct HoldingsHeatmapSectorDetail: View {
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("\(group.constituentCount) 项 · 面积仍代表在整个组合中的市值占比")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+            List {
+                Section {
+                    HStack {
+                        Text(DisplayFormat.money(model.marketValue)).appNumber(.body)
+                        Spacer()
+                        Text(DisplayFormat.percent(model.portfolioFraction * 100, signed: false))
+                            .appNumber(.body).foregroundStyle(.secondary)
+                    }
+                    LabeledContent(L10n.text(summary.isComplete ? "P&L" : "已知盈亏"), value:
+                        summary.knownCount > 0
+                            ? (summary.isEstimated ? "≈" : "") + (summary.amount > 0 ? "+" : "") + DisplayFormat.money(summary.amount)
+                            : L10n.text("暂无数据"))
+                    LabeledContent(L10n.text("收益率"), value:
+                        summary.percent.map { (summary.isEstimated ? "≈" : "") + DisplayFormat.percent($0) }
+                            ?? L10n.text("暂无数据"))
+                    if !summary.isComplete {
+                        Text(L10n.text("已覆盖 \(summary.knownCount)/\(summary.totalCount) 项，缺失数据未计入盈亏"))
+                            .appText(.caption).foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text(model.performanceTitle)
+                }
+                Section {
+                    // Every row opens. Rows for a constituent held only inside
+                    // an ETF used to render identically and do nothing, so
+                    // which rows responded looked arbitrary.
+                    ForEach(items) { item in
+                        if let holding = item.detailHolding {
+                            Button { selectedHolding = holding } label: { detailRow(item) }
+                                .buttonStyle(.plain)
+                        } else {
+                            detailRow(item)
+                        }
+                    }
+                } header: {
+                    Text(model.performanceTitle)
+                }
 
-                HoldingsHeatmapTileCloud(
-                    models: group.models,
-                    tileInset: 2,
-                    onSelect: onSelect
-                )
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
