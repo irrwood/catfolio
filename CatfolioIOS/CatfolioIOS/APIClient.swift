@@ -29,6 +29,12 @@ final class AppModel {
     private(set) var comparisonRevision = 0
     private(set) var returnsAnalyticsRevision = 0
     private(set) var isFakeDataMode = UserDefaults.standard.bool(forKey: "catfolio.fakeDataMode")
+    private(set) var isPublicInvestorMode = UserDefaults.standard.bool(forKey: PublicInvestorPreferences.enabledKey)
+    var publicInvestorSelection = UserDefaults.standard.string(forKey: PublicInvestorPreferences.selectionKey) ?? PublicInvestorPreferences.defaultSelection
+    var publicDisclosureSummary: PublicAccountDisclosure? {
+        let rows = document.positions.compactMap(\.publicDisclosure)
+        return rows.isEmpty ? nil : PublicAccountDisclosure.combining(rows)
+    }
     var fakeDataModeError: String?
     var portfolioRecoveryNotice: String?
 
@@ -76,6 +82,12 @@ final class AppModel {
             // Publish disk data before any network work. Slow/offline quote
             // providers must never hold the entire home screen in a skeleton.
             try await apply(loaded)
+            if isPublicInvestorMode {
+                await refreshHoldingDailyChanges()
+                guard generation == portfolioRequestGeneration else { return }
+                await enrichPortfolioChart(from: document, generation: generation)
+                return
+            }
             if !isFakeDataMode {
                 loaded = try await mergeCachedTrading212History(into: loaded)
                 guard generation == portfolioRequestGeneration else { return }
@@ -271,7 +283,7 @@ final class AppModel {
         return try await LocalMarketDataClient().volumeProfile(
             ticker: ticker,
             currency: holding?.quoteCurrency ?? "USD",
-            referencePrice: holding?.quotePrice
+            referencePrice: holding?.quotePrice.isFinite == true ? holding?.quotePrice : nil
         )
     }
 
@@ -282,9 +294,21 @@ final class AppModel {
         return try await LocalMarketDataClient().securityPriceHistory(
             ticker: ticker,
             currency: holding?.quoteCurrency ?? "USD",
-            referencePrice: holding?.quotePrice,
+            referencePrice: holding?.quotePrice.isFinite == true ? holding?.quotePrice : nil,
             document: scoped
         )
+    }
+
+    /// Holdings as they stand inside a subset of accounts.
+    ///
+    /// The published `holdings` are the whole portfolio. A screen with its
+    /// own account filter needs the positions those accounts actually hold,
+    /// re-derived rather than apportioned, because weight and market value
+    /// are properties of the scope they are computed in.
+    func holdings(forAccounts accountIDs: Set<String>) async throws -> [Holding] {
+        let document = try await loadActiveDocument()
+        let scoped = document.scoped(to: accountIDs)
+        return try LocalPortfolioEngine.presentation(for: scoped).2
     }
 
     func holdingDetailAccountContext(for ticker: String) async throws -> HoldingDetailAccountContext {
@@ -300,11 +324,11 @@ final class AppModel {
             .map { accountKey, positions -> HoldingDetailAccountOption in
                 let quoteCurrency = positions.first?.quoteCurrency ?? "USD"
                 let marketValue = positions.reduce(0.0) {
-                    $0 + $1.shares * $1.quotePrice
+                    $0 + ($1.publicDisclosure.map { $0.value ?? .nan } ?? ($1.shares * $1.quotePrice))
                 }
                 let marketValueUSD = try positions.reduce(0.0) { partial, position in
                     partial + (try LocalPortfolioEngine.usd(
-                        position.shares * position.quotePrice,
+                        position.publicDisclosure.map { $0.value ?? .nan } ?? (position.shares * position.quotePrice),
                         currency: position.quoteCurrency
                     ))
                 }
@@ -343,7 +367,7 @@ final class AppModel {
         return try await LocalMarketDataClient().securityPriceHistory(
             ticker: ticker,
             currency: scopedHolding?.quoteCurrency ?? "USD",
-            referencePrice: scopedHolding?.quotePrice,
+            referencePrice: scopedHolding?.quotePrice.isFinite == true ? scopedHolding?.quotePrice : nil,
             document: scoped
         )
     }
@@ -492,7 +516,7 @@ final class AppModel {
     }
 
     func renameAccount(_ accountID: String, to name: String) async throws {
-        guard !isFakeDataMode else { return }
+        guard !isFakeDataMode && !isPublicInvestorMode else { return }
         _ = try await LocalPortfolioStore.shared.renameAccount(accountID, to: name)
         await refreshPortfolio()
     }
@@ -506,7 +530,7 @@ final class AppModel {
         price: Double,
         currency: String
     ) async throws {
-        guard !isFakeDataMode else { return }
+        guard !isFakeDataMode && !isPublicInvestorMode else { return }
         let transaction = LocalTransactionRecord(
             date: DayDateCodec.string(from: date),
             action: action.uppercased(),
@@ -525,7 +549,7 @@ final class AppModel {
     }
 
     func deduplicateTransactions(for accountID: String) async throws -> Int {
-        guard !isFakeDataMode else { return 0 }
+        guard !isFakeDataMode && !isPublicInvestorMode else { return 0 }
         let (_, removed) = try await LocalPortfolioStore.shared.deduplicateTransactions(for: accountID)
         if removed > 0 {
             await refreshPortfolio()
@@ -535,7 +559,7 @@ final class AppModel {
     }
 
     func deleteAccount(_ accountID: String) async throws {
-        guard !isFakeDataMode else { return }
+        guard !isFakeDataMode && !isPublicInvestorMode else { return }
         _ = try await LocalPortfolioStore.shared.removeAccount(accountID)
         await refreshPortfolio()
         if !accounts.isEmpty {
@@ -956,7 +980,7 @@ final class AppModel {
             holdingDailyChangesSignature = ""
             isHoldingDailyChangesLoading = !presentation.2.isEmpty
         }
-        localSource = scoped.source
+        localSource = isPublicInvestorMode ? scoped.accounts.map(\.displayName).joined(separator: "、") : scoped.source
         localUpdatedAt = loaded.marketDataUpdatedAt ?? loaded.updatedAt
         comparison = nil
         returnsAnalytics = nil
@@ -977,7 +1001,36 @@ final class AppModel {
         await refreshReturnsPage()
     }
 
+    func setPublicInvestorMode(_ enabled: Bool) async {
+        isPublicInvestorMode = enabled
+        UserDefaults.standard.set(enabled, forKey: PublicInvestorPreferences.enabledKey)
+        await reloadPortfolioSource()
+    }
+
+    func setPublicInvestorSelection(_ selection: String) async {
+        publicInvestorSelection = selection
+        UserDefaults.standard.set(selection, forKey: PublicInvestorPreferences.selectionKey)
+        UserDefaults.standard.set(true, forKey: "catfolio.publicSelectsAllAccounts")
+        if isPublicInvestorMode { await reloadPortfolioSource() }
+    }
+
+    private func reloadPortfolioSource() async {
+        invalidateInFlightRequests()
+        holdings = []
+        overview = nil
+        portfolioChart = nil
+        comparison = nil
+        returnsAnalytics = nil
+        accounts = []
+        holdingDailyChanges = [:]
+        await refreshPortfolio()
+        await refreshReturnsPage()
+    }
+
     private func loadActiveDocument() async throws -> LocalPortfolioDocument {
+        if isPublicInvestorMode {
+            return try await PublicInvestorSimulationStore.shared.load(catalog: PublicInvestorCatalog.loaded.get(), selection: publicInvestorSelection)
+        }
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--verify-empty-account") { return FoundationRegressionChecks.emptyFixture }
         #endif
@@ -990,7 +1043,10 @@ final class AppModel {
     }
 
     private func activeDocument(from loaded: LocalPortfolioDocument) -> LocalPortfolioDocument {
-        isFakeDataMode ? FakePortfolioGenerator.make() : loaded
+        if isPublicInvestorMode {
+            return document
+        }
+        return isFakeDataMode ? FakePortfolioGenerator.make() : loaded
     }
 
     private func selectedDocument(from loaded: LocalPortfolioDocument) -> LocalPortfolioDocument {
@@ -1021,11 +1077,11 @@ final class AppModel {
     }
 
     private var selectedAccountsStorageKey: String {
-        isFakeDataMode ? Self.fakeSelectedAccountsKey : Self.selectedAccountsKey
+        isPublicInvestorMode ? "catfolio.publicSelectedAccounts" : (isFakeDataMode ? Self.fakeSelectedAccountsKey : Self.selectedAccountsKey)
     }
 
     private var selectsAllAccountsStorageKey: String {
-        isFakeDataMode ? Self.fakeSelectsAllAccountsKey : Self.selectsAllAccountsKey
+        isPublicInvestorMode ? "catfolio.publicSelectsAllAccounts" : (isFakeDataMode ? Self.fakeSelectsAllAccountsKey : Self.selectsAllAccountsKey)
     }
 
     private static func savedAccountKeys(forKey key: String) -> Set<String> {

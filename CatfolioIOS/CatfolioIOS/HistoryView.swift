@@ -12,6 +12,10 @@ private enum HistoryCategory: String, CaseIterable, Identifiable {
     case orders = "Orders"
     case dividends = "Dividends"
     case interest = "Interest"
+    /// Not an activity. The ledger records what was traded; a fund's charge
+    /// is a property of holding it, and it is the one cost in this app that
+    /// accrues without ever appearing as a transaction.
+    case fees = "Fees"
 
     var id: String { rawValue }
 
@@ -21,6 +25,7 @@ private enum HistoryCategory: String, CaseIterable, Identifiable {
         case .orders: "arrow.up.arrow.down"
         case .dividends: "banknote.fill"
         case .interest: "percent"
+        case .fees: "creditcard"
         }
     }
 
@@ -29,6 +34,7 @@ private enum HistoryCategory: String, CaseIterable, Identifiable {
         case .all: true
         case .orders: kind == .buy || kind == .sell
         case .dividends: kind == .dividend
+        case .fees: false
         case .interest: kind == .interest
         }
     }
@@ -181,6 +187,7 @@ struct HistoryView: View {
         guard let selectedTaxYear else { return true }
         return taxYearBasis.label(for: date) == selectedTaxYear
     }
+    @State private var scopedHoldings: [Holding] = []
     @State private var isLoading = true
     @State private var isSyncing = false
     @State private var errorMessage: String?
@@ -263,6 +270,9 @@ struct HistoryView: View {
         } message: {
             Text(exportError ?? "")
         }
+        .onChange(of: selectedAccountIDs) {
+            Task { await loadScopedHoldings() }
+        }
         .task {
             await loadLedger()
             await synchronizeTrading212History()
@@ -285,6 +295,9 @@ struct HistoryView: View {
         List {
             categorySection
 
+            if category == .fees {
+                feeSections
+            } else {
             Section {
                 ForEach(summaryMetrics) { metric in
                     summaryRow(metric)
@@ -318,6 +331,7 @@ struct HistoryView: View {
                     .headerProminence(.increased)
                 }
             }
+            }
         }
         .listStyle(.insetGrouped)
         .contentMargins(.top, 0, for: .scrollContent)
@@ -327,8 +341,108 @@ struct HistoryView: View {
         }
     }
 
+    /// Funds held in the selected accounts, and what they charge.
+    ///
+    /// Every other tab here reads the ledger. This one cannot: a fund's
+    /// charge never appears as a transaction — it is taken inside the fund,
+    /// out of the price — so the only way to see it is to price the holding
+    /// against a published rate. That is also why it is worth showing: it is
+    /// the one cost in this app that is never itemised anywhere else.
+    private var feeCharges: [(holding: Holding, rate: Double, annual: Double, isVerified: Bool)] {
+        guard let catalog = try? FundFeeCatalog.bundled.get() else { return [] }
+        return scopedHoldings.compactMap { holding in
+            guard let fee = catalog.fee(brokerSymbol: holding.ticker) else { return nil }
+            return (holding, fee.rate, holding.marketValue * fee.rate, fee.isVerified)
+        }.sorted { $0.annual > $1.annual }
+    }
+
+    @ViewBuilder
+    private var feeSections: some View {
+        let charges = feeCharges
+        if charges.isEmpty {
+            Section {
+                ContentUnavailableView(
+                    "没有可计费的基金",
+                    systemImage: "creditcard",
+                    description: Text(scopedHoldings.isEmpty
+                        ? "所选账户暂无持仓。"
+                        : "所选账户的持仓里没有找到已公布费率的基金。个股不收管理费。")
+                )
+                .frame(maxWidth: .infinity)
+                .listRowBackground(Color.clear)
+            }
+        } else {
+            let total = charges.reduce(0) { $0 + $1.annual }
+            let fundValue = charges.reduce(0) { $0 + $1.holding.marketValue }
+            Section {
+                LabeledContent("年费用合计") {
+                    Text(DisplayFormat.money(total, fractionDigits: 2))
+                        .appNumber(.body, weight: .semibold)
+                }
+                LabeledContent("基金市值") {
+                    Text(DisplayFormat.money(fundValue))
+                        .appNumber(.body)
+                }
+                LabeledContent("加权费率") {
+                    Text(fundValue > 0
+                         ? (total / fundValue * 100).formatted(.number.precision(.fractionLength(2...3))) + "%"
+                         : "—")
+                        .appNumber(.body)
+                }
+            } footer: {
+                Text("按当前市值和公布的年费率估算的运行成本，不是已扣除的金额。基金费用在基金内部按日计提，不会出现在交易流水里，也已经反映在净值中——不要再从收益里减一次。")
+            }
+
+            Section("按持仓") {
+                ForEach(charges, id: \.holding.id) { charge in
+                    feeRow(charge)
+                }
+            }
+        }
+    }
+
+    private func feeRow(
+        _ charge: (holding: Holding, rate: Double, annual: Double, isVerified: Bool)
+    ) -> some View {
+        HStack(spacing: 12) {
+            AssetLogo(
+                ticker: charge.holding.ticker,
+                logoSymbol: charge.holding.logoSymbol,
+                size: 34
+            )
+            VStack(alignment: .leading, spacing: 4) {
+                Text(charge.holding.shortName)
+                    .font(.body.weight(.semibold))
+                    .lineLimit(1)
+                HStack(spacing: 7) {
+                    Text(charge.holding.ticker)
+                    Text((charge.rate * 100)
+                        .formatted(.number.precision(.fractionLength(2...4))) + "%")
+                    // A published figure and an estimate are not the same
+                    // claim, and the package distinguishes them.
+                    if !charge.isVerified { Text("估算") }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(DisplayFormat.money(charge.annual, fractionDigits: 2))
+                    .appNumber(.subheading, weight: .semibold)
+                    .lineLimit(1)
+                Text("每年")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
     private var summaryMetrics: [HistorySummaryMetric] {
         switch category {
+        // Fees have their own section rather than a metric strip: they are a
+        // rate applied to a holding, not a count of things that happened.
+        case .fees: []
         case .all:
             [
                 HistorySummaryMetric(title: "Activity", value: "\(filteredActivities.count)", color: .primary),
@@ -934,9 +1048,20 @@ struct HistoryView: View {
         do {
             ledger = try await model.activityLedger()
             errorMessage = nil
+            await loadScopedHoldings()
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Positions as the selected accounts hold them.
+    ///
+    /// Re-derived per scope rather than filtered from the whole portfolio,
+    /// because market value and weight depend on the scope they are computed
+    /// in — and the fee figures are money, so an apportioned number would be
+    /// wrong rather than approximate.
+    private func loadScopedHoldings() async {
+        scopedHoldings = (try? await model.holdings(forAccounts: effectiveAccountIDs)) ?? []
     }
 
     @MainActor
