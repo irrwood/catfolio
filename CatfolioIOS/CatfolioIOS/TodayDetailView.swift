@@ -294,7 +294,6 @@ struct TodayDetailView: View {
         }
         .navigationTitle("今日")
         .navigationBarTitleDisplayMode(.inline)
-        .restoresNavigationBar()
     }
 
     private func contributionRow(_ contribution: Contribution) -> some View {
@@ -392,28 +391,9 @@ private struct SectorMembersView: View {
         }
         .navigationTitle(breakdown.displayName)
         .navigationBarTitleDisplayMode(.inline)
-        .restoresNavigationBar()
     }
 
     private func percentText(_ fraction: Double) -> String {
         (fraction * 100).formatted(.number.precision(.fractionLength(fraction < 0.1 ? 1 : 0))) + "%"
-    }
-}
-
-private extension View {
-    /// Puts the navigation bar back for a pushed screen.
-    ///
-    /// Home hides the bar for its whole stack, because it draws its own
-    /// header over a full-bleed chart. That hidden state is a property of the
-    /// stack, not of the screen that set it, so a screen pushed onto it
-    /// inherits a bar with no background: the title and the back button still
-    /// draw, and the rows scroll underneath them in the clear.
-    ///
-    /// Asking for the bar and its background explicitly is what separates
-    /// "this screen wants no chrome" from "this screen was pushed by one that
-    /// didn't".
-    func restoresNavigationBar() -> some View {
-        toolbar(.visible, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
     }
 }

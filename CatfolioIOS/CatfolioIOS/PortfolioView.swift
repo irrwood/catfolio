@@ -10,7 +10,7 @@ private struct PortfolioHomeTopBackground: View {
             stops: colorScheme == .light
                 ? [
                     .init(color: Color(red: 0.541, green: 0.788, blue: 0.918), location: 0),
-                    .init(color: Color(red: 0.886, green: 0.941, blue: 0.969), location: 1),
+                    .init(color: .white, location: 1),
                 ]
                 : [
                     .init(color: .black, location: 0),
@@ -27,27 +27,121 @@ private struct PortfolioHomePageBackdrop: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            // This explicit terminal fill is independent of the scroll
-            // content's height, so bottom rubber-banding can never expose the
-            // NavigationStack or TabView background.
             (colorScheme == .light ? Color.white : Color.black)
 
-            VStack(spacing: 0) {
-                PortfolioHomeTopBackground(colorScheme: colorScheme)
-                    .frame(height: 520)
-
-                // Extend the hero's terminal colour beneath its opaque card.
-                // It remains visible only during top-edge rubber-banding.
-                (colorScheme == .light
-                    ? Color(red: 0.886, green: 0.941, blue: 0.969)
-                    : Color(red: 0.192, green: 0.208, blue: 0.235))
-                    .frame(height: 180)
-
-                Spacer(minLength: 0)
-            }
+            // Figma 223:31122 uses one uninterrupted viewport gradient from
+            // #8AC9EA to the terminal page surface. Keeping it fixed behind
+            // the native ScrollView also makes rubber-banding reveal the same
+            // background instead of a separate pale-blue extension band.
+            PortfolioHomeTopBackground(colorScheme: colorScheme)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea()
+    }
+}
+
+private enum PortfolioContentSheetLayout {
+    // Figma 165:6775 starts as a 378pt sheet inside a 402pt canvas.
+    static let initialHorizontalInset: CGFloat = 12
+    // By the halfway reference (223:29979) the sheet has travelled 263pt
+    // and opened to the full canvas width.
+    static let widthExpansionDistance: CGFloat = 263
+    static let transitionHeight: CGFloat = 326
+    static let topRadius: CGFloat = 38
+}
+
+private struct PortfolioContentSheet<Content: View>: View {
+    let scrollOffset: CGFloat
+    let content: Content
+    @Environment(\.colorScheme) private var colorScheme
+
+    init(scrollOffset: CGFloat, @ViewBuilder content: () -> Content) {
+        self.scrollOffset = scrollOffset
+        self.content = content()
+    }
+
+    private var widthProgress: CGFloat {
+        min(max(scrollOffset / PortfolioContentSheetLayout.widthExpansionDistance, 0), 1)
+    }
+
+    private var horizontalInset: CGFloat {
+        PortfolioContentSheetLayout.initialHorizontalInset * (1 - widthProgress)
+    }
+
+    private var sheetShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: PortfolioContentSheetLayout.topRadius,
+            bottomLeadingRadius: 0,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: PortfolioContentSheetLayout.topRadius,
+            style: .continuous
+        )
+    }
+
+    var body: some View {
+        content
+            .background {
+                PortfolioContentSheetBackground(
+                    colorScheme: colorScheme
+                )
+            }
+            .clipShape(sheetShape)
+            .padding(.horizontal, horizontalInset)
+            .accessibilityElement(children: .contain)
+    }
+}
+
+private struct PortfolioContentSheetBackground: View {
+    let colorScheme: ColorScheme
+
+    private var terminalColor: Color {
+        colorScheme == .light ? .white : .black
+    }
+
+    private var sheetShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: PortfolioContentSheetLayout.topRadius,
+            bottomLeadingRadius: 0,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: PortfolioContentSheetLayout.topRadius,
+            style: .continuous
+        )
+    }
+
+    @ViewBuilder
+    private var liquidGlassLayer: some View {
+        if #available(iOS 26.0, *) {
+            Color.clear
+                .glassEffect(
+                    .clear.interactive(),
+                    in: sheetShape
+                )
+        } else {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                liquidGlassLayer
+
+                LinearGradient(
+                    stops: [
+                        .init(color: terminalColor.opacity(0.10), location: 0),
+                        .init(color: terminalColor.opacity(0.54), location: 0.42),
+                        .init(color: terminalColor, location: 1),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+            .frame(height: PortfolioContentSheetLayout.transitionHeight)
+
+            terminalColor
+        }
     }
 }
 
@@ -56,6 +150,7 @@ struct PortfolioView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedHolding: Holding?
     @State private var showsTodayDetail = false
+    @State private var homeScrollOffset: CGFloat = 0
     @Namespace private var todayZoom
 
     private var previewsLoading: Bool {
@@ -79,30 +174,52 @@ struct PortfolioView: View {
                                 isRefreshing: model.isPortfolioLoading
                             )
 
+                            if model.isPublicInvestorMode {
+                                Text(model.publicDisclosureSummary?.usesUpperBoundEstimate == true
+                                    ? "公开投资者账户 · 佩洛西按披露上限估算"
+                                    : "公开投资者账户 · 披露持仓，非实时账户")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                    .padding(.horizontal, 20).padding(.vertical, 8)
+                            }
+
                             if previewsLoading {
                                 PortfolioLoadingView()
                             } else if model.holdings.isEmpty, model.overview != nil {
-                                PortfolioLoadingView(isAnimating: model.isPortfolioLoading)
+                                if model.isPublicInvestorMode {
+                                    ContentUnavailableView("暂无持仓数据", systemImage: "person.crop.circle", description: Text("请在设置中选择人物；马斯克目前暂无记录。"))
+                                } else {
+                                    PortfolioLoadingView(isAnimating: model.isPortfolioLoading)
+                                }
                             } else if let overview = model.overview, let chart = model.portfolioChart {
                                 CostMarketCard(overview: overview, response: chart)
                                     .id(model.portfolioChartRevision)
+                                    // Keep the hero visually fixed in its original
+                                    // scroll slot. The foreground sheet below moves
+                                    // normally and therefore covers it as it rises.
+                                    .offset(y: homeScrollOffset)
+                                    .zIndex(0)
 
-                                TodayContributionCard(
-                                    holdings: model.holdings,
-                                    dailyChanges: model.holdingDailyChanges,
-                                    benchmarkChange: model.benchmarkDailyChange,
-                                    isLoading: model.isHoldingDailyChangesLoading,
-                                    onOpenDetail: { showsTodayDetail = true }
-                                ) { holding in
-                                    selectedHolding = holding
-                                }
-                                .id("today-contribution")
-                                .matchedTransitionSource(id: "today-detail", in: todayZoom)
+                                PortfolioContentSheet(scrollOffset: homeScrollOffset) {
+                                    VStack(spacing: 0) {
+                                        TodayContributionCard(
+                                            holdings: model.holdings,
+                                            dailyChanges: model.holdingDailyChanges,
+                                            benchmarkChange: model.benchmarkDailyChange,
+                                            isLoading: model.isHoldingDailyChangesLoading,
+                                            onOpenDetail: { showsTodayDetail = true }
+                                        ) { holding in
+                                            selectedHolding = holding
+                                        }
+                                        .id("today-contribution")
+                                        .matchedTransitionSource(id: "today-detail", in: todayZoom)
 
-                                PortfolioDetailsCard(holdings: model.holdings) { holding in
-                                    selectedHolding = holding
+                                        PortfolioDetailsCard(holdings: model.holdings) { holding in
+                                            selectedHolding = holding
+                                        }
+                                        .id("portfolio-details")
+                                    }
                                 }
-                                .id("portfolio-details")
+                                .zIndex(1)
                             } else if model.isPortfolioLoading {
                                 PortfolioLoadingView()
                             } else if let error = model.portfolioError {
@@ -121,6 +238,11 @@ struct PortfolioView: View {
                         .padding(.bottom, 16)
                     }
                     .background(Color.clear)
+                    .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                        max(0, geometry.contentOffset.y + geometry.contentInsets.top)
+                    } action: { _, newValue in
+                        homeScrollOffset = newValue
+                    }
                     // Keep native rubber-banding intact: UIRefreshControl relies on
                     // the full pull distance and release transition to trigger.
                     .scrollBounceBehavior(.always, axes: .vertical)
@@ -165,8 +287,13 @@ struct PortfolioView: View {
                     .navigationTransition(.zoom(sourceID: "today-detail", in: todayZoom))
                 }
             }
+            // Inside the stack, so it hides the bar for this screen only.
+            // Applied to the stack itself it becomes a stack-wide preference
+            // that every pushed screen inherits and none of them can override
+            // — which left the Today detail with a title and a back button
+            // over no background at all.
+            .toolbar(.hidden, for: .navigationBar)
         }
-        .toolbar(.hidden, for: .navigationBar)
     }
 }
 
@@ -241,10 +368,12 @@ private struct TodayContributionCard: View {
     }
 
     private var totalAmount: Double {
-        contributions.reduce(0) { $0 + $1.amount }
+        guard !holdings.contains(where: { $0.publicDisclosure != nil }) else { return .nan }
+        return contributions.reduce(0) { $0 + $1.amount }
     }
 
     private var totalPercent: Double {
+        guard totalAmount.isFinite else { return .nan }
         let currentValue = holdings.reduce(0) { $0 + $1.marketValue }
         let previousValue = currentValue - totalAmount
         guard previousValue > 0 else { return 0 }
@@ -397,7 +526,9 @@ private struct TodayContributionCard: View {
             style: .continuous
         )
         if colorScheme == .light {
-            shape.fill(Color.white)
+            // The shared content sheet owns the light glass-to-white surface.
+            // Keep this card clear so the hero chart can show through its top.
+            shape.fill(Color.clear)
         } else {
             let showsGains = direction == .gains
             let baseColor = showsGains
@@ -462,16 +593,17 @@ private struct TodayContributionCard: View {
     }
 
     private var directionPicker: some View {
+        directionPickerContent
+            .background(Color.white.opacity(0.40), in: Capsule())
+    }
+
+    private var directionPickerContent: some View {
         HStack(spacing: 2) {
             directionButton(.gains, systemImage: "arrow.up")
             directionButton(.losses, systemImage: "arrow.down")
         }
         .padding(3)
-        .frame(width: 96, height: 44)
-        .background(
-            colorScheme == .light ? Color(red: 0.957, green: 0.957, blue: 0.957) : Color.white.opacity(0.16),
-            in: Capsule()
-        )
+        .frame(width: 97, height: 47)
     }
 
     private func directionButton(_ value: Direction, systemImage: String) -> some View {
@@ -480,10 +612,15 @@ private struct TodayContributionCard: View {
         } label: {
             Image(systemName: systemImage)
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(direction == value ? Color.black : Color.primary)
-                .frame(width: 44, height: 38)
-                .background(direction == value ? Color.white : Color.clear, in: Capsule())
-                .shadow(color: direction == value ? Color.black.opacity(0.10) : .clear, radius: 1, y: 2)
+                .foregroundStyle(Color(red: 17 / 255, green: 17 / 255, blue: 17 / 255))
+                .frame(width: 44, height: 41)
+                .background {
+                    if direction == value {
+                        Capsule()
+                            .fill(Color.white)
+                            .shadow(color: Color.black.opacity(0.10), radius: 2, y: 2)
+                    }
+                }
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -878,11 +1015,15 @@ private enum PortfolioHeroChartLayout {
     // A visual overlap can still intercept taps even when the chart's own
     // gesture overlay is inset, particularly with iOS 26 dark rendering.
     static let plotHeight: CGFloat = 280
+    // Keep UIKit's long-press capture view away from the range buttons. The
+    // chart still draws at full height; only its interactive surface is inset.
+    static let chartInteractionBottomInset: CGFloat = 24
     static let pickerTop: CGFloat = 398
     static let pickerHeight: CGFloat = 62
 }
 
 private struct CostMarketCard: View {
+    @Environment(AppModel.self) private var model
 
     let overview: PortfolioOverview
     let warning: String?
@@ -891,13 +1032,11 @@ private struct CostMarketCard: View {
     @State private var isPreparing = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @State private var range = "3M"
+    @State private var range = ChartTimeRange.oneMonth
     @State private var selectedDate: Date?
     @State private var measuredRange: ChartDateRange?
     @State private var showsNetDeposit = true
     @Environment(\.colorScheme) private var colorScheme
-
-    private let choices = ["1D", "1W", "1M", "3M", "YTD", "1Y", "MAX"]
 
     private var forcesChartLoadingState: Bool {
         ProcessInfo.processInfo.arguments.contains("--show-chart-loading-state")
@@ -948,7 +1087,7 @@ private struct CostMarketCard: View {
         if let measurement = measuredPoints {
             return costMarketChange(from: measurement.start, to: measurement.end)
         }
-        guard range != "MAX",
+        guard range != .maximum,
               let start = rangeData.rows.first,
               let end = selectedPoint,
               start.id != end.id else {
@@ -981,7 +1120,7 @@ private struct CostMarketCard: View {
         let data = rangeData
         ZStack(alignment: .topLeading) {
             HStack(spacing: 4) {
-                Text("CATFOLIO")
+                Text(model.isPublicInvestorMode ? "披露市值 · USD" : "CATFOLIO")
                     .appCaps(.caption, weight: .semibold)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 6, weight: .bold))
@@ -990,7 +1129,7 @@ private struct CostMarketCard: View {
             .offset(x: CatfolioStyle.pageHorizontalInset, y: 15)
 
             CatfolioDisplayAmountText(
-                text: DisplayFormat.money(
+                text: model.publicDisclosureSummary?.amountLabel ?? DisplayFormat.money(
                     displayedPrimaryAmount,
                     signed: false,
                     fractionDigits: 2
@@ -1003,6 +1142,10 @@ private struct CostMarketCard: View {
             .offset(x: CatfolioStyle.pageHorizontalInset, y: 32)
 
             HStack(spacing: 4) {
+                if model.isPublicInvestorMode {
+                    Text("报告期 " + (model.publicDisclosureSummary?.reportDates.joined(separator: " / ") ?? "—"))
+                        .foregroundStyle(.secondary)
+                } else {
                 let summaryAccent = colorScheme == .light ? Color.primary : financialAccent
                 Group {
                     Text(DisplayFormat.money(rangePerformance.amount, signed: true))
@@ -1040,6 +1183,7 @@ private struct CostMarketCard: View {
                 .accessibilityHint("轻点切换显示或隐藏")
                 .foregroundStyle(Color.primary.opacity(colorScheme == .light ? 0.30 : 0.50))
             }
+            }
             .appNumber(.footnote)
             .lineLimit(1)
             .minimumScaleFactor(0.62)
@@ -1058,11 +1202,9 @@ private struct CostMarketCard: View {
             }
 
             ChartTimeRangePicker(
-                choices: choices,
                 selection: $range,
                 isDisabled: isChartLoading,
-                usesBrightSelectedBackground: true,
-                title: { $0 }
+                usesBrightSelectedBackground: true
             )
             .frame(height: PortfolioHeroChartLayout.pickerHeight)
             .contentShape(Rectangle())
@@ -1079,7 +1221,9 @@ private struct CostMarketCard: View {
             guard !Task.isCancelled else { return }
             self.prepared = prepared
             if prepared.data(for: range).rows.count <= 1,
-               let availableRange = choices.first(where: { prepared.data(for: $0).rows.count > 1 }) {
+               let availableRange = ChartTimeRange.allCases.first(where: {
+                   prepared.data(for: $0).rows.count > 1
+               }) {
                 // A sparse history can contain one old point plus today. Do
                 // not leave the default 3M filter on a single point.
                 range = availableRange
@@ -1112,11 +1256,12 @@ private struct CostMarketCard: View {
             FastCostMarketPlot(
                 data: data,
                 showsNetDeposit: showsNetDeposit,
-                transitionKey: range,
+                transitionKey: range.rawValue,
+                showsLatestPoint: range != .oneDay,
                 selectedPoint: selectedDate == nil && measuredRange == nil ? nil : selectedPoint,
                 measuredRange: measuredRange,
                 selectionIndicatorLabel: selectionIndicatorLabel,
-                compactDates: range == "1D" || range == "1W" || range == "1M",
+                compactDates: [.oneDay, .oneWeek, .oneMonth, .twoMonths].contains(range),
                 onSelect: {
                     guard measuredRange != nil || selectedDate != $0 else { return }
                     measuredRange = nil
@@ -1181,7 +1326,7 @@ private struct CostMarketCard: View {
             return rangeDateText(from: measurement.start.date, to: measurement.end.date)
         }
         guard selectedDate != nil, let selectedPoint else { return nil }
-        if range == "1D" {
+        if range == .oneDay {
             return selectedPoint.date.formatted(.dateTime.hour().minute())
         }
         return selectedPoint.date.formatted(.dateTime.year().month(.abbreviated).day())
@@ -1208,6 +1353,7 @@ private struct FastCostMarketPlot: View {
     let data: CostMarketRangeData
     let showsNetDeposit: Bool
     let transitionKey: String
+    let showsLatestPoint: Bool
     let selectedPoint: CostMarketPlotPoint?
     let measuredRange: ChartDateRange?
     let selectionIndicatorLabel: String?
@@ -1228,7 +1374,7 @@ private struct FastCostMarketPlot: View {
                 ? Color.white
                 : Color(red: 0.204, green: 0.780, blue: 0.349),
             lineWidth: 3,
-            latestPointRadius: 5,
+            latestPointRadius: showsLatestPoint ? 5 : 0,
             latestPointColor: colorScheme == .light ? .black : nil,
             latestPointUsesGlass: false
         )
@@ -1239,11 +1385,14 @@ private struct FastCostMarketPlot: View {
             },
             color: Color(red: 0.204, green: 0.459, blue: 1),
             lineWidth: 3,
-            latestPointRadius: 5,
+            latestPointRadius: showsLatestPoint ? 5 : 0,
             latestPointUsesGlass: false
         )
         StandardLineChart(
-            series: showsNetDeposit ? [marketSeries, costSeries] : [marketSeries],
+            // Canvas paints later series above earlier ones. Keep the blue
+            // net-deposit line underneath the adaptive white/green market
+            // line so their crossings preserve the portfolio-value signal.
+            series: showsNetDeposit ? [costSeries, marketSeries] : [marketSeries],
             interactionDates: data.rows.map(\.date),
             domain: data.domain,
             yTicks: (0..<5).map { index in
@@ -1254,6 +1403,7 @@ private struct FastCostMarketPlot: View {
             axisWidth: 0,
             topInset: 0,
             bottomHeight: bottomHeight,
+            interactionBottomInset: PortfolioHeroChartLayout.chartInteractionBottomInset,
             leadingLineOverflow: 0,
             trailingEndpointInset: 21,
             gridOpacity: 0,
@@ -1281,14 +1431,15 @@ private struct FastCostMarketPlot: View {
 }
 
 private final class CostMarketPreparedData: @unchecked Sendable {
-    private let ranges: [String: CostMarketRangeData]
+    private let ranges: [ChartTimeRange: CostMarketRangeData]
 
     init(response: PortfolioChartResponse) {
         let source = response.positionHistory.rows.isEmpty
             ? [response.currentPoint]
             : response.positionHistory.rows
         let points = source.compactMap { row -> CostMarketPlotPoint? in
-            guard let date = DayDateCodec.date(from: row.dateText) else { return nil }
+            guard row.marketValue.isFinite, row.cost.isFinite,
+                  let date = DayDateCodec.date(from: row.dateText) else { return nil }
             return CostMarketPlotPoint(
                 dateText: row.dateText,
                 date: date,
@@ -1304,28 +1455,26 @@ private final class CostMarketPreparedData: @unchecked Sendable {
 
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        let oneWeek = calendar.date(byAdding: .day, value: -7, to: last) ?? .distantPast
-        let oneMonth = calendar.date(byAdding: .month, value: -1, to: last) ?? .distantPast
-        let threeMonths = calendar.date(byAdding: .month, value: -3, to: last) ?? .distantPast
-        let oneYear = calendar.date(byAdding: .year, value: -1, to: last) ?? .distantPast
-        let lastYear = calendar.component(.year, from: last)
+        let previousTradingDate = points.dropLast().last?.date
 
-        ranges = [
+        ranges = Dictionary(uniqueKeysWithValues: ChartTimeRange.allCases.map { range in
             // Portfolio history is daily rather than intraday. Use the latest
             // two trading snapshots so 1D still shows the day-over-day move
             // instead of collapsing to an unhelpful single point.
-            "1D": Self.prepare(Array(points.suffix(2))),
-            "1W": Self.prepare(points.filter { $0.date >= oneWeek }),
-            "1M": Self.prepare(points.filter { $0.date >= oneMonth }),
-            "3M": Self.prepare(points.filter { $0.date >= threeMonths }),
-            "YTD": Self.prepare(points.filter { calendar.component(.year, from: $0.date) == lastYear }),
-            "1Y": Self.prepare(points.filter { $0.date >= oneYear }),
-            "MAX": Self.prepare(points)
-        ]
+            let filtered = points.filter {
+                range.includes(
+                    $0.date,
+                    through: last,
+                    previousTradingDate: previousTradingDate,
+                    calendar: calendar
+                )
+            }
+            return (range, Self.prepare(filtered))
+        })
     }
 
-    func data(for range: String) -> CostMarketRangeData {
-        ranges[range] ?? ranges["MAX"] ?? .empty
+    func data(for range: ChartTimeRange) -> CostMarketRangeData {
+        ranges[range] ?? ranges[.maximum] ?? .empty
     }
 
     private static func prepare(_ points: [CostMarketPlotPoint]) -> CostMarketRangeData {
@@ -1643,7 +1792,8 @@ private struct PortfolioDetailsCard: View {
         leftTicker: String,
         rightTicker: String
     ) -> Bool {
-        if left == right {
+        if left.isFinite != right.isFinite { return left.isFinite }
+        if left == right || (!left.isFinite && !right.isFinite) {
             let comparison = leftTicker.localizedStandardCompare(rightTicker)
             return holdingSortAscending
                 ? comparison == .orderedAscending
@@ -2219,6 +2369,7 @@ private extension Holding {
     ) -> HoldingPerformanceValues? {
         switch period {
         case .holdingPeriod:
+            guard unrealized.isFinite, unrealizedPercent.isFinite else { return nil }
             return HoldingPerformanceValues(amount: unrealized, percent: unrealizedPercent)
         case .today:
             guard let dailyChangePercent, dailyChangePercent.isFinite else { return nil }
@@ -2276,7 +2427,7 @@ private struct HoldingRow: View {
 
                             Spacer(minLength: 4)
 
-                            Text(DisplayFormat.money(holding.marketValue, fractionDigits: 2))
+                            Text(holding.displayedMarketValue)
                                 .appNumber(.body)
                                 .numericTransition(holding.marketValue)
                                 .lineLimit(1)
@@ -2390,7 +2541,7 @@ private struct HoldingMetrics: View {
 
     var body: some View {
         VStack(alignment: alignment, spacing: 5) {
-            Text(DisplayFormat.money(holding.marketValue, fractionDigits: 2))
+            Text(holding.displayedMarketValue)
                 .appNumber(.body)
                 .lineLimit(compact ? 1 : nil)
             Text(performanceText)
