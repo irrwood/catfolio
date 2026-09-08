@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct CatfolioIOSApp: App {
     @State private var model = AppModel()
+    @AppStorage(AppLanguage.preferenceKey) private var languageRawValue = AppLanguage.system.rawValue
     @AppStorage(AppAppearance.preferenceKey) private var appearanceRawValue = AppAppearance.system.rawValue
 
     private var preferredColorScheme: ColorScheme? {
@@ -15,7 +16,9 @@ struct CatfolioIOSApp: App {
                 .fontDesign(.rounded)
                 .task { ReferenceCatalogs.warm() }
                 .task { CloudPreferences.start() }
+                .task { PublicInvestorPreferences.migrateDemoSelectionIfNeeded() }
                 .environment(model)
+                .environment(\.locale, Locale(identifier: AppLanguage.resolvedIdentifier(languageRawValue)))
                 .tint(CatfolioTheme.accent)
                 .preferredColorScheme(preferredColorScheme)
                 #if DEBUG

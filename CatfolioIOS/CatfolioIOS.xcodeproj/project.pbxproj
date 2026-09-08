@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        A1D000000000000000000003 /* LocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000004 /* LocalizationTests.swift */; };
+        A1D000000000000000000001 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000001 /* Localization.swift */; };
+        A1D000000000000000000002 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = D1D000000000000000000001 /* Localizable.strings */; };
 		A1C000000000000000000001 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = B1C000000000000000000001 /* AppIcon.icon */; };
 		A19800000000000000000003 /* CompanyReferenceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000003 /* CompanyReferenceCatalog.swift */; };
 		A199000000000000000000E2 /* PublicInvestorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E2 /* PublicInvestorView.swift */; };
@@ -76,6 +79,7 @@
 		A19900000000000000000001 /* ResearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000001 /* ResearchView.swift */; };
 		A19900000000000000000002 /* StockScreenerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000002 /* StockScreenerView.swift */; };
 		A19900000000000000000003 /* AnalystConsensusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000003 /* AnalystConsensusView.swift */; };
+		A19900000000000000000009 /* OptionsOIView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000009 /* OptionsOIView.swift */; };
 		A199000000000000000000A1 /* MoneyWeightedReturnCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B1 /* MoneyWeightedReturnCalculatorTests.swift */; };
 		A199000000000000000000A2 /* LocalPortfolioEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B2 /* LocalPortfolioEngineTests.swift */; };
 		A199000000000000000000E4 /* PublicInvestorCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E4 /* PublicInvestorCatalogTests.swift */; };
@@ -86,6 +90,7 @@
 		A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B7 /* Trading212FillDecodingTests.swift */; };
 		A199000000000000000000AD /* NasdaqAnalystLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */; };
 		A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000C1 /* SectorAttributionTests.swift */; };
+		A19900000000000000FFA0 /* PublicInvestorSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */; };
 		A19900000000000000FF91 /* PortfolioDocumentMergeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF91 /* PortfolioDocumentMergeTests.swift */; };
 		A19900000000000000FF81 /* CloudPreferencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF81 /* CloudPreferencesTests.swift */; };
 		A19900000000000000FF71 /* LedgerReconciliationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF71 /* LedgerReconciliationTests.swift */; };
@@ -100,6 +105,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+        B1D000000000000000000004 /* LocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationTests.swift; sourceTree = "<group>"; };
+        B1D000000000000000000001 /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
+        B1D000000000000000000002 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+        B1D000000000000000000003 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		B1C000000000000000000001 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		B19800000000000000000003 /* CompanyReferenceCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyReferenceCatalog.swift; sourceTree = "<group>"; };
 		B199000000000000000000E2 /* PublicInvestorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicInvestorView.swift; sourceTree = "<group>"; };
@@ -114,6 +123,7 @@
 		B19900000000000000000001 /* ResearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResearchView.swift; sourceTree = "<group>"; };
 		B19900000000000000000002 /* StockScreenerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockScreenerView.swift; sourceTree = "<group>"; };
 		B19900000000000000000003 /* AnalystConsensusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalystConsensusView.swift; sourceTree = "<group>"; };
+		B19900000000000000000009 /* OptionsOIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptionsOIView.swift; sourceTree = "<group>"; };
 		B10000000000000000000001 /* CatfolioIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatfolioIOSApp.swift; sourceTree = "<group>"; };
 		B10000000000000000000002 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		B10000000000000000000003 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
@@ -182,6 +192,7 @@
 		B199000000000000000000B7 /* Trading212FillDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212FillDecodingTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NasdaqAnalystLogicTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000C1 /* SectorAttributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttributionTests.swift; sourceTree = "<group>"; };
+		B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicInvestorSelectionTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF91 /* PortfolioDocumentMergeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioDocumentMergeTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF81 /* CloudPreferencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPreferencesTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF71 /* LedgerReconciliationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerReconciliationTests.swift; sourceTree = "<group>"; };
@@ -233,6 +244,8 @@
 				B10000000000000000000002 /* Models.swift */,
 				B10000000000000000000003 /* APIClient.swift */,
 				B10000000000000000000004 /* DesignSystem.swift */,
+                B1D000000000000000000001 /* Localization.swift */,
+                D1D000000000000000000001 /* Localizable.strings */,
 				B10000000000000000000005 /* RootTabView.swift */,
 				B10000000000000000000006 /* PortfolioView.swift */,
 				B10000000000000000000007 /* VolumeProfileView.swift */,
@@ -282,6 +295,7 @@
 				B19900000000000000000001 /* ResearchView.swift */,
 				B19900000000000000000002 /* StockScreenerView.swift */,
 				B19900000000000000000003 /* AnalystConsensusView.swift */,
+				B19900000000000000000009 /* OptionsOIView.swift */,
 				D10000000000000000000004 /* Resources */,
 				B1000000000000000000001A /* PrivacyInfo.xcprivacy */,
 				B1000000000000000000000B /* Assets.xcassets */,
@@ -336,6 +350,7 @@
 			isa = PBXGroup;
 			children = (
 				B199000000000000000000B1 /* MoneyWeightedReturnCalculatorTests.swift */,
+                B1D000000000000000000004 /* LocalizationTests.swift */,
 				B199000000000000000000B2 /* LocalPortfolioEngineTests.swift */,
 				B199000000000000000000E4 /* PublicInvestorCatalogTests.swift */,
 				B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */,
@@ -345,6 +360,7 @@
 				B199000000000000000000B7 /* Trading212FillDecodingTests.swift */,
 				B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */,
 				B199000000000000000000C1 /* SectorAttributionTests.swift */,
+				B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */,
 				B19900000000000000FF91 /* PortfolioDocumentMergeTests.swift */,
 				B19900000000000000FF81 /* CloudPreferencesTests.swift */,
 				B19900000000000000FF71 /* LedgerReconciliationTests.swift */,
@@ -436,12 +452,12 @@
 			};
 			buildConfigurationList = F10000000000000000000001 /* Build configuration list for PBXProject "CatfolioIOS" */;
 			compatibilityVersion = "Xcode 16.0";
-			developmentRegion = zh_Hans;
+			developmentRegion = "zh-Hans";
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				Base,
 				en,
-				zh_Hans,
+				"zh-Hans",
 			);
 			mainGroup = D10000000000000000000001;
 			productRefGroup = D10000000000000000000003 /* Products */;
@@ -453,6 +469,15 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXVariantGroup section */
+        D1D000000000000000000001 /* Localizable.strings */ = {
+            isa = PBXVariantGroup;
+            children = (B1D000000000000000000002, B1D000000000000000000003);
+            name = Localizable.strings;
+            sourceTree = "<group>";
+        };
+/* End PBXVariantGroup section */
 
 /* Begin PBXResourcesBuildPhase section */
 		C10000000000000000000003 /* Resources */ = {
@@ -468,6 +493,7 @@
 				A19800000000000000000012 /* etf_sector_composition.json in Resources */,
 				A19800000000000000000014 /* etf_holdings.json in Resources */,
 				A1000000000000000000000B /* Assets.xcassets in Resources */,
+                A1D000000000000000000002 /* Localizable.strings in Resources */,
 				A10000000000000000000025 /* AssetLogos in Resources */,
 				A10000000000000000000017 /* sp500_holdings.json in Resources */,
 				A10000000000000000000018 /* PrivacyInfo.xcprivacy in Resources */,
@@ -489,6 +515,7 @@
 				A10000000000000000000002 /* Models.swift in Sources */,
 				A10000000000000000000003 /* APIClient.swift in Sources */,
 				A10000000000000000000004 /* DesignSystem.swift in Sources */,
+                A1D000000000000000000001 /* Localization.swift in Sources */,
 				A10000000000000000000005 /* RootTabView.swift in Sources */,
 				A10000000000000000000006 /* PortfolioView.swift in Sources */,
 				A10000000000000000000007 /* VolumeProfileView.swift in Sources */,
@@ -538,6 +565,7 @@
 				A19900000000000000000001 /* ResearchView.swift in Sources */,
 				A19900000000000000000002 /* StockScreenerView.swift in Sources */,
 				A19900000000000000000003 /* AnalystConsensusView.swift in Sources */,
+				A19900000000000000000009 /* OptionsOIView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -546,6 +574,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A199000000000000000000A1 /* MoneyWeightedReturnCalculatorTests.swift in Sources */,
+                A1D000000000000000000003 /* LocalizationTests.swift in Sources */,
 				A199000000000000000000A2 /* LocalPortfolioEngineTests.swift in Sources */,
 				A199000000000000000000E4 /* PublicInvestorCatalogTests.swift in Sources */,
 				A199000000000000000000A3 /* RealisedProfitCalculatorTests.swift in Sources */,
@@ -555,6 +584,7 @@
 				A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */,
 				A199000000000000000000AD /* NasdaqAnalystLogicTests.swift in Sources */,
 				A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */,
+				A19900000000000000FFA0 /* PublicInvestorSelectionTests.swift in Sources */,
 				A19900000000000000FF91 /* PortfolioDocumentMergeTests.swift in Sources */,
 				A19900000000000000FF81 /* CloudPreferencesTests.swift in Sources */,
 				A19900000000000000FF71 /* LedgerReconciliationTests.swift in Sources */,
