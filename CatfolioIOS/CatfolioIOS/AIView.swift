@@ -86,6 +86,12 @@ struct AIView: View {
                     }
 
                     if isSending {
+                    // Debates started from a security sheet finish in
+                    // SecurityDebateStore, not in this conversation, so they
+                    // are listed rather than folded into the message history —
+                    // which also leaves the chat document's schema alone.
+                    SecurityDebateInbox()
+
                         HStack(spacing: 8) {
                             ProgressView()
                             Text(loadingMessage)

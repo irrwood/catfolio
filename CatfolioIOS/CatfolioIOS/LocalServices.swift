@@ -223,7 +223,15 @@ struct CodexOAuthClient: Sendable {
         Self.cache(Self.disconnectedStatus)
     }
 
-    func complete(prompt: String) async throws -> String {
+    func complete(prompt: String, webSearch: Bool = false) async throws -> String {
+        try await completion(prompt: prompt, webSearch: webSearch).text
+    }
+
+    /// - Returns: the answer, and whether the model was actually allowed to
+    ///   search. Callers that tell the reader "this used live search" need to
+    ///   know the difference, and the fallback below means asking is not the
+    ///   same as getting it.
+    func completion(prompt: String, webSearch: Bool = false) async throws -> (text: String, searched: Bool) {
         guard var credentials = try Self.load(CodexCredentials.self, key: Self.credentialsKey) else {
             Self.cache(Self.disconnectedStatus)
             throw LocalServiceError.missingCodexConnection
@@ -232,10 +240,38 @@ struct CodexOAuthClient: Sendable {
             credentials = try await refresh(credentials)
         }
         do {
-            return try await completionWithAuthRecovery(prompt: prompt, credentials: credentials)
+            let text = try await run(prompt: prompt, credentials: credentials, webSearch: webSearch)
+            return (text, webSearch)
         } catch let error where Self.isTransientNetworkError(error) {
             try await Task.sleep(for: .milliseconds(700))
-            return try await completionWithAuthRecovery(prompt: prompt, credentials: credentials)
+            let text = try await run(prompt: prompt, credentials: credentials, webSearch: webSearch)
+            return (text, webSearch)
+        } catch where webSearch {
+            // `web_search` is a hosted tool on the Responses API, so asking for
+            // it costs no client-side loop — but this endpoint is the ChatGPT
+            // Codex backend rather than the documented API, and whether it
+            // honours the tool is not something the client can know in advance.
+            // One rejected request is the whole price of finding out; the answer
+            // is then produced without it and says so.
+            let text = try await run(prompt: prompt, credentials: credentials, webSearch: false)
+            return (text, false)
+        }
+    }
+
+    private func run(
+        prompt: String,
+        credentials: CodexCredentials,
+        webSearch: Bool
+    ) async throws -> String {
+        do {
+            return try await requestCompletion(
+                prompt: prompt, credentials: credentials, webSearch: webSearch
+            )
+        } catch CodexRequestError.unauthorized {
+            let refreshed = try await refresh(credentials, force: true)
+            return try await requestCompletion(
+                prompt: prompt, credentials: refreshed, webSearch: webSearch
+            )
         }
     }
 
@@ -250,18 +286,6 @@ struct CodexOAuthClient: Sendable {
             .internationalRoamingOff,
             .dataNotAllowed,
         ].contains(code)
-    }
-
-    private func completionWithAuthRecovery(
-        prompt: String,
-        credentials: CodexCredentials
-    ) async throws -> String {
-        do {
-            return try await requestCompletion(prompt: prompt, credentials: credentials)
-        } catch CodexRequestError.unauthorized {
-            let refreshed = try await refresh(credentials, force: true)
-            return try await requestCompletion(prompt: prompt, credentials: refreshed)
-        }
     }
 
     private func exchange(_ authorization: DeviceAuthorizationResponse) async throws -> CodexCredentials {
@@ -317,10 +341,18 @@ struct CodexOAuthClient: Sendable {
         return updated
     }
 
-    private func requestCompletion(prompt: String, credentials: CodexCredentials) async throws -> String {
-        let body: [String: Any] = [
+    private func requestCompletion(
+        prompt: String,
+        credentials: CodexCredentials,
+        webSearch: Bool = false
+    ) async throws -> String {
+        var body: [String: Any] = [
             "model": Self.model,
             "instructions": "你是 Catfolio 的投资组合分析助手。用简洁、可验证的中文回答；明确区分数据与推断，不承诺收益。",
+        if webSearch {
+            body["tools"] = [["type": "web_search"]]
+            body["tool_choice"] = "auto"
+        }
             "input": [[
                 "type": "message",
                 "role": "user",
@@ -3154,6 +3186,35 @@ struct LocalAIClient {
             )
         }
         let content = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// Research where the model is also allowed to look things up itself.
+    ///
+    /// Only one of the three providers can: Apple's on-device model has no
+    /// network at all, DeepSeek's API is chat completions with no hosted tool,
+    /// and Codex reaches an endpoint that may or may not honour `web_search`.
+    /// So Codex is preferred for this one job when it is connected, rather than
+    /// following the usual Apple-first order — the sources gathered locally are
+    /// the floor, and live search is the part only it can add.
+    ///
+    /// - Returns: the answer, and whether search actually happened.
+    func researchAnswerAllowingSearch(
+        _ question: String,
+        context: String
+    ) async throws -> (text: String, searched: Bool) {
+        let preference = AIProviderPreference.current
+        let codexEligible = (preference == .codex || preference == .automatic)
+            && CodexOAuthClient.cachedConnected
+        if codexEligible {
+            let prompt = context.isEmpty ? question : "\(context)\n\n问题：\(question)"
+            do {
+                return try await CodexOAuthClient().completion(prompt: prompt, webSearch: true)
+            } catch where preference == .automatic {
+                // Fall through to the ordinary ladder rather than failing the
+                // whole request because one provider is having a bad day.
+            }
+        }
+        return (try await researchAnswer(question, context: context, structured: true), false)
+    }
+
         guard !content.isEmpty else { throw LocalServiceError.invalidResponse }
         return content
     }

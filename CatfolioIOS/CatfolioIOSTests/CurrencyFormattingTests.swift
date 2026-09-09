@@ -36,14 +36,20 @@ final class CurrencyFormattingTests: XCTestCase {
             targetCurrency = displayCurrency.rawValue
             adjusted = displayCurrency.fromUSD(value)
         }
+        // Mirrors the millions threshold `money` applies after conversion: past
+        // a million the cents are dropped even when the caller asked for them.
+        // This replica exists to isolate the formatter cache, so it has to
+        // track deliberate rule changes or it starts reporting them as cache
+        // bugs — which is exactly what it did when the threshold landed.
+        let displayedFractionDigits = abs(adjusted) > 1_000_000 ? 0 : fractionDigits
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = targetCurrency
         if targetCurrency == "USD" {
             formatter.currencySymbol = "$"
         }
-        formatter.minimumFractionDigits = fractionDigits ?? 0
-        formatter.maximumFractionDigits = fractionDigits ?? (abs(adjusted) >= 1_000 ? 0 : 2)
+        formatter.minimumFractionDigits = displayedFractionDigits ?? 0
+        formatter.maximumFractionDigits = displayedFractionDigits ?? (abs(adjusted) >= 1_000 ? 0 : 2)
         let text = formatter.string(from: NSNumber(value: abs(adjusted))) ?? "\(adjusted)"
         guard signed else { return text }
         return "\(adjusted >= 0 ? "+" : "-")\(text)"
@@ -72,6 +78,17 @@ final class CurrencyFormattingTests: XCTestCase {
             }
         }
         XCTAssertEqual(compared, values.count * currencies.count * 4 * 2)
+    }
+
+    /// Past a million the cents go, whatever the caller asked for: a headline
+    /// figure reads worse with them and nobody reconciles a portfolio to the
+    /// penny off a summary line.
+    func testCentsAreDroppedPastAMillion() {
+        XCTAssertEqual(DisplayFormat.money(1_500_000, currency: "USD", fractionDigits: 2), "$1,500,000")
+        XCTAssertEqual(DisplayFormat.money(-1_500_000, currency: "USD", fractionDigits: 2), "$1,500,000")
+        // At the threshold itself the request still stands.
+        XCTAssertEqual(DisplayFormat.money(1_000_000, currency: "USD", fractionDigits: 2), "$1,000,000.00")
+        XCTAssertEqual(DisplayFormat.money(999_999.5, currency: "USD", fractionDigits: 2), "$999,999.50")
     }
 
     func testRepeatedCallsAreStable() {

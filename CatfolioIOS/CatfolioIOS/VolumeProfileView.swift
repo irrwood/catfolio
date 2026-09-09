@@ -182,6 +182,15 @@ struct HoldingDetailView: View {
             }
             // Start cache-backed work as soon as SwiftUI inserts the sheet,
             // while the native presentation animation is still running. The
+                        // Started here, but not owned here: the request lives in
+                        // SecurityDebateStore so leaving this sheet does not
+                        // cancel it. Placed after the numbers because it is the
+                        // argument about them, not another measurement.
+                        SecurityDebateCard(
+                            ticker: holding.ticker,
+                            name: holding.shortName
+                        )
+
             // available holding header renders immediately; only genuinely
             // missing chart sections show their own loading treatment.
             .task {

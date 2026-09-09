@@ -85,12 +85,17 @@
 		A199000000000000000000E4 /* PublicInvestorCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E4 /* PublicInvestorCatalogTests.swift */; };
 		A199000000000000000000E5 /* CurrencyFormattingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E5 /* CurrencyFormattingTests.swift */; };
 		A199000000000000000000E6 /* PortfolioAccountAggregationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E6 /* PortfolioAccountAggregationTests.swift */; };
+		A199000000000000000000EB /* SecurityDebate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EB /* SecurityDebate.swift */; };
+		A199000000000000000000ED /* SecurityDebateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000ED /* SecurityDebateStore.swift */; };
+		A199000000000000000000EE /* SecurityDebateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EE /* SecurityDebateView.swift */; };
 		A199000000000000000000A3 /* RealisedProfitCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */; };
 		A199000000000000000000A4 /* BrokerResultPreservationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B4 /* BrokerResultPreservationTests.swift */; };
 		A199000000000000000000E8 /* CompactNumberRuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E8 /* CompactNumberRuleTests.swift */; };
 		A199000000000000000000E9 /* HeatmapRemainderReturnTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E9 /* HeatmapRemainderReturnTests.swift */; };
 		A199000000000000000000EA /* HeatmapRowTapTargetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EA /* HeatmapRowTapTargetTests.swift */; };
-		A199000000000000000000E8 /* CompactNumberRuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E8 /* CompactNumberRuleTests.swift */; };
+		A199000000000000000000EC /* SecurityDebateResearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EC /* SecurityDebateResearchTests.swift */; };
+		A199000000000000000000A3 /* RealisedProfitCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */; };
+		A199000000000000000000A4 /* BrokerResultPreservationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B4 /* BrokerResultPreservationTests.swift */; };
 		A199000000000000000000A5 /* AnalystConsensusDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B5 /* AnalystConsensusDataTests.swift */; };
 		A199000000000000000000A6 /* StockScreenerRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B6 /* StockScreenerRulesTests.swift */; };
 		A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B7 /* Trading212FillDecodingTests.swift */; };
@@ -139,6 +144,9 @@
 		B10000000000000000000006 /* PortfolioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioView.swift; sourceTree = "<group>"; };
 		B10000000000000000000007 /* VolumeProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeProfileView.swift; sourceTree = "<group>"; };
 		B10000000000000000000008 /* ReturnsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReturnsView.swift; sourceTree = "<group>"; };
+		B199000000000000000000EB /* SecurityDebate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebate.swift; sourceTree = "<group>"; };
+		B199000000000000000000ED /* SecurityDebateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebateStore.swift; sourceTree = "<group>"; };
+		B199000000000000000000EE /* SecurityDebateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebateView.swift; sourceTree = "<group>"; };
 		B10000000000000000000009 /* AIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIView.swift; sourceTree = "<group>"; };
 		B1000000000000000000000A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B1000000000000000000000B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -207,6 +215,10 @@
 		B199000000000000000000C1 /* SectorAttributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttributionTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FFB0 /* NumericAlternatesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericAlternatesTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicInvestorSelectionTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000EC /* SecurityDebateResearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebateResearchTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealisedProfitCalculatorTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000B4 /* BrokerResultPreservationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrokerResultPreservationTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000B5 /* AnalystConsensusDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalystConsensusDataTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF91 /* PortfolioDocumentMergeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioDocumentMergeTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF81 /* CloudPreferencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPreferencesTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF71 /* LedgerReconciliationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerReconciliationTests.swift; sourceTree = "<group>"; };
@@ -320,6 +332,9 @@
 		};
 		D10000000000000000000004 /* Resources */ = {
 			isa = PBXGroup;
+				B199000000000000000000EB /* SecurityDebate.swift */,
+				B199000000000000000000ED /* SecurityDebateStore.swift */,
+				B199000000000000000000EE /* SecurityDebateView.swift */,
 			children = (
 				B10000000000000000000027 /* AssetLogos */,
 				B19800000000000000000004 /* company_reference.json */,
@@ -382,6 +397,9 @@
 				B199000000000000000000C1 /* SectorAttributionTests.swift */,
 				B19900000000000000FFB0 /* NumericAlternatesTests.swift */,
 				B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */,
+				B199000000000000000000EC /* SecurityDebateResearchTests.swift */,
+				B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */,
+				B199000000000000000000B4 /* BrokerResultPreservationTests.swift */,
 				B19900000000000000FF91 /* PortfolioDocumentMergeTests.swift */,
 				B19900000000000000FF81 /* CloudPreferencesTests.swift */,
 				B19900000000000000FF71 /* LedgerReconciliationTests.swift */,
@@ -601,6 +619,9 @@
 				A199000000000000000000E5 /* CurrencyFormattingTests.swift in Sources */,
 				A199000000000000000000E6 /* PortfolioAccountAggregationTests.swift in Sources */,
 				A199000000000000000000A3 /* RealisedProfitCalculatorTests.swift in Sources */,
+				A199000000000000000000EB /* SecurityDebate.swift in Sources */,
+				A199000000000000000000ED /* SecurityDebateStore.swift in Sources */,
+				A199000000000000000000EE /* SecurityDebateView.swift in Sources */,
 				A199000000000000000000A4 /* BrokerResultPreservationTests.swift in Sources */,
 				A199000000000000000000A5 /* AnalystConsensusDataTests.swift in Sources */,
 				A199000000000000000000E8 /* CompactNumberRuleTests.swift in Sources */,
@@ -617,6 +638,10 @@
 				A19900000000000000FF81 /* CloudPreferencesTests.swift in Sources */,
 				A19900000000000000FF71 /* LedgerReconciliationTests.swift in Sources */,
 				A19900000000000000FF61 /* UKSection104PoolTests.swift in Sources */,
+				A199000000000000000000EC /* SecurityDebateResearchTests.swift in Sources */,
+				A199000000000000000000A3 /* RealisedProfitCalculatorTests.swift in Sources */,
+				A199000000000000000000A4 /* BrokerResultPreservationTests.swift in Sources */,
+				A199000000000000000000A5 /* AnalystConsensusDataTests.swift in Sources */,
 				A19900000000000000FF51 /* UKShareMatchingTests.swift in Sources */,
 				A19900000000000000FF40 /* FXImpactTests.swift in Sources */,
 				A19900000000000000FF21 /* FundFeeTests.swift in Sources */,
