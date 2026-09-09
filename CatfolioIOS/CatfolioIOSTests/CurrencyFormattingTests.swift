@@ -12,9 +12,22 @@ import XCTest
 /// is precisely that caching changed nothing.
 final class CurrencyFormattingTests: XCTestCase {
 
+    private var savedLanguage: String?
+
     override func setUp() {
         super.setUp()
         UserDefaults.standard.removeObject(forKey: DisplayCurrency.preferenceKey)
+        // The compact ladder formats in the app's language while this file's
+        // replicas use the ambient locale, so the two only agree when the
+        // language is pinned. Left unpinned these passed on an English
+        // simulator and failed the moment one was set to Chinese.
+        savedLanguage = UserDefaults.standard.string(forKey: AppLanguage.preferenceKey)
+        UserDefaults.standard.set(AppLanguage.english.rawValue, forKey: AppLanguage.preferenceKey)
+    }
+
+    override func tearDown() {
+        UserDefaults.standard.set(savedLanguage, forKey: AppLanguage.preferenceKey)
+        super.tearDown()
     }
 
     /// The pre-cache implementation, verbatim: a fresh formatter per call.
@@ -125,6 +138,7 @@ final class CurrencyFormattingTests: XCTestCase {
             let symbol = formatter.currencySymbol ?? "\(displayCurrency.rawValue) "
             let compact = abs(converted).formatted(
                 .number.notation(.compactName).precision(.fractionLength(0...1))
+                    .locale(Locale(identifier: AppLanguage.currentIdentifier))
             )
             let expected = "\(converted < 0 ? "-" : "")\(symbol)\(compact)"
             XCTAssertEqual(DisplayFormat.compactMoney(value), expected)

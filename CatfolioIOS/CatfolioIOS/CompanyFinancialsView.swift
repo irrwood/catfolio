@@ -270,11 +270,11 @@ private struct IncomeFlowView: View {
     var body: some View {
         FinancialFlowDiagram(
             currency: period.currency,
-            left: .init("营业收入", period.revenue, .blue),
-            middleTop: .init("毛利润", period.grossProfit, .blue),
-            middleBottom: .init("营业成本", period.costOfRevenue, .pink),
-            rightTop: .init("营业利润", period.operatingIncome, .blue),
-            rightBottom: .init("营业费用", period.operatingExpenses, .pink)
+            left: .init(L10n.text("营业收入"), period.revenue, .inflow),
+            middleTop: .init(L10n.text("毛利润"), period.grossProfit, .inflow),
+            middleBottom: .init(L10n.text("营业成本"), period.costOfRevenue, .outflow),
+            rightTop: .init(L10n.text("营业利润"), period.operatingIncome, .inflow),
+            rightBottom: .init(L10n.text("营业费用"), period.operatingExpenses, .outflow)
         )
     }
 }
@@ -285,9 +285,9 @@ private struct BalanceFlowView: View {
     var body: some View {
         FinancialSplitDiagram(
             currency: period.currency,
-            source: .init("总资产", period.assets, .blue),
-            upper: .init("股东权益", period.equity, .blue),
-            lower: .init("总负债", period.liabilities, .pink)
+            source: .init(L10n.text("总资产"), period.assets, .inflow),
+            upper: .init(L10n.text("股东权益"), period.equity, .inflow),
+            lower: .init(L10n.text("总负债"), period.liabilities, .outflow)
         )
     }
 }
@@ -298,15 +298,15 @@ private struct CashFlowDiagram: View {
     var body: some View {
         FinancialSplitDiagram(
             currency: period.currency,
-            source: .init("经营现金流", period.operatingCashFlow, .blue),
-            upper: .init("自由现金流", period.freeCashFlow, .blue),
-            lower: .init("资本开支", period.capitalExpenditure, .pink)
+            source: .init(L10n.text("经营现金流"), period.operatingCashFlow, .inflow),
+            upper: .init(L10n.text("自由现金流"), period.freeCashFlow, .inflow),
+            lower: .init(L10n.text("资本开支"), period.capitalExpenditure, .outflow)
         )
     }
 }
 
 private struct FlowNode {
-    enum Tone { case blue, pink }
+    enum Tone { case inflow, outflow }
     let title: String
     let value: Double
     let tone: Tone
@@ -319,8 +319,8 @@ private struct FlowNode {
 
     var color: Color {
         switch tone {
-        case .blue: Color(red: 0.04, green: 0.60, blue: 0.91)
-        case .pink: Color(red: 0.82, green: 0.28, blue: 0.93)
+        case .inflow: CatfolioPalette.statementInflow
+        case .outflow: CatfolioPalette.statementOutflow
         }
     }
 }

@@ -63,7 +63,6 @@ GRANDFATHERED = {
     "PortfolioView.swift": 8,
     "ReturnsAnalyticsView.swift": 7,
     "AIView.swift": 2,
-    "CompanyFinancialsView.swift": 2,
 }
 
 
