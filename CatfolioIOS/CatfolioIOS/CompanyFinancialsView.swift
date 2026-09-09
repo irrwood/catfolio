@@ -339,6 +339,14 @@ private struct FinancialFlowDiagram: View {
             let revenueFlows = pairedFlowThickness(
                 middleTop.value,
                 middleBottom.value,
+
+    /// The ribbon's own tint, not a faded bar.
+    var ribbonColor: Color {
+        switch tone {
+        case .inflow: CatfolioPalette.statementInflowRibbon
+        case .outflow: CatfolioPalette.statementOutflowRibbon
+        }
+    }
                 span: 112
             )
             let grossThickness = revenueFlows.first
@@ -363,10 +371,10 @@ private struct FinancialFlowDiagram: View {
                     let x0: CGFloat = 48
                     let x1 = size.width * 0.50
                     let x2 = size.width - 48
-                    ribbon(context: &context, from: CGPoint(x: x0, y: grossSourceCenter), to: CGPoint(x: x1, y: grossCenter), thickness: grossThickness, color: middleTop.color)
-                    ribbon(context: &context, from: CGPoint(x: x0, y: costSourceCenter), to: CGPoint(x: x1, y: costCenter), thickness: costThickness, color: middleBottom.color)
-                    ribbon(context: &context, from: CGPoint(x: x1, y: operatingSourceCenter), to: CGPoint(x: x2, y: 90), thickness: operatingThickness, color: rightTop.color)
-                    ribbon(context: &context, from: CGPoint(x: x1, y: expenseSourceCenter), to: CGPoint(x: x2, y: 181), thickness: expenseThickness, color: rightBottom.color)
+                    ribbon(context: &context, from: CGPoint(x: x0, y: grossSourceCenter), to: CGPoint(x: x1, y: grossCenter), thickness: grossThickness, color: middleTop.ribbonColor)
+                    ribbon(context: &context, from: CGPoint(x: x0, y: costSourceCenter), to: CGPoint(x: x1, y: costCenter), thickness: costThickness, color: middleBottom.ribbonColor)
+                    ribbon(context: &context, from: CGPoint(x: x1, y: operatingSourceCenter), to: CGPoint(x: x2, y: 90), thickness: operatingThickness, color: rightTop.ribbonColor)
+                    ribbon(context: &context, from: CGPoint(x: x1, y: expenseSourceCenter), to: CGPoint(x: x2, y: 181), thickness: expenseThickness, color: rightBottom.ribbonColor)
                     bar(context: &context, x: x0, y: sourceTop, height: grossThickness + costThickness, color: left.color)
                     bar(context: &context, x: x1, y: grossTop, height: grossThickness, color: middleTop.color)
                     bar(context: &context, x: x1, y: costCenter - costThickness / 2, height: costThickness, color: middleBottom.color)
@@ -404,8 +412,8 @@ private struct FinancialSplitDiagram: View {
                 Canvas { context, size in
                     let x0: CGFloat = 54
                     let x1 = size.width - 54
-                    ribbon(context: &context, from: CGPoint(x: x0, y: upperSourceCenter), to: CGPoint(x: x1, y: 108), thickness: upperThickness, color: upper.color)
-                    ribbon(context: &context, from: CGPoint(x: x0, y: lowerSourceCenter), to: CGPoint(x: x1, y: 218), thickness: lowerThickness, color: lower.color)
+                    ribbon(context: &context, from: CGPoint(x: x0, y: upperSourceCenter), to: CGPoint(x: x1, y: 108), thickness: upperThickness, color: upper.ribbonColor)
+                    ribbon(context: &context, from: CGPoint(x: x0, y: lowerSourceCenter), to: CGPoint(x: x1, y: 218), thickness: lowerThickness, color: lower.ribbonColor)
                     bar(context: &context, x: x0, y: sourceTop, height: upperThickness + lowerThickness, color: source.color)
                     bar(context: &context, x: x1, y: 108 - upperThickness / 2, height: upperThickness, color: upper.color)
                     bar(context: &context, x: x1, y: 218 - lowerThickness / 2, height: lowerThickness, color: lower.color)
@@ -461,7 +469,7 @@ private func ribbon(
         control2: CGPoint(x: from.x + control, y: from.y + thickness / 2)
     )
     path.closeSubpath()
-    context.fill(path, with: .color(color.opacity(0.13)))
+    context.fill(path, with: .color(color))
 }
 
 /// Allocate both branches from one shared span. This makes the two ribbons

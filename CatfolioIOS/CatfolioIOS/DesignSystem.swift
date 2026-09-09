@@ -111,12 +111,14 @@ enum CatfolioPalette {
     static let magenta900 = color(0x4E005B)
 
     static let violet50 = color(0xEBE4FF)
+    static let violet100 = color(0xE6D8FF)
     static let violet200 = color(0xCAAEFA)
     static let violet500 = color(0x804DDE)
     static let violet700 = color(0x5A2CA8)
     static let violet900 = color(0x31165C)
 
     static let blue50 = color(0xE4F1FF)
+    static let blue100 = color(0xCCEBFF)
     static let blue200 = color(0xA0CDFF)
     static let blue500 = color(0x027DFF)
     static let blue700 = color(0x2B47D1)
@@ -136,7 +138,6 @@ enum CatfolioPalette {
 
     static let green50 = color(0xE4FBEE)
     static let green200 = color(0x84F4AD)
-    static let green400 = color(0x4CAE64)
     static let green500 = color(0x05AE5B)
     static let green700 = color(0x027D50)
     static let green900 = color(0x006645)
@@ -152,18 +153,25 @@ enum CatfolioPalette {
     /// what is subtracted from it — cost of revenue, operating expenses,
     /// liabilities, capital expenditure — reads as the other.
     ///
-    /// Green against olive, from the reference the page is being matched to.
-    /// The olive is `yellow700`, which the palette already held and which the
-    /// reference lands within a hair of; the green is muted where `green500` is
-    /// vivid, so it needed its own entry.
+    /// Blue against violet, each with the pale tint its ribbon is drawn in.
     ///
-    /// Neither is `gain` or `loss`, and the green is deliberately not the one
-    /// `gain` uses: a liability is not a loss and revenue is not a gain, so
-    /// borrowing either would tell the reader something untrue about a
-    /// statement. `gain` in light mode is a far darker #008724, which keeps the
-    /// two apart if they ever share a screen.
-    static let statementInflow = green400
-    static let statementOutflow = yellow700
+    /// The ribbons carry their own colour rather than a translucent copy of the
+    /// bar. A tint chosen directly can be lighter than an opacity of the bar
+    /// would ever be while keeping enough saturation to still read as the same
+    /// identity, which is what these four values do.
+    ///
+    /// `#007DFF` as asked for is `blue500` to within two parts in 255 — one
+    /// step in the red channel, invisible on screen — so it points at the
+    /// existing swatch instead of adding a near-duplicate for a future reader
+    /// to have to tell apart. `#804DDE` is `violet500` exactly.
+    ///
+    /// Neither side is `gain` or `loss`: revenue is not a gain and a liability
+    /// is not a loss, so borrowing either would tell the reader something
+    /// untrue about a statement.
+    static let statementInflow = blue500
+    static let statementInflowRibbon = blue100
+    static let statementOutflow = violet500
+    static let statementOutflowRibbon = violet100
     /// Figma Today-card negative series and its ambient dark-mode light source.
     static let contributionRed = color(0xD5312C)
     static let contributionRedGlow = color(0xE2433C)
