@@ -1117,6 +1117,7 @@ struct ChartTimeRangePicker: View {
     var isDisabled = false
     var usesBrightSelectedBackground = false
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
 
     var body: some View {
         HStack(spacing: 0) {
@@ -1163,6 +1164,9 @@ struct ChartTimeRangePicker: View {
     }
 
     private func displayedChoice(in group: [ChartTimeRange]) -> ChartTimeRange {
+        // Fires on the change, so tapping the range already selected stays
+        // silent — there is nothing for the tap to confirm.
+        .sensoryFeedback(.selection, trigger: selection) { _, _ in hapticsEnabled }
         group.first(where: { $0 == selection }) ?? group[0]
     }
 

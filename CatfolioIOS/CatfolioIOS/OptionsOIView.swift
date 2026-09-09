@@ -280,6 +280,7 @@ actor OptionsOIClient {
 }
 
 struct OptionsOIView: View {
+    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @Environment(\.locale) private var appLocale
     let symbol: String
     let currency: String?
@@ -310,6 +311,7 @@ struct OptionsOIView: View {
             Picker(L10n.text("到期范围"), selection: $days) {
                 Text(L10n.text("7 天内")).tag(7); Text(L10n.text("30 天内")).tag(30); Text(L10n.text("90 天内")).tag(90)
             }.pickerStyle(.segmented).disabled(loading || !supported)
+                .sensoryFeedback(.selection, trigger: days) { _, _ in hapticsEnabled }
             if loading { ProgressView(L10n.text("读取完整期权链…")) }
             if let error { Text(error).font(.caption).foregroundStyle(.secondary) }
             if !supported {

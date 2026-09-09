@@ -1,6 +1,10 @@
 import SwiftUI
 
 struct CompanyFinancialsView: View {
+    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
+    @Environment(\.locale) private var appLocale
+    @Environment(\.dismiss) private var dismiss
+
     private enum Statement: String, CaseIterable, Identifiable {
         case income = "利润表"
         case balance = "资产负债表"
@@ -110,6 +114,7 @@ struct CompanyFinancialsView: View {
             let periods = data.income.filter { $0.kind == periodKind }
             if let selected = selected(from: periods) {
                 IncomeFlowView(period: selected)
+            .sensoryFeedback(.selection, trigger: periodKind) { _, _ in hapticsEnabled }
                 periodSelector(periods, label: { periodLabel($0.fiscalYear, $0.fiscalPeriod) })
                 incomeRows(selected)
             } else {
@@ -173,6 +178,7 @@ struct CompanyFinancialsView: View {
         FinancialRows(currency: period.currency, rows: [
             ("营业收入", period.revenue, true),
             ("营业成本", period.costOfRevenue, false),
+        .sensoryFeedback(.selection, trigger: selectedPeriodEnd) { _, _ in hapticsEnabled }
             ("毛利润", period.grossProfit, true),
             ("营业费用", period.operatingExpenses, false),
             ("营业利润", period.operatingIncome, true),

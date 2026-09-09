@@ -2538,6 +2538,7 @@ private struct ETFExposureRow: View {
             }
         }
         .padding(.vertical, 9)
+    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
         .frame(minHeight: 76)
         .accessibilityElement(children: .combine)
     }
@@ -2549,6 +2550,7 @@ private struct ETFExposureRow: View {
                 .frame(width: 7, height: 7)
             Text("\(title) \(DisplayFormat.money(value))")
                 .appNumber(.micro, weight: .semibold)
+        .sensoryFeedback(.selection, trigger: performancePeriod) { _, _ in hapticsEnabled }
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
