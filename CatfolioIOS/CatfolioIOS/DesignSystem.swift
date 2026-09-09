@@ -136,6 +136,7 @@ enum CatfolioPalette {
 
     static let green50 = color(0xE4FBEE)
     static let green200 = color(0x84F4AD)
+    static let green400 = color(0x4CAE64)
     static let green500 = color(0x05AE5B)
     static let green700 = color(0x027D50)
     static let green900 = color(0x006645)
@@ -151,15 +152,18 @@ enum CatfolioPalette {
     /// what is subtracted from it — cost of revenue, operating expenses,
     /// liabilities, capital expenditure — reads as the other.
     ///
-    /// Neither is `gain` or `loss`. A liability is not a loss, and drawing it in
-    /// the same red as one would tell the reader something untrue about a
-    /// balance sheet. The inflow side is the blue this app already draws chart
-    /// geometry in, so the page stops being the one screen with a cyan of its
-    /// own; the outflow side is the palette's violet, which is calmer than the
-    /// magenta it replaces and still separates cleanly from both the blue and
-    /// the gain/loss pair that share the screen.
-    static let statementInflow = blue500
-    static let statementOutflow = violet500
+    /// Green against olive, from the reference the page is being matched to.
+    /// The olive is `yellow700`, which the palette already held and which the
+    /// reference lands within a hair of; the green is muted where `green500` is
+    /// vivid, so it needed its own entry.
+    ///
+    /// Neither is `gain` or `loss`, and the green is deliberately not the one
+    /// `gain` uses: a liability is not a loss and revenue is not a gain, so
+    /// borrowing either would tell the reader something untrue about a
+    /// statement. `gain` in light mode is a far darker #008724, which keeps the
+    /// two apart if they ever share a screen.
+    static let statementInflow = green400
+    static let statementOutflow = yellow700
     /// Figma Today-card negative series and its ambient dark-mode light source.
     static let contributionRed = color(0xD5312C)
     static let contributionRedGlow = color(0xE2433C)
