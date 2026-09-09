@@ -873,10 +873,7 @@ private struct TodayContributionBar: View {
     /// the compact form drops them rather than carrying two decimals into a
     /// space that could not hold the digits.
     private var compactAmountText: String {
-        DisplayFormat.compact(
-            DisplayCurrency.current.fromUSD(abs(amount)),
-            style: .localised
-        )
+        DisplayFormat.compact(DisplayCurrency.current.fromUSD(abs(amount)))
     }
 
     private func barAmountLabel(_ text: String) -> some View {

@@ -130,20 +130,19 @@ Turn fixed width off for a figure that never changes and sits in no column — a
 
 So there is one ladder: `DisplayFormat.compact` and `DisplayFormat.compactMoney`. `scripts/check_ios_design.py` fails on a division by a thousand or a million written anywhere else, and on `.notation(.compactName)` outside the token file.
 
-Two things are named rather than decided again at each call site:
+**The suffix follows the language.** 万, 亿 and 万亿 when the app is in Chinese; K, M, B and T when it is in English. A Chinese reader counts in 万 and 亿, and a figure written 1.2B for that reader has to be converted before it means anything. This is one convention, not two: the same call produces the right suffix in either language, which is why there is no style to choose.
+
+The locale is passed explicitly at the call. `formatted()` otherwise follows `Locale.current`, which tracks the device — and the language preference here lives in `AppLanguage` without going through `AppleLanguages`, so somebody reading the app in Chinese on an English phone would be shown K and M. Anything new that formats a figure has to pass it too.
+
+How much precision survives is the one thing a call site chooses:
 
 | | |
 | --- | --- |
 | `.whole` | No decimals. An axis label, where a decimal point is noise. |
 | `.tenth` | Up to one. The default for a figure read at a glance. |
-| `.statement` | Two below 100, none at or above — roughly three significant digits, which is what a statement line needs. |
+| `.statement` | Three significant digits: 1.23万 / 12.3亿 / 3910亿. A fixed two decimals prints 3910.35亿, six digits of precision nobody asked for. |
 
-| | |
-| --- | --- |
-| `.latin` | K / M / B / T, identical in every language. The default, and what any figure compared against another one uses. |
-| `.localised` | The locale's own names — 万 and 亿 under zh-Hans. Only the contribution bar, which reads as prose beside the figure it abbreviates. |
-
-**Open:** whether `.localised` should exist at all. A Chinese reader may well expect 亿, but the app currently says 亿 on one screen and B on the others, which is worse than either answer alone. Settle it and delete the other case.
+**Below the first step there is nothing to abbreviate**, and compact notation drops the thousands separator while it is at it — 1500 rather than 1,500, which reads as a typo beside a 1.23亿 on the same axis. `compact` re-renders those as plain grouped numbers. Where that step falls is the language's business: 10,000 in Chinese, 1,000 in English.
 
 **Signs and symbols.** The sign leads the whole amount — `-$1.50K`, not `$-1.50K`, which reads as a negative quantity of dollars. Symbols come from the same formatter `money()` uses, so a currency looks the same wherever it appears; a currency with no glyph prints its code followed by a non-breaking space, because `SEK1.00T` reads as one token.
 

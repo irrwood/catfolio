@@ -1685,26 +1685,23 @@ enum DisplayFormat {
         return "\(adjusted >= 0 ? "+" : "-")\(text)"
     }
 
-    /// How an abbreviated figure is suffixed.
-    ///
-    /// The app had two answers and no rule. Statement lines and axis labels
-    /// divided by hand and appended a literal "M"; the contribution bars used
-    /// `.compactName`, which under zh-Hans says 万 and 亿 rather than K and M.
-    /// Both are defensible, but not in the same app, so the choice is named
-    /// here instead of being made again at each call site.
-    enum CompactStyle {
-        /// K / M / B / T, identical in every language.
-        case latin
-        /// The locale's own compact names — 万 and 亿 under zh-Hans.
-        case localised
-    }
-
     /// How many digits an abbreviated figure keeps.
     enum CompactPrecision {
         /// Whole units. Axis labels, where a decimal point is noise.
         case whole
         /// Up to one decimal. The default for a figure read at a glance.
         case tenth
+    ///
+    /// The suffix follows the language: 万, 亿 and 万亿 under zh-Hans, K/M/B/T
+    /// under English. That is one convention, not two — the app had a
+    /// hand-rolled K/M/B/T table on some screens and `.compactName` on others,
+    /// and they disagreed in Chinese.
+    ///
+    /// The locale is passed explicitly. `formatted()` would otherwise follow
+    /// `Locale.current`, which tracks the device; the language preference here
+    /// lives in `AppLanguage` and does not set `AppleLanguages`, so a person
+    /// reading the app in Chinese on an English phone would still be shown K
+    /// and M.
         /// Two decimals below 100 and none at or above it, which holds a
         /// statement line to roughly three significant digits.
         case statement
@@ -1722,39 +1719,38 @@ enum DisplayFormat {
     /// through here; nothing else divides by a million.
     static func compact(
         _ value: Double,
-        style: CompactStyle = .latin,
         precision: CompactPrecision = .tenth
     ) -> String {
         guard value.isFinite else { return "—" }
-        if style == .localised {
-            return value.formatted(
-                .number.notation(.compactName).precision(.fractionLength(precision.range))
-            )
+        let locale = Locale(identifier: AppLanguage.currentIdentifier)
+        let compact: String
+        switch precision {
+        case .whole:
+            compact = value.formatted(
+                .number.notation(.compactName).precision(.fractionLength(0...0)).locale(locale))
+        case .tenth:
+            compact = value.formatted(
+                .number.notation(.compactName).precision(.fractionLength(0...1)).locale(locale))
+        case .statement:
+            compact = value.formatted(
+                .number.notation(.compactName).precision(.significantDigits(3)).locale(locale))
         }
-        let magnitude = abs(value)
-        let scaled: Double
-        let suffix: String
-        switch magnitude {
-        case 1_000_000_000_000...: scaled = value / 1_000_000_000_000; suffix = "T"
-        case 1_000_000_000...: scaled = value / 1_000_000_000; suffix = "B"
-        case 1_000_000...: scaled = value / 1_000_000; suffix = "M"
-        case 1_000...: scaled = value / 1_000; suffix = "K"
-        default: scaled = value; suffix = ""
+        // Below the first step there is nothing to abbreviate, and compact
+        // notation drops the thousands separator while it is at it — 1500
+        // rather than 1,500, which looks wrong beside a 1.23亿 on the same
+        // axis. Detected by the absence of a suffix rather than by comparing
+        // against a threshold, because where that threshold falls is the
+        // locale's business (10,000 in Chinese, 1,000 in English).
+        if !compact.contains(where: { $0.isLetter || ($0.unicodeScalars.first?.value ?? 0) > 0x2E80 }) {
+            return value.formatted(.number.precision(.fractionLength(0...0)).locale(locale))
         }
-        let digits: ClosedRange<Int>
-        if case .statement = precision {
-            digits = abs(scaled) >= 100 ? 0...0 : 2...2
-        } else {
-            digits = precision.range
-        }
-        return "\(scaled.formatted(.number.precision(.fractionLength(digits))))\(suffix)"
+        return compact
     }
 
     /// An abbreviated amount carrying its currency symbol.
     static func compactMoney(
         _ value: Double,
         currency: String? = nil,
-        style: CompactStyle = .latin,
         precision: CompactPrecision = .tenth
     ) -> String {
         guard value.isFinite else { return "—" }
@@ -1773,7 +1769,7 @@ enum DisplayFormat {
         // into a digit reads as one token: "SEK1.00T". money() spaces these,
         // so this does too.
         if let last = symbol.last, last.isLetter { symbol += "\u{00A0}" }
-        let body = compact(abs(adjusted), style: style, precision: precision)
+        let body = compact(abs(adjusted), precision: precision)
         // The sign leads the whole amount. The statement formatter this
         // replaced put it after the symbol — "$-1.50K" — which reads as a
         // negative quantity of dollars rather than a negative amount.
