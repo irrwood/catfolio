@@ -29,6 +29,22 @@ _H = [
     ("VUAG.L", "Vanguard S&P 500 UCITS ETF",       "VUAG.L",  "GBX", 30,  8800.00,9248.00, +0.51),
 ]
 
+_MARKET_META = {
+    "AAPL": (58_400_000, 52_100_000, 3_080_000_000_000, 237.49, 164.08),
+    "MSFT": (21_800_000, 24_700_000, 3_180_000_000_000, 468.35, 344.77),
+    "NVDA": (312_000_000, 284_000_000, 2_220_000_000_000, 974.00, 392.30),
+    "GOOGL": (27_600_000, 30_900_000, 2_270_000_000_000, 191.75, 120.21),
+    "META": (13_900_000, 16_800_000, 1_440_000_000_000, 638.40, 414.50),
+    "AMZN": (38_500_000, 41_200_000, 2_190_000_000_000, 242.52, 151.61),
+    "BRK.B": (3_600_000, 4_100_000, 975_000_000_000, 491.67, 396.35),
+    "SPY": (54_000_000, 62_000_000, 493_000_000_000, 613.23, 493.86),
+    "V": (7_400_000, 8_100_000, 570_000_000_000, 321.61, 252.70),
+    "JNJ": (6_900_000, 7_600_000, 350_000_000_000, 168.85, 140.68),
+    "LLOY.L": (118_000_000, 135_000_000, 42_000_000_000, 64.20, 49.10),
+    "BP.L": (26_000_000, 31_000_000, 78_000_000_000, 539.40, 379.70),
+    "VUAG.L": (180_000, 210_000, 8_900_000_000, 10_180.00, 7_820.00),
+}
+
 _FX = {"USD": 1.0, "GBP": 1.346, "GBX": 0.01346}  # GBX = pence → USD
 
 
@@ -62,6 +78,7 @@ def _build_snapshot():
             "price_currency": ccy,
         })
 
+        volume, avg_volume, market_cap, high_52w, low_52w = _MARKET_META[ticker]
         market_rows.append({
             "ticker": ticker,
             "name": name,
@@ -80,12 +97,12 @@ def _build_snapshot():
             "today_change_percent": chg,
             "trailing_pe": None,
             "forward_pe": None,
-            "volume": None,
-            "avg_volume_3m": None,
-            "market_cap": None,
-            "high_52w": None,
-            "low_52w": None,
-            "open_price": None,
+            "volume": volume,
+            "avg_volume_3m": avg_volume,
+            "market_cap": market_cap,
+            "high_52w": high_52w,
+            "low_52w": low_52w,
+            "open_price": round(price / (1 + chg / 100), 4),
             "market_time": _AS_OF,
             "source": "demo",
         })
@@ -189,9 +206,13 @@ def _demo_price_path(final_price, annual_drift, daily_wave, phase):
     for index, _day in enumerate(dates):
         cycle = math.sin(index / 17.0 + phase) * daily_wave
         slow_cycle = math.cos(index / 71.0 + phase / 2.0) * daily_wave * 0.55
+        # Add a shorter, phase-shifted wave so demo charts have visible local
+        # movement instead of reading as overly smooth trend lines. Keeping it
+        # deterministic makes screenshots and tests stable across deployments.
+        texture = math.sin(index / 2.8 + phase * 1.7) * daily_wave * 1.4
         shock = -daily_wave * 3.2 if index in {178, 431, 782} else 0.0
         rebound = daily_wave * 2.1 if index in {190, 447, 801} else 0.0
-        ret = annual_drift / 252.0 + cycle + slow_cycle + shock + rebound
+        ret = annual_drift / 252.0 + cycle + slow_cycle + texture + shock + rebound
         nav *= max(0.72, 1.0 + ret)
         raw.append(nav)
     scale = final_price / (raw[-1] or 1.0)

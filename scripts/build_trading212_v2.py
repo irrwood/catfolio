@@ -8,7 +8,6 @@ import os; ROOT = Path(os.environ.get("CATFOLIO_ROOT") or os.environ.get("HELM_R
 DATA_DIR = Path(os.environ.get("CATFOLIO_DATA_DIR") or os.environ.get("HELM_DATA_DIR") or str(ROOT / "outputs"))
 V1_DIR = DATA_DIR / "portfolio_analysis"
 V2_DIR = DATA_DIR / "portfolio_analysis_v2"
-V2_HTML = V2_DIR / "portfolio_cost_basis_v2.html"
 GBP_TO_USD = 1.3460
 YAHOO_SYMBOL_OVERRIDES = {
     "BRK.B": "BRK-B",
@@ -36,6 +35,14 @@ def usd_from_gbp(value):
     if value is None:
         return 0.0
     return float(value) * GBP_TO_USD
+
+
+def usd_from_account_currency(value, currency):
+    if value is None:
+        return None
+    rates = {"USD": 1.0, "GBP": GBP_TO_USD, "GBX": 0.013460, "EUR": 1.1630}
+    rate = rates.get(str(currency or "GBP").upper())
+    return float(value) * rate if rate is not None else None
 
 
 def gbp_market_value(quantity, price, currency):
@@ -82,6 +89,9 @@ def build_v2_data():
     t212 = load_json(V1_DIR / "trading212_data.json", {"positions": [], "summary": {}, "account_cash": {}})
     v1 = load_json(V1_DIR / "portfolio_analysis.json", {"holdings": [], "summary": {}})
     v1_by_ticker = {row["ticker"].upper(): row for row in v1.get("holdings", [])}
+    cash_by_account = t212.get("account_cash", {})
+    cash_accounts = cash_by_account if isinstance(cash_by_account, dict) else {}
+    account_info = t212.get("account_info", {}) if isinstance(t212.get("account_info"), dict) else {}
 
     holdings_by_account = []
     market_rows = []
@@ -105,6 +115,14 @@ def build_v2_data():
         market_usd = usd_from_gbp(market_gbp)
         avg_api_usd = cost_usd / shares if shares else 0
         account = row.get("account") or "Trading212 API"
+        cash = cash_accounts.get(account, {}) if isinstance(cash_accounts.get(account, {}), dict) else {}
+        info = account_info.get(account, {}) if isinstance(account_info.get(account, {}), dict) else {}
+        account_currency = str(cash.get("currencyCode") or info.get("currencyCode") or "GBP").upper()
+        broker_ppl = row.get("ppl")
+        broker_fx_ppl = row.get("fx_ppl")
+        broker_unrealized_usd = usd_from_account_currency(broker_ppl, account_currency)
+        broker_fx_ppl_usd = usd_from_account_currency(broker_fx_ppl, account_currency)
+        price_unrealized_usd = market_usd - cost_usd
         holding = {
             "ticker": ticker,
             "isin": v1_row.get("isin", ""),
@@ -134,6 +152,14 @@ def build_v2_data():
             "api_market_value_usd": market_usd,
             "api_unrealized_gbp": market_gbp - cost_gbp,
             "api_unrealized_usd": market_usd - cost_usd,
+            "broker_unrealized_account": broker_ppl,
+            "broker_unrealized_currency": account_currency,
+            "broker_unrealized_usd": broker_unrealized_usd,
+            "broker_fx_ppl_account": broker_fx_ppl,
+            "broker_fx_ppl_usd": broker_fx_ppl_usd,
+            "broker_ppl_includes_fx": broker_ppl is not None,
+            "price_unrealized_usd": price_unrealized_usd,
+            "price_unrealized_percent": ((market_usd / cost_usd - 1) * 100) if cost_usd else None,
             "csv_cost_usd_standard": v1_row.get("cost_usd_standard"),
             "csv_shares": v1_row.get("shares"),
             "api_share_diff": shares - float(v1_row.get("shares") or 0),
@@ -151,8 +177,14 @@ def build_v2_data():
             "quote_currency": currency,
             "market_value_native": float(row.get("market_value_native") or 0),
             "market_value_usd": market_usd,
-            "unrealized_usd": market_usd - cost_usd,
-            "unrealized_percent": ((market_usd / cost_usd - 1) * 100) if cost_usd else None,
+            "unrealized_usd": broker_unrealized_usd if broker_unrealized_usd is not None else price_unrealized_usd,
+            "unrealized_percent": ((broker_unrealized_usd if broker_unrealized_usd is not None else price_unrealized_usd) / cost_usd * 100) if cost_usd else None,
+            "broker_unrealized_usd": broker_unrealized_usd,
+            "broker_fx_ppl_usd": broker_fx_ppl_usd,
+            "broker_ppl_includes_fx": broker_ppl is not None,
+            "price_unrealized_usd": price_unrealized_usd,
+            "price_unrealized_percent": ((market_usd / cost_usd - 1) * 100) if cost_usd else None,
+            "pnl_basis": "trading212_ppl" if broker_ppl is not None else "price_difference",
             "change_percent": None,
             "market_time": t212.get("as_of_unix"),
             "source": "Trading 212 portfolio API",
@@ -175,6 +207,9 @@ def build_v2_data():
         target["api_market_value_usd"] += float(row.get("api_market_value_usd") or 0)
         target["api_unrealized_gbp"] += float(row.get("api_unrealized_gbp") or 0)
         target["api_unrealized_usd"] += float(row.get("api_unrealized_usd") or 0)
+        target["broker_unrealized_usd"] = float(target.get("broker_unrealized_usd") or 0) + float(row.get("broker_unrealized_usd") or 0)
+        target["broker_fx_ppl_usd"] = float(target.get("broker_fx_ppl_usd") or 0) + float(row.get("broker_fx_ppl_usd") or 0)
+        target["price_unrealized_usd"] = float(target.get("price_unrealized_usd") or 0) + float(row.get("price_unrealized_usd") or 0)
         target["api_share_diff"] += float(row.get("api_share_diff") or 0)
         target["buys"] += int(row.get("buys") or 0)
         target["sells"] += int(row.get("sells") or 0)
@@ -193,8 +228,6 @@ def build_v2_data():
     holdings_by_account.sort(key=lambda row: float(row.get("cost_usd_standard") or 0), reverse=True)
     market_rows.sort(key=lambda row: float(row.get("market_value_usd") or 0), reverse=True)
 
-    cash_by_account = t212.get("account_cash", {})
-    cash_accounts = cash_by_account if isinstance(cash_by_account, dict) else {}
     cash_total_gbp = 0.0
     cash_movements = {}
     for account, cash in cash_accounts.items():
@@ -227,6 +260,8 @@ def build_v2_data():
         "closed_positions": 0,
         "report_fx_to_usd": {"USD": 1, "GBP": GBP_TO_USD, "GBX": 0.013460, "EUR": 1.1630},
         "report_fx_source": "v2 uses Trading 212 API averagePrice/currentPrice snapshot; GBP/USD 1.3460 for display",
+        "unrealized_pnl_basis": "Trading 212 ppl in account currency; includes FX contribution",
+        "price_pnl_basis": "current price minus average cost; excludes broker FX reconciliation",
         "total_cost_usd_standard": total_usd,
         "cost_scale_by_currency": by_currency,
         "cost_scale_by_account_gbp_available": by_account,
@@ -248,6 +283,7 @@ def build_v2_data():
             "holdings": holdings,
             "holdings_by_account": holdings_by_account,
             "closed_positions": [],
+            "import_transactions": v1.get("import_transactions", []),
         },
         "market_data": {
             "as_of_unix": t212.get("as_of_unix"),
@@ -259,7 +295,7 @@ def build_v2_data():
 
 
 def build_and_write():
-    """Run the full Trading 212 -> v2 data + HTML report pipeline in-process.
+    """Run the Trading 212 -> normalized v2 data pipeline in-process.
 
     Returns a summary dict. Importable so the FastAPI app can refresh data
     without spawning a `python3` subprocess.
@@ -283,15 +319,10 @@ def build_and_write():
     (V2_DIR / "market_data.json").write_text(json.dumps(data["market_data"], ensure_ascii=False, indent=2), encoding="utf-8")
     (V2_DIR / "trading212_data.json").write_text(json.dumps(data["trading212_data"], ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # Regenerate the audit report HTML in-process.
-    import build_portfolio_html
-    build_portfolio_html.main(data_dir=V2_DIR, out_path=V2_HTML)
-
     return {
         "ok": True,
         "skipped": False,
         "holdings": len(holdings),
-        "html_path": str(V2_HTML.resolve()),
         "warnings": (portfolio_data.get("summary") or {}).get("warnings", []),
     }
 

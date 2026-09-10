@@ -1,30 +1,36 @@
-from pathlib import Path
-
 from starlette.requests import Request
 
 
 def _request(path="/report"):
-    return Request({"type": "http", "method": "GET", "path": path, "headers": []})
+    return Request({"type": "http", "method": "GET", "path": path, "headers": [], "query_string": b""})
 
 
-def test_demo_report_does_not_read_generated_private_report(monkeypatch, tmp_path):
-    from app.cache import clear_all
+def test_legacy_report_redirects_without_reading_private_files(monkeypatch):
     from app.routes import report as report_route
 
-    private_report = tmp_path / "portfolio_cost_basis_v2.html"
-    private_report.write_text(
-        "<html><body><section>PRIVATE_REAL_ACCOUNT_TICKER</section></body></html>",
-        encoding="utf-8",
+    monkeypatch.setattr(
+        "pathlib.Path.read_text",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("legacy report file was read")),
     )
 
-    monkeypatch.setenv("CATFOLIO_DEMO", "1")
-    monkeypatch.setattr(report_route, "V2_HTML", Path(private_report))
-    clear_all()
-
     response = report_route.report(_request())
-    html = response.body.decode("utf-8")
+    assert response.status_code == 307
+    assert response.headers["location"] == "/lab"
 
-    assert "PRIVATE_REAL_ACCOUNT_TICKER" not in html
-    assert "Catfolio" in html
-    assert "Demo mode is using Catfolio's built-in sample portfolio" in html
-    assert "AAPL" in html
+
+def test_legacy_report_canonicalizes_v5_shell():
+    from app.routes import report as report_route
+
+    request = Request({"type": "http", "method": "GET", "path": "/report", "headers": [], "query_string": b"ui=v5"})
+    response = report_route.report(request)
+    assert response.status_code == 307
+    assert response.headers["location"] == "/lab"
+
+
+def test_legacy_report_preserves_v4_escape_hatch():
+    from app.routes import report as report_route
+
+    request = Request({"type": "http", "method": "GET", "path": "/report", "headers": [], "query_string": b"ui=v4"})
+    response = report_route.report(request)
+    assert response.status_code == 307
+    assert response.headers["location"] == "/lab?ui=v4"

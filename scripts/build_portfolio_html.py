@@ -3,6 +3,8 @@ import os
 from html import escape
 from pathlib import Path
 
+from report_import_export import IMPORT_CSV_HEADERS, build_import_csv_rows_from_holdings
+
 
 def fmt(value, digits=2):
     try:
@@ -102,6 +104,7 @@ def main(data_dir=None, out_path=None):
         else f'基于 6 个账户 A/B CSV 文件，统计日期：{escape(summary["as_of"])}。成本价采用移动平均法；卖出按当时平均成本扣减。'
     )
     holdings = data["holdings"]
+    import_transactions = data.get("import_transactions") or build_import_csv_rows_from_holdings(holdings, summary.get("as_of", ""))
     warnings = summary.get("warnings", [])
     trading212_data = load_optional_json(data_dir / "trading212_data.json", {"summary": {}, "account_cash": {}, "warnings": ["trading212_data.json missing"]})
     trading212_summary = trading212_data.get("summary", {})
@@ -334,16 +337,33 @@ def main(data_dir=None, out_path=None):
     }}
     .section-head {{
       display: flex;
-      justify-content: space-between;
-      align-items: center;
+      justify-content: flex-start;
+      align-items: flex-start;
+      flex-direction: column;
+      flex-wrap: wrap;
       gap: 16px;
       padding: 16px 18px 13px;
       border-bottom: 1px solid var(--line);
       background: linear-gradient(180deg, var(--panel), oklch(0.985 0.005 92));
     }}
+    .section-head > div:first-child {{
+      flex: none;
+      min-width: 240px;
+      width: 100%;
+    }}
     h2 {{ margin: 0; font-size: 16px; line-height: 1.25; font-weight: 680; }}
     .note {{ color: var(--muted); font-size: 13px; margin-top: 4px; }}
-    .controls {{ display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }}
+    .controls {{
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: flex-start;
+      flex: none;
+      flex-wrap: wrap;
+      min-width: 0;
+      max-width: 100%;
+      width: 100%;
+    }}
     input, select, button {{
       height: 36px;
       border: 1px solid var(--line);
@@ -513,7 +533,7 @@ def main(data_dir=None, out_path=None):
       .grid, .currency-grid, .top-list, .insights {{ grid-template-columns: 1fr; }}
       .currency-box {{ border-right: 0; border-bottom: 1px solid var(--line); }}
       .section-head {{ align-items: flex-start; flex-direction: column; }}
-      .controls {{ width: 100%; }}
+      .controls {{ width: 100%; justify-content: flex-start; }}
       input, select, button {{ max-width: 100%; }}
       #portfolioChart {{ min-height: 380px; }}
       .echart-layout {{ grid-template-columns: 1fr; }}
@@ -631,6 +651,7 @@ def main(data_dir=None, out_path=None):
             <option value="EUR">EUR</option>
           </select>
           <button id="exportCsv" type="button">导出 CSV</button>
+          <button id="exportImportCsv" type="button">导出导入格式 CSV</button>
         </div>
       </div>
       <div class="table-wrap">
@@ -671,11 +692,13 @@ def main(data_dir=None, out_path=None):
   <script>
     const holdings = {json.dumps(holdings, ensure_ascii=False)};
     const trading212Rows = {json.dumps(trading212_reconcile_rows, ensure_ascii=False)};
+    const importCsvRows = {json.dumps(import_transactions, ensure_ascii=False)};
     const tbody = document.querySelector("#holdingsTable tbody");
     const search = document.querySelector("#search");
     const currencyFilter = document.querySelector("#currencyFilter");
     const exportCsv = document.querySelector("#exportCsv");
     const exportT212Csv = document.querySelector("#exportT212Csv");
+    const exportImportCsv = document.querySelector("#exportImportCsv");
     const toggleT212Reconcile = document.querySelector("#toggleT212Reconcile");
     const t212ReconcileBody = document.querySelector("#t212ReconcileBody");
     let sortKey = "cost_usd_standard";
@@ -686,6 +709,7 @@ def main(data_dir=None, out_path=None):
     const tableHeaders = ["Ticker","名称","股数","币种","USD 标准成本","USD 标准/股","总成本（原币）","成本价/股（原币）","账户","最后成交价参考","最后成交时间"];
     const trading212Keys = ["ticker","status","csv_shares","api_shares","diff","api_price","api_currency","api_market_value_gbp","csv_cost_usd"];
     const trading212Headers = ["Ticker","状态","CSV 股数","API 股数","差异","API 现价","API 币种","API 估算市值 GBP","CSV USD 成本"];
+    const importCsvHeaders = {json.dumps(IMPORT_CSV_HEADERS, ensure_ascii=False)};
 
     function formatNativeMoney(value, currency, digits = 2) {{
       const n = Number(value || 0);
@@ -748,6 +772,12 @@ def main(data_dir=None, out_path=None):
       return `"${{text.replaceAll('"', '""')}}"`;
     }}
 
+    function importCsvValue(value) {{
+      const text = String(value ?? "");
+      if (/[",\\n\\r]/.test(text)) return `"${{text.replaceAll('"', '""')}}"`;
+      return text;
+    }}
+
     function downloadCsv() {{
       const rows = getVisibleRows();
       const csvRows = [
@@ -783,6 +813,22 @@ def main(data_dir=None, out_path=None):
       URL.revokeObjectURL(url);
     }}
 
+    function downloadImportCsv() {{
+      const csvRows = [
+        importCsvHeaders.join(","),
+        ...importCsvRows.map(row => importCsvHeaders.map(key => importCsvValue(row[key])).join(","))
+      ];
+      const blob = new Blob(["\\ufeff" + csvRows.join("\\n")], {{ type: "text/csv;charset=utf-8" }});
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "portfolio_import_ready.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }}
+
     document.querySelectorAll("th[data-key]").forEach(th => {{
       th.addEventListener("click", () => {{
         const key = th.dataset.key;
@@ -798,6 +844,7 @@ def main(data_dir=None, out_path=None):
     currencyFilter.addEventListener("change", render);
     exportCsv.addEventListener("click", downloadCsv);
     exportT212Csv.addEventListener("click", downloadT212Csv);
+    exportImportCsv.addEventListener("click", downloadImportCsv);
     toggleT212Reconcile.addEventListener("click", () => {{
       const isCollapsed = t212ReconcileBody.classList.toggle("collapsed");
       toggleT212Reconcile.textContent = isCollapsed ? "展开明细" : "收起明细";

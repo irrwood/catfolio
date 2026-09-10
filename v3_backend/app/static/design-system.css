@@ -1,0 +1,305 @@
+/* Catfolio v5 shared design system — Lab is the visual source of truth. */
+
+:root {
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --font-sans: "Nunito Local", "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "PingFang SC", sans-serif;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-glow: none;
+}
+
+.ai-action-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  display: inline-block;
+  vertical-align: -3px;
+  background-color: currentColor;
+  -webkit-mask: url("/static/icons/ai-action.svg") center / contain no-repeat;
+  mask: url("/static/icons/ai-action.svg") center / contain no-repeat;
+}
+
+:root.light-theme {
+  --bg: #f7f8fa;
+  --panel: #fff;
+  --panel-raised: #fff;
+  --panel-hover: rgba(9, 15, 5, 0.035);
+  --soft: #f7f8fa;
+  --ink: #000;
+  --ink-secondary: rgba(9, 15, 5, 0.8);
+  --muted: #888;
+  --line: #f1f1f1;
+  --line-strong: #eaebed;
+  --accent: #2f8a3e;
+  --accent-soft: rgba(47, 138, 62, 0.09);
+  --accent-strong: #256f32;
+  --primary: #f7f8fa;
+  --primary-strong: #eaebed;
+  --on-primary: #000;
+  --positive: #2f8a3e;
+  --positive-soft: rgba(47, 138, 62, 0.08);
+  --negative: #e40014;
+  --negative-soft: rgba(228, 0, 20, 0.07);
+  --warn: #a8761a;
+  --warn-soft: rgba(168, 118, 26, 0.08);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --font-sans: "Nunito Local", "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "PingFang SC", sans-serif;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-glow: none;
+}
+
+body:not(.page-lab) {
+  min-width: 320px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+body:not(.page-lab) .v5-main { min-height: 100vh; background: var(--bg); }
+body:not(.page-lab) .v5-content {
+  max-width: none;
+  padding: 20px 10px 44px;
+  gap: 10px;
+  color: var(--ink);
+}
+
+/* Full-workspace pages follow the Portfolio boundary on wide screens. */
+body.page-analytics .v5-content,
+body.page-ai .v5-content { max-width: 1520px; }
+
+body:not(.page-lab) .v5-content > :is(.analytics-page, .returns-page) { gap: 10px; }
+
+body:not(.page-lab) .v5-content :is(.v4-hero, .analytics-head, .ai-page-head, .holdings-page-head) {
+  min-height: 41px;
+  margin: 0;
+  padding: 0;
+  align-items: center;
+}
+
+body:not(.page-lab) .v5-content :is(.v4-hero-text, .analytics-head > div, .ai-page-head > div) { min-width: 0; }
+body:not(.page-lab) .v5-content :is(.v4-hero, .analytics-head, .ai-page-head) h1,
+body:not(.page-lab) .v5-content > h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 41px;
+  letter-spacing: 0;
+}
+
+body:not(.page-lab) .v5-content :is(.v4-hero, .analytics-head, .ai-page-head) p {
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body:not(.page-lab) .v5-content :is(.v4-card, .panel, .analytics-card, .ai-prompt-library, .ai-chatbox) {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--panel);
+  box-shadow: none;
+}
+
+body:not(.page-lab) .v5-content :is(.v4-card, .panel) { padding: 20px; }
+body:not(.page-lab) .v5-content :is(.analytics-card, .v4-card, .panel) {
+  background-image: none;
+}
+
+body:not(.page-lab) .v5-content :is(.v4-card-title, .panel > h2, .chart-head h2, .analytics-card h2) {
+  margin: 0;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 750;
+  line-height: 25px;
+  letter-spacing: -0.01em;
+}
+
+body:not(.page-lab) .v5-content :is(.v4-card-subtitle, .chart-head span, .analytics-card header p) {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+body:not(.page-lab) .v5-content :is(.v4-card-header, .chart-head) {
+  margin-bottom: 14px;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+body:not(.page-lab) .v5-content :is(.metrics-grid, .returns-summary-grid) {
+  gap: 10px;
+}
+
+body:not(.page-lab) .v5-content .metric-card {
+  min-width: 0;
+  min-height: 118px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--panel);
+  box-shadow: none;
+}
+
+body:not(.page-lab) .v5-content .metric-card :is(.metric-label, span:first-child) {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+body:not(.page-lab) .v5-content .metric-card :is(.metric-value, strong, b) {
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 28px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+body:not(.page-lab) .v5-content :is(.grid-2, .analytics-grid, .question-grid, .optimization-grid) { gap: 10px; }
+
+body:not(.page-lab) .v5-content :is(.question-card, .score-card, .score-mini, .preference, .preference-metric, .percentile, .insight, .why-block) {
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--soft);
+  box-shadow: none;
+}
+
+body:not(.page-lab) .v5-content :is(.btn, button, [role="button"]) {
+  font-family: var(--font-sans);
+}
+
+body:not(.page-lab) .v5-content :is(.btn, .analytics-refresh, .prompt-more-btn, .dp-nav-btn) {
+  min-height: 36px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--ink-secondary);
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 700;
+  transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease;
+}
+
+body:not(.page-lab) .v5-content :is(.btn, .analytics-refresh, .prompt-more-btn, .dp-nav-btn):hover {
+  border-color: var(--line-strong);
+  background: var(--soft);
+  color: var(--ink);
+  box-shadow: none;
+  transform: none;
+}
+
+body:not(.page-lab) .v5-content :is(.btn-primary, button.primary, .ai-send) {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--panel);
+}
+
+body:not(.page-lab) .v5-content :is(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid #708cff;
+  outline-offset: 2px;
+}
+
+body:not(.page-lab) .v5-content :is(input:not([type="checkbox"]):not([type="radio"]):not(.ai-input), select, textarea) {
+  min-height: 40px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: none;
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+
+body:not(.page-lab) .v5-content :is(input:not(.ai-input), select, textarea):focus {
+  border-color: #708cff;
+  box-shadow: 0 0 0 3px rgba(112, 140, 255, 0.12);
+}
+
+body:not(.page-lab) .v5-content :is(.returns-segmented, .holdings-mode, .risk-tabs, .dp-dims) {
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--soft);
+  box-shadow: none;
+}
+
+body:not(.page-lab) .v5-content :is(.returns-segment.active, .risk-tab.active, .dp-dim.active) {
+  border-color: var(--line-strong);
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+body:not(.page-lab) .v5-content :is(.chart, .small-chart, .mini-chart, .analytics-chart, .heatmap-chart) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+body:not(.page-lab) .v5-content :is(.table-wrap, .holdings-table-shell) {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--panel);
+}
+
+body:not(.page-lab) .v5-content table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+body:not(.page-lab) .v5-content thead { background: var(--soft); }
+body:not(.page-lab) .v5-content th {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: none;
+}
+
+body:not(.page-lab) .v5-content :is(th, td) { border-color: var(--line); }
+body:not(.page-lab) .v5-content tr:hover td { background: var(--panel-hover); }
+
+body:not(.page-lab) .v5-content :is(.status, .analytics-status, .quality-banner, .dp-info-tip, .alert-item, .ai-card-result) {
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--soft);
+  box-shadow: none;
+}
+
+body:not(.page-lab) .positive { color: var(--positive) !important; }
+body:not(.page-lab) .negative { color: var(--negative) !important; }
+
+@media (max-width: 720px) {
+  body:not(.page-lab) .v5-content { padding: 16px 8px 32px; }
+  body:not(.page-lab) .v5-content :is(.v4-hero, .analytics-head, .ai-page-head) {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  body:not(.page-lab) .v5-content :is(.v4-hero, .analytics-head, .ai-page-head) h1 { font-size: 26px; line-height: 36px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body:not(.page-lab) .v5-content *,
+  body:not(.page-lab) .v5-content *::before,
+  body:not(.page-lab) .v5-content *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

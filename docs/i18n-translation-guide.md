@@ -108,9 +108,6 @@ PY
 | AI 分析 | `app/routes/ai.py` | `/ai` | 65 | ⬜ 待翻 |
 | 系统设置 | `app/routes/settings.py` | `/settings` | 63 | ⬜ 待翻 |
 | 收益对比 | `app/routes/returns.py` | `/returns` | 49 | ⬜ 待翻 |
-| 审计报表 | （由 `scripts/build_portfolio_html.py` 生成） | `/report` | — | ⬜ 待翻（方法相同） |
-
-> 审计报表的内容来自生成器脚本产出的 HTML、经 `app/routes/report.py` 后处理。`t_block` 同样作用于其最终页面，所以**把报表里的中文加进 `EN` 字典即可**，流程完全一致。
 
 建议顺序：按「中文行数从少到多」或「用户最常看」来，比如 `/settings` → `/returns` → `/ai` → `/home` → `/backtest` → `/heatmap` → `/lab` → `/report`。每页独立提交一次，便于 review。
 

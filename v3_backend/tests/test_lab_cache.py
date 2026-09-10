@@ -39,6 +39,17 @@ def test_demo_lab_history_uses_offline_data(monkeypatch):
     assert not summary["warnings"]
 
 
+def test_demo_price_path_has_visible_short_term_volatility():
+    from statistics import pstdev
+
+    from app.demo_data import DEMO_LAB_HISTORY
+
+    closes = [row["close"] for row in DEMO_LAB_HISTORY["prices"]["SPY"]]
+    returns = [current / previous - 1 for previous, current in zip(closes, closes[1:])]
+
+    assert pstdev(returns) > 0.006
+
+
 def test_demo_cash_flow_mirror_does_not_read_transactions(monkeypatch):
     from app import lab
     from app.cache import clear_all
@@ -53,6 +64,42 @@ def test_demo_cash_flow_mirror_does_not_read_transactions(monkeypatch):
 
     result = lab.cash_flow_mirror_vs_benchmark()
 
-    assert result["available"] is False
-    assert result["status"] == "demo_no_trade_history"
-    assert result["rows"] == []
+    assert result["available"] is True, result
+    assert result["status"] == "demo_synthetic"
+    assert len(result["rows"]) > 1000
+    assert result["stats"]["trade_count"] == 5
+    assert result["warnings"]
+
+
+def test_portfolio_chart_includes_uncached_current_snapshot(monkeypatch):
+    from app.routes import api
+
+    monkeypatch.setattr(
+        api,
+        "cash_flow_mirror_vs_benchmark",
+        lambda symbol: {
+            "available": True,
+            "rows": [{"date": "2026-07-17", "adjusted_portfolio_value": 67350.0, "net_cash_flow": 40057.0}],
+        },
+    )
+    monkeypatch.setattr(api, "current_snapshot", lambda: {"snapshot": "latest"})
+    monkeypatch.setattr(
+        api,
+        "portfolio_summary",
+        lambda snapshot: {
+            "as_of": "2026-07-28 09:30:00",
+            "market_value_usd": 56507.15,
+            "total_cost_usd_standard": 54500.69,
+        },
+    )
+
+    payload = api.api_portfolio_chart()
+
+    assert payload["cash_flow_mirror"]["rows"][-1]["date"] == "2026-07-17"
+    assert payload["current_point"] == {
+        "date": "2026-07-28",
+        "as_of": "2026-07-28 09:30:00",
+        "market_value_usd": 56507.15,
+        "cost_usd": 54500.69,
+    }
+    assert not hasattr(api.api_portfolio_chart, "cache_clear")

@@ -1,13 +1,9 @@
-"""Page route: backtest — HTML body only; CSS/JS in static/backtest.css and static/backtest.js."""
+"""Legacy backtest route and the reusable Backtest & Optimize page fragment."""
+
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
-from app.components import wrap_v4_layout
-from app.i18n import get_lang
+from fastapi.responses import RedirectResponse
 
 router = APIRouter(tags=["pages"])
-
-_HEAD = '<link rel="stylesheet" href="/static/backtest.css" />'
-_SCRIPTS = '<script src="/static/vendor/echarts.min.js"></script><script src="/static/backtest.js"></script>'
 
 _BODY = r"""<div class="v4-hero">
   <div class="v4-hero-text">
@@ -16,9 +12,9 @@ _BODY = r"""<div class="v4-hero">
   </div>
   <div style="display:flex;gap:8px;align-items:center;">
     <div id="btStatus" class="btn" style="pointer-events:none;color:var(--muted);font-size:12px;">点击刷新加载数据</div>
-    <button id="btRefreshBtn" class="btn primary" onclick="loadBacktest()"><i class="fa-solid fa-arrows-rotate"></i> 刷新数据</button>
-    <button id="aiAnalyzeBtn" class="btn primary" onclick="loadAiAnalysis()"><i class="fa-solid fa-robot"></i> AI 分析</button>
-    <a class="btn" href="/lab"><i class="fa-solid fa-flask"></i> Portfolio Lab</a>
+    <button id="btRefreshBtn" class="btn primary" onclick="loadBacktest()"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-refresh"></use></svg> 刷新数据</button>
+    <button id="aiAnalyzeBtn" class="btn primary" onclick="loadAiAnalysis()"><span class="ai-action-icon" aria-hidden="true"></span> AI 分析</button>
+    <a class="btn" href="/lab"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-flask"></use></svg> Portfolio</a>
   </div>
 </div>
 
@@ -35,7 +31,7 @@ _BODY = r"""<div class="v4-hero">
 </section>
 
 <section id="aiComparisonSection" class="panel" style="display:none;">
-    <h2><i class="fa-solid fa-robot"></i> AI 分析对比 <span style="font-size:12px;color:var(--muted);font-weight:400;">程序结论 vs AI 独立解读</span></h2>
+    <h2><span class="ai-action-icon" aria-hidden="true"></span> AI 分析对比 <span style="font-size:12px;color:var(--muted);font-weight:400;">程序结论 vs AI 独立解读</span></h2>
     <div class="ai-compare-grid">
         <div class="ai-compare-card" id="aiBacktestCard">
             <div class="ai-compare-head"><span>历史回测</span></div>
@@ -67,7 +63,7 @@ _BODY = r"""<div class="v4-hero">
         </div>
     </div>
     <div class="ai-review-box" id="aiReviewBox" style="display:none;">
-        <div class="ai-review-head"><i class="fa-solid fa-comment-dots"></i> AI 对程序结论的评议</div>
+        <div class="ai-review-head"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-comment-dots"></use></svg> AI 对程序结论的评议</div>
         <p id="aiReviewText"></p>
     </div>
 </section>
@@ -176,6 +172,4 @@ _BODY = r"""<div class="v4-hero">
 
 @router.get("/backtest")
 def backtest_page(request: Request):
-    return HTMLResponse(
-        wrap_v4_layout("回测与优化", _BODY + _SCRIPTS, "/backtest", get_lang(request), head_extra=_HEAD)
-    )
+    return RedirectResponse(url="/analytics#backtest-optimize", status_code=307)

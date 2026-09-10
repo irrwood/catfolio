@@ -1,0 +1,572 @@
+.analytics-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.analytics-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.analytics-head h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.analytics-head p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.analytics-refresh {
+  flex: 0 0 auto;
+  min-width: 92px;
+  justify-content: center;
+}
+
+.analytics-refresh[disabled] {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.analytics-refresh.is-loading .hi {
+  animation: analytics-spin 0.8s linear infinite;
+}
+
+.analytics-status {
+  display: none;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.analytics-status.is-visible { display: block; }
+.analytics-status.is-error { color: var(--negative); background: var(--negative-soft); }
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  min-width: 0;
+}
+
+.analytics-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(180deg, var(--panel) 0%, color-mix(in srgb, var(--soft) 28%, var(--panel)) 100%);
+}
+
+.analytics-card.analytics-wide { grid-column: 1 / -1; }
+
+.analytics-valuation-card { background: var(--panel); }
+
+.analytics-valuation-card > header {
+  align-items: center;
+  padding-bottom: 16px;
+}
+
+.analytics-valuation-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.analytics-valuation-refresh,
+.analytics-valuation-details {
+  min-width: 92px;
+  justify-content: center;
+}
+
+.analytics-valuation-refresh[disabled] {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.analytics-valuation-chart-wrap {
+  padding: 0 20px 20px;
+}
+
+.analytics-chart.valuation-matrix-chart { height: 520px; }
+
+.valuation-table-wrap {
+  overflow-x: auto;
+  border-top: 1px solid var(--line);
+}
+
+.valuation-table-wrap[hidden] { display: none; }
+
+.valuation-table-wrap:focus-visible {
+  outline: 2px solid #708cff;
+  outline-offset: -2px;
+}
+
+.valuation-table {
+  width: 100%;
+  min-width: 880px;
+  border-collapse: collapse;
+  color: var(--ink);
+}
+
+.valuation-table th,
+.valuation-table td {
+  padding: 13px 20px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.valuation-table th {
+  color: var(--muted);
+  background: var(--panel);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.valuation-table td {
+  font-size: 12px;
+  line-height: 17px;
+  font-variant-numeric: tabular-nums;
+}
+
+.valuation-table tbody tr:last-child td { border-bottom: 0; }
+.valuation-table tbody tr:hover td { background: var(--panel-hover); }
+
+.valuation-table th.numeric,
+.valuation-table td.numeric { text-align: right; }
+
+.valuation-asset {
+  display: grid;
+  min-width: 150px;
+}
+
+.valuation-asset strong { font-size: 12px; font-weight: 750; }
+
+.valuation-asset small {
+  overflow: hidden;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.valuation-table td.negative,
+.valuation-level.expensive { color: var(--negative); }
+
+.valuation-level.cheap { color: var(--positive); }
+.valuation-level { font-weight: 750; }
+
+.valuation-table-empty {
+  height: 100px;
+  color: var(--muted);
+  text-align: center !important;
+}
+
+.analytics-backtest-section {
+  min-width: 0;
+  scroll-margin-top: 18px;
+}
+
+.analytics-backtest-section > .v4-hero {
+  margin-top: 2px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--panel);
+}
+
+.analytics-backtest-section > .dashboard-stack {
+  margin-top: 18px;
+}
+
+.analytics-backtest-section .panel {
+  box-shadow: none;
+}
+
+.profit-calendar-card {
+  width: 100%;
+  padding: 21px;
+  border-color: color-mix(in srgb, var(--ink) 10%, transparent);
+  border-radius: 17px;
+  background: var(--panel);
+  --calendar-positive-fill: #89d663;
+  --calendar-positive-text: #269739;
+  --calendar-negative-fill: #ff889e;
+  --calendar-negative-text: #bd263d;
+}
+
+.analytics-card > .profit-calendar-head {
+  align-items: center;
+  padding: 0;
+}
+
+.profit-calendar-card h2 {
+  font-size: 20px;
+  line-height: 1.35;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.profit-calendar-controls,
+.profit-calendar-range,
+.profit-calendar-period-nav {
+  display: flex;
+  align-items: center;
+}
+
+.profit-calendar-controls { gap: 0; }
+
+.profit-calendar-range,
+.profit-calendar-period-nav {
+  min-height: 34px;
+  padding: 4px;
+  border: 1px solid var(--line-strong);
+  background: var(--soft);
+}
+
+.profit-calendar-range {
+  border-radius: 12px 0 0 12px;
+}
+
+.profit-calendar-period-nav {
+  margin-left: -1px;
+  border-radius: 0 12px 12px 0;
+}
+
+.profit-calendar-range-button,
+.profit-calendar-period-nav button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.profit-calendar-range-button {
+  width: 50px;
+  min-height: 34px;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: normal;
+  font-weight: 600;
+}
+
+.profit-calendar-range-button.active {
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.profit-calendar-range-button:focus-visible,
+.profit-calendar-period-nav button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.profit-calendar-period-nav {
+  gap: 8px;
+  padding-inline: 4px;
+}
+
+.profit-calendar-period-nav button {
+  display: grid;
+  width: 24px;
+  height: 34px;
+  padding: 8px 4px;
+  place-items: center;
+  border-radius: 8px;
+}
+
+.profit-calendar-period-nav button:hover { background: var(--panel-hover); }
+.profit-calendar-period-nav button:disabled { opacity: 0.35; cursor: not-allowed; }
+.profit-calendar-period-nav img { width: 16px; height: 16px; }
+
+#profitCalendarPeriod {
+  display: flex;
+  min-width: 72px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: color-mix(in srgb, var(--ink) 60%, transparent);
+  font-size: 13px;
+  line-height: normal;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+}
+
+#profitCalendarPeriodMonth { text-transform: uppercase; }
+
+.profit-calendar-body {
+  margin-top: 20px;
+  min-width: 0;
+}
+
+.profit-calendar-weekdays,
+.profit-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.profit-calendar-weekdays {
+  min-height: 24px;
+}
+
+.profit-calendar-weekday {
+  padding-bottom: 8px;
+  color: color-mix(in srgb, var(--ink) 80%, transparent);
+  font-size: 13px;
+  line-height: normal;
+  font-weight: 700;
+  text-align: center;
+}
+
+.profit-calendar-grid { grid-auto-rows: 64px; }
+
+.profit-calendar-day,
+.profit-calendar-month-tile {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--soft);
+  transition: filter 140ms ease;
+}
+
+.profit-calendar-day {
+  padding: 10px 11px;
+}
+
+.profit-calendar-day.is-outside {
+  background: transparent;
+  pointer-events: none;
+}
+
+.profit-calendar-day.has-value,
+.profit-calendar-month-tile.has-value {
+  background: var(--calendar-fill);
+}
+
+.profit-calendar-day:not(.is-outside):hover,
+.profit-calendar-month-tile:hover {
+  filter: brightness(1.025);
+}
+
+.profit-calendar-day-number {
+  display: block;
+  color: color-mix(in srgb, var(--ink) 80%, transparent);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+.profit-calendar-day-value {
+  display: block;
+  margin-top: 0;
+  overflow: hidden;
+  color: var(--calendar-positive-text);
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profit-calendar-day.is-negative .profit-calendar-day-value,
+.profit-calendar-month-tile.is-negative strong { color: var(--calendar-negative-text); }
+
+.profit-calendar-grid.is-year {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 104px;
+}
+
+.profit-calendar-month-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.profit-calendar-month-tile span {
+  color: color-mix(in srgb, var(--ink) 80%, transparent);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+.profit-calendar-month-tile strong {
+  color: var(--calendar-positive-text);
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 800;
+}
+
+.profit-calendar-month-tile:not(.has-value) strong {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.profit-calendar-grid.is-loading {
+  min-height: 344px;
+  border-radius: 10px;
+  background: linear-gradient(100deg, var(--soft) 20%, var(--panel-hover) 48%, var(--soft) 76%);
+  background-size: 220% 100%;
+  animation: analytics-shimmer 1.35s ease-in-out infinite;
+}
+
+.profit-calendar-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.profit-calendar-summary-item {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 20px;
+  border-radius: 10px;
+  background: var(--soft);
+}
+
+.profit-calendar-summary-item img { width: 18px; height: 18px; flex: 0 0 auto; }
+
+.profit-calendar-summary-label,
+.profit-calendar-summary-period {
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 17px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.profit-calendar-summary-item strong {
+  margin-left: auto;
+  color: var(--positive);
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.profit-calendar-summary-period { color: var(--muted); }
+
+:root:not(.light-theme) .profit-calendar-card {
+  --calendar-positive-fill: color-mix(in srgb, #89d663 28%, var(--panel));
+  --calendar-positive-text: #70d57d;
+  --calendar-negative-fill: color-mix(in srgb, #ff889e 24%, var(--panel));
+  --calendar-negative-text: #ff8191;
+}
+
+.analytics-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 4px;
+}
+
+.analytics-card h2 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.35;
+  font-weight: 650;
+}
+
+.analytics-card header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.analytics-chart {
+  position: relative;
+  width: 100%;
+  height: 340px;
+  min-width: 0;
+}
+
+.analytics-correlation { height: 520px; }
+
+.analytics-chart.is-loading {
+  background: linear-gradient(100deg, transparent 20%, var(--panel-hover) 48%, transparent 76%);
+  background-size: 220% 100%;
+  animation: analytics-shimmer 1.35s ease-in-out infinite;
+}
+
+.analytics-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@keyframes analytics-spin { to { transform: rotate(360deg); } }
+@keyframes analytics-shimmer { to { background-position: -220% 0; } }
+
+@media (max-width: 1100px) {
+  .analytics-grid { grid-template-columns: minmax(0, 1fr); }
+  .analytics-card.analytics-wide { grid-column: auto; }
+  .analytics-correlation { height: 480px; }
+  .analytics-chart.valuation-matrix-chart { height: 440px; }
+}
+
+@media (max-width: 640px) {
+  .analytics-head { align-items: flex-start; }
+  .analytics-head h1 { font-size: 21px; }
+  .analytics-refresh { min-width: 42px; width: 42px; padding: 0; }
+  .analytics-refresh span { display: none; }
+  .analytics-grid { gap: 14px; }
+  .analytics-card > header { padding: 16px 16px 2px; }
+  .analytics-chart { height: 310px; }
+  .analytics-correlation { height: 420px; }
+  .analytics-valuation-card > header { align-items: flex-start; }
+  .analytics-valuation-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .analytics-valuation-refresh,
+  .analytics-valuation-details { min-width: 42px; }
+  .analytics-valuation-chart-wrap { padding: 0 16px 16px; }
+  .analytics-chart.valuation-matrix-chart { height: 380px; }
+  .valuation-table th,
+  .valuation-table td { padding-inline: 14px; }
+  .profit-calendar-card { padding: 16px; }
+  .analytics-card > .profit-calendar-head { align-items: flex-start; }
+  .profit-calendar-head { flex-direction: column; }
+  .profit-calendar-controls { align-self: stretch; justify-content: space-between; }
+  .profit-calendar-grid { grid-auto-rows: 58px; }
+  .profit-calendar-grid.is-year { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 84px; }
+  .profit-calendar-day { padding: 8px 6px; }
+  .profit-calendar-summary { grid-template-columns: 1fr; gap: 8px; }
+  .profit-calendar-summary-item { padding: 12px 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .analytics-refresh.is-loading .hi,
+  .analytics-chart.is-loading,
+  .profit-calendar-grid.is-loading { animation: none; }
+
+  .profit-calendar-day,
+  .profit-calendar-month-tile { transition: none; }
+}

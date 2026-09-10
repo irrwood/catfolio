@@ -1,0 +1,1108 @@
+/* Portfolio Lab — compact Figma workspace (node 1:8278). */
+
+body.page-lab {
+  min-width: 320px;
+  background: var(--bg);
+  font-family: "Nunito Local", "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "PingFang SC", sans-serif;
+}
+/* Sidebar chrome is shared by every v5 page in v5.css. */
+.page-lab .v5-main {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.page-lab .v5-content { padding: 20px 10px; }
+
+.portfolio-workspace {
+  --portfolio-card-radius: 20px;
+  min-height: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.portfolio-page-head {
+  min-height: 41px;
+  display: flex;
+  align-items: center;
+}
+
+.portfolio-page-head h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 41px;
+  letter-spacing: normal;
+}
+
+.portfolio-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.portfolio-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.portfolio-metric-card {
+  min-width: 0;
+  height: 132px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  border: 1px solid var(--line);
+  border-radius: var(--portfolio-card-radius);
+  background: var(--panel);
+  corner-shape: round;
+}
+
+.portfolio-metric-card > span,
+.portfolio-metric-card > small {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portfolio-metric-card > strong {
+  color: var(--ink);
+  font-size: 30px;
+  font-weight: 750;
+  line-height: 41px;
+  letter-spacing: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.portfolio-metric-card .positive { color: var(--positive); }
+.portfolio-metric-card .negative { color: var(--negative); }
+
+.portfolio-insights-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.portfolio-insights-row > * { min-width: 0; }
+
+.portfolio-insights-row .portfolio-ranges {
+  padding-inline: 0;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.portfolio-insights-row .portfolio-ranges button { width: 100%; }
+
+.portfolio-value-card {
+  height: 545px;
+  min-height: 545px;
+  padding: 20px;
+  display: flex;
+  flex: 0 0 545px;
+  flex-direction: column;
+  gap: 24px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--portfolio-card-radius);
+  background: var(--panel);
+  corner-shape: round;
+}
+
+.portfolio-profit-calendar-card {
+  --calendar-positive-text: #269739;
+  --calendar-negative-text: #bd263d;
+  --calendar-year-empty-fill: #f8f9f7;
+  height: 545px;
+  min-height: 545px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: var(--panel);
+  corner-shape: round;
+}
+
+.profit-calendar-head,
+.profit-calendar-controls,
+.profit-calendar-range,
+.profit-calendar-period-nav {
+  display: flex;
+  align-items: center;
+}
+
+.profit-calendar-head {
+  min-height: 36px;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.profit-calendar-head h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 750;
+  line-height: 25px;
+  white-space: nowrap;
+}
+
+.profit-calendar-controls {
+  min-width: 0;
+  height: 40px;
+  padding: 3px;
+  gap: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--soft);
+}
+
+.profit-calendar-range,
+.profit-calendar-period-nav {
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.profit-calendar-range { border-radius: 9px; }
+.profit-calendar-period-nav { margin-left: 0; gap: 3px; border-radius: 9px; }
+
+.profit-calendar-range-button,
+.profit-calendar-period-nav button {
+  appearance: none;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.profit-calendar-range-button {
+  width: 50px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.profit-calendar-range-button.active {
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  background: var(--panel);
+  font-weight: 800;
+}
+
+.profit-calendar-range-button:focus-visible,
+.profit-calendar-period-nav button:focus-visible {
+  outline: 2px solid #708cff;
+  outline-offset: 1px;
+}
+
+.profit-calendar-period-nav button {
+  display: grid;
+  width: 20px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  border-radius: 7px;
+}
+
+.profit-calendar-period-nav button:hover { background: var(--panel-hover); }
+.profit-calendar-period-nav img { width: 14px; height: 14px; }
+
+#profitCalendarPeriod {
+  min-width: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: color-mix(in srgb, var(--ink) 60%, transparent);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#profitCalendarPeriodMonth { text-transform: uppercase; }
+
+.profit-calendar-body {
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.profit-calendar-weekdays,
+.profit-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.profit-calendar-weekdays { min-height: 20px; }
+.profit-calendar-weekdays[hidden] { display: none; }
+
+.profit-calendar-weekday {
+  color: color-mix(in srgb, var(--ink) 80%, transparent);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.profit-calendar-grid {
+  min-height: 0;
+  flex: 1;
+  grid-auto-rows: minmax(0, 1fr);
+}
+
+.profit-calendar-day,
+.profit-calendar-month-tile {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--soft);
+  transition: filter 140ms ease;
+}
+
+.profit-calendar-day {
+  padding: 8px 10px;
+}
+
+.profit-calendar-day.is-outside {
+  background: transparent;
+  pointer-events: none;
+}
+
+.profit-calendar-day.has-value,
+.profit-calendar-month-tile.has-value { background: var(--calendar-fill); }
+
+.profit-calendar-day:not(.is-outside):hover,
+.profit-calendar-month-tile:hover { filter: brightness(1.025); }
+
+.profit-calendar-day-number {
+  display: block;
+  color: color-mix(in srgb, var(--ink) 80%, transparent);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 15px;
+}
+
+.profit-calendar-day-value {
+  display: block;
+  overflow: hidden;
+  color: var(--calendar-positive-text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profit-calendar-day.is-negative .profit-calendar-day-value,
+.profit-calendar-month-tile.is-negative strong { color: var(--calendar-negative-text); }
+
+.profit-calendar-grid.is-months {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+}
+
+.profit-calendar-month-tile {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.profit-calendar-month-tile span {
+  color: color-mix(in srgb, var(--ink) 80%, transparent);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 15px;
+}
+
+.profit-calendar-month-tile strong {
+  overflow: hidden;
+  color: var(--calendar-positive-text);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profit-calendar-grid.is-year {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(17, minmax(0, 1fr));
+  grid-template-rows: repeat(16, minmax(0, 1fr));
+  grid-auto-flow: row;
+  align-content: stretch;
+  justify-content: stretch;
+  gap: 4px;
+  flex: 1;
+  border-radius: 0;
+  background: transparent;
+  overflow: hidden;
+  animation: profit-calendar-year-enter 180ms ease-out both;
+}
+
+.profit-calendar-year-day {
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 4px;
+  background: var(--calendar-year-empty-fill);
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+.profit-calendar-year-day.has-value { background: var(--calendar-fill); }
+
+/* Empty months keep their label without placeholder copy. */
+.profit-calendar-month-tile:not(.has-value) strong { display: none; }
+
+.profit-calendar-year-day:hover {
+  z-index: 1;
+  filter: brightness(0.94);
+  transform: scale(1.2);
+}
+
+@keyframes profit-calendar-year-enter {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.profit-calendar-grid.is-loading {
+  border-radius: 10px;
+  background: var(--soft);
+}
+
+.profit-calendar-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.profit-calendar-summary-item {
+  height: 46px;
+  min-width: 0;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 10px;
+  background: var(--soft);
+}
+
+.profit-calendar-summary-item img { width: 18px; height: 18px; flex: 0 0 auto; }
+
+.profit-calendar-summary-label,
+.profit-calendar-summary-period {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+.profit-calendar-summary-item strong {
+  margin-left: auto;
+  color: var(--positive);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 15px;
+  white-space: nowrap;
+}
+
+.profit-calendar-summary-period { color: var(--muted); font-size: 12px; }
+
+:root:not(.light-theme) .portfolio-profit-calendar-card {
+  --calendar-positive-text: #70d57d;
+  --calendar-negative-text: #ff8191;
+  --calendar-year-empty-fill: color-mix(in srgb, var(--ink) 10%, var(--panel));
+}
+
+.portfolio-calendar-error {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.portfolio-chart-head {
+  min-height: 44px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.portfolio-chart-head > div:first-child { min-width: 0; }
+
+.portfolio-chart-head h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 750;
+  line-height: 25px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.portfolio-chart-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 19px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portfolio-ranges {
+  width: 100%;
+  height: 32px;
+  padding: 0 17.401392%;
+  display: grid;
+  grid-template-columns: repeat(7, 50px);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.portfolio-ranges button {
+  width: 50px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.portfolio-ranges button:hover { color: var(--ink); }
+.portfolio-ranges button.active {
+  border-color: transparent;
+  color: var(--ink);
+  background: var(--soft);
+  font-weight: 800;
+}
+
+.portfolio-ranges button:focus-visible {
+  outline: 2px solid #708cff;
+  outline-offset: 1px;
+}
+
+.portfolio-chart-body {
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.portfolio-value-chart {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  cursor: crosshair;
+}
+
+.portfolio-value-chart canvas { border-radius: 0; }
+
+.portfolio-chart-hover-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  overflow: visible;
+  pointer-events: none;
+  contain: layout style;
+}
+
+.portfolio-chart-hover-dot,
+.portfolio-chart-hover-bubble,
+.portfolio-chart-hover-date {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+  animation: none !important;
+  transition: none !important;
+  will-change: left, top;
+}
+
+.portfolio-chart-hover-dot {
+  width: 8px;
+  height: 8px;
+  transform: translate3d(-50%, -50%, 0);
+  border-radius: 50%;
+}
+
+.portfolio-chart-hover-dot.market,
+.portfolio-chart-hover-bubble.market { background: var(--positive); }
+
+.portfolio-chart-hover-dot.cost,
+.portfolio-chart-hover-bubble.cost { background: #708cff; }
+
+.portfolio-chart-hover-bubble {
+  min-width: 48px;
+  padding: 4px 8px;
+  transform: translate3d(-50%, calc(-100% - 8px), 0);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 19px;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.portfolio-chart-hover-bubble.is-below {
+  transform: translate3d(-50%, 8px, 0);
+}
+
+.portfolio-chart-hover-date {
+  min-width: max-content;
+  padding: 4px 8px;
+  transform: translate3d(-50%, -50%, 0);
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--panel);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.portfolio-chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+}
+
+.portfolio-chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.portfolio-chart-legend i { width: 16px; height: 2px; border-radius: 2px; }
+.portfolio-chart-legend .market { background: var(--positive); }
+.portfolio-chart-legend .cost { background: #708cff; }
+
+.portfolio-holdings-card {
+  width: 100%;
+  padding: 20px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--portfolio-card-radius);
+  background: var(--panel);
+  corner-shape: round;
+}
+
+.portfolio-holdings-head {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 20px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.portfolio-holdings-title {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  white-space: nowrap;
+}
+
+.portfolio-holdings-title h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 25px;
+}
+
+.portfolio-holdings-title p {
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 19px;
+  text-overflow: ellipsis;
+}
+
+.portfolio-holdings-mode {
+  width: 252px;
+  height: 40px;
+  padding: 4px;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: var(--panel);
+}
+
+.portfolio-holdings-mode button:first-child { width: 110px; }
+.portfolio-holdings-mode button:last-child { width: 134px; }
+
+.portfolio-holdings-mode button {
+  height: 32px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.portfolio-holdings-mode button:hover { color: var(--ink-secondary); }
+.portfolio-holdings-mode button.active {
+  border-color: var(--line-strong);
+  color: var(--ink-secondary);
+  background: var(--soft);
+  font-weight: 800;
+}
+
+.portfolio-holdings-mode button:focus-visible,
+.portfolio-holdings-sort:focus-visible,
+.portfolio-holdings-scroll:focus-visible {
+  outline: 2px solid #708cff;
+  outline-offset: 1px;
+}
+
+.portfolio-holdings-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.portfolio-holdings-table {
+  width: 100%;
+  min-width: 1044px;
+  border: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.portfolio-holdings-table thead,
+.portfolio-holdings-table tbody { display: block; }
+
+.portfolio-holdings-table thead tr {
+  width: calc(100% - 40px);
+  height: 36px;
+  margin: 0 20px;
+  padding: 10px 16px 10px 8px;
+  display: grid;
+  grid-template-columns: 24px minmax(160px, 1fr) 100px 100px 118px 100px 118px 100px;
+  column-gap: 20px;
+  align-items: center;
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.portfolio-holdings-table th {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.portfolio-holdings-table th:nth-child(2) {
+  text-align: left;
+}
+.portfolio-holdings-table th:nth-child(3),
+.portfolio-holdings-table th:nth-child(5),
+.portfolio-holdings-table th:nth-child(6),
+.portfolio-holdings-table th:nth-child(7),
+.portfolio-holdings-table th:nth-child(8) { text-align: right; }
+
+.portfolio-holdings-sort {
+  width: 100%;
+  height: 16px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.portfolio-holdings-table th:nth-child(5) .portfolio-holdings-sort,
+.portfolio-holdings-table th:nth-child(6) .portfolio-holdings-sort,
+.portfolio-holdings-table th:nth-child(7) .portfolio-holdings-sort,
+.portfolio-holdings-table th:nth-child(8) .portfolio-holdings-sort { justify-content: flex-end; }
+.portfolio-holdings-sort img { width: 8px; height: 8px; flex: 0 0 8px; }
+.portfolio-holdings-sort.ascending img { transform: rotate(180deg); }
+
+.portfolio-holdings-table tbody {
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.portfolio-holdings-table tbody tr:not(.portfolio-holdings-message) {
+  width: calc(100% - 40px);
+  height: 44px;
+  margin-inline: 20px;
+  padding: 4px 16px 4px 8px;
+  display: grid;
+  grid-template-columns: 24px minmax(160px, 1fr) 100px 100px 118px 100px 118px 100px;
+  column-gap: 20px;
+  align-items: center;
+  border-radius: 8px;
+  box-sizing: border-box;
+  transition: background-color 180ms ease;
+}
+
+@media (hover: hover) {
+  .portfolio-holdings-table tbody tr:not(.portfolio-holdings-message):hover {
+    background: var(--panel-hover);
+  }
+
+  .portfolio-holdings-table tbody tr:not(.portfolio-holdings-message):hover > td {
+    background: transparent;
+  }
+}
+
+.portfolio-holdings-table td {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 19px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portfolio-holdings-table td:nth-child(3),
+.portfolio-holdings-table td:nth-child(5),
+.portfolio-holdings-table td:nth-child(6),
+.portfolio-holdings-table td:nth-child(7) { text-align: right; }
+.portfolio-holdings-table .positive { color: var(--positive); }
+.portfolio-holdings-table .negative { color: var(--negative); }
+.portfolio-holdings-table .muted { color: var(--muted); }
+
+.portfolio-holding-asset {
+  text-align: left;
+}
+
+.portfolio-holding-logo { display: flex; align-items: center; justify-content: center; }
+
+.portfolio-holding-badge {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+  color: #fff;
+  background: hsl(var(--asset-hue) 72% 48%);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.portfolio-holding-initial { transition: opacity 0.15s ease; }
+
+.portfolio-holding-logo-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border-radius: 0;
+  object-fit: contain;
+  background: transparent;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.portfolio-holding-badge.has-logo {
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+}
+
+.portfolio-holding-badge.has-logo .portfolio-holding-initial { opacity: 0; }
+.portfolio-holding-badge.has-logo .portfolio-holding-logo-image { opacity: 1; }
+
+.portfolio-holding-identity {
+  width: 100%;
+  height: 36px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.portfolio-holding-identity strong {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portfolio-holding-identity strong { font-size: 14px; font-weight: 700; line-height: 19px; }
+
+.portfolio-holding-identity small {
+  height: 16px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.portfolio-holding-stack,
+.portfolio-holding-market,
+.portfolio-holding-profit,
+.portfolio-holding-fx {
+  height: 36px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  line-height: normal;
+}
+
+.portfolio-holding-stack,
+.portfolio-holding-market,
+.portfolio-holding-profit,
+.portfolio-holding-fx { align-items: flex-end; }
+
+.portfolio-holding-stack b,
+.portfolio-holding-market b,
+.portfolio-holding-profit b,
+.portfolio-holding-fx b { font-size: 14px; font-weight: 600; line-height: 19px; }
+
+.portfolio-holding-stack span,
+.portfolio-holding-market span,
+.portfolio-holding-profit span,
+.portfolio-holding-fx span { color: var(--muted); font-size: 12px; font-weight: 600; line-height: 16px; }
+
+.portfolio-holding-profit {
+  color: inherit;
+}
+
+.portfolio-holding-range {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.portfolio-holding-range-track {
+  position: relative;
+  width: 8px;
+  height: 30px;
+  flex: 0 0 8px;
+  overflow: hidden;
+  border-radius: 34px;
+  background: var(--line);
+}
+
+.portfolio-holding-range-track i {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  min-height: 2px;
+  border-radius: 20px;
+  background: var(--line-strong);
+}
+
+.portfolio-holding-range-values {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: right;
+}
+
+.portfolio-holding-range-values span + span { margin-top: -1px; }
+
+.portfolio-holding-source {
+  display: inline-flex;
+  max-width: 94px;
+  padding: 3px 7px;
+  overflow: hidden;
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--soft);
+  font-size: 10px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portfolio-holding-mix {
+  width: 72px;
+  height: 6px;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--line);
+}
+
+.portfolio-holding-mix i { display: block; height: 100%; border-radius: inherit; background: #708cff; }
+
+.portfolio-holdings-message {
+  height: 44px;
+  display: table-row;
+}
+
+.portfolio-holdings-message td {
+  width: 100%;
+  padding: 14px 20px 0;
+  color: var(--muted);
+  text-align: left;
+}
+
+@media (max-width: 960px) {
+  .portfolio-insights-row { grid-template-columns: minmax(0, 1fr); }
+  .portfolio-value-card {
+    height: 460px;
+    min-height: 460px;
+    flex-basis: 460px;
+  }
+}
+
+@media (max-width: 640px) {
+  .portfolio-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .portfolio-ranges {
+    padding-inline: 0;
+    grid-template-columns: repeat(7, 50px);
+  }
+  .portfolio-ranges button { width: 50px; }
+  .portfolio-value-card {
+    height: auto;
+    min-height: 440px;
+    flex-basis: auto;
+  }
+  .portfolio-profit-calendar-card {
+    height: auto;
+    min-height: 545px;
+  }
+  .portfolio-value-chart { min-height: 292px; }
+  .portfolio-holdings-head { align-items: stretch; flex-direction: column; }
+  .portfolio-holdings-mode { align-self: flex-start; }
+}
+
+@media (max-width: 560px) {
+  .portfolio-page-head h1 { font-size: 26px; }
+  .portfolio-metrics { grid-template-columns: 1fr; }
+  .portfolio-metric-card { height: 118px; }
+  .portfolio-value-card { padding: 18px 14px; }
+  .profit-calendar-head {
+    min-height: 0;
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .profit-calendar-controls { width: 100%; }
+  .profit-calendar-range,
+  .profit-calendar-period-nav { flex: 1; }
+  .profit-calendar-range-button { width: auto; flex: 1; }
+  .profit-calendar-period-nav { justify-content: space-between; }
+  #profitCalendarPeriod { min-width: 0; flex: 1; }
+  .profit-calendar-grid.is-year {
+    min-width: 0;
+    padding: 0;
+    grid-template-columns: repeat(17, minmax(0, 1fr));
+    grid-template-rows: repeat(16, minmax(0, 1fr));
+    gap: 3px;
+    align-self: stretch;
+  }
+  .profit-calendar-year-day { width: auto; height: auto; }
+  .profit-calendar-summary { grid-template-columns: minmax(0, 1fr); }
+  .portfolio-ranges { overflow-x: auto; grid-template-columns: repeat(7, 50px); }
+  .portfolio-value-chart { min-height: 300px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portfolio-ranges button,
+  .portfolio-holdings-mode button,
+  .portfolio-holdings-table tbody tr:not(.portfolio-holdings-message),
+  .profit-calendar-year-day,
+  .profit-calendar-month-tile { transition: none; }
+  .profit-calendar-grid.is-year { animation: none; }
+}

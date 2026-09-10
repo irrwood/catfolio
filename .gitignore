@@ -26,9 +26,16 @@ node_modules
 
 # Claude Code local per-user settings
 **/settings.local.json
+.claude/
+.playwright-mcp/
 
 # Local planning artifacts
 docs/superpowers/
+artifacts/
+/design-qa.md
+/docs/screenshots/lab-design-qa-comparison.png
+/docs/screenshots/lab-reference-layout.png
+/docs/screenshots/lab-reference-layout-compact.png
 
 # Logs
 *.log
@@ -36,6 +43,13 @@ docs/superpowers/
 
 # PyInstaller build artifacts
 build/
+build-*/
+dist-*/
+.venv-*/
 
 # Local release archives
 releases/
+.vercel/
+
+# Private, local-only review images
+/pnl-broker-vs-price.jpeg

@@ -1,5 +1,5 @@
   const $ = id => document.getElementById(id);
-  const TEMPLATES = __TEMPLATES__;
+  const TEMPLATES = window.STRATEGY_TEMPLATES || {};
   $("f_code").value = TEMPLATES.momentum;
   let equityChart = null, ddChart = null, activeRunId = null, themeReady = false;
 
@@ -9,12 +9,12 @@
   }
   async function importHoldings() {
     const status = $("runStatus");
-    status.style.color = "var(--muted)"; status.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 读取持仓…';
+    status.style.color = "var(--muted)"; status.innerHTML = '<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> 读取持仓…';
     try {
       const data = await (await fetch("/api/strategy/holdings-universe?top=10")).json();
       if (data.symbols && data.symbols.length) {
         $("f_universe").value = data.symbols.join(", ");
-        status.style.color = "var(--positive)"; status.innerHTML = '<i class="fa-solid fa-check"></i> 已导入 ' + data.symbols.length + ' 只标的';
+        status.style.color = "var(--positive)"; status.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> 已导入 ' + data.symbols.length + ' 只标的';
       } else { status.innerHTML = "没有可导入的持仓"; }
     } catch (e) { status.style.color = "var(--negative)"; status.innerHTML = "导入失败"; }
   }
@@ -37,7 +37,7 @@
     el.innerHTML = data.runs.map(r => {
       const cagr = r.metrics && r.metrics.cagr != null ? fmtPct(r.metrics.cagr) : "—";
       return '<div class="run-item ' + (r.id===activeRunId?'active':'') + '" onclick="loadRun(' + r.id + ')">' +
-        '<div class="rn"><span>' + escapeHtml(r.name) + '</span><span class="run-del" onclick="event.stopPropagation();delRun(' + r.id + ')"><i class="fa-solid fa-trash"></i></span></div>' +
+        '<div class="rn"><span>' + escapeHtml(r.name) + '</span><span class="run-del" onclick="event.stopPropagation();delRun(' + r.id + ')"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-trash"></use></svg></span></div>' +
         '<div class="rm">CAGR ' + cagr + ' · ' + fmtDate(r.created_at) + '</div></div>';
     }).join("");
   }
@@ -60,17 +60,17 @@
   async function runBacktest() {
     const btn = $("runBtn"), status = $("runStatus");
     btn.disabled = true; status.style.color = "var(--muted)";
-    status.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在拉取历史并回测…';
+    status.innerHTML = '<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> 正在拉取历史并回测…';
     try {
       const res = await fetch("/api/strategy/run", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(gatherConfig()) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "回测失败");
-      status.style.color = "var(--positive)"; status.innerHTML = '<i class="fa-solid fa-check"></i> 完成';
+      status.style.color = "var(--positive)"; status.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-check"></use></svg> 完成';
       activeRunId = data.run_id;
       renderResult(data.result, gatherConfig().name || "回测结果");
       await loadRuns();
     } catch (err) {
-      status.style.color = "var(--negative)"; status.innerHTML = '<i class="fa-solid fa-xmark"></i> ' + escapeHtml(err.message);
+      status.style.color = "var(--negative)"; status.innerHTML = '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-x"></use></svg> ' + escapeHtml(err.message);
     } finally { btn.disabled = false; }
   }
 
@@ -120,7 +120,7 @@
       xAxis: { type: "category", data: dates, axisLabel: { color: "#9ca3af" } },
       yAxis: { type: "value", scale: true, axisLabel: { color: "#9ca3af" } },
       series: [
-        { name: "策略", type: "line", showSymbol: false, data: result.equity.map(e=>e.nav), lineStyle:{width:2.2,color:"#5e6ad2"}, itemStyle:{color:"#5e6ad2"} },
+        { name: "策略", type: "line", showSymbol: false, data: result.equity.map(e=>e.nav), lineStyle:{width:2.2,color:"#8fca5b"}, itemStyle:{color:"#8fca5b"} },
         { name: "基准 " + result.benchmark, type: "line", showSymbol: false, data: result.benchmark_equity.map(e=>e.nav), lineStyle:{width:1.5,color:"#888",opacity:0.85}, itemStyle:{color:"#888"} },
       ],
     });
@@ -186,4 +186,10 @@
     loadRuns();
   }
 
-  loadRuns();
+  if (window.CATFOLIO_DEMO) {
+    loadRun(1);
+    $("runStatus").style.color = "var(--muted)";
+    $("runStatus").textContent = "Demo 假数据 · 只读展示";
+  } else {
+    loadRuns();
+  }

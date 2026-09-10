@@ -170,6 +170,89 @@ def _num(value):
         return 0.0
 
 
+def _optional_num(value):
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+BROKER_PNL_FX_TO_USD = {
+    "USD": 1.0,
+    "GBP": 1.3460,
+    "GBX": 0.013460,
+    "EUR": 1.1630,
+}
+
+
+def broker_pnl_by_ticker(snapshot):
+    """Aggregate Trading 212 `ppl` by ticker in the report currency.
+
+    Trading 212 reports `ppl` in the account currency and already includes the
+    FX contribution. `fxPpl` is therefore exposed as an informational component
+    and must not be added to `ppl` again.
+    """
+    trading212 = snapshot.get("trading212", {})
+    account_cash = trading212.get("account_cash", {})
+    account_info = trading212.get("account_info", {})
+    rows = {}
+    for position in trading212.get("positions", []):
+        ticker = str(position.get("normalized_ticker") or position.get("ticker") or "").upper()
+        if not ticker:
+            continue
+        ppl = _optional_num(position.get("ppl"))
+        if ppl is None:
+            continue
+        account = position.get("account") or "Trading212 API"
+        cash = account_cash.get(account, {}) if isinstance(account_cash, dict) else {}
+        info = account_info.get(account, {}) if isinstance(account_info, dict) else {}
+        currency = str(
+            (cash.get("currencyCode") if isinstance(cash, dict) else None)
+            or (info.get("currencyCode") if isinstance(info, dict) else None)
+            or "GBP"
+        ).upper()
+        rate = BROKER_PNL_FX_TO_USD.get(currency)
+        if rate is None:
+            continue
+        fx_ppl = _optional_num(position.get("fx_ppl"))
+        target = rows.setdefault(
+            ticker,
+            {
+                "broker_unrealized_usd": 0.0,
+                "broker_fx_ppl_usd": 0.0,
+                "broker_pnl_currencies": set(),
+                "broker_ppl_includes_fx": True,
+            },
+        )
+        target["broker_unrealized_usd"] += ppl * rate
+        if fx_ppl is not None:
+            target["broker_fx_ppl_usd"] += fx_ppl * rate
+        target["broker_pnl_currencies"].add(currency)
+
+    for target in rows.values():
+        currencies = sorted(target.pop("broker_pnl_currencies"))
+        target["broker_pnl_currency"] = currencies[0] if len(currencies) == 1 else "MIXED"
+
+    # Portable fallback: a desktop app on another Mac has its own Application
+    # Support directory and may receive the normalized portfolio file without
+    # the raw Trading 212 response. Persisted broker fields must still win over
+    # any machine-local Yahoo cache or reconstructed price P/L.
+    for holding in snapshot.get("portfolio", {}).get("holdings", []):
+        ticker = str(holding.get("ticker") or "").upper()
+        broker_usd = _optional_num(holding.get("broker_unrealized_usd"))
+        if not ticker or ticker in rows or broker_usd is None:
+            continue
+        rows[ticker] = {
+            "broker_unrealized_usd": broker_usd,
+            "broker_fx_ppl_usd": _num(holding.get("broker_fx_ppl_usd")),
+            "broker_pnl_currency": holding.get("broker_unrealized_currency") or "USD",
+            "broker_ppl_includes_fx": bool(holding.get("broker_ppl_includes_fx", True)),
+        }
+    return rows
+
+
 def market_by_ticker(snapshot):
     return {row.get("ticker"): row for row in snapshot["market"].get("rows", []) if row.get("ticker")}
 
@@ -193,12 +276,31 @@ def exposure_value_usd(ticker, snapshot, basis="market"):
 
 def portfolio_summary(snapshot):
     summary = dict(snapshot["portfolio"].get("summary", {}))
-    market_total = sum(_num(row.get("market_value_usd")) for row in snapshot["market"].get("rows", []))
+    market = market_by_ticker(snapshot)
+    holdings = holdings_by_ticker(snapshot)
+    broker_pnl = broker_pnl_by_ticker(snapshot)
+    market_total = sum(_num(row.get("market_value_usd")) for row in market.values())
     cost_total = _num(summary.get("total_cost_usd_standard"))
+    price_unrealized_total = market_total - cost_total
+    unrealized_total = 0.0
+    broker_positions = 0
+    for ticker, holding in holdings.items():
+        broker_row = broker_pnl.get(ticker)
+        if broker_row:
+            unrealized_total += broker_row["broker_unrealized_usd"]
+            broker_positions += 1
+            continue
+        market_value = _num(market.get(ticker, {}).get("market_value_usd"))
+        unrealized_total += market_value - _num(holding.get("cost_usd_standard"))
     summary.update(
         {
             "market_value_usd": market_total,
-            "unrealized_usd": market_total - cost_total,
+            "unrealized_usd": unrealized_total,
+            "broker_unrealized_usd": sum(row["broker_unrealized_usd"] for row in broker_pnl.values()),
+            "broker_fx_ppl_usd": sum(row["broker_fx_ppl_usd"] for row in broker_pnl.values()),
+            "price_unrealized_usd": price_unrealized_total,
+            "unrealized_includes_fx": bool(broker_positions),
+            "unrealized_source": "trading212_ppl" if broker_positions == len(holdings) and holdings else ("mixed" if broker_positions else "price_difference"),
             "trading212_positions": snapshot["trading212"].get("summary", {}).get("positions"),
             "cash": snapshot["trading212"].get("account_cash", {}),
         }
@@ -249,6 +351,7 @@ def etf_lookthrough(snapshot, basis="cost"):
         rows.append(
             {
                 "ticker": ticker,
+                "logo_symbol": holding.get("yahoo_symbol") or ticker,
                 "name": holding.get("name") or ticker,
                 "direct_usd": value,
                 "from_etf_usd": 0.0,
@@ -300,20 +403,32 @@ def chart_pnl(snapshot):
     rows = []
     market = market_by_ticker(snapshot)
     holdings = holdings_by_ticker(snapshot)
+    broker_pnl = broker_pnl_by_ticker(snapshot)
     for ticker, holding in holdings.items():
         market_row = market.get(ticker, {})
+        cost = _num(holding.get("cost_usd_standard"))
+        market_value = _num(market_row.get("market_value_usd"))
+        price_unrealized = market_value - cost
+        broker_row = broker_pnl.get(ticker)
+        unrealized = broker_row["broker_unrealized_usd"] if broker_row else price_unrealized
         rows.append(
             {
                 "ticker": ticker,
                 "name": holding.get("name") or ticker,
-                "cost_usd": _num(holding.get("cost_usd_standard")),
-                "market_value_usd": _num(market_row.get("market_value_usd")),
-                "unrealized_usd": _num(market_row.get("unrealized_usd")),
-                "unrealized_percent": market_row.get("unrealized_percent"),
+                "cost_usd": cost,
+                "market_value_usd": market_value,
+                "unrealized_usd": unrealized,
+                "unrealized_percent": (unrealized / cost * 100) if cost else None,
+                "broker_unrealized_usd": broker_row.get("broker_unrealized_usd") if broker_row else None,
+                "broker_fx_ppl_usd": broker_row.get("broker_fx_ppl_usd") if broker_row else None,
+                "broker_fx_ppl_percent": (broker_row.get("broker_fx_ppl_usd") / cost * 100) if broker_row and cost else None,
+                "broker_ppl_includes_fx": bool(broker_row),
+                "price_unrealized_usd": price_unrealized,
+                "price_unrealized_percent": (price_unrealized / cost * 100) if cost else None,
             }
         )
     rows.sort(key=lambda row: abs(row["unrealized_usd"]), reverse=True)
-    return {"basis": "api_average_cost_vs_current_price", "rows": rows}
+    return {"basis": "trading212_ppl_including_fx_with_price_difference", "rows": rows}
 
 
 def _base_ticker(ticker):
@@ -350,27 +465,59 @@ def holdings_detail(snapshot):
     holdings = holdings_by_ticker(snapshot)
     market = market_by_ticker(snapshot)
     total = sum(_num(row.get("market_value_usd")) for row in market.values())
+    broker_pnl = broker_pnl_by_ticker(snapshot)
     rows = []
     for ticker, holding in holdings.items():
         market_row = market.get(ticker, {})
         market_value = _num(market_row.get("market_value_usd")) or _num(holding.get("api_market_value_usd"))
         cost = _num(holding.get("cost_usd_standard"))
+        company_name = (
+            market_row.get("company_name")
+            or market_row.get("name")
+            or holding.get("company_name")
+            or holding.get("name")
+            or ticker
+        )
+        if str(company_name).strip().casefold() == str(ticker).strip().casefold():
+            company_name = ticker
+        price_unrealized = market_value - cost
+        broker_row = broker_pnl.get(ticker)
+        unrealized = broker_row["broker_unrealized_usd"] if broker_row else price_unrealized
         rows.append(
             {
                 "ticker": ticker,
+                "logo_symbol": holding.get("yahoo_symbol") or ticker,
                 "name": holding.get("name") or ticker,
+                "company_name": company_name,
                 "display_name": display_name(ticker, holding.get("name") or ticker),
                 "sector": SECTOR_BY_TICKER.get(_base_ticker(ticker), "Other / Unclassified"),
                 "shares": _num(holding.get("shares")),
                 "cost_usd": cost,
                 "avg_cost_usd": _num(holding.get("avg_cost_usd_standard")),
+                "avg_cost_native": _num(holding.get("avg_cost_native")),
+                "cost_currency": holding.get("cost_currency") or holding.get("price_currency"),
+                "cost_native": _num(holding.get("cost_native")),
+                "accounts": holding.get("accounts") or holding.get("account") or "",
+                "last_trade_time": holding.get("last_trade_time"),
                 "quote_price": market_row.get("quote_price"),
                 "quote_currency": market_row.get("quote_currency") or holding.get("price_currency"),
                 "today_change_percent": market_row.get("change_percent"),
                 "market_value_usd": market_value,
                 "weight": market_value / total if total else 0.0,
-                "unrealized_usd": market_value - cost,
-                "unrealized_percent": (market_value / cost - 1) * 100 if cost else None,
+                "unrealized_usd": unrealized,
+                "unrealized_percent": (unrealized / cost * 100) if cost else None,
+                "broker_unrealized_usd": broker_row.get("broker_unrealized_usd") if broker_row else None,
+                "broker_fx_ppl_usd": broker_row.get("broker_fx_ppl_usd") if broker_row else None,
+                "broker_fx_ppl_percent": (broker_row.get("broker_fx_ppl_usd") / cost * 100) if broker_row and cost else None,
+                "broker_ppl_includes_fx": bool(broker_row),
+                "broker_pnl_currency": broker_row.get("broker_pnl_currency") if broker_row else None,
+                "price_unrealized_usd": price_unrealized,
+                "price_unrealized_percent": (price_unrealized / cost * 100) if cost else None,
+                "volume": market_row.get("volume"),
+                "avg_volume_3m": market_row.get("avg_volume_3m"),
+                "market_cap": market_row.get("market_cap"),
+                "high_52w": market_row.get("high_52w"),
+                "low_52w": market_row.get("low_52w"),
             }
         )
     rows.sort(key=lambda row: row["market_value_usd"], reverse=True)
@@ -435,6 +582,7 @@ def holdings_heatmap(snapshot):
         rows.append(
             {
                 "ticker": row["ticker"],
+                "logo_symbol": row.get("logo_symbol") or yahoo_symbol,
                 "name": row["name"],
                 "display_name": row.get("display_name") or display_name(row["ticker"], row["name"]),
                 "sector": row.get("sector"),
@@ -448,6 +596,12 @@ def holdings_heatmap(snapshot):
                 "today_change_percent": row["today_change_percent"],
                 "unrealized_usd": row.get("unrealized_usd"),
                 "unrealized_percent": row.get("unrealized_percent"),
+                "broker_unrealized_usd": row.get("broker_unrealized_usd"),
+                "broker_fx_ppl_usd": row.get("broker_fx_ppl_usd"),
+                "broker_fx_ppl_percent": row.get("broker_fx_ppl_percent"),
+                "broker_ppl_includes_fx": row.get("broker_ppl_includes_fx"),
+                "price_unrealized_usd": row.get("price_unrealized_usd"),
+                "price_unrealized_percent": row.get("price_unrealized_percent"),
                 "trailing_pe": valuation.get(row["ticker"], {}).get("trailing_pe") or row.get("trailing_pe"),
                 "forward_pe": valuation.get(row["ticker"], {}).get("forward_pe") or row.get("forward_pe"),
                 "price_to_sales": valuation.get(row["ticker"], {}).get("price_to_sales"),

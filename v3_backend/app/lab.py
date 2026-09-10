@@ -199,6 +199,62 @@ def _read_trade_transactions():
     return rows
 
 
+@cached(ttl=60 * 60 * 12)
+def income_summary():
+    """Return monthly and annual dividend/cash-interest income in reporting USD."""
+    global SOURCE_FILES
+    if demo_mode():
+        return {"currency": "USD", "rows": [], "monthly_rows": []}
+    if not SOURCE_FILES:
+        SOURCE_FILES = _init_source_files()
+
+    by_year = defaultdict(lambda: {"dividends_usd": 0.0, "cash_interest_usd": 0.0})
+    by_month = defaultdict(lambda: {"dividends_usd": 0.0, "cash_interest_usd": 0.0})
+    for _account, file_path in SOURCE_FILES:
+        path = Path(file_path)
+        if not path.exists():
+            continue
+        try:
+            with path.open("r", encoding="utf-8-sig", newline="") as handle:
+                for row in csv.DictReader(handle):
+                    action = str(row.get("Action") or "").strip()
+                    is_dividend = action.startswith("Dividend")
+                    is_interest = action == "Interest on cash" or action.startswith("Interest")
+                    if not is_dividend and not is_interest:
+                        continue
+                    dt = _parse_datetime(row.get("Time") or row.get("Date") or "")
+                    if not dt:
+                        continue
+                    currency = row.get("Currency (Total)") or row.get("Currency (Price / share)") or "USD"
+                    rate = REPORT_FX_TO_USD.get(currency)
+                    if rate is None:
+                        continue
+                    amount_usd = abs(float(_dec(row.get("Total")) * rate))
+                    field = "dividends_usd" if is_dividend else "cash_interest_usd"
+                    by_year[str(dt.year)][field] += amount_usd
+                    by_month[dt.strftime("%Y-%m")][field] += amount_usd
+        except (OSError, csv.Error):
+            continue
+
+    rows = [
+        {
+            "year": year,
+            "dividends_usd": round(values["dividends_usd"], 2),
+            "cash_interest_usd": round(values["cash_interest_usd"], 2),
+        }
+        for year, values in sorted(by_year.items())
+    ]
+    monthly_rows = [
+        {
+            "month": month,
+            "dividends_usd": round(values["dividends_usd"], 2),
+            "cash_interest_usd": round(values["cash_interest_usd"], 2),
+        }
+        for month, values in sorted(by_month.items())
+    ]
+    return {"currency": "USD", "rows": rows, "monthly_rows": monthly_rows}
+
+
 def fetch_history(symbol, years=5):
     period2 = int(time.time())
     period1 = period2 - int(years * 365.25 * 24 * 60 * 60)
@@ -297,6 +353,9 @@ def get_history_cached():
     Used by views that must stay fast on a cold cache (home alerts, heatmap),
     where a synchronous fetch of ~35 symbols would block the page for seconds.
     """
+    if demo_mode():
+        from .demo_data import DEMO_LAB_HISTORY
+        return DEMO_LAB_HISTORY
     return load_json(LAB_HISTORY_CACHE, None) or {"prices": {}}
 
 
@@ -486,9 +545,13 @@ def nav_series(dates, returns):
     return rows
 
 
-@cached(ttl=300)
+@cached(ttl=60 * 60 * 12)
 def lab_history_summary():
-    snapshot = current_snapshot()
+    if demo_mode():
+        from .demo_data import DEMO_SNAPSHOT
+        snapshot = DEMO_SNAPSHOT
+    else:
+        snapshot = current_snapshot()
     history = get_history()
     universe = grouped_universe(snapshot, history)
     weights = universe["weights"]
@@ -508,7 +571,7 @@ def lab_history_summary():
     }
 
 
-@cached(ttl=300)
+@cached(ttl=60 * 60 * 12)
 def efficient_frontier(samples=900):
     snapshot = current_snapshot()
     history = get_history()
@@ -555,7 +618,7 @@ def _percentile(sorted_values, percentile):
     return sorted_values[idx]
 
 
-@cached(ttl=300)
+@cached(ttl=60 * 60 * 12)
 def monte_carlo(years=10, paths=300):
     summary = lab_history_summary()
     returns = [row["return"] for row in summary["nav"]]
@@ -610,7 +673,7 @@ def monte_carlo(years=10, paths=300):
     }
 
 
-@cached(ttl=300)
+@cached(ttl=60 * 60 * 12)
 def backtest():
     history = get_history()
     summary = lab_history_summary()
@@ -627,7 +690,7 @@ def backtest():
     return {"portfolio": {"stats": summary["stats"], "nav": portfolio_nav}, "benchmarks": benchmark_rows}
 
 
-@cached(ttl=300)
+@cached(ttl=60 * 60 * 12)
 def factor_analysis():
     history = get_history()
     summary = lab_history_summary()
@@ -654,7 +717,7 @@ def factor_analysis():
     return {"method": "single-factor regression against ETF proxies", "rows": rows}
 
 
-@cached(ttl=300)
+@cached(ttl=60 * 60 * 12)
 def monthly_return_heatmap(years=(2025, 2026)):
     summary = lab_history_summary()
     rows = []
@@ -679,7 +742,7 @@ def monthly_return_heatmap(years=(2025, 2026)):
     }
 
 
-@cached(ttl=300)
+@cached(ttl=60 * 60 * 12)
 def cumulative_vs_benchmark(symbol="SPY"):
     bt = backtest()
     portfolio = bt["portfolio"].get("nav", [])
@@ -724,7 +787,7 @@ def cumulative_vs_benchmark(symbol="SPY"):
     }
 
 
-@cached(ttl=300)
+@cached(ttl=60 * 60 * 12)
 def cumulative_multi_benchmark():
     """Portfolio vs all BENCHMARKS rebased to the same start — for Vanguard-style comparison."""
     bt = backtest()
@@ -773,19 +836,81 @@ def cumulative_multi_benchmark():
     }
 
 
-@cached(ttl=300)
+@cached(ttl=60 * 60 * 12)
 def cash_flow_mirror_vs_benchmark(symbol="SPY"):
     if demo_mode():
+        model = cumulative_vs_benchmark(symbol)
+        model_rows = model.get("rows", [])
+        if not model_rows:
+            return {"benchmark": symbol, "available": False, "status": "demo_no_rows", "rows": []}
+
+        # A deterministic synthetic contribution schedule makes the two account-
+        # return modes useful in screenshots without pretending it is real data.
+        event_indexes = {
+            0: 12_000.0,
+            len(model_rows) // 5: 4_000.0,
+            len(model_rows) * 2 // 5: 3_500.0,
+            len(model_rows) * 3 // 5: -1_800.0,
+            len(model_rows) * 4 // 5: 2_500.0,
+        }
+        portfolio_units = benchmark_units = 0.0
+        buy_total = sell_total = cumulative_sell_total = net_cash_flow = 0.0
+        rows = []
+        for index, row in enumerate(model_rows):
+            portfolio_nav = float(row.get("portfolio") or 1.0)
+            benchmark_nav = float(row.get("benchmark") or 1.0)
+            amount = event_indexes.get(index, 0.0)
+            if amount > 0:
+                portfolio_units += amount / portfolio_nav
+                benchmark_units += amount / benchmark_nav
+                buy_total += amount
+                net_cash_flow += amount
+            elif amount < 0:
+                withdrawal = min(abs(amount), portfolio_units * portfolio_nav * 0.35)
+                portfolio_units -= withdrawal / portfolio_nav
+                benchmark_units -= withdrawal / benchmark_nav
+                sell_total += withdrawal
+                cumulative_sell_total += withdrawal
+                net_cash_flow -= withdrawal
+            portfolio_value = portfolio_units * portfolio_nav
+            benchmark_value = benchmark_units * benchmark_nav
+            rows.append({
+                "date": row["date"],
+                "portfolio_value": portfolio_value,
+                "benchmark_value": benchmark_value,
+                "adjusted_portfolio_value": portfolio_value + cumulative_sell_total,
+                "adjusted_benchmark_value": benchmark_value + cumulative_sell_total,
+                "portfolio_return": (portfolio_value + cumulative_sell_total) / buy_total - 1 if buy_total else 0.0,
+                "benchmark_return": (benchmark_value + cumulative_sell_total) / buy_total - 1 if buy_total else 0.0,
+                "net_cash_flow": net_cash_flow,
+                "buy_total": buy_total,
+                "cumulative_sell_total": cumulative_sell_total,
+                "priced_symbols": 13,
+            })
         return {
             "benchmark": symbol,
-            "available": False,
-            "status": "demo_no_trade_history",
-            "basis": "buy and sell trades mirrored into the benchmark",
+            "available": True,
+            "status": "demo_synthetic",
+            "basis": "synthetic demo contributions mirrored into the benchmark",
             "label": "现金流镜像",
-            "note": "Demo data includes holdings, prices, and model history, but not private transaction CSVs.",
-            "message": "Demo mode does not include real trade history, so cash-flow mirror is disabled.",
-            "date_range": None,
-            "rows": [],
+            "note": "Demo 模式使用固定假现金流，仅用于展示产品交互。",
+            "message": "All cash flows and values on this view are synthetic demo data.",
+            "date_range": {"start": rows[0]["date"], "end": rows[-1]["date"]},
+            "rows": rows,
+            "stats": {
+                "trade_count": len(event_indexes),
+                "buy_total_usd": buy_total,
+                "sell_total_usd": sell_total,
+                "net_cash_flow_usd": net_cash_flow,
+                "final_portfolio_value_usd": rows[-1]["portfolio_value"],
+                "final_benchmark_value_usd": rows[-1]["benchmark_value"],
+                "final_adjusted_portfolio_value_usd": rows[-1]["adjusted_portfolio_value"],
+                "final_adjusted_benchmark_value_usd": rows[-1]["adjusted_benchmark_value"],
+                "final_gap_usd": rows[-1]["portfolio_value"] - rows[-1]["benchmark_value"],
+                "covered_symbols": 13,
+                "missing_symbols": [],
+            },
+            "warnings": ["Demo 假数据：现金流时点与金额不代表任何真实账户。"],
         }
 
     trades = _read_trade_transactions()
@@ -1011,7 +1136,7 @@ def cash_flow_mirror_vs_benchmark(symbol="SPY"):
     }
 
 
-@cached(ttl=300)
+@cached(ttl=60 * 60 * 12)
 def drawdown_curve():
     summary = lab_history_summary()
     peak = 1.0
@@ -1026,7 +1151,7 @@ def drawdown_curve():
     return {"max_drawdown": max_drawdown, "rows": rows}
 
 
-@cached(ttl=300)
+@cached(ttl=60 * 60 * 12)
 def return_distribution():
     summary = lab_history_summary()
     returns = [row["return"] for row in summary["nav"]]
@@ -1040,7 +1165,12 @@ def return_distribution():
     for index in range(bucket_count):
         start = low + index * width
         end = start + width
-        count = sum(1 for value in returns if (start <= value < end) or (index == bucket_count - 1 and value <= end))
+        count = sum(
+            1
+            for value in returns
+            if (start <= value < end)
+            or (index == bucket_count - 1 and value >= start)
+        )
         bins.append({"start": start, "end": end, "mid": (start + end) / 2, "count": count})
     avg = mean(returns)
     downside = [value for value in returns if value < 0]
@@ -1056,7 +1186,7 @@ def return_distribution():
     }
 
 
-@cached(ttl=300)
+@cached(ttl=60 * 60 * 12)
 def correlation_matrix(limit=14):
     snapshot = current_snapshot()
     history = get_history()
@@ -1085,7 +1215,7 @@ def correlation_matrix(limit=14):
     return {"symbols": symbols, "matrix": rows}
 
 
-@cached(ttl=300)
+@cached(ttl=60 * 60 * 12)
 def monthly_contribution_waterfall():
     snapshot = current_snapshot()
     history = get_history()
@@ -1105,7 +1235,7 @@ def monthly_contribution_waterfall():
     return {"month": month, "basis": "current-weight model contribution", "rows": rows[:16]}
 
 
-@cached(ttl=300)
+@cached(ttl=60 * 60 * 12)
 def fifty_two_week_position():
     snapshot = current_snapshot()
     history = get_history()

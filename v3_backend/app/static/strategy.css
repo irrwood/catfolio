@@ -17,4 +17,4 @@
   .run-del:hover { color:var(--negative); }
   .metric-box { background:var(--soft); border:1px solid var(--line); border-radius:var(--radius-lg); padding:12px 14px; }
   .metric-box .ml { font-size:11px; color:var(--muted); font-weight:650; }
-  .metric-box .mv { font-size:20px; font-weight:720; margin-top:4px; font-family:var(--font-mono); }
+  .metric-box .mv { font-size:20px; font-weight:650; margin-top:4px; font-family:var(--font-mono); }

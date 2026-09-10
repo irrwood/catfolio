@@ -14,6 +14,7 @@ if _env_path.exists():
 del _env_path
 
 import ssl
+import math
 import subprocess
 import threading
 import time
@@ -28,6 +29,11 @@ from .settings import FUNDAMENTALS_CACHE, LIVE_MARKET_CACHE, MARKET_REFRESH_TTL_
 _DEMO_FLAG = V2_DIR / "demo_mode.flag"
 
 
+def public_demo_mode() -> bool:
+    """Whether this process is a permanently read-only public showcase."""
+    return (os.environ.get("CATFOLIO_PUBLIC_DEMO") or "").lower() in ("1", "true", "yes", "on")
+
+
 def demo_mode() -> bool:
     """Demo (sample-data) mode.
 
@@ -35,6 +41,8 @@ def demo_mode() -> bool:
     toggle writes an explicit runtime override so demo mode can be turned off
     even when the app was launched with CATFOLIO_DEMO=1.
     """
+    if public_demo_mode():
+        return True
     try:
         if _DEMO_FLAG.exists():
             flag = _DEMO_FLAG.read_text(encoding="utf-8").strip().lower()
@@ -49,6 +57,8 @@ def demo_mode() -> bool:
 
 def set_demo_mode(on: bool) -> bool:
     """Persist the demo-mode toggle and clear caches so it takes effect now."""
+    if public_demo_mode():
+        return bool(on)
     try:
         _DEMO_FLAG.parent.mkdir(parents=True, exist_ok=True)
         _DEMO_FLAG.write_text("1" if on else "0", encoding="utf-8")
@@ -84,6 +94,7 @@ def current_snapshot():
         return DEMO_SNAPSHOT
     portfolio = load_json(V2_DIR / "portfolio_analysis.json", {"summary": {}, "holdings": [], "holdings_by_account": []})
     market = load_json(LIVE_MARKET_CACHE, None) or load_json(V2_DIR / "market_data.json", {"rows": [], "warnings": []})
+    market = reconcile_market_currencies(portfolio, market)
     fundamentals = load_json(FUNDAMENTALS_CACHE, {"rows": [], "warnings": ["Fundamentals cache not available."]})
     trading212 = load_json(V2_DIR / "trading212_data.json", {"summary": {}, "account_cash": {}, "positions": [], "warnings": []})
     return {
@@ -108,6 +119,70 @@ def usd_equivalent(amount, currency):
     if rate is None:
         return None
     return float(amount) * rate
+
+
+def resolve_quote_currency(holding, reported_currency, price, shares):
+    """Choose the currency that best agrees with the broker's market value.
+
+    Yahoo occasionally labels a London GBX quote as USD. The broker snapshot is
+    used only as a sanity anchor, so legitimate USD-listed London instruments
+    keep Yahoo's currency when it is the closer interpretation.
+    """
+    reported = normalize_currency(reported_currency)
+    expected = normalize_currency(holding.get("price_currency") or holding.get("cost_currency"))
+    if not reported:
+        return expected
+    if not expected or expected == reported:
+        return reported
+    try:
+        broker_value = float(holding.get("api_market_value_usd") or 0)
+        native_value = float(shares or 0) * float(price)
+    except (TypeError, ValueError):
+        return reported
+    if broker_value <= 0 or native_value <= 0:
+        return reported
+
+    candidates = [currency for currency in (reported, expected) if currency in FX_TO_USD]
+    if len(candidates) < 2:
+        return reported
+
+    def distance(currency):
+        candidate_value = usd_equivalent(native_value, currency)
+        return abs(math.log(candidate_value / broker_value)) if candidate_value and candidate_value > 0 else float("inf")
+
+    return min(candidates, key=distance)
+
+
+def reconcile_market_currencies(portfolio, market):
+    """Repair stale market-cache rows using the same currency sanity check."""
+    holdings = {str(row.get("ticker") or "").upper(): row for row in portfolio.get("holdings", [])}
+    rows = []
+    for source_row in market.get("rows", []):
+        row = dict(source_row)
+        holding = holdings.get(str(row.get("ticker") or "").upper())
+        if not holding or row.get("quote_price") is None:
+            rows.append(row)
+            continue
+        shares = float(row.get("shares") or holding.get("shares") or 0)
+        currency = resolve_quote_currency(holding, row.get("quote_currency"), row.get("quote_price"), shares)
+        if currency != row.get("quote_currency"):
+            native_value = shares * float(row["quote_price"])
+            market_value_usd = usd_equivalent(native_value, currency)
+            cost_usd = float(row.get("cost_usd_standard") or holding.get("cost_usd_standard") or 0)
+            row.update(
+                {
+                    "quote_currency": currency,
+                    "market_value_native": native_value,
+                    "market_value_usd": market_value_usd,
+                    "price_unrealized_usd": market_value_usd - cost_usd if market_value_usd is not None else None,
+                    "price_unrealized_percent": (market_value_usd / cost_usd - 1) * 100 if market_value_usd is not None and cost_usd else None,
+                    "unrealized_usd": market_value_usd - cost_usd if market_value_usd is not None else None,
+                    "unrealized_percent": (market_value_usd / cost_usd - 1) * 100 if market_value_usd is not None and cost_usd else None,
+                    "pnl_basis": "price_difference",
+                }
+            )
+        rows.append(row)
+    return {**market, "rows": rows}
 
 
 def open_json(url):
@@ -184,8 +259,7 @@ def save_secret(name: str, value: str) -> bool:
     import platform
     ok = False
     if platform.system() == "Darwin":
-        _keychain_save(name, value, "com.catfolio.portfolio")
-        ok = True
+        ok = _keychain_save(name, value, "com.catfolio.portfolio")
     else:
         try:
             import keyring as _kr
@@ -196,6 +270,25 @@ def save_secret(name: str, value: str) -> bool:
     if ok:
         with _secret_lock:
             _secret_cache[name] = value
+    return ok
+
+
+def delete_secret(name: str) -> bool:
+    """Delete a Catfolio-owned secret from the OS credential store."""
+    import platform
+
+    ok = False
+    if platform.system() == "Darwin":
+        ok = _keychain_delete(name, "com.catfolio.portfolio")
+    else:
+        try:
+            import keyring as _kr
+            _kr.delete_password("com.catfolio.portfolio", name)
+            ok = True
+        except Exception:
+            ok = False
+    with _secret_lock:
+        _secret_cache.pop(name, None)
     return ok
 
 
@@ -214,12 +307,26 @@ def _keychain_get(account, service):
 
 def _keychain_save(account, password, service):
     try:
-        subprocess.run(
+        result = subprocess.run(
             ["security", "add-generic-password", "-a", account, "-s", service, "-w", password, "-U"],
             capture_output=True, text=True, timeout=5,
         )
+        return result.returncode == 0
     except Exception:
-        pass
+        return False
+
+
+def _keychain_delete(account, service):
+    try:
+        result = subprocess.run(
+            ["security", "delete-generic-password", "-a", account, "-s", service],
+            capture_output=True, text=True, timeout=5,
+        )
+        # security returns 44 when the item does not exist; deletion is still
+        # effectively complete from Catfolio's perspective.
+        return result.returncode in {0, 44}
+    except Exception:
+        return False
 
 
 def fetch_yahoo_chart(symbol):
@@ -287,20 +394,27 @@ def refresh_market_quotes(force=False):
     for row in holdings:
         symbol = row.get("yahoo_symbol") or row.get("ticker")
         quote = quotes.get(symbol, {})
+        company_name = quote.get("shortName") or row.get("name") or row["ticker"]
         price = quote.get("regularMarketPrice")
         source = "Yahoo Finance chart endpoint live cache"
         if price is None:
             price = row.get("last_trade_price")
             source = "Trading 212 portfolio API fallback"
-        quote_currency = normalize_currency(quote.get("regularMarketCurrency") or row.get("price_currency") or row.get("cost_currency"))
         shares = float(row.get("shares") or 0)
+        quote_currency = resolve_quote_currency(
+            row,
+            quote.get("regularMarketCurrency") or row.get("price_currency") or row.get("cost_currency"),
+            price,
+            shares,
+        )
         market_value_native = shares * float(price) if price is not None else None
         market_value_usd = usd_equivalent(market_value_native, quote_currency)
         cost_usd = float(row.get("cost_usd_standard") or 0)
         rows.append(
             {
                 "ticker": row["ticker"],
-                "name": row.get("name", ""),
+                "name": company_name,
+                "company_name": company_name,
                 "yahoo_symbol": symbol,
                 "shares": shares,
                 "cost_currency": row.get("cost_currency", ""),
@@ -310,8 +424,11 @@ def refresh_market_quotes(force=False):
                 "quote_currency": quote_currency,
                 "market_value_native": market_value_native,
                 "market_value_usd": market_value_usd,
+                "price_unrealized_usd": market_value_usd - cost_usd if market_value_usd is not None else None,
+                "price_unrealized_percent": (market_value_usd / cost_usd - 1) * 100 if market_value_usd is not None and cost_usd else None,
                 "unrealized_usd": market_value_usd - cost_usd if market_value_usd is not None else None,
                 "unrealized_percent": (market_value_usd / cost_usd - 1) * 100 if market_value_usd is not None and cost_usd else None,
+                "pnl_basis": "price_difference",
                 "change_percent": quote.get("regularMarketChangePercent"),
                 "today_change_percent": quote.get("regularMarketChangePercent"),
                 "trailing_pe": quote.get("trailingPE"),
@@ -530,7 +647,7 @@ def refresh_fundamentals(force=False):
 
 
 def refresh_trading212():
-    """Refresh Trading 212 data + audit report by calling the pipeline in-process.
+    """Refresh normalized Trading 212 holdings by calling the pipeline in-process.
 
     Previously this spawned `python3 scripts/build_trading212_v2.py`. That breaks
     inside a PyInstaller-bundled desktop app (no python3 interpreter, scripts not on
@@ -546,15 +663,26 @@ def refresh_trading212():
         sys.path.insert(0, scripts_dir)
 
     # Bridge UI-saved secrets into the environment the standalone fetch script
-    # reads. The Settings page saves keys to the keychain (com.catfolio.portfolio),
-    # but enrich_trading212_data.py looks them up via os.environ / its own
-    # keychain service — so without this bridge a key entered in the UI is never
-    # used and the sync silently returns 0 positions.
-    for _name in ("TRADING212_API_KEY", "TRADING212_API_SECRET", "TRADING212_ACCOUNTS"):
-        if not os.environ.get(_name):
-            _val = secret_value(_name)
-            if _val:
-                os.environ[_name] = _val
+    # reads. Slot 2 maps to the script's named account "2". When configured, it
+    # is appended to any explicit account list so both accounts are fetched and
+    # merged into the normalized portfolio output.
+    for _name in (
+        "TRADING212_API_KEY",
+        "TRADING212_API_SECRET",
+        "TRADING212_API_KEY_2",
+        "TRADING212_API_SECRET_2",
+    ):
+        _val = secret_value(_name)
+        if _val:
+            os.environ[_name] = _val
+
+    _accounts_value = secret_value("TRADING212_ACCOUNTS") or os.environ.get("TRADING212_ACCOUNTS") or "default"
+    _accounts = [item.strip() for item in _accounts_value.split(",") if item.strip()]
+    if not _accounts:
+        _accounts = ["default"]
+    if os.environ.get("TRADING212_API_KEY_2") and "2" not in _accounts:
+        _accounts.append("2")
+    os.environ["TRADING212_ACCOUNTS"] = ",".join(_accounts)
 
     try:
         import build_trading212_v2

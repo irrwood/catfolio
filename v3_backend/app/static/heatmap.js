@@ -48,10 +48,13 @@
       "涨跌6月, %": "Change 6M, %",
       "今年以来 YTD, %": "YTD Change, %",
       "涨跌1年, %": "Change 1Y, %",
+      "代码": "Ticker",
+      "Logo + 代码": "Logo + Ticker",
       "中文": "Chinese",
       "英文": "English",
       "隐藏": "Hidden",
       "已就绪": "Ready",
+      "已更新": "Updated",
       "ETF已穿透": "ETF look-through enabled",
       "没有持仓热力图数据": "No holdings heatmap data",
       "没有可用数据": "No available data",
@@ -96,6 +99,7 @@
     const nameTrigger = document.querySelector("#nameTrigger");
     const nameMenu = document.querySelector("#nameMenu");
     const nameLabel = document.querySelector("#nameLabel");
+    const rawHoldingsBtn = document.querySelector("#rawHoldingsBtn");
     const etfUnwrapBtn = document.querySelector("#etfUnwrapBtn");
     const fullscreenBtn = document.querySelector("#fullscreenBtn");
     const refreshMarketButton = document.querySelector("#refreshMarket");
@@ -110,7 +114,7 @@
     let currencyMode = "USD";
     let colorMode = "day";
     let sizeMode_value = "marketcap";
-    let nameMode = "cn";
+    let nameMode = "ticker";
     let etfUnwrap = false;
     let rawRows = [];
     let lookthroughData = null;
@@ -132,7 +136,25 @@
       pnl: "浮动盈亏, %",
       relvolume: "相对成交量",
     };
-    const nameLabels = { cn: "中文", en: "英文", hidden: "隐藏" };
+    const nameLabels = { ticker: "代码", logo: "Logo + 代码" };
+    const SECTOR_ZH = {
+      "Technology": "科技",
+      "Communication Services": "通信服务",
+      "Financials": "金融",
+      "Consumer Cyclical": "可选消费",
+      "Consumer Defensive": "必选消费",
+      "Healthcare": "医疗健康",
+      "Industrials": "工业",
+      "Energy": "能源",
+      "Utilities": "公用事业",
+      "Real Estate": "房地产",
+      "Basic Materials": "基础材料",
+      "ETF / S&P 500": "ETF / 标普 500",
+      "ETF / Multi-Asset": "ETF / 多资产",
+      "Other / Unclassified": "其他 / 未分类",
+      "Other": "其他",
+    };
+    const localizedSector = value => isEnglish() ? value : (SECTOR_ZH[value] || value);
     function cssVar(name) {
       return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
     }
@@ -180,39 +202,26 @@
       if (colorMode === "year") return 30;
       return 2;
     }
+    const FIGMA_HEAT_PALETTE = {
+      positive: ["#ffffff", "#edffe0", "#d0f6b7", "#a6e585", "#89d663"],
+      negative: ["#ffffff", "#ffeff1", "#ffd3d9", "#ff97a8", "#ff889e"],
+    };
+    const DARK_HEAT_PALETTE = {
+      positive: ["#111713", "#17331d", "#205329", "#2b7436", "#389547"],
+      negative: ["#191315", "#35191f", "#57232d", "#78303e", "#963d4d"],
+    };
+    function paletteColor(amount, colors) {
+      const value = Math.max(0, Math.min(1, amount));
+      const index = value <= 0.025 ? 0 : value < 0.18 ? 1 : value < 0.42 ? 2 : value < 0.72 ? 3 : 4;
+      return colors[index];
+    }
     function heatColor(val, limit) {
-      const isDark = isDarkMode();
-      if (colorMode === "valuation") {
-        return val >= 0 ? (isDark ? "#22c55e" : "#1b5e20") : (isDark ? "#ef4444" : "#b71c1c");
-      }
-      const t = Math.max(-1, Math.min(1, val / limit));
-      if (isDark) {
-        if (t >= 0) {
-          const r = Math.round(18 + t * (34 - 18));
-          const g = Math.round(22 + t * (197 - 22));
-          const b = Math.round(32 + t * (94 - 32));
-          return `rgb(${r},${g},${b})`;
-        } else {
-          const a = Math.abs(t);
-          const r = Math.round(18 + a * (239 - 18));
-          const g = Math.round(22 + a * (68 - 22));
-          const b = Math.round(32 + a * (68 - 32));
-          return `rgb(${r},${g},${b})`;
-        }
-      } else {
-        if (t >= 0) {
-          const r = Math.round(240 - t * (240 - 27));
-          const g = Math.round(243 - t * (243 - 94));
-          const b = Math.round(250 - t * (250 - 32));
-          return `rgb(${r},${g},${b})`;
-        } else {
-          const a = Math.abs(t);
-          const r = Math.round(240 - a * (240 - 183));
-          const g = Math.round(243 - a * (243 - 28));
-          const b = Math.round(250 - a * (250 - 28));
-          return `rgb(${r},${g},${b})`;
-        }
-      }
+      const t = Math.max(-1, Math.min(1, Number(val || 0) / Math.max(limit, 0.001)));
+      const palette = isDarkMode() ? DARK_HEAT_PALETTE : FIGMA_HEAT_PALETTE;
+      if (colorMode === "valuation") return t >= 0 ? palette.positive[4] : palette.negative[4];
+      return t >= 0
+        ? paletteColor(t, palette.positive)
+        : paletteColor(Math.abs(t), palette.negative);
     }
     function valuationPe(row) { const pe = Number(row.trailing_pe || 0); if (pe > 0 && pe < 300) return pe; return null; }
     function metricLabel(row) {
@@ -264,18 +273,26 @@
         return { fontSize: 10, lineHeight: 12 };
       }
       const pct = Number(row.weight || 0) * 100;
-      if (pct >= 8) return { fontSize: 13, lineHeight: 16 };
-      if (pct >= 4) return { fontSize: 11, lineHeight: 13 };
-      if (pct >= 2) return { fontSize: 9, lineHeight: 11 };
-      if (pct >= 1) return { fontSize: 8, lineHeight: 10 };
-      if (pct >= 0.5) return { fontSize: 7, lineHeight: 9 };
+      if (pct >= 20) return { fontSize: 18, lineHeight: 24 };
+      if (pct >= 10) return { fontSize: 17, lineHeight: 22 };
+      if (pct >= 5) return { fontSize: 16, lineHeight: 21 };
+      if (pct >= 2) return { fontSize: 13, lineHeight: 17 };
+      if (pct >= 1) return { fontSize: 10, lineHeight: 13 };
+      if (pct >= 0.5) return { fontSize: 8, lineHeight: 10 };
       return { fontSize: 6, lineHeight: 8 };
     }
     function isDarkMode() {
       return !document.documentElement.classList.contains("light-theme");
     }
     function labelColor() {
-      return isDarkMode() ? "#f0f0f0" : "#1a1a1a";
+      return cssVar("--ink") || (isDarkMode() ? "#ededef" : "#000000");
+    }
+    function metricLabelColor() {
+      return isDarkMode() ? "rgba(255, 255, 255, 0.56)" : "rgba(0, 0, 0, 0.5)";
+    }
+    function assetLogoUrl(row) {
+      const symbol = String(row.logo_symbol || row.ticker || "").trim();
+      return symbol ? `/api/asset-logo/${encodeURIComponent(symbol)}` : "";
     }
     function leafNode(row) {
       const metric = colorMetric(row);
@@ -285,26 +302,53 @@
       if (sizeMode_value === "equal") value = 1;
       else if (sizeMode_value === "vol1d") value = Math.max(Number(row.volume || 0), 1);
       else if (sizeMode_value === "turnover1d") value = Math.max(Number(row.volume || 0) * Number(row.quote_price || row.avg_cost_usd || 1), 1);
-      else if (sizeMode_value === "marketcap") value = Math.max(Number(row.market_cap || row.market_value_usd || 0), 1);
+      else if (sizeMode_value === "marketcap") value = Math.max(Number(row.market_value_usd || 0), 1);
       else value = Math.max(Number(row.market_value_usd || 0), 1);
+      const pct = Number(row.weight || 0) * 100;
+      const inset = pct >= 2 ? 16 : pct >= 1 ? 10 : pct >= 0.5 ? 6 : 4;
+      const logoSize = pct >= 5 ? 30 : pct >= 2 ? 26 : 22;
+      const logoUrl = nameMode === "logo" ? assetLogoUrl(row) : "";
       return {
         name: row.ticker,
         value,
         raw: row,
-        itemStyle: { color: heatColor(metric, colorMetricLimit()), borderColor: cssVar("--line"), borderWidth: 1, gapWidth: 1 },
+        itemStyle: {
+          color: heatColor(metric, colorMetricLimit()),
+          borderColor: "transparent",
+          borderWidth: 0,
+          gapWidth: 4,
+          borderRadius: 8,
+          shadowBlur: 0,
+          shadowColor: "transparent",
+        },
         label: {
           show: true, color: lc, position: "insideTopLeft", align: "left", verticalAlign: "top",
-          padding: [4, 4, 0, 4], overflow: "truncate",
+          padding: [inset, inset, 0, inset], overflow: "truncate",
           formatter: params => {
             const item = params.data.raw || {};
-            const pct = Number(item.weight || 0) * 100;
-            if (pct < 0.35) return item.ticker || "";
-            if (pct < 1) return `${item.ticker}`;
-            if (pct < 2) return `${item.ticker}\n${metricLabel(item)}`;
-            const company = labelCompanyName(item);
-            return company ? `${item.ticker}\n${metricLabel(item)}\n${company}` : `${item.ticker}\n${metricLabel(item)}`;
+            const itemPct = Number(item.weight || 0) * 100;
+            if (itemPct < 0.12) return "";
+            if (itemPct < 0.35) return `{ticker|${item.ticker || ""}}`;
+            if (nameMode === "logo" && itemPct >= 0.5 && logoUrl) {
+              return `{logo| }\n{ticker|${item.ticker || ""}}\n{metric|${metricLabel(item)}}`;
+            }
+            return `{ticker|${item.ticker || ""}}\n{metric|${metricLabel(item)}}`;
           },
-          fontWeight: 800, fontSize: size.fontSize, lineHeight: size.lineHeight,
+          rich: {
+            logo: {
+              width: logoSize,
+              height: logoSize,
+              borderRadius: Math.ceil(logoSize / 2),
+              backgroundColor: logoUrl ? { image: logoUrl } : "transparent",
+            },
+            ticker: { color: lc, fontWeight: 700, fontSize: size.fontSize, lineHeight: size.lineHeight },
+            metric: {
+              color: metricLabelColor(),
+              fontWeight: 600,
+              fontSize: Math.max(6, size.fontSize - 2),
+              lineHeight: Math.max(8, size.lineHeight - 2),
+            },
+          },
         },
         emphasis: { itemStyle: { shadowBlur: 0, shadowColor: "transparent" }, label: { color: lc } },
       };
@@ -317,13 +361,27 @@
         const children = group.holdings.map(leafNode);
         const childrenSum = children.reduce((sum, child) => sum + child.value, 0);
         const holdingsLabel = isEnglish() ? `${group.count} holdings` : `${group.count}只`;
+        const groupValue = fmtMoney(group.holdings.reduce((s, r) => s + Number(r.market_value_usd || 0), 0));
+        const groupMetric = colorMode === "valuation"
+          ? (group.weightedPe ? `P/E ${group.weightedPe.toFixed(1)}` : "P/E —")
+          : colorMode === "pnl"
+            ? fmtDay(group.weightedPnl)
+            : (colorMode === "day" ? fmtDay(group.weightedChange) : fmtDay(group.weightedValue));
         return {
-          name: `${group.sector}\n${holdingsLabel} · ${fmtMoney(group.holdings.reduce((s, r) => s + Number(r.market_value_usd || 0), 0))}\n${colorMode === "valuation" ? (group.weightedPe ? `P/E ${group.weightedPe.toFixed(1)}` : "P/E —") : colorMode === "pnl" ? fmtDay(group.weightedPnl) : (colorMode === "day" ? fmtDay(group.weightedChange) : fmtDay(group.weightedValue))}`,
+          name: `${localizedSector(group.sector)}   ${holdingsLabel} · ${groupValue}   ${groupMetric}`,
           value: childrenSum,
-          itemStyle: { borderColor: cssVar("--line"), borderWidth: 2, gapWidth: 3 },
+          itemStyle: {
+            color: cssVar("--panel"),
+            borderColor: cssVar("--panel"),
+            borderWidth: 0,
+            gapWidth: 4,
+            borderRadius: 8,
+            shadowBlur: 0,
+            shadowColor: "transparent",
+          },
           upperLabel: {
-            show: true, height: 52, align: "left", padding: [6, 6, 0, 6],
-            color: isDarkMode() ? "#e0e0e0" : "#2a2a2a", fontSize: 12, fontWeight: 800,
+            show: true, height: 28, align: "left", verticalAlign: "middle", padding: [0, 10, 0, 10],
+            color: cssVar("--ink"), backgroundColor: cssVar("--panel"), fontSize: 12, fontWeight: 800,
             overflow: "truncate",
           },
           children,
@@ -382,7 +440,7 @@
           <div style="font-weight:850;font-size:13px;color:${metric >= 0 ? up : down};">${metricLabel(row)}</div>
         </div>
         <div style="display:grid;gap:5px;font-size:11px;line-height:1.25;">
-          <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">${tr("板块")}</span><b style="font-weight:650;text-align:right;">${htmlEscape(row.sector || "Other")}</b></div>
+          <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">${tr("板块")}</span><b style="font-weight:650;text-align:right;">${htmlEscape(localizedSector(row.sector || "Other"))}</b></div>
           <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">${tr("仓位")}</span><b style="font-weight:750;">${fmtPct(row.weight)}</b></div>
           <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">${tr("今日")}</span><b style="font-weight:750;color:${day >= 0 ? up : down};">${fmtDay(day)}</b></div>
           <div style="display:flex;justify-content:space-between;gap:14px;"><span style="color:${muted};">P/E</span><b style="font-weight:750;color:${pe === null ? muted : pe <= 22 ? up : down};">${fmtRatio(pe)}</b></div>
@@ -514,46 +572,50 @@
         el.classList.toggle("active", el.dataset.size === sizeMode_value);
       });
       sizeLabel.textContent = tr(sizeLabels[sizeMode_value] || "市值");
-      nameLabel.textContent = tr(nameLabels[nameMode] || "中文");
+      nameLabel.textContent = tr(nameLabels[nameMode] || "代码");
       nameMenu.querySelectorAll(".menu-item").forEach(el => {
         el.classList.toggle("active", el.dataset.name === nameMode);
       });
+      rawHoldingsBtn?.classList.toggle("active", !etfUnwrap);
+      rawHoldingsBtn?.setAttribute("aria-pressed", String(!etfUnwrap));
+      etfUnwrapBtn.classList.toggle("active", etfUnwrap);
+      etfUnwrapBtn.setAttribute("aria-pressed", String(etfUnwrap));
       if (!heatmapChart) {
         heatmapChart = echarts.init(heatmap, null, { renderer: "canvas" });
         window.addEventListener("resize", () => { heatmapChart?.resize(); });
       }
       const data = layoutMode === "sector" ? buildSectorData(rows) : buildSizeData(rows);
       heatmapChart.setOption({
-        animationDuration: 450, animationDurationUpdate: 420,
+        animationDuration: 280, animationDurationUpdate: 260,
+        animationEasing: "cubicOut", animationEasingUpdate: "cubicOut",
         tooltip: {
           trigger: "item", confine: true, borderWidth: 0, padding: 0, backgroundColor: "transparent",
           formatter: params => { const row = params.data.raw; if (!row) return ""; return tooltipHtml(row); },
         },
         series: [{
           type: "treemap", roam: false, nodeClick: false, breadcrumb: { show: false },
-          visibleMin: 1, left: 0, top: 0, right: 0, bottom: 0, squareRatio: 1.15,
+          visibleMin: 0, left: 0, top: 0, right: 0, bottom: 0, squareRatio: 1.15, sort: "desc",
           levels: [
-            { itemStyle: { borderWidth: 1, gapWidth: 1, borderColor: cssVar("--line") } },
-            { upperLabel: { show: layoutMode === "sector" }, itemStyle: { borderWidth: 1, gapWidth: 2, borderColor: cssVar("--line") } },
-            { itemStyle: { borderWidth: 1, gapWidth: 1, borderColor: cssVar("--line") } },
+            { itemStyle: { borderWidth: 0, gapWidth: 4, borderColor: cssVar("--bg"), borderRadius: 8 } },
+            { upperLabel: { show: layoutMode === "sector" }, itemStyle: { borderWidth: 0, gapWidth: 4, borderColor: cssVar("--bg"), borderRadius: 8 } },
+            { itemStyle: { borderWidth: 0, gapWidth: 4, borderColor: cssVar("--bg"), borderRadius: 8 } },
           ],
           data,
         }],
       }, true);
-      const valuationRows = rows.filter(row => valuationPe(row) !== null);
-      const coverage = `${valuationRows.length}/${rows.length}`;
-      const totalValue = rows.reduce((s, r) => s + Number(r.market_value_usd || 0), 0);
-      const etfTag = etfUnwrap ? ` · ${tr("ETF已穿透")}` : "";
-      setStatus(`<div class="status-dot"></div> ${tr("已就绪")}`, true);
+      setStatus(`<span class="status-dot"></span> ${tr("已更新")}`);
       buildLegend();
       renderSummary(rows);
     }
     function toggleFullscreen() {
       isFullscreen = !isFullscreen;
       heatmap.parentElement.classList.toggle("fullscreen-mode", isFullscreen);
-      fullscreenBtn.innerHTML = isFullscreen ? '<i class="fa-solid fa-compress"></i>' : '<i class="fa-solid fa-expand"></i>';
+      fullscreenBtn.innerHTML = isFullscreen ? '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-compress"></use></svg>' : '<svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-expand"></use></svg>';
       setTimeout(() => heatmapChart?.resize(), 100);
     }
+    window.addEventListener("catfolio:themechange", () => {
+      if (heatmapChart && currentRows.length) render();
+    });
     fullscreenBtn.addEventListener("click", toggleFullscreen);
     document.addEventListener("keydown", e => { if (e.key === "Escape" && isFullscreen) toggleFullscreen(); });
     function closeAllMenus() {
@@ -609,20 +671,25 @@
         render();
       });
     });
+    rawHoldingsBtn?.addEventListener("click", () => {
+      if (!etfUnwrap) return;
+      etfUnwrap = false;
+      render();
+    });
     etfUnwrapBtn.addEventListener("click", () => {
       if (!lookthroughData) return;
-      etfUnwrap = !etfUnwrap;
-      etfUnwrapBtn.classList.toggle("active", etfUnwrap);
+      if (etfUnwrap) return;
+      etfUnwrap = true;
       render();
     });
     async function boot() {
-      const [cc, s, lt] = await Promise.all([fetch("/api/command-center"), fetch("/api/portfolio/summary"), fetch("/api/etf-lookthrough?basis=market")]);
-      if (!cc.ok) throw new Error(`HTTP ${cc.status}`);
+      const [heatmapResponse, s, lt] = await Promise.all([fetch("/api/holdings/heatmap"), fetch("/api/portfolio/summary"), fetch("/api/etf-lookthrough?basis=market")]);
+      if (!heatmapResponse.ok) throw new Error(`HTTP ${heatmapResponse.status}`);
       if (!s.ok) throw new Error(`HTTP ${s.status}`);
-      const data = await cc.json();
+      const data = await heatmapResponse.json();
       const summary = await s.json();
       fxToUsd = { USD: 1, GBP: Number(summary.report_fx_to_usd?.GBP || 1.346) };
-      rawRows = data.holdings_heatmap?.rows || [];
+      rawRows = data.rows || [];
       if (!rawRows.length) throw new Error("没有持仓热力图数据");
       if (lt.ok) lookthroughData = await lt.json();
       render();
@@ -646,9 +713,9 @@
       }
       finally { button.disabled = false; }
     }
-    refreshMarketButton.addEventListener("click", () => refreshAndReload(refreshMarketButton, "刷新行情", "/api/refresh/market?force=true"));
-    refreshValuationButton.addEventListener("click", () => refreshAndReload(refreshValuationButton, "刷新估值", "/api/refresh/fundamentals?force=true"));
-    refreshHoldingsButton.addEventListener("click", () => refreshAndReload(refreshHoldingsButton, "同步持仓", "/api/refresh/trading212"));
+    refreshMarketButton?.addEventListener("click", () => refreshAndReload(refreshMarketButton, "刷新行情", "/api/refresh/market?force=true"));
+    refreshValuationButton?.addEventListener("click", () => refreshAndReload(refreshValuationButton, "刷新估值", "/api/refresh/fundamentals?force=true"));
+    refreshHoldingsButton?.addEventListener("click", () => refreshAndReload(refreshHoldingsButton, "同步持仓", "/api/refresh/trading212"));
     boot().catch(error => {
       const message = tr(error.message);
       setStatus(`<div class="status-dot danger"></div> ${tr("加载失败：")}${message}`);

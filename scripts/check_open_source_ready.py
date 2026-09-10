@@ -12,15 +12,22 @@ ROOT = Path(__file__).resolve().parent.parent
 
 BLOCKED_PATH_PREFIXES = (
     ".claude/",
+    ".playwright-mcp/",
+    ".vercel/",
+    "artifacts/",
     "v3_backend/.claude/",
     "docs/superpowers/",
     "outputs/",
     "build/",
+    "build-",
     "dist/",
+    "dist-",
     "releases/",
     ".venv/",
+    ".venv-",
     "venv/",
     "v3_backend/.venv/",
+    "v3_backend/.venv-",
     "v3_backend/venv/",
     "__pycache__/",
 )
@@ -36,6 +43,14 @@ SECRET_ASSIGNMENTS = [
     re.compile(r"(?m)^\s*([A-Z0-9_]*(?:API_KEY|API_SECRET|TOKEN|PASSWORD)[A-Z0-9_]*)\s*=\s*['\"]?([^'\"\s#]+)"),
     re.compile(r"['\"]([A-Z0-9_]*(?:API_KEY|API_SECRET|TOKEN|PASSWORD)[A-Z0-9_]*)['\"]\s*:\s*['\"]([^'\"]+)['\"]"),
 ]
+SECRET_LITERALS = [
+    re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
+    re.compile(r"\bgh[opsu]_[A-Za-z0-9]{20,}\b"),
+    re.compile(r"\bAIza[0-9A-Za-z_-]{20,}\b"),
+    re.compile(r"\bxox[baprs]-[0-9A-Za-z-]{20,}\b"),
+    re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+]
+PRIVATE_HOME_PATH = re.compile(r"/" + r"Users/(?!demo(?:/|$)|example(?:/|$))[^/\s]+/")
 
 
 def git_files() -> list[str]:
@@ -72,6 +87,10 @@ def scan_file(path: str) -> list[str]:
             value = match.group(2).strip()
             if not PLACEHOLDER_VALUE.match(value):
                 findings.append(f"{path}: possible non-placeholder secret value for {match.group(1)}")
+    if any(pattern.search(text) for pattern in SECRET_LITERALS):
+        findings.append(f"{path}: possible credential or private key literal")
+    if PRIVATE_HOME_PATH.search(text):
+        findings.append(f"{path}: contains a user-specific absolute home path")
     return findings
 
 

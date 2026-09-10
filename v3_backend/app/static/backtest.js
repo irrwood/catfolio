@@ -123,7 +123,7 @@
 
     async function loadBacktest(cachedData) {
         const isLight = document.documentElement.classList.contains("light-theme");
-        btStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 正在加载...`;
+        btStatus.innerHTML = `<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> 正在加载...`;
         let history, frontier, monteCarlo, factors, backtest;
         try {
             if (cachedData) {
@@ -181,7 +181,7 @@
             // — Backtesting chart —
             chart("#backtestChart").setOption({
                 ...baseOption(),
-                color: ['#27a648', '#3b82f6', '#f97316', '#8b5cf6'],
+                color: ['#27a648', '#9ca3af', '#f97316', '#8b5cf6'],
                 legend: { bottom: 0, textStyle: { color: isLight ? "#374151" : "#9ca3af" } },
                 grid: { left: 54, right: 18, top: 18, bottom: 48 },
                 xAxis: { type: "category", data: (backtest.portfolio?.nav || []).map(r => r.date), axisLabel: { hideOverlap: true } },
@@ -199,7 +199,7 @@
             // — Efficient Frontier chart —
             chart("#frontierChart").setOption({
                 ...baseOption(),
-                color: [isLight ? "#9ca3af" : "#707580", "#3b82f6", "#27a648", "#f97316"],
+                color: [isLight ? "#9ca3af" : "#707580", "#27a648", "#f97316"],
                 legend: { bottom: 0, textStyle: { color: isLight ? "#374151" : "#9ca3af" } },
                 grid: { left: 58, right: 18, top: 18, bottom: 58 },
                 tooltip: { trigger: "item", formatter: params => {
@@ -284,14 +284,14 @@
             riskTabs.forEach(tab => tab.addEventListener("click", () => renderOptimizationTarget(Number(tab.dataset.risk || 1))));
             renderOptimizationTarget(Number(riskPreference.value || 1));
 
-            btStatus.innerHTML = `<i class="fa-solid fa-circle-check" style="color:var(--positive)"></i> 已完成 · ${navDays} 个交易日`;
+            btStatus.innerHTML = `<svg class="hi hi-inline" style="color:var(--positive)" aria-hidden="true" focusable="false"><use href="#hi-check-circle"></use></svg> 已完成 · ${navDays} 个交易日`;
 
             // Cache fresh result for next visit
             if (!cachedData) {
                 try { localStorage.setItem(BT_CACHE_KEY, JSON.stringify({ history, frontier, monteCarlo, factors, backtest, cachedAt: Date.now() })); } catch(_) {}
             }
         } catch(e) {
-            btStatus.innerHTML = `<i class="fa-solid fa-circle-xmark" style="color:var(--negative)"></i> 加载失败：${e.message}`;
+            btStatus.innerHTML = `<svg class="hi hi-inline" style="color:var(--negative)" aria-hidden="true" focusable="false"><use href="#hi-x-circle"></use></svg> 加载失败：${e.message}`;
             console.error(e);
         }
     }
@@ -304,7 +304,7 @@
     const reviewBox = document.querySelector("#aiReviewBox");
     _aiRunning = true;
     btn.disabled = true;
-    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${ui.analyzing()}`;
+    btn.innerHTML = `<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> ${ui.analyzing()}`;
     section.style.display = "block";
     reviewBox.style.display = "none";
     try {
@@ -333,10 +333,10 @@
         reviewBox.style.display = "block";
         document.querySelector("#aiReviewText").textContent = data.ai_review;
       }
-      btn.innerHTML = `<i class="fa-solid fa-circle-check" style="color:var(--positive)"></i> ${ui.done()}`;
+      btn.innerHTML = `<svg class="hi hi-inline" style="color:var(--positive)" aria-hidden="true" focusable="false"><use href="#hi-check-circle"></use></svg> ${ui.done()}`;
     } catch (e) {
       document.querySelector("#aiAiBacktest").textContent = `${ui.loadFailed()}${e.message}`;
-      btn.innerHTML = `<i class="fa-solid fa-circle-xmark" style="color:var(--negative)"></i> ${ui.failed()}`;
+      btn.innerHTML = `<svg class="hi hi-inline" style="color:var(--negative)" aria-hidden="true" focusable="false"><use href="#hi-x-circle"></use></svg> ${ui.failed()}`;
       console.error(e);
     } finally {
       _aiRunning = false;
@@ -346,18 +346,23 @@
 
   // Restore from cache or show prompt
   (function init() {
+    if (window.CATFOLIO_DEMO) {
+      btStatus.innerHTML = `<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> 正在加载 Demo 分析...`;
+      loadBacktest();
+      return;
+    }
     try {
       const raw = localStorage.getItem(BT_CACHE_KEY);
       if (raw) {
         const cached = JSON.parse(raw);
         if (cached.history && cached.frontier) {
-          btStatus.innerHTML = `<i class="fa-solid fa-clock" style="color:var(--muted)"></i> 缓存数据 · ${fmtCacheAge(cached.cachedAt)}`;
+          btStatus.innerHTML = `<svg class="hi hi-inline" style="color:var(--muted)" aria-hidden="true" focusable="false"><use href="#hi-clock"></use></svg> 缓存数据 · ${fmtCacheAge(cached.cachedAt)}`;
           loadBacktest(cached);
           return;
         }
       }
     } catch(_) {}
-    btStatus.innerHTML = `<span style="color:var(--muted)">点击 <i class="fa-solid fa-arrows-rotate"></i> 刷新数据 加载分析</span>`;
+    btStatus.innerHTML = `<span style="color:var(--muted)">点击 <svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-refresh"></use></svg> 刷新数据 加载分析</span>`;
   })();
 
 // ── Per-card AI 解读 (magic-wand) ──────────────────────────────────────────
@@ -406,7 +411,7 @@
     btn.className = "ai-card-btn" + (chartHead ? "" : " abs");
     btn.title = "AI 解读";
     btn.setAttribute("aria-label", "AI 解读");
-    btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i>';
+    btn.innerHTML = '<span class="ai-action-icon" aria-hidden="true"></span>';
     if (chartHead) { btn.style.marginLeft = "auto"; chartHead.appendChild(btn); }
     else { panel.appendChild(btn); }
 
@@ -420,11 +425,11 @@
       if (loaded) { result.hidden = !result.hidden; return; }
       result.hidden = false;
       result.classList.remove("err");
-      result.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${ui.analyzeCard()}`;
+      result.innerHTML = `<svg class="hi hi-inline hi-spin" aria-hidden="true" focusable="false"><use href="#hi-spinner"></use></svg> ${ui.analyzeCard()}`;
       btn.disabled = true;
       try {
         const data = await ask(aiPrompt(title));
-        result.innerHTML = '<span class="ai-card-tag"><i class="fa-solid fa-wand-magic-sparkles"></i></span>' + esc(data.answer);
+        result.innerHTML = '<span class="ai-card-tag"><span class="ai-action-icon" aria-hidden="true"></span></span>' + esc(data.answer);
         loaded = true;
       } catch (e) {
         result.classList.add("err");
