@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Catfolio sector rotation after adjusted prices settle
+
+[Timer]
+OnCalendar=*-*-* 23:45:00 UTC
+Persistent=true
+Unit=catfolio-sector-rotation.service
+
+[Install]
+WantedBy=timers.target

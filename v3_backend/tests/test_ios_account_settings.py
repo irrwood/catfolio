@@ -3,6 +3,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SETTINGS = ROOT / "CatfolioIOS" / "CatfolioIOS" / "SettingsView.swift"
+ROOT_TABS = ROOT / "CatfolioIOS" / "CatfolioIOS" / "RootTabView.swift"
+DESIGN_SYSTEM = ROOT / "CatfolioIOS" / "CatfolioIOS" / "DesignSystem.swift"
+PUBLIC_INVESTOR = ROOT / "CatfolioIOS" / "CatfolioIOS" / "PublicInvestorView.swift"
 MODEL = ROOT / "CatfolioIOS" / "CatfolioIOS" / "APIClient.swift"
 STORE = ROOT / "CatfolioIOS" / "CatfolioIOS" / "LocalPortfolioStore.swift"
 TRADING_212 = ROOT / "CatfolioIOS" / "CatfolioIOS" / "Trading212View.swift"
@@ -69,9 +72,21 @@ def test_account_management_is_backed_by_local_model_operations():
         assert operation in store
 
 
+def test_transaction_rows_use_the_records_stable_domain_identity():
+    settings = SETTINGS.read_text(encoding="utf-8")
+    store = STORE.read_text(encoding="utf-8")
+
+    assert "struct LocalTransactionRecord: Codable, Equatable, Identifiable" in store
+    assert "var id: String" in store
+    assert "transactionsByKey[transaction.id]" in store
+    assert "seen.insert(transaction.id)" in store
+    assert "List(transactions) { transaction in" in settings
+    assert "id: \\.offset" not in settings
+
+
 def test_new_account_section_is_add_only_and_uses_creation_context():
     source = SETTINGS.read_text(encoding="utf-8")
-    section = source[source.index('title: "新建账户"'):source.index('SettingsSectionBlock(title: "行情与 AI"')]
+    section = source[source.index('Section("新建账户")'):source.index('Section("行情与 AI")')]
 
     assert "券商与导入" not in source
     for label in ("Trading 212", "Moomoo", "Interactive Brokers", "CSV 导入"):
@@ -88,15 +103,40 @@ def test_new_account_section_is_add_only_and_uses_creation_context():
         assert connector in source
 
 
-def test_settings_cards_use_spacious_rows_without_explanatory_footers():
+def test_settings_root_uses_native_ios_form_sections_and_controls():
     source = SETTINGS.read_text(encoding="utf-8")
+    root_body = source[source.index("    var body: some View {"):source.index("    private var appVersion:")]
 
-    assert 'LazyVStack(alignment: .leading, spacing: 28)' in source
-    assert '.padding(.horizontal, 18)' in source
-    assert 'RoundedRectangle(cornerRadius: 24, style: .continuous)' in source
-    assert '.frame(width: 36, height: 36)' in source
-    assert '.frame(width: 50, height: 36)' in source
-    assert '.padding(.vertical, 15)' in source
+    assert "Form {" in root_body
+    assert ".formStyle(.grouped)" in root_body
+    assert ".contentMargins(.bottom, 96, for: .scrollContent)" in root_body
+    assert "NavigationStack {" not in root_body
+    assert 'Section("账户范围")' in root_body
+    assert 'Section("新建账户")' in root_body
+    assert "Toggle(isOn: $hapticsEnabled)" in root_body
+    assert "SettingsGroupCard" not in root_body
+    assert "SettingsDivider" not in root_body
+    assert ".background(CatfolioTheme.pageBackground" not in root_body
+
+
+def test_settings_pages_share_the_native_grouped_background():
+    design_system = DESIGN_SYSTEM.read_text(encoding="utf-8")
+    assert "static let settingsBackground = Color(uiColor: .systemGroupedBackground)" in design_system
+
+    for path in (SETTINGS, PUBLIC_INVESTOR, TRADING_212, MOOMOO, IBKR, CSV_IMPORT):
+        source = path.read_text(encoding="utf-8")
+        assert ".background(CatfolioTheme.settingsBackground)" in source
+        assert "CatfolioTheme.pageBackground(for: colorScheme)" not in source
+
+
+def test_sheet_rows_keep_semantic_text_colors_and_show_disclosure_arrows():
+    source = SETTINGS.read_text(encoding="utf-8")
+    connector = source[source.index("    private func connector("):source.index("    private func settingsValueRow(")]
+
+    assert 'Image(systemName: "chevron.forward")' in connector
+    assert ".foregroundStyle(.tertiary)" in connector
+    assert ".buttonStyle(.plain)" in connector
+    assert "nativeSettingsLabel(title: title, detail: detail" in connector
 
 
 def test_account_checkmarks_share_the_connector_icon_centerline():
@@ -106,7 +146,22 @@ def test_account_checkmarks_share_the_connector_icon_centerline():
         source.index("private func connector")
     ]
 
-    assert '.frame(width: 50, height: 54)' in selection_button
+    assert '.frame(width: 36)' in selection_button
+    assert '.frame(minHeight: 44)' in selection_button
+    assert '.buttonStyle(.borderless)' in selection_button
+
+
+def test_settings_selection_and_disclosure_symbols_adapt_to_dark_mode():
+    source = SETTINGS.read_text(encoding="utf-8")
+    selection_button = source[
+        source.index("private func accountSelectionButton"):
+        source.index("private func connector")
+    ]
+
+    assert ".symbolRenderingMode(.palette)" in selection_button
+    assert ".foregroundStyle(.white, CatfolioTheme.accent)" in selection_button
+    assert 'Image(systemName: "chevron.right")' not in source
+    assert "CatfolioTheme.disclosure" not in source
 
 
 def test_all_accounts_row_displays_the_combined_market_value():
@@ -226,3 +281,31 @@ def test_ibkr_credentials_are_stored_and_loaded_per_account():
     assert "Self.queryIDKey(accountID: accountID)" in view
     assert "legacyTokenKey" in view
     assert "legacyQueryIDKey" in view
+
+
+def test_local_service_actions_use_native_button_styles_and_accessibility_labels():
+    source = SETTINGS.read_text(encoding="utf-8")
+    detail = source[source.index("private struct LocalServiceDetailView"):]
+
+    assert ".buttonStyle(.borderedProminent)" in detail
+    assert ".buttonStyle(.bordered)" in detail
+    assert '.accessibilityLabel(isTesting ? "正在验证" : "保存并验证")' in detail
+    assert '.accessibilityLabel("仅保存，不验证")' in detail
+    assert ".opacity(trimmedKey.isEmpty || isTesting ? 0.45 : 1)" not in detail
+
+
+def test_account_notice_uses_current_alert_presentation_api():
+    source = SETTINGS.read_text(encoding="utf-8")
+    detail = source[source.index("private struct AccountDetailView"):source.index("private struct SettingsSectionBlock")]
+
+    assert "presenting: notice" in detail
+    assert ".alert(item: $notice)" not in detail
+    assert 'Button("好", role: .cancel)' in detail
+
+
+def test_ai_zoom_source_declares_the_bubble_clip_shape():
+    source = ROOT_TABS.read_text(encoding="utf-8")
+    assistant = source[source.index('Button(action: presentAI)'):source.index('.accessibilityLabel("AI 助手")')]
+
+    assert 'matchedTransitionSource(id: "ai-bubble"' in assistant
+    assert "RoundedRectangle(cornerRadius: 28, style: .continuous)" in assistant

@@ -202,14 +202,15 @@ def current_snapshot():
     broker_cache = load_json(V2_DIR / "broker_data.json", {})
     provider = str(portfolio.get("summary", {}).get("broker_provider") or "trading212")
     broker = broker_cache if provider in {"moomoo", "ibkr"} and broker_cache.get("provider") == provider else trading212
-    return {
+    from .brokers.accounts import apply_accounts
+    return apply_accounts({
         "portfolio": portfolio,
         "market": market,
         "fundamentals": fundamentals,
         "broker": broker,
         "trading212": trading212,
         "loaded_at": datetime.now(timezone.utc).isoformat(),
-    }
+    })
 
 
 def normalize_currency(currency):
@@ -473,7 +474,7 @@ def live_cache_age_seconds():
 
 
 def refresh_market_quotes(force=False):
-    portfolio = load_json(V2_DIR / "portfolio_analysis.json", {"holdings": []})
+    portfolio = current_snapshot()["portfolio"]
     holdings = portfolio.get("holdings", [])
     symbols = sorted({row.get("yahoo_symbol") or row.get("ticker") for row in holdings if row.get("ticker")})
     cached_market = load_json(LIVE_MARKET_CACHE, {"rows": [], "warnings": []}) or {"rows": []}
@@ -753,7 +754,7 @@ def refresh_fundamentals(force=False):
     FUNDAMENTALS_TTL_SECONDS = 60 * 60 * 12
     fmp_token = secret_value("FMP_API_KEY")
     finnhub_token = secret_value("FINNHUB_API_KEY")
-    portfolio = load_json(V2_DIR / "portfolio_analysis.json", {"holdings": []})
+    portfolio = current_snapshot()["portfolio"]
     holdings = portfolio.get("holdings", [])
     eligible_holdings = [
         holding for holding in holdings
@@ -1006,7 +1007,7 @@ def refresh_after_hours(force=False):
     if not api_key:
         return {"ok": False, "cached": False, "warning": "未设置 MASSIVE_API_KEY，盘后数据不可用。"}
 
-    portfolio = load_json(V2_DIR / "portfolio_analysis.json", {"holdings": []})
+    portfolio = current_snapshot()["portfolio"]
     holdings = portfolio.get("holdings", [])
 
     # Only US-listed tickers (no "." suffix)

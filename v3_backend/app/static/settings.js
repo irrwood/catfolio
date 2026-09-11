@@ -179,9 +179,15 @@
       return payload;
     }
 
+    if (type === 'broker' && document.getElementById('accountList')) {
+      document.getElementById('settings-accounts').scrollIntoView({behavior: 'auto'});
+      document.getElementById('accountStatus').textContent = '请选择账户，预览并确认同步。';
+      document.getElementById('addAccount').focus();
+      return;
+    }
     if (type === 'all') {
       const steps = [
-        ["正在同步当前券商持仓…", "/api/refresh/broker"],
+
         ["正在增量刷新实时行情…", "/api/refresh/market"],
         ["正在增量刷新历史价格…", "/api/lab/refresh-history"],
         ["正在增量刷新估值数据…", "/api/refresh/fundamentals"],

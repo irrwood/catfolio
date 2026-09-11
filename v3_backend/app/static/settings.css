@@ -643,3 +643,62 @@
     transition: none;
   }
 }
+
+/* Account selection and detail share the existing v5 settings language. */
+.page-settings .account-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 0;
+}
+.page-settings .account-row + .account-row { border-top: 1px solid var(--line); }
+.page-settings .account-row .settings-row-copy { flex: 1; min-width: 0; }
+.page-settings .account-scope { width: 20px; height: 20px; flex: 0 0 20px; accent-color: var(--ink); }
+.page-settings .account-open {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.page-settings .account-open span { color: var(--muted); font-size: 12px; }
+.page-settings .account-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.page-settings .account-dialog {
+  box-sizing: border-box;
+  width: min(620px, calc(100vw - 40px));
+  max-height: calc(100dvh - 40px);
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--panel);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  box-shadow: none;
+}
+.page-settings .account-dialog::backdrop { background: rgb(0 0 0 / 25%); }
+.page-settings .account-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
+.page-settings .account-dialog h2 { margin: 0; font-size: 24px; }
+.page-settings .account-dialog p { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.page-settings .account-dialog label { display: grid; gap: 10px; margin-bottom: 20px; font-size: 13px; }
+.page-settings .account-dialog .settings-input { font-family: var(--font-sans); height: 40px; }
+.page-settings .account-dialog #accountDialogStatus { margin-top: 20px; font-size: 13px; }
+.page-settings .account-preview-table { overflow: auto; max-height: 300px; }
+.page-settings .account-preview-table table { width: 100%; }
+.page-settings .account-preview-table :is(th, td):nth-child(2),
+.page-settings .account-preview-table :is(th, td):nth-child(3) { text-align: right; font-variant-numeric: tabular-nums; }
+.page-settings :is(.account-dialog, #settings-accounts) :is(button, input, select, a):focus-visible {
+  outline: 2px solid var(--chart-blue, #708cff);
+  outline-offset: 3px;
+  box-shadow: none;
+}
+.page-settings .account-dialog [hidden] { display: none; }
+@media (max-width: 640px) {
+  .page-settings .account-row { gap: 10px; }
+  .page-settings .account-row .settings-button { flex-shrink: 0; }
+}

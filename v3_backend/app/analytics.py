@@ -208,7 +208,9 @@ def broker_pnl_by_ticker(snapshot):
     account_cash = trading212.get("account_cash", {})
     account_info = trading212.get("account_info", {})
     rows = {}
-    for position in trading212.get("positions", []):
+    # Account overlays supply complete normalized P&L, including CSV accounts.
+    raw_positions = [] if trading212.get("normalized_account_pnl") else trading212.get("positions", [])
+    for position in raw_positions:
         ticker = str(position.get("normalized_ticker") or position.get("ticker") or "").upper()
         if not ticker:
             continue
@@ -317,10 +319,13 @@ def portfolio_summary(snapshot):
     if not holdings:
         market_total = sum(_num(row.get("market_value_usd")) for row in market.values())
     cost_total = _num(summary.get("total_cost_usd_standard"))
-    price_unrealized_total = market_total - cost_total
+    unpriced_cost = sum(_num(h.get("cost_usd_standard")) for h in holdings.values() if h.get("valuation_missing"))
+    price_unrealized_total = market_total - (cost_total - unpriced_cost)
     unrealized_total = 0.0
     broker_positions = 0
     for ticker, holding in holdings.items():
+        if holding.get("valuation_missing"):
+            continue
         broker_row = broker_pnl.get(ticker)
         if broker_row:
             unrealized_total += broker_row["broker_unrealized_usd"]
@@ -463,6 +468,8 @@ def chart_pnl(snapshot):
     holdings = holdings_by_ticker(snapshot)
     broker_pnl = broker_pnl_by_ticker(snapshot)
     for ticker, holding in holdings.items():
+        if holding.get("valuation_missing"):
+            continue
         market_row = market.get(ticker, {})
         cost = _num(holding.get("cost_usd_standard"))
         market_value = _num(market_row.get("market_value_usd"))
@@ -541,6 +548,7 @@ def holdings_detail(snapshot):
         price_unrealized = market_value - cost
         broker_row = broker_pnl.get(ticker)
         unrealized = broker_row["broker_unrealized_usd"] if broker_row else price_unrealized
+        missing = holding.get("valuation_missing", False)
         rows.append(
             {
                 "ticker": ticker,
@@ -560,17 +568,17 @@ def holdings_detail(snapshot):
                 "quote_price": market_row.get("quote_price"),
                 "quote_currency": market_row.get("quote_currency") or holding.get("price_currency"),
                 "today_change_percent": market_row.get("change_percent"),
-                "market_value_usd": market_value,
+                "market_value_usd": None if missing else market_value,
                 "weight": market_value / total if total else 0.0,
-                "unrealized_usd": unrealized,
-                "unrealized_percent": (unrealized / cost * 100) if cost else None,
+                "unrealized_usd": None if missing else unrealized,
+                "unrealized_percent": (unrealized / cost * 100) if cost and not missing else None,
                 "broker_unrealized_usd": broker_row.get("broker_unrealized_usd") if broker_row else None,
                 "broker_fx_ppl_usd": broker_row.get("broker_fx_ppl_usd") if broker_row else None,
                 "broker_fx_ppl_percent": (broker_row.get("broker_fx_ppl_usd") / cost * 100) if broker_row and cost else None,
                 "broker_ppl_includes_fx": bool(broker_row),
                 "broker_pnl_currency": broker_row.get("broker_pnl_currency") if broker_row else None,
-                "price_unrealized_usd": price_unrealized,
-                "price_unrealized_percent": (price_unrealized / cost * 100) if cost else None,
+                "price_unrealized_usd": None if missing else price_unrealized,
+                "price_unrealized_percent": (price_unrealized / cost * 100) if cost and not missing else None,
                 "volume": market_row.get("volume"),
                 "avg_volume_3m": market_row.get("avg_volume_3m"),
                 "market_cap": market_row.get("market_cap"),
@@ -578,7 +586,7 @@ def holdings_detail(snapshot):
                 "low_52w": market_row.get("low_52w"),
             }
         )
-    rows.sort(key=lambda row: row["market_value_usd"], reverse=True)
+    rows.sort(key=lambda row: (row["market_value_usd"] or 0), reverse=True)
     return {"rows": rows}
 
 

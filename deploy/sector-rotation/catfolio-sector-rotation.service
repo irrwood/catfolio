@@ -1,0 +1,12 @@
+[Unit]
+Description=Catfolio independent sector rotation snapshots
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/catfolio
+Environment=CATFOLIO_DATA_DIR=/var/lib/catfolio
+ExecStart=/opt/catfolio/v3_backend/.venv/bin/python /opt/catfolio/scripts/sector_rotation.py --daily
+TimeoutStartSec=600
+UMask=0077

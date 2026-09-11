@@ -110,3 +110,16 @@ app.include_router(settings.router)
 app.include_router(strategy.router)
 app.include_router(import_csv.router)
 app.include_router(i18n.router)
+
+from app.routes import volatility
+app.include_router(volatility.router)
+
+# Stock history is reachable from the desktop holdings table.
+from app.routes import price_target_history
+app.include_router(price_target_history.router)
+
+from app.routes import sector_rotation
+app.include_router(sector_rotation.router)
+
+from app.routes import accounts
+app.include_router(accounts.router)

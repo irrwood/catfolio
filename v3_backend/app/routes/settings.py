@@ -16,6 +16,7 @@ from app.lab import history_cache_age_seconds
 from app.settings import ROOT, V2_DIR
 from app.components import render_layout
 from app.i18n import get_lang
+from app.account_ui import render_accounts
 from app.ai import PROVIDERS as AI_PROVIDERS, DEFAULT_PROVIDER as AI_DEFAULT
 from app.brokers.service import SUPPORTED_BROKERS
 from app.brokers.ibkr import IBKRConfig
@@ -164,10 +165,11 @@ def settings_page(request: Request):
       </div>"""
         if demo_on else
         f"""<div class="settings-credential-groups">
+      <details class="settings-disclosure"><summary><strong>旧版券商连接</strong><span class="settings-chevron" aria-hidden="true"></span></summary>
       <section class="settings-credential-group" aria-labelledby="settingsCredentialBroker">
         <header class="settings-credential-group-head">
           <strong id="settingsCredentialBroker">券商持仓源</strong>
-          <span>选择一个当前数据源。所有连接仅调用只读持仓与账户接口。</span>
+          <span>兼容已有的全局连接。新增账户请使用上方账户入口，连接仅调用只读接口。</span>
         </header>
         <div class="settings-broker-picker">
           <div class="settings-provider-grid settings-broker-grid">
@@ -204,7 +206,7 @@ def settings_page(request: Request):
           <button class="settings-button" onclick="testBroker('ibkr', this)">测试 IBKR 连接</button>
           <div id="broker_test_ibkr" class="settings-inline-status"></div>
         </div>
-      </section>
+      </section></details>
       <section class="settings-credential-group" aria-labelledby="settingsCredentialMarket">
         <header class="settings-credential-group-head">
           <strong id="settingsCredentialMarket">市场数据</strong>
@@ -319,11 +321,11 @@ def settings_page(request: Request):
     else:
         active_broker_label = SUPPORTED_BROKERS[broker_provider]
         data_cache_rows = f"""<div class="settings-row">
-            <div class="settings-row-copy"><strong>刷新全部组合数据</strong><span>当前券商：{active_broker_label}。依次同步持仓、行情、历史价格和估值。</span></div>
+            <div class="settings-row-copy"><strong>刷新全部组合数据</strong><span>刷新当前账户组合的行情、历史价格和估值。持仓请在账户中预览后同步。</span></div>
             <button class="settings-button settings-button-primary" onclick="triggerRefresh('all')">一键刷新</button>
           </div>
           <div class="settings-row">
-            <div class="settings-row-copy"><strong>{active_broker_label} 持仓</strong><span>从当前券商拉取持仓、平均成本和账户现金。</span></div>
+            <div class="settings-row-copy"><strong>账户持仓</strong><span>按账户预览持仓、平均成本和现金，然后确认同步。</span></div>
             <button class="settings-button" onclick="triggerRefresh('broker')">立即同步</button>
           </div>
           <div class="settings-row">
@@ -349,6 +351,7 @@ def settings_page(request: Request):
     <div class="settings-nav-rail">
       <nav class="settings-nav" aria-label="设置分类">
         <a class="settings-nav-link is-active" href="#settings-general">常规</a>
+        <a class="settings-nav-link" href="#settings-accounts">账户</a>
         <a class="settings-nav-link" href="#settings-data">数据与缓存</a>
         <a class="settings-nav-link" href="#settings-ai">AI</a>
         <a class="settings-nav-link" href="#settings-credentials">凭证</a>
@@ -374,6 +377,7 @@ def settings_page(request: Request):
         </div>
       </section>
 
+      {render_accounts(demo_on)}
       <section class="settings-section" id="settings-data">
         <div class="settings-section-header">
           <h2>数据与缓存</h2>
@@ -453,6 +457,7 @@ def settings_page(request: Request):
   </div>
 </main>
 <script src="/static/settings.js"></script>
+<script src="/static/accounts.js"></script>
 """
     return HTMLResponse(render_layout(
         request,
