@@ -13,11 +13,20 @@ Usage:
     clear_all()
 """
 
+import os
 import threading
 import time
 from functools import wraps
 
 _store: dict[str, tuple[float, object]] = {}
+# An entry is only noticed as expired when its own key is read again, and the
+# analytics caches are keyed by the snapshot's loaded_at timestamp — a fresh key
+# every ~10s. Nothing else reclaims them: clear_all() runs on data refresh, which
+# a browse-only session never triggers. So the store is swept on write once it
+# grows past this budget. The live working set is well under 50 entries (one
+# snapshot, its handful of analytics, and the 12h lab/api results), so the
+# default leaves plenty of headroom before anything is dropped.
+_MAX_ENTRIES = int(os.environ.get("CATFOLIO_CACHE_MAX_ENTRIES", "512"))
 # Sync routes run in Starlette's threadpool, so _store can be touched by
 # concurrent threads. Dict ops are atomic under the GIL, but the lock guards
 # the read/expiry/write critical section. Function execution happens OUTSIDE
@@ -71,7 +80,9 @@ def cached(ttl: float = 300, key=None):
             try:
                 result = func(*args, **kwargs)
                 with _lock:
-                    _store[cache_key] = (time.time() + ttl, result)
+                    now = time.time()
+                    _store[cache_key] = (now + ttl, result)
+                    _evict_locked(now)
                 return result
             finally:
                 with _lock:
@@ -84,10 +95,38 @@ def cached(ttl: float = 300, key=None):
     return decorator
 
 
+def _evict_locked(now: float) -> None:
+    """Reclaim space once the store is over budget. Caller must hold `_lock`.
+
+    Expired entries go first; in normal operation that is the whole job, since
+    what accumulates is the 30s snapshot-keyed analytics.
+
+    If everything is still live, the entries closest to expiring are shed — not
+    the oldest-inserted. Insertion order would evict exactly the wrong things:
+    the 12h lab/api results are written once, early, and are the only ones whose
+    recomputation costs a network fetch, whereas a short TTL marks a value the
+    caller already expects to recompute shortly and that is pure CPU to rebuild.
+    """
+    if len(_store) <= _MAX_ENTRIES:
+        return
+    for key in [key for key, (expires, _) in _store.items() if expires <= now]:
+        del _store[key]
+    if len(_store) <= _MAX_ENTRIES:
+        return
+    doomed = sorted(_store, key=lambda k: _store[k][0])[: len(_store) - _MAX_ENTRIES]
+    for key in doomed:
+        del _store[key]
+
+
 def _clear_prefix(prefix: str) -> None:
-    """Clear all cache entries whose key starts with a given prefix."""
+    """Clear every cache entry belonging to one function.
+
+    Keys are ``f"{func.__name__}:{...}"``, so the separator is part of the match:
+    clearing `api_returns` must not also wipe a future `api_returns_summary`.
+    """
+    owned = f"{prefix}:"
     with _lock:
-        to_delete = [k for k in _store if k.startswith(prefix)]
+        to_delete = [k for k in _store if k.startswith(owned)]
         for k in to_delete:
             del _store[k]
 

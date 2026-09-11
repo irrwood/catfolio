@@ -1,8 +1,10 @@
 """Shared UI components used across route modules."""
 
+import hashlib as _hashlib
 import re as _re
 import time as _time
 from datetime import datetime, timezone
+from functools import lru_cache as _lru_cache
 from pathlib import Path
 from app.data_store import current_snapshot, demo_mode
 from app.i18n import t_block
@@ -310,28 +312,36 @@ def _hi(symbol_id: str, class_name: str = "hi hi-sidebar") -> str:
 
 
 
+@_lru_cache(maxsize=512)
+def _asset_content_version(path: str, mtime_ns: int, size: int) -> str:
+    """Return a content fingerprint, using stat values only as the cache key.
+
+    Deployment systems can normalize every packaged file's modification time, so
+    the public URL must be derived from the bytes rather than from ``mtime``.
+    """
+    del mtime_ns, size
+    return _hashlib.sha256(Path(path).read_bytes()).hexdigest()[:12]
+
+
 def _version_assets(html: str) -> str:
-    """Append ?v=<mtime> to every local /static asset URL so browsers refetch
-    whenever a file changes (cache-busting). Without this, extracted CSS/JS stay
-    cached and edits never reach users."""
+    """Append a content fingerprint to local static asset URLs."""
     def repl(match):
         path = match.group(1)
         rel = path[len("/static/"):]
         try:
-            mtime = int((_STATIC_DIR / rel).stat().st_mtime)
-            return f"{path}?v={mtime}"
+            asset = _STATIC_DIR / rel
+            stat = asset.stat()
+            version = _asset_content_version(
+                str(asset), stat.st_mtime_ns, stat.st_size
+            )
+            return f"{path}?v={version}"
         except OSError:
             return path
     return _re.sub(r'(/static/[^"?\s>]+\.(?:css|js|png|jpg|jpeg|webp|svg))', repl, html)
 
 
-def _brand_icon_paths(demo_on: bool) -> tuple[str, str]:
-    """Return dark-theme and light-theme brand icons for the active data mode."""
-    if demo_on:
-        return (
-            "/static/icons/catfolio-icon-dark.png",
-            "/static/icons/catfolio-icon-light.png",
-        )
+def _brand_icon_paths() -> tuple[str, str]:
+    """Return the shared brand icons used by local and hosted builds."""
     return (
         "/static/icons/realcat-dark.svg",
         "/static/icons/realcat.svg",
@@ -340,10 +350,10 @@ def _brand_icon_paths(demo_on: bool) -> tuple[str, str]:
 
 def wrap_v4_layout(title: str, content: str, active_page: str, lang: str = "zh", head_extra: str = "") -> str:
     demo_on = demo_mode()
-    brand_icon_dark, brand_icon_light = _brand_icon_paths(demo_on)
+    brand_icon_dark, brand_icon_light = _brand_icon_paths()
     try:
         snapshot = current_snapshot()
-        trading_unix = snapshot["trading212"].get("as_of_unix")
+        trading_unix = (snapshot.get("broker") or snapshot["trading212"]).get("as_of_unix")
         market_unix = snapshot["market"].get("as_of_unix")
         fundamentals_unix = snapshot["fundamentals"].get("as_of_unix")
     except Exception:
@@ -542,6 +552,7 @@ _V5_NAV_GROUPS = [
         ("/analytics", "分析图表", "trade.svg"),
         ("/strategy", "策略回测", "strategy.svg"),
         ("/heatmap", "持仓热力图", "tools.svg"),
+        ("/sentiment", "行业情绪", "analysis.svg"),
         ("/ai", "AI 分析", "magic.svg"),
         ("/bank", "银行", "bank.svg"),
     ]),
@@ -551,9 +562,68 @@ _V5_NAV_GROUPS = [
     ]),
 ]
 
+
+def _global_ai_float(lang: str, active_page: str) -> str:
+    """Shared AI chat surface mounted outside page content in the v5 shell."""
+    is_english = lang == "en"
+    copy = {
+        "label": "AI assistant" if is_english else "AI 助手",
+        "title": "Ask Cat",
+        "close": "Close AI assistant" if is_english else "关闭 AI 助手",
+        "open": "Open AI assistant" if is_english else "打开 AI 助手",
+        "intro": (
+            "Ask about the page you are viewing or your portfolio."
+            if is_english
+            else "可以问当前页面，也可以问你的投资组合。"
+        ),
+        "prompt": "Ask AI" if is_english else "问问 AI",
+        "starters": "Show suggested questions" if is_english else "显示推荐问题",
+        "send": "Send" if is_english else "发送",
+        "disclaimer": (
+            "AI can make mistakes. Verify important figures in Portfolio."
+            if is_english
+            else "AI 可能会出错，重要数字请回到 Portfolio 核对。"
+        ),
+    }
+    default_open = "false" if active_page == "/ai" else "true"
+    return f"""
+  <div class="global-ai-float" id="globalAiFloat" data-default-open="{default_open}">
+    <section class="global-ai-panel" id="globalAiPanel" role="dialog" aria-modal="false" aria-label="{copy['label']}">
+      <header class="global-ai-head">
+        <span class="global-ai-kicker">{copy['title']}</span>
+        <button class="global-ai-close" id="globalAiClose" type="button" aria-label="{copy['close']}">×</button>
+      </header>
+      <div class="global-ai-scroll" id="globalAiScroll" aria-live="polite">
+        <div class="global-ai-intro" id="globalAiIntro">
+          <img src="/static/icons/sidebar/magic.svg" alt="" width="28" height="28" />
+          <p>{copy['intro']}</p>
+        </div>
+        <div class="global-ai-conversation" id="globalAiConversation"></div>
+      </div>
+      <div class="global-ai-starters" id="globalAiStarters" hidden></div>
+      <form class="global-ai-composer" id="globalAiComposer">
+        <div class="global-ai-status" id="globalAiStatus" aria-live="polite"></div>
+        <div class="global-ai-compose-row">
+          <button class="global-ai-tool" id="globalAiSuggestions" type="button" aria-label="{copy['starters']}" aria-expanded="false">{_hi('hi-plus', 'hi')}</button>
+          <div class="global-ai-input-wrap">
+            <textarea id="globalAiInput" rows="1" maxlength="1200" placeholder="{copy['prompt']}" aria-label="{copy['prompt']}"></textarea>
+            <button class="global-ai-send" id="globalAiSend" type="submit" aria-label="{copy['send']}">
+              <img src="/static/icons/ai-send-arrow.svg" alt="" width="28" height="28" />
+            </button>
+          </div>
+        </div>
+        <small>{copy['disclaimer']}</small>
+      </form>
+    </section>
+    <button class="global-ai-launcher" id="globalAiLauncher" type="button" aria-label="{copy['open']}" aria-controls="globalAiPanel" aria-expanded="false" hidden>
+      <img src="/static/icons/sidebar/magic.svg" alt="" width="24" height="24" />
+    </button>
+  </div>
+"""
+
 def wrap_v5_layout(title: str, content: str, active_page: str, lang: str = "zh", head_extra: str = "") -> str:
     demo_on = demo_mode()
-    brand_icon_dark, brand_icon_light = _brand_icon_paths(demo_on)
+    brand_icon_dark, brand_icon_light = _brand_icon_paths()
     page_slug = active_page.strip("/").replace("/", "-") or "home"
     shell_class = "v5-shell collapsed"
     sidebar_mode = "hover"
@@ -563,11 +633,7 @@ def wrap_v5_layout(title: str, content: str, active_page: str, lang: str = "zh",
         links = ""
         for href, label, icon in items:
             is_active = "active" if href == active_page else ""
-            icon_html = (
-                '<span class="v5-nav-icon v5-nav-icon-mask v5-nav-icon-bank" aria-hidden="true"></span>'
-                if icon == "bank.svg"
-                else f'<img class="v5-nav-icon" src="/static/icons/sidebar/{icon}" alt="" width="24" height="24" />'
-            )
+            icon_html = f'<img class="v5-nav-icon" src="/static/icons/sidebar/{icon}" alt="" width="24" height="24" />'
             links += (
                 f'<a class="v5-nav-link {is_active}" href="{href}" title="{label}">'
                 f'{icon_html}'
@@ -599,6 +665,7 @@ def wrap_v5_layout(title: str, content: str, active_page: str, lang: str = "zh",
   <link rel="stylesheet" href="/static/v5.css" />
   {head_extra}
   <link rel="stylesheet" href="/static/design-system.css" />
+  <link rel="stylesheet" href="/static/ai-float.css" />
 </head>
 <body class="page-{page_slug}">
   {_HUGEICON_SYMBOLS}
@@ -642,6 +709,8 @@ def wrap_v5_layout(title: str, content: str, active_page: str, lang: str = "zh",
       </div>
     </div>
   </div>
+
+  {_global_ai_float(lang, active_page)}
 
   <script src="/static/client_i18n.js"></script>
   <script>
@@ -724,6 +793,7 @@ def wrap_v5_layout(title: str, content: str, active_page: str, lang: str = "zh",
       }});
     }}
   </script>
+  <script src="/static/ai-float.js"></script>
 </body>
 </html>"""
     return t_block(_version_assets(html), lang)
@@ -740,12 +810,13 @@ def render_layout(request, title: str, content: str, active_page: str, lang: str
 
 def data_health_bar(snapshot) -> str:
     """Render a compact data-health indicator bar."""
-    trading_unix = snapshot["trading212"].get("as_of_unix")
+    broker = snapshot.get("broker") or snapshot["trading212"]
+    trading_unix = broker.get("as_of_unix")
     market_unix = snapshot["market"].get("as_of_unix")
     fundamentals_unix = snapshot["fundamentals"].get("as_of_unix")
     fund_rows = len(snapshot["fundamentals"].get("rows", []))
     market_rows = len(snapshot["market"].get("rows", []))
-    trading_positions = len(snapshot["trading212"].get("positions", []))
+    trading_positions = len(broker.get("positions", []))
 
     def age_class(unix_val, max_age_sec):
         if not unix_val:

@@ -138,12 +138,20 @@ EN = {
     "总市值": "Market Value",
     "总浮盈": "Total P/L",
     "正在读取组合数据": "Reading portfolio data",
+    "投资组合组件演示": "Portfolio component demo",
+    "组件切换控制": "Component navigation",
+    "上一个组件": "Previous component",
+    "下一个组件": "Next component",
     "组合核心概览": "Portfolio overview",
     "净投入成本与当前总市值（USD）": "Net invested cost vs. current market value (USD)",
+    "当前股票持仓的成本与历史市值（USD，不含账户现金）": "Current stock-position cost and historical market value (USD, excluding account cash)",
     "图表时间范围": "Chart time range",
     "净投入成本与当前总市值折线图": "Net invested cost and current market value line chart",
+    "股票持仓成本与历史市值曲线，不含账户现金": "Stock-position cost and historical market-value chart, excluding account cash",
     "当前总市值": "Current Market Value",
     "净投入成本": "Net Invested Cost",
+    "持仓市值": "Holdings Market Value",
+    "持仓成本": "Holdings Cost",
     "今日盈亏": "Today P/L",
     "持仓股数": "Holdings",
     "夏普比率": "Sharpe Ratio",
@@ -166,9 +174,12 @@ EN = {
     "月度收益热图": "Monthly Return Heatmap",
     "收益日历": "Profit Calendar",
     "日历范围": "Calendar range",
+    "查看当月每日盈亏": "View daily P/L for the month",
+    "查看全年逐月盈亏": "View monthly P/L for the year",
     "上一个周期": "Previous period",
     "下一个周期": "Next period",
     "每日投资组合盈亏": "Daily portfolio profit and loss",
+    "选择组件": "Select component",
     "股息": "Dividends",
     "现金利息": "Cash interest",
     "全年": "Year",
@@ -190,6 +201,7 @@ EN = {
     "个股盈亏贡献": "Holding P/L Contribution",
     "真实账户 · 美元浮盈（成本 vs 现价）": "Real account · USD unrealized P/L (cost vs current price)",
     "持仓明细": "Holding Details",
+    "持仓明细列表": "Holding details list",
     "查看持仓明细": "View Holdings",
     "正在读取组合…": "Loading portfolio…",
     "组合概览": "Portfolio overview",
@@ -232,6 +244,7 @@ EN = {
     "收益率分布": "Return Distribution",
     "模型日收益": "Model daily returns",
     "回撤水下曲线": "Drawdown Underwater Curve",
+    "回撤图表时间范围": "Drawdown chart time range",
     "模型组合跌离高点": "Model portfolio decline from peak",
     "持仓相关性矩阵": "Holding Correlation Matrix",
     "颜色越深，越容易同涨同跌": "Darker colors mean holdings move together more",
@@ -408,6 +421,10 @@ EN = {
     "Massive API Key (盘后数据)": "Massive API Key (After-Hours Data)",
     "用于获取盘后异动、期权链快照和市值参考数据。": "Used to fetch after-hours movers, options-chain snapshots, and market-cap reference data.",
     "Trading 212 API Key (交易账户)": "Trading 212 API Key (Trading Account)",
+    "Trading 212 API Secret 1": "Trading 212 API Secret 1",
+    "Trading 212 API Secret 2": "Trading 212 API Secret 2",
+    "主账户 API Key 对应的 Secret": "Secret paired with the primary account API key",
+    "第二账户 API Key 对应的 Secret": "Secret paired with the secondary account API key",
     "主账户：同步持仓、平均成本和账户现金": "Primary account: sync holdings, average cost, and account cash",
     "第二账户（可选）：同步时自动合并两个账户": "Second account (optional): automatically merge both accounts during sync",
     "Trading 212 账户": "Trading 212 Accounts",
@@ -419,6 +436,9 @@ EN = {
     "用于同步持仓数据、平均买入成本和账户现金快照。": "Used to sync positions, average purchase cost, and account cash snapshots.",
     "用于 AI 组合总结、风险诊断、收益归因和情景分析。": "Used for AI portfolio summaries, risk diagnosis, return attribution, and scenario analysis.",
     "数据缓存生命周期": "Data Cache Lifecycle",
+    "刷新全部组合数据": "Refresh All Portfolio Data",
+    "依次同步持仓、行情、历史价格和估值；任一步失败都会明确提示。": "Sync holdings, quotes, price history, and valuations in order; any failed step is reported clearly.",
+    "一键刷新": "Refresh All",
     "系统采用增量与缓存机制，避免频繁调用外部接口导致封禁。": "The system uses incremental updates and caching to avoid excessive external API calls.",
     "Yahoo 实时现价缓存": "Yahoo Live Quote Cache",
     "当前缓存年龄：": "Current cache age:",
@@ -1038,6 +1058,228 @@ def t(text: str, lang: str = "zh") -> str:
         return EN.get(text, text)
     return text
 
+
+
+# Sector rotation: full phrases avoid partial-word substitutions.
+EN.update({'板块轮动': 'Sector Rotation',
+ '领先': 'Leading',
+ '减弱': 'Weakening',
+ '落后': 'Lagging',
+ '改善': 'Improving',
+ '中性': 'Neutral',
+ '动量增强': 'Momentum strengthening',
+ '动量减弱': 'Momentum weakening',
+ '动量持平': 'Momentum unchanged',
+ '历史不足': 'Insufficient history',
+ '中期与近月位置都高于板块中位数，相对表现保持在较强一侧。': 'Both windows sit above the sector median; relative performance remains on the '
+                                 'stronger side.',
+ '中期位置较强，近月位置转弱，关注相对动量的变化。': 'The medium-term position is stronger, while recent momentum has weakened.',
+ '中期与近月位置都低于板块中位数，相对表现仍偏弱。': 'Both windows sit below the sector median; relative performance remains weaker.',
+ '中期位置偏弱，近月位置较强，相对动量正在改善。': 'The medium-term position is weaker, while recent relative momentum is improving.',
+ '位置接近截面中心，板块之间的强弱差异尚不鲜明。': 'The position is near the cross-sectional centre, with no clear relative strength '
+                            'distinction.',
+ '较上周从「%@」转为「%@」。': 'Changed from %@ to %@ since last week.',
+ '中期相对强弱 × 近月相对动量': 'Medium-term strength × recent momentum',
+ '如何阅读这张图': 'How to read this chart',
+ '短期': 'Short term',
+ '中期': 'Medium term',
+ '长期': 'Long term',
+ '数据截至 %@（纽约）': 'Data as of %@ (New York)',
+ '数据更新延迟，当前显示上次可用快照。': 'Update delayed. Showing the last available snapshot.',
+ '回填快照': 'Backfilled snapshot',
+ '近 1 月相对动量 ↑': 'Recent relative momentum ↑',
+ '中期相对强弱 →': 'Medium-term relative strength →',
+ '图心是当日 11 个板块的中位数，不是 SPY 或零收益。位置是相对其他板块的，不是绝对涨跌。': 'The centre is the daily median of 11 sectors, not SPY or '
+                                                    'zero return. Positions are relative to other sectors, not '
+                                                    'absolute gains or losses.',
+ '读取每日快照…': 'Loading daily snapshot…',
+ '暂无板块轮动数据': 'No sector rotation data',
+ '连接快照服务后读取每日板块数据。': 'Connect a snapshot service to read daily sector data.',
+ '中期相对强弱': 'Medium-term relative strength',
+ '近 1 月相对动量': 'Recent relative momentum',
+ '本周变化': 'Weekly change',
+ '点击圆点或板块列表查看 8 周轨迹，长按圆点查看精确值。': 'Tap a point or sector to see its 8-week trail. Hold a point for precise values.',
+ '展示板块相对 SPY 的趋势和动量，仅供市场观察，不构成投资建议。': 'Sector trends and momentum relative to SPY, for market observation only. '
+                                      'Not investment advice.',
+ '快照数据源': 'Snapshot source',
+ '中期窗口为第 63 至第 21 个交易日前；近月窗口为最近 21 个交易日。先计算相对 SPY 的对数差并作 5 日均值，再用当日中位数与 MAD 标准化及 tanh 压缩。': 'The medium-term '
+                                                                                            'window runs from 63 '
+                                                                                            'to 21 sessions ago; '
+                                                                                            'momentum covers the '
+                                                                                            'latest 21 sessions. '
+                                                                                            'Log price ratios to '
+                                                                                            'SPY are averaged '
+                                                                                            'over 5 sessions, '
+                                                                                            'normalised using the '
+                                                                                            'daily median and '
+                                                                                            'MAD, then compressed '
+                                                                                            'with tanh.',
+ '中心 ±0.25 范围为中性。新象限连续两交易日成立才切换文字标签，文字可能暂时不同于点所在象限。百分比表示相对 SPY 的变化；坐标表示相对其他板块的位置。': 'The central ±0.25 zone is '
+                                                                                    'neutral. A new quadrant '
+                                                                                    'needs two consecutive '
+                                                                                    'sessions to change the '
+                                                                                    'label, which can temporarily '
+                                                                                    'differ from the plotted '
+                                                                                    'quadrant. Percentages '
+                                                                                    'measure change relative to '
+                                                                                    'SPY; coordinates compare '
+                                                                                    'sectors.',
+ '轨迹读取历史快照，每个完整 ISO 周取最后有效交易日。初始化历史使用回填时可得的复权价，可能与当时发布值略有差异。此图不使用 JdK RRG 专有计算。': 'Trails read saved snapshots at '
+                                                                                  'the last valid session of each '
+                                                                                  'completed ISO week. Initial '
+                                                                                  'backfills use adjusted prices '
+                                                                                  'available at backfill time and '
+                                                                                  'may differ slightly from '
+                                                                                  'original observations. This '
+                                                                                  'chart does not use proprietary '
+                                                                                  'JdK RRG calculations.',
+ '填写已部署的 HTTPS 快照 API。未连接时保留本机快照，行情过期会明确标记。此读取不触发账户同步或行情计算。': 'Enter a deployed HTTPS snapshot API. Saved '
+                                                              'snapshots remain available offline and expired '
+                                                              'data is marked. Reading does not trigger account '
+                                                              'sync or market calculations.',
+ '精确值': 'Precise values',
+ '暂停历史回放': 'Pause history playback',
+ '播放历史快照': 'Play historical snapshots',
+ '回看日期': 'History date',
+ '美国市场 · 11 个 SPDR 板块 ETF / SPY': 'US market · 11 SPDR sector ETFs / SPY',
+ '观察周期': 'Observation period',
+ '暂未开放': 'Not available yet',
+ '板块轮动四象限图': 'Sector rotation quadrant chart',
+ '播放': 'Play',
+ '暂停': 'Pause',
+ '最新': 'Latest',
+ '选择一个板块': 'Select a sector',
+ '点击图中圆点或下方列表，查看过去 8 周轨迹与规则解释。': 'Select a point or sector below to see its past 8 weeks and rule-based '
+                                 'explanation.',
+ '全部板块': 'All sectors',
+ '领先：中期与近月位置都高于板块中位数。减弱：中期高于、近月低于。落后：两者都低于。改善：中期低于、近月高于。这些状态不表示绝对涨跌，也不是买卖信号。': 'Leading: both windows above the '
+                                                                               'sector median. Weakening: '
+                                                                               'medium-term above, recent below. '
+                                                                               'Lagging: both below. Improving: '
+                                                                               'medium-term below, recent above. '
+                                                                               'These states do not describe '
+                                                                               'absolute returns or trading '
+                                                                               'signals.',
+ '先计算 ETF 与 SPY 复权价的对数差，再作 5 日均值。横轴取第 63 至第 21 个交易日前的变化，纵轴取最近 21 个交易日的变化；两者不重叠。分别以当日中位数和 MAD 标准化，再用 tanh 软压缩。': 'Log '
+                                                                                                                'ratios '
+                                                                                                                'of '
+                                                                                                                'adjusted '
+                                                                                                                'ETF '
+                                                                                                                'prices '
+                                                                                                                'to '
+                                                                                                                'SPY '
+                                                                                                                'are '
+                                                                                                                'averaged '
+                                                                                                                'over '
+                                                                                                                '5 '
+                                                                                                                'sessions. '
+                                                                                                                'The '
+                                                                                                                'horizontal '
+                                                                                                                'axis '
+                                                                                                                'measures '
+                                                                                                                'change '
+                                                                                                                'from '
+                                                                                                                '63 '
+                                                                                                                'to '
+                                                                                                                '21 '
+                                                                                                                'sessions '
+                                                                                                                'ago; '
+                                                                                                                'the '
+                                                                                                                'vertical '
+                                                                                                                'axis '
+                                                                                                                'measures '
+                                                                                                                'the '
+                                                                                                                'latest '
+                                                                                                                '21 '
+                                                                                                                'sessions. '
+                                                                                                                'These '
+                                                                                                                'windows '
+                                                                                                                'do '
+                                                                                                                'not '
+                                                                                                                'overlap. '
+                                                                                                                'Each '
+                                                                                                                'axis '
+                                                                                                                'uses '
+                                                                                                                'daily '
+                                                                                                                'median/MAD '
+                                                                                                                'normalisation '
+                                                                                                                'and '
+                                                                                                                'tanh '
+                                                                                                                'compression.',
+ '显示的百分比由原始对数差还原，表示相对 SPY 的变化。图上位置以板块截面为中心。中心 ±0.25 范围为中性；新象限连续两交易日成立才切换文字标签，因此文字可能暂时不同于点所在象限。': 'Percentages '
+                                                                                                 'convert the raw '
+                                                                                                 'log differences '
+                                                                                                 'back into '
+                                                                                                 'returns '
+                                                                                                 'relative to '
+                                                                                                 'SPY. '
+                                                                                                 'Coordinates are '
+                                                                                                 'centred on the '
+                                                                                                 'sector '
+                                                                                                 'cross-section. '
+                                                                                                 'The central '
+                                                                                                 '±0.25 zone is '
+                                                                                                 'neutral; other '
+                                                                                                 'labels change '
+                                                                                                 'after two '
+                                                                                                 'consecutive '
+                                                                                                 'sessions, so '
+                                                                                                 'labels may '
+                                                                                                 'temporarily '
+                                                                                                 'differ from '
+                                                                                                 'plotted '
+                                                                                                 'quadrants.',
+ '历史来自当日快照，每周取最后有效交易日；选中后显示当前点和过去 8 个完整 ISO 周的周点。初始化历史使用回填时可得的复权序列，可能与当时实际发布值略有差异。此图不使用 JdK RRG 专有计算。': 'History '
+                                                                                                        'comes '
+                                                                                                        'from '
+                                                                                                        'saved '
+                                                                                                        'daily '
+                                                                                                        'snapshots. '
+                                                                                                        'Selection '
+                                                                                                        'shows '
+                                                                                                        'the '
+                                                                                                        'current '
+                                                                                                        'point '
+                                                                                                        'plus the '
+                                                                                                        'last '
+                                                                                                        'valid '
+                                                                                                        'session '
+                                                                                                        'of each '
+                                                                                                        'of the '
+                                                                                                        'previous '
+                                                                                                        '8 '
+                                                                                                        'completed '
+                                                                                                        'ISO '
+                                                                                                        'weeks. '
+                                                                                                        'Initial '
+                                                                                                        'backfills '
+                                                                                                        'use '
+                                                                                                        'adjusted '
+                                                                                                        'prices '
+                                                                                                        'available '
+                                                                                                        'at '
+                                                                                                        'backfill '
+                                                                                                        'time and '
+                                                                                                        'may '
+                                                                                                        'differ '
+                                                                                                        'from '
+                                                                                                        'original '
+                                                                                                        'observations. '
+                                                                                                        'This '
+                                                                                                        'chart '
+                                                                                                        'does not '
+                                                                                                        'use '
+                                                                                                        'proprietary '
+                                                                                                        'JdK RRG '
+                                                                                                        'calculations.',
+ '观察 11 个美股板块的中期相对强弱与近月动量。': 'Observe medium-term relative strength and recent momentum across 11 US sectors.',
+ '查看四象限与历史轨迹 →': 'View quadrants and historical trails →',
+ '尚无可用快照；等待每日批处理完成。': 'No snapshots yet. Waiting for the daily batch.',
+ '无法读取快照，请稍后重试。': 'Unable to read snapshots. Please try again.'})
+
+
+from .account_i18n import EN as ACCOUNT_EN
+EN.update(ACCOUNT_EN)
 
 _EN_KEYS_BY_LEN = sorted(EN.keys(), key=len, reverse=True)
 

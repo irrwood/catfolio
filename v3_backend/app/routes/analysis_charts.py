@@ -36,6 +36,53 @@ _BODY = r"""
   <div class="analytics-status" id="analyticsStatus" aria-live="polite"></div>
 
   <section class="analytics-grid" aria-label="分析图表">
+    <div class="analytics-figma-charts">
+      <article class="analytics-card analytics-drawdown-card">
+        <header>
+          <div><h2>回撤水下曲线</h2><p id="drawdownMeta">最大回撤</p></div>
+          <a class="analytics-ai-link" href="/ai" aria-label="用 AI 解读回撤水下曲线" title="AI 解读">
+            <span class="ai-action-icon" aria-hidden="true"></span>
+          </a>
+        </header>
+        <div class="analytics-drawdown-body">
+          <div class="analytics-chart is-loading" id="drawdownChart" role="img" aria-label="回撤水下曲线"></div>
+          <div class="analytics-drawdown-ranges" role="group" aria-label="回撤图表时间范围">
+            <button type="button" data-drawdown-range="1D" aria-pressed="false">1D</button>
+            <button type="button" data-drawdown-range="1W" aria-pressed="false">1W</button>
+            <button type="button" data-drawdown-range="1M" aria-pressed="false">1M</button>
+            <button type="button" data-drawdown-range="3M" aria-pressed="false">3M</button>
+            <button type="button" data-drawdown-range="YTD" aria-pressed="false">YTD</button>
+            <button type="button" data-drawdown-range="1Y" aria-pressed="false">1Y</button>
+            <button type="button" data-drawdown-range="MAX" class="active" aria-pressed="true">MAX</button>
+          </div>
+        </div>
+      </article>
+
+      <article class="analytics-card analytics-valuation-card">
+        <header>
+          <div><h2>估值矩阵 (P/E vs 成长)</h2><p>气泡大小 = 仓位权重</p></div>
+          <a class="analytics-ai-link" href="/ai" aria-label="用 AI 解读估值矩阵" title="AI 解读">
+            <span class="ai-action-icon" aria-hidden="true"></span>
+          </a>
+          <div class="analytics-valuation-actions">
+            <button class="btn analytics-valuation-details" id="valuationTableToggle" type="button" aria-expanded="false" aria-controls="valuationTablePanel">展开明细</button>
+            <button class="btn analytics-valuation-refresh" id="valuationRefresh" type="button">刷新估值</button>
+          </div>
+        </header>
+        <div class="analytics-valuation-chart-wrap">
+          <div class="analytics-chart valuation-matrix-chart is-loading" id="valuationMatrixChart" role="img" aria-label="估值矩阵 (P/E vs 成长)"></div>
+        </div>
+        <div class="valuation-table-wrap" id="valuationTablePanel" tabindex="0" aria-label="持仓估值明细" hidden>
+          <table class="valuation-table">
+            <thead id="valuationTableHead"></thead>
+            <tbody id="valuationTableBody">
+              <tr><td class="valuation-table-empty">正在加载估值数据…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+
     <article class="analytics-card">
       <header>
         <div><h2>月度收益热图</h2><p id="monthlyReturnMeta">年 × 月盈亏%</p></div>
@@ -45,9 +92,9 @@ _BODY = r"""
 
     <article class="analytics-card">
       <header>
-        <div><h2>回撤水下曲线</h2><p id="drawdownMeta">模型组合跌离高点</p></div>
+        <div><h2>收益率分布</h2><p id="distributionMeta">模型日收益</p></div>
       </header>
-      <div class="analytics-chart is-loading" id="drawdownChart" role="img" aria-label="回撤水下曲线"></div>
+      <div class="analytics-chart is-loading" id="distributionChart" role="img" aria-label="收益率分布"></div>
     </article>
 
     <article class="analytics-card analytics-wide">
@@ -57,35 +104,7 @@ _BODY = r"""
       <div class="analytics-chart analytics-correlation is-loading" id="correlationChart" role="img" aria-label="持仓相关性矩阵"></div>
     </article>
 
-    <article class="analytics-card analytics-wide analytics-valuation-card">
-      <header>
-        <div><h2>估值矩阵 (P/E vs 成长)</h2><p>气泡大小 = 仓位权重</p></div>
-        <div class="analytics-valuation-actions">
-          <button class="btn analytics-valuation-details" id="valuationTableToggle" type="button" aria-expanded="false" aria-controls="valuationTablePanel">展开明细</button>
-          <button class="btn analytics-valuation-refresh" id="valuationRefresh" type="button">刷新估值</button>
-        </div>
-      </header>
-      <div class="analytics-valuation-chart-wrap">
-        <div class="analytics-chart valuation-matrix-chart is-loading" id="valuationMatrixChart" role="img" aria-label="估值矩阵 (P/E vs 成长)"></div>
-      </div>
-      <div class="valuation-table-wrap" id="valuationTablePanel" tabindex="0" aria-label="持仓估值明细" hidden>
-        <table class="valuation-table">
-          <thead id="valuationTableHead"></thead>
-          <tbody id="valuationTableBody">
-            <tr><td class="valuation-table-empty">正在加载估值数据…</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </article>
-
-    <article class="analytics-card">
-      <header>
-        <div><h2>收益率分布</h2><p id="distributionMeta">模型日收益</p></div>
-      </header>
-      <div class="analytics-chart is-loading" id="distributionChart" role="img" aria-label="收益率分布"></div>
-    </article>
-
-    <article class="analytics-card">
+    <article class="analytics-card analytics-wide">
       <header>
         <div><h2>模型归因 Waterfall</h2><p id="waterfallMeta">模型口径 · 当月权重收益%（非真实盈亏）</p></div>
       </header>

@@ -609,21 +609,6 @@ body.page-lab {
   font-variant-numeric: tabular-nums;
 }
 
-.portfolio-chart-legend {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 16px;
-}
-
-.portfolio-chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
-.portfolio-chart-legend i { width: 16px; height: 2px; border-radius: 2px; }
-.portfolio-chart-legend .market { background: var(--positive); }
-.portfolio-chart-legend .cost { background: #708cff; }
-
 .portfolio-holdings-card {
   width: 100%;
   padding: 20px 0;
@@ -973,7 +958,6 @@ body.page-lab {
   width: 8px;
   height: 30px;
   flex: 0 0 8px;
-  overflow: hidden;
   border-radius: 34px;
   background: var(--line);
 }
@@ -986,6 +970,19 @@ body.page-lab {
   min-height: 2px;
   border-radius: 20px;
   background: var(--line-strong);
+}
+
+.portfolio-holding-range-marker {
+  position: absolute;
+  left: 50%;
+  z-index: 1;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  background: var(--ink);
+  box-sizing: border-box;
+  transform: translate(-50%, 50%);
 }
 
 .portfolio-holding-range-values {
@@ -1036,6 +1033,101 @@ body.page-lab {
   padding: 14px 20px 0;
   color: var(--muted);
   text-align: left;
+}
+
+.portfolio-volume-profile-popover {
+  --profile-rail-height: clamp(82px, 7vw, 92px);
+  position: fixed;
+  z-index: 240;
+  width: clamp(156px, 14vw, 184px);
+  padding: clamp(9px, 0.8vw, 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid #f1f1f1;
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 10px 8.45px rgb(0 0 0 / 8%);
+  color: var(--ink);
+  font-family: "Nunito Local", "Nunito", sans-serif;
+  font-size: clamp(11px, 1vw, 12px);
+  line-height: normal;
+  letter-spacing: 0.25px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.portfolio-volume-profile-popover[hidden] { display: none; }
+
+.portfolio-volume-profile-title {
+  opacity: 0.5;
+  font-size: clamp(11px, 1vw, 12px);
+  font-weight: 700;
+}
+
+.portfolio-volume-profile-body {
+  display: flex;
+  width: 100%;
+  min-height: var(--profile-rail-height);
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.portfolio-volume-profile-rail {
+  position: relative;
+  width: 12px;
+  height: var(--profile-rail-height);
+  flex: 0 0 12px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #e8e8e8;
+}
+
+.portfolio-volume-profile-marker {
+  position: absolute;
+  left: 2.5px;
+  top: var(--profile-marker-position);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+
+.portfolio-volume-profile-marker.is-poc { background: #000; }
+.portfolio-volume-profile-marker.is-cost { background: #708cff; }
+
+.portfolio-volume-profile-rows {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: clamp(5px, 0.5vw, 7px);
+}
+
+.portfolio-volume-profile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.portfolio-volume-profile-row b,
+.portfolio-volume-profile-row i {
+  color: inherit;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.portfolio-volume-profile-row.is-cost { color: #405fdd; }
+
+:root:not(.light-theme) .portfolio-volume-profile-popover {
+  border-color: var(--line);
+  box-shadow: 0 10px 8.45px rgb(0 0 0 / 22%);
+}
+
+@media (hover: none), (pointer: coarse) {
+  .portfolio-volume-profile-popover { display: none; }
 }
 
 @media (max-width: 960px) {
@@ -1106,3 +1198,7 @@ body.page-lab {
   .profit-calendar-month-tile { transition: none; }
   .profit-calendar-grid.is-year { animation: none; }
 }
+
+.portfolio-history-link{color:inherit;text-decoration:none;border-radius:var(--radius-sm)}
+.portfolio-history-link:hover strong{text-decoration:underline;text-underline-offset:4px}
+.portfolio-history-link:focus-visible{outline:2px solid #708cff;outline-offset:4px}

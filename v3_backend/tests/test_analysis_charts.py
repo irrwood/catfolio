@@ -53,6 +53,12 @@ def test_analysis_charts_page_contains_requested_charts(monkeypatch):
     assert 'id="valuationTablePanel" tabindex="0" aria-label="持仓估值明细" hidden' in html
     assert 'id="valuationTableBody"' in html
     assert 'id="valuationRefresh"' in html
+    assert 'class="analytics-figma-charts"' in html
+    assert 'class="analytics-card analytics-drawdown-card"' in html
+    assert 'class="analytics-card analytics-valuation-card"' in html
+    assert html.count('class="analytics-ai-link"') == 2
+    for period in ("1D", "1W", "1M", "3M", "YTD", "1Y", "MAX"):
+        assert f'data-drawdown-range="{period}"' in html
 
 
 def test_analysis_charts_restores_valuation_matrix_and_table_contracts():
@@ -66,13 +72,20 @@ def test_analysis_charts_restores_valuation_matrix_and_table_contracts():
     assert 'fetchJson("/api/refresh/fundamentals?force=true"' in script
     assert "function renderValuation(payload)" in script
     assert "function renderValuationTable(rows)" in script
-    assert "function valuationSummary(rows)" in script
-    assert 'data: [{ xAxis: summary.portfolioMedian }]' in script
-    assert 'position: "insideEndTop",\n            rotate: 0,' in script
-    assert "copy.valuationLevel" in script
     assert "function toggleValuationTable()" in script
+    assert 'let drawdownRange = "MAX";' in script
+    assert 'dayWindows = { "1D": 1, "1W": 7, "1M": 31, "3M": 93, "1Y": 366 }' in script
+    assert 'data-drawdown-range' in script
+    assert 'areaStyle: { color: "rgba(228,0,20,.10)" }' in script
+    assert 'Math.sqrt(Number(value[2] || 0) / maximumWeight) * 118' in script
+    assert 'class="analytics-valuation-tooltip"' in script
     assert ".analytics-valuation-chart-wrap" in css
-    assert ".analytics-chart.valuation-matrix-chart { height: 520px; }" in css
+    assert ".analytics-figma-charts {" in css
+    assert "grid-template-columns: minmax(0, 586fr) minmax(0, 889fr);" in css
+    assert ".analytics-drawdown-card," in css
+    assert "height: 545px;" in css
+    assert ".analytics-chart.valuation-matrix-chart { height: 100%; }" in css
+    assert ".analytics-drawdown-ranges {" in css
     assert ".analytics-valuation-waterline" not in css
     assert ".valuation-table-wrap[hidden] { display: none; }" in css
     assert ".valuation-table td.numeric" in css
@@ -193,7 +206,12 @@ def test_income_summary_does_not_read_private_files_in_demo(monkeypatch):
     monkeypatch.setattr(lab, "SOURCE_FILES", [])
     lab.income_summary.cache_clear()
 
-    assert lab.income_summary() == {"currency": "USD", "rows": [], "monthly_rows": []}
+    result = lab.income_summary()
+
+    assert result["currency"] == "USD"
+    assert result["rows"]
+    assert result["monthly_rows"]
+    assert all(row["month"] <= "2026-08" for row in result["monthly_rows"])
 
 
 def test_profit_calendar_summary_switches_between_month_and_year():

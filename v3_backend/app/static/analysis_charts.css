@@ -60,6 +60,15 @@
   min-width: 0;
 }
 
+.analytics-figma-charts {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 586fr) minmax(0, 889fr);
+  gap: 25px;
+  align-items: start;
+  min-width: 0;
+}
+
 .analytics-card {
   min-width: 0;
   overflow: hidden;
@@ -72,15 +81,24 @@
 
 .analytics-valuation-card { background: var(--panel); }
 
-.analytics-valuation-card > header {
-  align-items: center;
-  padding-bottom: 16px;
-}
-
 .analytics-valuation-actions {
+  position: absolute;
+  z-index: 3;
+  top: 16px;
+  right: 52px;
   display: flex;
   align-items: center;
   gap: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease;
+}
+
+.analytics-valuation-card:hover .analytics-valuation-actions,
+.analytics-valuation-card:focus-within .analytics-valuation-actions,
+.analytics-valuation-card.is-table-expanded .analytics-valuation-actions {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .analytics-valuation-refresh,
@@ -95,10 +113,12 @@
 }
 
 .analytics-valuation-chart-wrap {
-  padding: 0 20px 20px;
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 0;
 }
 
-.analytics-chart.valuation-matrix-chart { height: 520px; }
+.analytics-chart.valuation-matrix-chart { height: 100%; }
 
 .valuation-table-wrap {
   overflow-x: auto;
@@ -509,6 +529,184 @@
 
 .analytics-correlation { height: 520px; }
 
+/* Figma 68:1104 — paired drawdown and valuation cards. */
+.analytics-drawdown-card,
+.analytics-valuation-card {
+  position: relative;
+  display: flex;
+  height: 545px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 24px;
+  padding: 21px;
+  border-color: #f1f1f1;
+  border-radius: 20px;
+  background: var(--panel);
+}
+
+.analytics-drawdown-card > header,
+.analytics-valuation-card > header {
+  min-height: 46px;
+  align-items: flex-start;
+  padding: 0;
+}
+
+.analytics-drawdown-card h2,
+.analytics-valuation-card h2 {
+  font-size: 18px;
+  line-height: 25px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.analytics-drawdown-card header p,
+.analytics-valuation-card header p {
+  margin-top: 0;
+  color: #a7a7a7;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 600;
+}
+
+.analytics-ai-link {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  place-items: center;
+  border-radius: 8px;
+  color: #a7a7a7;
+  text-decoration: none;
+}
+
+.analytics-ai-link .ai-action-icon {
+  width: 16px;
+  height: 16px;
+  flex-basis: 16px;
+}
+
+.analytics-ai-link:hover {
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.analytics-ai-link:focus-visible,
+.analytics-drawdown-ranges button:focus-visible {
+  outline: 2px solid #708cff;
+  outline-offset: 2px;
+}
+
+.analytics-drawdown-body {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.analytics-drawdown-body > .analytics-chart {
+  min-height: 0;
+  flex: 1 1 auto;
+  height: auto;
+}
+
+.analytics-drawdown-ranges {
+  display: grid;
+  height: 32px;
+  flex: 0 0 32px;
+  grid-template-columns: repeat(7, 50px);
+  justify-content: center;
+  gap: 7px;
+}
+
+.analytics-drawdown-ranges button {
+  appearance: none;
+  display: grid;
+  width: 50px;
+  min-width: 0;
+  height: 32px;
+  padding: 8px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: color-mix(in srgb, var(--ink) 60%, transparent);
+  font: 700 12px/16px var(--font-sans);
+  cursor: pointer;
+}
+
+.analytics-drawdown-ranges button:hover { background: var(--panel-hover); }
+
+.analytics-drawdown-ranges button.active {
+  background: var(--soft);
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.analytics-valuation-card.is-table-expanded { height: auto; }
+
+.analytics-valuation-card.is-table-expanded .analytics-valuation-chart-wrap {
+  height: 433px;
+  flex: 0 0 433px;
+}
+
+.analytics-valuation-card .valuation-table-wrap {
+  margin: 0 -21px -21px;
+}
+
+.analytics-valuation-tooltip {
+  display: grid;
+  min-width: 108px;
+  gap: 4px;
+  color: #000;
+  font: 600 10px/14px var(--font-sans);
+}
+
+.analytics-valuation-tooltip-head,
+.analytics-valuation-tooltip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.analytics-valuation-tooltip-head {
+  margin-bottom: 1px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 800;
+}
+
+.analytics-drawdown-tooltip {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+}
+
+.analytics-drawdown-tooltip-date,
+.analytics-drawdown-tooltip-value {
+  display: inline-flex;
+  padding: 4px 8px;
+  border-radius: 10px;
+  color: #fff;
+  font-family: var(--font-sans);
+  white-space: nowrap;
+}
+
+.analytics-drawdown-tooltip-date {
+  background: #000;
+  font-size: 10px;
+  line-height: 13px;
+  font-weight: 600;
+}
+
+.analytics-drawdown-tooltip-value {
+  background: #e40014;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 700;
+}
+
 .analytics-chart.is-loading {
   background: linear-gradient(100deg, transparent 20%, var(--panel-hover) 48%, transparent 76%);
   background-size: 220% 100%;
@@ -529,9 +727,9 @@
 
 @media (max-width: 1100px) {
   .analytics-grid { grid-template-columns: minmax(0, 1fr); }
+  .analytics-figma-charts { grid-template-columns: minmax(0, 1fr); gap: 18px; }
   .analytics-card.analytics-wide { grid-column: auto; }
   .analytics-correlation { height: 480px; }
-  .analytics-chart.valuation-matrix-chart { height: 440px; }
 }
 
 @media (max-width: 640px) {
@@ -543,12 +741,17 @@
   .analytics-card > header { padding: 16px 16px 2px; }
   .analytics-chart { height: 310px; }
   .analytics-correlation { height: 420px; }
-  .analytics-valuation-card > header { align-items: flex-start; }
-  .analytics-valuation-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .analytics-figma-charts { gap: 14px; }
+  .analytics-drawdown-card,
+  .analytics-valuation-card { height: 500px; gap: 18px; padding: 16px; }
+  .analytics-drawdown-card > header,
+  .analytics-valuation-card > header { min-height: 46px; padding: 0; }
+  .analytics-valuation-actions { top: 13px; right: 46px; flex-wrap: wrap; justify-content: flex-end; }
   .analytics-valuation-refresh,
   .analytics-valuation-details { min-width: 42px; }
-  .analytics-valuation-chart-wrap { padding: 0 16px 16px; }
-  .analytics-chart.valuation-matrix-chart { height: 380px; }
+  .analytics-drawdown-ranges { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+  .analytics-drawdown-ranges button { width: 100%; padding-inline: 2px; }
+  .analytics-valuation-card .valuation-table-wrap { margin: 0 -16px -16px; }
   .valuation-table th,
   .valuation-table td { padding-inline: 14px; }
   .profit-calendar-card { padding: 16px; }
@@ -568,5 +771,6 @@
   .profit-calendar-grid.is-loading { animation: none; }
 
   .profit-calendar-day,
-  .profit-calendar-month-tile { transition: none; }
+  .profit-calendar-month-tile,
+  .analytics-valuation-actions { transition: none; }
 }

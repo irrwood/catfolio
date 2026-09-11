@@ -125,6 +125,32 @@ def test_trading212_ppl_is_primary_unrealized_pnl_and_fx_is_not_added_twice():
     assert summary["unrealized_includes_fx"] is True
 
 
+def test_portfolio_summary_prefers_current_broker_position_value_and_excludes_cash():
+    from app.analytics import portfolio_summary
+
+    snapshot = {
+        "portfolio": {
+            "summary": {"total_cost_usd_standard": 100},
+            "holdings": [{
+                "ticker": "TEST",
+                "cost_usd_standard": 100,
+                "api_market_value_usd": 125,
+            }],
+        },
+        "market": {"rows": [{"ticker": "TEST", "market_value_usd": 120}]},
+        "trading212": {
+            "summary": {},
+            "account_cash": {"Trading212 API": {"free": 999_999}},
+            "positions": [],
+        },
+    }
+
+    summary = portfolio_summary(snapshot)
+
+    assert summary["market_value_usd"] == pytest.approx(125)
+    assert summary["price_unrealized_usd"] == pytest.approx(25)
+
+
 def test_persisted_broker_pnl_survives_on_another_desktop_without_raw_api_cache():
     from app.analytics import holdings_detail
 
