@@ -56,7 +56,12 @@ enum PortfolioSector: String, CaseIterable, Hashable, Sendable {
     /// than being folded into a neighbouring sector.
     init?(sourceName raw: String?) {
         guard let raw else { return nil }
-        switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let sector = Self.allCases.first(where: { $0.displayName == normalized || $0.rawValue.lowercased() == normalized.lowercased() }) {
+            self = sector
+            return
+        }
+        switch normalized.lowercased() {
         case "technology", "information technology": self = .technology
         case "healthcare", "health care": self = .healthcare
         case "financial services", "financials": self = .financials
@@ -67,7 +72,7 @@ enum PortfolioSector: String, CaseIterable, Hashable, Sendable {
         case "basic materials", "materials": self = .materials
         case "real estate": self = .realEstate
         case "utilities": self = .utilities
-        case "communication services": self = .communication
+        case "communication services", "communication": self = .communication
         default: return nil
         }
     }
@@ -125,6 +130,11 @@ enum SectorAttribution {
             return nil
         }
         return only.key
+    }
+
+    /// Empty or unclassified snapshot fields must not mask known company facts.
+    static func resolvedSector(ticker: String, reportedSector: String?) -> PortfolioSector? {
+        PortfolioSector(sourceName: reportedSector) ?? primarySector(ticker: ticker)
     }
 
     private static let fundCache = FundCompositionCache()

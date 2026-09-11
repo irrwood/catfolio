@@ -44,6 +44,22 @@ final class PortfolioSectorTests: XCTestCase {
         XCTAssertNil(PortfolioSector(sourceName: nil))
     }
 
+    func testPersistedDisplayNamesAndSnapshotCommunicationResolve() {
+        for sector in PortfolioSector.allCases {
+            XCTAssertEqual(PortfolioSector(sourceName: sector.displayName), sector)
+            XCTAssertEqual(PortfolioSector(sourceName: sector.rawValue), sector)
+        }
+        XCTAssertEqual(PortfolioSector(sourceName: "Communication"), .communication)
+    }
+
+    func testMissingOrStaleUnclassifiedLabelsUseExistingCompanyData() {
+        for label in [nil, "", "未分类", "Unclassified", "Unknown"] as [String?] {
+            XCTAssertEqual(SectorAttribution.resolvedSector(ticker: "ASML.AS", reportedSector: label), .technology)
+            XCTAssertEqual(SectorAttribution.resolvedSector(ticker: "AZN.L", reportedSector: label), .healthcare)
+            XCTAssertNil(SectorAttribution.resolvedSector(ticker: "NOTREAL.XX", reportedSector: label))
+        }
+    }
+
     func testEverySectorHasADisplayNameAndSymbol() {
         for sector in PortfolioSector.allCases {
             XCTAssertFalse(sector.displayName.isEmpty)
