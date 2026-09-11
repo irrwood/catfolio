@@ -74,3 +74,6 @@ DerivedData/
 
 # Nested demo site checkout (own git repo + node_modules)
 /sites/
+
+# Generated QA screenshots and browser artifacts
+/output/
