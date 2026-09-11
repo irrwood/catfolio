@@ -1077,7 +1077,11 @@ private struct SecurityPriceChart: View {
     var body: some View {
         VStack(spacing: 0) {
             Group {
-                if isPreparing {
+                // Blank only before the first preparation. Re-preparing for
+                // another account keeps the line on screen and lets the chart
+                // morph to the new data; swapping in a blank tore the chart
+                // down and replayed its entrance — the flash on account change.
+                if isPreparing && prepared == nil {
                     Color.clear
                 } else if data.points.count > 1 {
                     SecurityPricePlot(
