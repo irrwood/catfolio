@@ -64,16 +64,16 @@ struct IBKRFlexSnapshot: Equatable {
 
         for position in positions {
             guard position.quantity > 0 else {
-                warnings.append("已跳过空头持仓 \(position.symbol)")
+                warnings.append(L10n.text("已跳过空头持仓 \(position.symbol)"))
                 continue
             }
             let category = position.assetCategory.uppercased()
             guard category.isEmpty || category == "STK" else {
-                warnings.append("已跳过不受支持的 \(category) 持仓 \(position.symbol)")
+                warnings.append(L10n.text("已跳过不受支持的 \(category) 持仓 \(position.symbol)"))
                 continue
             }
             guard let averageCost = position.averageCost, averageCost > 0 else {
-                warnings.append("\(position.symbol) 缺少 Cost Basis Price，已跳过")
+                warnings.append(L10n.text("\(position.symbol) 缺少 Cost Basis Price，已跳过"))
                 continue
             }
             let date = Self.normalizedDate(position.reportDate ?? reportDate)
@@ -129,23 +129,23 @@ enum IBKRFlexError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidToken:
-            "Flex Token 格式无效"
+            L10n.text("Flex Token 格式无效")
         case .invalidQueryID:
-            "Flex Query ID 格式无效"
+            L10n.text("Flex Query ID 格式无效")
         case .invalidResponse:
-            "IBKR Flex 返回了无法识别的数据"
+            L10n.text("IBKR Flex 返回了无法识别的数据")
         case .insecureResponseURL:
-            "IBKR 返回了不安全的报表地址"
+            L10n.text("IBKR 返回了不安全的报表地址")
         case let .http(code):
-            "IBKR Flex 请求失败（HTTP \(code)）"
+            L10n.text("IBKR Flex 请求失败（HTTP \(code)）")
         case let .service(code, message):
             "IBKR Flex \(code)：\(message)"
         case .generationTimedOut:
-            "IBKR 仍在生成报表。首次同步或时间跨度较长时可能需要几分钟，稍等片刻再试即可。"
+            L10n.text("IBKR 仍在生成报表。首次同步或时间跨度较长时可能需要几分钟，稍等片刻再试即可。")
         case .noPositions:
-            "Flex 报表没有 Open Positions；请在 Query 中加入该栏目和 Summary 明细"
+            L10n.text("Flex 报表没有 Open Positions；请在 Query 中加入该栏目和 Summary 明细")
         case let .noImportablePositions(warnings):
-            warnings.isEmpty ? "Flex 报表没有可导入的股票持仓" : warnings.joined(separator: "；")
+            warnings.isEmpty ? L10n.text("Flex 报表没有可导入的股票持仓") : warnings.joined(separator: L10n.clauseSeparator)
         }
     }
 }
@@ -187,8 +187,8 @@ struct IBKRFlexClient {
               let responseURLText = envelope.responseURL,
               let responseURL = URL(string: responseURLText) else {
             throw IBKRFlexError.service(
-                envelope.errorCode ?? "请求失败",
-                envelope.errorMessage ?? "未返回 Reference Code"
+                envelope.errorCode ?? L10n.text("请求失败"),
+                envelope.errorMessage ?? L10n.text("未返回 Reference Code")
             )
         }
         try validate(responseURL: responseURL)
@@ -218,7 +218,7 @@ struct IBKRFlexClient {
                 if status.errorCode == "1019" { continue }
                 throw IBKRFlexError.service(
                     status.errorCode ?? status.status,
-                    status.errorMessage ?? "报表生成失败"
+                    status.errorMessage ?? L10n.text("报表生成失败")
                 )
             }
             let snapshot = try parseStatement(statementData)

@@ -9,8 +9,8 @@ enum Trading212Environment: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .live: "正式账户"
-        case .demo: "模拟账户"
+        case .live: L10n.text("正式账户")
+        case .demo: L10n.text("模拟账户")
         }
     }
 
@@ -44,7 +44,7 @@ struct Trading212AccountCredentials: Equatable {
     let slot: Int
     let credentials: Trading212Credentials
 
-    var label: String { "账户 \(slot)" }
+    var label: String { L10n.text("账户 \(slot)") }
 }
 
 struct Trading212Position: Decodable, Identifiable, Equatable {
@@ -478,21 +478,21 @@ enum Trading212Error: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidAPIKey:
-            "API Key 不能为空，且不能包含冒号"
+            L10n.text("API Key 不能为空，且不能包含冒号")
         case .invalidAPISecret:
-            "API Secret 不能为空"
+            L10n.text("API Secret 不能为空")
         case .noAccounts:
-            "请填写 Trading 212 账户的 API Key 与 API Secret"
+            L10n.text("请填写 Trading 212 账户的 API Key 与 API Secret")
         case .invalidResponse:
-            "Trading 212 返回了无法识别的数据"
+            L10n.text("Trading 212 返回了无法识别的数据")
         case .authorizationFailed:
-            "Trading 212 授权失败，请检查环境、API Key、Secret 与读取权限"
+            L10n.text("Trading 212 授权失败，请检查环境、API Key、Secret 与读取权限")
         case let .accountFailed(slot, message):
-            "Trading 212 账户 \(slot)：\(message)"
+            L10n.text("Trading 212 账户 \(slot)：\(message)")
         case let .http(code, message):
-            "Trading 212 请求失败（HTTP \(code)）：\(message)"
+            L10n.text("Trading 212 请求失败（HTTP \(code)）：\(message)")
         case .noPositions:
-            "Trading 212 账户当前没有持仓"
+            L10n.text("Trading 212 账户当前没有持仓")
         }
     }
 }
@@ -602,7 +602,7 @@ struct Trading212Client {
                             transactions: [],
                             isComplete: false,
                             cachedCount: 0,
-                            status: "分红记录读取失败：\(error.localizedDescription)"
+                            status: L10n.text("分红记录读取失败：\(error.localizedDescription)")
                         )
                     }
                     let interestHistory: HistoricalOrdersResult
@@ -623,7 +623,7 @@ struct Trading212Client {
                             transactions: [],
                             isComplete: false,
                             cachedCount: 0,
-                            status: "券商结算报表读取失败：\(error.localizedDescription)"
+                            status: L10n.text("券商结算报表读取失败：\(error.localizedDescription)")
                         )
                     }
                     let activityKey = Self.interestCheckpointKey(
@@ -648,15 +648,15 @@ struct Trading212Client {
                         interestHistory.status,
                     ].compactMap { $0 }
                     if !messages.isEmpty {
-                        historyStatuses.append("\(account.label)\(messages.joined(separator: "；"))")
+                        historyStatuses.append("\(account.label)\(messages.joined(separator: L10n.clauseSeparator))")
                     } else if !accountHistoryComplete {
                         historyStatuses.append(
-                            "\(account.label)正在补齐成交、分红和利息历史"
+                            L10n.text("\(account.label)正在补齐成交、分红和利息历史")
                         )
                     }
                 } catch {
                     hasCompleteTransactionHistory = false
-                    historyStatuses.append("\(account.label)成交历史本次未能继续读取")
+                    historyStatuses.append(L10n.text("\(account.label)成交历史本次未能继续读取"))
                 }
             } catch {
                 throw Trading212Error.accountFailed(account.slot, error.localizedDescription)
@@ -672,7 +672,7 @@ struct Trading212Client {
             hasCompleteTransactionHistory: hasCompleteTransactionHistory,
             transactionHistoryStatus: historyStatuses.isEmpty
                 ? nil
-                : historyStatuses.joined(separator: "；"),
+                : historyStatuses.joined(separator: L10n.clauseSeparator),
             syncedAccounts: accounts.map { account in
                 PortfolioAccount(id: "Trading 212|account-\(account.slot)", accountID: "account-\(account.slot)",
                     source: "Trading 212", name: account.label,
@@ -802,7 +802,7 @@ struct Trading212Client {
                 transactions: checkpoint.orders.map(\.transaction).sorted { $0.date < $1.date },
                 isComplete: false,
                 cachedCount: checkpoint.orders.count,
-                status: "历史接口已达本轮限制，稍后再同步会继续"
+                status: L10n.text("历史接口已达本轮限制，稍后再同步会继续")
             )
         }
 
@@ -906,7 +906,7 @@ struct Trading212Client {
                     transactions: checkpoint.orders.map(\.transaction).sorted { $0.date < $1.date },
                     isComplete: false,
                     cachedCount: checkpoint.orders.count,
-                    status: "已缓存 \(checkpoint.orders.count) 笔成交，下次同步会继续"
+                    status: L10n.text("已缓存 \(checkpoint.orders.count) 笔成交，下次同步会继续")
                 )
             }
             checkpoint.nextPagePath = path
@@ -920,7 +920,7 @@ struct Trading212Client {
             transactions: checkpoint.orders.map(\.transaction).sorted { $0.date < $1.date },
             isComplete: false,
             cachedCount: checkpoint.orders.count,
-            status: "已缓存 \(checkpoint.orders.count) 笔成交，为避免 Trading 212 限流，稍后再继续"
+            status: L10n.text("已缓存 \(checkpoint.orders.count) 笔成交，为避免 Trading 212 限流，稍后再继续")
         )
     }
 
@@ -941,7 +941,7 @@ struct Trading212Client {
                 transactions: checkpoint.dividends.map(\.transaction).sorted { $0.date < $1.date },
                 isComplete: false,
                 cachedCount: checkpoint.dividends.count,
-                status: "分红历史稍后继续"
+                status: L10n.text("分红历史稍后继续")
             )
         }
 
@@ -1028,7 +1028,7 @@ struct Trading212Client {
                     transactions: checkpoint.dividends.map(\.transaction).sorted { $0.date < $1.date },
                     isComplete: false,
                     cachedCount: checkpoint.dividends.count,
-                    status: "已缓存 \(checkpoint.dividends.count) 笔分红，稍后继续"
+                    status: L10n.text("已缓存 \(checkpoint.dividends.count) 笔分红，稍后继续")
                 )
             }
             checkpoint.nextPagePath = path
@@ -1042,7 +1042,7 @@ struct Trading212Client {
             transactions: checkpoint.dividends.map(\.transaction).sorted { $0.date < $1.date },
             isComplete: false,
             cachedCount: checkpoint.dividends.count,
-            status: "已缓存 \(checkpoint.dividends.count) 笔分红，稍后继续"
+            status: L10n.text("已缓存 \(checkpoint.dividends.count) 笔分红，稍后继续")
         )
     }
 
@@ -1087,8 +1087,8 @@ struct Trading212Client {
                 isComplete: false,
                 cachedCount: checkpoint.interests.count,
                 status: checkpoint.pendingReportID == nil
-                    ? "券商结算报表稍后重试"
-                    : "券商结算报表生成中"
+                    ? L10n.text("券商结算报表稍后重试")
+                    : L10n.text("券商结算报表生成中")
             )
         }
 
@@ -1137,7 +1137,7 @@ struct Trading212Client {
                 transactions: cached(),
                 isComplete: false,
                 cachedCount: checkpoint.interests.count,
-                status: "券商结算报表生成中"
+                status: L10n.text("券商结算报表生成中")
             )
         }
 
@@ -1193,7 +1193,7 @@ struct Trading212Client {
                 transactions: checkpoint.interests.map(\.transaction).sorted { $0.date < $1.date },
                 isComplete: isComplete,
                 cachedCount: checkpoint.interests.count,
-                status: isComplete ? nil : "已同步部分券商结算结果，稍后继续补齐"
+                status: isComplete ? nil : L10n.text("已同步部分券商结算结果，稍后继续补齐")
             )
         case "failed", "canceled":
             checkpoint.pendingReportID = nil
@@ -1203,7 +1203,7 @@ struct Trading212Client {
                 transactions: cached(),
                 isComplete: false,
                 cachedCount: checkpoint.interests.count,
-                status: "券商结算报表生成失败，稍后重试"
+                status: L10n.text("券商结算报表生成失败，稍后重试")
             )
         default:
             checkpoint.nextCheckAfter = Date().addingTimeInterval(61)
@@ -1212,7 +1212,7 @@ struct Trading212Client {
                 transactions: cached(),
                 isComplete: false,
                 cachedCount: checkpoint.interests.count,
-                status: "券商结算报表生成中"
+                status: L10n.text("券商结算报表生成中")
             )
         }
     }
@@ -1623,12 +1623,12 @@ struct Trading212Client {
 
     private static func serviceMessage(from data: Data) -> String {
         guard let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return "服务暂时不可用"
+            return L10n.text("服务暂时不可用")
         }
         return payload["message"] as? String
             ?? payload["error"] as? String
             ?? payload["code"] as? String
-            ?? "服务暂时不可用"
+            ?? L10n.text("服务暂时不可用")
     }
 }
 

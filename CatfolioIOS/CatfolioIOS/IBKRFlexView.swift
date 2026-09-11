@@ -25,9 +25,9 @@ enum IBKRFlexQueryBrief {
 }
 
 struct IBKRFlexView: View {
+    @Environment(\.locale) private var appLocale
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
-    @Environment(\.colorScheme) private var colorScheme
 
     let context: AccountConnectorContext
 
@@ -40,6 +40,7 @@ struct IBKRFlexView: View {
     @State private var showsClearConfirmation = false
     @State private var showsSyncConfirmation = false
     @State private var nickname = ""
+    @State private var nicknameEdited = false
     @State private var usesLegacyCredentials = false
     @State private var didCopyBrief = false
 
@@ -69,199 +70,222 @@ struct IBKRFlexView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                if context.isCreating {
-                    Section {
-                        TextField("账户昵称", text: $nickname)
-                            .textInputAutocapitalization(.words)
-                            .autocorrectionDisabled()
-                    } header: {
-                        Text("账户昵称")
-                    } footer: {
-                        Text("用于区分多个 Interactive Brokers 账户，创建后仍可在账户详情中修改。")
+            SettingsPage(bottomInset: 32) {
+                if context.isCreating, snapshot != nil {
+                    SettingsSectionHeader(L10n.text("账户昵称"))
+                    SettingsCard {
+                        AccountNicknameField(nickname: $nickname, edited: $nicknameEdited)
+                            .disabled(isWorking)
                     }
+                    SettingsFootnote(L10n.text("用于区分多个 Interactive Brokers 账户，创建后仍可在账户详情中修改。"))
                 }
 
-                Section {
-                    SecureField("Flex Token", text: $token)
+                SettingsSectionHeader(L10n.text("Flex 凭证"))
+                SettingsCard {
+                    SettingsFieldRow("Flex Token", text: $token, isSecure: true, isMonospaced: true)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                        .font(.body.monospaced())
 
-                    TextField("Query ID", text: $queryID)
+                    SettingsFieldRow("Query ID", text: $queryID, isMonospaced: true)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.numberPad)
-                        .font(.body.monospaced())
 
-                    Label("凭证仅存于此 iPhone Keychain，不会发送到 Catfolio 服务端。", systemImage: "lock.shield")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                } header: {
-                    Text("Flex 凭证")
-                } footer: {
-                    // The two credentials come from different halves of the
-                    // same screen, and IBKR's own instructions for creating a
-                    // query never mention the ID — it only appears in the list
-                    // afterwards. Saying so here saves a hunt.
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("两个凭证都在 Client Portal → Performance & Reports → Flex Queries 这一页。")
-                        Text("Token：该页 Flex Web Service Configuration 区域 → 齿轮图标 → 启用后点 Generate A New Token。")
-                        Text("Query ID：建好查询后回到列表，数字在查询名称旁；创建向导里不显示。")
-                        Text("查询怎么配，用下面的「复制配置提示词」交给 IBKR 的助手即可。持仓超过一年的话，把 Period 改到覆盖最早的建仓日。")
+                    SettingsRowContainer {
+                        Text(L10n.text("凭证仅存于此 iPhone Keychain，不会发送到 Catfolio 服务端。"))
+                            .appText(.label, weight: .regular)
+                            .foregroundStyle(SettingsTemplate.secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+                // The two credentials come from different halves of the same
+                // screen, and IBKR's own instructions for creating a query
+                // never mention the ID — it only appears in the list
+                // afterwards. Saying so here saves a hunt.
+                SettingsFootnote([
+                    L10n.text("两个凭证都在 Client Portal → Performance & Reports → Flex Queries 这一页。"),
+                    L10n.text("Token：该页 Flex Web Service Configuration 区域 → 齿轮图标 → 启用后点 Generate A New Token。"),
+                    L10n.text("Query ID：建好查询后回到列表，数字在查询名称旁；创建向导里不显示。"),
+                    L10n.text("查询怎么配，用下面的「复制配置提示词」交给 IBKR 的助手即可。持仓超过一年的话，把 Period 改到覆盖最早的建仓日。"),
+                ])
 
-                Section("连接") {
+                SettingsSectionHeader(L10n.text("连接"))
+                SettingsCard {
                     if let snapshot {
-                        Button {
+                        SettingsButtonRow(
+                            icon: .symbol("arrow.clockwise"),
+                            title: L10n.text("重新读取持仓"),
+                            showsChevron: false
+                        ) {
                             Task { await testFlex() }
-                        } label: {
-                            Label("重新读取持仓", systemImage: "arrow.clockwise")
                         }
                         .disabled(isWorking)
 
-                        GlassPrimaryButton(
-                            title: isWorking
-                                ? (context.isCreating ? "正在创建" : "正在同步")
-                                : (context.isCreating ? "创建 IBKR 账户" : "同步 \(snapshot.positions.count) 项到 Catfolio"),
-                            systemImage: "tray.and.arrow.down.fill",
-                            isDisabled: !hasValidNickname,
-                            isBusy: isWorking
-                        ) {
-                            showsSyncConfirmation = true
+                        SettingsRowContainer {
+                            GlassPrimaryButton(
+                                title: isWorking
+                                    ? (context.isCreating ? L10n.text("正在创建") : L10n.text("正在同步"))
+                                    : (context.isCreating ? L10n.text("创建 IBKR 账户") : L10n.text("同步 \(snapshot.positions.count) 项到 Catfolio")),
+                                systemImage: "tray.and.arrow.down.fill",
+                                isDisabled: !hasValidNickname,
+                                isBusy: isWorking
+                            ) {
+                                showsSyncConfirmation = true
+                            }
                         }
                     } else {
                         // Saving no longer waits on a report IBKR may take
                         // minutes to build. The account is created now and
                         // shows as awaiting its first sync; the credentials
                         // can be revisited by opening it again.
-                        GlassPrimaryButton(
-                            title: context.isCreating ? "保存并创建账户" : "保存凭证",
-                            systemImage: "tray.and.arrow.down.fill",
-                            isDisabled: !hasCompleteCredentials || !hasValidNickname,
-                            isBusy: isWorking
-                        ) {
-                            Task { await saveAndClose() }
+                        SettingsRowContainer {
+                            GlassPrimaryButton(
+                                title: context.isCreating ? L10n.text("保存并创建账户") : L10n.text("保存凭证"),
+                                systemImage: "tray.and.arrow.down.fill",
+                                isDisabled: !hasCompleteCredentials || !hasValidNickname,
+                                isBusy: isWorking
+                            ) {
+                                Task { await saveAndClose() }
+                            }
                         }
 
-                        Button {
+                        SettingsButtonRow(
+                            icon: .symbol("arrow.down.circle"),
+                            title: isWorking ? L10n.text("正在读取") : L10n.text("现在就读取持仓"),
+                            showsChevron: false
+                        ) {
                             Task { await testFlex() }
-                        } label: {
-                            Label(isWorking ? "正在读取" : "现在就读取持仓", systemImage: "arrow.down.circle")
                         }
                         .disabled(isWorking || !hasCompleteCredentials)
                     }
 
-                    statusView
+                    if status.isPresented {
+                        SettingsRowContainer { statusView }
+                    }
 
-                    Button {
+                    SettingsButtonRow(
+                        icon: .symbol(didCopyBrief ? "checkmark.circle" : "doc.on.doc"),
+                        title: didCopyBrief ? L10n.text("已复制，去 IBKR 粘贴给它的助手") : L10n.text("复制配置提示词"),
+                        showsChevron: false,
+                        tint: didCopyBrief ? CatfolioTheme.positive : CatfolioTheme.accent
+                    ) {
                         UIPasteboard.general.string = IBKRFlexQueryBrief.prompt
                         withAnimation { didCopyBrief = true }
                         Task {
                             try? await Task.sleep(for: .seconds(2))
                             withAnimation { didCopyBrief = false }
                         }
-                    } label: {
-                        Label(
-                            didCopyBrief ? "已复制，去 IBKR 粘贴给它的助手" : "复制配置提示词",
-                            systemImage: didCopyBrief ? "checkmark.circle.fill" : "doc.on.doc"
-                        )
-                    }
-                    .foregroundStyle(didCopyBrief ? Color.green : Color.accentColor)
-
-                    Link(destination: URL(string: "https://www.ibkrguides.com/clientportal/performanceandstatements/activityflex.htm")!) {
-                        Label("如何创建 Activity Flex Query", systemImage: "arrow.up.right.square")
                     }
 
-                    Link(destination: URL(string: "https://www.ibkrguides.com/clientportal/performanceandstatements/flex-web-service.htm")!) {
-                        Label("如何启用 Flex Web Service 并生成 Token", systemImage: "arrow.up.right.square")
-                    }
+                    settingsLink(
+                        L10n.text("如何创建 Activity Flex Query"),
+                        url: "https://www.ibkrguides.com/clientportal/performanceandstatements/activityflex.htm"
+                    )
+
+                    settingsLink(
+                        L10n.text("如何启用 Flex Web Service 并生成 Token"),
+                        url: "https://www.ibkrguides.com/clientportal/performanceandstatements/flex-web-service.htm"
+                    )
                 }
 
                 if let snapshot {
-                    Section {
-                        LabeledContent("报表日期", value: snapshot.reportDate ?? "最新")
-                        LabeledContent("Open Positions", value: "\(snapshot.positions.count) 项")
-                        LabeledContent("成交明细", value: "\(snapshot.transactions.count) 笔")
+                    SettingsSectionHeader(L10n.text("Flex 预览"))
+                    SettingsCard {
+                        SettingsValueRow(title: L10n.text("报表日期"), value: snapshot.reportDate ?? L10n.text("最新"), valueIsNumeric: false)
+                        SettingsValueRow(title: "Open Positions", value: L10n.text("\(snapshot.positions.count) 项"))
+                        SettingsValueRow(title: L10n.text("成交明细"), value: L10n.text("\(snapshot.transactions.count) 笔"))
 
                         ForEach(snapshot.positions.prefix(10)) { position in
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(position.symbol)
-                                        .font(.body.weight(.semibold))
-                                    Text(position.name)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
-                                Spacer()
-                                VStack(alignment: .trailing, spacing: 2) {
-                                    Text(DisplayFormat.shares(position.quantity))
-                                        .appNumber(.subheading)
-                                    if let marketValue = position.marketValue {
-                                        Text(DisplayFormat.money(marketValue, currency: position.currency))
-                                            .appNumber(.caption)
-                                            .foregroundStyle(.secondary)
+                            SettingsRowContainer {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: SettingsTemplate.subtitleSpacing) {
+                                        Text(position.symbol)
+                                            .appText(.subheading, weight: .semibold)
+                                        Text(position.name)
+                                            .appText(.label, weight: .regular)
+                                            .foregroundStyle(SettingsTemplate.secondaryText)
+                                            .lineLimit(1)
+                                    }
+                                    Spacer()
+                                    VStack(alignment: .trailing, spacing: SettingsTemplate.subtitleSpacing) {
+                                        Text(DisplayFormat.shares(position.quantity))
+                                            .appNumber(.subheading)
+                                        if let marketValue = position.marketValue {
+                                            Text(DisplayFormat.money(marketValue, currency: position.currency))
+                                                .appNumber(.label, weight: .regular, monospaced: false)
+                                                .foregroundStyle(SettingsTemplate.secondaryText)
+                                        }
                                     }
                                 }
                             }
                         }
-                    } header: {
-                        Text("Flex 预览")
-                    } footer: {
-                        if snapshot.positions.count > 10 {
-                            Text("仅预览前 10 项；同步会处理全部可导入股票持仓。")
-                        }
+                    }
+                    if snapshot.positions.count > 10 {
+                        SettingsFootnote(L10n.text("仅预览前 10 项；同步会处理全部可导入股票持仓。"))
                     }
                 }
 
                 if (!token.isEmpty || !queryID.isEmpty) && !context.isCreating {
-                    Section {
-                        Button("移除本机 Flex 凭证", role: .destructive) {
+                    SettingsCard {
+                        SettingsButtonRow(
+                            icon: .symbol("trash"),
+                            title: L10n.text("移除本机 Flex 凭证"),
+                            showsChevron: false,
+                            role: .destructive
+                        ) {
                             showsClearConfirmation = true
                         }
                     }
                 }
             }
-            .scrollContentBackground(.hidden)
-            .background(CatfolioTheme.pageBackground(for: colorScheme))
-            .navigationTitle(context.isCreating ? "新建 IBKR 账户" : "IBKR Flex")
+            .softTopScrollEdge()
+            .navigationTitle(context.isCreating ? L10n.text("新建 IBKR 账户") : "IBKR Flex")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("完成") { dismiss() }
+                    Button(L10n.text("完成")) { dismiss() }
                 }
             }
             .task { prepareAccount() }
             .onChange(of: token) { _, _ in invalidatePreview() }
             .onChange(of: queryID) { _, _ in invalidatePreview() }
             .confirmationDialog(
-                "移除 Flex 凭证？",
+                L10n.text("移除 Flex 凭证？"),
                 isPresented: $showsClearConfirmation,
                 titleVisibility: .visible
             ) {
-                Button("移除", role: .destructive) { clearCredentials() }
-                Button("取消", role: .cancel) {}
+                Button(L10n.text("移除"), role: .destructive) { clearCredentials() }
+                Button(L10n.text("取消"), role: .cancel) {}
             } message: {
-                Text("只会删除此 iPhone Keychain 中的 Token 和 Query ID。")
+                Text(L10n.text("只会删除此 iPhone Keychain 中的 Token 和 Query ID。"))
             }
             .confirmationDialog(
-                context.isCreating ? "创建 IBKR 账户？" : "更新 IBKR 账户？",
+                context.isCreating ? L10n.text("创建 IBKR 账户？") : L10n.text("更新 IBKR 账户？"),
                 isPresented: $showsSyncConfirmation,
                 titleVisibility: .visible
             ) {
-                Button(context.isCreating ? "创建账户" : "同步并更新") {
+                Button(context.isCreating ? L10n.text("创建账户") : L10n.text("同步并更新")) {
                     Task { await syncFlex() }
                 }
-                Button("取消", role: .cancel) {}
+                Button(L10n.text("取消"), role: .cancel) {}
             } message: {
                 Text(context.isCreating
-                    ? "将使用预览中的数据创建新账户；现有账户不受影响。"
-                    : "将更新当前 IBKR 账户持仓；其他账户不受影响。")
+                    ? L10n.text("将使用预览中的数据创建新账户；现有账户不受影响。")
+                    : L10n.text("将更新当前 IBKR 账户持仓；其他账户不受影响。"))
             }
         }
         .tint(CatfolioTheme.accent)
+    }
+
+    /// A row that opens a web page. `Link` stays the control, so the row does
+    /// not reimplement how a URL is handed to the system.
+    private func settingsLink(_ title: String, url: String) -> some View {
+        Link(destination: URL(string: url)!) {
+            SettingsRowContainer {
+                SettingsRowLabel(icon: .symbol("arrow.up.right.square"), title: title)
+            }
+        }
+        .buttonStyle(SettingsRowButtonStyle())
     }
 
     @ViewBuilder
@@ -274,8 +298,8 @@ struct IBKRFlexView: View {
                 ProgressView().controlSize(.small)
                 Text(message)
             }
-            .font(.footnote)
-            .foregroundStyle(.secondary)
+            .appText(.label, weight: .regular)
+            .foregroundStyle(SettingsTemplate.secondaryText)
         case let .success(message):
             Label(message, systemImage: "checkmark.circle.fill")
                 .font(.footnote)
@@ -321,7 +345,7 @@ struct IBKRFlexView: View {
     private func saveAndClose() async {
         savePendingCredentials()
         guard context.isCreating else {
-            status = .success("凭证已保存。")
+            status = .success(L10n.text("凭证已保存。"))
             dismiss()
             return
         }
@@ -336,7 +360,7 @@ struct IBKRFlexView: View {
             )
             dismiss()
         } catch {
-            status = .failure("无法创建账户：\(error.localizedDescription)")
+            status = .failure(L10n.text("无法创建账户：\(error.localizedDescription)"))
         }
     }
 
@@ -364,7 +388,7 @@ struct IBKRFlexView: View {
 
     private func testFlex() async {
         isWorking = true
-        status = .working("正在请求 IBKR Flex 报表…")
+        status = .working(L10n.text("正在请求 IBKR Flex 报表…"))
         defer { isWorking = false }
         do {
             let credentials = try credentials()
@@ -372,26 +396,25 @@ struct IBKRFlexView: View {
                     credentials: credentials,
                     onProgress: { seconds in
                         Task { @MainActor in
-                            status = .working("IBKR 正在生成报表… 已等待 \(seconds) 秒")
+                            status = .working(L10n.text("IBKR 正在生成报表… 已等待 \(seconds) 秒"))
                         }
                     }
                 )
             let result = snapshotForContext(fetched)
             guard !result.positions.isEmpty else {
                 status = .failure(context.isCreating
-                    ? "Flex 报表中没有可新建的 IBKR 账户。"
-                    : "当前账户没有可导入持仓。")
+                    ? L10n.text("Flex 报表中没有可新建的 IBKR 账户。")
+                    : L10n.text("当前账户没有可导入持仓。"))
                 return
             }
             if context.isCreating,
-               AccountNaming.generatedNicknames.contains(nickname),
-               let detectedName = result.accountNames.values.sorted().first {
-                nickname = model.suggestedAccountNickname(detectedName: detectedName)
+               !nicknameEdited {
+                nickname = model.suggestedAccountNickname(detectedName: result.accountNames.values.sorted().first ?? "IBKR")
             }
             try saveCredentials(credentials, accountIDs: resultAccountIDs(result))
             snapshot = result
             snapshotCredentials = credentials
-            status = .success("Flex 连接成功，读取 \(result.positions.count) 项持仓")
+            status = .success(L10n.text("Flex 连接成功，读取 \(result.positions.count) 项持仓"))
         } catch {
             status = .failure(error.localizedDescription)
         }
@@ -399,7 +422,7 @@ struct IBKRFlexView: View {
 
     private func syncFlex() async {
         isWorking = true
-        status = .working("正在读取并转换 Flex 持仓…")
+        status = .working(L10n.text("正在读取并转换 Flex 持仓…"))
         defer { isWorking = false }
         do {
             let credentials = try credentials()
@@ -411,7 +434,7 @@ struct IBKRFlexView: View {
                     credentials: credentials,
                     onProgress: { seconds in
                         Task { @MainActor in
-                            status = .working("IBKR 正在生成报表… 已等待 \(seconds) 秒")
+                            status = .working(L10n.text("IBKR 正在生成报表… 已等待 \(seconds) 秒"))
                         }
                     }
                 )
@@ -421,12 +444,12 @@ struct IBKRFlexView: View {
             }
             guard !currentSnapshot.positions.isEmpty else {
                 status = .failure(context.isCreating
-                    ? "Flex 报表中没有可新建的 IBKR 账户。"
-                    : "当前账户没有可导入持仓。")
+                    ? L10n.text("Flex 报表中没有可新建的 IBKR 账户。")
+                    : L10n.text("当前账户没有可导入持仓。"))
                 return
             }
             try saveCredentials(credentials, accountIDs: resultAccountIDs(currentSnapshot))
-            status = .working("Flex 已读取，正在保存到本机…")
+            status = .working(L10n.text("Flex 已读取，正在保存到本机…"))
             let accountIDs = resultAccountIDs(currentSnapshot).sorted()
             let accountNames = model.accountNames(
                 source: "IBKR Flex",
@@ -439,10 +462,10 @@ struct IBKRFlexView: View {
                 accountNames: accountNames,
                 replacingAccountsOnly: true
             )
-            let warningText = result.warnings.isEmpty ? "" : "，\(result.warnings.count) 条提示"
+            let warningText = result.warnings.isEmpty ? "" : L10n.text("，\(result.warnings.count) 条提示")
             status = .success(context.isCreating
-                ? "已创建账户，导入 \(result.holdingsCount) 个持仓\(warningText)"
-                : "已同步 \(result.holdingsCount) 个持仓\(warningText)")
+                ? L10n.text("已创建账户，导入 \(result.holdingsCount) 个持仓\(warningText)")
+                : L10n.text("已同步 \(result.holdingsCount) 个持仓\(warningText)"))
         } catch {
             status = .failure(error.localizedDescription)
         }
@@ -502,6 +525,11 @@ struct IBKRFlexView: View {
 
 private enum FlexViewStatus {
     case idle
+
+    /// Whether the connection card should give the status a row of its own.
+    var isPresented: Bool {
+        if case .idle = self { false } else { true }
+    }
     case working(String)
     case success(String)
     case failure(String)

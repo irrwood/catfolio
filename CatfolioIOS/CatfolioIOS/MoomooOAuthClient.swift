@@ -95,11 +95,11 @@ struct MoomooSnapshot: Equatable {
 
         for position in positions {
             guard position.positionSide.uppercased() != "SHORT", position.quantityValue > 0 else {
-                warnings.append("已跳过空头持仓 \(position.code)")
+                warnings.append(L10n.text("已跳过空头持仓 \(position.code)"))
                 continue
             }
             guard let costPrice = position.costPriceValue, costPrice > 0 else {
-                warnings.append("\(position.code) 缺少有效成本价，已跳过")
+                warnings.append(L10n.text("\(position.code) 缺少有效成本价，已跳过"))
                 continue
             }
             let fields = [
@@ -306,25 +306,25 @@ enum MoomooOpenAPIError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
-            "Moomoo 返回了无法识别的数据"
+            L10n.text("Moomoo 返回了无法识别的数据")
         case let .registrationFailed(message):
-            "无法注册 Moomoo OAuth 客户端：\(message)"
+            L10n.text("无法注册 Moomoo OAuth 客户端：\(message)")
         case .authorizationCancelled:
-            "已取消 Moomoo 登录"
+            L10n.text("已取消 Moomoo 登录")
         case let .authorizationFailed(message):
-            "Moomoo 授权失败：\(message)"
+            L10n.text("Moomoo 授权失败：\(message)")
         case .invalidState:
-            "Moomoo OAuth state 校验失败，请重新登录"
+            L10n.text("Moomoo OAuth state 校验失败，请重新登录")
         case .tokenMissing:
-            "尚未登录 Moomoo"
+            L10n.text("尚未登录 Moomoo")
         case let .service(code, message):
             code.map { "Moomoo \($0)：\(message)" } ?? "Moomoo：\(message)"
         case .noAccounts:
-            "Moomoo 没有返回已授权的交易账户；请授予 trade:read 权限"
+            L10n.text("Moomoo 没有返回已授权的交易账户；请授予 trade:read 权限")
         case .noPositions:
-            "已授权的 Moomoo 账户当前没有持仓"
+            L10n.text("已授权的 Moomoo 账户当前没有持仓")
         case let .noImportablePositions(warnings):
-            warnings.isEmpty ? "Moomoo 没有可导入的多头持仓" : warnings.joined(separator: "；")
+            warnings.isEmpty ? L10n.text("Moomoo 没有可导入的多头持仓") : warnings.joined(separator: L10n.clauseSeparator)
         }
     }
 }
@@ -472,7 +472,7 @@ struct MoomooOpenAPIClient {
                     )
                     allFills.append(contentsOf: fills.map { $0.assigned(to: account.accountID) })
                 } catch {
-                    historyWarnings.append("\(account.accountCardNumber) · \(market)：历史成交未完整同步")
+                    historyWarnings.append(L10n.text("\(account.accountCardNumber) · \(market)：历史成交未完整同步"))
                 }
             }
         }
@@ -606,17 +606,17 @@ struct MoomooOpenAPIClient {
 
     private func serviceMessage(from data: Data) -> String {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return "请求失败"
+            return L10n.text("请求失败")
         }
         return object["errmsg"] as? String
             ?? object["error_description"] as? String
             ?? object["error"] as? String
-            ?? "请求失败"
+            ?? L10n.text("请求失败")
     }
 
     private static func validate(_ status: String, code: Int?, message: String?) throws {
         guard status.caseInsensitiveCompare("ok") == .orderedSame else {
-            throw MoomooOpenAPIError.service(code, message ?? "请求失败")
+            throw MoomooOpenAPIError.service(code, message ?? L10n.text("请求失败"))
         }
     }
 }
@@ -646,7 +646,7 @@ final class MoomooAuthorizationSession: ObservableObject {
             try await listener.start()
         } catch {
             loopbackListener = nil
-            throw MoomooOpenAPIError.authorizationFailed("无法启动本机 OAuth 回调：\(error.localizedDescription)")
+            throw MoomooOpenAPIError.authorizationFailed(L10n.text("无法启动本机 OAuth 回调：\(error.localizedDescription)"))
         }
         authorizationPage = MoomooAuthorizationPage(url: authorizationURL)
         let callbackURL: URL
@@ -661,7 +661,7 @@ final class MoomooAuthorizationSession: ObservableObject {
         loopbackListener = nil
         guard callbackURL.scheme == "http", callbackURL.host?.lowercased() == "localhost",
               callbackURL.port == 60355, callbackURL.path == "/callback" else {
-            throw MoomooOpenAPIError.authorizationFailed("回调地址无效")
+            throw MoomooOpenAPIError.authorizationFailed(L10n.text("回调地址无效"))
         }
         let items = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let value: (String) -> String? = { name in items.first(where: { $0.name == name })?.value }
@@ -688,7 +688,7 @@ final class MoomooAuthorizationSession: ObservableObject {
         var bytes = [UInt8](repeating: 0, count: byteCount)
         let status = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
         guard status == errSecSuccess else {
-            throw MoomooOpenAPIError.authorizationFailed("无法生成安全随机数（\(status)）")
+            throw MoomooOpenAPIError.authorizationFailed(L10n.text("无法生成安全随机数（\(status)）"))
         }
         return Data(bytes).base64URLEncodedString()
     }
@@ -713,7 +713,7 @@ private final class MoomooLoopbackListener: @unchecked Sendable {
 
     init(port: UInt16) throws {
         guard let port = NWEndpoint.Port(rawValue: port) else {
-            throw MoomooOpenAPIError.authorizationFailed("本机回调端口无效")
+            throw MoomooOpenAPIError.authorizationFailed(L10n.text("本机回调端口无效"))
         }
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: port)
@@ -743,7 +743,7 @@ private final class MoomooLoopbackListener: @unchecked Sendable {
             try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
             guard !Task.isCancelled else { return }
             self?.finish(.failure(
-                MoomooOpenAPIError.authorizationFailed("Moomoo 授权超时，请重新登录")
+                MoomooOpenAPIError.authorizationFailed(L10n.text("Moomoo 授权超时，请重新登录"))
             ))
         }
         defer { timeoutTask.cancel() }
@@ -782,7 +782,7 @@ private final class MoomooLoopbackListener: @unchecked Sendable {
             finish(.failure(MoomooOpenAPIError.authorizationFailed(error.localizedDescription)))
         case let .waiting(error):
             resumeReady(.failure(error))
-            finish(.failure(MoomooOpenAPIError.authorizationFailed("本机回调端口不可用：\(error.localizedDescription)")))
+            finish(.failure(MoomooOpenAPIError.authorizationFailed(L10n.text("本机回调端口不可用：\(error.localizedDescription)"))))
         case .cancelled:
             resumeReady(.failure(MoomooOpenAPIError.authorizationCancelled))
         default:
@@ -806,8 +806,8 @@ private final class MoomooLoopbackListener: @unchecked Sendable {
             var accumulated = buffer
             if let data { accumulated.append(data) }
             if accumulated.count > 16_384 {
-                self.sendResponse(to: connection, status: "413 Payload Too Large", message: "请求过大")
-                self.finish(.failure(MoomooOpenAPIError.authorizationFailed("OAuth 回调请求过大")))
+                self.sendResponse(to: connection, status: "413 Payload Too Large", message: L10n.text("请求过大"))
+                self.finish(.failure(MoomooOpenAPIError.authorizationFailed(L10n.text("OAuth 回调请求过大"))))
                 return
             }
             if accumulated.range(of: Data("\r\n\r\n".utf8)) != nil || isComplete {
@@ -827,10 +827,10 @@ private final class MoomooLoopbackListener: @unchecked Sendable {
               let target = firstLine.split(separator: " ").dropFirst().first,
               let callbackURL = URL(string: String(target), relativeTo: URL(string: "http://localhost:60355"))?.absoluteURL,
               callbackURL.path == "/callback" else {
-            sendResponse(to: connection, status: "404 Not Found", message: "无效回调")
+            sendResponse(to: connection, status: "404 Not Found", message: L10n.text("无效回调"))
             return
         }
-        sendResponse(to: connection, status: "200 OK", message: "Moomoo 授权完成，可以返回 Catfolio。")
+        sendResponse(to: connection, status: "200 OK", message: L10n.text("Moomoo 授权完成，可以返回 Catfolio。"))
         finish(.success(callbackURL))
     }
 

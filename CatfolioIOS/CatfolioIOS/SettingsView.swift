@@ -1,6 +1,38 @@
 import SwiftUI
 import UIKit
 
+struct AccountNicknameField: View {
+    @Environment(AppModel.self) private var model
+    @Binding var nickname: String
+    @Binding var edited: Bool
+
+    var body: some View {
+        HStack {
+            TextField(L10n.text("账户昵称"), text: Binding(
+                get: { nickname },
+                set: { nickname = $0; edited = true }
+            ))
+            .textInputAutocapitalization(.words)
+            .autocorrectionDisabled()
+            Button {
+                let used = Set(model.accounts.map {
+                    AccountNaming.nickname(from: $0.displayName, provider: AccountNaming.providerName(for: $0.source))
+                })
+                let candidates = AccountNaming.generatedNicknames.filter { $0 != nickname && !used.contains($0) }
+                nickname = candidates.randomElement()
+                    ?? AccountNaming.generatedNicknames.filter { $0 != nickname }.randomElement()
+                    ?? nickname
+                edited = true
+            } label: {
+                Image(systemName: "shuffle")
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel(L10n.text("随机生成一个新昵称"))
+        }
+    }
+}
+
 struct SettingsView: View {
     @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
@@ -21,6 +53,8 @@ struct SettingsView: View {
     @State private var portfolioResetError: String?
     @State private var reconciliation: LedgerReconciliation.Report?
     #if DEBUG
+    @State private var showsRotationPreview = ProcessInfo.processInfo.arguments.contains("--show-sector-rotation")
+    @State private var showsStockChartsPreview = ProcessInfo.processInfo.arguments.contains("--show-stockcharts-rrg")
     @State private var showsScreenerPreview = ProcessInfo.processInfo.arguments.contains("--show-screener")
     @State private var showsHistoryPreview = ProcessInfo.processInfo.arguments.contains("--show-history-preview")
     @State private var showsResearchPreview = ProcessInfo.processInfo.arguments.contains("--preview-research-analysis")
@@ -32,213 +66,198 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        Form {
-                PublicInvestorSettingsSection()
-                if !model.accounts.isEmpty {
-                    Section(L10n.text("账户范围")) {
-                        allAccountsRow
-                        ForEach(model.accounts) { account in
-                            accountScopeRow(account)
-                        }
-                    }
+        SettingsPage {
+            PublicInvestorSettingsSection()
 
-                    Section(L10n.text("账户活动")) {
-                        NavigationLink {
-                            HistoryView()
-                                .environment(model)
-                        } label: {
-                            nativeSettingsLabel(
-                                title: L10n.text("History"),
-                                detail: L10n.text("跨账户资产活动流水"),
-                                icon: "clock.arrow.circlepath",
-                                tint: CatfolioTheme.services
-                            )
-                        }
+            if !model.accounts.isEmpty {
+                SettingsSection(L10n.text("账户范围")) {
+                    allAccountsRow
+                    ForEach(model.accounts) { account in
+                        accountScopeRow(account)
                     }
                 }
 
-                Section(L10n.text("新建账户")) {
-                    connector("Trading 212", detail: L10n.text("使用只读 API 创建账户"), icon: "chart.line.uptrend.xyaxis", tint: CatfolioTheme.trading212) {
-                        showsTrading212 = true
-                    }
-                    connector("Moomoo", detail: L10n.text("通过 OAuth 授权创建账户"), icon: "person.badge.key.fill", tint: CatfolioTheme.moomoo) {
-                        showsMoomooOAuth = true
-                    }
-                    connector("Interactive Brokers", detail: L10n.text("使用 Flex Web Service 创建账户"), icon: "doc.text.fill", tint: CatfolioTheme.interactiveBrokers) {
-                        showsIBKRFlex = true
-                    }
-                    connector(L10n.text("CSV 导入"), detail: L10n.text("从交易记录创建账户"), icon: "doc.badge.plus", tint: CatfolioTheme.csvImport) {
-                        showsCSVImport = true
-                    }
-                    Button {} label: {
-                        nativeSettingsLabel(
-                            title: L10n.text("拍照 AI 添加持仓"),
-                            detail: L10n.text("本地模型识别添加，需 iOS 27 支持"),
-                            icon: "camera.fill",
-                            tint: CatfolioTheme.accent
-                        )
-                    }
-                    .disabled(true)
-                    .accessibilityHint(L10n.text("功能暂未开放"))
-                }
-
-                Section(L10n.text("行情与 AI")) {
-                    NavigationLink {
-                        ResearchView()
-                    } label: {
-                        nativeSettingsLabel(
-                            title: L10n.text("研究"),
-                            icon: "chart.xyaxis.line",
-                            tint: CatfolioTheme.accent
-                        )
-                    }
-                    NavigationLink {
-                        StockScreenerView()
-                    } label: {
-                        nativeSettingsLabel(
-                            title: L10n.text("选股器"),
-                            icon: "line.3.horizontal.decrease",
-                            tint: CatfolioTheme.preference
-                        )
-                    }
-                    connector(L10n.text("服务商"), detail: L10n.text("行情、估值与 AI 密钥"), icon: "key.fill", tint: CatfolioTheme.services) {
-                        showsLocalServices = true
+                SettingsSection(L10n.text("账户活动")) {
+                    SettingsNavigationRow(
+                        // The drawing's 账单 row, down to the 2pt between its
+                        // two lines: an icon, what the page is, and what it
+                        // tracks.
+                        icon: .asset("SettingsInvoice"),
+                        title: L10n.text("History"),
+                        subtitle: L10n.text("跨账户资产活动流水"),
+                        subtitleSpacing: 2
+                    ) {
+                        HistoryView().environment(model)
                     }
                 }
+            }
 
-                Section {
-                    Toggle(isOn: $hapticsEnabled) {
-                        nativeSettingsLabel(
-                            title: L10n.text("触控反馈"),
-                            icon: "hand.tap.fill",
-                            tint: CatfolioTheme.warning
-                        )
-                    }
+            SettingsSection(L10n.text("新建账户")) {
+                connector("Trading 212", detail: L10n.text("使用只读 API 创建账户"), icon: "chart.line.uptrend.xyaxis") {
+                    showsTrading212 = true
+                }
+                connector("Moomoo", detail: L10n.text("通过 OAuth 授权创建账户"), icon: "person.badge.key") {
+                    showsMoomooOAuth = true
+                }
+                connector("Interactive Brokers", detail: L10n.text("使用 Flex Web Service 创建账户"), icon: "doc.text") {
+                    showsIBKRFlex = true
+                }
+                connector(L10n.text("CSV 导入"), detail: L10n.text("从交易记录创建账户"), icon: "doc.badge.plus") {
+                    showsCSVImport = true
+                }
+                SettingsButtonRow(
+                    icon: .symbol("camera"),
+                    title: L10n.text("拍照 AI 添加持仓"),
+                    subtitle: L10n.text("本地模型识别添加，需 iOS 27 支持"),
+                    subtitleSpacing: 2,
+                    action: {}
+                )
+                .disabled(true)
+                .accessibilityHint(L10n.text("功能暂未开放"))
+            }
 
-                    settingsPickerRow(
-                        title: L10n.text("语言"),
-                        icon: "character.bubble",
-                        tint: CatfolioTheme.preference,
-                        selection: $languageRawValue
-                    ) {
-                        ForEach(AppLanguage.allCases) { language in
-                            Text(language.title).tag(language.rawValue)
-                        }
-                    }
-                    .accessibilityIdentifier("settings.language")
+            SettingsSection(L10n.text("行情与 AI")) {
+                SettingsNavigationRow(icon: .symbol("sparkles"), title: L10n.text("今天值得关注")) {
+                    TodayAttentionView().environment(model)
+                }
+                .accessibilityIdentifier("settings.today-attention")
+                connector(L10n.text("服务商"), detail: L10n.text("行情、估值与 AI 密钥"), icon: "key") {
+                    showsLocalServices = true
+                }
+            }
 
-                    settingsPickerRow(
-                        title: L10n.text("外观"),
-                        icon: "circle.lefthalf.filled",
-                        tint: CatfolioTheme.accent,
-                        selection: $appearanceRawValue
-                    ) {
-                        ForEach(AppAppearance.allCases) { appearance in
-                            Text(L10n.label(appearance.title)).tag(appearance.rawValue)
-                        }
-                    }
+            SettingsSectionHeader(L10n.text("偏好设置"))
+            SettingsCard {
+                SettingsToggleRow(
+                    icon: .symbol("hand.tap"),
+                    title: L10n.text("触控反馈"),
+                    isOn: $hapticsEnabled
+                )
 
-                    settingsPickerRow(
-                        title: L10n.text("公司名称"),
-                        icon: "character.bubble.fill",
-                        tint: CatfolioTheme.preference,
-                        selection: $companyNameDisplayRawValue
-                    ) {
-                        ForEach(CompanyNameDisplay.allCases) { display in
-                            Text(display.title).tag(display.rawValue)
-                        }
+                SettingsMenuRow(
+                    // The drawing's 语言 row: the region globe, the current
+                    // answer in the primary colour, and the caret that says it
+                    // opens.
+                    icon: .asset("SettingsRegion"),
+                    title: L10n.text("语言"),
+                    value: AppLanguage(rawValue: languageRawValue)?.title ?? AppLanguage.system.title,
+                    selection: $languageRawValue
+                ) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(language.title).tag(language.rawValue)
                     }
+                }
+                .accessibilityIdentifier("settings.language")
 
-                    settingsPickerRow(
-                        title: L10n.text("数据货币"),
-                        icon: "globe",
-                        tint: CatfolioTheme.services,
-                        selection: $displayCurrencyRawValue
-                    ) {
-                        ForEach(DisplayCurrency.allCases) { currency in
-                            Text(L10n.label(currency.title)).tag(currency.rawValue)
-                        }
+                SettingsMenuRow(
+                    icon: .symbol("circle.lefthalf.filled"),
+                    title: L10n.text("外观"),
+                    value: L10n.label(AppAppearance(rawValue: appearanceRawValue)?.title ?? AppAppearance.system.title),
+                    selection: $appearanceRawValue
+                ) {
+                    ForEach(AppAppearance.allCases) { appearance in
+                        Text(L10n.label(appearance.title)).tag(appearance.rawValue)
                     }
-                } header: {
-                    Text(L10n.text("偏好设置"))
-                } footer: {
-                    Text(LocalPortfolioEngine.fxStatus)
                 }
 
-                Section(L10n.text("本机数据")) {
-                    settingsValueRow(
-                        title: L10n.text("数据来源"),
-                        value: model.localSource,
-                        icon: "iphone.gen3",
-                        tint: CatfolioTheme.localData
+                SettingsMenuRow(
+                    icon: .symbol("character.bubble"),
+                    title: L10n.text("公司名称"),
+                    value: CompanyNameDisplay(rawValue: companyNameDisplayRawValue)?.title ?? CompanyNameDisplay.original.title,
+                    selection: $companyNameDisplayRawValue
+                ) {
+                    ForEach(CompanyNameDisplay.allCases) { display in
+                        Text(display.title).tag(display.rawValue)
+                    }
+                }
+
+                SettingsMenuRow(
+                    icon: .symbol("dollarsign.circle"),
+                    title: L10n.text("数据货币"),
+                    value: L10n.label(DisplayCurrency(rawValue: displayCurrencyRawValue)?.title ?? DisplayCurrency.usd.title),
+                    selection: $displayCurrencyRawValue
+                ) {
+                    ForEach(DisplayCurrency.allCases) { currency in
+                        Text(L10n.label(currency.title)).tag(currency.rawValue)
+                    }
+                }
+            }
+            SettingsFootnote(LocalPortfolioEngine.fxStatus)
+
+            SettingsSection(L10n.text("本机数据")) {
+                SettingsValueRow(
+                    icon: .symbol("iphone.gen3"),
+                    title: L10n.text("数据来源"),
+                    value: L10n.label(model.localSource),
+                    valueIsNumeric: false
+                )
+                SettingsValueRow(
+                    icon: .symbol("chart.pie"),
+                    title: L10n.text("持仓"),
+                    value: L10n.text("\(model.holdings.count) 项")
+                )
+                if let reconciliation, !reconciliation.reconciles {
+                    SettingsValueRow(
+                        icon: .symbol("exclamationmark.triangle"),
+                        title: L10n.text("交易记录"),
+                        value: L10n.text("\(reconciliation.mismatches.count) 项对不上")
                     )
-                    settingsValueRow(
-                        title: L10n.text("持仓"),
-                        value: L10n.text("\(model.holdings.count) 项"),
-                        icon: "chart.pie.fill",
-                        tint: CatfolioTheme.services
-                    )
-                    if let reconciliation, !reconciliation.reconciles {
-                        settingsValueRow(
-                            title: L10n.text("交易记录"),
-                            value: L10n.text("\(reconciliation.mismatches.count) 项对不上"),
-                            icon: "exclamationmark.triangle.fill",
-                            tint: CatfolioTheme.warning
-                        )
-                        Text(reconciliationDetail(reconciliation))
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    } else if let reconciliation {
-                        settingsValueRow(
-                            title: L10n.text("交易记录"),
-                            value: L10n.text("\(reconciliation.transactionCount) 笔 · 与持仓一致"),
-                            icon: "checkmark.seal.fill",
-                            tint: CatfolioTheme.positive
-                        )
-                    }
-                    if let updatedAt = model.localUpdatedAt {
-                        settingsValueRow(
-                            title: L10n.text("行情更新"),
-                            value: compactDate(updatedAt),
-                            icon: "clock.fill",
-                            tint: CatfolioTheme.warning
-                        )
-                    }
-                }
-
-                Section {
-                    Button(L10n.text("重置本机组合数据"), systemImage: "trash", role: .destructive) {
-                        showsPortfolioResetConfirmation = true
-                    }
-                    .disabled(isResettingPortfolio || model.isPortfolioLoading || model.isReturnsLoading || model.isPublicInvestorMode)
-                } header: {
-                    Text(L10n.text("本机组合数据"))
-                } footer: {
-                    if let notice = model.portfolioRecoveryNotice {
-                        Text(notice)
-                            .textSelection(.enabled)
-                    }
-                }
-
-                Section(L10n.text("关于")) {
-                    settingsValueRow(
-                        title: L10n.text("版本"),
-                        value: appVersion,
-                        icon: "info.circle.fill",
-                        tint: CatfolioTheme.neutralIcon
+                } else if let reconciliation {
+                    SettingsValueRow(
+                        icon: .symbol("checkmark.seal"),
+                        title: L10n.text("交易记录"),
+                        value: L10n.text("\(reconciliation.transactionCount) 笔 · 与持仓一致")
                     )
                 }
+                if let updatedAt = model.localUpdatedAt {
+                    SettingsValueRow(
+                        icon: .symbol("clock"),
+                        title: L10n.text("行情更新"),
+                        value: compactDate(updatedAt)
+                    )
+                }
+            }
+            if let reconciliation, !reconciliation.reconciles {
+                SettingsFootnote(reconciliationDetail(reconciliation))
+            }
+
+            SettingsSectionHeader(L10n.text("本机组合数据"))
+            SettingsCard {
+                SettingsButtonRow(
+                    icon: .symbol("trash"),
+                    title: L10n.text("重置本机组合数据"),
+                    showsChevron: false,
+                    role: .destructive
+                ) {
+                    showsPortfolioResetConfirmation = true
+                }
+                .disabled(isResettingPortfolio || model.isPortfolioLoading || model.isReturnsLoading || model.isPublicInvestorMode)
+            }
+            if let notice = model.portfolioRecoveryNotice {
+                SettingsFootnote(notice)
+                    .textSelection(.enabled)
+            }
+
+            SettingsSection(L10n.text("关于")) {
+                SettingsValueRow(
+                    icon: .symbol("info.circle"),
+                    title: L10n.text("版本"),
+                    value: appVersion,
+                    valueIsNumeric: true
+                )
+            }
         }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
-        .background(CatfolioTheme.settingsBackground)
-        .contentMargins(.bottom, 96, for: .scrollContent)
+        .tracksRootTabBarScroll()
+            .accessibilityIdentifier("settings-root")
             #if DEBUG
+            .navigationDestination(isPresented: $showsRotationPreview) { SectorRotationView() }
+            .navigationDestination(isPresented: $showsStockChartsPreview) { StockChartsRotationView() }
             .navigationDestination(isPresented: $showsScreenerPreview) { StockScreenerView() }
             .navigationDestination(isPresented: $showsHistoryPreview) { HistoryView().environment(model) }
-            .navigationDestination(isPresented: $showsResearchPreview) { ResearchView().environment(model) }
+            .navigationDestination(isPresented: $showsResearchPreview) { TodayAttentionView().environment(model) }
             .navigationDestination(isPresented: $showsOIPreview) {
                 ScrollView { OptionsOIView(symbol: "TEST", currency: "USD", price: 108, costUSD: 104).padding(24) }
+                    .softTopScrollEdge()
                     .navigationTitle(L10n.text("OI 布局验证"))
             }
             #endif
@@ -363,52 +382,22 @@ struct SettingsView: View {
             parts.append(L10n.text("有持仓在账本里找不到买入记录"))
         }
         parts.append(L10n.text("重新同步以补齐；在补齐前，按税务口径的成本与损益不会计算。"))
-        return parts.joined(separator: "。")
-    }
-
-    private func nativeSettingsLabel(
-        title: String,
-        detail: String? = nil,
-        icon: String,
-        tint: Color
-    ) -> some View {
-        Label {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .foregroundStyle(.primary)
-                if let detail {
-                    Text(detail)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-        } icon: {
-            SettingsGlyph(symbol: icon, tint: tint)
-        }
+        return L10n.sentences(parts)
     }
 
     private var allAccountsRow: some View {
-        HStack(spacing: 0) {
-            accountSelectionButton(
-                selected: model.selectedAccountKeys.count == model.accounts.count,
-                label: L10n.text("全部账户"),
-                selectedAccessibilityLabel: L10n.text("全部账户已计入")
-            ) {
-                if model.selectedAccountKeys.count != model.accounts.count {
-                    Task { await model.selectAllAccounts() }
-                }
+        SettingsSelectionRow(
+            isSelected: model.selectedAccountKeys.count == model.accounts.count,
+            title: L10n.text("全部账户"),
+            subtitle: L10n.text("\(model.accounts.count) 个账户 · \(DisplayFormat.money(allAccountsMarketValueUSD))"),
+            selectionAccessibilityLabel: model.selectedAccountKeys.count == model.accounts.count
+                ? L10n.text("全部账户已计入")
+                : L10n.text("计入全部账户"),
+            selectionAccessibilityHint: L10n.text("只更改全局组合的账户范围")
+        ) {
+            if model.selectedAccountKeys.count != model.accounts.count {
+                Task { await model.selectAllAccounts() }
             }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(L10n.text("全部账户"))
-                    .font(.body)
-                    .foregroundStyle(.primary)
-                Text(L10n.text("\(model.accounts.count) 个账户 · \(DisplayFormat.money(allAccountsMarketValueUSD))"))
-                    .appNumber(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
         }
     }
 
@@ -420,126 +409,44 @@ struct SettingsView: View {
 
     private func accountScopeRow(_ account: PortfolioAccount) -> some View {
         let isSelected = model.selectedAccountKeys.contains(account.id)
-        return HStack(spacing: 0) {
-            accountSelectionButton(selected: isSelected, label: account.displayName) {
-                Task { await model.toggleAccount(account.id) }
-            }
-
-            NavigationLink {
-                AccountDetailView(accountID: account.id, initialAccount: account)
-                    .environment(model)
-            } label: {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(account.displayName)
-                            .font(.body)
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                        Text(account.awaitsFirstSync
-                            ? (model.isPublicInvestorMode ? L10n.text("暂无数据") : L10n.text("等待首次同步"))
-                            : L10n.text("\(account.positionCount) 项 · \(DisplayFormat.money(account.marketValueUSD))"))
-                            .appNumber(.footnote)
-                            // Not the accent: in this row the accent already
-                            // means "included in the portfolio", and reusing
-                            // it for a sync state makes an unsynced account
-                            // read as a selected one.
-                            .foregroundStyle(account.awaitsFirstSync ? Color.orange : .secondary)
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 8)
-                }
-                .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
-            }
-            .accessibilityHint(L10n.text("进入账户详情"))
+        return SettingsSelectionRow(
+            isSelected: isSelected,
+            title: account.localizedDisplayName,
+            subtitle: account.awaitsFirstSync
+                ? (model.isPublicInvestorMode ? L10n.text("暂无数据") : L10n.text("等待首次同步"))
+                : L10n.text("\(account.positionCount) 项 · \(DisplayFormat.money(account.marketValueUSD))"),
+            // Not the accent: in this row the filled circle already means
+            // "included in the portfolio", and reusing its colour for a sync
+            // state makes an unsynced account read as a selected one.
+            subtitleColor: account.awaitsFirstSync ? CatfolioTheme.warning : SettingsTemplate.secondaryText,
+            selectionAccessibilityLabel: isSelected
+                ? L10n.text("不计入\(account.localizedDisplayName)")
+                : L10n.text("计入\(account.localizedDisplayName)"),
+            selectionAccessibilityHint: L10n.text("只更改全局组合的账户范围"),
+            toggle: { Task { await model.toggleAccount(account.id) } }
+        ) {
+            AccountDetailView(accountID: account.id, initialAccount: account)
+                .environment(model)
         }
     }
 
-    private func accountSelectionButton(
-        selected: Bool,
-        label: String,
-        selectedAccessibilityLabel: String? = nil,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Group {
-                if selected {
-                    // Tint rather than a literal blue: this is the same
-                    // affordance Calendar uses for "include this in the
-                    // view", and it is expected to follow the app's tint and
-                    // the reader's accessibility settings, not a brand value
-                    // frozen at design time.
-                    Image(systemName: "checkmark.circle.fill")
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(Color(uiColor: .systemBackground), .tint)
-                } else {
-                    Image(systemName: "circle")
-                        .foregroundStyle(.tertiary)
-                }
-            }
-                .imageScale(.large)
-                .frame(width: 36)
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.borderless)
-        .accessibilityLabel(selected ? (selectedAccessibilityLabel ?? L10n.text("不计入\(label)")) : L10n.text("计入\(label)"))
-        .accessibilityValue(selected ? L10n.text("已选择") : L10n.text("未选择"))
-        .accessibilityHint(L10n.text("只更改全局组合的账户范围"))
-    }
-
+    /// A row that opens a broker flow in a sheet. The subtitle stacks at 2
+    /// rather than 4 — the drawing sets a one-line explanation that tight, and
+    /// reserves 4 for the two-line account rows where the second line is a
+    /// figure.
     private func connector(
         _ title: String,
         detail: String,
         icon: String,
-        tint: Color,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                nativeSettingsLabel(title: title, detail: detail, icon: icon, tint: tint)
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.forward")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func settingsValueRow(
-        title: String,
-        value: String?,
-        icon: String,
-        tint: Color
-    ) -> some View {
-        LabeledContent {
-            if let value {
-                Text(value)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.trailing)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-        } label: {
-            nativeSettingsLabel(title: title, icon: icon, tint: tint)
-        }
-    }
-
-    private func settingsPickerRow<SelectionValue: Hashable, Options: View>(
-        title: String,
-        icon: String,
-        tint: Color,
-        selection: Binding<SelectionValue>,
-        @ViewBuilder options: () -> Options
-    ) -> some View {
-        Picker(selection: selection, content: options) {
-            nativeSettingsLabel(title: title, icon: icon, tint: tint)
-        }
-        .pickerStyle(.menu)
+        SettingsButtonRow(
+            icon: .symbol(icon),
+            title: title,
+            subtitle: detail,
+            subtitleSpacing: 2,
+            action: action
+        )
     }
 }
 
@@ -580,118 +487,87 @@ private struct AccountDetailView: View {
     }
 
     var body: some View {
-        // A real List, not a ScrollView imitating one. The hand-rolled
-        // version matched the colours and metrics of the settings page it
-        // was pushed from and still read as slightly different, because row
-        // height, separator inset, tap highlight and Dynamic Type reflow are
-        // things the system does and a stack of VStacks does not. Built this
-        // way it matches by construction, and follows the platform when the
-        // platform changes.
-        List {
-            Section {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(account.displayName)
-                        .font(.largeTitle.bold())
-                        .lineLimit(2)
-                    Text(DisplayFormat.money(account.marketValueUSD))
-                        .appNumber(.title, weight: .bold)
-                    Text(L10n.text("\(account.positionCount) 个持仓"))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 8)
-                .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
+        SettingsPage(
+            // The account names the screen and the holding count sits under
+            // it, so both fold into the small two-line title on scroll. The
+            // value stays in the page, where it is the largest thing on it.
+            title: account.localizedDisplayName,
+            subtitle: L10n.text("\(account.positionCount) 个持仓"),
+            bottomInset: 24
+        ) {
+            CatfolioDisplayAmountText(text: DisplayFormat.money(account.marketValueUSD), size: 34, symbolSize: 22)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                if model.isFakeDataMode {
-                    Label(L10n.text("这里是独立演示账户，与真实持仓无关。"), systemImage: "eye.slash.fill")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 8, trailing: 20))
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                }
+            if model.isFakeDataMode {
+                SettingsFootnote(L10n.text("这里是独立演示账户，与真实持仓无关。"))
             }
 
-            Section(L10n.text("账户信息")) {
-                Button {
+            SettingsSection(L10n.text("账户信息")) {
+                SettingsButtonRow(
+                    title: L10n.text("账户名称"),
+                    value: account.localizedDisplayName
+                ) {
                     accountNameDraft = account.displayName
                     showsRenamePrompt = true
-                } label: {
-                    detailActionRow(title: L10n.text("账户名称"), detail: account.displayName)
                 }
-                .buttonStyle(.plain)
                 .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
 
-                LabeledContent(L10n.text("账户类型"), value: account.accountType)
-                LabeledContent(L10n.text("基础币种"), value: account.baseCurrency)
-                LabeledContent(L10n.text("Broker"), value: account.brokerName)
+                SettingsValueRow(title: L10n.text("账户类型"), value: L10n.label(account.accountType), valueIsNumeric: false)
+                SettingsValueRow(title: L10n.text("基础币种"), value: account.baseCurrency, valueIsNumeric: false)
+                SettingsValueRow(title: L10n.text("Broker"), value: L10n.label(account.brokerName), valueIsNumeric: false)
             }
 
-            Section(L10n.text("数据来源")) {
-                Button { activeSheet = syncSheet } label: {
-                    detailActionRow(title: primarySourceTitle, detail: primarySourceStatus)
+            SettingsSection(L10n.text("数据来源")) {
+                SettingsButtonRow(title: primarySourceTitle, value: primarySourceStatus) {
+                    activeSheet = syncSheet
                 }
-                .buttonStyle(.plain)
                 .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
 
                 if account.source != "CSV" {
-                    Button { activeSheet = .csv } label: {
-                        detailActionRow(title: L10n.text("CSV 导入"), detail: csvImportStatus)
+                    SettingsButtonRow(title: L10n.text("CSV 导入"), value: csvImportStatus) {
+                        activeSheet = .csv
                     }
-                    .buttonStyle(.plain)
                     .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
                 }
 
-                Button { activeSheet = .manualTransaction } label: {
-                    detailActionRow(title: L10n.text("手动补充"), detail: L10n.text("\(manualTransactionCount) 笔"))
+                SettingsButtonRow(title: L10n.text("手动补充"), value: L10n.text("\(manualTransactionCount) 笔")) {
+                    activeSheet = .manualTransaction
                 }
-                .buttonStyle(.plain)
                 .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
             }
 
-            Section(L10n.text("数据记录")) {
-                // A NavigationLink draws its own chevron, so this row does
-                // not add one — two would be the giveaway that the list is
-                // hand-made.
-                NavigationLink {
+            SettingsSection(L10n.text("数据记录")) {
+                SettingsNavigationRow(
+                    title: L10n.text("History"),
+                    value: L10n.text("\(account.transactionCount) 笔交易记录")
+                ) {
                     HistoryView(initialAccountIDs: [account.id])
                         .environment(model)
-                } label: {
-                    LabeledContent(
-                        L10n.text("History"),
-                        value: L10n.text("\(account.transactionCount) 笔交易记录")
-                    )
                 }
 
-                Button { deduplicateTransactions() } label: {
-                    detailActionRow(
-                        title: L10n.text("数据匹配与去重"),
-                        detail: isWorking ? nil : dataMatchStatus,
-                        showsProgress: isWorking
-                    )
+                SettingsButtonRow(
+                    title: L10n.text("数据匹配与去重"),
+                    showsChevron: !isWorking,
+                    value: isWorking ? nil : dataMatchStatus,
+                    showsProgress: isWorking
+                ) {
+                    deduplicateTransactions()
                 }
-                .buttonStyle(.plain)
                 .disabled(isWorking || model.isFakeDataMode || model.isPublicInvestorMode)
             }
 
-            Section(L10n.text("账户设置")) {
-                // The role paints it, rather than a literal colour: a
-                // destructive button in a list is already red, and already
-                // dims correctly when disabled.
-                Button(role: .destructive) {
+            SettingsSection(L10n.text("账户设置")) {
+                SettingsButtonRow(
+                    icon: .symbol("trash"),
+                    title: L10n.text("删除账户"),
+                    showsChevron: false,
+                    role: .destructive
+                ) {
                     showsDeleteConfirmation = true
-                } label: {
-                    Text(L10n.text("删除账户"))
                 }
                 .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
             }
         }
-        .listStyle(.insetGrouped)
-        .background(CatfolioTheme.settingsBackground)
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .alert(L10n.text("编辑账户名称"), isPresented: $showsRenamePrompt) {
             TextField(L10n.text("账户名称"), text: $accountNameDraft)
@@ -705,7 +581,7 @@ private struct AccountDetailView: View {
             Button(L10n.text("取消"), role: .cancel) {}
             Button(L10n.text("删除"), role: .destructive) { deleteAccount() }
         } message: {
-            Text(L10n.text("将删除 \(account.displayName) 的持仓、交易和历史快照，此操作无法撤销。"))
+            Text(L10n.text("将删除 \(account.localizedDisplayName) 的持仓、交易和历史快照，此操作无法撤销。"))
         }
         .alert(
             Text(notice?.title ?? ""),
@@ -782,49 +658,6 @@ private struct AccountDetailView: View {
 
     private var manualTransactionCount: Int {
         account.manualTransactionCount
-    }
-
-    private func detailValueRow(title: String, value: String) -> some View {
-        HStack(spacing: 12) {
-            Text(title)
-                .font(.body.weight(.medium))
-                .foregroundStyle(.primary)
-            Spacer(minLength: 16)
-            Text(value)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.trailing)
-        }
-        .padding(.vertical, 13)
-    }
-
-    private func detailActionRow(
-        title: String,
-        detail: String? = nil,
-        showsProgress: Bool = false
-    ) -> some View {
-        HStack(spacing: 10) {
-            Text(title)
-                .foregroundStyle(.primary)
-            Spacer(minLength: 8)
-            if let detail {
-                Text(detail)
-                    .appNumber(.body)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            if showsProgress {
-                ProgressView()
-                    .controlSize(.small)
-            } else {
-                // Matches the chevron a NavigationLink row draws, for the
-                // rows that open a sheet instead of pushing.
-                Image(systemName: "chevron.forward")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-        }
-        .contentShape(Rectangle())
     }
 
     private func renameAccount() {
@@ -939,6 +772,7 @@ private struct AccountTransactionsView: View {
         }
         .background(CatfolioTheme.settingsBackground)
         .tint(CatfolioTheme.accent)
+        .softTopScrollEdge()
         .navigationTitle(L10n.text("交易记录"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: account.id) {
@@ -1046,25 +880,45 @@ private struct ManualTransactionView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    LabeledContent(L10n.text("账户"), value: account.displayName)
-                    DatePicker(L10n.text("交易日期"), selection: $date, displayedComponents: .date)
-                    Picker(L10n.text("交易类型"), selection: $action) {
+            SettingsPage(bottomInset: 32) {
+                SettingsCard {
+                    SettingsValueRow(
+                        title: L10n.text("账户"),
+                        value: account.localizedDisplayName,
+                        valueIsNumeric: false
+                    )
+
+                    SettingsRowContainer {
+                        DatePicker(L10n.text("交易日期"), selection: $date, displayedComponents: .date)
+                            .appText(.subheading)
+                    }
+
+                    // `.menu` explicitly: a `Picker` shows a menu inside a
+                    // grouped Form and would pick a different style outside
+                    // one, which would change how the row is operated.
+                    SettingsMenuRow(
+                        title: L10n.text("交易类型"),
+                        value: action == "BUY" ? L10n.text("买入") : L10n.text("卖出"),
+                        selection: $action
+                    ) {
                         Text(L10n.text("买入")).tag("BUY")
                         Text(L10n.text("卖出")).tag("SELL")
                     }
                 }
 
-                Section(L10n.text("交易内容")) {
-                    TextField(L10n.text("代码，如 AAPL"), text: $ticker)
+                SettingsSection(L10n.text("交易内容")) {
+                    SettingsFieldRow(L10n.text("代码，如 AAPL"), text: $ticker)
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
-                    TextField(L10n.text("数量"), text: $quantity)
+                    SettingsFieldRow(L10n.text("数量"), text: $quantity)
                         .keyboardType(.decimalPad)
-                    TextField(L10n.text("成交价"), text: $price)
+                    SettingsFieldRow(L10n.text("成交价"), text: $price)
                         .keyboardType(.decimalPad)
-                    Picker(L10n.text("币种"), selection: $currency) {
+                    SettingsMenuRow(
+                        title: L10n.text("币种"),
+                        value: currency.rawValue,
+                        selection: $currency
+                    ) {
                         ForEach(DisplayCurrency.allCases) { currency in
                             Text(currency.rawValue).tag(currency)
                         }
@@ -1072,14 +926,10 @@ private struct ManualTransactionView: View {
                 }
 
                 if let errorMessage {
-                    Section {
-                        Label(errorMessage, systemImage: "exclamationmark.circle.fill")
-                            .foregroundStyle(CatfolioTheme.danger)
-                    }
+                    SettingsFootnote(errorMessage, color: CatfolioTheme.danger)
                 }
             }
-            .scrollContentBackground(.hidden)
-            .background(CatfolioTheme.settingsBackground)
+            .softTopScrollEdge()
             .navigationTitle(L10n.text("补充历史交易"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1116,95 +966,6 @@ private struct ManualTransactionView: View {
                 errorMessage = error.localizedDescription
             }
         }
-    }
-}
-
-private struct SettingsSectionBlock<Content: View>: View {
-    @Environment(\.locale) private var appLocale
-    let title: String
-    let footer: String?
-    @ViewBuilder let content: Content
-
-    init(
-        title: String,
-        footer: String? = nil,
-        @ViewBuilder content: () -> Content
-    ) {
-        self.title = title
-        self.footer = footer
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            // A grouped-list section header, not a page title. At title3
-            // semibold in the primary colour these read as headings of equal
-            // weight to the screen's own title, which is why the page looked
-            // like several stacked pages rather than one list.
-            Text(title)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            content
-
-            if let footer {
-                Text(footer)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
-            }
-        }
-    }
-}
-
-private struct SettingsGroupCard<Content: View>: View {
-    @Environment(\.locale) private var appLocale
-    @Environment(\.colorScheme) private var colorScheme
-    @ViewBuilder let content: Content
-
-    init(@ViewBuilder content: () -> Content) {
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            content
-        }
-        .padding(.horizontal, 16)
-        .background(
-            // The system's grouped-row fill rather than a hand-picked grey.
-            // The previous one was #2C3334 — lighter than the native
-            // #1C1C1E and faintly blue, so every card floated off the page
-            // as a pale slab instead of sitting in it.
-            Color(uiColor: .secondarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-        )
-    }
-}
-
-private struct SettingsDivider: View {
-    @Environment(\.locale) private var appLocale
-    var body: some View {
-        Divider()
-            .padding(.leading, 66)
-    }
-}
-
-private struct SettingsIcon: View {
-    @Environment(\.locale) private var appLocale
-    let systemName: String
-    let tint: Color
-
-    var body: some View {
-        Image(systemName: systemName)
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: 36, height: 36)
-            .background(tint, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .frame(width: 50, height: 36)
-            .accessibilityHidden(true)
     }
 }
 
@@ -1344,83 +1105,61 @@ private struct LocalServicesSettingsView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 20) {
-                    StatusNotice(
-                        text: L10n.text("行情密钥和 ChatGPT 登录都只保存在此 iPhone。"),
-                        kind: .info
-                    )
+            SettingsPage(
+                title: L10n.text("服务商"),
+                subtitle: L10n.text("行情、估值与 AI 密钥"),
+                bottomInset: 32
+            ) {
+                SettingsFootnote(L10n.text("行情密钥和 ChatGPT 登录都只保存在此 iPhone。"))
 
-                    SettingsSectionBlock(title: L10n.text("行情与估值")) {
-                        SettingsGroupCard {
-                            providerLink(.massive)
-                            SettingsDivider()
-                            providerLink(.fmp)
-                        }
+                SettingsSection(L10n.text("行情与估值")) {
+                    providerLink(.massive)
+                    providerLink(.fmp)
+                }
+                SettingsFootnote(L10n.text("Yahoo Finance 无需密钥；自动用于回撤与历史价格，也会在 Massive 不可用时补充成交量行情。"))
 
-                        HStack(alignment: .top, spacing: 9) {
-                            Image(systemName: "globe.americas.fill")
-                                .foregroundStyle(CatfolioTheme.accent)
-                                .frame(width: 20)
-                            Text(L10n.text("Yahoo Finance 无需密钥；自动用于回撤与历史价格，也会在 Massive 不可用时补充成交量行情。"))
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(.horizontal, 4)
-                        .accessibilityElement(children: .combine)
-                    }
+                SettingsSectionHeader("AI")
+                SettingsCard {
+                    // The one row on these pages that is not a row: choosing a
+                    // model is a choice between three, and a segmented control
+                    // shows all three at once. It sits on the card's own 20/16
+                    // padding so it lines up with every row under it.
+                    SettingsRowContainer(minHeight: 0) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(L10n.text("默认模型"))
+                                .appText(.label, weight: .medium)
+                                .foregroundStyle(SettingsTemplate.sectionHeader)
 
-                    SettingsSectionBlock(title: "AI") {
-                        SettingsGroupCard {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text(L10n.text("默认模型"))
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-
-                                Picker(L10n.text("默认模型"), selection: $aiProviderRaw) {
-                                    ForEach(AIProviderPreference.allCases) { provider in
-                                        Text(L10n.label(provider.title)).tag(provider.rawValue)
-                                    }
+                            Picker(L10n.text("默认模型"), selection: $aiProviderRaw) {
+                                ForEach(AIProviderPreference.allCases) { provider in
+                                    Text(L10n.label(provider.title)).tag(provider.rawValue)
                                 }
-                                .pickerStyle(.segmented)
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
 
-                                Text(selectedAIProvider.detail)
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
+                            Text(selectedAIProvider.detail)
+                                .appText(.label, weight: .regular)
+                                .foregroundStyle(SettingsTemplate.secondaryText)
+                                .fixedSize(horizontal: false, vertical: true)
 
-                                if selectedAIProvider == .automatic || selectedAIProvider == .apple {
-                                    Label(
-                                        LocalAIClient.appleModelStatus.message,
-                                        systemImage: LocalAIClient.appleModelStatus.isAvailable
-                                            ? "checkmark.circle.fill"
-                                            : "exclamationmark.circle"
-                                    )
-                                    .font(.caption.weight(.semibold))
+                            if selectedAIProvider == .automatic || selectedAIProvider == .apple {
+                                Text(LocalAIClient.appleModelStatus.message)
+                                    .appText(.label, weight: .medium)
                                     .foregroundStyle(
                                         LocalAIClient.appleModelStatus.isAvailable
                                             ? CatfolioTheme.positive
-                                            : Color.secondary
+                                            : SettingsTemplate.secondaryText
                                     )
-                                }
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
-                            .padding(12)
-
-                            SettingsDivider()
-                            codexLink
-                            SettingsDivider()
-                            providerLink(.deepSeek)
                         }
                     }
+
+                    codexLink
+                    providerLink(.deepSeek)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 48)
             }
-            .background(CatfolioTheme.settingsBackground)
-            .navigationTitle(L10n.text("服务商"))
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(L10n.text("完成")) { dismiss() }
@@ -1444,84 +1183,41 @@ private struct LocalServicesSettingsView: View {
     }
 
     private var codexLink: some View {
-        NavigationLink {
+        SettingsNavigationRow(
+            icon: .symbol("bubble.left.and.text.bubble.right"),
+            title: "ChatGPT Codex",
+            subtitle: L10n.text("使用 ChatGPT 订阅进行组合问答"),
+            subtitleSpacing: 2,
+            value: codexConnected ? L10n.text("已连接") : L10n.text("未连接"),
+            valueColor: codexConnected ? CatfolioTheme.positive : SettingsTemplate.readOnlyValue
+        ) {
             CodexOAuthSettingsView()
-        } label: {
-            HStack(spacing: 12) {
-                SettingsIcon(systemName: "bubble.left.and.text.bubble.right.fill", tint: CatfolioTheme.services)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("ChatGPT Codex")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.primary)
-                    Text(L10n.text("使用 ChatGPT 订阅进行组合问答"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: 8)
-
-                HStack(spacing: 4) {
-                    Image(systemName: codexConnected ? "checkmark.circle.fill" : "circle")
-                    Text(codexConnected ? L10n.text("已连接") : L10n.text("未连接"))
-                }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(codexConnected ? CatfolioTheme.positive : Color.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(
-                    (codexConnected ? CatfolioTheme.positive : Color.secondary).opacity(0.10),
-                    in: Capsule()
-                )
-
-                Image(systemName: "chevron.forward")
-                    .font(.caption.bold())
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.vertical, 12)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
         .accessibilityLabel(L10n.text("ChatGPT Codex，使用 ChatGPT 订阅进行组合问答"))
         .accessibilityValue(codexConnected ? L10n.text("已连接") : L10n.text("未连接"))
     }
 
     private func providerLink(_ provider: LocalServiceProvider) -> some View {
         let status = statuses[provider] ?? .unconfigured
+        // Pushed by value, so a launch argument can route straight to one
+        // provider. The row is otherwise the template's navigation row.
         return NavigationLink(value: provider) {
-            HStack(spacing: 12) {
-                SettingsIcon(systemName: provider.iconName, tint: provider.tint)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(provider.shortTitle)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.primary)
-                    Text(provider.purpose)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            SettingsRowContainer {
+                HStack(spacing: SettingsTemplate.iconSpacing) {
+                    SettingsRowLabel(
+                        icon: .symbol(provider.iconName),
+                        title: provider.shortTitle,
+                        subtitle: provider.purpose,
+                        subtitleSpacing: 2,
+                        value: status.title,
+                        valueColor: status == .unconfigured ? SettingsTemplate.readOnlyValue : status.color,
+                        valueIsNumeric: false
+                    )
+                    SettingsChevron()
                 }
-
-                Spacer(minLength: 8)
-
-                HStack(spacing: 4) {
-                    Image(systemName: status.iconName)
-                    Text(status.title)
-                }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(status.color)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(status.color.opacity(0.10), in: Capsule())
-
-                Image(systemName: "chevron.forward")
-                    .font(.caption.bold())
-                    .foregroundStyle(.tertiary)
             }
-            .padding(.vertical, 12)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SettingsRowButtonStyle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(provider.title)，\(provider.purpose)")
         .accessibilityValue(status.title)
@@ -1567,50 +1263,41 @@ private struct CodexOAuthSettingsView: View {
     @State private var didCopyCode = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(L10n.text("连接状态"))
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
-
-                    HStack(spacing: 14) {
-                        SettingsIcon(
-                            systemName: "bubble.left.and.text.bubble.right.fill",
-                            tint: CatfolioTheme.services
-                        )
-                        VStack(alignment: .leading, spacing: 4) {
+        SettingsPage(
+            title: "ChatGPT Codex",
+            subtitle: connected ? L10n.text("已连接 ChatGPT") : L10n.text("尚未连接"),
+            bottomInset: 32
+        ) {
+            SettingsSectionHeader(L10n.text("连接状态"))
+            SettingsCard {
+                SettingsRowContainer {
+                    HStack(spacing: SettingsTemplate.iconSpacing) {
+                        SettingsRowIcon(.symbol("bubble.left.and.text.bubble.right"))
+                        VStack(alignment: .leading, spacing: SettingsTemplate.subtitleSpacing) {
                             Text(connected ? L10n.text("已连接 ChatGPT") : L10n.text("尚未连接"))
-                                .font(.title3.weight(.bold))
-                            if connected {
-                                Text([accountEmail, planLabel].filter { !$0.isEmpty }.joined(separator: " · "))
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                Text(L10n.text("授权令牌保存在此 iPhone 的 Keychain 中。"))
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
+                                .appText(.subheading)
+                                .foregroundStyle(.primary)
+                            Text(connected
+                                ? [accountEmail, planLabel].filter { !$0.isEmpty }.joined(separator: " · ")
+                                : L10n.text("授权令牌保存在此 iPhone 的 Keychain 中。"))
+                                .appText(.label, weight: .regular)
+                                .foregroundStyle(SettingsTemplate.secondaryText)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer(minLength: 0)
                     }
-                    .padding(16)
-                    .background(
-                        CatfolioTheme.surface(for: colorScheme),
-                        in: RoundedRectangle(cornerRadius: CatfolioStyle.cardRadius, style: .continuous)
-                    )
                 }
+            }
 
-                if let loginSession {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(L10n.text("一次性验证码"))
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                        HStack {
+            if let loginSession {
+                SettingsSectionHeader(L10n.text("一次性验证码"))
+                SettingsCard {
+                    SettingsRowContainer {
+                        HStack(spacing: SettingsTemplate.iconSpacing) {
                             Text(loginSession.userCode)
                                 .font(.title2.monospaced().weight(.bold))
                                 .textSelection(.enabled)
-                            Spacer()
+                            Spacer(minLength: 8)
                             Button(didCopyCode ? L10n.text("已复制") : L10n.text("复制")) {
                                 UIPasteboard.general.string = loginSession.userCode
                                 didCopyCode = true
@@ -1620,53 +1307,52 @@ private struct CodexOAuthSettingsView: View {
                                     didCopyCode = false
                                 }
                             }
-                            .buttonStyle(.bordered)
-                            .foregroundStyle(didCopyCode ? CatfolioTheme.positive : CatfolioTheme.services)
+                            .appText(.subheading)
+                            .foregroundStyle(didCopyCode ? CatfolioTheme.positive : CatfolioTheme.accent)
                         }
-                        Button(L10n.text("打开 ChatGPT 登录页"), systemImage: "safari") {
-                            openURL(loginSession.verificationURL)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
                     }
-                    .padding(16)
-                    .background(
-                        CatfolioTheme.surface(for: colorScheme),
-                        in: RoundedRectangle(cornerRadius: CatfolioStyle.cardRadius, style: .continuous)
-                    )
                 }
 
-                if let feedback {
-                    StatusNotice(text: feedback.text, kind: feedback.kind)
+                Button(L10n.text("打开 ChatGPT 登录页"), systemImage: "safari") {
+                    openURL(loginSession.verificationURL)
                 }
-
-                if connected {
-                    Button(role: .destructive, action: logout) {
-                        Label(isWorking ? L10n.text("正在断开…") : L10n.text("退出 ChatGPT"), systemImage: "rectangle.portrait.and.arrow.right")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .disabled(isWorking)
-                } else {
-                    Button(action: startLogin) {
-                        HStack(spacing: 8) {
-                            if isWorking { ProgressView().tint(.white) }
-                            Text(isWorking ? L10n.text("等待网页授权…") : L10n.text("登录 ChatGPT"))
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .disabled(isWorking)
-                }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.roundedRectangle(radius: SettingsTemplate.cardRadius))
+                .controlSize(.large)
+                .frame(maxWidth: .infinity)
             }
-            .padding(16)
-            .padding(.bottom, 32)
+
+            if let feedback {
+                StatusNotice(text: feedback.text, kind: feedback.kind)
+            }
+
+            if connected {
+                SettingsCard {
+                    SettingsButtonRow(
+                        icon: .symbol("rectangle.portrait.and.arrow.right"),
+                        title: isWorking ? L10n.text("正在断开…") : L10n.text("退出 ChatGPT"),
+                        showsChevron: false,
+                        showsProgress: isWorking,
+                        role: .destructive,
+                        action: logout
+                    )
+                    .disabled(isWorking)
+                }
+            } else {
+                Button(action: startLogin) {
+                    HStack(spacing: 8) {
+                        if isWorking { ProgressView().tint(.white) }
+                        Text(isWorking ? L10n.text("等待网页授权…") : L10n.text("登录 ChatGPT"))
+                            .appText(.subheading, weight: .semibold)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 54)
+                }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.roundedRectangle(radius: SettingsTemplate.cardRadius))
+                .disabled(isWorking)
+            }
         }
-        .background(CatfolioTheme.settingsBackground)
-        .navigationTitle("ChatGPT Codex")
-        .navigationBarTitleDisplayMode(.inline)
         .task { await refreshStatus() }
         .onDisappear {
             pollingTask?.cancel()
@@ -1807,38 +1493,30 @@ private struct LocalServiceDetailView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(L10n.text("服务用途"))
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
-
-                    HStack(alignment: .top, spacing: 14) {
-                        SettingsIcon(systemName: provider.iconName, tint: provider.tint)
-                        VStack(alignment: .leading, spacing: 5) {
+        SettingsPage(title: provider.shortTitle, subtitle: provider.purpose, bottomInset: 32) {
+            SettingsSectionHeader(L10n.text("服务用途"))
+            SettingsCard {
+                SettingsRowContainer {
+                    HStack(alignment: .top, spacing: SettingsTemplate.iconSpacing) {
+                        SettingsRowIcon(.symbol(provider.iconName))
+                        VStack(alignment: .leading, spacing: SettingsTemplate.subtitleSpacing) {
                             Text(provider.title)
-                                .font(.title3.weight(.bold))
+                                .appText(.subheading)
+                                .foregroundStyle(.primary)
                             Text(provider.detail)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .appText(.label, weight: .regular)
+                                .foregroundStyle(SettingsTemplate.secondaryText)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
+                        Spacer(minLength: 0)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
-                    .background(
-                        CatfolioTheme.surface(for: colorScheme),
-                        in: RoundedRectangle(cornerRadius: CatfolioStyle.cardRadius, style: .continuous)
-                    )
                 }
+            }
 
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(L10n.text("API 密钥"))
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
-
-                    HStack(spacing: 4) {
+            SettingsSectionHeader(L10n.text("API 密钥"))
+            SettingsCard {
+                SettingsRowContainer {
+                    HStack(spacing: SettingsTemplate.iconSpacing) {
                         Group {
                             if revealsKey {
                                 TextField(L10n.text("输入 \(provider.shortTitle) API Key"), text: $apiKey)
@@ -1852,94 +1530,82 @@ private struct LocalServiceDetailView: View {
                         .textContentType(.password)
                         .submitLabel(.done)
 
+                        // On the icon artboard and in the row's own greys, so
+                        // the control reads as part of the row rather than a
+                        // tinted button dropped into it.
                         Button {
                             revealsKey.toggle()
                         } label: {
-                            Image(systemName: revealsKey ? "eye.slash.fill" : "eye.fill")
-                                .font(.body.weight(.semibold))
-                                .foregroundStyle(CatfolioTheme.accent)
-                                .frame(width: 44, height: 44)
+                            SettingsRowIcon(.symbol(revealsKey ? "eye.slash" : "eye"))
+                                .foregroundStyle(SettingsTemplate.secondaryText)
+                                .padding(.vertical, SettingsTemplate.rowVerticalPadding)
+                                .contentShape(Rectangle())
+                                .padding(.vertical, -SettingsTemplate.rowVerticalPadding)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(revealsKey ? L10n.text("隐藏 API 密钥") : L10n.text("显示 API 密钥"))
                     }
-                    .padding(.leading, 16)
-                    .padding(.trailing, 6)
-                    .frame(minHeight: 56)
-                    .background(
-                        CatfolioTheme.surface(for: colorScheme),
-                        in: RoundedRectangle(cornerRadius: CatfolioStyle.cardRadius, style: .continuous)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: CatfolioStyle.cardRadius, style: .continuous)
-                            .stroke(Color.primary.opacity(0.06), lineWidth: 1)
-                    }
-                    .disabled(isTesting)
-
-                    Label(L10n.text("仅保存在此 iPhone 的 Keychain"), systemImage: "lock.shield.fill")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
+                .disabled(isTesting)
+            }
+            SettingsFootnote(L10n.text("仅保存在此 iPhone 的 Keychain"))
 
-                if let feedback {
-                    StatusNotice(text: feedback.text, kind: feedback.kind)
-                }
+            if let feedback {
+                StatusNotice(text: feedback.text, kind: feedback.kind)
+            }
 
-                VStack(spacing: 12) {
-                    Button {
-                        startValidation()
-                    } label: {
-                        HStack(spacing: 9) {
-                            if isTesting {
-                                ProgressView()
-                                    .tint(.white)
-                            }
-                            Text(isTesting ? L10n.text("正在验证…") : L10n.text("保存并验证"))
-                                .font(.headline)
+            VStack(spacing: 12) {
+                Button {
+                    startValidation()
+                } label: {
+                    HStack(spacing: 9) {
+                        if isTesting {
+                            ProgressView()
+                                .tint(.white)
                         }
-                        .frame(maxWidth: .infinity)
-                        .frame(minHeight: 54)
+                        Text(isTesting ? L10n.text("正在验证…") : L10n.text("保存并验证"))
+                            .appText(.subheading, weight: .semibold)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.roundedRectangle(radius: CatfolioStyle.cardRadius))
-                    .tint(CatfolioTheme.accent)
-                    .disabled(trimmedKey.isEmpty || isTesting)
-                    .accessibilityLabel(isTesting ? L10n.text("正在验证") : L10n.text("保存并验证"))
-                    .accessibilityHint(L10n.text("保存 API 密钥并验证连接"))
-
-                    Button {
-                        saveWithoutValidation()
-                    } label: {
-                        Text(L10n.text("仅保存，不验证"))
-                            .font(.body.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .frame(minHeight: 52)
-                    }
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.roundedRectangle(radius: CatfolioStyle.cardRadius))
-                    .tint(CatfolioTheme.accent)
-                    .disabled(trimmedKey.isEmpty || isTesting)
-                    .accessibilityLabel(L10n.text("仅保存，不验证"))
-                    .accessibilityHint(L10n.text("保存 API 密钥但不验证连接"))
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 54)
                 }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.roundedRectangle(radius: SettingsTemplate.cardRadius))
+                .tint(CatfolioTheme.accent)
+                .disabled(trimmedKey.isEmpty || isTesting)
+                .accessibilityLabel(isTesting ? L10n.text("正在验证") : L10n.text("保存并验证"))
+                .accessibilityHint(L10n.text("保存 API 密钥并验证连接"))
 
-                if !originalKey.isEmpty {
-                    Button(L10n.text("移除此密钥"), role: .destructive) {
+                Button {
+                    saveWithoutValidation()
+                } label: {
+                    Text(L10n.text("仅保存，不验证"))
+                        .appText(.subheading, weight: .semibold)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: 52)
+                }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.roundedRectangle(radius: SettingsTemplate.cardRadius))
+                .tint(CatfolioTheme.accent)
+                .disabled(trimmedKey.isEmpty || isTesting)
+                .accessibilityLabel(L10n.text("仅保存，不验证"))
+                .accessibilityHint(L10n.text("保存 API 密钥但不验证连接"))
+            }
+
+            if !originalKey.isEmpty {
+                SettingsCard {
+                    SettingsButtonRow(
+                        icon: .symbol("trash"),
+                        title: L10n.text("移除此密钥"),
+                        showsChevron: false,
+                        role: .destructive
+                    ) {
                         showsRemoveConfirmation = true
                     }
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 48)
                     .disabled(isTesting)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 18)
-            .padding(.bottom, 32)
         }
-        .background(CatfolioTheme.settingsBackground)
-        .navigationTitle(provider.shortTitle)
-        .navigationBarTitleDisplayMode(.inline)
         .onAppear { loadKeyIfNeeded() }
         .onDisappear {
             validationTask?.cancel()
@@ -2058,20 +1724,3 @@ private struct LocalServiceDetailView: View {
 /// `chart.pie.fill` next to each other read as two different kinds of
 /// control. Boxing them equalises that: the tile is the constant, the symbol
 /// varies inside it, and the row's text starts at the same x every time.
-private struct SettingsGlyph: View {
-    @Environment(\.locale) private var appLocale
-    let symbol: String
-    let tint: Color
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(tint.gradient)
-            .frame(width: 29, height: 29)
-            .overlay {
-                Image(systemName: symbol)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-            .accessibilityHidden(true)
-    }
-}

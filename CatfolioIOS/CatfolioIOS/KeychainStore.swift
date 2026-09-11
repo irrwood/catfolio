@@ -60,9 +60,9 @@ private enum KeychainError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case let .writeFailed(status):
-            "无法保存到 Keychain（\(status)）"
+            L10n.text("无法保存到 Keychain（\(status)）")
         case let .deleteFailed(status):
-            "无法从 Keychain 移除密钥（\(status)）"
+            L10n.text("无法从 Keychain 移除密钥（\(status)）")
         }
     }
 }
