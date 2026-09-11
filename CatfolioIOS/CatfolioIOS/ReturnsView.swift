@@ -3,41 +3,169 @@ import SwiftUI
 struct ReturnsView: View {
     @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
+    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
+    @State private var showsPolicyComposer = false
+    @State private var selectedHolding: Holding?
+    #if DEBUG
+    @State private var showsHeatmapPreview = ProcessInfo.processInfo.arguments.contains("--show-heatmap")
+    #endif
 
     var body: some View {
-            ScrollView {
-                VStack(spacing: 64) {
-                    ReturnsComparisonPanel()
-
-                    Group {
-                        if let analytics = model.returnsAnalytics {
-                            ReturnsAnalyticsView(
-                                response: analytics,
-                                pendingParts: model.returnsAnalyticsPendingParts
-                            )
-                                .id(model.returnsAnalyticsRevision)
-                        } else if model.isReturnsAnalyticsLoading {
-                            ReturnsAnalyticsLoadingView()
-                        } else {
-                            ReturnsAnalyticsUnavailableView()
-                        }
+        SettingsPage {
+            // The heatmap lives on the tab itself, not behind a row: it reads
+            // the same holdings and daily changes the home list already has.
+            PortfolioDetailsCard(
+                holdings: model.holdings,
+                onSelect: { selectedHolding = $0 },
+                showsHeatmap: true
+            )
+            .clipShape(RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius, style: .continuous))
+            .accessibilityIdentifier("performance.heatmap")
+            SettingsSection(L10n.text("Performance")) {
+                ForEach(ReturnsChartDestination.allCases.filter { $0 != .heatmap }) { chart in
+                    SettingsNavigationRow(icon: .symbol(chart.icon), title: chart.title) {
+                        ReturnsChartPage(chart: chart)
                     }
-                    .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
-                }
-                .padding(.bottom, 72)
-            }
-            .background(Color(uiColor: .systemBackground))
-            .navigationTitle(L10n.text("Performance"))
-            .navigationBarTitleDisplayMode(.large)
-            .toolbarVisibility(.visible, for: .navigationBar)
-            .refreshable { await model.refreshReturnsPage() }
-            .task {
-                if (model.comparison == nil || model.returnsAnalytics == nil),
-                   !model.isReturnsLoading,
-                   !model.isReturnsAnalyticsLoading {
-                    await model.refreshReturnsPage()
+                    .accessibilityIdentifier("performance.chart.\(chart.rawValue)")
                 }
             }
+            SettingsSection(L10n.text("行情与 AI")) {
+                SettingsNavigationRow(icon: .symbol("chart.xyaxis.line"), title: L10n.text("板块轮动")) {
+                    SectorRotationView()
+                }
+                SettingsNavigationRow(icon: .symbol("point.3.connected.trianglepath.dotted"), title: L10n.text("市场轮动 · RRG")) {
+                    StockChartsRotationView()
+                }
+                .accessibilityIdentifier("performance.stockcharts-rrg")
+                SettingsNavigationRow(icon: .symbol("gauge.with.dots.needle.50percent"), title: L10n.text("行业情绪")) {
+                    IndustrySentimentView()
+                }
+                SettingsNavigationRow(icon: .symbol("chart.xyaxis.line"), title: L10n.text("研究")) {
+                    ResearchView()
+                }
+                SettingsNavigationRow(icon: .symbol("line.3.horizontal.decrease"), title: L10n.text("选股器")) {
+                    StockScreenerView()
+                }
+                SettingsButtonRow(icon: .symbol("slider.horizontal.3"), title: L10n.text("策略编曲家"), action: { showsPolicyComposer = true })
+                SettingsButtonRow(icon: .symbol("number.square"), title: L10n.text("税务计算"), action: {})
+                    .disabled(true)
+                    .accessibilityHint(L10n.text("功能暂未开放"))
+            }
+        }
+        .tracksRootTabBarScroll()
+        .accessibilityIdentifier("returns-root")
+        .softTopScrollEdge()
+        .navigationTitle(L10n.text("Performance"))
+        .navigationBarTitleDisplayMode(.large)
+        .toolbarVisibility(.visible, for: .navigationBar)
+        .fullScreenCover(isPresented: $showsPolicyComposer) {
+            PolicyComposerEntry().ignoresSafeArea()
+        }
+        .sheet(item: $selectedHolding) { holding in
+            HoldingDetailView(holding: holding)
+                .environment(model)
+                .securityDetailSheet()
+        }
+        .securityDetailOpenFeedback(trigger: selectedHolding?.ticker, enabled: hapticsEnabled)
+        #if DEBUG
+        .navigationDestination(isPresented: $showsHeatmapPreview) {
+            ReturnsChartPage(chart: .heatmap)
+        }
+        .task {
+            showsPolicyComposer = ProcessInfo.processInfo.arguments.contains("--show-policy-composer")
+        }
+        #endif
+    }
+}
+
+enum ReturnsChartDestination: String, CaseIterable, Identifiable {
+    case heatmap, comparison, drawdown, valuation
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .heatmap: L10n.text("持仓热力图")
+        case .comparison: L10n.text("收益对比")
+        case .drawdown: L10n.text("回撤水下曲线")
+        case .valuation: L10n.text("估值矩阵 (P/E vs 成长)")
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .heatmap: "square.grid.2x2"
+        case .comparison: "chart.line.uptrend.xyaxis"
+        case .drawdown: "water.waves"
+        case .valuation: "chart.dots.scatter"
+        }
+    }
+}
+
+private struct ReturnsChartPage: View {
+    @Environment(AppModel.self) private var model
+    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
+    let chart: ReturnsChartDestination
+    @State private var selectedHolding: Holding?
+
+    var body: some View {
+        ScrollView {
+            Group {
+                switch chart {
+                case .heatmap:
+                    PortfolioDetailsCard(
+                        holdings: model.holdings,
+                        onSelect: { selectedHolding = $0 },
+                        showsHeatmap: true
+                    )
+                case .comparison:
+                    ReturnsComparisonPanel()
+                case .drawdown:
+                    analytics(.drawdown)
+                case .valuation:
+                    analytics(.valuation)
+                }
+            }
+            .padding(.top, 20)
+            .padding(.bottom, 72)
+        }
+        .background(Color(uiColor: .systemBackground))
+        .softTopScrollEdge()
+        .navigationTitle(chart.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarVisibility(.visible, for: .navigationBar)
+        .refreshable { await model.refreshReturnsPage() }
+        .sheet(item: $selectedHolding) { holding in
+            HoldingDetailView(holding: holding)
+                .environment(model)
+                .securityDetailSheet()
+        }
+        .securityDetailOpenFeedback(trigger: selectedHolding?.ticker, enabled: hapticsEnabled)
+        .task {
+            if (model.comparison == nil || model.returnsAnalytics == nil),
+               !model.isReturnsLoading,
+               !model.isReturnsAnalyticsLoading {
+                await model.refreshReturnsPage()
+            }
+        }
+    }
+
+    private func analytics(_ chart: ReturnsAnalyticsChart) -> some View {
+        Group {
+            if let analytics = model.returnsAnalytics {
+                ReturnsAnalyticsView(
+                    response: analytics,
+                    pendingParts: model.returnsAnalyticsPendingParts,
+                    chart: chart
+                )
+                .id(model.returnsAnalyticsRevision)
+            } else if model.isReturnsAnalyticsLoading {
+                ReturnsAnalyticsLoadingView(chart: chart)
+            } else {
+                ReturnsAnalyticsUnavailableView()
+            }
+        }
+        .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
     }
 }
 
@@ -295,7 +423,7 @@ private struct ReturnsModePickerSkeleton: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private var skeletonColor: Color {
-        colorScheme == .dark ? .white.opacity(0.09) : Color(white: 0.957)
+        CatfolioTheme.skeletonFill
     }
 
     var body: some View {
@@ -761,6 +889,7 @@ private struct FastReturnsPlot: View {
 
     private let axisWidth: CGFloat = 33
     private let bottomHeight: CGFloat = 0
+    private let endpointConnectorWidth: CGFloat = 9
 
     var body: some View {
         let standardSeries = ReturnsSeriesStyle.order.compactMap { series -> StandardLineChartSeries? in
@@ -793,9 +922,10 @@ private struct FastReturnsPlot: View {
             topInset: 0,
             bottomHeight: bottomHeight,
             leadingLineOverflow: 65,
+            trailingEndpointInset: endpointConnectorWidth,
             transitionKey: transitionKey,
             dataTransition: .viewportZoom,
-            animatesInitialAppearance: false,
+            animatesInitialAppearance: true,
             selectedDate: selectedDate,
             measuredRange: measuredRange,
             rangeSeriesIDs: [ReturnsSeriesStyle.portfolio],
@@ -811,6 +941,21 @@ private struct FastReturnsPlot: View {
         .overlay {
             GeometryReader { geometry in
                 ForEach(endpointLayouts(height: geometry.size.height)) { endpoint in
+                    // Continue each curve into its capsule, including labels
+                    // shifted vertically to keep neighboring tickers apart.
+                    Path { path in
+                        let labelLeadingX = geometry.size.width - axisWidth
+                        path.move(to: CGPoint(
+                            x: labelLeadingX - endpointConnectorWidth,
+                            y: endpoint.lineY
+                        ))
+                        path.addLine(to: CGPoint(
+                            x: labelLeadingX + axisWidth / 2,
+                            y: endpoint.y
+                        ))
+                    }
+                    .stroke(endpoint.color, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+
                     Text(endpoint.text)
                         .font(Typography.text(size: 10, weight: .bold))
                         .foregroundStyle(Color.black)
@@ -840,6 +985,7 @@ private struct FastReturnsPlot: View {
                 id: series,
                 text: ReturnsSeriesStyle.title(for: series),
                 color: ReturnsSeriesStyle.color(for: series),
+                lineY: rawY,
                 y: min(max(rawY, halfHeight), max(halfHeight, height - halfHeight))
             )
         }
@@ -918,6 +1064,7 @@ private struct ReturnsEndpointLabelLayout: Identifiable {
     let id: String
     let text: String
     let color: Color
+    let lineY: CGFloat
     var y: CGFloat
 }
 
@@ -1294,7 +1441,7 @@ private struct CompactSeriesValue: View {
     }
 
     private var secondaryValueColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.30) : Color.black
+        colorScheme == .dark ? .secondary : .primary
     }
 
     private var formattedAmount: String {

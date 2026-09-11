@@ -26,11 +26,12 @@ final class AppModel {
     var accounts: [PortfolioAccount] = []
     var selectedAccountKeys: Set<String> = []
     private(set) var portfolioChartRevision = 0
+    private(set) var isPortfolioChartLoading = false
     private(set) var comparisonRevision = 0
     private(set) var returnsAnalyticsRevision = 0
-    private(set) var isFakeDataMode = UserDefaults.standard.bool(forKey: "catfolio.fakeDataMode")
-    private(set) var isPublicInvestorMode = UserDefaults.standard.bool(forKey: PublicInvestorPreferences.enabledKey)
-    var publicInvestorSelection = UserDefaults.standard.string(forKey: PublicInvestorPreferences.selectionKey) ?? PublicInvestorPreferences.defaultSelection
+    private(set) var isFakeDataMode: Bool
+    private(set) var isPublicInvestorMode: Bool
+    private(set) var publicInvestorSelection: String
     var publicDisclosureSummary: PublicAccountDisclosure? {
         let rows = document.positions.compactMap(\.publicDisclosure)
         return rows.isEmpty ? nil : PublicAccountDisclosure.combining(rows)
@@ -53,6 +54,13 @@ final class AppModel {
     @ObservationIgnored private var dailyChangesRequestGeneration = 0
     @ObservationIgnored private var holdingDailyChangesSignature = ""
     @ObservationIgnored private var returnsPageTask: Task<Void, Never>?
+    @ObservationIgnored private var portfolioSourceTask: Task<Void, Never>?
+    @ObservationIgnored private var portfolioSourceGeneration = 0
+    @ObservationIgnored private var presentedSource: PortfolioSource?
+    @ObservationIgnored private var sourcePresentations: [PortfolioSource: SourcePresentation] = [:]
+    @ObservationIgnored private let modeDefaults: UserDefaults
+    @ObservationIgnored private let publicInvestorStore: PublicInvestorSimulationStore
+    @ObservationIgnored private let personalDocumentLoader: @Sendable () async throws -> LocalPortfolioDocument
     private static let brokerKey = "catfolio.activeBroker"
     private static let selectedAccountsKey = "catfolio.selectedAccounts"
     private static let selectsAllAccountsKey = "catfolio.selectsAllAccounts"
@@ -60,16 +68,34 @@ final class AppModel {
     private static let fakeSelectedAccountsKey = "catfolio.fakeDataSelectedAccounts"
     private static let fakeSelectsAllAccountsKey = "catfolio.fakeDataSelectsAllAccounts"
 
-    init() {
-        if let raw = UserDefaults.standard.string(forKey: Self.brokerKey) {
+    init(
+        defaults: UserDefaults = .standard,
+        publicInvestorStore: PublicInvestorSimulationStore = .shared,
+        personalDocumentLoader: @escaping @Sendable () async throws -> LocalPortfolioDocument = {
+            try await LocalPortfolioStore.shared.load()
+        }
+    ) {
+        modeDefaults = defaults
+        self.publicInvestorStore = publicInvestorStore
+        self.personalDocumentLoader = personalDocumentLoader
+        publicInvestorSelection = defaults.string(forKey: PublicInvestorPreferences.selectionKey) ?? PublicInvestorPreferences.defaultSelection
+        isFakeDataMode = defaults.bool(forKey: Self.fakeDataModeKey)
+        isPublicInvestorMode = defaults.bool(forKey: PublicInvestorPreferences.enabledKey)
+        if isFakeDataMode && isPublicInvestorMode {
+            isFakeDataMode = PublicInvestorPreferences.isDemo(publicInvestorSelection)
+            isPublicInvestorMode = !isFakeDataMode
+        }
+        if let raw = defaults.string(forKey: Self.brokerKey) {
             activeBroker = BrokerProvider(rawValue: raw)
         }
     }
 
-    func refreshPortfolio() async {
+    func refreshPortfolio(refreshMarketData: Bool = true) async {
+        guard !Task.isCancelled else { return }
         portfolioRequestGeneration &+= 1
         let generation = portfolioRequestGeneration
         isPortfolioLoading = true
+        isPortfolioChartLoading = true
         portfolioError = nil
         defer {
             if generation == portfolioRequestGeneration {
@@ -82,19 +108,44 @@ final class AppModel {
             // Publish disk data before any network work. Slow/offline quote
             // providers must never hold the entire home screen in a skeleton.
             try await apply(loaded)
+            guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+            // Loading the selected source is finished. Public data can update
+            // behind the usable cached presentation without locking controls.
+            isPortfolioLoading = false
+            guard refreshMarketData else {
+                isPortfolioChartLoading = false
+                isHoldingDailyChangesLoading = false
+                return
+            }
             if isPublicInvestorMode {
-                await refreshHoldingDailyChanges()
-                guard generation == portfolioRequestGeneration else { return }
+                if let fresh = try await publicInvestorStore.refreshIfNeeded(
+                    catalog: PublicInvestorCatalog.loaded.get(), selection: publicInvestorSelection
+                ) {
+                    guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+                    try await apply(fresh)
+                    guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+                }
                 await enrichPortfolioChart(from: document, generation: generation)
+                guard generation == portfolioRequestGeneration else { return }
+                await refreshHoldingDailyChanges()
                 return
             }
             if !isFakeDataMode {
                 loaded = try await mergeCachedTrading212History(into: loaded)
                 guard generation == portfolioRequestGeneration else { return }
                 try await apply(loaded)
+                guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+            }
+            // Start history before quote and daily-change refreshes. Those
+            // independent vendor calls used to make the correct line wait
+            // behind unrelated home-screen data.
+            if !isFakeDataMode {
+                await enrichPortfolioChart(from: document, generation: generation)
+                guard generation == portfolioRequestGeneration else { return }
             }
             guard !loaded.positions.isEmpty else {
                 isHoldingDailyChangesLoading = false
+                isPortfolioChartLoading = false
                 return
             }
             async let dailyRefresh: Void = refreshHoldingDailyChanges()
@@ -110,6 +161,7 @@ final class AppModel {
             await dailyRefresh
             guard generation == portfolioRequestGeneration else { return }
             try await apply(loaded, invalidatesDailyChanges: false)
+            guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
             // Historical chart enrichment is independent of the already
             // published positions and daily contributions.
             await enrichPortfolioChart(from: document, generation: generation)
@@ -118,6 +170,7 @@ final class AppModel {
             // Retain the last usable local presentation on refresh failure.
             // An error is not an empty account and must not erase its bars.
             isHoldingDailyChangesLoading = false
+            isPortfolioChartLoading = false
             portfolioError = error.localizedDescription
         }
     }
@@ -174,6 +227,7 @@ final class AppModel {
     }
 
     func refreshReturns() async {
+        guard !Task.isCancelled else { return }
         returnsRequestGeneration &+= 1
         let generation = returnsRequestGeneration
         isReturnsLoading = true
@@ -203,7 +257,7 @@ final class AppModel {
                 guard generation == returnsRequestGeneration else { return }
                 comparison = localFallback
                 comparisonRevision &+= 1
-                comparisonWarning = (["历史行情读取失败：\(error.localizedDescription)"]
+                comparisonWarning = ([L10n.text("历史行情读取失败：\(error.localizedDescription)")]
                     + (localFallback.warnings ?? []))
                     .joined(separator: "\n")
             }
@@ -216,20 +270,24 @@ final class AppModel {
     }
 
     func refreshReturnsPage() async {
+        guard !Task.isCancelled else { return }
         returnsPageRequestGeneration &+= 1
         let generation = returnsPageRequestGeneration
-
-        if let previous = returnsPageTask {
-            previous.cancel()
-            await previous.value
-            guard generation == returnsPageRequestGeneration else { return }
-        }
+        returnsPageTask?.cancel()
+        // Invalidate every old continuation without waiting for a slow vendor
+        // request to acknowledge cancellation.
+        returnsRequestGeneration &+= 1
+        returnsAnalyticsRequestGeneration &+= 1
 
         let task = Task { @MainActor [weak self] in
-            guard let self else { return }
+            guard let self, !Task.isCancelled,
+                  generation == self.returnsPageRequestGeneration else { return }
             self.analyticsWarning = nil
+            self.isReturnsAnalyticsLoading = false
+            self.returnsAnalyticsPendingParts = []
             await self.refreshReturns()
-            guard !Task.isCancelled, self.returnsError == nil else { return }
+            guard !Task.isCancelled, generation == self.returnsPageRequestGeneration,
+                  self.returnsError == nil else { return }
             await self.refreshReturnsAnalytics()
         }
         returnsPageTask = task
@@ -240,6 +298,7 @@ final class AppModel {
     }
 
     private func refreshReturnsAnalytics() async {
+        guard !Task.isCancelled else { return }
         returnsAnalyticsRequestGeneration &+= 1
         let generation = returnsAnalyticsRequestGeneration
         isReturnsAnalyticsLoading = true
@@ -273,17 +332,18 @@ final class AppModel {
         } catch {
             guard generation == returnsAnalyticsRequestGeneration else { return }
             returnsAnalytics = nil
-            analyticsWarning = "分析图表读取失败：\(error.localizedDescription)"
+            analyticsWarning = L10n.text("分析图表读取失败：\(error.localizedDescription)")
             returnsAnalyticsRevision &+= 1
         }
     }
 
-    func volumeProfile(for ticker: String) async throws -> VolumeProfile {
+    func volumeProfile(for ticker: String, forceRefresh: Bool = false) async throws -> VolumeProfile {
         let holding = holdings.first(where: { $0.ticker == ticker })
         return try await LocalMarketDataClient().volumeProfile(
             ticker: ticker,
             currency: holding?.quoteCurrency ?? "USD",
-            referencePrice: holding?.quotePrice.isFinite == true ? holding?.quotePrice : nil
+            referencePrice: holding?.quotePrice.isFinite == true ? holding?.quotePrice : nil,
+            forceRefresh: forceRefresh
         )
     }
 
@@ -333,6 +393,15 @@ final class AppModel {
                     ))
                 }
                 let account = accountsByID[accountKey]
+                let unrealized: Double?
+                if positions.contains(where: { $0.publicDisclosure != nil }) {
+                    unrealized = nil
+                } else {
+                    let totals = try LocalPortfolioEngine.totals(for: positions)
+                    let unitUSD = try LocalPortfolioEngine.usd(1, currency: quoteCurrency)
+                    let value = (totals.marketValue - totals.cost) / unitUSD
+                    unrealized = value.isFinite ? value : nil
+                }
                 return HoldingDetailAccountOption(
                     id: accountKey,
                     displayName: account?.displayName
@@ -340,7 +409,8 @@ final class AppModel {
                         ?? "账户",
                     marketValue: marketValue,
                     currency: quoteCurrency,
-                    marketValueUSD: marketValueUSD
+                    marketValueUSD: marketValueUSD,
+                    unrealized: unrealized
                 )
             }
             .sorted { lhs, rhs in
@@ -359,7 +429,8 @@ final class AppModel {
 
     func securityPriceHistory(
         for ticker: String,
-        accountKeys: Set<String>
+        accountKeys: Set<String>,
+        forceRefresh: Bool = false
     ) async throws -> SecurityPriceHistory {
         let context = try await holdingDetailAccountContext(for: ticker)
         let scoped = context.document(for: accountKeys)
@@ -368,7 +439,8 @@ final class AppModel {
             ticker: ticker,
             currency: scopedHolding?.quoteCurrency ?? "USD",
             referencePrice: scopedHolding?.quotePrice.isFinite == true ? scopedHolding?.quotePrice : nil,
-            document: scoped
+            document: scoped,
+            forceRefresh: forceRefresh
         )
     }
 
@@ -452,7 +524,18 @@ final class AppModel {
 
     func loadETFLookThrough(basis: ETFLookThroughBasis) async throws -> ETFLookThroughResponse {
         let loaded = try await loadActiveDocument()
-        return try LocalETFLookThrough.make(document: selectedDocument(from: loaded), basis: basis)
+        let snapshot = selectedDocument(from: loaded)
+        let preparation = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            let response = try LocalETFLookThrough.make(document: snapshot, basis: basis)
+            try Task.checkCancellation()
+            return response
+        }
+        return try await withTaskCancellationHandler {
+            try await preparation.value
+        } onCancel: {
+            preparation.cancel()
+        }
     }
 
     func selectAllAccounts() async {
@@ -568,10 +651,17 @@ final class AppModel {
     }
 
     func resetLocalPortfolio() async throws {
+        portfolioSourceGeneration &+= 1
+        portfolioSourceTask?.cancel()
+        portfolioSourceTask = nil
         invalidateInFlightRequests()
         returnsPageTask?.cancel()
         returnsPageRequestGeneration &+= 1
         let backup = try await LocalPortfolioStore.shared.resetPortfolio()
+        // The explicit reset action must not restore an old personal screen.
+        // Shared public-data caches and built-in account snapshots stay intact.
+        sourcePresentations.removeValue(forKey: .personal)
+        presentedSource = nil
         isFakeDataMode = false
         UserDefaults.standard.set(false, forKey: Self.fakeDataModeKey)
         UserDefaults.standard.removeObject(forKey: Self.selectedAccountsKey)
@@ -579,6 +669,7 @@ final class AppModel {
         document = .empty
         overview = nil
         portfolioChart = nil
+        isPortfolioChartLoading = false
         holdings = []
         accounts = []
         selectedAccountKeys = []
@@ -596,8 +687,8 @@ final class AppModel {
         comparisonRevision &+= 1
         returnsAnalyticsRevision &+= 1
         portfolioRecoveryNotice = backup.map {
-            "本机组合已重置，原数据备份为 \($0.lastPathComponent)。券商授权和 AI 对话已保留。"
-        } ?? "本机组合已重置。券商授权和 AI 对话已保留。"
+            L10n.text("本机组合已重置，原数据备份为 \($0.lastPathComponent)。券商授权和 AI 对话已保留。")
+        } ?? L10n.text("本机组合已重置。券商授权和 AI 对话已保留。")
     }
 
     func suggestedAccountNickname(detectedName: String? = nil) -> String {
@@ -685,7 +776,7 @@ final class AppModel {
         let positions = snapshot.positions.compactMap { position -> LocalPositionRecord? in
             guard position.quantity > 0 else { return nil }
             guard let average = position.averagePricePaid, average > 0 else {
-                warnings.append("\(position.rawTicker) 缺少平均成本，已跳过")
+                warnings.append(L10n.text("\(position.rawTicker) 缺少平均成本，已跳过"))
                 return nil
             }
             return LocalPositionRecord(
@@ -714,7 +805,7 @@ final class AppModel {
         if !snapshot.hasCompleteTransactionHistory {
             warnings.append(
                 snapshot.transactionHistoryStatus
-                    ?? "成交历史正在分页同步，稍后再次同步会继续补全。"
+                    ?? L10n.text("成交历史正在分页同步，稍后再次同步会继续补全。")
             )
         }
         let transactions = snapshot.transactions.map { transaction in
@@ -742,7 +833,7 @@ final class AppModel {
         )
         let unavailableFXCount = enriched.filter { $0.fxPnlStatus == "unavailable" }.count
         if unavailableFXCount > 0 {
-            warnings.append("\(unavailableFXCount) 项持仓缺少完整历史数据，汇率影响标记为不可算")
+            warnings.append(L10n.text("\(unavailableFXCount) 项持仓缺少完整历史数据，汇率影响标记为不可算"))
         }
         let result = try await replace(
             enriched,
@@ -788,7 +879,7 @@ final class AppModel {
         let positions = snapshot.positions.compactMap { position -> LocalPositionRecord? in
             guard position.positionSide.uppercased() != "SHORT", position.quantityValue > 0 else { return nil }
             guard let average = position.costPriceValue, average > 0 else {
-                warnings.append("\(position.code) 缺少有效成本价，已跳过")
+                warnings.append(L10n.text("\(position.code) 缺少有效成本价，已跳过"))
                 return nil
             }
             return LocalPositionRecord(
@@ -838,7 +929,7 @@ final class AppModel {
         )
         let unavailableFXCount = enriched.filter { $0.fxPnlStatus == "unavailable" }.count
         if unavailableFXCount > 0 {
-            warnings.append("\(unavailableFXCount) 项持仓缺少完整历史数据，汇率影响标记为不可算")
+            warnings.append(L10n.text("\(unavailableFXCount) 项持仓缺少完整历史数据，汇率影响标记为不可算"))
         }
         return try await replace(
             enriched,
@@ -859,11 +950,11 @@ final class AppModel {
             guard position.quantity > 0 else { return nil }
             let category = position.assetCategory.uppercased()
             guard category.isEmpty || category == "STK" else {
-                warnings.append("已跳过不受支持的 \(category) 持仓 \(position.symbol)")
+                warnings.append(L10n.text("已跳过不受支持的 \(category) 持仓 \(position.symbol)"))
                 return nil
             }
             guard let average = position.averageCost, average > 0 else {
-                warnings.append("\(position.symbol) 缺少平均成本，已跳过")
+                warnings.append(L10n.text("\(position.symbol) 缺少平均成本，已跳过"))
                 return nil
             }
             let currency = position.currency.isEmpty ? "USD" : position.currency.uppercased()
@@ -900,10 +991,10 @@ final class AppModel {
             )
         }
         if snapshot.accountCurrencies.isEmpty {
-            warnings.append("Flex Query 缺少 Account Information → Base Currency，汇率影响暂不可计算")
+            warnings.append(L10n.text("Flex Query 缺少 Account Information → Base Currency，汇率影响暂不可计算"))
         }
         if transactions.isEmpty {
-            warnings.append("Flex Query 缺少 Trades → Executions；无建仓日时汇率影响将标记为不可算")
+            warnings.append(L10n.text("Flex Query 缺少 Trades → Executions；无建仓日时汇率影响将标记为不可算"))
         }
         let enriched = await LocalFXImpactCalculator().enrich(
             positions: positions,
@@ -911,7 +1002,7 @@ final class AppModel {
         )
         let unavailableFXCount = enriched.filter { $0.fxPnlStatus == "unavailable" }.count
         if unavailableFXCount > 0 {
-            warnings.append("\(unavailableFXCount) 项持仓缺少完整历史数据，汇率影响标记为不可算")
+            warnings.append(L10n.text("\(unavailableFXCount) 项持仓缺少完整历史数据，汇率影响标记为不可算"))
         }
         return try await replace(
             enriched,
@@ -958,10 +1049,24 @@ final class AppModel {
         let presentation = try await Task.detached(priority: .userInitiated) {
             try LocalPortfolioEngine.presentation(for: scoped)
         }.value
+        let cachedChart: PortfolioChartResponse?
+        if !isFakeDataMode && !isPublicInvestorMode && !scoped.positions.isEmpty {
+            cachedChart = try? await LocalMarketDataClient().portfolioChart(
+                document: scoped,
+                cachedOnly: true
+            )
+        } else {
+            cachedChart = nil
+        }
         guard generation == portfolioRequestGeneration else { return }
         document = scoped
+        presentedSource = portfolioSource
         overview = presentation.0
-        portfolioChart = presentation.1
+        portfolioChart = cachedChart ?? presentation.1
+        isPortfolioChartLoading = cachedChart == nil
+            && !isFakeDataMode
+            && !isPublicInvestorMode
+            && !scoped.positions.isEmpty
         portfolioChartRevision &+= 1
         holdings = presentation.2
         if invalidatesDailyChanges {
@@ -991,51 +1096,129 @@ final class AppModel {
         returnsAnalyticsRevision &+= 1
     }
 
-    func setFakeDataMode(_ enabled: Bool) async {
-        guard enabled != isFakeDataMode else { return }
+    var portfolioSource: PortfolioSource {
+        if isPublicInvestorMode { return .publicInvestors(publicInvestorSelection) }
+        return isFakeDataMode ? .demo : .personal
+    }
+
+    /// The two flags and selection change synchronously, before any suspension.
+    /// Switching never clears persisted portfolio or shared public-data caches.
+    func setPortfolioMode(enabled: Bool, selection: String) {
+        let chosen = enabled && selection.isEmpty ? PublicInvestorPreferences.defaultSelection : selection
+        let normalized = PublicInvestorPreferences.selectedIDs(chosen).sorted().joined(separator: ",")
+        let demo = enabled && PublicInvestorPreferences.isDemo(normalized)
+        let investor = enabled && !demo
+        guard demo != isFakeDataMode || investor != isPublicInvestorMode
+                || normalized != publicInvestorSelection else { return }
+
+        if presentedSource == portfolioSource {
+            sourcePresentations[portfolioSource] = captureSourcePresentation()
+        }
+        portfolioSourceGeneration &+= 1
+        let generation = portfolioSourceGeneration
+        portfolioSourceTask?.cancel()
+        invalidateInFlightRequests()
+        let changedSelection = normalized != publicInvestorSelection
+        isFakeDataMode = demo
+        isPublicInvestorMode = investor
+        publicInvestorSelection = normalized
+        modeDefaults.set(demo, forKey: Self.fakeDataModeKey)
+        modeDefaults.set(investor, forKey: PublicInvestorPreferences.enabledKey)
+        modeDefaults.set(normalized, forKey: PublicInvestorPreferences.selectionKey)
+        if changedSelection {
+            modeDefaults.set(true, forKey: "catfolio.publicSelectsAllAccounts")
+        }
         fakeDataModeError = nil
-        isFakeDataMode = enabled
-        UserDefaults.standard.set(enabled, forKey: Self.fakeDataModeKey)
-        invalidateInFlightRequests()
-        await refreshPortfolio()
-        await refreshReturnsPage()
+        portfolioError = nil
+        returnsError = nil
+        comparisonWarning = nil
+        analyticsWarning = nil
+        if let cached = sourcePresentations[portfolioSource] {
+            restoreSourcePresentation(cached)
+        } else {
+            clearSourcePresentation()
+        }
+        portfolioSourceTask = Task { @MainActor [weak self] in
+            guard let self, !Task.isCancelled,
+                  generation == self.portfolioSourceGeneration else { return }
+            await self.refreshPortfolio()
+            guard !Task.isCancelled, generation == self.portfolioSourceGeneration else { return }
+            await self.refreshReturnsPage()
+            if generation == self.portfolioSourceGeneration { self.portfolioSourceTask = nil }
+        }
     }
 
-    func setPublicInvestorMode(_ enabled: Bool) async {
-        isPublicInvestorMode = enabled
-        UserDefaults.standard.set(enabled, forKey: PublicInvestorPreferences.enabledKey)
-        await reloadPortfolioSource()
+    private struct SourcePresentation {
+        let document: LocalPortfolioDocument
+        let overview: PortfolioOverview?
+        let chart: PortfolioChartResponse?
+        let holdings: [Holding]
+        let accounts: [PortfolioAccount]
+        let accountKeys: Set<String>
+        let dailyChanges: [String: Double]
+        let benchmark: Double?
+        let comparison: ComparisonResponse?
+        let analytics: ReturnsAnalyticsResponse?
+        let source: String
+        let updatedAt: Date?
     }
 
-    func setPublicInvestorSelection(_ selection: String) async {
-        publicInvestorSelection = selection
-        UserDefaults.standard.set(selection, forKey: PublicInvestorPreferences.selectionKey)
-        UserDefaults.standard.set(true, forKey: "catfolio.publicSelectsAllAccounts")
-        if isPublicInvestorMode { await reloadPortfolioSource() }
+    private func captureSourcePresentation() -> SourcePresentation {
+        SourcePresentation(document: document, overview: overview, chart: portfolioChart,
+            holdings: holdings, accounts: accounts, accountKeys: selectedAccountKeys,
+            dailyChanges: holdingDailyChanges, benchmark: benchmarkDailyChange,
+            comparison: comparison, analytics: returnsAnalytics, source: localSource, updatedAt: localUpdatedAt)
     }
 
-    private func reloadPortfolioSource() async {
-        invalidateInFlightRequests()
+    private func restoreSourcePresentation(_ cached: SourcePresentation) {
+        document = cached.document
+        overview = cached.overview
+        portfolioChart = cached.chart
+        holdings = cached.holdings
+        accounts = cached.accounts
+        selectedAccountKeys = cached.accountKeys
+        holdingDailyChanges = cached.dailyChanges
+        benchmarkDailyChange = cached.benchmark
+        comparison = cached.comparison
+        returnsAnalytics = cached.analytics
+        localSource = cached.source
+        localUpdatedAt = cached.updatedAt
+        presentedSource = portfolioSource
+        portfolioChartRevision &+= 1
+        comparisonRevision &+= 1
+        returnsAnalyticsRevision &+= 1
+    }
+
+    private func clearSourcePresentation() {
+        // Only the outgoing screen state; never a disk-cache deletion.
+        document = .empty
+        presentedSource = nil
         holdings = []
         overview = nil
         portfolioChart = nil
         comparison = nil
         returnsAnalytics = nil
         accounts = []
+        selectedAccountKeys = []
         holdingDailyChanges = [:]
-        await refreshPortfolio()
-        await refreshReturnsPage()
+        localUpdatedAt = nil
+        localSource = "尚未导入"
+        portfolioChartRevision &+= 1
+        comparisonRevision &+= 1
+        returnsAnalyticsRevision &+= 1
     }
 
     private func loadActiveDocument() async throws -> LocalPortfolioDocument {
         if isPublicInvestorMode {
-            return try await PublicInvestorSimulationStore.shared.load(catalog: PublicInvestorCatalog.loaded.get(), selection: publicInvestorSelection)
+            return try await publicInvestorStore.load(catalog: PublicInvestorCatalog.loaded.get(), selection: publicInvestorSelection)
         }
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--verify-empty-account") { return FoundationRegressionChecks.emptyFixture }
         #endif
-        if isFakeDataMode { return FakePortfolioGenerator.make() }
-        let loaded = try await LocalPortfolioStore.shared.load()
+        if isFakeDataMode {
+            return await Task.detached(priority: .userInitiated) { FakePortfolioGenerator.make() }.value
+        }
+        let loaded = try await personalDocumentLoader()
         if let notice = await LocalPortfolioStore.shared.recoveryNotice {
             portfolioRecoveryNotice = notice
         }
@@ -1052,8 +1235,8 @@ final class AppModel {
     private func selectedDocument(from loaded: LocalPortfolioDocument) -> LocalPortfolioDocument {
         let availableAccounts = loaded.accounts
         let availableKeys = Set(availableAccounts.map(\.id))
-        let savedKeys = Self.savedAccountKeys(forKey: selectedAccountsStorageKey).intersection(availableKeys)
-        let selectsAll = UserDefaults.standard.bool(forKey: selectsAllAccountsStorageKey)
+        let savedKeys = Self.savedAccountKeys(forKey: selectedAccountsStorageKey, defaults: modeDefaults).intersection(availableKeys)
+        let selectsAll = modeDefaults.bool(forKey: selectsAllAccountsStorageKey)
         let effectiveKeys = selectsAll || savedKeys.isEmpty ? availableKeys : savedKeys
         accounts = availableAccounts
         selectedAccountKeys = effectiveKeys
@@ -1070,8 +1253,8 @@ final class AppModel {
         isReturnsLoading = false
         isReturnsAnalyticsLoading = false
         returnsAnalyticsPendingParts = []
-        Self.saveAccountKeys(next, forKey: selectedAccountsStorageKey)
-        UserDefaults.standard.set(selectsAll, forKey: selectsAllAccountsStorageKey)
+        Self.saveAccountKeys(next, forKey: selectedAccountsStorageKey, defaults: modeDefaults)
+        modeDefaults.set(selectsAll, forKey: selectsAllAccountsStorageKey)
         await refreshPortfolio()
         await refreshReturnsPage()
     }
@@ -1084,16 +1267,16 @@ final class AppModel {
         isPublicInvestorMode ? "catfolio.publicSelectsAllAccounts" : (isFakeDataMode ? Self.fakeSelectsAllAccountsKey : Self.selectsAllAccountsKey)
     }
 
-    private static func savedAccountKeys(forKey key: String) -> Set<String> {
-        guard let data = UserDefaults.standard.data(forKey: key),
+    private static func savedAccountKeys(forKey key: String, defaults: UserDefaults) -> Set<String> {
+        guard let data = defaults.data(forKey: key),
               let values = try? JSONDecoder().decode([String].self, from: data) else { return [] }
         return Set(values)
     }
 
-    private static func saveAccountKeys(_ keys: Set<String>, forKey key: String) {
+    private static func saveAccountKeys(_ keys: Set<String>, forKey key: String, defaults: UserDefaults) {
         let values = keys.sorted()
         guard let data = try? JSONEncoder().encode(values) else { return }
-        UserDefaults.standard.set(data, forKey: key)
+        defaults.set(data, forKey: key)
     }
 
     private static func maskedAccountName(provider: String, accountID: String) -> String {
@@ -1115,6 +1298,11 @@ final class AppModel {
     }
 
     private func enrichPortfolioChart(from loaded: LocalPortfolioDocument, generation: Int) async {
+        defer {
+            if generation == portfolioRequestGeneration {
+                isPortfolioChartLoading = false
+            }
+        }
         if let enriched = try? await LocalMarketDataClient().portfolioChart(document: loaded) {
             guard generation == portfolioRequestGeneration else { return }
             portfolioChart = enriched
@@ -1123,21 +1311,33 @@ final class AppModel {
     }
 
     private func invalidateInFlightRequests() {
+        returnsPageRequestGeneration &+= 1
+        returnsPageTask?.cancel()
+        returnsPageTask = nil
         portfolioRequestGeneration &+= 1
         returnsRequestGeneration &+= 1
         returnsAnalyticsRequestGeneration &+= 1
         dailyChangesRequestGeneration &+= 1
         isPortfolioLoading = false
+        isPortfolioChartLoading = false
         isReturnsLoading = false
         isReturnsAnalyticsLoading = false
         returnsAnalyticsPendingParts = []
         isHoldingDailyChangesLoading = false
         benchmarkDailyChange = nil
+        holdingDailyChangesSignature = ""
     }
 
+    /// Which tickers the daily changes were read for — nothing else.
+    ///
+    /// A day's change belongs to the ticker, not to the latest quote or the
+    /// size of the position. Keying on price and market value meant the quote
+    /// update that follows every home refresh left the signature stale, so
+    /// opening the heatmap fetched every change again (with its spinner) that
+    /// the home list was already showing. A real refresh still resets this
+    /// signature and reads the changes afresh.
     private static func dailyChangesSignature(for holdings: [Holding]) -> String {
-        holdings
-            .map { "\($0.ticker.uppercased()):\($0.quotePrice):\($0.marketValue)" }
+        Set(holdings.map { $0.ticker.uppercased() })
             .sorted()
             .joined(separator: "|")
     }
