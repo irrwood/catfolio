@@ -1,0 +1,87 @@
+{
+  "checkedOn": "2026-09-09",
+  "releaseId": "09c2d833d79d34dc",
+  "seed": 20260909,
+  "passed": 12,
+  "checks": [
+    "source member SHA256",
+    "rating exists in original archive",
+    "start/end close matches original archive",
+    "entry after rating date",
+    "price return arithmetic"
+  ],
+  "samples": [
+    {
+      "symbol": "CAG",
+      "institution": "Bernstein",
+      "date": "2026-06-03",
+      "horizon": 21
+    },
+    {
+      "symbol": "BCS",
+      "institution": "Morgan Stanley",
+      "date": "2023-09-26",
+      "horizon": 63
+    },
+    {
+      "symbol": "DKL",
+      "institution": "Wells Fargo",
+      "date": "2020-01-07",
+      "horizon": 252
+    },
+    {
+      "symbol": "URBN",
+      "institution": "Baird",
+      "date": "2014-08-19",
+      "horizon": 252
+    },
+    {
+      "symbol": "COHU",
+      "institution": "Needham",
+      "date": "2013-06-20",
+      "horizon": 63
+    },
+    {
+      "symbol": "SIRI",
+      "institution": "Morgan Stanley",
+      "date": "2017-04-19",
+      "horizon": 21
+    },
+    {
+      "symbol": "AEE",
+      "institution": "Argus Research",
+      "date": "2015-04-27",
+      "horizon": 63
+    },
+    {
+      "symbol": "KEY",
+      "institution": "Keefe, Bruyette & Woods",
+      "date": "2023-11-06",
+      "horizon": 21
+    },
+    {
+      "symbol": "AAP",
+      "institution": "Citigroup",
+      "date": "2019-09-13",
+      "horizon": 252
+    },
+    {
+      "symbol": "GOOG",
+      "institution": "Stifel",
+      "date": "2021-03-30",
+      "horizon": 21
+    },
+    {
+      "symbol": "ZM",
+      "institution": "RBC Capital",
+      "date": "2020-06-03",
+      "horizon": 252
+    },
+    {
+      "symbol": "SIGI",
+      "institution": "Keefe Bruyette & Woods",
+      "date": "2013-02-19",
+      "horizon": 63
+    }
+  ]
+}

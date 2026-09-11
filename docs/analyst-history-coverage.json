@@ -1,0 +1,17 @@
+{
+  "securities": 78,
+  "usable": 74,
+  "priceAndTarget": 73,
+  "ratings": 74,
+  "statuses": {
+    "PARTIAL": 56,
+    "AVAILABLE": 18,
+    "UNSUPPORTED_LISTING": 4
+  },
+  "unavailable": [
+    "VUSA",
+    "ASMLA",
+    "RR",
+    "XS2D"
+  ]
+}

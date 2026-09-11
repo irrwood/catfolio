@@ -10,6 +10,8 @@ Project repository: [github.com/irrwood/catfolio](https://github.com/irrwood/cat
 
 ## Highlights
 
+Developer map: [引擎与能力清单 / Engine capability catalog](ENGINE_CATALOG.md) — current iOS implementations, Core data pipelines, consumers, limitations, and planned extraction boundaries. Read before adding another calculation engine.
+
 - **Local-first by default**: portfolio files, imported CSVs, caches, saved strategy runs, and API keys stay on your machine.
 - **Demo-safe for open source**: `CATFOLIO_DEMO=1` uses bundled sample data and does not read local private account files.
 - **Broker sync or CSV import**: connect Trading 212 for live holdings, or upload broker transaction CSVs to calculate weighted-average cost and current positions.

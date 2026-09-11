@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>设置 · Catfolio iOS</title>
+  <style>
+    :root{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif;color:#111;background:#f2f2f7}*{box-sizing:border-box}body{margin:0;background:#f2f2f7}button,input{font:inherit}.app{max-width:430px;min-height:100vh;margin:auto;padding:calc(env(safe-area-inset-top) + 12px) 20px calc(env(safe-area-inset-bottom) + 28px)}.top{display:flex;align-items:center;justify-content:space-between;margin:0 0 20px}.top h1{font-size:34px;line-height:1.1;margin:0;font-weight:750;letter-spacing:-.04em}.top button{border:0;background:none;color:#007aff;font-size:16px}.search{height:36px;border-radius:10px;background:#e5e5ea;color:#8e8e93;padding:8px 12px;margin-bottom:22px;font-size:15px}.search:before{content:'⌕';font-size:19px;margin-right:7px}.section{margin:0 0 24px}.section h2{font-size:13px;color:#6d6d72;font-weight:400;text-transform:uppercase;margin:0 0 7px 16px}.card{overflow:hidden;border-radius:24px;background:#fff}.row{min-height:54px;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:14px}.row+.row{border-top:1px solid #e5e5ea}.copy{min-width:0}.copy strong{display:block;font-size:16px;font-weight:500}.copy span{display:block;color:#8e8e93;font-size:12px;margin-top:3px;line-height:1.3}.value{color:#8e8e93;font-size:14px;text-align:right;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.chevron{color:#c7c7cc;font-size:22px;margin-left:3px}.switch{width:51px;height:31px;border:0;border-radius:20px;background:#d1d1d6;position:relative;flex:none}.switch:after{content:'';position:absolute;width:27px;height:27px;left:2px;top:2px;border-radius:50%;background:#fff;box-shadow:0 2px 4px #0002;transition:.2s}.switch.on{background:#34c759}.switch.on:after{left:22px}.sub{padding:10px 16px;background:#fafafa;border-top:1px solid #e5e5ea}.sub label{display:block;color:#6d6d72;font-size:12px;margin:9px 0 5px}.sub input{width:100%;height:38px;border:1px solid #d1d1d6;border-radius:8px;padding:0 10px;background:#fff;font-size:14px}.pill{font-size:12px;color:#34a853;background:#e8f7ec;border-radius:99px;padding:5px 9px;white-space:nowrap}.pill.off{color:#8e8e93;background:#f2f2f7}.action{color:#007aff;border:0;background:none;font-size:15px;white-space:nowrap}.note{font-size:12px;line-height:1.4;color:#8e8e93;padding:9px 16px 0}.footer{text-align:center;color:#8e8e93;font-size:12px;margin-top:32px}@media(min-width:700px){body{padding:24px}.app{border-radius:28px;box-shadow:0 12px 40px #0001;min-height:calc(100vh - 48px)}}
+    button:focus-visible,input:focus-visible{outline:3px solid #007aff55;outline-offset:2px}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+  </style>
+</head>
+<body>
+<main class="app">
+  <header class="top"><h1>设置</h1><button onclick="alert('设置已保存')">完成</button></header>
+  <div class="search">搜索设置</div>
+
+  <section class="section"><h2>常规</h2><div class="card">
+    <div class="row"><div class="copy"><strong>演示数据模式</strong><span id="demoText">当前：已关闭 — 显示真实数据</span></div><button class="switch" aria-label="演示数据模式" onclick="toggle(this)"></button></div>
+  </div></section>
+
+  <section class="section"><h2>数据与缓存</h2><div class="card">
+    <div class="row"><div class="copy"><strong>刷新全部组合数据</strong><span>同步持仓、行情、历史价格和估值</span></div><button class="action" onclick="saved(this)">一键刷新</button></div>
+    <div class="row"><div class="copy"><strong>Trading 212 持仓</strong><span>持仓、平均成本和账户现金</span></div><button class="action" onclick="saved(this)">立即同步</button></div>
+    <div class="row"><div class="copy"><strong>历史日线价格</strong><span>每 12 小时过期 · 当前：2 小时前</span></div><button class="action" onclick="saved(this)">刷新</button></div>
+    <div class="row"><div class="copy"><strong>FMP 估值数据</strong><span>覆盖 18/22 只美股</span></div><button class="action" onclick="saved(this)">刷新</button></div>
+    <div class="row"><div class="copy"><strong>Massive 盘后异动</strong><span>每 15 分钟过期 · 当前：18 分钟前</span></div><button class="action" onclick="saved(this)">刷新</button></div>
+  </div></section>
+
+  <section class="section"><h2>AI 提供方</h2><div class="card">
+    <div class="row" onclick="expand('ai')"><div class="copy"><strong>当前模型</strong><span>用于组合总结、风险诊断和收益归因</span></div><div class="value">OpenAI <span class="chevron">›</span></div></div>
+    <div class="sub" id="ai" hidden><label>提供方</label><input value="OpenAI" aria-label="AI 提供方"><label>API Key</label><input type="password" placeholder="已设置，留空则不修改"></div>
+  </div></section>
+
+  <section class="section"><h2>凭证</h2><div class="card">
+    <div class="row" onclick="expand('broker')"><div class="copy"><strong>券商持仓源</strong><span>Trading 212 · 只读接口</span></div><div class="value">已配置 <span class="chevron">›</span></div></div><div class="sub" id="broker" hidden><label>Trading 212 API Key</label><input type="password" placeholder="已设置，留空则不修改"><label>Trading 212 API Secret</label><input type="password" placeholder="已设置，留空则不修改"><label>Moomoo / Futu OpenD Host</label><input value="127.0.0.1"><label>OpenD Port</label><input value="11111"></div>
+    <div class="row" onclick="expand('market')"><div class="copy"><strong>市场数据</strong><span>行情、估值、盘后异动和宏观数据</span></div><div class="value">3/4 已配置 <span class="chevron">›</span></div></div><div class="sub" id="market" hidden><label>FMP API Key</label><input type="password" placeholder="粘贴 API Key…"><label>Finnhub API Key</label><input type="password" placeholder="已设置，留空则不修改"><label>Massive API Key</label><input type="password" placeholder="可选"><label>FRED API Key</label><input type="password" placeholder="可选"></div>
+    <div class="row" onclick="expand('bank')"><div class="copy"><strong>Open Banking</strong><span>Plaid Link 与交易同步</span></div><div class="value">未配置 <span class="chevron">›</span></div></div><div class="sub" id="bank" hidden><label>Plaid Client ID</label><input placeholder="粘贴 Client ID…"><label>Plaid Secret</label><input type="password" placeholder="粘贴 Secret…"></div>
+    <div class="row" onclick="expand('telegram')"><div class="copy"><strong>Telegram 提醒</strong><span>集中度、估值和回撤阈值通知</span></div><span class="pill off">未配置</span></div><div class="sub" id="telegram" hidden><label>Bot Token</label><input type="password" placeholder="从 @BotFather 获取"><label>Chat ID</label><input placeholder="自动获取或手动填写"><button class="action" style="padding:12px 0 4px">获取 Chat ID</button></div>
+  </div><p class="note">密钥保存到系统 Keychain，不会写入项目文件。</p></section>
+
+  <section class="section"><h2>系统</h2><div class="card">
+    <div class="row"><div class="copy"><strong>项目根路径</strong><span>数据保存与脚本执行的工作区</span></div><div class="value">本地工作区</div></div>
+    <div class="row"><div class="copy"><strong>V2 缓存路径</strong><span>主数据模型文件存放目录</span></div><div class="value">outputs/…</div></div>
+    <div class="row"><div class="copy"><strong>GBP/USD 汇率</strong><span>英股与英镑资产的展示基准</span></div><div class="value">1.3460</div></div>
+    <div class="row"><div class="copy"><strong>EUR/USD 汇率</strong><span>欧洲股票资产的换算基准</span></div><div class="value">1.1630</div></div>
+  </div></section>
+
+  <section class="section"><h2>开发者</h2><div class="card"><div class="row" onclick="expand('api')"><div class="copy"><strong>本地 REST API</strong><span>4 个只读数据接口</span></div><span class="chevron">›</span></div><div class="sub" id="api" hidden><div class="row"><div class="copy"><strong>组合汇总数据</strong></div><div class="value">/api/portfolio/summary</div></div><div class="row"><div class="copy"><strong>当前持仓明细</strong></div><div class="value">/api/holdings</div></div><div class="row"><div class="copy"><strong>ETF 穿透</strong></div><div class="value">/api/etf-lookthrough</div></div><div class="row"><div class="copy"><strong>相关性矩阵</strong></div><div class="value">/api/chart/exposure</div></div></div></div></section>
+  <div class="footer">Catfolio · 本地工作区设置</div>
+</main>
+<script>function toggle(b){b.classList.toggle('on');document.getElementById('demoText').textContent=b.classList.contains('on')?'当前：已开启 — 显示样例数据':'当前：已关闭 — 显示真实数据'}function expand(id){const e=document.getElementById(id);e.hidden=!e.hidden}function saved(b){const t=b.textContent;b.textContent='完成';setTimeout(()=>b.textContent=t,1000)}</script>
+</body></html>

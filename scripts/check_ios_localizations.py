@@ -45,9 +45,20 @@ def main():
         catalogs[language] = dict(entries)
     assert catalogs["en"].keys() == catalogs["zh-Hans"].keys(), "Language keys differ"
     for key, english in catalogs["en"].items():
-        assert not re.search("[\u4e00-\u9fff]", english), f"Untranslated English value: {key}"
+        assert not re.search("[\u4e00-\u9fff。；、，：！？（）]", english), f"Untranslated English value: {key}"
         assert key.count("%@") == english.count("%@"), f"English placeholders: {key}"
         assert key.count("%@") == catalogs["zh-Hans"][key].count("%@"), f"Chinese placeholders: {key}"
+    for name in ["SettingsView.swift", "HistoryView.swift", "TodayDetailView.swift"]:
+        source = (ROOT / name).read_text()
+        assert 'joined(separator: "。")' not in source, f"Hard-coded sentence punctuation: {name}"
+    settings = (ROOT / "SettingsView.swift").read_text()
+    assert 'value: L10n.label(model.localSource)' in settings
+    assert 'value: L10n.label(account.accountType)' in settings
+    # Literal labels can otherwise bypass the translation catalog entirely.
+    for start, end, key in scan(settings):
+        prefix = settings[max(0, start - 80):start]
+        if re.search(r'(?:Text|TextField|Label|Button|Section|accessibilityLabel|accessibilityHint)\($', prefix):
+            assert not re.search("[一-鿿。；、]", key), f"Unlocalized Settings label: {key}"
     missing = []
     count = 0
     for path in ROOT.glob("*.swift"):
