@@ -15,7 +15,7 @@ from app.routes import api, home, report, lab, analysis_charts, backtest, heatma
 from app import i18n
 from app.data_store import public_demo_mode
 
-app = FastAPI(title="Catfolio", version="1.0.0")
+app = FastAPI(title="Catfolio", version="1.1.0")
 APP_DIR = Path(__file__).resolve().parent
 
 app.add_middleware(
@@ -35,6 +35,7 @@ _PUBLIC_DEMO_POSTS = {
     "/api/ai/overlap-analysis",
     "/api/ai/what-if",
     "/api/ai/ask",
+    "/api/ai/portfolio-attention",
     "/api/ai/returns-explanation",
     "/api/alerts/preview-ai-reminders",
     "/api/bank/scan-subscriptions",
@@ -109,3 +110,13 @@ app.include_router(settings.router)
 app.include_router(strategy.router)
 app.include_router(import_csv.router)
 app.include_router(i18n.router)
+
+# Stock history is reachable from the desktop holdings table.
+from app.routes import price_target_history
+app.include_router(price_target_history.router)
+
+from app.routes import sector_rotation
+app.include_router(sector_rotation.router)
+
+from app.routes import accounts
+app.include_router(accounts.router)

@@ -1,8 +1,12 @@
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
 certifi>=2024.2.2
-python-dotenv==1.1.0
+python-dotenv==1.2.3
 keyring>=25.0.0
 cryptography>=42.0.0
 python-multipart>=0.0.9
 imap-tools>=1.14.0,<2.0
+futu-api>=10.0.6008
+
+# Exchange sessions for independent sector-rotation snapshots (holiday/DST aware).
+exchange-calendars>=4.5,<5

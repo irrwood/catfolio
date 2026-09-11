@@ -53,3 +53,27 @@ releases/
 
 # Private, local-only review images
 /pnl-broker-vs-price.jpeg
+
+# catfolio-dsh plugin build artifacts
+catfolio-dsh/dist/
+catfolio-dsh/node_modules/
+
+# Xcode per-user state
+xcuserdata/
+*.xcuserstate
+DerivedData/
+*.xcworkspace/xcuserdata/
+
+# Local design-QA artifacts (large, machine-local)
+/CatfolioIOS/design-qa.md
+/CatfolioIOS/design-qa-assets/
+/design-qa-*.png
+
+# Playwright CLI cache
+.playwright-cli/
+
+# Nested demo site checkout (own git repo + node_modules)
+/sites/
+
+# Local account-sync browser QA artifacts
+/output/playwright/account-sync/

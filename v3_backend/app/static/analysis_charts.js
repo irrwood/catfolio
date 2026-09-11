@@ -1,5 +1,6 @@
 (() => {
   const isEnglish = document.documentElement.lang === "en";
+  const isComponentDemo = window.__CATFOLIO_COMPONENT_DEMO__ === true;
   const copy = isEnglish ? {
     loading: "Loading analytics…",
     loadError: "Could not load analytics.",
@@ -86,6 +87,7 @@
   let latestData = null;
   let latestValuationData = null;
   let loading = false;
+  let drawdownRange = "MAX";
   let calendarInitialized = false;
   const calendarState = { view: "month", year: new Date().getFullYear(), month: new Date().getMonth() + 1 };
 
@@ -400,26 +402,81 @@
   }
 
   function renderDrawdown(data) {
-    const rows = data.drawdown?.rows || [];
-    if (!rows.length) return emptyChart("drawdownChart");
+    const allRows = data.drawdown?.rows || [];
+    if (!allRows.length) return emptyChart("drawdownChart");
     const colors = palette();
+    const endDate = new Date(`${allRows.at(-1).date}T12:00:00`);
+    const dayWindows = { "1D": 1, "1W": 7, "1M": 31, "3M": 93, "1Y": 366 };
+    let rows = allRows;
+    if (drawdownRange === "YTD") {
+      rows = allRows.filter(row => String(row.date).slice(0, 4) === String(endDate.getFullYear()));
+    } else if (dayWindows[drawdownRange]) {
+      const startDate = new Date(endDate);
+      startDate.setDate(startDate.getDate() - dayWindows[drawdownRange]);
+      rows = allRows.filter(row => new Date(`${row.date}T12:00:00`) >= startDate);
+    }
+    if (rows.length < 2) rows = allRows.slice(-2);
     const values = rows.map(row => Number(row.drawdown || 0) * 100);
+    const minimum = Math.min(...values);
+    const axisMinimum = Math.min(-10, Math.floor(minimum / 10) * 10);
     const meta = document.getElementById("drawdownMeta");
     if (meta) meta.textContent = `${copy.maxDrawdown} ${formatPct(data.drawdown?.max_drawdown)}`;
     chart("drawdownChart").setOption({
       ...baseOption(),
-      grid: { left: 58, right: 20, top: 18, bottom: 38 },
-      xAxis: categoryAxis({ data: rows.map(row => row.date), boundaryGap: false, axisLabel: { color: colors.muted, hideOverlap: true, fontSize: 10 } }),
-      yAxis: valueAxis({ max: 0, axisLabel: { color: colors.muted, formatter: value => `${value.toFixed(0)}%` } }),
+      animationDuration: 180,
+      grid: { left: 54, right: 0, top: 12, bottom: 8 },
+      xAxis: categoryAxis({
+        data: rows.map(row => row.date),
+        boundaryGap: false,
+        axisLine: { show: false },
+        axisLabel: { show: false },
+        splitLine: { show: false },
+        axisPointer: {
+          show: true,
+          type: "line",
+          lineStyle: { color: "#eaebed", width: 1 },
+          label: { show: false },
+        },
+      }),
+      yAxis: valueAxis({
+        min: axisMinimum,
+        max: 0,
+        interval: 10,
+        axisLabel: {
+          color: "rgba(9,15,5,.6)",
+          fontSize: 12,
+          fontWeight: 700,
+          margin: 18,
+          formatter: value => `${value.toFixed(0)}%`,
+        },
+        splitLine: { lineStyle: { color: "#eaebed", width: 1, opacity: 1 } },
+      }),
       series: [{
         type: "line",
         showSymbol: false,
-        smooth: 0.16,
+        smooth: 0.18,
         data: values,
-        lineStyle: { color: colors.negative, width: 1.7 },
-        areaStyle: { color: new window.echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: `${colors.negative}55` }, { offset: 1, color: `${colors.negative}08` }]) },
+        lineStyle: { color: "#e40014", width: 2 },
+        areaStyle: { color: "rgba(228,0,20,.10)" },
+        emphasis: { focus: "series", scale: true, itemStyle: { color: "#e40014" } },
       }],
-      tooltip: { ...baseOption().tooltip, trigger: "axis", valueFormatter: value => `${Number(value).toFixed(2)}%` },
+      tooltip: {
+        trigger: "axis",
+        confine: true,
+        backgroundColor: "transparent",
+        borderWidth: 0,
+        padding: 0,
+        axisPointer: { type: "line", lineStyle: { color: "#eaebed", width: 1 } },
+        extraCssText: "box-shadow:none;",
+        formatter: params => {
+          const point = params[0];
+          const date = new Date(`${point.axisValue}T12:00:00`);
+          const dateLabel = date.toLocaleDateString(isEnglish ? "en-GB" : "zh-CN", {
+            day: "2-digit", month: "short", year: "2-digit",
+          }).toUpperCase();
+          return `<div class="analytics-drawdown-tooltip"><span class="analytics-drawdown-tooltip-date">${escapeHtml(dateLabel)}</span><span class="analytics-drawdown-tooltip-value">${Number(point.value).toFixed(1)}%</span></div>`;
+        },
+      },
     }, true);
     finishChart("drawdownChart");
   }
@@ -521,17 +578,6 @@
     finishChart("waterfallChart");
   }
 
-  function valuationSummary(rows) {
-    const valued = rows.filter(row => row.pe && row.benchmark && row.premium !== null);
-    if (!valued.length) return null;
-    const portfolioMedian = median(valued.map(row => row.pe));
-    const weightedTotal = valued.reduce((sum, row) => sum + row.weight, 0);
-    const weightedPremium = weightedTotal
-      ? valued.reduce((sum, row) => sum + row.premium * row.weight, 0) / weightedTotal
-      : valued.reduce((sum, row) => sum + row.premium, 0) / valued.length;
-    return { valuedCount: valued.length, portfolioMedian, weightedPremium };
-  }
-
   function renderValuationTable(rows) {
     const head = document.getElementById("valuationTableHead");
     const body = document.getElementById("valuationTableBody");
@@ -577,7 +623,6 @@
     if (!target) return;
     const colors = palette();
     const chartRows = rows.filter(row => row.pe && row.growth !== null);
-    const summary = valuationSummary(rows);
     target.clear();
     if (!chartRows.length) {
       target.setOption({
@@ -592,76 +637,91 @@
       finishChart("valuationMatrixChart");
       return;
     }
-    const sectorPalette = ["#708cff", "#2f8a3e", "#7d68d8", "#d49b27", "#1a9aa8", "#b55d8d", "#687482"];
+    const sectorPalette = ["#89d663", "#f36d0d", "#708cff", "#2f8a3e", "#d49b27", "#7d68d8", "#1a9aa8"];
     const sectorColor = new Map();
     chartRows.forEach(row => {
       const sector = row.sector || "Other";
       if (!sectorColor.has(sector)) sectorColor.set(sector, sectorPalette[sectorColor.size % sectorPalette.length]);
     });
+    const peValues = chartRows.map(row => row.pe);
+    const growthValues = chartRows.map(row => row.growth);
+    const xMinimum = Math.min(-10, Math.floor(Math.min(...peValues) / 10) * 10);
+    const xMaximum = Math.max(50, Math.ceil(Math.max(...peValues) / 10) * 10);
+    const growthSpan = Math.max(20, Math.max(...growthValues) - Math.min(...growthValues));
+    const growthPadding = Math.max(10, growthSpan * 0.25);
+    const yMinimum = Math.min(-60, Math.floor((Math.min(...growthValues) - growthPadding) / 10) * 10);
+    const yMaximum = Math.max(0, Math.ceil((Math.max(...growthValues) + growthPadding) / 10) * 10);
+    const xInterval = Math.max(10, Math.ceil(((xMaximum - xMinimum) / 6) / 10) * 10);
+    const yInterval = Math.max(10, Math.ceil(((yMaximum - yMinimum) / 6) / 10) * 10);
+    const maximumWeight = Math.max(...chartRows.map(row => row.weight), 0.0001);
     target.setOption({
       ...baseOption(),
-      title: summary ? {
-        text: `${copy.valuationLevel}  ${summary.weightedPremium >= 0 ? "+" : ""}${(summary.weightedPremium * 100).toFixed(1)}%`,
-        subtext: `${summary.valuedCount} ${copy.holdingsWithPe}`,
-        right: 24,
-        top: 12,
-        textStyle: {
-          color: summary.weightedPremium >= 0 ? colors.negative : colors.positive,
-          fontSize: 18,
-          fontWeight: 750,
-        },
-        subtextStyle: { color: colors.muted, fontSize: 11, lineHeight: 18 },
-      } : undefined,
-      grid: { left: 68, right: 24, top: 72, bottom: 62 },
+      animationDuration: 220,
+      grid: { left: 54, right: 18, top: 12, bottom: 39 },
       xAxis: valueAxis({
-        name: "P/E",
-        nameLocation: "middle",
-        nameGap: 34,
-        min: 0,
-        axisLabel: { color: colors.muted, fontSize: 11, formatter: value => `${Number(value).toFixed(0)}×` },
+        min: xMinimum,
+        max: xMaximum,
+        interval: xInterval,
+        axisLabel: {
+          color: "rgba(9,15,5,.6)",
+          fontSize: 12,
+          fontWeight: 700,
+          margin: 18,
+          formatter: value => `${Number(value).toFixed(0)}×${Number(value) === xMaximum ? " P/E" : ""}`,
+        },
+        splitLine: { lineStyle: { color: "#eaebed", width: 1, opacity: 1 } },
       }),
       yAxis: valueAxis({
-        name: copy.growthRate,
-        nameLocation: "middle",
-        nameGap: 46,
-        axisLabel: { color: colors.muted, fontSize: 11, formatter: value => `${Number(value).toFixed(0)}%` },
+        min: yMinimum,
+        max: yMaximum,
+        interval: yInterval,
+        axisLabel: {
+          color: "rgba(9,15,5,.6)",
+          fontSize: 12,
+          fontWeight: 700,
+          margin: 18,
+          formatter: value => `${Number(value).toFixed(0)}%`,
+        },
+        splitLine: { lineStyle: { color: "#eaebed", width: 1, opacity: 1 } },
       }),
       series: [{
         type: "scatter",
-        data: chartRows.map(row => ({
-          value: [row.pe, row.growth, row.weight],
-          raw: row,
-          itemStyle: { color: sectorColor.get(row.sector || "Other"), opacity: 0.78 },
-        })),
-        symbolSize: value => Math.max(14, Math.min(48, Math.sqrt(Number(value[2] || 0)) * 130)),
-        label: { show: true, formatter: params => params.data.raw.ticker, position: "top", color: colors.muted, fontSize: 10 },
-        markLine: summary ? {
-          silent: true,
-          symbol: "none",
-          animation: false,
-          lineStyle: { color: "#708cff", width: 1.5, type: "dashed", opacity: 0.9 },
-          label: {
-            show: true,
-            formatter: `${copy.portfolioMedian}  ${summary.portfolioMedian.toFixed(1)}×`,
-            position: "insideEndTop",
-            rotate: 0,
-            color: colors.ink,
-            fontSize: 11,
-            fontWeight: 700,
-            backgroundColor: colors.panel,
-            borderColor: colors.line,
-            borderWidth: 1,
-            borderRadius: 7,
-            padding: [5, 8],
-          },
-          data: [{ xAxis: summary.portfolioMedian }],
-        } : undefined,
+        clip: false,
+        data: chartRows.map(row => {
+          const pointColor = sectorColor.get(row.sector || "Other");
+          return {
+            value: [row.pe, row.growth, row.weight],
+            raw: row,
+            itemStyle: { color: pointColor, opacity: 1 },
+            label: { color: pointColor },
+          };
+        }),
+        symbolSize: value => Math.max(20, Math.min(118, Math.sqrt(Number(value[2] || 0) / maximumWeight) * 118)),
+        label: {
+          show: true,
+          formatter: params => params.data.raw.ticker,
+          position: "top",
+          distance: 4,
+          fontSize: 11,
+          fontWeight: 700,
+        },
+        emphasis: { scale: 1.04 },
       }],
       tooltip: {
-        ...baseOption().tooltip,
+        confine: true,
+        backgroundColor: "#fff",
+        borderColor: "#f1f1f1",
+        borderWidth: 1,
+        padding: 8,
+        textStyle: { color: "#000", fontFamily: getComputedStyle(document.body).fontFamily, fontSize: 10 },
+        extraCssText: "border-radius:8px;box-shadow:0 10px 9px rgba(0,0,0,.08);",
         formatter: params => {
           const row = params.data.raw;
-          return `<b>${escapeHtml(row.ticker)}</b><br>P/E ${row.pe.toFixed(1)}×<br>${escapeHtml(row.growthSource)} ${row.growth >= 0 ? "+" : ""}${row.growth.toFixed(1)}%<br>${escapeHtml(copy.weight)} ${(row.weight * 100).toFixed(1)}%`;
+          return `<div class="analytics-valuation-tooltip">
+            <div class="analytics-valuation-tooltip-head"><span>${escapeHtml(row.ticker)}</span><span>${row.pe.toFixed(1)}×</span></div>
+            <div class="analytics-valuation-tooltip-row"><span>${escapeHtml(row.growthSource)}</span><span>${row.growth >= 0 ? "+" : ""}${row.growth.toFixed(1)}%</span></div>
+            <div class="analytics-valuation-tooltip-row"><span>${escapeHtml(copy.weight)}</span><span>${(row.weight * 100).toFixed(1)}%</span></div>
+          </div>`;
         },
       },
     }, true);
@@ -682,13 +742,15 @@
     const expanded = button.getAttribute("aria-expanded") !== "true";
     button.setAttribute("aria-expanded", expanded ? "true" : "false");
     panel.hidden = !expanded;
+    button.closest(".analytics-valuation-card")?.classList.toggle("is-table-expanded", expanded);
     const rows = latestValuationData ? prepareValuationRows(latestValuationData) : [];
     button.textContent = `${expanded ? copy.hideDetails : copy.showDetails} (${rows.length})`;
+    requestAnimationFrame(() => chart("valuationMatrixChart")?.resize());
   }
 
   function renderAll(data) {
     latestData = data;
-    renderProfitCalendar(data);
+    if (!isComponentDemo) renderProfitCalendar(data);
     renderMonthly(data);
     renderDrawdown(data);
     renderCorrelation(data);
@@ -764,26 +826,39 @@
   document.getElementById("analyticsRefresh")?.addEventListener("click", load);
   document.getElementById("valuationRefresh")?.addEventListener("click", refreshValuation);
   document.getElementById("valuationTableToggle")?.addEventListener("click", toggleValuationTable);
-  document.getElementById("profitCalendarMonth")?.addEventListener("click", () => {
-    calendarState.view = "month";
-    if (latestData) renderProfitCalendar(latestData);
+  document.querySelectorAll("[data-drawdown-range]").forEach(button => {
+    button.addEventListener("click", () => {
+      drawdownRange = button.dataset.drawdownRange || "MAX";
+      document.querySelectorAll("[data-drawdown-range]").forEach(option => {
+        const active = option === button;
+        option.classList.toggle("active", active);
+        option.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+      if (latestData) renderDrawdown(latestData);
+    });
   });
-  document.getElementById("profitCalendarYear")?.addEventListener("click", () => {
-    calendarState.view = "year";
-    if (latestData) renderProfitCalendar(latestData);
-  });
-  document.getElementById("profitCalendarPrev")?.addEventListener("click", () => {
-    if (calendarState.view === "year") calendarState.year -= 1;
-    else if (calendarState.month === 1) { calendarState.month = 12; calendarState.year -= 1; }
-    else calendarState.month -= 1;
-    if (latestData) renderProfitCalendar(latestData);
-  });
-  document.getElementById("profitCalendarNext")?.addEventListener("click", () => {
-    if (calendarState.view === "year") calendarState.year += 1;
-    else if (calendarState.month === 12) { calendarState.month = 1; calendarState.year += 1; }
-    else calendarState.month += 1;
-    if (latestData) renderProfitCalendar(latestData);
-  });
+  if (!isComponentDemo) {
+    document.getElementById("profitCalendarMonth")?.addEventListener("click", () => {
+      calendarState.view = "month";
+      if (latestData) renderProfitCalendar(latestData);
+    });
+    document.getElementById("profitCalendarYear")?.addEventListener("click", () => {
+      calendarState.view = "year";
+      if (latestData) renderProfitCalendar(latestData);
+    });
+    document.getElementById("profitCalendarPrev")?.addEventListener("click", () => {
+      if (calendarState.view === "year") calendarState.year -= 1;
+      else if (calendarState.month === 1) { calendarState.month = 12; calendarState.year -= 1; }
+      else calendarState.month -= 1;
+      if (latestData) renderProfitCalendar(latestData);
+    });
+    document.getElementById("profitCalendarNext")?.addEventListener("click", () => {
+      if (calendarState.view === "year") calendarState.year += 1;
+      else if (calendarState.month === 12) { calendarState.month = 1; calendarState.year += 1; }
+      else calendarState.month += 1;
+      if (latestData) renderProfitCalendar(latestData);
+    });
+  }
   window.addEventListener("resize", () => instances.forEach(instance => instance.resize()));
   new MutationObserver(mutations => {
     if (mutations.some(record => record.attributeName === "class")) {

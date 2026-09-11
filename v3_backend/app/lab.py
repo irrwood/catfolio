@@ -7,11 +7,11 @@ import time
 import urllib.request
 from collections import defaultdict
 from statistics import mean, stdev
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from .analytics import _num, exposure_value_usd, holdings_by_ticker, market_by_ticker
+from .analytics import _num, exposure_value_usd, holdings_by_ticker, market_by_ticker, snapshot_index
 from .cache import cached
 from .data_store import current_snapshot, demo_mode, load_json
 from .settings import LAB_HISTORY_CACHE, LAB_HISTORY_TTL_SECONDS, ROOT, V2_DIR
@@ -204,7 +204,8 @@ def income_summary():
     """Return monthly and annual dividend/cash-interest income in reporting USD."""
     global SOURCE_FILES
     if demo_mode():
-        return {"currency": "USD", "rows": [], "monthly_rows": []}
+        from .demo_data import DEMO_INCOME_SUMMARY
+        return DEMO_INCOME_SUMMARY
     if not SOURCE_FILES:
         SOURCE_FILES = _init_source_files()
 
@@ -255,9 +256,13 @@ def income_summary():
     return {"currency": "USD", "rows": rows, "monthly_rows": monthly_rows}
 
 
-def fetch_history(symbol, years=5):
+def fetch_history(symbol, years=5, start_date=None):
     period2 = int(time.time())
-    period1 = period2 - int(years * 365.25 * 24 * 60 * 60)
+    if start_date:
+        start = datetime.strptime(str(start_date)[:10], "%Y-%m-%d")
+        period1 = min(int(start.replace(tzinfo=timezone.utc).timestamp()), period2 - 60)
+    else:
+        period1 = period2 - int(years * 365.25 * 24 * 60 * 60)
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?period1={period1}&period2={period2}&interval=1d"
     payload = _open_json(url)
     result = payload.get("chart", {}).get("result") or []
@@ -265,13 +270,164 @@ def fetch_history(symbol, years=5):
         return []
     data = result[0]
     timestamps = data.get("timestamp") or []
-    closes = (data.get("indicators", {}).get("adjclose", [{}])[0].get("adjclose") or data.get("indicators", {}).get("quote", [{}])[0].get("close") or [])
+    indicators = data.get("indicators", {})
+    quote = (indicators.get("quote") or [{}])[0]
+    adjusted_closes = (indicators.get("adjclose") or [{}])[0].get("adjclose") or []
+    raw_closes = quote.get("close") or []
+    closes = adjusted_closes or raw_closes
+    opens = quote.get("open") or []
+    highs = quote.get("high") or []
+    lows = quote.get("low") or []
+    volumes = quote.get("volume") or []
     rows = []
-    for ts, close in zip(timestamps, closes):
+    for index, (ts, close) in enumerate(zip(timestamps, closes)):
         if close is None:
             continue
-        rows.append({"date": time.strftime("%Y-%m-%d", time.gmtime(int(ts))), "close": float(close)})
+        row = {"date": time.strftime("%Y-%m-%d", time.gmtime(int(ts))), "close": float(close)}
+        for field, values in (("open", opens), ("high", highs), ("low", lows), ("raw_close", raw_closes)):
+            value = values[index] if index < len(values) else None
+            if value is not None:
+                row[field] = float(value)
+        volume = volumes[index] if index < len(volumes) else None
+        if volume is not None:
+            row["volume"] = int(volume)
+        rows.append(row)
     return rows
+
+
+def calculate_volume_profile(rows, *, bins=36, value_area=0.70, lookback=120, minimum_bars=20):
+    """Approximate a volume profile from daily OHLCV bars.
+
+    Each session's volume is distributed evenly across the price bins touched
+    by that session. This is deliberately labelled as a daily-bar estimate: it
+    is useful for a compact hover summary, but is not tick-level volume-at-price.
+    """
+    valid = []
+    for row in rows or []:
+        try:
+            low = float(row.get("low"))
+            high = float(row.get("high"))
+            volume = float(row.get("volume"))
+        except (TypeError, ValueError):
+            continue
+        if not all(math.isfinite(value) for value in (low, high, volume)) or volume <= 0:
+            continue
+        if high < low:
+            low, high = high, low
+        valid.append({"date": str(row.get("date") or ""), "low": low, "high": high, "volume": volume})
+
+    valid = valid[-max(1, int(lookback)) :]
+    if len(valid) < max(1, int(minimum_bars)):
+        return {
+            "available": False,
+            "reason": "insufficient_ohlcv_history",
+            "sessions": len(valid),
+        }
+
+    price_low = min(row["low"] for row in valid)
+    price_high = max(row["high"] for row in valid)
+    if not math.isfinite(price_low) or not math.isfinite(price_high) or price_high <= price_low:
+        return {"available": False, "reason": "invalid_price_range", "sessions": len(valid)}
+
+    bin_count = max(8, min(120, int(bins)))
+    step = (price_high - price_low) / bin_count
+    volume_by_bin = [0.0] * bin_count
+    for row in valid:
+        first = max(0, min(bin_count - 1, int((row["low"] - price_low) / step)))
+        last = max(0, min(bin_count - 1, int((row["high"] - price_low) / step)))
+        touched = last - first + 1
+        allocated = row["volume"] / touched
+        for index in range(first, last + 1):
+            volume_by_bin[index] += allocated
+
+    total_volume = sum(volume_by_bin)
+    if total_volume <= 0:
+        return {"available": False, "reason": "invalid_volume", "sessions": len(valid)}
+
+    poc_index = max(range(bin_count), key=volume_by_bin.__getitem__)
+    selected_low = selected_high = poc_index
+    selected_volume = volume_by_bin[poc_index]
+    target_volume = total_volume * max(0.5, min(0.95, float(value_area)))
+    while selected_volume < target_volume and (selected_low > 0 or selected_high < bin_count - 1):
+        left_volume = volume_by_bin[selected_low - 1] if selected_low > 0 else -1.0
+        right_volume = volume_by_bin[selected_high + 1] if selected_high < bin_count - 1 else -1.0
+        if right_volume > left_volume:
+            selected_high += 1
+            selected_volume += volume_by_bin[selected_high]
+        else:
+            selected_low -= 1
+            selected_volume += volume_by_bin[selected_low]
+
+    return {
+        "available": True,
+        "vah": round(price_low + (selected_high + 1) * step, 4),
+        "poc": round(price_low + (poc_index + 0.5) * step, 4),
+        "val": round(price_low + selected_low * step, 4),
+        "sessions": len(valid),
+        "value_area_percent": round(value_area * 100),
+        "as_of": valid[-1]["date"] or None,
+        "method": "daily_ohlcv_uniform_price_bins",
+    }
+
+
+@cached(ttl=60 * 60 * 12)
+def holding_volume_profile(ticker):
+    """Return a compact Volume Profile only for a current portfolio holding."""
+    normalized = str(ticker or "").strip().upper()
+    snapshot = current_snapshot()
+    holdings = snapshot.get("portfolio", {}).get("holdings", [])
+    holding = next(
+        (
+            row
+            for row in holdings
+            if normalized
+            in {
+                str(row.get("ticker") or "").strip().upper(),
+                str(row.get("yahoo_symbol") or "").strip().upper(),
+            }
+        ),
+        None,
+    )
+    if holding is None:
+        return None
+
+    ticker_label = str(holding.get("ticker") or normalized).strip().upper()
+    symbol = str(holding.get("yahoo_symbol") or holding.get("ticker") or normalized).strip().upper()
+    history = get_history_cached()
+    cached_rows = list((history.get("prices") or {}).get(symbol) or [])
+    profile = calculate_volume_profile(cached_rows)
+    if not profile.get("available") and not demo_mode():
+        try:
+            profile = calculate_volume_profile(fetch_history(symbol, years=1))
+        except Exception:
+            profile = {"available": False, "reason": "history_fetch_failed", "sessions": 0}
+
+    market_rows = snapshot.get("market", {}).get("rows", [])
+    market_row = next(
+        (
+            row
+            for row in market_rows
+            if normalized
+            in {
+                str(row.get("ticker") or "").strip().upper(),
+                str(row.get("yahoo_symbol") or "").strip().upper(),
+            }
+        ),
+        {},
+    )
+    currency = (
+        market_row.get("quote_currency")
+        or market_row.get("currency")
+        or holding.get("price_currency")
+        or holding.get("cost_currency")
+        or "USD"
+    )
+    return {
+        "ticker": ticker_label,
+        "symbol": symbol,
+        "currency": str(currency).upper(),
+        **profile,
+    }
 
 
 def history_cache_age_seconds():
@@ -283,7 +439,12 @@ def history_cache_age_seconds():
 
 def lab_symbols(snapshot, max_symbols=35):
     holdings = snapshot["portfolio"].get("holdings", [])
-    ranked = sorted(holdings, key=lambda row: exposure_value_usd(row.get("ticker"), snapshot, basis="market"), reverse=True)
+    index = snapshot_index(snapshot)
+    ranked = sorted(
+        holdings,
+        key=lambda row: exposure_value_usd(row.get("ticker"), snapshot, basis="market", index=index),
+        reverse=True,
+    )
     symbols = []
     for row in ranked:
         symbol = row.get("yahoo_symbol") or row.get("ticker")
@@ -302,23 +463,50 @@ def refresh_history(force=False, years=5):
         from .demo_data import DEMO_LAB_HISTORY
         return {"ok": True, "cached": True, "age_seconds": 0, "history": DEMO_LAB_HISTORY}
 
-    age = history_cache_age_seconds()
-    if not force and age is not None and age < LAB_HISTORY_TTL_SECONDS:
-        return {"ok": True, "cached": True, "age_seconds": age, "history": load_json(LAB_HISTORY_CACHE, {})}
-
     snapshot = current_snapshot()
     symbols = lab_symbols(snapshot)
+    cached_history = load_json(LAB_HISTORY_CACHE, {}) or {}
+    cached_prices = cached_history.get("prices", {}) if isinstance(cached_history.get("prices"), dict) else {}
+    age = history_cache_age_seconds()
+    missing_symbols = [symbol for symbol in symbols if not cached_prices.get(symbol)]
+    if not force and age is not None and age < LAB_HISTORY_TTL_SECONDS and not missing_symbols:
+        return {"ok": True, "cached": True, "age_seconds": age, "history": cached_history}
+
     prices = {}
     warnings = []
     started = time.time()
+    full_symbols = 0
+    incremental_symbols = 0
+    unchanged_symbols = 0
     for symbol in symbols:
+        existing_rows = list(cached_prices.get(symbol) or [])
+        start_date = None
+        if not force and existing_rows:
+            last_date = max(str(row.get("date") or "") for row in existing_rows)
+            if last_date:
+                start_date = (datetime.strptime(last_date[:10], "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
         try:
-            rows = fetch_history(symbol, years=years)
-            if rows:
+            rows = fetch_history(symbol, years=years, start_date=start_date)
+            if start_date:
+                merged = {str(row.get("date")): row for row in existing_rows if row.get("date")}
+                previous_count = len(merged)
+                merged.update({str(row.get("date")): row for row in rows if row.get("date")})
+                prices[symbol] = [merged[date] for date in sorted(merged)]
+                if len(merged) > previous_count:
+                    incremental_symbols += 1
+                else:
+                    unchanged_symbols += 1
+            elif rows:
                 prices[symbol] = rows
+                full_symbols += 1
+            elif existing_rows:
+                prices[symbol] = existing_rows
+                unchanged_symbols += 1
             else:
                 warnings.append(f"Yahoo history empty: {symbol}")
         except Exception as exc:
+            if existing_rows:
+                prices[symbol] = existing_rows
             warnings.append(f"Yahoo history failed {symbol}: {type(exc).__name__} {str(exc)[:100]}")
         time.sleep(0.08)
     history = {
@@ -330,6 +518,13 @@ def refresh_history(force=False, years=5):
         "benchmarks": BENCHMARKS,
         "warnings": warnings,
         "source": "Yahoo Finance chart endpoint",
+        "incremental": not force,
+        "refresh_stats": {
+            "full": full_symbols,
+            "incremental": incremental_symbols,
+            "unchanged": unchanged_symbols,
+            "removed": len(set(cached_prices) - set(symbols)),
+        },
     }
     LAB_HISTORY_CACHE.parent.mkdir(parents=True, exist_ok=True)
     LAB_HISTORY_CACHE.write_text(json.dumps(history, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -357,6 +552,90 @@ def get_history_cached():
         from .demo_data import DEMO_LAB_HISTORY
         return DEMO_LAB_HISTORY
     return load_json(LAB_HISTORY_CACHE, None) or {"prices": {}}
+
+
+def current_open_positions_history(snapshot=None, history=None):
+    """Backcast current open stock positions without including account cash.
+
+    Trading 212 exposes current quantity, average price and initial fill date,
+    but there is not yet a complete historical position ledger for both
+    accounts. Each currently-open account position therefore starts on its
+    broker-provided initial fill date and is valued with cached daily prices.
+    """
+    snapshot = snapshot or current_snapshot()
+    history = history or get_history_cached()
+    prices = history.get("prices", {}) if isinstance(history.get("prices"), dict) else {}
+    holdings_by_account = snapshot.get("portfolio", {}).get("holdings_by_account", [])
+    raw_positions = (snapshot.get("broker") or snapshot.get("trading212", {})).get("positions", [])
+    initial_fill_by_key = {
+        (str(row.get("account") or ""), str(row.get("ticker") or "")): str(row.get("initial_fill_date") or "")[:10]
+        for row in raw_positions
+        if row.get("ticker") and row.get("initial_fill_date")
+    }
+    fx_to_usd = {key: float(value) for key, value in REPORT_FX_TO_USD.items()}
+    positions = []
+    for holding in holdings_by_account:
+        account = str(holding.get("account") or holding.get("accounts") or "")
+        api_ticker = str(holding.get("api_ticker") or "")
+        start_date = initial_fill_by_key.get((account, api_ticker))
+        symbol = holding.get("yahoo_symbol") or holding.get("ticker")
+        if not start_date or not symbol:
+            continue
+        positions.append({
+            "start_date": start_date,
+            "symbol": symbol,
+            "shares": float(holding.get("shares") or 0),
+            "cost_usd": float(holding.get("cost_usd_standard") or 0),
+            "fx": fx_to_usd.get(str(holding.get("cost_currency") or "USD"), 1.0),
+        })
+    if not positions:
+        return {"available": False, "rows": [], "basis": "current_open_positions_excluding_cash"}
+
+    price_by_symbol = {
+        symbol: {
+            str(row.get("date")): float(row.get("close"))
+            for row in rows
+            if row.get("date") and row.get("close") is not None
+        }
+        for symbol, rows in prices.items()
+    }
+    dates = sorted({date for series in price_by_symbol.values() for date in series})
+    earliest_start = min(position["start_date"] for position in positions)
+    rows = []
+    last_close = {}
+    for date in dates:
+        if date < earliest_start:
+            continue
+        market_value = 0.0
+        position_cost = 0.0
+        active_positions = 0
+        for position in positions:
+            if date < position["start_date"]:
+                continue
+            active_positions += 1
+            position_cost += position["cost_usd"]
+            close = price_by_symbol.get(position["symbol"], {}).get(date)
+            if close is not None:
+                last_close[position["symbol"]] = close
+            else:
+                close = last_close.get(position["symbol"])
+            market_value += (
+                position["shares"] * close * position["fx"]
+                if close is not None
+                else position["cost_usd"]
+            )
+        if active_positions:
+            rows.append({
+                "date": date,
+                "market_value_usd": market_value,
+                "cost_usd": position_cost,
+            })
+    return {
+        "available": bool(rows),
+        "rows": rows,
+        "basis": "current_open_positions_backcast_from_initial_fill_excluding_cash",
+        "position_count": len(positions),
+    }
 
 
 def ensure_history_symbols(symbols, years=5, max_fetch=180):
@@ -1059,7 +1338,6 @@ def cash_flow_mirror_vs_benchmark(symbol="SPY"):
             portfolio_value += shares * close * symbol_value_fx.get(currency, 1.0)
             priced_symbols += 1
         benchmark_value = benchmark_shares * benchmark_close
-
         # Return = (holdings + withdrawn) / total_invested - 1
         if buy_total > 0:
             portfolio_return = (portfolio_value + cumulative_sell_total) / buy_total - 1

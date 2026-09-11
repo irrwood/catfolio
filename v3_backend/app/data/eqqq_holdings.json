@@ -1,0 +1,629 @@
+{
+  "fund_id": "IE0032077012",
+  "fund_name": "Invesco EQQQ NASDAQ-100 UCITS ETF Dist",
+  "benchmark": "NASDAQ-100 Index",
+  "as_of": "2026-08-27",
+  "source": "Invesco official holdings",
+  "source_url": "https://www.invesco.com/uk/en/financial-products/etfs/invesco-eqqq-nasdaq-100-ucits-etf-dist.html",
+  "source_api": "https://dng-api.invesco.com/cache/v1/accounts/en_GB/shareclasses/IE0032077012/holdings/index?idType=isin",
+  "rows": [
+    {
+      "ticker": "NVDA",
+      "name": "NVIDIA CORP",
+      "sector": "Information Technology",
+      "weight_percent": 8.7358
+    },
+    {
+      "ticker": "AAPL",
+      "name": "APPLE INC",
+      "sector": "Information Technology",
+      "weight_percent": 7.3159
+    },
+    {
+      "ticker": "MSFT",
+      "name": "MICROSOFT CORP",
+      "sector": "Information Technology",
+      "weight_percent": 5.9508
+    },
+    {
+      "ticker": "MU",
+      "name": "MICRON TECHNOLOGY INC",
+      "sector": "Information Technology",
+      "weight_percent": 4.6125
+    },
+    {
+      "ticker": "AMZN",
+      "name": "AMAZON.COM INC",
+      "sector": "Consumer Discretionary",
+      "weight_percent": 4.3653
+    },
+    {
+      "ticker": "AMD",
+      "name": "ADVANCED MICRO DEVICES",
+      "sector": "Information Technology",
+      "weight_percent": 3.3985
+    },
+    {
+      "ticker": "GOOGL",
+      "name": "ALPHABET INC-CL A",
+      "sector": "Communication Services",
+      "weight_percent": 3.1427
+    },
+    {
+      "ticker": "GOOG",
+      "name": "ALPHABET INC-CL C",
+      "sector": "Communication Services",
+      "weight_percent": 2.9194
+    },
+    {
+      "ticker": "TSLA",
+      "name": "TESLA INC",
+      "sector": "Consumer Discretionary",
+      "weight_percent": 2.8081
+    },
+    {
+      "ticker": "AVGO",
+      "name": "BROADCOM INC",
+      "sector": "Information Technology",
+      "weight_percent": 2.791
+    },
+    {
+      "ticker": "META",
+      "name": "Meta Platforms INC",
+      "sector": "Communication Services",
+      "weight_percent": 2.6797
+    },
+    {
+      "ticker": "WMT",
+      "name": "WALMART INC",
+      "sector": "Consumer Staples",
+      "weight_percent": 2.1949
+    },
+    {
+      "ticker": "INTC",
+      "name": "INTEL CORP",
+      "sector": "Information Technology",
+      "weight_percent": 2.0253
+    },
+    {
+      "ticker": "CSCO",
+      "name": "CISCO SYSTEMS INC",
+      "sector": "Information Technology",
+      "weight_percent": 1.934
+    },
+    {
+      "ticker": "PLTR",
+      "name": "PALANTIR TECHNOLOGIES INC-A",
+      "sector": "Information Technology",
+      "weight_percent": 1.8692
+    },
+    {
+      "ticker": "COST",
+      "name": "COSTCO WHOLESALE CORP",
+      "sector": "Consumer Staples",
+      "weight_percent": 1.8138
+    },
+    {
+      "ticker": "LRCX",
+      "name": "LAM RESEARCH CORP COM",
+      "sector": "Information Technology",
+      "weight_percent": 1.7438
+    },
+    {
+      "ticker": "AMAT",
+      "name": "APPLIED MATERIALS INC",
+      "sector": "Information Technology",
+      "weight_percent": 1.6771
+    },
+    {
+      "ticker": "NFLX",
+      "name": "NETFLIX INC",
+      "sector": "Communication Services",
+      "weight_percent": 1.4715
+    },
+    {
+      "ticker": "PANW",
+      "name": "PALO ALTO NETWORKS INC",
+      "sector": "Information Technology",
+      "weight_percent": 1.368
+    },
+    {
+      "ticker": "SPCX",
+      "name": "SPACE EXPLORATION TECHN-CL A",
+      "sector": null,
+      "weight_percent": 1.1826
+    },
+    {
+      "ticker": "TXN",
+      "name": "TEXAS INSTRUMENTS INC USD1",
+      "sector": "Information Technology",
+      "weight_percent": 1.063
+    },
+    {
+      "ticker": "KLAC",
+      "name": "KLA CORP",
+      "sector": "Information Technology",
+      "weight_percent": 1.0532
+    },
+    {
+      "ticker": "AMGN",
+      "name": "AMGEN INC",
+      "sector": "Health Care",
+      "weight_percent": 1.0382
+    },
+    {
+      "ticker": "CRWD",
+      "name": "CROWDSTRIKE HOLDINGS INC - A",
+      "sector": "Information Technology",
+      "weight_percent": 1.0169
+    },
+    {
+      "ticker": "LIN",
+      "name": "LINDE PLC",
+      "sector": "Materials",
+      "weight_percent": 0.9839
+    },
+    {
+      "ticker": "SNDK",
+      "name": "SANDISK CORP-W/I",
+      "sector": "Information Technology",
+      "weight_percent": 0.9636
+    },
+    {
+      "ticker": "MRVL",
+      "name": "MARVELL TECHNOLOGY INC",
+      "sector": "Information Technology",
+      "weight_percent": 0.9203
+    },
+    {
+      "ticker": "TMUS",
+      "name": "T-MOBILE US INC",
+      "sector": "Communication Services",
+      "weight_percent": 0.843
+    },
+    {
+      "ticker": "PEP",
+      "name": "PEPSICO INC",
+      "sector": "Consumer Staples",
+      "weight_percent": 0.8321
+    },
+    {
+      "ticker": "STX",
+      "name": "SEAGATE TECHNOLOGY HOLDINGS",
+      "sector": "Information Technology",
+      "weight_percent": 0.8275
+    },
+    {
+      "ticker": "SHOP",
+      "name": "SHOPIFY INC - CLASS A",
+      "sector": null,
+      "weight_percent": 0.8201
+    },
+    {
+      "ticker": "GILD",
+      "name": "GILEAD SCIENCES INC",
+      "sector": "Health Care",
+      "weight_percent": 0.8053
+    },
+    {
+      "ticker": "ADI",
+      "name": "ANALOG DEVICES INC",
+      "sector": "Information Technology",
+      "weight_percent": 0.7948
+    },
+    {
+      "ticker": "QCOM",
+      "name": "QUALCOMM INC",
+      "sector": "Information Technology",
+      "weight_percent": 0.7567
+    },
+    {
+      "ticker": "WDC",
+      "name": "WESTERN DIGITAL CORP",
+      "sector": "Information Technology",
+      "weight_percent": 0.6939
+    },
+    {
+      "ticker": "ASML",
+      "name": "ASML HOLDING NV-NY REG SHS",
+      "sector": null,
+      "weight_percent": 0.6932
+    },
+    {
+      "ticker": "BKNG",
+      "name": "BOOKING HOLDINGS INC",
+      "sector": "Consumer Discretionary",
+      "weight_percent": 0.6839
+    },
+    {
+      "ticker": "VRTX",
+      "name": "VERTEX PHARMACEUTICALS INC",
+      "sector": "Health Care",
+      "weight_percent": 0.6055
+    },
+    {
+      "ticker": "ISRG",
+      "name": "INTUITIVE SURGICAL INC",
+      "sector": "Health Care",
+      "weight_percent": 0.5666
+    },
+    {
+      "ticker": "FTNT",
+      "name": "FORTINET INC",
+      "sector": "Information Technology",
+      "weight_percent": 0.5516
+    },
+    {
+      "ticker": "SBUX",
+      "name": "STARBUCKS CORP",
+      "sector": "Consumer Discretionary",
+      "weight_percent": 0.5352
+    },
+    {
+      "ticker": "ADBE",
+      "name": "ADOBE INC",
+      "sector": "Information Technology",
+      "weight_percent": 0.5092
+    },
+    {
+      "ticker": "ADP",
+      "name": "AUTOMATIC DATA PROCESSING",
+      "sector": "Industrials",
+      "weight_percent": 0.4958
+    },
+    {
+      "ticker": "ARM",
+      "name": "ARM HOLDINGS PLCUSD ADR",
+      "sector": null,
+      "weight_percent": 0.4714
+    },
+    {
+      "ticker": "CEG",
+      "name": "CONSTELLATION ENERGY - W/I",
+      "sector": "Utilities",
+      "weight_percent": 0.4449
+    },
+    {
+      "ticker": "MELI",
+      "name": "MERCADOLIBRE INC",
+      "sector": null,
+      "weight_percent": 0.4268
+    },
+    {
+      "ticker": "CDNS",
+      "name": "CADENCE DESIGN SYS INC",
+      "sector": "Information Technology",
+      "weight_percent": 0.4176
+    },
+    {
+      "ticker": "CSX",
+      "name": "CSX CORP USD1",
+      "sector": "Industrials",
+      "weight_percent": 0.4173
+    },
+    {
+      "ticker": "APP",
+      "name": "APPLOVIN CORP-CLASS A",
+      "sector": "Information Technology",
+      "weight_percent": 0.4164
+    },
+    {
+      "ticker": "DASH",
+      "name": "DOORDASH INC - A",
+      "sector": "Consumer Discretionary",
+      "weight_percent": 0.4156
+    },
+    {
+      "ticker": "INTU",
+      "name": "INTUIT INC",
+      "sector": "Information Technology",
+      "weight_percent": 0.4148
+    },
+    {
+      "ticker": "CMCSA",
+      "name": "COMCAST CORP-CLASS A",
+      "sector": "Communication Services",
+      "weight_percent": 0.41
+    },
+    {
+      "ticker": "MAR",
+      "name": "MARRIOTT INTERNATIONAL -CL A",
+      "sector": "Consumer Discretionary",
+      "weight_percent": 0.4073
+    },
+    {
+      "ticker": "MNST",
+      "name": "MONSTER BEVERAGE CORP",
+      "sector": "Consumer Staples",
+      "weight_percent": 0.398
+    },
+    {
+      "ticker": "SNPS",
+      "name": "SYNOPSYS INC",
+      "sector": "Information Technology",
+      "weight_percent": 0.3878
+    },
+    {
+      "ticker": "REGN",
+      "name": "REGENERON PHARMACEUTICALS",
+      "sector": "Health Care",
+      "weight_percent": 0.3631
+    },
+    {
+      "ticker": "CTAS",
+      "name": "CINTAS CORP",
+      "sector": "Industrials",
+      "weight_percent": 0.3566
+    },
+    {
+      "ticker": "DDOG",
+      "name": "DATADOG INC - CLASS A",
+      "sector": "Information Technology",
+      "weight_percent": 0.3501
+    },
+    {
+      "ticker": "MDLZ",
+      "name": "MONDELEZ INTERNATIONAL INC-A",
+      "sector": "Consumer Staples",
+      "weight_percent": 0.3492
+    },
+    {
+      "ticker": "ABNB",
+      "name": "AIRBNB INC-CLASS A",
+      "sector": "Consumer Discretionary",
+      "weight_percent": 0.3358
+    },
+    {
+      "ticker": "LITE",
+      "name": "LUMENTUM HOLDINGS INC",
+      "sector": "Information Technology",
+      "weight_percent": 0.3238
+    },
+    {
+      "ticker": "ROST",
+      "name": "ROSS STORES INC",
+      "sector": "Consumer Discretionary",
+      "weight_percent": 0.3227
+    },
+    {
+      "ticker": "ORLY",
+      "name": "O'REILLY AUTOMOTIVE INC",
+      "sector": "Consumer Discretionary",
+      "weight_percent": 0.3172
+    },
+    {
+      "ticker": "WBD",
+      "name": "WARNER BROS DISCOVERY INC",
+      "sector": "Communication Services",
+      "weight_percent": 0.3155
+    },
+    {
+      "ticker": "HON",
+      "name": "HONEYWELL INTERNATIONAL -WI",
+      "sector": "Industrials",
+      "weight_percent": 0.305
+    },
+    {
+      "ticker": "AEP",
+      "name": "AMERICAN ELECTRIC POWER USD6.5",
+      "sector": "Utilities",
+      "weight_percent": 0.2928
+    },
+    {
+      "ticker": "PCAR",
+      "name": "PACCAR INC USD1",
+      "sector": "Industrials",
+      "weight_percent": 0.2909
+    },
+    {
+      "ticker": "MPWR",
+      "name": "MONOLITHIC POWER SYSTEMS INC",
+      "sector": "Information Technology",
+      "weight_percent": 0.281
+    },
+    {
+      "ticker": "BKR",
+      "name": "BAKER HUGHES CO",
+      "sector": "Energy",
+      "weight_percent": 0.2685
+    },
+    {
+      "ticker": "FAST",
+      "name": "FASTENAL CO",
+      "sector": "Industrials",
+      "weight_percent": 0.2558
+    },
+    {
+      "ticker": "TER",
+      "name": "TERADYNE INC",
+      "sector": "Information Technology",
+      "weight_percent": 0.2538
+    },
+    {
+      "ticker": "ADSK",
+      "name": "AUTODESK INC",
+      "sector": "Information Technology",
+      "weight_percent": 0.2488
+    },
+    {
+      "ticker": "NXPI",
+      "name": "NXP SEMICONDUCTORS NV",
+      "sector": "Information Technology",
+      "weight_percent": 0.2485
+    },
+    {
+      "ticker": "PDD",
+      "name": "PDD Holdings Inc",
+      "sector": null,
+      "weight_percent": 0.2465
+    },
+    {
+      "ticker": "FANG",
+      "name": "DIAMONDBACK ENERGY INC",
+      "sector": "Energy",
+      "weight_percent": 0.2458
+    },
+    {
+      "ticker": "PYPL",
+      "name": "PAYPAL HOLDINGS INC",
+      "sector": "Financials",
+      "weight_percent": 0.2363
+    },
+    {
+      "ticker": "ALAB",
+      "name": "ASTERA LABS IN",
+      "sector": null,
+      "weight_percent": 0.227
+    },
+    {
+      "ticker": "HONA",
+      "name": "HONEYWELL AEROSPACE -WI",
+      "sector": "Industrials",
+      "weight_percent": 0.2219
+    },
+    {
+      "ticker": "AXON",
+      "name": "AXON ENTERPRISE INC",
+      "sector": "Industrials",
+      "weight_percent": 0.2148
+    },
+    {
+      "ticker": "XEL",
+      "name": "XCEL ENERGY INC USD2.5",
+      "sector": "Utilities",
+      "weight_percent": 0.2099
+    },
+    {
+      "ticker": "NBIS",
+      "name": "Nebius Group NV",
+      "sector": null,
+      "weight_percent": 0.2098
+    },
+    {
+      "ticker": "CCEP",
+      "name": "COCA-COLA EUROPEAN PARTNERS",
+      "sector": null,
+      "weight_percent": 0.2085
+    },
+    {
+      "ticker": "PAYX",
+      "name": "PAYCHEX INC",
+      "sector": "Industrials",
+      "weight_percent": 0.199
+    },
+    {
+      "ticker": "MSTR",
+      "name": "Strategy Inc",
+      "sector": null,
+      "weight_percent": 0.198
+    },
+    {
+      "ticker": "EXC",
+      "name": "EXELON CORP",
+      "sector": "Utilities",
+      "weight_percent": 0.196
+    },
+    {
+      "ticker": "KDP",
+      "name": "KEURIG DR PEPPER INC",
+      "sector": "Consumer Staples",
+      "weight_percent": 0.189
+    },
+    {
+      "ticker": "TTWO",
+      "name": "TAKE-TWO INTERACTIVE SOFTWRE",
+      "sector": "Communication Services",
+      "weight_percent": 0.1886
+    },
+    {
+      "ticker": "IDXX",
+      "name": "IDEXX LABORATORIES INC",
+      "sector": "Health Care",
+      "weight_percent": 0.1873
+    },
+    {
+      "ticker": "ROP",
+      "name": "Roper Technologies Inc",
+      "sector": "Information Technology",
+      "weight_percent": 0.186
+    },
+    {
+      "ticker": "FER",
+      "name": "FERROVIAL SE",
+      "sector": null,
+      "weight_percent": 0.1842
+    },
+    {
+      "ticker": "ODFL",
+      "name": "OLD DOMINION FREIGHT LINE",
+      "sector": "Industrials",
+      "weight_percent": 0.1813
+    },
+    {
+      "ticker": "MCHP",
+      "name": "MICROCHIP TECHNOLOGY INC",
+      "sector": "Information Technology",
+      "weight_percent": 0.1792
+    },
+    {
+      "ticker": "TRI",
+      "name": "THOMSON REUTERS CORP",
+      "sector": null,
+      "weight_percent": 0.1748
+    },
+    {
+      "ticker": "RKLB",
+      "name": "ROCKET LAB CORP",
+      "sector": null,
+      "weight_percent": 0.1703
+    },
+    {
+      "ticker": "WDAY",
+      "name": "WORKDAY INC-CLASS A",
+      "sector": "Information Technology",
+      "weight_percent": 0.1695
+    },
+    {
+      "ticker": "CRWV",
+      "name": "COREWEAVE INC-",
+      "sector": null,
+      "weight_percent": 0.1693
+    },
+    {
+      "ticker": "DXCM",
+      "name": "DEXCOM INC",
+      "sector": "Health Care",
+      "weight_percent": 0.1501
+    },
+    {
+      "ticker": "GEHC",
+      "name": "GE HEALTHCARE TECHNOLOG-W/I",
+      "sector": "Health Care",
+      "weight_percent": 0.1436
+    },
+    {
+      "ticker": "ALNY",
+      "name": "ALNYLAM PHARMACEUTICALS INC",
+      "sector": null,
+      "weight_percent": 0.1377
+    },
+    {
+      "ticker": "CPRT",
+      "name": "COPART INC",
+      "sector": "Industrials",
+      "weight_percent": 0.1321
+    },
+    {
+      "ticker": "KHC",
+      "name": "KRAFT HEINZ CO/THE",
+      "sector": "Consumer Staples",
+      "weight_percent": 0.1298
+    },
+    {
+      "ticker": "CASH",
+      "name": "Cash and/or Derivatives",
+      "sector": "ETF / Other",
+      "weight_percent": 0.1534
+    }
+  ]
+}

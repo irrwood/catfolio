@@ -1,4 +1,7 @@
+from collections import namedtuple
+
 from .cache import cached
+from .sp500_holdings import sp500_holdings_dataset
 
 # These analytics are pure functions of the snapshot. The snapshot is itself
 # cached (~10s) and re-keyed by its loaded_at timestamp, so caching on that
@@ -184,6 +187,13 @@ BROKER_PNL_FX_TO_USD = {
     "GBP": 1.3460,
     "GBX": 0.013460,
     "EUR": 1.1630,
+    "AUD": 0.655,
+    "CAD": 0.726,
+    "CNH": 0.139,
+    "CNY": 0.139,
+    "HKD": 0.1275,
+    "JPY": 0.0068,
+    "SGD": 0.777,
 }
 
 
@@ -194,11 +204,13 @@ def broker_pnl_by_ticker(snapshot):
     FX contribution. `fxPpl` is therefore exposed as an informational component
     and must not be added to `ppl` again.
     """
-    trading212 = snapshot.get("trading212", {})
+    trading212 = snapshot.get("broker") or snapshot.get("trading212", {})
     account_cash = trading212.get("account_cash", {})
     account_info = trading212.get("account_info", {})
     rows = {}
-    for position in trading212.get("positions", []):
+    # Account overlays supply complete normalized P&L, including CSV accounts.
+    raw_positions = [] if trading212.get("normalized_account_pnl") else trading212.get("positions", [])
+    for position in raw_positions:
         ticker = str(position.get("normalized_ticker") or position.get("ticker") or "").upper()
         if not ticker:
             continue
@@ -261,9 +273,23 @@ def holdings_by_ticker(snapshot):
     return {row.get("ticker"): row for row in snapshot["portfolio"].get("holdings", []) if row.get("ticker")}
 
 
-def exposure_value_usd(ticker, snapshot, basis="market"):
-    holdings = holdings_by_ticker(snapshot)
-    market = market_by_ticker(snapshot)
+SnapshotIndex = namedtuple("SnapshotIndex", ("holdings", "market"))
+
+
+def snapshot_index(snapshot):
+    """Build the two ticker indexes once for a batch of exposure lookups.
+
+    ``exposure_value_usd`` needs both, and is called once per holding by
+    ``etf_lookthrough``, ``chart_exposure`` and ``lab_symbols``. Rebuilding the
+    dicts inside the callee made all three quadratic in the number of holdings,
+    so anything looking up more than one ticker builds this once and passes it
+    down.
+    """
+    return SnapshotIndex(holdings_by_ticker(snapshot), market_by_ticker(snapshot))
+
+
+def exposure_value_usd(ticker, snapshot, basis="market", index=None):
+    holdings, market = snapshot_index(snapshot) if index is None else index
     if basis == "market":
         row = market.get(ticker, {})
         if row.get("market_value_usd") is not None:
@@ -276,15 +302,30 @@ def exposure_value_usd(ticker, snapshot, basis="market"):
 
 def portfolio_summary(snapshot):
     summary = dict(snapshot["portfolio"].get("summary", {}))
+    broker_provider = str(
+        summary.get("broker_provider")
+        or (snapshot.get("broker") or {}).get("provider")
+        or "trading212"
+    )
     market = market_by_ticker(snapshot)
     holdings = holdings_by_ticker(snapshot)
     broker_pnl = broker_pnl_by_ticker(snapshot)
-    market_total = sum(_num(row.get("market_value_usd")) for row in market.values())
+    market_total = sum(
+        _num(holding.get("api_market_value_usd"))
+        if holding.get("api_market_value_usd") is not None
+        else _num(market.get(ticker, {}).get("market_value_usd"))
+        for ticker, holding in holdings.items()
+    )
+    if not holdings:
+        market_total = sum(_num(row.get("market_value_usd")) for row in market.values())
     cost_total = _num(summary.get("total_cost_usd_standard"))
-    price_unrealized_total = market_total - cost_total
+    unpriced_cost = sum(_num(h.get("cost_usd_standard")) for h in holdings.values() if h.get("valuation_missing"))
+    price_unrealized_total = market_total - (cost_total - unpriced_cost)
     unrealized_total = 0.0
     broker_positions = 0
     for ticker, holding in holdings.items():
+        if holding.get("valuation_missing"):
+            continue
         broker_row = broker_pnl.get(ticker)
         if broker_row:
             unrealized_total += broker_row["broker_unrealized_usd"]
@@ -300,25 +341,37 @@ def portfolio_summary(snapshot):
             "broker_fx_ppl_usd": sum(row["broker_fx_ppl_usd"] for row in broker_pnl.values()),
             "price_unrealized_usd": price_unrealized_total,
             "unrealized_includes_fx": bool(broker_positions),
-            "unrealized_source": "trading212_ppl" if broker_positions == len(holdings) and holdings else ("mixed" if broker_positions else "price_difference"),
+            "unrealized_source": f"{broker_provider}_ppl" if broker_positions == len(holdings) and holdings else ("mixed" if broker_positions else "price_difference"),
             "trading212_positions": snapshot["trading212"].get("summary", {}).get("positions"),
-            "cash": snapshot["trading212"].get("account_cash", {}),
+            "broker_positions": len((snapshot.get("broker") or snapshot["trading212"]).get("positions", [])),
+            "cash": (snapshot.get("broker") or snapshot["trading212"]).get("account_cash", {}),
         }
     )
     return summary
 
 
 def etf_lookthrough(snapshot, basis="cost"):
-    holdings = holdings_by_ticker(snapshot)
-    etf_total = sum(exposure_value_usd(ticker, snapshot, basis=basis) for ticker in SP500_ETF_TICKERS)
+    index = snapshot_index(snapshot)
+    holdings = index.holdings
+    etf_total = sum(exposure_value_usd(ticker, snapshot, basis=basis, index=index) for ticker in SP500_ETF_TICKERS)
     direct = {
-        ticker: exposure_value_usd(ticker, snapshot, basis=basis)
+        ticker: exposure_value_usd(ticker, snapshot, basis=basis, index=index)
         for ticker in holdings
         if ticker not in SP500_ETF_TICKERS
     }
+    dataset = sp500_holdings_dataset()
+    constituent_rows = dataset.get("rows") or [
+        {"ticker": ticker, "name": name, "weight_percent": weight}
+        for ticker, name, weight in SP500_WEIGHTS
+    ]
     rows = []
     used_weight = 0.0
-    for ticker, name, weight in SP500_WEIGHTS:
+    for constituent in constituent_rows:
+        ticker = str(constituent.get("ticker") or "").upper()
+        if not ticker:
+            continue
+        name = constituent.get("name") or ticker
+        weight = _num(constituent.get("weight_percent"))
         used_weight += weight
         from_etf = etf_total * weight / 100
         direct_value = direct.get(ticker, 0.0)
@@ -331,22 +384,27 @@ def etf_lookthrough(snapshot, basis="cost"):
                 "from_etf_usd": from_etf,
                 "total_usd": direct_value + from_etf,
                 "etf_weight_percent": weight,
+                "sector": constituent.get("sector"),
             }
         )
     other_weight = max(0.0, 100 - used_weight)
-    rows.append(
-        {
-            "ticker": "其他 S&P 500",
-            "name": "其他 S&P 500 成分股",
-            "direct_usd": 0.0,
-            "from_etf_usd": etf_total * other_weight / 100,
-            "total_usd": etf_total * other_weight / 100,
-            "etf_weight_percent": other_weight,
-        }
-    )
+    if other_weight > 0.001:
+        rows.append(
+            {
+                "ticker": "ETF 其他",
+                "name": "基金现金及衍生品",
+                "direct_usd": 0.0,
+                "from_etf_usd": etf_total * other_weight / 100,
+                "total_usd": etf_total * other_weight / 100,
+                "etf_weight_percent": other_weight,
+                "sector": "ETF / Other",
+            }
+        )
+    seen_tickers = {row["ticker"] for row in rows}
     for ticker, value in direct.items():
-        if ticker in {row["ticker"] for row in rows}:
+        if ticker in seen_tickers:
             continue
+        seen_tickers.add(ticker)
         holding = holdings.get(ticker, {})
         rows.append(
             {
@@ -366,17 +424,22 @@ def etf_lookthrough(snapshot, basis="cost"):
         "etf_total_usd": etf_total,
         "covered_weight_percent": used_weight,
         "other_weight_percent": other_weight,
+        "constituent_count": len(constituent_rows),
+        "holdings_as_of": dataset.get("as_of"),
+        "holdings_source": dataset.get("source"),
+        "holdings_source_url": dataset.get("source_url"),
         "rows": rows,
     }
 
 
 def chart_exposure(snapshot):
-    holdings = holdings_by_ticker(snapshot)
+    index = snapshot_index(snapshot)
+    holdings = index.holdings
     market_lookthrough = etf_lookthrough(snapshot, basis="market")
     direct_children = [
         {
             "name": ticker,
-            "value": exposure_value_usd(ticker, snapshot, basis="market"),
+            "value": exposure_value_usd(ticker, snapshot, basis="market", index=index),
             "currency": holding.get("cost_currency"),
         }
         for ticker, holding in holdings.items()
@@ -405,6 +468,8 @@ def chart_pnl(snapshot):
     holdings = holdings_by_ticker(snapshot)
     broker_pnl = broker_pnl_by_ticker(snapshot)
     for ticker, holding in holdings.items():
+        if holding.get("valuation_missing"):
+            continue
         market_row = market.get(ticker, {})
         cost = _num(holding.get("cost_usd_standard"))
         market_value = _num(market_row.get("market_value_usd"))
@@ -483,6 +548,7 @@ def holdings_detail(snapshot):
         price_unrealized = market_value - cost
         broker_row = broker_pnl.get(ticker)
         unrealized = broker_row["broker_unrealized_usd"] if broker_row else price_unrealized
+        missing = holding.get("valuation_missing", False)
         rows.append(
             {
                 "ticker": ticker,
@@ -502,17 +568,17 @@ def holdings_detail(snapshot):
                 "quote_price": market_row.get("quote_price"),
                 "quote_currency": market_row.get("quote_currency") or holding.get("price_currency"),
                 "today_change_percent": market_row.get("change_percent"),
-                "market_value_usd": market_value,
+                "market_value_usd": None if missing else market_value,
                 "weight": market_value / total if total else 0.0,
-                "unrealized_usd": unrealized,
-                "unrealized_percent": (unrealized / cost * 100) if cost else None,
+                "unrealized_usd": None if missing else unrealized,
+                "unrealized_percent": (unrealized / cost * 100) if cost and not missing else None,
                 "broker_unrealized_usd": broker_row.get("broker_unrealized_usd") if broker_row else None,
                 "broker_fx_ppl_usd": broker_row.get("broker_fx_ppl_usd") if broker_row else None,
                 "broker_fx_ppl_percent": (broker_row.get("broker_fx_ppl_usd") / cost * 100) if broker_row and cost else None,
                 "broker_ppl_includes_fx": bool(broker_row),
                 "broker_pnl_currency": broker_row.get("broker_pnl_currency") if broker_row else None,
-                "price_unrealized_usd": price_unrealized,
-                "price_unrealized_percent": (price_unrealized / cost * 100) if cost else None,
+                "price_unrealized_usd": None if missing else price_unrealized,
+                "price_unrealized_percent": (price_unrealized / cost * 100) if cost and not missing else None,
                 "volume": market_row.get("volume"),
                 "avg_volume_3m": market_row.get("avg_volume_3m"),
                 "market_cap": market_row.get("market_cap"),
@@ -520,7 +586,7 @@ def holdings_detail(snapshot):
                 "low_52w": market_row.get("low_52w"),
             }
         )
-    rows.sort(key=lambda row: row["market_value_usd"], reverse=True)
+    rows.sort(key=lambda row: (row["market_value_usd"] or 0), reverse=True)
     return {"rows": rows}
 
 

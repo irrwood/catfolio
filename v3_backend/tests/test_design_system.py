@@ -1,7 +1,28 @@
+import hashlib
+import os
 from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
+
+
+def test_static_assets_use_content_fingerprints_not_deployment_mtime(
+    tmp_path, monkeypatch
+):
+    from app import components
+
+    static_dir = tmp_path / "static"
+    static_dir.mkdir()
+    asset = static_dir / "portfolio.js"
+    asset.write_text("const version = 'new';", encoding="utf-8")
+    os.utime(asset, (1540000000, 1540000000))
+    monkeypatch.setattr(components, "_STATIC_DIR", static_dir)
+
+    html = components._version_assets('<script src="/static/portfolio.js"></script>')
+    expected = hashlib.sha256(asset.read_bytes()).hexdigest()[:12]
+
+    assert f"/static/portfolio.js?v={expected}" in html
+    assert "?v=1540000000" not in html
 
 
 def test_v5_layout_loads_shared_design_system_after_page_styles():
@@ -29,6 +50,14 @@ def test_design_system_matches_lab_foundations():
     assert 'body:not(.page-lab) .v5-content' in css
     assert 'body.page-analytics .v5-content,\nbody.page-ai .v5-content { max-width: 1520px; }' in css
     assert '@media (prefers-reduced-motion: reduce)' in css
+
+
+def test_shared_v5_brand_icon_has_no_shadow():
+    css = (ROOT / "app" / "static" / "v5.css").read_text(encoding="utf-8")
+
+    final_brand_rule = css.rsplit(".v5-brand-icon {", 1)[1].split("}", 1)[0]
+    assert "box-shadow: none;" in final_brand_rule
+    assert ":root.light-theme .v5-brand-icon { box-shadow: none; }" in css
 
 
 def test_design_system_documentation_and_agent_rules_exist():
@@ -173,25 +202,26 @@ def test_strategy_sidebar_uses_api_icon_asset():
     assert 'M12.7764 9.10229L11.2235 14.8978' in icon
 
 
-def test_bank_sidebar_uses_supplied_icon_with_distinct_interaction_states():
+def test_bank_sidebar_uses_the_same_icon_color_states_as_other_tabs():
     components = (ROOT / "app" / "components.py").read_text(encoding="utf-8")
     sidebar = (ROOT / "app" / "static" / "v5.css").read_text(encoding="utf-8")
     icon = (ROOT / "app" / "static" / "icons" / "sidebar" / "bank.svg").read_text(encoding="utf-8")
 
     assert '("/bank", "银行", "bank.svg")' in components
-    assert "v5-nav-icon-bank" in components
-    assert 'mask-image: url("/static/icons/sidebar/bank.svg");' in sidebar
-    assert ".v5-nav-link:hover .v5-nav-icon-mask" in sidebar
-    assert ".v5-nav-link:active .v5-nav-icon-mask" in sidebar
-    assert ".v5-nav-link.active .v5-nav-icon-mask" in sidebar
-    assert ".v5-nav-link.active:hover .v5-nav-icon-mask" in sidebar
-    assert 'fill="currentColor"' in icon
+    assert "if icon == \"bank.svg\"" not in components
+    assert "v5-nav-icon-bank" not in components
+    assert "v5-nav-icon-mask" not in sidebar
+    assert ".v5-nav-link:hover .v5-nav-icon { opacity: 1; }" in sidebar
+    assert ".v5-nav-link.active .v5-nav-icon {" in sidebar
+    assert ":root.light-theme .v5-nav-link.active .v5-nav-icon" in sidebar
+    assert 'fill="#A7A7A7"' in icon
+    assert 'fill="currentColor"' not in icon
 
 
 def test_collapsed_sidebar_secondary_links_fit_without_clipping():
     sidebar = (ROOT / "app" / "static" / "v5.css").read_text(encoding="utf-8")
 
-    assert ".v5-shell.collapsed .v5-nav-group:nth-child(2) .v5-nav-link { width: 42px; }" in sidebar
+    assert ".v5-shell.collapsed .v5-nav-group:nth-child(2) .v5-nav-link { width: 44px; }" in sidebar
     assert ".v5-shell.collapsed .v5-nav-group:nth-child(2) .v5-nav-link { width: 48px; }" not in sidebar
 
 
@@ -199,9 +229,20 @@ def test_sidebar_collapse_keeps_brand_nav_and_theme_icons_on_fixed_axes():
     sidebar = (ROOT / "app" / "static" / "v5.css").read_text(encoding="utf-8")
 
     assert ".v5-shell.collapsed .v5-brand {" in sidebar
+    assert "width: 44px;" in sidebar
     assert "margin-inline: 0;" in sidebar
-    assert ".v5-nav-link .v5-nav-icon {" in sidebar and "left: 10px;" in sidebar
-    assert ".v5-foot-btn .v5-theme-icon {" in sidebar and "left: 11px;" in sidebar
+    assert "justify-content: flex-start;" in sidebar
+    collapsed_brand = sidebar[sidebar.rindex(".v5-shell.collapsed .v5-brand-text {") :]
+    collapsed_brand = collapsed_brand[: collapsed_brand.index("}")]
+    assert "display: none;" in collapsed_brand
+    assert "max-width" not in collapsed_brand
+    assert ".v5-shell.collapsed .v5-nav-link .v5-nav-icon {\n  left: 10px;" in sidebar
+    assert ".v5-shell.collapsed .v5-foot-btn .v5-theme-icon {\n  left: 11px;" in sidebar
+    assert ".v5-shell.collapsed .v5-foot {\n  width: 44px;" in sidebar
+    assert ".v5-shell.collapsed .v5-lang {\n  display: flex;\n  width: 44px;" in sidebar
+    collapsed_language = sidebar[sidebar.rindex(".v5-shell.collapsed .v5-lang {") :]
+    collapsed_language = collapsed_language[: collapsed_language.index("}")]
+    assert "border: 0;" in collapsed_language
     assert ".v5-shell.collapsed .v5-lang a {\n  display: inline-flex;" in sidebar
     assert ".v5-shell.collapsed .v5-lang .v5-lang-toggle {" in sidebar
     assert "@media (prefers-reduced-motion: reduce)" in sidebar
