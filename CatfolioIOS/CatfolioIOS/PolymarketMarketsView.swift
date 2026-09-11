@@ -11,9 +11,58 @@ struct PolymarketRelatedMarket: Codable, Identifiable, Sendable {
     let volume24Hours: Double
     let totalVolume: Double
     let endDate: Date?
+    var localizedOutcome: String? = nil
+    // Optional so existing on-device caches remain readable.
+    var groupItemTitle: String? = nil
+    var oneDayPriceChange: Double? = nil
+
+    var outcomeText: String {
+        switch outcome.lowercased() {
+        case "yes": L10n.text("是")
+        case "no": L10n.text("否")
+        case "up": L10n.text("上涨")
+        case "down": L10n.text("下跌")
+        default: localizedOutcome ?? outcome
+        }
+    }
 
     var webURL: URL? {
         URL(string: "https://polymarket.com/event/\(eventSlug)")
+    }
+
+    var hasUsableContent: Bool {
+        !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        && !eventSlug.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        && probability.isFinite && (0...1).contains(probability) && webURL != nil
+    }
+
+    func probabilityText(locale: Locale) -> String {
+        probability.formatted(.percent.precision(.fractionLength(0)).locale(locale))
+    }
+}
+
+/// One event title and up to three options, each with its own volume. Keep
+/// probability values untouched; rounding and grouping are presentation only.
+struct PolymarketRelatedEvent: Identifiable {
+    let id: String
+    let markets: [PolymarketRelatedMarket]
+    var title: String { markets.first?.eventTitle ?? "" }
+    var webURL: URL? { markets.first?.webURL }
+    var visibleMarkets: [PolymarketRelatedMarket] {
+        Array(markets.sorted { $0.probability > $1.probability }.prefix(3))
+    }
+    var hasMultipleOptions: Bool { markets.count > 1 }
+
+    static func grouped(_ markets: [PolymarketRelatedMarket]) -> [Self] {
+        var order: [String] = []
+        var groups: [String: [PolymarketRelatedMarket]] = [:]
+        var seen = Set<String>()
+        for market in markets where seen.insert(market.id).inserted {
+            let key = market.eventSlug.isEmpty ? market.id : market.eventSlug
+            if groups[key] == nil { order.append(key) }
+            groups[key, default: []].append(market)
+        }
+        return order.map { Self(id: $0, markets: groups[$0] ?? []) }
     }
 }
 
@@ -24,7 +73,7 @@ enum PolymarketClientError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
-            "Polymarket 返回了无法识别的数据"
+            L10n.text("Polymarket 返回了无法识别的数据")
         case let .remote(message):
             message
         }
@@ -63,6 +112,8 @@ actor PolymarketClient {
         let volume: Double
         let volume24Hours: Double
         let endDate: Date?
+        let groupItemTitle: String?
+        let oneDayPriceChange: Double?
 
         enum CodingKeys: String, CodingKey {
             case id
@@ -75,12 +126,14 @@ actor PolymarketClient {
             case volumeNum
             case volume24Hours = "volume24hr"
             case endDate
+            case groupItemTitle
+            case oneDayPriceChange
         }
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             id = (try? container.decode(String.self, forKey: .id)) ?? UUID().uuidString
-            question = (try? container.decode(String.self, forKey: .question)) ?? "Polymarket 盘口"
+            question = (try? container.decode(String.self, forKey: .question)) ?? L10n.text("Polymarket 盘口")
             active = try? container.decodeIfPresent(Bool.self, forKey: .active)
             closed = try? container.decodeIfPresent(Bool.self, forKey: .closed)
             outcomes = container.stringArray(forKey: .outcomes)
@@ -90,15 +143,20 @@ actor PolymarketClient {
                 ?? 0
             volume24Hours = container.flexibleDouble(forKey: .volume24Hours) ?? 0
             endDate = container.flexibleDate(forKey: .endDate)
+            groupItemTitle = try? container.decodeIfPresent(String.self, forKey: .groupItemTitle)
+            oneDayPriceChange = container.flexibleDouble(forKey: .oneDayPriceChange)
         }
     }
 
     private let session: URLSession
+    private let diskCacheURL: URL
     private var cache: [String: CacheEntry] = [:]
     private var didLoadCache = false
     private let freshness: TimeInterval = 15 * 60
 
-    init() {
+    init(session suppliedSession: URLSession? = nil, cacheURL: URL? = nil) {
+        diskCacheURL = cacheURL ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("catfolio-polymarket-markets.json")
         let configuration = URLSessionConfiguration.default
         configuration.waitsForConnectivity = false
         configuration.timeoutIntervalForRequest = 12
@@ -107,16 +165,17 @@ actor PolymarketClient {
             memoryCapacity: 4 * 1_024 * 1_024,
             diskCapacity: 20 * 1_024 * 1_024
         )
-        session = URLSession(configuration: configuration)
+        session = suppliedSession ?? URLSession(configuration: configuration)
     }
 
     func relatedMarkets(
         ticker: String,
         companyName: String,
-        forceRefresh: Bool = false
+        forceRefresh: Bool = false,
+        language: String = AppLanguage.currentIdentifier
     ) async throws -> [PolymarketRelatedMarket] {
         loadCacheIfNeeded()
-        let cacheKey = Self.cacheKey(ticker: ticker, companyName: companyName)
+        let cacheKey = ContentLanguage.cacheKey(Self.cacheKey(ticker: ticker, companyName: companyName), language: language)
         let cached = cache[cacheKey]
 
         if !forceRefresh,
@@ -137,13 +196,68 @@ actor PolymarketClient {
                 }
             }
 
-            let markets = Self.rank(events: events)
+            let ranked = Self.rank(events: events)
+            let markets = try await localizedMarkets(ranked, events: events, language: language, forceRefresh: forceRefresh)
             cache[cacheKey] = CacheEntry(fetchedAt: Date(), markets: markets)
             persistCache()
             return markets
         } catch {
             if let cached { return cached.markets }
             throw error
+        }
+    }
+
+    /// Nil is not loaded / unknown, [] is a previously successful empty lookup.
+    func cachedRelatedMarkets(ticker: String, companyName: String,
+                              language: String = AppLanguage.currentIdentifier) -> [PolymarketRelatedMarket]? {
+        loadCacheIfNeeded()
+        let key = ContentLanguage.cacheKey(Self.cacheKey(ticker: ticker, companyName: companyName), language: language)
+        guard let entry = cache[key] else { return nil }
+        let markets = entry.markets.filter(\.hasUsableContent)
+        // Positive user caches remain usable. An expired negative lookup must
+        // not suppress newly created markets forever on subsequent visits.
+        guard !markets.isEmpty || Date().timeIntervalSince(entry.fetchedAt) < freshness else { return nil }
+        return markets
+    }
+
+    /// Search establishes identity and quote selection; locale changes presentation only.
+    private func localizedMarkets(_ ranked: [PolymarketRelatedMarket], events: [SearchEvent],
+                                  language: String, forceRefresh: Bool) async throws -> [PolymarketRelatedMarket] {
+        guard !ranked.isEmpty else { return [] }
+        struct Payload: Decodable { let markets: [Translation] }
+        struct Translation: Decodable {
+            struct Event: Decodable { let title: String }
+            let id: String
+            let question: String
+            let outcomes: String?
+            let groupItemTitle: String?
+            let events: [Event]?
+        }
+        var url = URLComponents(string: "https://gamma-api.polymarket.com/markets/keyset")!
+        url.queryItems = [URLQueryItem(name: "locale", value: language.hasPrefix("zh") ? "zh" : "en"),
+                          URLQueryItem(name: "limit", value: "100")]
+            + ranked.map { URLQueryItem(name: "id", value: $0.id) }
+        var request = URLRequest(url: url.url!, cachePolicy: forceRefresh ? .reloadIgnoringLocalCacheData : .useProtocolCachePolicy)
+        request.setValue(language, forHTTPHeaderField: "Accept-Language")
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw PolymarketClientError.invalidResponse
+        }
+        let translations = try JSONDecoder().decode(Payload.self, from: data).markets
+        return ranked.compactMap { market in
+            guard let translated = translations.first(where: { $0.id == market.id }),
+                  ContentLanguage.acceptsHeadline(translated.question, language: language) else { return nil }
+            let original = events.flatMap { $0.markets ?? [] }.first { $0.id == market.id }
+            let labels = translated.outcomes.flatMap { try? JSONDecoder().decode([String].self, from: Data($0.utf8)) } ?? []
+            let index = original?.outcomes.firstIndex(of: market.outcome)
+            let label = index.flatMap { labels.indices.contains($0) ? labels[$0] : nil }
+            return PolymarketRelatedMarket(id: market.id, question: translated.question,
+                eventTitle: translated.events?.first?.title ?? translated.question,
+                eventSlug: market.eventSlug, outcome: market.outcome, probability: market.probability,
+                volume24Hours: market.volume24Hours, totalVolume: market.totalVolume,
+                endDate: market.endDate, localizedOutcome: label,
+                groupItemTitle: translated.groupItemTitle ?? (language.hasPrefix("zh") ? nil : market.groupItemTitle),
+                oneDayPriceChange: market.oneDayPriceChange)
         }
     }
 
@@ -174,7 +288,7 @@ actor PolymarketClient {
             throw PolymarketClientError.invalidResponse
         }
         guard (200..<300).contains(http.statusCode) else {
-            throw PolymarketClientError.remote("暂时无法读取 Polymarket（HTTP \(http.statusCode)）")
+            throw PolymarketClientError.remote(L10n.text("暂时无法读取 Polymarket（HTTP \(http.statusCode)）"))
         }
         do {
             return try JSONDecoder().decode(SearchResponse.self, from: data).events ?? []
@@ -189,8 +303,8 @@ actor PolymarketClient {
 
         for event in events
         where event.active != false && event.closed != true && event.archived != true {
-            for market in event.markets ?? []
-            where market.active != false && market.closed != true && marketIDs.insert(market.id).inserted {
+            let activeMarkets = (event.markets ?? []).filter { $0.active != false && $0.closed != true }
+            for market in activeMarkets where marketIDs.insert(market.id).inserted {
                 guard let quote = displayedQuote(
                     outcomes: market.outcomes,
                     prices: market.outcomePrices
@@ -205,20 +319,26 @@ actor PolymarketClient {
                         probability: quote.probability,
                         volume24Hours: market.volume24Hours,
                         totalVolume: market.volume,
-                        endDate: market.endDate
+                        endDate: market.endDate,
+                        groupItemTitle: market.groupItemTitle,
+                        // Gamma's change belongs to the first quote. Do not
+                        // attach it to a different selected outcome.
+                        oneDayPriceChange: market.outcomes.first == quote.outcome
+                            ? market.oneDayPriceChange : nil
                     )
                 )
             }
         }
 
-        return results.sorted { left, right in
+        let ranked = results.sorted { left, right in
             if left.volume24Hours != right.volume24Hours {
                 return left.volume24Hours > right.volume24Hours
             }
             return left.totalVolume > right.totalVolume
         }
-        .prefix(5)
-        .map { $0 }
+        // Retain the top options of each event, not five unrelated flattened
+        // rows. Each option retains its own original quote and volume.
+        return PolymarketRelatedEvent.grouped(ranked).prefix(5).flatMap(\.visibleMarkets)
     }
 
     private static func displayedQuote(
@@ -279,13 +399,11 @@ actor PolymarketClient {
         try? data.write(to: cacheURL, options: .atomic)
     }
 
-    private var cacheURL: URL {
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("catfolio-polymarket-markets.json")
-    }
+    private var cacheURL: URL { diskCacheURL }
 }
 
 struct PolymarketMarketsSection: View {
+    @Environment(\.locale) private var appLocale
     let holding: Holding
 
     @Environment(\.openURL) private var openURL
@@ -294,14 +412,13 @@ struct PolymarketMarketsSection: View {
     @State private var isLoading = true
 
     static func supports(_ holding: Holding) -> Bool {
-        let identity = "\(holding.displayName) \(holding.sector ?? "")".uppercased()
-        return !["ETF", "UCITS", "INDEX", "FUND"].contains(where: identity.contains)
+        HoldingSecurityKind.classify(holding) != .fund
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                Text("Polymarket 热门盘口")
+                Text(L10n.text("Polymarket 热门盘口"))
                     .font(.headline)
                 Spacer()
                 if !isLoading {
@@ -314,7 +431,7 @@ struct PolymarketMarketsSection: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-                    .accessibilityLabel("刷新 Polymarket 盘口")
+                    .accessibilityLabel(L10n.text("刷新 Polymarket 盘口"))
                 }
             }
             .padding(.bottom, 10)
@@ -327,7 +444,7 @@ struct PolymarketMarketsSection: View {
                 emptyState
             }
 
-            Text("概率来自预测市场交易价格，仅供参考，不代表事实或投资建议。")
+            Text(L10n.text("概率来自预测市场交易价格，仅供参考，不代表事实或投资建议。"))
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .padding(.top, 10)
@@ -339,19 +456,19 @@ struct PolymarketMarketsSection: View {
     }
 
     private var taskID: String {
-        "\(holding.ticker)|\(holding.displayName)"
+        "\(holding.ticker)|\(holding.displayName)|\(appLocale.identifier)"
     }
 
     private var marketRows: some View {
         VStack(spacing: 0) {
-            ForEach(Array(markets.enumerated()), id: \.element.id) { index, market in
+            ForEach(Array(PolymarketRelatedEvent.grouped(markets).enumerated()), id: \.element.id) { index, event in
                 if index > 0 {
-                    Divider().padding(.leading, 28)
+                    Divider().padding(.vertical, 18)
                 }
                 Button {
-                    if let url = market.webURL { openURL(url) }
+                    if let url = event.webURL { openURL(url) }
                 } label: {
-                    PolymarketMarketRow(market: market)
+                    PolymarketEventCard(event: event)
                 }
                 .buttonStyle(.plain)
             }
@@ -362,10 +479,10 @@ struct PolymarketMarketsSection: View {
         VStack(spacing: 0) {
             ForEach(0..<3, id: \.self) { index in
                 if index > 0 { Divider().padding(.leading, 28) }
-                PolymarketMarketRow(
-                    market: PolymarketRelatedMarket(
+                PolymarketEventCard(
+                    event: PolymarketRelatedEvent(id: "placeholder-\(index)", markets: [PolymarketRelatedMarket(
                         id: "placeholder-\(index)",
-                        question: "正在读取最活跃的相关盘口",
+                        question: L10n.text("正在读取最活跃的相关盘口"),
                         eventTitle: "Polymarket",
                         eventSlug: "",
                         outcome: "Yes",
@@ -373,20 +490,20 @@ struct PolymarketMarketsSection: View {
                         volume24Hours: 12_500,
                         totalVolume: 220_000,
                         endDate: nil
-                    )
+                    )])
                 )
                 .redacted(reason: .placeholder)
             }
         }
         .allowsHitTesting(false)
-        .accessibilityLabel("正在读取 Polymarket 盘口")
+        .accessibilityLabel(L10n.text("正在读取 Polymarket 盘口"))
     }
 
     private var emptyState: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: errorMessage == nil ? "scope" : "wifi.exclamationmark")
                 .foregroundStyle(.secondary)
-            Text(errorMessage ?? "暂时没有找到与 \(holding.ticker) 相关的活跃盘口")
+            Text(errorMessage ?? L10n.text("暂时没有找到当前语言中与 \(holding.ticker) 相关的活跃盘口"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -397,19 +514,21 @@ struct PolymarketMarketsSection: View {
 
     @MainActor
     private func load(forceRefresh: Bool) async {
+        let language = AppLanguage.currentIdentifier
         isLoading = true
+        markets = []
         errorMessage = nil
         do {
             let name = holding.displayName.components(separatedBy: " / ").first ?? holding.displayName
             let loaded = try await PolymarketClient.shared.relatedMarkets(
                 ticker: holding.ticker,
                 companyName: name,
-                forceRefresh: forceRefresh
+                forceRefresh: forceRefresh, language: language
             )
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, language == AppLanguage.currentIdentifier else { return }
             markets = loaded
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, language == AppLanguage.currentIdentifier else { return }
             markets = []
             errorMessage = error.localizedDescription
         }
@@ -417,75 +536,92 @@ struct PolymarketMarketsSection: View {
     }
 }
 
-private struct PolymarketMarketRow: View {
-    let market: PolymarketRelatedMarket
+/// One event: its question, then up to three options. Each option reads as
+/// name and volume on the left, probability and its 24h move on the right.
+struct PolymarketEventCard: View {
+    @Environment(\.locale) private var locale
+    let event: PolymarketRelatedEvent
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Image(systemName: "chart.line.uptrend.xyaxis")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(CatfolioStyle.blue)
-                .frame(width: 18)
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text(market.question)
-                    .font(.subheadline.weight(.semibold))
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(event.title)
+                    .appText(.footnote, weight: .semibold)
                     .foregroundStyle(.primary)
-                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
 
-                HStack(spacing: 7) {
-                    Text(activityText)
-                    if let endDate = market.endDate {
-                        Text("·")
-                        Text("截止 \(endDate.formatted(.dateTime.month().day()))")
-                    }
+            VStack(spacing: 12) {
+                ForEach(event.visibleMarkets) { market in
+                    optionRow(market)
                 }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
             }
-
-            Spacer(minLength: 6)
-
-            VStack(alignment: .trailing, spacing: 3) {
-                Text(probabilityText)
-                    .appNumber(.heading, weight: .bold)
-                    .foregroundStyle(CatfolioStyle.blue)
-                Text(outcomeText)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-
-            Image(systemName: "arrow.up.right")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.tertiary)
         }
-        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(market.question)，\(outcomeText)概率\(probabilityText)，\(activityText)")
-        .accessibilityHint("打开 Polymarket 查看")
+        .accessibilityHint(L10n.text("打开 Polymarket 查看"))
     }
 
-    private var probabilityText: String {
-        market.probability.formatted(.percent.precision(.fractionLength(0...1)))
-    }
+    private func optionRow(_ market: PolymarketRelatedMarket) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(optionTitle(market))
+                        .appText(.footnote)
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(L10n.text("\(DisplayFormat.compactMoney(market.totalVolume, currency: "USD")) volume"))
+                        .appText(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-    private var outcomeText: String {
-        switch market.outcome.lowercased() {
-        case "yes": "是"
-        case "no": "否"
-        case "up": "上涨"
-        case "down": "下跌"
-        default: market.outcome
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(market.probabilityText(locale: locale))
+                        .appNumber(.subheading, weight: .semibold)
+                        .foregroundStyle(.primary)
+                    change(market.oneDayPriceChange)
+                }
+                .fixedSize()
         }
+        .accessibilityElement(children: .combine)
     }
 
-    private var activityText: String {
-        let amount = market.volume24Hours > 0 ? market.volume24Hours : market.totalVolume
-        let prefix = market.volume24Hours > 0 ? "24h" : L10n.text("累计")
-        return "\(prefix) \(DisplayFormat.compactMoney(amount, currency: "USD"))"
+    private func optionTitle(_ market: PolymarketRelatedMarket) -> String {
+        if let title = market.groupItemTitle, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return title
+        }
+        return event.hasMultipleOptions ? market.question : market.outcomeText
+    }
+
+    /// A change in odds, not investment profit or loss. Direction colours
+    /// follow the supplied market-card reference: up red, down green.
+    @ViewBuilder
+    private func change(_ change: Double?) -> some View {
+        // Anything that would print as 0% reads as no move, not an arrow.
+        if let change, change.isFinite, abs(change) >= 0.001 {
+            let color = change > 0 ? CatfolioStyle.red : CatfolioStyle.green
+            HStack(spacing: 2) {
+                Image(systemName: change > 0 ? "arrow.up.right" : "arrow.down.right")
+                    .font(.system(size: 9, weight: .bold))
+                Text(abs(change).formatted(.percent.precision(.fractionLength(0...1)).locale(locale)))
+                    .appNumber(.caption, weight: .medium)
+            }
+            .foregroundStyle(color)
+            .accessibilityLabel(L10n.text("24h probability change") + " " +
+                change.formatted(.percent.precision(.fractionLength(0...1)).locale(locale)))
+        } else {
+            Text(verbatim: "—")
+                .appNumber(.caption, weight: .medium)
+                .foregroundStyle(.quaternary)
+                .accessibilityLabel(L10n.text("24h probability change unavailable"))
+        }
     }
 }
 

@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct AnalystConsensusData {
+struct AnalystConsensusData: Codable, Sendable {
     let ratings: RatingSpread?
     let consensus: String?
     let low: Double?
@@ -13,6 +13,7 @@ struct AnalystConsensusData {
     let fetchedAt: Date
     let warnings: [String]
     var total: Int { ratings?.total ?? 0 }
+    var hasContent: Bool { total > 0 || Self.validTargets(low: low, mean: mean, high: high) }
 
     static func ratingCounts(_ row: [String: Any]) -> [Int]? {
         let keys = ["strongSell", "sell", "hold", "buy", "strongBuy"]
@@ -37,6 +38,22 @@ struct AnalystConsensusData {
 actor AnalystConsensusClient {
     static let shared = AnalystConsensusClient()
     private var cache: [String: AnalystConsensusData] = [:]
+    private let cacheURL: URL
+
+    init(cacheURL: URL? = nil) {
+        let directory = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        )[0].appendingPathComponent("AnalystConsensus", isDirectory: true)
+        self.cacheURL = cacheURL ?? directory.appendingPathComponent("analyst-consensus-v1.json")
+        if let stored = try? Data(contentsOf: self.cacheURL),
+           let decoded = try? JSONDecoder().decode(
+               [String: AnalystConsensusData].self,
+               from: stored
+           ) {
+            cache = decoded
+        }
+    }
 
     /// The caller already knows the holding's quote currency and price, so the
     /// `profile` request this used to make was a third of the page's FMP budget
@@ -50,28 +67,35 @@ actor AnalystConsensusClient {
         currency?.uppercased() == "USD"
     }
 
-    /// What is already in hand, if it is still fresh. Costs no request, so a
-    /// holding visited twice in an hour shows its card straight away.
+    /// Analyst snapshots remain available until the user explicitly refreshes
+    /// that analyst page. Opening/closing a sheet, view reconstruction and app
+    /// relaunches must not silently discard a result the user already fetched.
     func cached(symbol: String) -> AnalystConsensusData? {
-        guard let cached = cache[symbol],
-              Date().timeIntervalSince(cached.fetchedAt) < 3600 else { return nil }
-        return cached
+        guard let value = cache[symbol.uppercased()], value.hasContent else { return nil }
+        return value
     }
 
-    func load(symbol: String, currency: String?, price: Double?) async throws -> AnalystConsensusData {
+    func load(
+        symbol: String,
+        currency: String?,
+        price: Double?,
+        forceRefresh: Bool = false
+    ) async throws -> AnalystConsensusData {
         guard Self.supports(currency: currency) else {
-            throw ScreenFailure.message("暂仅支持美元报价的证券，目标价不与其他币种混用。")
+            throw ScreenFailure.message(L10n.text("暂仅支持美元报价的证券，目标价不与其他币种混用。"))
         }
-        if let cached = cached(symbol: symbol) { return cached }
+        let symbol = symbol.uppercased()
+        if !forceRefresh, let cached = cached(symbol: symbol) { return cached }
+        let previous = cache[symbol]
         let client = StockScreenDataClient.shared
         let query = ["symbol": symbol]
         var warnings: [String] = []
         var rating: [String: Any] = [:]
         var target: [String: Any] = [:]
         do { rating = try await client.rows("grades-consensus", query: query).first(where: { $0["symbol"] as? String == symbol }) ?? [:] }
-        catch { try Task.checkCancellation(); warnings.append("评级：\(error.localizedDescription)") }
+        catch { try Task.checkCancellation(); warnings.append(L10n.text("评级：\(error.localizedDescription)")) }
         do { target = try await client.rows("price-target-consensus", query: query).first(where: { $0["symbol"] as? String == symbol }) ?? [:] }
-        catch { try Task.checkCancellation(); warnings.append("目标价：\(error.localizedDescription)") }
+        catch { try Task.checkCancellation(); warnings.append(L10n.text("目标价：\(error.localizedDescription)")) }
         let low = StockScreenDataClient.number(target, "targetLow")
         let mean = StockScreenDataClient.number(target, "targetConsensus")
         let high = StockScreenDataClient.number(target, "targetHigh")
@@ -92,15 +116,32 @@ actor AnalystConsensusClient {
             // FMP gave nothing usable — an exhausted quota, a missing
             // entitlement, or genuinely no coverage. Nasdaq publishes the same
             // two figures without a key, so try there before giving up.
-            if let fallback = try? await nasdaqData(symbol: symbol, price: price, after: warnings) {
-                cache[symbol] = fallback
+            do {
+                let fallback = try await nasdaqData(symbol: symbol, price: price, after: warnings)
+                store(fallback, symbol: symbol)
                 return fallback
+            } catch {
+                // A transport/provider error is not confirmation of no coverage.
+                if error as? NasdaqAnalystError != .noCoverage { warnings.append(error.localizedDescription) }
             }
             if let reason = warnings.first { throw ScreenFailure.message(reason) }
+            if let previous { return previous }
         }
-        // Do not cache entitlement failures or empty responses as valid data.
-        if warnings.isEmpty && data.ratings != nil && valid { cache[symbol] = data }
+        // Preserve every usable partial snapshot too. A missing target endpoint
+        // must not make a valid rating disappear on the next presentation.
+        if data.ratings != nil || valid { store(data, symbol: symbol) }
         return data
+    }
+
+    private func store(_ data: AnalystConsensusData, symbol: String) {
+        cache[symbol.uppercased()] = data
+        let directory = cacheURL.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        guard let encoded = try? JSONEncoder().encode(cache) else { return }
+        try? encoded.write(
+            to: cacheURL,
+            options: [.atomic, .completeFileProtectionUnlessOpen]
+        )
     }
 
     private func nasdaqData(
@@ -123,28 +164,34 @@ actor AnalystConsensusClient {
             current: price,
             source: "Nasdaq",
             fetchedAt: Date(),
-            warnings: warnings.isEmpty ? [] : ["FMP 未返回数据，已改用 Nasdaq。"]
+            warnings: warnings.isEmpty ? [] : [L10n.text("FMP 未返回数据，已改用 Nasdaq。")]
         )
     }
 }
 
 struct AnalystConsensusView: View {
+    @Environment(\.locale) private var appLocale
     let symbol: String
     let currency: String?
     let price: Double?
+    var showsConsensus = true
+    var showsHistoryEntry: Bool? = nil
+    var initialData: AnalystConsensusData? = nil
+    var onAvailability: (HoldingResearchAvailability) -> Void = { _ in }
     @State private var data: AnalystConsensusData?
     @State private var error: String?
     @State private var loading = false
-    @Namespace private var zoom
+    @State private var isExpanded = false
+    @State private var showsHistory = false
 
     /// One line saying what the analysts think, for the collapsed row.
     private var summary: String? {
         guard let data else { return nil }
         var parts: [String] = []
         if let consensus = AnalystConsensusContent.ratingLabel(for: data.consensus) { parts.append(consensus) }
-        if data.total > 0 { parts.append("\(data.total) 份评级") }
+        if data.total > 0 { parts.append(L10n.text("\(data.total) 份评级")) }
         if let mean = data.mean, mean.isFinite {
-            parts.append("均价 " + DisplayFormat.money(mean, currency: "USD"))
+            parts.append(L10n.text("均价 ") + DisplayFormat.money(mean, currency: "USD"))
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
@@ -153,73 +200,92 @@ struct AnalystConsensusView: View {
         if let error { return error }
         if let summary { return summary }
         guard AnalystConsensusClient.supports(currency: currency) else {
-            return "暂仅支持美元报价的证券，目标价不与其他币种混用。"
+            return L10n.text("暂仅支持美元报价的证券，目标价不与其他币种混用。")
         }
-        return "评级、目标价与分析师覆盖 · 按需读取"
+        return L10n.text("评级、目标价与分析师覆盖 · 按需读取")
     }
 
     var body: some View {
-        Group {
-            if let data {
-                NavigationLink {
-                    AnalystConsensusDetails(data: data, symbol: symbol)
-                        .navigationTransition(.zoom(sourceID: symbol, in: zoom))
-                } label: { card }
-                .buttonStyle(.plain)
-                .matchedTransitionSource(id: symbol, in: zoom)
-                .accessibilityHint("查看分析师评级与目标价")
-            } else {
-                Button { Task { await load() } } label: { card }
-                    .buttonStyle(.plain)
-                    .disabled(loading || !AnalystConsensusClient.supports(currency: currency))
-                    .accessibilityHint("读取分析师评级与目标价")
+        VStack(spacing: HoldingDetailCardStyle.spacing) {
+            if showsConsensus { consensusRow }
+            if showsHistoryEntry ?? Self.hasHistory(symbol: symbol) {
+                Button { showsHistory = true } label: {
+                    HoldingDetailActionCardLabel(
+                        title: L10n.text("分析师历史回顾"),
+                        subtitle: L10n.text("目标价、推荐建议与股价 · 本地快照")
+                    )
+                }.buttonStyle(.plain)
+                .accessibilityIdentifier("analyst-history-entry")
+                .sheet(isPresented: $showsHistory) {
+                    NavigationStack { AnalystHistoryView(symbol: symbol) }
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
+                }
             }
         }
+    }
+
+    static func hasHistory(symbol: String) -> Bool {
+        AnalystHistorySnapshot.load(symbol: symbol)?.points.contains {
+            $0.validTargets || ($0.hasRatings && $0.counts.reduce(0, +) > 0)
+        } == true
+    }
+
+    /// Opens in place on the holding page; there is no analyst sheet. Same
+    /// title size, secondary line and glass as the Financial row beside it.
+    private var consensusRow: some View {
+        HoldingDetailDisclosureCard(
+            title: L10n.text("分析师一致预期"),
+            subtitle: subtitle,
+            isExpanded: $isExpanded,
+            isLoading: loading,
+            isEnabled: AnalystConsensusClient.supports(currency: currency)
+        ) {
+            expandedContent
+        }
+        .accessibilityHint(data == nil ? L10n.text("读取并查看分析师评级与目标价") : L10n.text("查看分析师评级与目标价"))
         // Appearing costs nothing. Every holding detail firing a request as it
         // opened spent the page's shared FMP budget on a card most visits
         // never look at, and scrolling past a holding spent it too.
         .task(id: symbol) {
-            data = await AnalystConsensusClient.shared.cached(symbol: symbol.uppercased())
+            if let initialData { data = initialData }
+            else { data = await AnalystConsensusClient.shared.cached(symbol: symbol.uppercased()) }
+            if let data { onAvailability(data.hasContent ? .available : .empty) }
+        }
+        // Opening the card is the request.
+        .task(id: "\(symbol)|\(isExpanded)") {
+            guard isExpanded, data == nil else { return }
+            await load()
         }
     }
 
-    /// Deliberately the same shape as the Financial row beside it: same
-    /// title size, same secondary line, same chevron, same glass. Two rows
-    /// offering the same thing should not look like two different features.
-    private var card: some View {
-        HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("分析师一致预期")
-                    .appText(.subheading, weight: .medium)
-                    .foregroundStyle(.primary)
-
-                Text(subtitle)
-                    .appText(.label, weight: .medium)
-                    .foregroundStyle(.primary.opacity(0.50))
-                    .lineSpacing(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: 237, alignment: .leading)
-            .layoutPriority(1)
-
-            Spacer(minLength: 0)
-
-            if loading {
-                ProgressView().controlSize(.small).frame(width: 12, height: 24)
-            } else if data != nil || AnalystConsensusClient.supports(currency: currency) {
-                Image(systemName: data == nil ? "arrow.down.circle" : "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 12, height: 24)
+    @ViewBuilder private var expandedContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if let data {
+                AnalystConsensusContent(data: data)
+                if let error {
+                    Text(error).font(.caption).foregroundStyle(.secondary)
+                }
+                HStack {
+                    Spacer()
+                    Button { Task { await load(forceRefresh: true) } } label: {
+                        Text(L10n.text(loading ? "加载中…" : "刷新"))
+                            .font(.caption).frame(minWidth: 44, minHeight: 44)
+                    }
+                    .disabled(loading)
+                }
+            } else if loading {
+                ProgressView().frame(maxWidth: .infinity, minHeight: 120)
+            } else {
+                Text(error ?? L10n.text("暂无完整评级分布"))
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 120)
             }
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, minHeight: 105, alignment: .leading)
-        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .holdingDetailGlassCard()
     }
 
-    @MainActor private func load() async {
+    @MainActor @discardableResult
+    private func load(forceRefresh: Bool = false) async -> AnalystConsensusData? {
         // No `guard !loading` here. `.task(id:)` restarts this on re-entry, and
         // bailing out because a superseded run had not finished unwinding left
         // the card with no data, no error and no spinner — a blank box.
@@ -228,38 +294,51 @@ struct AnalystConsensusView: View {
         defer { loading = false }
         do {
             let loaded = try await AnalystConsensusClient.shared.load(
-                symbol: symbol.uppercased(), currency: currency, price: price
+                symbol: symbol.uppercased(),
+                currency: currency,
+                price: price,
+                forceRefresh: forceRefresh
             )
             try Task.checkCancellation()
             data = loaded
+            onAvailability(loaded.hasContent ? .available : .empty)
+            return loaded
         } catch is CancellationError {
             // Superseded by a newer load; keep whatever is already on screen.
+            return data
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else { return data }
             self.error = error.localizedDescription
-            data = nil
+            // A failed manual refresh never erases the last usable snapshot.
+            if data == nil {
+                data = await AnalystConsensusClient.shared.cached(symbol: symbol.uppercased())
+            }
+            onAvailability(data?.hasContent == true ? .available : .failed)
+            return data
         }
     }
+
 }
 
 private struct AnalystConsensusContent: View {
+    @Environment(\.locale) private var appLocale
     let data: AnalystConsensusData
 
     /// Returns nil for a consensus the provider did not give, so the caller
     /// can leave it out of a summary line rather than print a placeholder.
     static func ratingLabel(for consensus: String?) -> String? {
         switch consensus?.lowercased() {
-        case "strong buy", "strongbuy": "强烈买入"
-        case "buy": "买入"
-        case "hold", "neutral": "中性"
-        case "sell": "卖出"
-        case "strong sell", "strongsell": "强烈卖出"
+        case "strong buy", "strongbuy": L10n.text("强烈买入")
+        case "buy": L10n.text("买入")
+        case "hold", "neutral": L10n.text("中性")
+        case "sell": L10n.text("卖出")
+        case "strong sell", "strongsell": L10n.text("强烈卖出")
         default: nil
         }
     }
 
     private var ratingLabel: String {
-        Self.ratingLabel(for: data.consensus) ?? "评级分布"
+        Self.ratingLabel(for: data.consensus) ?? L10n.text("评级分布")
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -268,13 +347,13 @@ private struct AnalystConsensusContent: View {
                     Text(ratingLabel).font(.subheadline.weight(.semibold))
                         .padding(8).background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
                     Spacer()
-                    Text("\(data.total) 份评级").font(.subheadline).foregroundStyle(.secondary)
+                    Text(L10n.text("\(data.total) 份评级")).font(.subheadline).foregroundStyle(.secondary)
                 }
                 let totals = [ratings.bearish, ratings.neutral, ratings.bullish]
                 HStack {
-                    Text("\(totals[0]) 看跌").foregroundStyle(.red)
-                    Spacer(); Text("\(totals[1]) 中性").foregroundStyle(.secondary)
-                    Spacer(); Text("\(totals[2]) 看涨").foregroundStyle(.green)
+                    Text(L10n.text("\(totals[0]) 看跌")).foregroundStyle(.red)
+                    Spacer(); Text(L10n.text("\(totals[1]) 中性")).foregroundStyle(.secondary)
+                    Spacer(); Text(L10n.text("\(totals[2]) 看涨")).foregroundStyle(.green)
                 }.appNumber(.callout)
                 GeometryReader { geo in
                     HStack(spacing: 0) {
@@ -284,7 +363,7 @@ private struct AnalystConsensusContent: View {
                         }
                     }.clipShape(Capsule())
                 }.frame(height: 7).accessibilityHidden(true)
-            } else { Text("暂无完整评级分布").foregroundStyle(.secondary) }
+            } else { Text(L10n.text("暂无完整评级分布")).foregroundStyle(.secondary) }
             if let low = data.low, let mean = data.mean, let high = data.high {
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 18) { metrics(low: low, mean: mean, high: high) }.fixedSize(horizontal: true, vertical: false)
@@ -307,52 +386,21 @@ private struct AnalystConsensusContent: View {
                             .offset(x: width * AnalystConsensusData.position(current, low: minimum, high: maximum), y: 2)
                     }
                 }.frame(height: 22).accessibilityHidden(true)
-            } else { Text("暂无可核验的目标价区间").foregroundStyle(.secondary) }
-            Text("\(data.source) · 读取于 \(data.fetchedAt.formatted(date: .abbreviated, time: .shortened))")
+            } else { Text(L10n.text("暂无可核验的目标价区间")).foregroundStyle(.secondary) }
+            Text(L10n.text("\(data.source) · 读取于 \(data.fetchedAt.formatted(date: .abbreviated, time: .shortened))"))
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
     @ViewBuilder private func metrics(low: Double, mean: Double, high: Double) -> some View {
-        metric("最低目标", value: low)
-        metric("当前报价", value: data.current)
-        metric("平均目标", value: mean)
-        metric("最高目标", value: high)
+        metric(L10n.text("最低目标"), value: low)
+        metric(L10n.text("当前报价"), value: data.current)
+        metric(L10n.text("平均目标"), value: mean)
+        metric(L10n.text("最高目标"), value: high)
     }
     private func metric(_ title: String, value: Double?) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(value.map { $0.formatted(.currency(code: "USD")) } ?? "—").appNumber(.callout, weight: .semibold)
             Text(title).font(.caption).foregroundStyle(.secondary)
         }
-    }
-}
-
-private struct AnalystConsensusDetails: View {
-    let data: AnalystConsensusData
-    let symbol: String
-    var body: some View {
-        List {
-            Section { AnalystConsensusContent(data: data) }
-            if let ratings = data.ratings {
-                // Three buckets, not five: Nasdaq does not distinguish
-                // strong from ordinary, and showing it as "强烈买入 0" would
-                // be an invented number rather than a missing one.
-                Section("评级细分") {
-                    LabeledContent("看跌", value: "\(ratings.bearish)")
-                    LabeledContent("中性", value: "\(ratings.neutral)")
-                    LabeledContent("看涨", value: "\(ratings.bullish)")
-                    LabeledContent("合计", value: "\(ratings.total)")
-                }
-            }
-            Section("数据口径") {
-                Text("来源为 FMP 覆盖的评级样本，不代表所有分析师；评级与目标价来自不同汇总接口，样本数不可混用。")
-                Text("全部金额为美元。现价取同一证券的 FMP 可用报价，可能延迟；读取时间不是评级发布日期。接口未提供统一报告日期或逐位分析师名单。")
-                Text("目标价是分析师观点，不是收益承诺或 Catfolio 的买卖建议。")
-                ForEach(data.warnings, id: \.self) { Text($0).foregroundStyle(.secondary) }
-                Link("FMP 目标价数据说明", destination: URL(string: "https://site.financialmodelingprep.com/developer/docs/stable/price-target-consensus")!)
-            }.font(.subheadline)
-        }
-        .navigationTitle("\(symbol) · 分析师")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarVisibility(.visible, for: .navigationBar)
     }
 }

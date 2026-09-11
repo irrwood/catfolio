@@ -185,6 +185,9 @@
 "P&L" = "P&L";
 "Performance" = "Performance";
 "Polymarket 热门盘口" = "Popular Polymarket markets";
+"%@ volume" = "%@ volume";
+"24h probability change" = "24h probability change";
+"24h probability change unavailable" = "24h probability change unavailable";
 "Polymarket 盘口" = "Polymarket markets";
 "Polymarket 返回了无法识别的数据" = "Polymarket returned unrecognized data";
 "Portfolio Attention 扫描了 %@ 只持仓，%@ 只需要关注。\n%@" = "Portfolio Attention scanned %@ holdings; %@ need attention.\n%@";
@@ -368,8 +371,10 @@
 "刷新分析" = "Refresh analysis";
 "刷新失败，以下为旧缓存。%@" = "Refresh failed. Showing previous cached data. %@";
 "刷新市场" = "Refresh market";
+"刷新行情" = "Refresh prices";
 "券商 Result · %@/%@ 笔 · 原币" = "Broker Result · %@/%@ trades · Original currency";
 "功能暂未开放" = "Not available yet";
+"税务计算" = "Tax Calculator";
 "加权费率" = "Weighted fee rate";
 "包含 ETF" = "Included ETFs";
 "匹配依据" = "Match evidence";
@@ -805,7 +810,7 @@
 "版本" = "Version";
 "环境" = "Environment";
 "现价 %@" = "Current price %@";
-"现价" = "Current Price";
+"现价" = "Price";
 "现价位于所选范围的 OI 集中区%@。" = "The current price is %@ the OI concentration area for this range.";
 "现价位于所选范围的 OI 集中区内。" = "The current price is inside the OI concentration area for this range.";
 "现在就读取持仓" = "Load holdings now";
@@ -902,7 +907,9 @@
 "营收同比" = "Revenue YoY";
 "营收增长" = "Revenue growth";
 "融资现金流" = "Financing cash flow";
-"行业 ETF 作为美国板块代理；数值为最近两个可用收盘价的变化，非盘中实时行情。来源：现有 Yahoo 行情服务及本机缓存。每项分别显示数据日期。" = "Sector ETFs proxy US sectors. Values show the change between the latest two available closes, not live intraday quotes. Source: existing Yahoo quote service and local cache. Data dates are shown individually.";
+"行业 ETF 作为美国板块代理；数值为最近两个可用收盘价的变化，非盘中实时行情。来源：现有 Yahoo 行情服务及本机缓存。" = "Sector ETFs proxy US sectors. Values show the change between the latest two available closes, not live intraday quotes. Source: existing Yahoo quote service and local cache.";
+"数据日期 %@" = "Data date %@";
+"数据日期 %@–%@" = "Data dates %@–%@";
 "行业" = "Sector";
 "行业来自打包的美股公司资料，用于当前归类，不适用于历史回溯。" = "Sectors come from bundled US company data for current classification, not historical analysis.";
 "行业资本开支周期可能带来进一步波动" = "The sector’s capital expenditure cycle may bring more volatility";
@@ -1042,3 +1049,844 @@
 "，%@ 条提示" = ", %@ notices";
 "，且接近成交峰值。" = "and close to peak volume.";
 "，跳过 %@ 项" = ", skipped %@ items";
+"全球账户" = "Global account";
+"Global account" = "Global account";
+"美股账户" = "US stocks account";
+"US stocks account" = "US stocks account";
+"Local account" = "Local account";
+"Demo account" = "Demo account";
+"Account" = "Account";
+"橘子" = "Orange";
+"Orange" = "Orange";
+"蓝莓" = "Blueberry";
+"Blueberry" = "Blueberry";
+"水獭" = "Otter";
+"Otter" = "Otter";
+"熊猫" = "Panda";
+"Panda" = "Panda";
+"柚子" = "Pomelo";
+"Pomelo" = "Pomelo";
+"樱桃" = "Cherry";
+"Cherry" = "Cherry";
+"松鼠" = "Squirrel";
+"Squirrel" = "Squirrel";
+"海豚" = "Dolphin";
+"Dolphin" = "Dolphin";
+
+"≈ 按当前成分权重分摊 ETF 成本与市值，并合并直接持仓；不代表成分股自身的历史收益。" = "≈ ETF cost and market value are allocated using current constituent weights and combined with direct holdings; this is not the constituent’s own historical return.";
+
+"其他 %@ 项" = "Other %@ holdings";
+
+"%@ · 仓位占整个组合" = "%@ · Weight in the full portfolio";
+
+"仓位" = "Portfolio weight";
+
+"已知盈亏" = "Known P&L";
+"已覆盖 %@/%@ 项，缺失数据未计入盈亏" = "Covered %@/%@ holdings; missing data is excluded from P&L";
+
+"占比" = "Weight";
+"%@ · 组合占比" = "%@ · Portfolio weight";
+
+"查看%@行业" = "View %@ sector";
+
+"%@，占组合 %@，%@ %@" = "%@, weight %@, %@ %@";
+
+"%@，%@，占组合 %@，%@ %@" = "%@, %@, weight %@, %@ %@";
+"对话" = "Chats";
+"对话列表" = "Chats";
+"关闭对话列表" = "Close chat list";
+"新对话" = "New chat";
+"还没有对话" = "No chats yet";
+
+/* Earnings history */
+"盈利历史" = "Earnings history";
+"盈利历史指标" = "Earnings metric";
+"每股收益" = "EPS";
+"收入" = "Revenue";
+"估计" = "Estimate";
+"超出预期" = "Beat";
+"未达到预期" = "Miss";
+"匹配" = "Met";
+"实际" = "Actual";
+"更新于" = "Updated";
+"横轴为公布日期 · 点按查看数值" = "Report dates · Tap a point for values";
+"暂无收入预估与实际值；请在设置中配置有盈利接口权限的 FMP。" = "Revenue comparison is unavailable. Configure FMP with earnings access in Settings.";
+"暂无盈利历史。" = "No earnings history available.";
+"Nasdaq 仅提供最近四期 EPS；收入对比需要 FMP 盈利接口权限。" = "Nasdaq provides the latest four EPS reports. Revenue comparison requires FMP earnings access.";
+"更新失败，显示缓存。" = "Refresh failed; showing saved data.";
+"更新失败，保留缓存。" = "Refresh failed; keeping saved data.";
+"FMP 暂无盈利历史覆盖。" = "FMP has no earnings history coverage.";
+"Nasdaq 未返回盈利历史。" = "Nasdaq did not return earnings history.";
+"盈利历史网络请求失败。" = "Could not load earnings history.";
+"证券代码无效。" = "Invalid symbol.";
+
+"刷新" = "Refresh";
+
+"加载中…" = "Loading…";
+
+"暂无收入数据" = "No revenue data";
+"正式账户" = "Live account";
+"模拟账户" = "Demo account";
+"API Key 不能为空，且不能包含冒号" = "API key must not be empty or contain a colon";
+"API Secret 不能为空" = "API secret must not be empty";
+"请填写 Trading 212 账户的 API Key 与 API Secret" = "Enter the Trading 212 account’s API key and secret";
+"Trading 212 返回了无法识别的数据" = "Trading 212 returned unrecognized data";
+"Trading 212 授权失败，请检查环境、API Key、Secret 与读取权限" = "Trading 212 authorization failed. Check the environment, API key, secret and read permissions.";
+"Trading 212 账户 %@：%@" = "Trading 212 account %@: %@";
+"Trading 212 请求失败（HTTP %@）：%@" = "Trading 212 request failed (HTTP %@): %@";
+"Trading 212 账户当前没有持仓" = "This Trading 212 account has no holdings";
+"分红记录读取失败：%@" = "Unable to load dividend records: %@";
+"券商结算报表读取失败：%@" = "Unable to load broker settlement statements: %@";
+"%@正在补齐成交、分红和利息历史" = "%@ is loading trade, dividend and interest history";
+"%@成交历史本次未能继续读取" = "%@ could not continue loading trade history this time";
+"历史接口已达本轮限制，稍后再同步会继续" = "The history request limit for this sync was reached. Sync again later to continue.";
+"已缓存 %@ 笔成交，下次同步会继续" = "Cached %@ trades. The next sync will continue.";
+"已缓存 %@ 笔成交，为避免 Trading 212 限流，稍后再继续" = "Cached %@ trades. Continue later to avoid Trading 212 rate limits.";
+"分红历史稍后继续" = "Dividend history will continue later";
+"已缓存 %@ 笔分红，稍后继续" = "Cached %@ dividends. Continue later.";
+"券商结算报表稍后重试" = "Retry the broker settlement statement later";
+"券商结算报表生成中" = "Generating the broker settlement statement";
+"已同步部分券商结算结果，稍后继续补齐" = "Some broker settlement results were synced. Continue later to complete them.";
+"券商结算报表生成失败，稍后重试" = "Broker settlement statement generation failed. Try again later.";
+"服务暂时不可用" = "Service temporarily unavailable";
+"已跳过空头持仓 %@" = "Skipped short position %@";
+"已跳过不受支持的 %@ 持仓 %@" = "Skipped unsupported %@ holding %@";
+"%@ 缺少 Cost Basis Price，已跳过" = "%@ has no Cost Basis Price and was skipped";
+"Flex Token 格式无效" = "Invalid Flex token format";
+"Flex Query ID 格式无效" = "Invalid Flex Query ID format";
+"IBKR Flex 返回了无法识别的数据" = "IBKR Flex returned unrecognized data";
+"IBKR 返回了不安全的报表地址" = "IBKR returned an unsafe report URL";
+"IBKR Flex 请求失败（HTTP %@）" = "IBKR Flex request failed (HTTP %@)";
+"IBKR 仍在生成报表。首次同步或时间跨度较长时可能需要几分钟，稍等片刻再试即可。" = "IBKR is still generating the report. An initial sync or a long reporting period may take a few minutes. Try again shortly.";
+"Flex 报表没有 Open Positions；请在 Query 中加入该栏目和 Summary 明细" = "The Flex report has no Open Positions. Add that section with Summary details to the query.";
+"Flex 报表没有可导入的股票持仓" = "The Flex report has no eligible stock holdings";
+"请求失败" = "Request failed";
+"未返回 Reference Code" = "No Reference Code returned";
+"报表生成失败" = "Report generation failed";
+"%@ 缺少有效成本价，已跳过" = "%@ has no valid cost price and was skipped";
+"Moomoo 返回了无法识别的数据" = "Moomoo returned unrecognized data";
+"无法注册 Moomoo OAuth 客户端：%@" = "Unable to register the Moomoo OAuth client: %@";
+"已取消 Moomoo 登录" = "Moomoo sign-in cancelled";
+"Moomoo 授权失败：%@" = "Moomoo authorization failed: %@";
+"Moomoo OAuth state 校验失败，请重新登录" = "Moomoo OAuth state verification failed. Sign in again.";
+"尚未登录 Moomoo" = "Not signed in to Moomoo";
+"Moomoo 没有返回已授权的交易账户；请授予 trade:read 权限" = "Moomoo returned no authorized trading accounts. Grant trade:read permission.";
+"已授权的 Moomoo 账户当前没有持仓" = "The authorized Moomoo accounts have no holdings";
+"Moomoo 没有可导入的多头持仓" = "Moomoo has no eligible long positions";
+"%@ · %@：历史成交未完整同步" = "%@ · %@: Trade history was not fully synced";
+"无法启动本机 OAuth 回调：%@" = "Unable to start the local OAuth callback: %@";
+"回调地址无效" = "Invalid callback URL";
+"无法生成安全随机数（%@）" = "Unable to generate secure random data (%@)";
+"本机回调端口无效" = "Invalid local callback port";
+"Moomoo 授权超时，请重新登录" = "Moomoo authorization timed out. Sign in again.";
+"本机回调端口不可用：%@" = "Local callback port unavailable: %@";
+"请求过大" = "Request too large";
+"OAuth 回调请求过大" = "OAuth callback request too large";
+"无效回调" = "Invalid callback";
+"Moomoo 授权完成，可以返回 Catfolio。" = "Moomoo authorization complete. You can return to Catfolio.";
+"无法保存到 Keychain（%@）" = "Unable to save to Keychain (%@)";
+"无法从 Keychain 移除密钥（%@）" = "Unable to remove the key from Keychain (%@)";
+"历史行情读取失败：%@" = "Unable to load historical quotes: %@";
+"分析图表读取失败：%@" = "Unable to load analytics charts: %@";
+"本机组合已重置，原数据备份为 %@。券商授权和 AI 对话已保留。" = "Local portfolio reset. Original data backed up as %@. Broker authorization and AI conversations were retained.";
+"本机组合已重置。券商授权和 AI 对话已保留。" = "Local portfolio reset. Broker authorization and AI conversations were retained.";
+"%@ 缺少平均成本，已跳过" = "%@ has no average cost and was skipped";
+"成交历史正在分页同步，稍后再次同步会继续补全。" = "Trade history is syncing in batches. Sync again later to continue.";
+"%@ 项持仓缺少完整历史数据，汇率影响标记为不可算" = "%@ holdings have incomplete history; their FX impact is marked unavailable.";
+"Flex Query 缺少 Account Information → Base Currency，汇率影响暂不可计算" = "The Flex query lacks Account Information → Base Currency. FX impact cannot be calculated yet.";
+"Flex Query 缺少 Trades → Executions；无建仓日时汇率影响将标记为不可算" = "The Flex query lacks Trades → Executions. FX impact is unavailable without purchase dates.";
+"手机中还没有组合数据，请先直连券商或导入 CSV" = "No portfolio data on this phone yet. Connect a broker or import a CSV first.";
+"CSV 无法导入：%@" = "Unable to import CSV: %@";
+"暂不支持 %@ 换算为 USD" = "Conversion from %@ to USD is not supported yet";
+"无法保存到 iPhone 本地存储" = "Unable to save to local iPhone storage";
+"组合文件无法读取，已备份为 %@。请重新导入组合；原始数据保留在本机备份中。" = "The portfolio file could not be read and was backed up as %@. Import the portfolio again; the original data remains in the local backup.";
+"文件编码无法识别，请使用 UTF-8 或 UTF-16" = "Unrecognized file encoding. Use UTF-8 or UTF-16.";
+"文件为空" = "The file is empty";
+"没有找到可识别的表头" = "No recognizable header found";
+"缺少列：%@" = "Missing columns: %@";
+"第 %@ 行：Result 缺少币种，不计入券商已实现盈亏。" = "Row %@: Result has no currency and is excluded from broker realized P/L.";
+"第 %@ 行：%@" = "Row %@: %@";
+"没有有效交易" = "No valid transactions";
+"无效数字 %@" = "Invalid number %@";
+"无效日期 %@" = "Invalid date %@";
+"无法开始 ChatGPT 登录" = "Unable to start ChatGPT sign-in";
+"登录已超时，请重新开始" = "Sign-in timed out. Please start again.";
+"ChatGPT 授权失败" = "ChatGPT authorization failed";
+"ChatGPT 令牌交换失败" = "ChatGPT token exchange failed";
+"ChatGPT 登录已失效，请重新登录" = "ChatGPT sign-in expired. Sign in again.";
+"ChatGPT 登录刷新失败" = "Unable to refresh ChatGPT sign-in";
+"Codex 分析请求失败" = "Codex analysis request failed";
+"无法识别 ChatGPT 账户" = "Unable to identify the ChatGPT account";
+"Codex 尚未连接" = "Codex is not connected";
+"生成请求失败，请稍后再试" = "Generation failed. Please try again later.";
+"组合摘要超过本地模型的上下文长度" = "The portfolio summary exceeds the local model’s context limit";
+"模型资源暂不可用，请等待系统完成下载后重试" = "Model resources are unavailable. Wait for the system download to finish and try again.";
+"请求被 Apple Intelligence 的安全规则拦截" = "Apple Intelligence safety rules blocked this request";
+"当前系统模型不支持此输出格式" = "The system model does not support this output format";
+"当前系统模型暂不支持所用语言" = "The system model does not support this language";
+"本地模型返回内容无法解析" = "Unable to parse the local model’s response";
+"本地模型请求过于频繁，请稍后再试" = "Too many local model requests. Try again later.";
+"本地模型正在处理另一个请求" = "The local model is processing another request";
+"本地模型拒绝回答此问题" = "The local model declined to answer this question";
+"本地模型生成失败，请稍后再试" = "Local model generation failed. Try again later.";
+"尚未导入" = "Not imported yet";
+"本机" = "On-device";
+"假数据（Trading 212 + Moomoo + IBKR）" = "Demo data (Trading 212 + Moomoo + IBKR)";
+"假数据（本机脱敏）" = "Demo data (anonymized on this device)";
+"Individual" = "Individual";
+"Stocks ISA" = "Stocks ISA";
+"Invest" = "Invest";
+"随机生成一个新昵称" = "Generate a new random nickname";
+"关键问题" = "Key questions";
+"%@ 个来源 · 含联网搜索" = "%@ sources · Includes web search";
+"%@ 个来源" = "%@ sources";
+"每个问题的两侧都按最强论点陈述，不构成建议。" = "Both sides of each question present their strongest arguments. This is not advice.";
+"看涨观点" = "Bullish case";
+"看跌观点" = "Bearish case";
+"这一侧在已收集的来源中没有直接支持" = "No direct support for this side was found in the collected sources";
+"一手" = "Primary";
+"正在收集新闻与申报文件…" = "Collecting news and filings…";
+"正在整理正反方观点…" = "Preparing both sides of the debate…";
+"可以离开这个页面，完成后在 AI 标签里也能看到。" = "You can leave this page. The result will also appear in the AI tab when ready.";
+"生成于 %@" = "Generated %@";
+"重新生成" = "Regenerate";
+"AI 正反方分析" = "AI bull and bear analysis";
+"收集新闻、申报与分析师目标价，整理出多空双方的论点" = "Collect news, filings and analyst targets to explore both bullish and bearish arguments";
+"个股正反方分析" = "Stock bull and bear analysis";
+"%@ 正在分析…" = "Analyzing %@…";
+"%@ 个关键问题 · %@ 个来源" = "%@ key questions · %@ sources";
+"没有找到可引用的新闻或申报文件" = "No citable news or filings were found";
+"模型没有返回可解析的正反方结构" = "The model did not return a valid bull and bear analysis";
+
+"行业情绪" = "Industry Sentiment";
+
+"导入行情快照" = "Import Market Snapshot";
+
+"暂无行情数据" = "Market data unavailable";
+
+"无法导入，请选择有效且更新的行情快照。" = "Choose a valid, newer market snapshot.";
+
+"半导体" = "Semiconductors";
+
+"已过期" = "Outdated";
+
+"市场状态" = "Market regime";
+
+"20日均值" = "20-day average";
+
+"20日 Z-Score" = "20-day Z-Score";
+
+"可用历史分位数" = "Historical percentile";
+
+"1年分位数" = "1-year percentile";
+
+"VXSMH 1日变化" = "VXSMH daily change";
+
+"SMH 1日涨跌" = "SMH daily change";
+
+"波动率趋势" = "Volatility trend";
+
+"SMH 成交量" = "SMH volume";
+
+"暂无评分" = "Score unavailable";
+
+"极度恐惧" = "Extreme fear";
+
+"恐惧" = "Fear";
+
+"贪婪" = "Greed";
+
+"极度贪婪" = "Extreme greed";
+
+"半导体直接持仓占比" = "Direct semiconductor exposure";
+
+"不含现金及 ETF 穿透" = "Excludes cash and ETF look-through";
+
+"演示组合" = "Demo portfolio";
+"今天值得关注" = "Today’s Focus";
+"搜索持仓" = "Search holdings";
+
+"计入全部账户" = "Include all accounts";
+
+"时间范围" = "Time range";
+
+"可选择多个" = "Select multiple";
+
+"暂时没有找到当前语言中与 %@ 相关的活跃盘口" = "No active prediction markets for %@ are available in this language.";
+
+"关键变化" = "Key developments";
+
+"%@ 个已引用来源" = "%@ cited sources";
+
+"暂未找到证据充分的关键变化。部分来源可能无法读取正文，可稍后重试。" = "No sufficiently supported developments found. Some article bodies may be unavailable. Try again later.";
+
+"事实附原文摘录；影响解读和观察项是分析，不代表已发生。" = "Facts include source excerpts. Implications and watch items are analysis, not observed outcomes.";
+"上次没有生成有效结果，请重试。" = "The previous attempt produced no valid result. Please retry.";
+"未能读取这只股票的相关新闻正文。请检查网络后重试，已有结果会保留。" = "Could not read relevant articles for this stock. Check your connection and retry. Previous results are retained.";
+"生成内容的引用未通过原文核对，请重试。" = "The generated citations did not match the source text. Please retry.";
+"已读取 %@ 篇相关资料，暂未发现证据充分的关键变化。可稍后重试。" = "Read %@ relevant documents but found no sufficiently supported key developments. You can retry later.";
+"生成内容未通过事实核对，请重试。已有结果会保留。" = "The generated content did not pass the evidence review. Please retry. Previous results are retained.";
+"保留的上次结果" = "Previous result retained";
+
+"为什么重要 · 分析" = "Why it matters · Analysis";
+
+"接下来观察" = "What to watch";
+
+"尚不确定" = "What remains uncertain";
+
+"正在核对变化与原文证据…" = "Checking developments against source text…";
+
+"AI 关键变化" = "AI key developments";
+
+"阅读新闻与申报正文，提取重要变化、影响和观察项" = "Read news and filings for material changes, implications and what to watch";
+
+"个股关键变化" = "Company developments";
+
+"%@ 个关键变化 · %@ 个来源" = "%@ developments · %@ sources";
+
+"未能生成可核对的关键变化，请重试" = "Could not generate verifiable developments. Please try again.";
+
+"历史快照 · 苹果 AAPL" = "Historical snapshot · Apple AAPL";
+
+"目标价历史" = "Price targets";
+
+"推荐建议历史" = "Recommendations";
+
+"单位 USD · 阴影为最低至最高目标价" = "USD · Shading shows the low–high target range";
+
+"左轴：评级数量 · 右轴：股价 USD" = "Left: rating count · Right: share price in USD";
+
+"长按并拖动查看历史数值" = "Touch and drag to inspect history";
+
+"每月推荐建议为该月份对应的过去一年评级分布，并非当月新增评级。股价来自同一来源的月度图表，不是当日收盘价。月份统计窗口与拆股调整口径尚未确认，不用于预测准确率计算。" = "Monthly recommendations show the trailing-year ratings distribution, not new ratings that month. Prices come from the same source’s monthly chart, not daily closes. Monthly aggregation and split adjustments are unverified; this is not a forecast accuracy measure.";
+
+"本地快照 · 采集于 " = "Local snapshot · Collected on ";
+
+"查看每期数值" = "View observations";
+
+"股价 " = "Share price ";
+
+"共识 " = "Consensus ";
+
+"暂无已验证的历史快照" = "No validated historical snapshot available";
+
+"分析师历史回顾" = "Analyst history";
+
+"浅蓝：共识目标价 · 阴影：目标价范围" = "Light blue: consensus · Shading: target range";
+
+"股价（来源月度图表）" = "Share price (source monthly chart)";
+
+"目标价、推荐建议与股价 · 本地快照" = "Targets, recommendations and price · Local snapshot";
+
+"历史快照" = "Historical snapshot";
+
+"该证券尚未采集历史数据。" = "Historical data has not been collected for this security.";
+
+"该上市市场暂不支持，未使用其他市场同名股票数据。" = "This listing market is unsupported. Data from same-named stocks on other markets is not substituted.";
+
+"来源抓取失败，暂未取得历史数据。" = "Source retrieval failed. Historical data is not available yet.";
+
+"来源暂无有效历史覆盖。" = "The source has no usable historical coverage.";
+
+"部分月份目标价异常，已留空；未补值或连接缺失区间。" = "Invalid monthly targets are left blank; missing intervals are not filled or connected.";
+
+"暂无历史快照" = "No historical snapshot available";
+
+"石头姐 / ARK" = "Cathie Wood / ARK";
+
+"板块轮动" = "Sector Rotation";
+"领先" = "Leading";
+"减弱" = "Weakening";
+"落后" = "Lagging";
+"改善" = "Improving";
+"动量增强" = "Momentum strengthening";
+"动量减弱" = "Momentum weakening";
+"动量持平" = "Momentum unchanged";
+"历史不足" = "Insufficient history";
+"中期与近月位置都高于板块中位数，相对表现保持在较强一侧。" = "Both windows sit above the sector median; relative performance remains on the stronger side.";
+"中期位置较强，近月位置转弱，关注相对动量的变化。" = "The medium-term position is stronger, while recent momentum has weakened.";
+"中期与近月位置都低于板块中位数，相对表现仍偏弱。" = "Both windows sit below the sector median; relative performance remains weaker.";
+"中期位置偏弱，近月位置较强，相对动量正在改善。" = "The medium-term position is weaker, while recent relative momentum is improving.";
+"位置接近截面中心，板块之间的强弱差异尚不鲜明。" = "The position is near the cross-sectional centre, with no clear relative strength distinction.";
+"较上周从「%@」转为「%@」。" = "Changed from %@ to %@ since last week.";
+"中期相对强弱 × 近月相对动量" = "Medium-term strength × recent momentum";
+"如何阅读这张图" = "How to read this chart";
+"短期" = "Short term";
+"中期" = "Medium term";
+"长期" = "Long term";
+"数据截至 %@（纽约）" = "Data as of %@ (New York)";
+"数据更新延迟，当前显示上次可用快照。" = "Update delayed. Showing the last available snapshot.";
+"回填快照" = "Backfilled snapshot";
+"近 1 月相对动量 ↑" = "Recent relative momentum ↑";
+"中期相对强弱 →" = "Medium-term relative strength →";
+"图心是当日 11 个板块的中位数，不是 SPY 或零收益。位置是相对其他板块的，不是绝对涨跌。" = "The centre is the daily median of 11 sectors, not SPY or zero return. Positions are relative to other sectors, not absolute gains or losses.";
+"读取每日快照…" = "Loading daily snapshot…";
+"暂无板块轮动数据" = "No sector rotation data";
+"连接快照服务后读取每日板块数据。" = "Connect a snapshot service to read daily sector data.";
+"中期相对强弱" = "Medium-term relative strength";
+"近 1 月相对动量" = "Recent relative momentum";
+"本周变化" = "Weekly change";
+"点击圆点或板块列表查看 8 周轨迹，长按圆点查看精确值。" = "Tap a point or sector to see its 8-week trail. Hold a point for precise values.";
+"展示板块相对 SPY 的趋势和动量，仅供市场观察，不构成投资建议。" = "Sector trends and momentum relative to SPY, for market observation only. Not investment advice.";
+"快照数据源" = "Snapshot source";
+"中期窗口为第 63 至第 21 个交易日前；近月窗口为最近 21 个交易日。先计算相对 SPY 的对数差并作 5 日均值，再用当日中位数与 MAD 标准化及 tanh 压缩。" = "The medium-term window runs from 63 to 21 sessions ago; momentum covers the latest 21 sessions. Log price ratios to SPY are averaged over 5 sessions, normalised using the daily median and MAD, then compressed with tanh.";
+"中心 ±0.25 范围为中性。新象限连续两交易日成立才切换文字标签，文字可能暂时不同于点所在象限。百分比表示相对 SPY 的变化；坐标表示相对其他板块的位置。" = "The central ±0.25 zone is neutral. A new quadrant needs two consecutive sessions to change the label, which can temporarily differ from the plotted quadrant. Percentages measure change relative to SPY; coordinates compare sectors.";
+"轨迹读取历史快照，每个完整 ISO 周取最后有效交易日。初始化历史使用回填时可得的复权价，可能与当时发布值略有差异。此图不使用 JdK RRG 专有计算。" = "Trails read saved snapshots at the last valid session of each completed ISO week. Initial backfills use adjusted prices available at backfill time and may differ slightly from original observations. This chart does not use proprietary JdK RRG calculations.";
+"填写已部署的 HTTPS 快照 API。未连接时保留本机快照，行情过期会明确标记。此读取不触发账户同步或行情计算。" = "Enter a deployed HTTPS snapshot API. Saved snapshots remain available offline and expired data is marked. Reading does not trigger account sync or market calculations.";
+"精确值" = "Precise values";
+"暂停历史回放" = "Pause history playback";
+"播放历史快照" = "Play historical snapshots";
+"回看日期" = "History date";
+"美国市场 · 11 个 SPDR 板块 ETF / SPY" = "US market · 11 SPDR sector ETFs / SPY";
+"观察周期" = "Observation period";
+"暂未开放" = "Not available yet";
+"板块轮动四象限图" = "Sector rotation quadrant chart";
+"播放" = "Play";
+"暂停" = "Pause";
+"选择一个板块" = "Select a sector";
+"点击图中圆点或下方列表，查看过去 8 周轨迹与规则解释。" = "Select a point or sector below to see its past 8 weeks and rule-based explanation.";
+"全部板块" = "All sectors";
+"领先：中期与近月位置都高于板块中位数。减弱：中期高于、近月低于。落后：两者都低于。改善：中期低于、近月高于。这些状态不表示绝对涨跌，也不是买卖信号。" = "Leading: both windows above the sector median. Weakening: medium-term above, recent below. Lagging: both below. Improving: medium-term below, recent above. These states do not describe absolute returns or trading signals.";
+"先计算 ETF 与 SPY 复权价的对数差，再作 5 日均值。横轴取第 63 至第 21 个交易日前的变化，纵轴取最近 21 个交易日的变化；两者不重叠。分别以当日中位数和 MAD 标准化，再用 tanh 软压缩。" = "Log ratios of adjusted ETF prices to SPY are averaged over 5 sessions. The horizontal axis measures change from 63 to 21 sessions ago; the vertical axis measures the latest 21 sessions. These windows do not overlap. Each axis uses daily median/MAD normalisation and tanh compression.";
+"显示的百分比由原始对数差还原，表示相对 SPY 的变化。图上位置以板块截面为中心。中心 ±0.25 范围为中性；新象限连续两交易日成立才切换文字标签，因此文字可能暂时不同于点所在象限。" = "Percentages convert the raw log differences back into returns relative to SPY. Coordinates are centred on the sector cross-section. The central ±0.25 zone is neutral; other labels change after two consecutive sessions, so labels may temporarily differ from plotted quadrants.";
+"历史来自当日快照，每周取最后有效交易日；选中后显示当前点和过去 8 个完整 ISO 周的周点。初始化历史使用回填时可得的复权序列，可能与当时实际发布值略有差异。此图不使用 JdK RRG 专有计算。" = "History comes from saved daily snapshots. Selection shows the current point plus the last valid session of each of the previous 8 completed ISO weeks. Initial backfills use adjusted prices available at backfill time and may differ from original observations. This chart does not use proprietary JdK RRG calculations.";
+"观察 11 个美股板块的中期相对强弱与近月动量。" = "Observe medium-term relative strength and recent momentum across 11 US sectors.";
+"查看四象限与历史轨迹 →" = "View quadrants and historical trails →";
+"尚无可用快照；等待每日批处理完成。" = "No snapshots yet. Waiting for the daily batch.";
+"无法读取快照，请稍后重试。" = "Unable to read snapshots. Please try again.";
+
+"轮动中性" = "Neutral";
+
+"行业轮动" = "Sector Rotation";
+
+"位置相对其他板块，不是绝对涨跌。图心为板块中位数。" = "Positions compare sectors, not absolute returns. The centre is the sector median.";
+
+"取消选择" = "Clear selection";
+
+"更多选项" = "More options";
+
+"收益对比" = "Return comparison";
+
+// StockCharts RRG comparison
+"市场轮动 · RRG" = "Market Rotation · RRG";
+"六大市场指数" = "Six Market Indices";
+"周线 · 30 周尾迹 · 基准 $SPX" = "Weekly · 30-week tails · Benchmark $SPX";
+"来源时间：%@（纽约）" = "Source time: %@ (New York)";
+"正在读取 StockCharts…" = "Reading StockCharts…";
+"更新失败，保留上次来源快照。" = "Refresh failed. Showing the previous source snapshot.";
+"显示来源快照；最新周点可能包含未收盘行情。" = "Source snapshot shown; the latest weekly point may include an unfinished session.";
+"RS-Ratio 与 RS-Momentum 是以 100 为中线的指标值，不是百分比。涨跌幅对应当前显示的 30 周区间。" = "RS-Ratio and RS-Momentum are indicator values centred at 100, not percentages. Price changes cover the displayed 30-week interval.";
+"仅供市场观察，不构成投资建议。" = "For market observation only, not investment advice.";
+"暂无 RRG 数据" = "No RRG data";
+"请刷新以读取 StockCharts 的公开图表。" = "Refresh to read the public StockCharts chart.";
+"刷新来源数据" = "Refresh Source Data";
+"在 StockCharts 查看" = "View on StockCharts";
+"这张对照图直接展示 StockCharts 返回的 JdK RS-Ratio 和 RS-Momentum，未套用板块轮动 v2 的计算、压缩或标签迟滞。" = "This comparison displays JdK RS-Ratio and RS-Momentum returned by StockCharts, without applying sector rotation v2 calculations, compression or label hysteresis.";
+"30 周尾迹包含当前点和之前 30 个周点。每个点保留来源数值，拖动时间条可回看历史。" = "A 30-week tail includes the current point and 30 previous weekly points. Every point retains its source values. Drag the timeline to review history.";
+"右上领先、右下减弱、左下落后、左上改善；两轴中线均为 100。" = "Leading is top right, weakening bottom right, lagging bottom left and improving top left. Both axes are centred at 100.";
+"六个指数按来源默认列表展示，基准为 S&P 500 指数 $SPX。" = "The six indices follow the source default list, benchmarked against the S&P 500 index, $SPX.";
+
+// Research holding movers insight
+"持仓表现" = "Holding performance";
+"当前榜单暂无可供解读的行情数据。" = "There is no holding-mover data to interpret.";
+"使用当前涨跌榜快照生成解读" = "Generate an interpretation from the current movers snapshot";
+"数据已变化，请重新生成 AI 解读。" = "The data changed. Generate a new AI interpretation.";
+"AI 正在解读…" = "AI is interpreting…";
+"取消生成" = "Cancel generation";
+"AI 解读失败" = "AI interpretation failed";
+"持仓数据已变化，以下结果可能已过期。" = "The holding data changed. The result below may be out of date.";
+"输入数据日期：%@" = "Input data date: %@";
+"未提供" = "Unavailable";
+"仅向已选择的 AI 服务发送当前涨跌榜中的证券名称、代码、涨跌幅，以及已有的板块、权重和数据日期；不会发送完整账本或交易历史。" = "Only the names, tickers and price changes in the current mover lists, plus available sector, weight and data-date fields, are sent to the selected AI service. The full ledger and transaction history are not sent.";
+
+"右侧绿色 Call · 左侧红色 Put。灰线为页面现价，非期权快照同步报价。浅色区域为集中区外的 OI；曲线仅连接相邻有效行权价，不是成交量或 Gamma。" = "Green Call on the right · red Put on the left. The gray line is the page price, not a quote synchronized with this snapshot. Lighter OI lies outside the concentration range; curves join adjacent observed strikes only. This is neither volume nor Gamma.";
+
+"主要分布" = "Main distribution";
+
+"显示范围" = "Display range";
+
+"范围外 %@ OI" = "%@ OI outside range";
+
+"范围外" = "Outside range";
+
+"集中区" = "Concentration";
+
+"张" = "contracts";
+
+"查看全部并列价位" = "View all tied strikes";
+
+"全部墙位" = "All walls";
+
+"Yahoo · 获取于 %@ · OI 日期未知" = "Yahoo · Fetched %@ · OI date unknown";
+
+"按所选到期范围汇总 Yahoo 返回合约的未平仓张数。Put／Call 墙为各自 OI 最大价位，并列峰值全部保留。主要分布显示累计 OI 的 5%–95% 区间及墙位，留有边距；切换全部可查看尾部。远离分布的现价与成本列在摘要，不扩展价格轴。集中区仍为累计 OI 的 15%–85% 等尾区间，覆盖至少 70% 已读取 OI。价格显示四舍五入整数，坐标与选中值保留原始行权价。仅纳入 REGULAR 且代码可核对的合约。Yahoo 覆盖不等于交易所全部合约；缺数时保留旧缓存。获取时间不是 OI 数据日期。OI 不代表成交量、买卖方向或必然支撑阻力。" = "Open-interest contracts returned by Yahoo are summed over the selected expiry period. Put/Call walls are the maximum OI strikes; all ties are retained. Main distribution frames the cumulative 5%–95% OI range and walls with padding. All shows the tails. Distant price and cost references remain in the summary without extending the axis. Concentration remains the cumulative 15%–85% equal-tail interval, covering at least 70% of received OI. Prices display rounded integers; geometry and selection retain original strikes. Only verifiable REGULAR contracts are included. Yahoo coverage may differ from the exchange; incomplete updates retain the old cache. Fetch time is not the OI data date. OI is not trading volume, buying or selling direction, or guaranteed support or resistance.";
+
+// Strategy Composer
+"检查账户范围、规则增删、阈值与单位。确认只保存修订，不会执行策略。" = "Review accounts, rule changes, thresholds and units. Confirming saves a revision; it does not run the strategy.";
+"请回到 App 前台主动开始运行" = "Return to the app to start a run.";
+"任务已注册" = "Task registered";
+"系统未允许后台任务注册。请使用前台运行并保留恢复记录。" = "Background tasks are unavailable. Run in the foreground; checkpoints will be saved.";
+"策略编曲家" = "Strategy Composer";
+"等待开始，只读分析" = "Waiting to start · Read-only analysis";
+"已处理 %@/%@ 条规则" = "Processed %@/%@ rules";
+"已读取 %@ 只证券" = "Loaded %@ securities";
+"策略分析已结束" = "Strategy analysis finished";
+"结果已保存在本机。打开策略编曲家查看运行历史。" = "Results are saved on this device. Open Strategy Composer to view run history.";
+"部分数据不足，结果与原因已保存在运行历史。" = "Some data was unavailable. Results and reasons are saved in run history.";
+"修改摘要" = "Changes";
+"原稿" = "Original";
+"候选" = "Candidate";
+"确认 AI 修改" = "Review AI Changes";
+"应用候选" = "Apply";
+"检查账户范围、规则增删、阈值与单位。AI 仅整理文本，未搜索行情，也未执行策略。" = "Check scope, rules, thresholds and units. Reviewing this text does not run the strategy or search markets.";
+"候选修改详情" = "Candidate changes";
+"修改摘要、原稿与候选切换" = "Switch between changes, original and candidate";
+"暂无记录" = "No records yet";
+"保存的修订和 AI 候选会显示在这里。" = "Saved revisions and AI candidates appear here.";
+"编排" = "Compose";
+"文本" = "Text";
+"运行" = "Run";
+"返回" = "Back";
+"撤销、修订与候选历史" = "Undo, revisions and candidate history";
+"策略库" = "Strategy Library";
+"添加规则" = "Add Rule";
+"检查策略" = "Check";
+"新策略" = "New Strategy";
+"点击设置名称、账户与数据口径。来源按连接关系执行，拖动仅调整展示顺序。" = "Edit the name, accounts and data basis. Connections determine execution; dragging only changes display order.";
+"规则" = "Rule";
+"插入" = "Insert";
+"检查" = "Check";
+"AI 整理" = "AI Draft";
+"历史" = "History";
+"运行 %@" = "Run %@";
+"%@\n%@\n已冻结 %@ 只证券；策略版本 %@" = "%@\n%@\nFrozen: %@ securities · Strategy revision %@";
+"用户输入 · 本次模拟总预算" = "User input · Simulation budget";
+"%@ %@\n用于目标权重分母与预算上限；不是真实账户NAV，不写回账户。" = "%@ %@\nSimulation weight denominator and budget limit, not actual account NAV. No account changes.";
+"结果 · %@" = "Result · %@";
+"无符合条件的证券" = "No matching securities";
+" · 未完成 / 阻断原因" = " · Missing data / Block reasons";
+" · 候选工件，未自动应用" = " · Candidate artifact, not applied";
+" · 整体风险条件" = " · Portfolio risk condition";
+"%@ · 数据来源" = "%@ · Data source";
+"%@\n日线截止 %@；读取于 %@\n%@" = "%@\nDaily data through %@; retrieved %@\n%@";
+"尚未运行" = "Not run yet";
+"运行前会检查策略、账户范围和所需数据。这里只输出研究结果，不会下单。" = "Rules, accounts and data are checked before running. Research results only; no orders.";
+"草稿未保存" = "Unsaved draft";
+"草稿保存在本机 · 不会自动下单" = "Draft saved locally · No automatic orders";
+"已保存到本机" = "Saved on this device";
+"编辑历史" = "Edit History";
+"恢复和撤销会生成新修订，不改写已有运行证据。" = "Restoring or undoing creates a new revision. Existing run evidence remains unchanged.";
+"撤销上次编辑" = "Undo Last Edit";
+"旧修订" = "Revisions";
+"AI 候选历史" = "AI Candidates";
+"修订 %@" = "Revision %@";
+"恢复会生成新修订；当前运行及旧记录保持不变。\n\n" = "Restoring creates a new revision. Runs and earlier records stay unchanged.\n\n";
+"恢复旧修订" = "Restore Revision";
+"恢复为新修订" = "Restore";
+"已采纳 · 修订 %@" = "Adopted · Revision %@";
+"待确认候选" = "Pending review";
+"已采纳；历史仅供查看。" = "Already adopted; history is read-only.";
+"原稿和基础修订匹配，可确认应用。" = "The original draft and base revision match. You may confirm and apply.";
+"版本冲突：当前原稿或修订已变化，此候选只能查看。" = "Version conflict: the draft or revision has changed. This candidate is read-only.";
+"参数需要你明确确认；不会猜测阈值。" = "Confirm parameters explicitly. Thresholds are never guessed.";
+"编辑不能更换策略ID；请使用复制或新建" = "Editing cannot change the strategy ID. Duplicate or create a strategy instead.";
+"正在检查结构…" = "Checking structure…";
+"结构合法 · 执行前还会检查参数、能力与数据" = "Valid structure · Parameters, capabilities and data still require checks";
+"结构合法\n" = "Valid structure\n";
+"使用 AI 整理草稿？" = "Organize this draft with AI?";
+"会将此草稿与公共策略规则发送给当前选择的 AI 服务。不会自动附加持仓；如果你在草稿中写了个人信息，也会一并发送。结果需你确认后才应用。" = "This draft and the public schema will be sent to your configured AI service. Holdings are not attached automatically. Personal information typed into the draft will also be sent. Nothing is applied without confirmation.";
+"继续" = "Continue";
+"AI 正在整理，不会改动原稿…" = "AI is preparing a candidate. The original stays unchanged…";
+"AI 候选待确认 · 未修改原稿" = "AI candidate awaiting review · Original unchanged";
+"当前执行适配仅支持真实本机账户；未读取其他模式的账户。" = "This adapter only supports local personal accounts. Accounts from other modes were not read.";
+"开始只读分析" = "Start Read-Only Analysis";
+"本次会冻结账户与行情输入。若包含 AI 节点，将向当前配置的 AI 服务发送所选证券身份和公开价格证据（不发送股数、成本或账户名称）。系统可能排队或停止后台任务；强制关闭 App 后需要主动恢复。" = "Account and market inputs will be frozen. AI nodes send security identities and public price evidence to your configured AI service, not quantities, costs or account names. Background tasks may queue or stop. Force-closing requires manual recovery.";
+"运行并完成提醒" = "Run and Notify";
+"仅前台运行" = "Run in Foreground";
+"策略账户与当前选择不同，请在策略设置中明确确认账户范围" = "Strategy accounts differ from the current selection. Confirm the scope in strategy settings.";
+"本次模拟预算 · USD" = "Simulation Budget · USD";
+"输入包含所选持仓估值的模拟总资产金额，用于目标权重分母与预算上限。它不是券商真实NAV，不会写回账户。当前仅支持USD，不自动换汇；所选未调整持仓也占用预算。" = "Enter simulated total assets including selected holdings. This is the weight denominator and budget limit, not broker NAV. It does not change accounts. USD only, no implicit FX; unchanged holdings also use the budget.";
+"明确输入总金额，不设默认值" = "Enter a total amount; no default";
+"取消运行" = "Cancel Run";
+"确认模拟预算" = "Confirm Budget";
+"预算必须为明确的正数，未开始运行" = "Enter a positive budget. The run has not started.";
+"策略设置" = "Strategy Settings";
+"尚未保存" = "Not Saved";
+"继续编辑" = "Keep Editing";
+"交付此输出：" = "Use output: ";
+"复制规则" = "Duplicate Rule";
+"删除规则" = "Delete Rule";
+"其他规则仍引用此节点，请先修改依赖" = "Other rules reference this node. Update their connections first.";
+"点击查看完整错误详情" = "Tap for full error details";
+"详情" = "Details";
+"未命名策略" = "Untitled Strategy";
+" 副本" = " Copy";
+"未能复制" = "Could Not Duplicate";
+"规则嵌套过深" = "Rule nesting is too deep";
+"不允许此值" = "This value is not allowed";
+"不支持远程规则引用" = "Remote schema references are not supported";
+"规则引用不存在" = "Schema reference not found";
+"值不符合契约" = "Value does not match the contract";
+"不在允许的选项中" = "Not one of the allowed options";
+"数据类型错误" = "Incorrect data type";
+"不能为空" = "Cannot be empty";
+"格式不合法" = "Invalid format";
+"时间格式不合法" = "Invalid date-time format";
+"低于允许的最小值" = "Below the minimum allowed value";
+"项目数量不足" = "Too few items";
+"存在重复项目" = "Duplicate items";
+"缺少必需项目" = "Required item missing";
+"缺少 %@" = "Missing %@";
+"不符合任何唯一的规则类型，请检查字段" = "Fields do not match exactly one rule type";
+"禁止此字段组合" = "This field combination is not allowed";
+"JSON 字段名格式错误" = "Invalid JSON field name";
+"JSON 字符串未结束" = "Unterminated JSON string";
+"JSON 嵌套过深" = "JSON nesting is too deep";
+"JSON 不完整" = "Incomplete JSON";
+"JSON 字段重复：%@" = "Duplicate JSON field: %@";
+"JSON 缺少冒号" = "Missing JSON colon";
+"JSON 对象未结束" = "Unterminated JSON object";
+"JSON 数组未结束" = "Unterminated JSON array";
+"第 %@ 行：需要 json 代码块" = "Line %@: expected a json code block";
+"JSON 代码块未结束" = "Unterminated JSON code block";
+"这是自由草稿。规范策略应以 # Strategy 开始；可先用 AI 整理，再确认。" = "This is a free-form draft. Structured strategies start with # Strategy. You can use AI to organize it, then review.";
+"metadata 不能包含 nodes" = "Metadata must not contain nodes";
+"第 %@ 行：需要节点标题 ## nodeId" = "Line %@: expected a ## nodeId heading";
+"节点标题与 nodeId 不一致：%@" = "Node heading does not match nodeId: %@";
+"节点 ID 重复" = "Duplicate node ID";
+"规则存在循环：%@" = "Cycle in rules: %@";
+"找不到引用的规则：%@" = "Referenced rule not found: %@";
+"共享策略契约未包含在此构建中，无法安全编辑或执行" = "The shared strategy schema is missing from this build. Editing and execution are unavailable.";
+"原稿不是合法结构文本；下面为新生成的规则，请逐项确认。" = "The original is not valid structured text. Review each newly generated rule below.";
+"新增规则 %@：%@" = "Added rule %@: %@";
+"删除规则 %@" = "Removed rule %@";
+"规则/" = "Rule/";
+"待处理：\n" = "Needs attention:\n";
+"策略" = "Strategy";
+"没有语义变化" = "No semantic changes";
+"交易日历仅覆盖2026年，不能外推" = "The trading calendar only covers 2026; it cannot be extrapolated";
+"请添加规则" = "Add a rule";
+"请选择需要交付的输出" = "Choose an output to deliver";
+"请选择账户" = "Select accounts";
+"允许陈旧天数必须是非负整数 DAYS" = "Maximum age must be a nonnegative integer in DAYS";
+"当前数据适配仅支持拆股复权收盘价，不会替换价格口径" = "Only split-adjusted closes are supported. The requested price basis will not be substituted.";
+"尚未导入此模拟初始快照，不能代替为空状态" = "This initial simulation snapshot is not available. It cannot be replaced with empty state.";
+"任一/全部需要至少两个条件" = "ANY/ALL requires at least two conditions";
+"输入端口与规则类型不匹配" = "Input ports do not match the rule type";
+"%@ 引用了不兼容的输出端口" = "%@ references an incompatible output port";
+"当前持仓来源不能附加指定证券" = "Selected holdings cannot include an explicit security list";
+"指定证券列表不能为空" = "Explicit securities cannot be empty";
+"指标 %@/%@ 尚未适配" = "Indicator %@/%@ is not supported";
+"指标输出单位应为 %@" = "Indicator output unit must be %@";
+"完整日线价格不接受计算窗口" = "Daily close does not accept a calculation window";
+"此指标仅支持交易日窗口" = "This indicator requires a trading-session window";
+"指标窗口应为有效整数 SESSIONS" = "The window must be a valid integer in SESSIONS";
+"当前历史适配最多支持250个交易日窗口" = "The current adapter supports windows up to 250 sessions";
+"最多保留必须为正整数 COUNT" = "The limit must be a positive integer COUNT";
+"配置值的单位或范围不正确" = "Invalid allocation unit or range";
+"配置分母必须明确为NAV或不适用" = "The allocation denominator must be NAV or NOT_APPLICABLE";
+"手数必须为正SHARES；不舍入时显式填1" = "Lot size must be positive SHARES; explicitly use 1 when rounding is NONE";
+"只注册了最大单证券目标权重/1" = "Only max_position_weight/1 is registered";
+"风险阈值必须为PERCENT" = "Risk threshold must use PERCENT";
+"模拟状态只允许SIMULATE模式" = "State nodes require SIMULATE mode";
+"读取状态的value必须为null" = "State READ requires a null value";
+"多个节点写同一模拟状态键" = "Multiple nodes write the same simulation state key";
+"AI仅注册price-evidence-thesis/1与policy-thesis-1；不替换未知提示方法" = "AI supports only price-evidence-thesis/1 and policy-thesis-1; unknown methods are not substituted";
+"%@ 尚未完成执行适配，不能生成假结果" = "%@ has no execution adapter; no fabricated results will be produced";
+"交付输出端口不存在" = "Delivery output port does not exist";
+"AI格式或引用不合法" = "Invalid AI response format or citations";
+"前置规则没有产生 %@" = "An upstream rule did not produce %@";
+"缺少包含现金的完整NAV及同币种持仓估值；不能用持仓市值冒充账户预算" = "Complete NAV including cash and same-currency valuations are missing. Holdings value cannot stand in for account budget.";
+"价格、币种或目标值不完整" = "Price, currency or target value is incomplete";
+"目标金额币种不匹配，未隐式换汇" = "Target currency mismatch; no implicit FX conversion";
+"未知配置方法" = "Unknown allocation method";
+"手数未知" = "Unknown lot size";
+"目标数值溢出" = "Target value overflow";
+"目标配置与未调整资产超过NAV；不会自动归一化或卖出其他资产" = "Targets plus unchanged assets exceed NAV. No automatic rescaling or sale of other assets.";
+"提案或完整NAV缺失，风险不能判为安全" = "Proposal or complete NAV is missing; risk cannot be considered safe";
+"风险条件不通过，已阻断" = "Risk condition failed; blocked";
+"风险未知或提案不完整，已阻断" = "Risk is unknown or proposal incomplete; blocked";
+"明确为空的初始模拟状态中不存在此键；没有默认为false" = "This key is absent from the explicitly empty initial state. It was not defaulted to false.";
+"条件未知，未提出状态更改" = "Condition unknown; no state change proposed";
+"指定证券尚未获得唯一挂牌映射；不会按裸代码猜测" = "Explicit securities lack unique listing mappings. Bare symbols will not be guessed.";
+"证券输入缺失" = "Security input missing";
+"交易所与窗口日历不匹配" = "Exchange does not match the window calendar";
+"历史长度不足或交易日存在缺口" = "Insufficient history or missing trading sessions";
+"指标无法计算" = "Indicator could not be calculated";
+"筛选条件与指标的单位或证券范围不匹配" = "Filter and indicator units or security scopes do not match";
+"币种不匹配，未隐式换汇" = "Currency mismatch; no implicit FX conversion";
+"条件宇宙不一致，不能隐式合并" = "Condition universes differ; no implicit merge";
+"条件数据不足" = "Insufficient condition data";
+"条件分支证券范围不一致" = "Branch security scopes do not match";
+"排序范围或数量错误" = "Invalid sort scope or limit";
+"尚不支持执行 %@" = "Execution is not supported for %@";
+"规则名称" = "Rule name";
+"策略名称" = "Strategy name";
+"单位" = "Unit";
+"指标" = "Indicator";
+"比较方式" = "Comparison";
+"窗口长度" = "Window length";
+"阈值" = "Threshold";
+"最多保留" = "Limit";
+"允许陈旧天数" = "Maximum age in days";
+"数据截止时间" = "Data as of";
+"排序方向" = "Sort order";
+"交易所代码" = "Exchange MIC";
+"来源规则" = "Source rule";
+"来源输出" = "Source output";
+"日期口径" = "Calendar basis";
+"操作" = "Operation";
+"待确认原因" = "Unresolved reason";
+"待确认：" = "Confirm: ";
+"大于" = "Greater than";
+"大于或等于" = "Greater than or equal to";
+"小于" = "Less than";
+"小于或等于" = "Less than or equal to";
+"等于" = "Equal to";
+"不等于" = "Not equal to";
+"从高到低" = "Highest first";
+"从低到高" = "Lowest first";
+"只读分析" = "Read-only analysis";
+"本次空状态模拟（非历史回测）" = "Empty-state simulation (not a historical backtest)";
+"完整日线收盘价" = "Completed daily close";
+"区间涨跌幅" = "Period price change";
+"简单移动平均" = "Simple moving average";
+"Cutler RSI · 有限窗口，非Wilder平滑" = "Cutler RSI · Finite window, not Wilder smoothing";
+"对数收益年化波动率 · 样本方差/252日" = "Annualized log-return volatility · Sample variance / 252 days";
+"不舍入" = "No rounding";
+"按手数向下舍入" = "Round down to lot size";
+"排除无数据项" = "Exclude missing values";
+"无数据项排最后" = "Missing values last";
+"选择" = "Choose";
+"选择明确的方法；不会自动填入窗口或阈值。" = "Choose an explicit method. Windows and thresholds are not filled automatically.";
+"请确认交易日窗口" = "Confirm the trading-session window";
+"编辑字段" = "Edit Field";
+"填写明确数值与单位；例如 60 / SESSIONS、10 / PERCENT。货币和价格必须提供币种。" = "Enter a value and unit, such as 60 / SESSIONS or 10 / PERCENT. Money and prices require a currency.";
+"字符串无需引号；数组和布尔值请使用 JSON。" = "Strings do not need quotes. Use JSON for arrays and booleans.";
+"值" = "Value";
+"单位：PERCENT / SESSIONS / DAYS / COUNT" = "Unit: PERCENT / SESSIONS / DAYS / COUNT";
+"币种（价格或金额必填）" = "Currency (required for prices or money)";
+"确定" = "Confirm";
+"合成组合不能进入真实账户运行或发送至AI服务" = "Synthetic portfolios cannot enter personal-account runs or be sent to AI";
+"账户已不存在或未选择；不能自动扩展为全部账户" = "Accounts are missing or unselected. The scope will not expand automatically.";
+"数据截止时间无效或位于未来" = "The as-of time is invalid or in the future";
+"当前适配器不提供历史时点可得性。请明确更新数据截止时间为今天；不会自动改动策略。" = "This adapter does not establish historical point-in-time availability. Explicitly update the as-of date to today; the strategy will not be changed automatically.";
+"截止时间内没有已完成且日历覆盖的交易日" = "No completed, calendar-covered session exists before the as-of time";
+"交易日参考或允许陈旧天数不可用" = "Trading calendar or maximum age is unavailable";
+"市场数据已超出允许的陈旧天数" = "Market data exceeds the allowed age";
+"%@ 的挂牌或币种尚未适配。当前仅支持参考目录已确认的美元美股，不会按裸代码混合市场。" = "Listing or currency for %@ is unsupported. Only catalog-mapped USD US equities are supported; markets are not mixed by bare symbol.";
+"%@ 缺少已适配的交易所日历" = "%@ has no supported exchange calendar";
+"Yahoo 日线 / 本机 split-only 缓存；company_reference %@；2026计划交易日：%@" = "Yahoo daily / local split-only cache; company_reference %@; 2026 scheduled sessions: %@";
+"最新完整日线缺失或落后于计划交易日" = "Latest completed daily bar is missing or behind the scheduled session";
+"当前账户没有可分析的持仓" = "No analyzable holdings in these accounts";
+"运行 ID 无效" = "Invalid run ID";
+"已有策略正在运行，请先取消或等待完成" = "A strategy is already running. Cancel it or wait for completion.";
+"用户模拟预算只适用于SIMULATE；当前估值适配仅支持USD" = "User simulation budgets require SIMULATE. Valuations currently support USD only.";
+"已有运行任务" = "A run is already active";
+"此运行不能继续；取消或成功的运行不会自动重启" = "This run cannot resume. Cancelled and successful runs do not restart.";
+"后台申请失败，可手动选择前台运行：%@" = "Background request failed. You can continue in the foreground: %@";
+"读取冻结账户范围；行情仅在本次未缓存时获取" = "Reading frozen account scope; fetching only uncaptured market inputs";
+"完成：%@" = "Completed: %@";
+"%@ 项缺少数据，详见输出原因" = "%@ items lack data; see output reasons";
+"UNREACHABLE：不属于交付输出的依赖" = "UNREACHABLE: not a dependency of a requested output";
+"只读研究结果；计划日历核对，不是历史时点回测。AI节点只解释提供的价格证据，不搜索市场、不验证公司基本面；候选需确认。状态更改仅为本次模拟提案，未提交订单。" = "Read-only research using a scheduled calendar, not a point-in-time backtest. AI explains supplied price evidence only; no market search or fundamental verification. Candidates require confirmation. State changes are simulation proposals, not orders.";
+"系统结束了后台任务，已保存进度。需要你主动继续；不能保证后台一直运行。" = "The system ended the background task. Progress is saved. Resume manually; continuous background execution is not guaranteed.";
+"已取消。完成的步骤和输入已保留；此运行不会自动继续。" = "Cancelled. Completed steps and inputs are saved. This run will not resume automatically.";
+"AI证券范围缺失" = "AI security scope is missing";
+"缺少可引用的完整价格证据，未请求AI" = "Complete citable price evidence is missing; AI was not requested";
+"运行历史" = "Run History";
+"暂无运行记录" = "No runs yet";
+"完成、失败和已取消的运行都会保存在本机。" = "Completed, failed and cancelled runs are saved on this device.";
+"查看结果" = "View Results";
+"从已保存进度继续" = "Resume from Checkpoint";
+"仅前台继续" = "Resume in Foreground";
+"选择证券" = "Select Securities";
+"计算指标" = "Calculate Indicator";
+"满足任一条件" = "Any Condition";
+"满足全部条件" = "All Conditions";
+"条件分支" = "Conditional Branch";
+"排序" = "Sort";
+"目标配置" = "Target Allocation";
+"风险检查" = "Risk Check";
+"执行保护" = "Guard";
+"AI 研究" = "AI Research";
+"模拟状态" = "Simulation State";
+"个交易日" = " sessions";
+"天" = " days";
+"项" = " items";
+"股" = " shares";
+"分" = " points";
+"使用已确认账户中的当前持仓" = "Use current holdings in the confirmed accounts";
+"仅分析指定的 %@ 个挂牌证券" = "Analyze only the %@ specified listings";
+"Cutler RSI（非 Wilder）" = "Cutler RSI (not Wilder)";
+"年化波动率（对数收益，252日）" = "Annualized volatility (log returns, 252 days)";
+"完整日线成交股数" = "Completed daily share volume";
+"\n窗口：" = "\nWindow: ";
+"；保留 " = "; keep ";
+"任一条件成立即可；全部不成立才排除，缺数据会保留未知状态。" = "Any true condition passes. All false conditions exclude. Missing data may remain unknown.";
+"所有条件成立才通过；缺数据不等于通过。" = "All conditions must be true. Missing data is not a pass.";
+"分别输出成立、不成立和未知分支；未知不会进入否则分支。" = "True, false and unknown have separate branches. Unknown never enters the else branch.";
+"每只证券目标：" = "Target per security: ";
+"以明确的总预算为分母；未调整资产也占预算。" = "Uses the explicit total budget as denominator. Unchanged assets also use the budget.";
+"目标值不是增量订单。" = "The target is not an incremental order.";
+"最大单证券权重 " = "Maximum single-security weight ";
+"仅整体风险通过时放行；不通过或未知均阻断。" = "Passes only when portfolio risk passes. Failed or unknown conditions block.";
+"模拟状态 " = "Simulation state ";
+"\n只返回本次提案，不修改账户。" = "\nReturns a proposal for this run only. No account changes.";
+"依据冻结价格证据形成待确认摘要；不推断公司基本面，不自动交易。" = "Creates a reviewable summary from frozen price evidence. No fundamental inference or automatic trading.";
+"检查参数与依赖后执行；不支持的规则会明确拦截。" = "Parameters and dependencies are checked. Unsupported rules are explicitly blocked.";
+"请确认允许的数据陈旧天数" = "Confirm the maximum data age in days";
+"证券范围" = "security scope";
+"请先添加%@规则。" = "Add a %@ rule first.";
+"请填写交易日数量" = "Enter the number of trading sessions";
+"请填写筛选阈值与单位" = "Enter the filter threshold and unit";
+"请填写最多保留数量" = "Enter the maximum number of results";
+"请先添加至少两个筛选条件。" = "Add at least two filter conditions first.";
+"每只证券的目标NAV百分比" = "Target NAV percentage per security";
+"最大单证券目标权重百分比" = "Maximum single-security target weight percentage";
+"未知规则类型" = "Unknown rule type";
+"策略已在另一处更新，请重新打开后再编辑。草稿尚未覆盖。" = "The strategy changed elsewhere. Reopen before editing. Your draft was not overwritten.";
+"策略文本过大，请拆分为较小的策略。" = "The strategy is too large. Split it into smaller strategies.";
+"无法读取策略文件 %@。原文件已保留，未重置。" = "Could not read strategy file %@. The original was preserved, not reset.";
+
+/* Stock detail header · price movement analysis */
+"未能生成可核对的变动分析，请重试" = "Unable to produce a verifiable movement analysis. Please retry.";
+"已读取 %@ 篇区间内资料，暂未发现证据充分的相关因素。可稍后重试。" = "Read %@ sources for this interval, but found no sufficiently supported related factors. You can retry later.";
+"为什么变动？" = "Why the move?";
+"为什么涨了？" = "Why the rise?";
+"为什么跌了？" = "Why the drop?";
+"等待带日期的价格走势" = "Waiting for dated price history";
+"区间测量" = "Selected interval";
+"未实现盈亏" = "Unrealized P&L";
+"按图表所选区间分析，不默认代表今日涨跌。" = "Analyzing the chart's selected interval, not necessarily today's move.";
+"可能相关的因素" = "Potentially related factors";
+"仅分析可核对的公开资料。资料覆盖可能不完整，相关事件不等于已证明的涨跌原因。" = "Based only on verifiable public sources. Coverage may be incomplete; related events are not proven causes of the price movement.";
+"重新分析" = "Analyze again";
+"开始分析" = "Analyze";
+"正在收集区间内的公开资料" = "Collecting public sources for this interval";
+"正在核对可能相关的因素" = "Verifying potentially related factors";
+"已有分析仍保留在下方。" = "Your previous analysis is preserved below.";
+"未找到这个区间内可核对的公开资料，暂时不能确认变动原因。" = "No verifiable public sources were found for this interval. The reason for the move cannot yet be confirmed.";
+
+"今天有什么动静？" = "What’s happening today?";
+
+"暂时没能查到，稍后再试。" = "Couldn’t check the news. Please try again.";
+
+"暂未找到这次涨跌的明确公开原因。" = "No clear public catalyst was found for this move.";
+
+"正在查找当天的消息…" = "Checking the session’s news…";
+
+"正在思考" = "Thinking";
+
+"最近有什么动静？" = "What’s new recently?";
+
+"近期暂无可核实的重要公司新进展。" = "No important recent company developments could be verified.";
+
+"已展开" = "Expanded";
+"已收起" = "Collapsed";
+"每股收益与收入 · 实际对比预期" = "EPS and revenue · Actual vs. estimate";
+"期权持仓墙 OI" = "Option OI walls";
+"期权持仓不代表成交量、买卖方向或必然的支撑与阻力。" = "Open interest does not show volume, trade direction, or guaranteed support and resistance.";
+"Unrealised P&L %" = "Unrealised P&L %";
+"Polymarket · %@ 个相关事件" = "Polymarket · %@ related events";
+"峰值" = "Peak";

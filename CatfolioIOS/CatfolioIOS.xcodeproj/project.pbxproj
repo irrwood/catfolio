@@ -7,6 +7,38 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AE1100000000000000000041 /* catfolio-daily-brief in Resources */ = {isa = PBXBuildFile; fileRef = BE1100000000000000000041; };
+		A5EC7000000000000000000B /* StockChartsRotationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC7000000000000000000B; };
+		A5EC7000000000000000000A /* stockcharts_rrg_reference.json in Resources */ = {isa = PBXBuildFile; fileRef = B5EC7000000000000000000A; };
+		A5EC70000000000000000009 /* StockChartsRotationUIKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000009; };
+		A5EC70000000000000000008 /* StockChartsRotationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000008; };
+		A5EC70000000000000000007 /* StockChartsRotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000007; };
+		A5EC70000000000000000005 /* SectorRotationUIKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000005; };
+				A5EC70000000000000000006 /* SectorPerformance.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000006; };
+		A5EC70000000000000000004 /* SectorRotationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000004; };
+		A5EC70000000000000000003 /* sector_rotation_history.json in Resources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000003; };
+		A5EC70000000000000000002 /* SectorRotationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000002; };
+		A5EC70000000000000000001 /* SectorRotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000001; };
+		AF1000000000000000000014 /* PolicyBackgroundService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000014; };
+		AF1000000000000000000010 /* PolicyExecution.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000010; };
+		AF1000000000000000000011 /* PolicyMarketAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000011; };
+		AF1000000000000000000012 /* PolicyRunCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000012; };
+		AF1000000000000000000013 /* PolicyRunHistoryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000013; };
+		AF1000000000000000000001 /* PolicyWorkspaceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000001; };
+		AF1000000000000000000002 /* PolicyComposerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000002; };
+		AF1000000000000000000003 /* PolicyContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000003; };
+		AF1000000000000000000004 /* PolicyTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000004; };
+		AF1000000000000000000005 /* PolicyFieldsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000005; };
+		AF1000000000000000000006 /* PolicyCandidateViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000006; };
+		AF1000000000000000000090 /* strategy.schema.json in Resources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000090; };
+		A1E100000000000000000001 /* PortfolioHomeScrollInteraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E100000000000000000001 /* PortfolioHomeScrollInteraction.swift */; };
+		A1E099000000000000000001 /* HistoryPagingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E099000000000000000001 /* HistoryPagingView.swift */; };
+		A1E092000000000000000001 /* SettingsInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E092000000000000000001 /* SettingsInteractionTests.swift */; };
+		A1E091000000000000000001 /* HistoryInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E091000000000000000001 /* HistoryInteractionTests.swift */; };
+		A1E093000000000000000001 /* PageLoadAndJitterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E093000000000000000001 /* PageLoadAndJitterTests.swift */; };
+		A1E080000000000000000001 /* HomeScrollInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E080000000000000000001 /* HomeScrollInteractionTests.swift */; };
+		A1E090000000000000000001 /* HoldingDetailInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E090000000000000000001 /* HoldingDetailInteractionTests.swift */; };
+		339F77A85FF9414A9A93A96A /* HoldingsHeatmapAggregationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9266D7BEE7814E13A87C6F40 /* HoldingsHeatmapAggregationTests.swift */; };
         A1D000000000000000000003 /* LocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000004 /* LocalizationTests.swift */; };
         A1D000000000000000000001 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000001 /* Localization.swift */; };
         A1D000000000000000000002 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = D1D000000000000000000001 /* Localizable.strings */; };
@@ -62,6 +94,8 @@
 		A199000000000000000000AA /* RealisedProfitCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AA /* RealisedProfitCalculator.swift */; };
 		A199000000000000000000AB /* FMPRateLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AB /* FMPRateLimiter.swift */; };
 		A199000000000000000000AC /* NasdaqAnalystClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AC /* NasdaqAnalystClient.swift */; };
+		E10100000000000000000002 /* EarningsHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000002 /* EarningsHistoryView.swift */; };
+		E10100000000000000000001 /* EarningsHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000001 /* EarningsHistory.swift */; };
 		A199000000000000000000AE /* TodayDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AE /* TodayDetailView.swift */; };
 		A199000000000000000000AF /* SectorAttribution.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AF /* SectorAttribution.swift */; };
 		A19900000000000000FF90 /* PortfolioDocumentMerge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF90 /* PortfolioDocumentMerge.swift */; };
@@ -75,21 +109,20 @@
 		A199000000000000000000D8 /* ReferenceCatalogs.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D8 /* ReferenceCatalogs.swift */; };
 		A199000000000000000000D6 /* LegacyType.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D6 /* LegacyType.swift */; };
 		A199000000000000000000D5 /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D5 /* Typography.swift */; };
+		A199000000000000000000EF /* SettingsTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EF /* SettingsTemplate.swift */; };
 		A199000000000000000000D1 /* StockSplitCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D1 /* StockSplitCatalog.swift */; };
 		A19900000000000000000001 /* ResearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000001 /* ResearchView.swift */; };
 		A19900000000000000000002 /* StockScreenerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000002 /* StockScreenerView.swift */; };
 		A19900000000000000000003 /* AnalystConsensusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000003 /* AnalystConsensusView.swift */; };
 		A19900000000000000000009 /* OptionsOIView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000009 /* OptionsOIView.swift */; };
+		A199000000000000000000EB /* SecurityDebate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EB /* SecurityDebate.swift */; };
+		A199000000000000000000ED /* SecurityDebateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000ED /* SecurityDebateStore.swift */; };
+		A199000000000000000000EE /* SecurityDebateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EE /* SecurityDebateView.swift */; };
 		A199000000000000000000A1 /* MoneyWeightedReturnCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B1 /* MoneyWeightedReturnCalculatorTests.swift */; };
 		A199000000000000000000A2 /* LocalPortfolioEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B2 /* LocalPortfolioEngineTests.swift */; };
 		A199000000000000000000E4 /* PublicInvestorCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E4 /* PublicInvestorCatalogTests.swift */; };
 		A199000000000000000000E5 /* CurrencyFormattingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E5 /* CurrencyFormattingTests.swift */; };
 		A199000000000000000000E6 /* PortfolioAccountAggregationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E6 /* PortfolioAccountAggregationTests.swift */; };
-		A199000000000000000000EB /* SecurityDebate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EB /* SecurityDebate.swift */; };
-		A199000000000000000000ED /* SecurityDebateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000ED /* SecurityDebateStore.swift */; };
-		A199000000000000000000EE /* SecurityDebateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EE /* SecurityDebateView.swift */; };
-		A199000000000000000000A3 /* RealisedProfitCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */; };
-		A199000000000000000000A4 /* BrokerResultPreservationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B4 /* BrokerResultPreservationTests.swift */; };
 		A199000000000000000000E8 /* CompactNumberRuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E8 /* CompactNumberRuleTests.swift */; };
 		A199000000000000000000E9 /* HeatmapRemainderReturnTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E9 /* HeatmapRemainderReturnTests.swift */; };
 		A199000000000000000000EA /* HeatmapRowTapTargetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EA /* HeatmapRowTapTargetTests.swift */; };
@@ -100,12 +133,14 @@
 		A199000000000000000000A6 /* StockScreenerRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B6 /* StockScreenerRulesTests.swift */; };
 		A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B7 /* Trading212FillDecodingTests.swift */; };
 		A199000000000000000000AD /* NasdaqAnalystLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */; };
+		E10100000000000000000003 /* EarningsHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000003 /* EarningsHistoryTests.swift */; };
 		A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000C1 /* SectorAttributionTests.swift */; };
 		A19900000000000000FFB0 /* NumericAlternatesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FFB0 /* NumericAlternatesTests.swift */; };
 		A19900000000000000FFA0 /* PublicInvestorSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */; };
 		A19900000000000000FF91 /* PortfolioDocumentMergeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF91 /* PortfolioDocumentMergeTests.swift */; };
 		A19900000000000000FF81 /* CloudPreferencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF81 /* CloudPreferencesTests.swift */; };
 		A19900000000000000FF71 /* LedgerReconciliationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF71 /* LedgerReconciliationTests.swift */; };
+		A19900000000000000FFC0 /* AIConversationLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FFC0 /* AIConversationLibraryTests.swift */; };
 		A19900000000000000FF61 /* UKSection104PoolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF61 /* UKSection104PoolTests.swift */; };
 		A19900000000000000FF51 /* UKShareMatchingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF51 /* UKShareMatchingTests.swift */; };
 		A19900000000000000FF40 /* FXImpactTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF40 /* FXImpactTests.swift */; };
@@ -114,9 +149,45 @@
 		A199000000000000000000D2 /* StockSplitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D2 /* StockSplitTests.swift */; };
 		AF5A00000000000000000001 /* ETFLookThroughExpansionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5A00000000000000000001 /* ETFLookThroughExpansionTests.swift */; };
 		A199000000000000000000C2 /* CompanyCIKSeedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000C2 /* CompanyCIKSeedTests.swift */; };
+		AE1100000000000000000001 /* IndustrySentimentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1100000000000000000001 /* IndustrySentimentView.swift */; };
+		AE1100000000000000000002 /* industry_sentiment.json in Resources */ = {isa = PBXBuildFile; fileRef = BE1100000000000000000002 /* industry_sentiment.json */; };
+		AC9200000000000000000001 /* AnalystHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC9200000000000000000001 /* AnalystHistoryView.swift */; };
+		AC9200000000000000000002 /* analyst_history_catalog.json in Resources */ = {isa = PBXBuildFile; fileRef = BC9200000000000000000002 /* analyst_history_catalog.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		BE1100000000000000000041 /* catfolio-daily-brief */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "catfolio-daily-brief"; sourceTree = "<group>"; };
+		B5EC7000000000000000000B /* StockChartsRotationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockChartsRotationTests.swift; sourceTree = "<group>"; };
+		B5EC7000000000000000000A /* stockcharts_rrg_reference.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = stockcharts_rrg_reference.json; sourceTree = "<group>"; };
+		B5EC70000000000000000009 /* StockChartsRotationUIKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockChartsRotationUIKit.swift; sourceTree = "<group>"; };
+		B5EC70000000000000000008 /* StockChartsRotationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockChartsRotationView.swift; sourceTree = "<group>"; };
+		B5EC70000000000000000007 /* StockChartsRotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockChartsRotation.swift; sourceTree = "<group>"; };
+		B5EC70000000000000000005 /* SectorRotationUIKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorRotationUIKit.swift; sourceTree = "<group>"; };
+				B5EC70000000000000000006 /* SectorPerformance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorPerformance.swift; sourceTree = "<group>"; };
+		B5EC70000000000000000004 /* SectorRotationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorRotationTests.swift; sourceTree = "<group>"; };
+		B5EC70000000000000000003 /* sector_rotation_history.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = sector_rotation_history.json; sourceTree = "<group>"; };
+		B5EC70000000000000000002 /* SectorRotationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorRotationView.swift; sourceTree = "<group>"; };
+		B5EC70000000000000000001 /* SectorRotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorRotation.swift; sourceTree = "<group>"; };
+		BF1000000000000000000014 /* PolicyBackgroundService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyBackgroundService.swift; sourceTree = "<group>"; };
+		BF1000000000000000000010 /* PolicyExecution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyExecution.swift; sourceTree = "<group>"; };
+		BF1000000000000000000011 /* PolicyMarketAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyMarketAdapter.swift; sourceTree = "<group>"; };
+		BF1000000000000000000012 /* PolicyRunCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyRunCoordinator.swift; sourceTree = "<group>"; };
+		BF1000000000000000000013 /* PolicyRunHistoryViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyRunHistoryViewController.swift; sourceTree = "<group>"; };
+		BF1000000000000000000001 /* PolicyWorkspaceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyWorkspaceStore.swift; sourceTree = "<group>"; };
+		BF1000000000000000000002 /* PolicyComposerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyComposerViewController.swift; sourceTree = "<group>"; };
+		BF1000000000000000000003 /* PolicyContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyContract.swift; sourceTree = "<group>"; };
+		BF1000000000000000000004 /* PolicyTemplates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyTemplates.swift; sourceTree = "<group>"; };
+		BF1000000000000000000005 /* PolicyFieldsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyFieldsViewController.swift; sourceTree = "<group>"; };
+		BF1000000000000000000006 /* PolicyCandidateViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyCandidateViewController.swift; sourceTree = "<group>"; };
+		BF1000000000000000000090 /* strategy.schema.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "../core/reference/strategy.schema.json"; sourceTree = SOURCE_ROOT; };
+		B1E100000000000000000001 /* PortfolioHomeScrollInteraction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioHomeScrollInteraction.swift; sourceTree = "<group>"; };
+		B1E099000000000000000001 /* HistoryPagingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryPagingView.swift; sourceTree = "<group>"; };
+		B1E092000000000000000001 /* SettingsInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsInteractionTests.swift; sourceTree = "<group>"; };
+		B1E091000000000000000001 /* HistoryInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryInteractionTests.swift; sourceTree = "<group>"; };
+		B1E093000000000000000001 /* PageLoadAndJitterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageLoadAndJitterTests.swift; sourceTree = "<group>"; };
+		B1E080000000000000000001 /* HomeScrollInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeScrollInteractionTests.swift; sourceTree = "<group>"; };
+		B1E090000000000000000001 /* HoldingDetailInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingDetailInteractionTests.swift; sourceTree = "<group>"; };
+		9266D7BEE7814E13A87C6F40 /* HoldingsHeatmapAggregationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingsHeatmapAggregationTests.swift; sourceTree = "<group>"; };
         B1D000000000000000000004 /* LocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationTests.swift; sourceTree = "<group>"; };
         B1D000000000000000000001 /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
         B1D000000000000000000002 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
@@ -136,6 +207,9 @@
 		B19900000000000000000002 /* StockScreenerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockScreenerView.swift; sourceTree = "<group>"; };
 		B19900000000000000000003 /* AnalystConsensusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalystConsensusView.swift; sourceTree = "<group>"; };
 		B19900000000000000000009 /* OptionsOIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptionsOIView.swift; sourceTree = "<group>"; };
+		B199000000000000000000EB /* SecurityDebate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebate.swift; sourceTree = "<group>"; };
+		B199000000000000000000ED /* SecurityDebateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebateStore.swift; sourceTree = "<group>"; };
+		B199000000000000000000EE /* SecurityDebateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebateView.swift; sourceTree = "<group>"; };
 		B10000000000000000000001 /* CatfolioIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatfolioIOSApp.swift; sourceTree = "<group>"; };
 		B10000000000000000000002 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		B10000000000000000000003 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
@@ -144,9 +218,6 @@
 		B10000000000000000000006 /* PortfolioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioView.swift; sourceTree = "<group>"; };
 		B10000000000000000000007 /* VolumeProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeProfileView.swift; sourceTree = "<group>"; };
 		B10000000000000000000008 /* ReturnsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReturnsView.swift; sourceTree = "<group>"; };
-		B199000000000000000000EB /* SecurityDebate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebate.swift; sourceTree = "<group>"; };
-		B199000000000000000000ED /* SecurityDebateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebateStore.swift; sourceTree = "<group>"; };
-		B199000000000000000000EE /* SecurityDebateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebateView.swift; sourceTree = "<group>"; };
 		B10000000000000000000009 /* AIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIView.swift; sourceTree = "<group>"; };
 		B1000000000000000000000A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B1000000000000000000000B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -182,6 +253,8 @@
 		B199000000000000000000AA /* RealisedProfitCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealisedProfitCalculator.swift; sourceTree = "<group>"; };
 		B199000000000000000000AB /* FMPRateLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FMPRateLimiter.swift; sourceTree = "<group>"; };
 		B199000000000000000000AC /* NasdaqAnalystClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NasdaqAnalystClient.swift; sourceTree = "<group>"; };
+		F10100000000000000000002 /* EarningsHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarningsHistoryView.swift; sourceTree = "<group>"; };
+		F10100000000000000000001 /* EarningsHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarningsHistory.swift; sourceTree = "<group>"; };
 		B199000000000000000000AE /* TodayDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayDetailView.swift; sourceTree = "<group>"; };
 		B199000000000000000000AF /* SectorAttribution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttribution.swift; sourceTree = "<group>"; };
 		B19900000000000000FF90 /* PortfolioDocumentMerge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioDocumentMerge.swift; sourceTree = "<group>"; };
@@ -195,6 +268,7 @@
 		B199000000000000000000D8 /* ReferenceCatalogs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferenceCatalogs.swift; sourceTree = "<group>"; };
 		B199000000000000000000D6 /* LegacyType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyType.swift; sourceTree = "<group>"; };
 		B199000000000000000000D5 /* Typography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Typography.swift; sourceTree = "<group>"; };
+		B199000000000000000000EF /* SettingsTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTemplate.swift; sourceTree = "<group>"; };
 		B199000000000000000000D1 /* StockSplitCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockSplitCatalog.swift; sourceTree = "<group>"; };
 		B199000000000000000000B0 /* CatfolioIOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CatfolioIOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B199000000000000000000B1 /* MoneyWeightedReturnCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyWeightedReturnCalculatorTests.swift; sourceTree = "<group>"; };
@@ -202,26 +276,24 @@
 		B199000000000000000000E4 /* PublicInvestorCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicInvestorCatalogTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000E5 /* CurrencyFormattingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrencyFormattingTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000E6 /* PortfolioAccountAggregationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioAccountAggregationTests.swift; sourceTree = "<group>"; };
-		B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealisedProfitCalculatorTests.swift; sourceTree = "<group>"; };
-		B199000000000000000000B4 /* BrokerResultPreservationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrokerResultPreservationTests.swift; sourceTree = "<group>"; };
-		B199000000000000000000B5 /* AnalystConsensusDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalystConsensusDataTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000E8 /* CompactNumberRuleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompactNumberRuleTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000E9 /* HeatmapRemainderReturnTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeatmapRemainderReturnTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000EA /* HeatmapRowTapTargetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeatmapRowTapTargetTests.swift; sourceTree = "<group>"; };
-		B199000000000000000000B6 /* StockScreenerRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockScreenerRulesTests.swift; sourceTree = "<group>"; };
-		B199000000000000000000E8 /* CompactNumberRuleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompactNumberRuleTests.swift; sourceTree = "<group>"; };
-		B199000000000000000000B7 /* Trading212FillDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212FillDecodingTests.swift; sourceTree = "<group>"; };
-		B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NasdaqAnalystLogicTests.swift; sourceTree = "<group>"; };
-		B199000000000000000000C1 /* SectorAttributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttributionTests.swift; sourceTree = "<group>"; };
-		B19900000000000000FFB0 /* NumericAlternatesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericAlternatesTests.swift; sourceTree = "<group>"; };
-		B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicInvestorSelectionTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000EC /* SecurityDebateResearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebateResearchTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealisedProfitCalculatorTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000B4 /* BrokerResultPreservationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrokerResultPreservationTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000B5 /* AnalystConsensusDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalystConsensusDataTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000B6 /* StockScreenerRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockScreenerRulesTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000B7 /* Trading212FillDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212FillDecodingTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NasdaqAnalystLogicTests.swift; sourceTree = "<group>"; };
+		F10100000000000000000003 /* EarningsHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarningsHistoryTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000C1 /* SectorAttributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttributionTests.swift; sourceTree = "<group>"; };
+		B19900000000000000FFB0 /* NumericAlternatesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericAlternatesTests.swift; sourceTree = "<group>"; };
+		B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicInvestorSelectionTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF91 /* PortfolioDocumentMergeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioDocumentMergeTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF81 /* CloudPreferencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPreferencesTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF71 /* LedgerReconciliationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerReconciliationTests.swift; sourceTree = "<group>"; };
+		B19900000000000000FFC0 /* AIConversationLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIConversationLibraryTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF61 /* UKSection104PoolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UKSection104PoolTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF51 /* UKShareMatchingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UKShareMatchingTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF40 /* FXImpactTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FXImpactTests.swift; sourceTree = "<group>"; };
@@ -230,6 +302,10 @@
 		B199000000000000000000D2 /* StockSplitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockSplitTests.swift; sourceTree = "<group>"; };
 		BF5A00000000000000000001 /* ETFLookThroughExpansionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ETFLookThroughExpansionTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000C2 /* CompanyCIKSeedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyCIKSeedTests.swift; sourceTree = "<group>"; };
+		BE1100000000000000000001 /* IndustrySentimentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndustrySentimentView.swift; sourceTree = "<group>"; };
+		BE1100000000000000000002 /* industry_sentiment.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = industry_sentiment.json; sourceTree = "<group>"; };
+		BC9200000000000000000001 /* AnalystHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalystHistoryView.swift; sourceTree = "<group>"; };
+		BC9200000000000000000002 /* analyst_history_catalog.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = analyst_history_catalog.json; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -277,6 +353,19 @@
 				B10000000000000000000007 /* VolumeProfileView.swift */,
 				B10000000000000000000008 /* ReturnsView.swift */,
 				B10000000000000000000009 /* AIView.swift */,
+				B199000000000000000000EF /* SettingsTemplate.swift */,
+				BF1000000000000000000014 /* PolicyBackgroundService.swift */,
+				BF1000000000000000000010 /* PolicyExecution.swift */,
+				BF1000000000000000000011 /* PolicyMarketAdapter.swift */,
+				BF1000000000000000000012 /* PolicyRunCoordinator.swift */,
+				BF1000000000000000000013 /* PolicyRunHistoryViewController.swift */,
+				BF1000000000000000000001 /* PolicyWorkspaceStore.swift */,
+				BF1000000000000000000002 /* PolicyComposerViewController.swift */,
+				BF1000000000000000000003 /* PolicyContract.swift */,
+				BF1000000000000000000004 /* PolicyTemplates.swift */,
+				BF1000000000000000000005 /* PolicyFieldsViewController.swift */,
+				BF1000000000000000000006 /* PolicyCandidateViewController.swift */,
+				BF1000000000000000000090 /* strategy.schema.json */,
 				B1000000000000000000000A /* SettingsView.swift */,
 				B1000000000000000000000E /* ETFLookThroughView.swift */,
 				B1000000000000000000000F /* CSVImportView.swift */,
@@ -301,9 +390,21 @@
 				B10000000000000000000025 /* CompanyFinancialsView.swift */,
 				B10000000000000000000026 /* StandardLineChart.swift */,
 				B1000000000000000000002D /* HistoryView.swift */,
+				B1E099000000000000000001 /* HistoryPagingView.swift */,
+				B1E100000000000000000001 /* PortfolioHomeScrollInteraction.swift */,
 				B199000000000000000000AA /* RealisedProfitCalculator.swift */,
 				B199000000000000000000AB /* FMPRateLimiter.swift */,
 				B199000000000000000000AC /* NasdaqAnalystClient.swift */,
+				F10100000000000000000002 /* EarningsHistoryView.swift */,
+				BE1100000000000000000001 /* IndustrySentimentView.swift */,
+				B5EC70000000000000000002 /* SectorRotationView.swift */,
+				B5EC70000000000000000005 /* SectorRotationUIKit.swift */,
+				B5EC70000000000000000006 /* SectorPerformance.swift */,
+				B5EC70000000000000000009 /* StockChartsRotationUIKit.swift */,
+				B5EC70000000000000000008 /* StockChartsRotationView.swift */,
+				B5EC70000000000000000007 /* StockChartsRotation.swift */,
+				B5EC70000000000000000001 /* SectorRotation.swift */,
+				F10100000000000000000001 /* EarningsHistory.swift */,
 				B199000000000000000000AE /* TodayDetailView.swift */,
 				B199000000000000000000AF /* SectorAttribution.swift */,
 				B19900000000000000FF90 /* PortfolioDocumentMerge.swift */,
@@ -321,7 +422,11 @@
 				B19900000000000000000001 /* ResearchView.swift */,
 				B19900000000000000000002 /* StockScreenerView.swift */,
 				B19900000000000000000003 /* AnalystConsensusView.swift */,
+				BC9200000000000000000001 /* AnalystHistoryView.swift */,
 				B19900000000000000000009 /* OptionsOIView.swift */,
+				B199000000000000000000EB /* SecurityDebate.swift */,
+				B199000000000000000000ED /* SecurityDebateStore.swift */,
+				B199000000000000000000EE /* SecurityDebateView.swift */,
 				D10000000000000000000004 /* Resources */,
 				B1000000000000000000001A /* PrivacyInfo.xcprivacy */,
 				B1000000000000000000000B /* Assets.xcassets */,
@@ -332,13 +437,15 @@
 		};
 		D10000000000000000000004 /* Resources */ = {
 			isa = PBXGroup;
-				B199000000000000000000EB /* SecurityDebate.swift */,
-				B199000000000000000000ED /* SecurityDebateStore.swift */,
-				B199000000000000000000EE /* SecurityDebateView.swift */,
 			children = (
 				B10000000000000000000027 /* AssetLogos */,
+				BE1100000000000000000041 /* catfolio-daily-brief */,
 				B19800000000000000000004 /* company_reference.json */,
 				B199000000000000000000E3 /* public_investors.json */,
+				BC9200000000000000000002 /* analyst_history_catalog.json */,
+				BE1100000000000000000002 /* industry_sentiment.json */,
+				B5EC70000000000000000003 /* sector_rotation_history.json */,
+				B5EC7000000000000000000A /* stockcharts_rrg_reference.json */,
 				B19800000000000000000011 /* stock_splits.json */,
 				B19900000000000000FF32 /* gbp_fx_daily.json */,
 				B19900000000000000FF22 /* fund_fees.json */,
@@ -380,36 +487,43 @@
 			children = (
 				B199000000000000000000B1 /* MoneyWeightedReturnCalculatorTests.swift */,
                 B1D000000000000000000004 /* LocalizationTests.swift */,
+                B5EC70000000000000000004 /* SectorRotationTests.swift */,
+				B5EC7000000000000000000B /* StockChartsRotationTests.swift */,
 				B199000000000000000000B2 /* LocalPortfolioEngineTests.swift */,
 				B199000000000000000000E4 /* PublicInvestorCatalogTests.swift */,
 				B199000000000000000000E5 /* CurrencyFormattingTests.swift */,
 				B199000000000000000000E6 /* PortfolioAccountAggregationTests.swift */,
-				B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */,
-				B199000000000000000000B4 /* BrokerResultPreservationTests.swift */,
 				B199000000000000000000E8 /* CompactNumberRuleTests.swift */,
 				B199000000000000000000E9 /* HeatmapRemainderReturnTests.swift */,
 				B199000000000000000000EA /* HeatmapRowTapTargetTests.swift */,
-				B199000000000000000000B5 /* AnalystConsensusDataTests.swift */,
-				B199000000000000000000B6 /* StockScreenerRulesTests.swift */,
-				B199000000000000000000E8 /* CompactNumberRuleTests.swift */,
-				B199000000000000000000B7 /* Trading212FillDecodingTests.swift */,
-				B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */,
-				B199000000000000000000C1 /* SectorAttributionTests.swift */,
-				B19900000000000000FFB0 /* NumericAlternatesTests.swift */,
-				B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */,
 				B199000000000000000000EC /* SecurityDebateResearchTests.swift */,
 				B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */,
 				B199000000000000000000B4 /* BrokerResultPreservationTests.swift */,
+				B199000000000000000000B5 /* AnalystConsensusDataTests.swift */,
+				B199000000000000000000B6 /* StockScreenerRulesTests.swift */,
+				B199000000000000000000B7 /* Trading212FillDecodingTests.swift */,
+				B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */,
+				F10100000000000000000003 /* EarningsHistoryTests.swift */,
+				B199000000000000000000C1 /* SectorAttributionTests.swift */,
+				B19900000000000000FFB0 /* NumericAlternatesTests.swift */,
+				B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */,
 				B19900000000000000FF91 /* PortfolioDocumentMergeTests.swift */,
 				B19900000000000000FF81 /* CloudPreferencesTests.swift */,
 				B19900000000000000FF71 /* LedgerReconciliationTests.swift */,
+				B19900000000000000FFC0 /* AIConversationLibraryTests.swift */,
 				B19900000000000000FF61 /* UKSection104PoolTests.swift */,
 				B19900000000000000FF51 /* UKShareMatchingTests.swift */,
 				B19900000000000000FF40 /* FXImpactTests.swift */,
 				B19900000000000000FF21 /* FundFeeTests.swift */,
 				B199000000000000000000D7 /* TypographyTests.swift */,
+				B1E080000000000000000001 /* HomeScrollInteractionTests.swift */,
+				B1E090000000000000000001 /* HoldingDetailInteractionTests.swift */,
+				B1E091000000000000000001 /* HistoryInteractionTests.swift */,
+				B1E092000000000000000001 /* SettingsInteractionTests.swift */,
+				B1E093000000000000000001 /* PageLoadAndJitterTests.swift */,
 				B199000000000000000000D2 /* StockSplitTests.swift */,
 				BF5A00000000000000000001 /* ETFLookThroughExpansionTests.swift */,
+				9266D7BEE7814E13A87C6F40 /* HoldingsHeatmapAggregationTests.swift */,
 				B199000000000000000000C2 /* CompanyCIKSeedTests.swift */,
 			);
 			path = CatfolioIOSTests;
@@ -524,8 +638,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1C000000000000000000001 /* AppIcon.icon in Resources */,
+				AF1000000000000000000090 /* strategy.schema.json in Resources */,
 				A19800000000000000000004 /* company_reference.json in Resources */,
 				A199000000000000000000E3 /* public_investors.json in Resources */,
+				AC9200000000000000000002 /* analyst_history_catalog.json in Resources */,
+				AE1100000000000000000002 /* industry_sentiment.json in Resources */,
+				A5EC70000000000000000003 /* sector_rotation_history.json in Resources */,
+				A5EC7000000000000000000A /* stockcharts_rrg_reference.json in Resources */,
 				A19800000000000000000011 /* stock_splits.json in Resources */,
 				A19900000000000000FF32 /* gbp_fx_daily.json in Resources */,
 				A19900000000000000FF22 /* fund_fees.json in Resources */,
@@ -534,6 +653,7 @@
 				A1000000000000000000000B /* Assets.xcassets in Resources */,
                 A1D000000000000000000002 /* Localizable.strings in Resources */,
 				A10000000000000000000025 /* AssetLogos in Resources */,
+				AE1100000000000000000041 /* catfolio-daily-brief in Resources */,
 				A10000000000000000000017 /* sp500_holdings.json in Resources */,
 				A10000000000000000000018 /* PrivacyInfo.xcprivacy in Resources */,
 				A10000000000000000000019 /* eqqq_holdings.json in Resources */,
@@ -560,6 +680,18 @@
 				A10000000000000000000007 /* VolumeProfileView.swift in Sources */,
 				A10000000000000000000008 /* ReturnsView.swift in Sources */,
 				A10000000000000000000009 /* AIView.swift in Sources */,
+				A199000000000000000000EF /* SettingsTemplate.swift in Sources */,
+				AF1000000000000000000014 /* PolicyBackgroundService.swift in Sources */,
+				AF1000000000000000000010 /* PolicyExecution.swift in Sources */,
+				AF1000000000000000000011 /* PolicyMarketAdapter.swift in Sources */,
+				AF1000000000000000000012 /* PolicyRunCoordinator.swift in Sources */,
+				AF1000000000000000000013 /* PolicyRunHistoryViewController.swift in Sources */,
+				AF1000000000000000000001 /* PolicyWorkspaceStore.swift in Sources */,
+				AF1000000000000000000002 /* PolicyComposerViewController.swift in Sources */,
+				AF1000000000000000000003 /* PolicyContract.swift in Sources */,
+				AF1000000000000000000004 /* PolicyTemplates.swift in Sources */,
+				AF1000000000000000000005 /* PolicyFieldsViewController.swift in Sources */,
+				AF1000000000000000000006 /* PolicyCandidateViewController.swift in Sources */,
 				A1000000000000000000000A /* SettingsView.swift in Sources */,
 				A1000000000000000000000C /* ETFLookThroughView.swift in Sources */,
 				A1000000000000000000000D /* CSVImportView.swift in Sources */,
@@ -584,9 +716,21 @@
 				A10000000000000000000023 /* CompanyFinancialsView.swift in Sources */,
 				A10000000000000000000024 /* StandardLineChart.swift in Sources */,
 				A1000000000000000000002B /* HistoryView.swift in Sources */,
+				A1E099000000000000000001 /* HistoryPagingView.swift in Sources */,
+				A1E100000000000000000001 /* PortfolioHomeScrollInteraction.swift in Sources */,
 				A199000000000000000000AA /* RealisedProfitCalculator.swift in Sources */,
 				A199000000000000000000AB /* FMPRateLimiter.swift in Sources */,
 				A199000000000000000000AC /* NasdaqAnalystClient.swift in Sources */,
+				E10100000000000000000002 /* EarningsHistoryView.swift in Sources */,
+				AE1100000000000000000001 /* IndustrySentimentView.swift in Sources */,
+				A5EC70000000000000000002 /* SectorRotationView.swift in Sources */,
+				A5EC70000000000000000005 /* SectorRotationUIKit.swift in Sources */,
+				A5EC70000000000000000006 /* SectorPerformance.swift in Sources */,
+				A5EC70000000000000000009 /* StockChartsRotationUIKit.swift in Sources */,
+				A5EC70000000000000000008 /* StockChartsRotationView.swift in Sources */,
+				A5EC70000000000000000007 /* StockChartsRotation.swift in Sources */,
+				A5EC70000000000000000001 /* SectorRotation.swift in Sources */,
+				E10100000000000000000001 /* EarningsHistory.swift in Sources */,
 				A199000000000000000000AE /* TodayDetailView.swift in Sources */,
 				A199000000000000000000AF /* SectorAttribution.swift in Sources */,
 				A19900000000000000FF90 /* PortfolioDocumentMerge.swift in Sources */,
@@ -604,7 +748,11 @@
 				A19900000000000000000001 /* ResearchView.swift in Sources */,
 				A19900000000000000000002 /* StockScreenerView.swift in Sources */,
 				A19900000000000000000003 /* AnalystConsensusView.swift in Sources */,
+				AC9200000000000000000001 /* AnalystHistoryView.swift in Sources */,
 				A19900000000000000000009 /* OptionsOIView.swift in Sources */,
+				A199000000000000000000EB /* SecurityDebate.swift in Sources */,
+				A199000000000000000000ED /* SecurityDebateStore.swift in Sources */,
+				A199000000000000000000EE /* SecurityDebateView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -614,40 +762,43 @@
 			files = (
 				A199000000000000000000A1 /* MoneyWeightedReturnCalculatorTests.swift in Sources */,
                 A1D000000000000000000003 /* LocalizationTests.swift in Sources */,
+                A5EC70000000000000000004 /* SectorRotationTests.swift in Sources */,
+				A5EC7000000000000000000B /* StockChartsRotationTests.swift in Sources */,
 				A199000000000000000000A2 /* LocalPortfolioEngineTests.swift in Sources */,
 				A199000000000000000000E4 /* PublicInvestorCatalogTests.swift in Sources */,
 				A199000000000000000000E5 /* CurrencyFormattingTests.swift in Sources */,
 				A199000000000000000000E6 /* PortfolioAccountAggregationTests.swift in Sources */,
-				A199000000000000000000A3 /* RealisedProfitCalculatorTests.swift in Sources */,
-				A199000000000000000000EB /* SecurityDebate.swift in Sources */,
-				A199000000000000000000ED /* SecurityDebateStore.swift in Sources */,
-				A199000000000000000000EE /* SecurityDebateView.swift in Sources */,
-				A199000000000000000000A4 /* BrokerResultPreservationTests.swift in Sources */,
-				A199000000000000000000A5 /* AnalystConsensusDataTests.swift in Sources */,
 				A199000000000000000000E8 /* CompactNumberRuleTests.swift in Sources */,
 				A199000000000000000000E9 /* HeatmapRemainderReturnTests.swift in Sources */,
 				A199000000000000000000EA /* HeatmapRowTapTargetTests.swift in Sources */,
+				A199000000000000000000EC /* SecurityDebateResearchTests.swift in Sources */,
+				A199000000000000000000A3 /* RealisedProfitCalculatorTests.swift in Sources */,
+				A199000000000000000000A4 /* BrokerResultPreservationTests.swift in Sources */,
+				A199000000000000000000A5 /* AnalystConsensusDataTests.swift in Sources */,
 				A199000000000000000000A6 /* StockScreenerRulesTests.swift in Sources */,
 				A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */,
 				A199000000000000000000AD /* NasdaqAnalystLogicTests.swift in Sources */,
-				A199000000000000000000E8 /* CompactNumberRuleTests.swift in Sources */,
+				E10100000000000000000003 /* EarningsHistoryTests.swift in Sources */,
 				A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */,
 				A19900000000000000FFB0 /* NumericAlternatesTests.swift in Sources */,
 				A19900000000000000FFA0 /* PublicInvestorSelectionTests.swift in Sources */,
 				A19900000000000000FF91 /* PortfolioDocumentMergeTests.swift in Sources */,
 				A19900000000000000FF81 /* CloudPreferencesTests.swift in Sources */,
 				A19900000000000000FF71 /* LedgerReconciliationTests.swift in Sources */,
+				A19900000000000000FFC0 /* AIConversationLibraryTests.swift in Sources */,
 				A19900000000000000FF61 /* UKSection104PoolTests.swift in Sources */,
-				A199000000000000000000EC /* SecurityDebateResearchTests.swift in Sources */,
-				A199000000000000000000A3 /* RealisedProfitCalculatorTests.swift in Sources */,
-				A199000000000000000000A4 /* BrokerResultPreservationTests.swift in Sources */,
-				A199000000000000000000A5 /* AnalystConsensusDataTests.swift in Sources */,
 				A19900000000000000FF51 /* UKShareMatchingTests.swift in Sources */,
 				A19900000000000000FF40 /* FXImpactTests.swift in Sources */,
 				A19900000000000000FF21 /* FundFeeTests.swift in Sources */,
 				A199000000000000000000D7 /* TypographyTests.swift in Sources */,
+				A1E080000000000000000001 /* HomeScrollInteractionTests.swift in Sources */,
+				A1E090000000000000000001 /* HoldingDetailInteractionTests.swift in Sources */,
+				A1E091000000000000000001 /* HistoryInteractionTests.swift in Sources */,
+				A1E092000000000000000001 /* SettingsInteractionTests.swift in Sources */,
+				A1E093000000000000000001 /* PageLoadAndJitterTests.swift in Sources */,
 				A199000000000000000000D2 /* StockSplitTests.swift in Sources */,
 				AF5A00000000000000000001 /* ETFLookThroughExpansionTests.swift in Sources */,
+				339F77A85FF9414A9A93A96A /* HoldingsHeatmapAggregationTests.swift in Sources */,
 				A199000000000000000000C2 /* CompanyCIKSeedTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -688,7 +839,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = 2G5PCQU652;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -715,7 +866,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 2G5PCQU652;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = CatfolioIOS/Info.plist;
