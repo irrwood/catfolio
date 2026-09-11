@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AIView: View {
+    @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(AIProviderPreference.storageKey) private var aiProviderRaw = AIProviderPreference.automatic.rawValue
@@ -9,6 +10,12 @@ struct AIView: View {
     let showsComposer: Bool
     @State private var messages: [ChatMessage] = []
     @State private var attentionReports: [UUID: PortfolioAttentionReport] = [:]
+    /// Every conversation on the device. `messages` above is the working copy
+    /// of whichever one is open; it is folded back in on every save and on
+    /// every switch, so the two never drift.
+    @State private var conversations: [AIConversation] = []
+    @State private var activeConversationID: UUID?
+    @State private var showsSidebar = false
     @State private var lastAttentionContext: String?
     @State private var question = ""
     @State private var isSending = false
@@ -36,14 +43,17 @@ struct AIView: View {
         Group {
             if isEmbedded {
                 conversation
+                    .overlay(alignment: .topLeading) { sidebarButton }
+                    .overlay { sidebarDrawer }
             } else {
                 NavigationStack {
                     conversation
+                        .softTopScrollEdge()
                         .navigationTitle("AI")
                         .toolbar {
                             if !messages.isEmpty {
                                 ToolbarItem(placement: .topBarTrailing) {
-                                    Button("清空对话", systemImage: "trash") {
+                                    Button(L10n.text("清空对话"), systemImage: "trash") {
                                         showsClearConfirmation = true
                                     }
                                     .labelStyle(.iconOnly)
@@ -54,10 +64,10 @@ struct AIView: View {
                 }
             }
         }
-        .confirmationDialog("清空本机 AI 对话？", isPresented: $showsClearConfirmation) {
-            Button("清空对话", role: .destructive, action: clearConversation)
+        .confirmationDialog(L10n.text("清空本机 AI 对话？"), isPresented: $showsClearConfirmation) {
+            Button(L10n.text("清空对话"), role: .destructive, action: clearConversation)
         } message: {
-            Text("此操作只会删除保存在这台 iPhone 上的聊天记录。")
+            Text(L10n.text("此操作只会删除保存在这台 iPhone 上的聊天记录。"))
         }
     }
 
@@ -66,16 +76,22 @@ struct AIView: View {
             ScrollView {
                 LazyVStack(spacing: 12) {
                     if isRestoringHistory {
-                        ProgressView("正在读取本机对话…")
+                        ProgressView(L10n.text("正在读取本机对话…"))
                             .frame(minHeight: isEmbedded ? 300 : 420)
                     } else if messages.isEmpty && !isSending && errorMessage == nil {
                         ContentUnavailableView(
-                            "AI 投资助手",
+                            L10n.text("AI 投资助手"),
                             systemImage: "sparkles",
-                            description: Text("询问组合风险、持仓集中度或近期表现。当前模型：\(selectedAIProvider.title)。")
+                            description: Text(L10n.text("询问组合风险、持仓集中度或近期表现。当前模型：\(selectedAIProvider.title)。"))
                         )
                         .frame(minHeight: isEmbedded ? 300 : 420)
                     }
+
+                    // Debates started from a security sheet finish in
+                    // SecurityDebateStore, not in this conversation, so they
+                    // are listed rather than folded into the message history —
+                    // which also leaves the chat document's schema alone.
+                    SecurityDebateInbox()
 
                     ForEach(messages) { message in
                         ChatBubble(
@@ -86,12 +102,6 @@ struct AIView: View {
                     }
 
                     if isSending {
-                    // Debates started from a security sheet finish in
-                    // SecurityDebateStore, not in this conversation, so they
-                    // are listed rather than folded into the message history —
-                    // which also leaves the chat document's schema alone.
-                    SecurityDebateInbox()
-
                         HStack(spacing: 8) {
                             ProgressView()
                             Text(loadingMessage)
@@ -139,10 +149,12 @@ struct AIView: View {
                 scrollToConversationBottom()
             } label: {
                 Image(systemName: "arrow.down")
+                    .font(.body.weight(.medium))
+                    .frame(width: 48, height: 48)
+                    .contentShape(Circle())
+                    .floatingGlassSurface(in: Circle())
             }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.circle)
-            .controlSize(.large)
+            .buttonStyle(.plain)
             .padding(16)
             .opacity(showsScrollToBottomButton ? 1 : 0)
             .scaleEffect(showsScrollToBottomButton ? 1 : 0.86)
@@ -152,7 +164,7 @@ struct AIView: View {
                 reduceMotion ? nil : .easeInOut(duration: 0.2),
                 value: showsScrollToBottomButton
             )
-            .accessibilityLabel("回到最新对话")
+            .accessibilityLabel(L10n.text("回到最新对话"))
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             AIComposer(
@@ -185,6 +197,167 @@ struct AIView: View {
         }
     }
 
+    private var sidebarButton: some View {
+        Button {
+            isComposerFocused = false
+            withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) {
+                showsSidebar = true
+            }
+        } label: {
+            Image(systemName: "line.3.horizontal")
+                .font(.body.weight(.medium))
+                .frame(width: 48, height: 48)
+                .contentShape(Circle())
+                .floatingGlassSurface(in: Circle())
+        }
+        .buttonStyle(.plain)
+        .padding(14)
+        .accessibilityLabel(L10n.text("对话列表"))
+    }
+
+    @ViewBuilder
+    private var sidebarDrawer: some View {
+        if showsSidebar {
+            ZStack(alignment: .leading) {
+                // The scrim is what closes the drawer, so it has to cover the
+                // whole page rather than only the uncovered strip.
+                Color.black.opacity(0.45)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: dismissSidebar)
+                    .transition(.opacity)
+                    .accessibilityLabel(L10n.text("关闭对话列表"))
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction(.default, dismissSidebar)
+
+                sidebarPanel
+                    .transition(.move(edge: .leading))
+            }
+            .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: showsSidebar)
+        }
+    }
+
+    private var sidebarPanel: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(L10n.text("对话"))
+                    .appText(.heading, weight: .semibold)
+                Spacer()
+                Button {
+                    startNewConversation()
+                    dismissSidebar()
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                        .font(.body.weight(.medium))
+                        .frame(width: 40, height: 40)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.text("新对话"))
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 10)
+
+            if sidebarConversations.isEmpty {
+                Text(L10n.text("还没有对话"))
+                    .appText(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 18)
+                Spacer()
+            } else {
+                List {
+                    ForEach(sidebarConversations) { conversation in
+                        Button {
+                            openConversation(conversation.id)
+                            dismissSidebar()
+                        } label: {
+                            sidebarRow(conversation)
+                        }
+                        .buttonStyle(.plain)
+                        .listRowBackground(
+                            conversation.id == activeConversationID
+                                ? Color.primary.opacity(0.10)
+                                : Color.clear
+                        )
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10))
+                        .swipeActions(edge: .trailing) {
+                            Button(L10n.text("删除"), systemImage: "trash", role: .destructive) {
+                                deleteConversation(conversation.id)
+                            }
+                        }
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .scrollIndicators(.hidden)
+                .padding(.top, 6)
+            }
+        }
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+        // Measured against the container rather than the screen, so a split
+        // view or a Stage Manager window gets a drawer proportional to the
+        // window it is actually in.
+        .containerRelativeFrame(.horizontal) { width, _ in
+            min(320, width * 0.82)
+        }
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(Color.primary.opacity(0.12))
+                .frame(width: 0.5)
+        }
+        .ignoresSafeArea(edges: .bottom)
+    }
+
+    private func sidebarRow(_ conversation: AIConversation) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(conversation.title ?? L10n.text("新对话"))
+                .appText(.body)
+                .lineLimit(1)
+            Text(Self.relativeDate.localizedString(for: conversation.updatedAt, relativeTo: .now))
+                .appText(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .contentShape(Rectangle())
+    }
+
+    /// Built once. A formatter is expensive to create, and this one would
+    /// otherwise be rebuilt for every row on every render of the drawer.
+    private static let relativeDate: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter
+    }()
+
+    /// The open conversation is listed even before it has been saved, so the
+    /// drawer shows the chat you are looking at rather than only the ones
+    /// already on disk.
+    private var sidebarConversations: [AIConversation] {
+        var listed = conversations
+        if let activeConversationID,
+           !messages.isEmpty,
+           !listed.contains(where: { $0.id == activeConversationID }) {
+            listed.append(AIConversation(
+                id: activeConversationID,
+                title: AIConversation.derivedTitle(from: messages),
+                messages: messages,
+                attentionReports: attentionReports
+            ))
+        }
+        return LocalChatLibrary(conversations: listed, activeID: activeConversationID).sortedByRecency
+    }
+
+    private func dismissSidebar() {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) {
+            showsSidebar = false
+        }
+    }
+
     private func scrollToConversationBottom() {
         var transaction = Transaction()
         transaction.disablesAnimations = true
@@ -206,15 +379,15 @@ struct AIView: View {
     }
 
     private var historyTaskID: String {
-        "\(loadsHistoryOnAppear)-\(model.isFakeDataMode)"
+        "\(loadsHistoryOnAppear)-\(model.isFakeDataMode)-\(model.isPublicInvestorMode)"
     }
 
     private var loadingMessage: String {
         switch selectedAIProvider {
-        case .automatic: "正在选择模型并分析组合…"
-        case .apple: "正在使用 Apple 本地模型分析…"
-        case .codex: "正在使用 ChatGPT Codex 分析…"
-        case .deepSeek: "正在使用 DeepSeek 分析…"
+        case .automatic: L10n.text("正在选择模型并分析组合…")
+        case .apple: L10n.text("正在使用 Apple 本地模型分析…")
+        case .codex: L10n.text("正在使用 ChatGPT Codex 分析…")
+        case .deepSeek: L10n.text("正在使用 DeepSeek 分析…")
         }
     }
 
@@ -223,24 +396,45 @@ struct AIView: View {
         didRestoreHistory = true
         defer { isRestoringHistory = false }
 
-        if model.isFakeDataMode {
+        // Demo and public-investor modes never touch the library on disk, so
+        // they run entirely in memory. They still get a conversation id: the
+        // sidebar and the composer both key off one, and a mode with none
+        // would silently refuse to start a second chat.
+        if model.isPublicInvestorMode {
+            messages = []
+            attentionReports = [:]
+            lastAttentionContext = nil
+            conversations = []
+            activeConversationID = UUID()
+            return
+        }
+
+        if model.isFakeDataMode && !model.isPublicInvestorMode {
             let history = FakeAIContent.initialHistory()
             messages = history.messages
             attentionReports = history.attentionReports
             lastAttentionContext = FakeAIContent.attentionReport.contextSummary
             errorMessage = nil
+            conversations = []
+            activeConversationID = UUID()
+            foldActiveConversationIntoLibrary()
             return
         }
 
         do {
-            let history = try await LocalChatStore.shared.load()
-            messages = history.messages
-            attentionReports = history.attentionReports
-            lastAttentionContext = history.messages.reversed().compactMap { message in
-                history.attentionReports[message.id]?.contextSummary
+            let library = try await LocalChatStore.shared.loadLibrary()
+            conversations = library.conversations
+            let opened = library.active ?? library.sortedByRecency.first
+            // A device with no history still needs somewhere to put the first
+            // message, so an empty library opens an unsaved conversation.
+            activeConversationID = opened?.id ?? UUID()
+            messages = opened?.messages ?? []
+            attentionReports = opened?.attentionReports ?? [:]
+            lastAttentionContext = messages.reversed().compactMap { message in
+                attentionReports[message.id]?.contextSummary
             }.first
         } catch {
-            errorMessage = "无法读取本机对话：\(error.localizedDescription)"
+            errorMessage = L10n.text("无法读取本机对话：\(error.localizedDescription)")
             return
         }
 
@@ -260,7 +454,7 @@ struct AIView: View {
         Task {
             defer { isSending = false }
 
-            if model.isFakeDataMode {
+            if model.isFakeDataMode && !model.isPublicInvestorMode {
                 try? await Task.sleep(for: .milliseconds(320))
                 if Self.isAttentionPreset(cleanQuestion) {
                     let report = FakeAIContent.attentionReport
@@ -302,17 +496,100 @@ struct AIView: View {
             || question.localizedCaseInsensitiveCompare("Which holdings need my attention today?") == .orderedSame
     }
 
+    /// Folds the working copy back into the library.
+    ///
+    /// Called before every save and before every switch. A conversation with
+    /// nothing in it is dropped rather than stored: opening the sidebar,
+    /// tapping "new chat" and changing your mind should not leave a row
+    /// behind, and an untitled empty chat is indistinguishable from the next
+    /// one anyway.
+    private func foldActiveConversationIntoLibrary() {
+        guard let activeConversationID else { return }
+        guard !messages.isEmpty else {
+            conversations.removeAll { $0.id == activeConversationID }
+            return
+        }
+        let existing = conversations.first { $0.id == activeConversationID }
+        let updated = AIConversation(
+            id: activeConversationID,
+            title: existing?.title ?? AIConversation.derivedTitle(from: messages),
+            messages: messages,
+            attentionReports: attentionReports,
+            updatedAt: .now
+        )
+        if let index = conversations.firstIndex(where: { $0.id == activeConversationID }) {
+            conversations[index] = updated
+        } else {
+            conversations.append(updated)
+        }
+    }
+
     private func persistMessages() async {
-        guard !model.isFakeDataMode else { return }
+        guard !model.isFakeDataMode && !model.isPublicInvestorMode else { return }
+        foldActiveConversationIntoLibrary()
         do {
-            try await LocalChatStore.shared.save(messages, attentionReports: attentionReports)
+            try await LocalChatStore.shared.save(
+                LocalChatLibrary(conversations: conversations, activeID: activeConversationID)
+            )
         } catch {
-            errorMessage = "无法保存本机对话：\(error.localizedDescription)"
+            errorMessage = L10n.text("无法保存本机对话：\(error.localizedDescription)")
+        }
+    }
+
+    /// Opens an empty conversation. The current one is kept.
+    private func startNewConversation() {
+        foldActiveConversationIntoLibrary()
+        let conversation = AIConversation()
+        activeConversationID = conversation.id
+        messages = []
+        attentionReports = [:]
+        lastAttentionContext = nil
+        errorMessage = nil
+        Task { await persistLibrary() }
+    }
+
+    private func openConversation(_ id: UUID) {
+        guard id != activeConversationID else { return }
+        foldActiveConversationIntoLibrary()
+        guard let conversation = conversations.first(where: { $0.id == id }) else { return }
+        activeConversationID = id
+        messages = conversation.messages
+        attentionReports = conversation.attentionReports
+        lastAttentionContext = conversation.messages.reversed().compactMap {
+            conversation.attentionReports[$0.id]?.contextSummary
+        }.first
+        errorMessage = nil
+        Task { await persistLibrary() }
+    }
+
+    private func deleteConversation(_ id: UUID) {
+        conversations.removeAll { $0.id == id }
+        if id == activeConversationID {
+            // Land on the next most recent rather than an empty screen, which
+            // is what deleting from a list usually does.
+            let next = LocalChatLibrary(conversations: conversations, activeID: nil)
+                .sortedByRecency.first
+            activeConversationID = next?.id ?? UUID()
+            messages = next?.messages ?? []
+            attentionReports = next?.attentionReports ?? [:]
+            lastAttentionContext = nil
+        }
+        Task { await persistLibrary() }
+    }
+
+    private func persistLibrary() async {
+        guard !model.isFakeDataMode && !model.isPublicInvestorMode else { return }
+        do {
+            try await LocalChatStore.shared.save(
+                LocalChatLibrary(conversations: conversations, activeID: activeConversationID)
+            )
+        } catch {
+            errorMessage = L10n.text("无法保存本机对话：\(error.localizedDescription)")
         }
     }
 
     private func clearConversation() {
-        if model.isFakeDataMode {
+        if model.isFakeDataMode || model.isPublicInvestorMode {
             messages = []
             attentionReports = [:]
             lastAttentionContext = nil
@@ -320,17 +597,19 @@ struct AIView: View {
             return
         }
 
-        Task {
-            do {
-                try await LocalChatStore.shared.clear()
-                messages = []
-                attentionReports = [:]
-                lastAttentionContext = nil
-                errorMessage = nil
-            } catch {
-                errorMessage = "无法清空本机对话：\(error.localizedDescription)"
-            }
+        // Only the open conversation. This used to delete the whole file,
+        // which was the same thing back when the file held one conversation
+        // and is emphatically not now: clearing the chat you are looking at
+        // must not take every other chat with it.
+        let cleared = activeConversationID
+        messages = []
+        attentionReports = [:]
+        lastAttentionContext = nil
+        errorMessage = nil
+        if let cleared {
+            conversations.removeAll { $0.id == cleared }
         }
+        Task { await persistLibrary() }
     }
 }
 
@@ -368,11 +647,11 @@ private enum FakeAIContent {
                     distanceFrom52WLowPercent: 41.2,
                     ma200PositionPercent: 18.4,
                     signals: [
-                        PortfolioAttentionSignal(kind: "daily_move", label: "+4.8% 单日涨幅", direction: "positive", value: 4.8),
-                        PortfolioAttentionSignal(kind: "volume", label: "成交量 1.9×", direction: "positive", value: 1.9),
+                        PortfolioAttentionSignal(kind: "daily_move", label: L10n.text("+4.8% 单日涨幅"), direction: "positive", value: 4.8),
+                        PortfolioAttentionSignal(kind: "volume", label: L10n.text("成交量 1.9×"), direction: "positive", value: 1.9),
                     ],
                     fundamentals: PortfolioFundamentalSnapshot(
-                        source: "演示财务数据",
+                        source: L10n.text("演示财务数据"),
                         latestPeriod: "FY 2026 Q1",
                         revenueGrowthYoY: 8.7,
                         operatingIncomeGrowthYoY: 11.2,
@@ -381,12 +660,12 @@ private enum FakeAIContent {
                     thesis: PortfolioAttentionThesis(
                         stance: .strengthening,
                         confidence: .high,
-                        whatChanged: "演示行情显示股价放量上行，并接近模拟的 52 周高位。",
-                        whyItMatters: "ORCL 是演示组合中权重较高的科技持仓，短期动量增强会明显影响组合表现。",
-                        supportingEvidence: ["60 日模拟收益为 +12.6%", "价格位于模拟 200 日均线之上 18.4%"],
-                        counterEvidence: ["接近阶段高位后，短线波动可能放大"],
-                        risks: ["估值扩张速度快于演示盈利增速"],
-                        watchNext: ["观察后续成交量能否维持", "关注回撤是否跌破短期趋势"],
+                        whatChanged: L10n.text("演示行情显示股价放量上行，并接近模拟的 52 周高位。"),
+                        whyItMatters: L10n.text("ORCL 是演示组合中权重较高的科技持仓，短期动量增强会明显影响组合表现。"),
+                        supportingEvidence: [L10n.text("60 日模拟收益为 +12.6%"), L10n.text("价格位于模拟 200 日均线之上 18.4%")],
+                        counterEvidence: [L10n.text("接近阶段高位后，短线波动可能放大")],
+                        risks: [L10n.text("估值扩张速度快于演示盈利增速")],
+                        watchNext: [L10n.text("观察后续成交量能否维持"), L10n.text("关注回撤是否跌破短期趋势")],
                         riskFlags: []
                     ),
                     sources: []
@@ -403,19 +682,19 @@ private enum FakeAIContent {
                     distanceFrom52WLowPercent: 24.8,
                     ma200PositionPercent: 3.1,
                     signals: [
-                        PortfolioAttentionSignal(kind: "pullback", label: "距高点 -12.4%", direction: "negative", value: -12.4),
-                        PortfolioAttentionSignal(kind: "trend", label: "仍高于 200 日线", direction: "positive", value: 3.1),
+                        PortfolioAttentionSignal(kind: "pullback", label: L10n.text("距高点 -12.4%"), direction: "negative", value: -12.4),
+                        PortfolioAttentionSignal(kind: "trend", label: L10n.text("仍高于 200 日线"), direction: "positive", value: 3.1),
                     ],
                     fundamentals: nil,
                     thesis: PortfolioAttentionThesis(
                         stance: .maintaining,
                         confidence: .medium,
-                        whatChanged: "演示价格自阶段高位回落，但长期趋势尚未破坏。",
-                        whyItMatters: "这类高波动半导体设备持仓容易放大组合的科技周期风险。",
-                        supportingEvidence: ["模拟价格仍在 200 日均线上方", "仓位权重控制在 5%以内"],
-                        counterEvidence: ["60 日模拟收益仍为负值"],
-                        risks: ["行业资本开支周期可能带来进一步波动"],
-                        watchNext: ["观察 200 日均线支撑", "关注半导体板块相对强弱"],
+                        whatChanged: L10n.text("演示价格自阶段高位回落，但长期趋势尚未破坏。"),
+                        whyItMatters: L10n.text("这类高波动半导体设备持仓容易放大组合的科技周期风险。"),
+                        supportingEvidence: [L10n.text("模拟价格仍在 200 日均线上方"), L10n.text("仓位权重控制在 5%以内")],
+                        counterEvidence: [L10n.text("60 日模拟收益仍为负值")],
+                        risks: [L10n.text("行业资本开支周期可能带来进一步波动")],
+                        watchNext: [L10n.text("观察 200 日均线支撑"), L10n.text("关注半导体板块相对强弱")],
                         riskFlags: []
                     ),
                     sources: []
@@ -432,31 +711,31 @@ private enum FakeAIContent {
                     distanceFrom52WLowPercent: 33.6,
                     ma200PositionPercent: 9.7,
                     signals: [
-                        PortfolioAttentionSignal(kind: "daily_drop", label: "-5.6% 单日回撤", direction: "negative", value: -5.6),
-                        PortfolioAttentionSignal(kind: "elevated_volume", label: "成交量 1.6×", direction: "negative", value: 1.6),
+                        PortfolioAttentionSignal(kind: "daily_drop", label: L10n.text("-5.6% 单日回撤"), direction: "negative", value: -5.6),
+                        PortfolioAttentionSignal(kind: "elevated_volume", label: L10n.text("成交量 1.6×"), direction: "negative", value: 1.6),
                     ],
                     fundamentals: nil,
                     thesis: PortfolioAttentionThesis(
                         stance: .maintaining,
                         confidence: .medium,
-                        whatChanged: "演示行情出现放量回撤，但中期累计表现仍为正。",
-                        whyItMatters: "单日波动与成交量同时放大，值得确认这是短期获利回吐还是趋势转弱。",
-                        supportingEvidence: ["60 日模拟收益仍为 +5.8%", "价格仍高于模拟 200 日均线"],
-                        counterEvidence: ["单日跌幅显著高于组合其他持仓"],
-                        risks: ["高波动成长股可能继续拖累短期收益"],
-                        watchNext: ["观察未来三个交易日能否收复跌幅", "关注成交量是否恢复正常"],
+                        whatChanged: L10n.text("演示行情出现放量回撤，但中期累计表现仍为正。"),
+                        whyItMatters: L10n.text("单日波动与成交量同时放大，值得确认这是短期获利回吐还是趋势转弱。"),
+                        supportingEvidence: [L10n.text("60 日模拟收益仍为 +5.8%"), L10n.text("价格仍高于模拟 200 日均线")],
+                        counterEvidence: [L10n.text("单日跌幅显著高于组合其他持仓")],
+                        risks: [L10n.text("高波动成长股可能继续拖累短期收益")],
+                        watchNext: [L10n.text("观察未来三个交易日能否收复跌幅"), L10n.text("关注成交量是否恢复正常")],
                         riskFlags: []
                     ),
                     sources: []
                 ),
             ],
-            warnings: ["以上卡片为假数据模式的演示分析，不代表实时行情或投资建议。"]
+            warnings: [L10n.text("以上卡片为假数据模式的演示分析，不代表实时行情或投资建议。")]
         )
     }
 
     static func answer(to question: String) -> String {
         let normalized = question.lowercased()
-        if normalized.contains("集中") || normalized.contains("风险") {
+        if normalized.contains("集中") || normalized.contains("风险") || normalized.contains("concentration") || normalized.contains("risk") {
             return """
             ## 演示组合风险摘要
 
@@ -467,7 +746,7 @@ private enum FakeAIContent {
             > 以上内容完全由独立假数据生成，不包含你的真实持仓。
             """
         }
-        if normalized.contains("表现") || normalized.contains("收益") {
+        if normalized.contains("表现") || normalized.contains("收益") || normalized.contains("performance") || normalized.contains("return") {
             return """
             ## 近期表现（演示）
 
@@ -485,6 +764,7 @@ private enum FakeAIContent {
 }
 
 private struct ChatBubble: View {
+    @Environment(\.locale) private var appLocale
     let message: ChatMessage
     let attentionReport: PortfolioAttentionReport?
 
@@ -517,27 +797,28 @@ private struct ChatBubble: View {
             MarkdownMessageText(markdown: message.text)
         } else {
             Text(message.text)
-                .font(.body)
+                .currencyFont(.body)
         }
     }
 
 }
 
 private struct PortfolioAttentionReportView: View {
+    @Environment(\.locale) private var appLocale
     let report: PortfolioAttentionReport
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("今天")
+                Text(L10n.text("今天"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                Text("\(report.holdingsCount) 只持仓中有 \(report.attentionRows.count) 只需要关注")
+                Text(L10n.text("\(report.holdingsCount) 只持仓中有 \(report.attentionRows.count) 只需要关注"))
                     .font(.headline)
             }
 
             if report.attentionRows.isEmpty {
-                Text("无重大变化")
+                Text(L10n.text("无重大变化"))
                     .foregroundStyle(.secondary)
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -549,9 +830,9 @@ private struct PortfolioAttentionReportView: View {
             }
 
             HStack {
-                Text("其他持仓").fontWeight(.semibold)
+                Text(L10n.text("其他持仓")).fontWeight(.semibold)
                 Spacer()
-                Text("\(report.noMaterialChangeCount) 只 · 无重大变化")
+                Text(L10n.text("\(report.noMaterialChangeCount) 只 · 无重大变化"))
                     .foregroundStyle(.secondary)
             }
             .font(.subheadline)
@@ -569,6 +850,7 @@ private struct PortfolioAttentionReportView: View {
 }
 
 struct PortfolioAttentionCard: View {
+    @Environment(\.locale) private var appLocale
     #if DEBUG
     static var researchPreviewReport: PortfolioAttentionReport { FakeAIContent.attentionReport }
     #endif
@@ -598,12 +880,13 @@ struct PortfolioAttentionCard: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityHint("放大查看持仓分析详情")
+        .accessibilityHint(L10n.text("放大查看持仓分析详情"))
         .matchedTransitionSource(id: row.id, in: zoom)
     }
 }
 
 private struct PortfolioAttentionDetail: View {
+    @Environment(\.locale) private var appLocale
     let row: PortfolioAttentionHolding
     @Environment(\.dismiss) private var dismiss
 
@@ -614,6 +897,7 @@ private struct PortfolioAttentionDetail: View {
                 .textSelection(.enabled)
         }
         .background(Color(uiColor: .systemGroupedBackground))
+        .softTopScrollEdge()
         .navigationTitle(row.ticker)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
@@ -634,6 +918,7 @@ private struct PortfolioAttentionDetail: View {
 }
 
 private struct PortfolioAttentionCardContent: View {
+    @Environment(\.locale) private var appLocale
     let row: PortfolioAttentionHolding
     let expanded: Bool
     var prominent = false
@@ -676,25 +961,25 @@ private struct PortfolioAttentionCardContent: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             if let risk = row.thesis.risks.first {
-                Text("主要风险：\(risk)")
+                Text(L10n.text("主要风险：\(risk)"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             if expanded {
                 VStack(alignment: .leading, spacing: 10) {
-                    AttentionTextSection(title: "发生了什么", text: row.thesis.whatChanged)
-                    AttentionTextSection(title: "为什么值得关注", text: row.thesis.whyItMatters)
-                    AttentionListSection(title: "支持证据", values: row.thesis.supportingEvidence)
-                    AttentionListSection(title: "反方证据", values: row.thesis.counterEvidence)
-                    AttentionListSection(title: "风险", values: row.thesis.risks)
-                    AttentionListSection(title: "接下来关注", values: row.thesis.watchNext)
+                    AttentionTextSection(title: L10n.text("发生了什么"), text: row.thesis.whatChanged)
+                    AttentionTextSection(title: L10n.text("为什么值得关注"), text: row.thesis.whyItMatters)
+                    AttentionListSection(title: L10n.text("支持证据"), values: row.thesis.supportingEvidence)
+                    AttentionListSection(title: L10n.text("反方证据"), values: row.thesis.counterEvidence)
+                    AttentionListSection(title: L10n.text("风险"), values: row.thesis.risks)
+                    AttentionListSection(title: L10n.text("接下来关注"), values: row.thesis.watchNext)
                     if !row.thesis.riskFlags.isEmpty {
-                        AttentionListSection(title: "Risk Flags", values: row.thesis.riskFlags.map(Self.riskFlagText))
+                        AttentionListSection(title: L10n.text("Risk Flags"), values: row.thesis.riskFlags.map(Self.riskFlagText))
                     }
                     if !row.sources.isEmpty {
                         VStack(alignment: .leading, spacing: 5) {
-                            Text("来源").font(.caption.weight(.semibold))
+                            Text(L10n.text("来源")).font(.caption.weight(.semibold))
                             ForEach(row.sources) { source in
                                 Link(destination: source.url) {
                                     VStack(alignment: .leading, spacing: 1) {
@@ -708,7 +993,7 @@ private struct PortfolioAttentionCardContent: View {
                 }
                 .padding(.top, 8)
             } else {
-                Label("查看详情", systemImage: "arrow.up.left.and.arrow.down.right")
+                Label(L10n.text("查看详情"), systemImage: "arrow.up.left.and.arrow.down.right")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -729,7 +1014,7 @@ private struct PortfolioAttentionCardContent: View {
     }
 
     private var attentionText: String {
-        row.attention == .high ? "高关注" : "中关注"
+        row.attention == .high ? L10n.text("高关注") : L10n.text("中关注")
     }
 
     private var attentionBorder: Color {
@@ -738,9 +1023,9 @@ private struct PortfolioAttentionCardContent: View {
 
     private var stanceText: String {
         switch row.thesis.stance {
-        case .strengthening: "投资逻辑增强"
-        case .maintaining: "投资逻辑维持"
-        case .weakening: "投资逻辑减弱"
+        case .strengthening: L10n.text("投资逻辑增强")
+        case .maintaining: L10n.text("投资逻辑维持")
+        case .weakening: L10n.text("投资逻辑减弱")
         }
     }
 
@@ -754,17 +1039,18 @@ private struct PortfolioAttentionCardContent: View {
 
     private static func riskFlagText(_ value: String) -> String {
         switch value {
-        case "legal_regulatory": "诉讼 / 监管"
-        case "governance": "治理 / 审计"
-        case "dilution": "潜在稀释"
-        case "liquidity": "流动性 / 现金流"
-        case "leadership": "管理层变动"
+        case "legal_regulatory": L10n.text("诉讼 / 监管")
+        case "governance": L10n.text("治理 / 审计")
+        case "dilution": L10n.text("潜在稀释")
+        case "liquidity": L10n.text("流动性 / 现金流")
+        case "leadership": L10n.text("管理层变动")
         default: value
         }
     }
 }
 
 private struct AttentionTextSection: View {
+    @Environment(\.locale) private var appLocale
     let title: String
     let text: String
 
@@ -778,6 +1064,7 @@ private struct AttentionTextSection: View {
 }
 
 private struct AttentionListSection: View {
+    @Environment(\.locale) private var appLocale
     let title: String
     let values: [String]
 
@@ -797,10 +1084,11 @@ private struct AttentionListSection: View {
 }
 
 private struct MarkdownMessageText: View {
+    @Environment(\.locale) private var appLocale
     let markdown: String
 
     var body: some View {
-        let blocks = MarkdownBlockParser.parse(markdown)
+        let blocks = MarkdownRenderCache.blocks(of: markdown)
 
         VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
@@ -816,13 +1104,12 @@ private struct MarkdownMessageText: View {
         switch block {
         case let .paragraph(text):
             inlineText(text)
-                .font(.body)
+                .currencyFont(.body)
                 .fixedSize(horizontal: false, vertical: true)
 
         case let .heading(level, text):
             inlineText(text)
-                .font(headingFont(for: level))
-                .fontWeight(.semibold)
+                .currencyFont(headingStyle(for: level), weight: .semibold)
                 .fixedSize(horizontal: false, vertical: true)
 
         case let .unorderedList(items):
@@ -832,7 +1119,7 @@ private struct MarkdownMessageText: View {
                         Text("•")
                             .font(.body.weight(.bold))
                         inlineText(item)
-                            .font(.body)
+                            .currencyFont(.body)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -846,7 +1133,7 @@ private struct MarkdownMessageText: View {
                             .appNumber(.subheading, weight: .semibold)
                             .foregroundStyle(.secondary)
                         inlineText(item)
-                            .font(.body)
+                            .currencyFont(.body)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -858,7 +1145,7 @@ private struct MarkdownMessageText: View {
                     .fill(Color.secondary.opacity(0.55))
                     .frame(width: 3)
                 inlineText(text)
-                    .font(.callout)
+                    .currencyFont(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -886,7 +1173,7 @@ private struct MarkdownMessageText: View {
                     GridRow {
                         ForEach(Array(header.enumerated()), id: \.offset) { _, cell in
                             inlineText(cell)
-                                .font(.caption.weight(.semibold))
+                                .currencyFont(.caption1, weight: .semibold)
                                 .frame(minWidth: 88, alignment: .leading)
                         }
                     }
@@ -897,7 +1184,7 @@ private struct MarkdownMessageText: View {
                         GridRow {
                             ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
                                 inlineText(cell)
-                                    .font(.caption)
+                                    .currencyFont(.caption1)
                                     .frame(minWidth: 88, alignment: .leading)
                             }
                         }
@@ -913,17 +1200,10 @@ private struct MarkdownMessageText: View {
     }
 
     private func inlineText(_ source: String) -> Text {
-        let options = AttributedString.MarkdownParsingOptions(
-            interpretedSyntax: .inlineOnlyPreservingWhitespace,
-            failurePolicy: .returnPartiallyParsedIfPossible
-        )
-        guard let attributed = try? AttributedString(markdown: source, options: options) else {
-            return Text(source)
-        }
-        return Text(attributed)
+        Text(MarkdownRenderCache.inline(source))
     }
 
-    private func headingFont(for level: Int) -> Font {
+    private func headingStyle(for level: Int) -> UIFont.TextStyle {
         switch level {
         case 1: .title3
         case 2: .headline
@@ -941,6 +1221,60 @@ private enum MarkdownBlock {
     case code(language: String?, code: String)
     case table(header: [String], rows: [[String]])
     case divider
+}
+
+/// Parsed markdown, kept between renders.
+///
+/// Both halves of rendering a message used to run inside `body`: the block
+/// split, and an `AttributedString(markdown:)` for every paragraph, heading
+/// and list item. SwiftUI evaluates `body` whenever anything the view depends
+/// on changes, so a conversation re-parsed every visible message on every
+/// state change — including the one the scroll observer writes as the list
+/// moves. The assistant's replies are long, `AttributedString(markdown:)` is
+/// the expensive half, and the cost arrived as text that took seconds to
+/// appear and buttons that answered late.
+///
+/// The text of a message never changes once it is on screen, so the parse is
+/// pure and its result can simply be kept. Keyed by the source string: two
+/// bubbles with the same text are the same parse.
+private enum MarkdownRenderCache {
+    private final class Blocks { let value: [MarkdownBlock]; init(_ v: [MarkdownBlock]) { value = v } }
+    private final class Inline { let value: AttributedString; init(_ v: AttributedString) { value = v } }
+
+    // Bounded, because a long conversation would otherwise hold every string
+    // it ever rendered. NSCache also evicts under memory pressure on its own.
+    private static let blockCache: NSCache<NSString, Blocks> = {
+        let cache = NSCache<NSString, Blocks>()
+        cache.countLimit = 400
+        return cache
+    }()
+
+    private static let inlineCache: NSCache<NSString, Inline> = {
+        let cache = NSCache<NSString, Inline>()
+        cache.countLimit = 2000
+        return cache
+    }()
+
+    static func blocks(of source: String) -> [MarkdownBlock] {
+        let key = source as NSString
+        if let hit = blockCache.object(forKey: key) { return hit.value }
+        let parsed = MarkdownBlockParser.parse(source)
+        blockCache.setObject(Blocks(parsed), forKey: key)
+        return parsed
+    }
+
+    static func inline(_ source: String) -> AttributedString {
+        let key = source as NSString
+        if let hit = inlineCache.object(forKey: key) { return hit.value }
+        let options = AttributedString.MarkdownParsingOptions(
+            interpretedSyntax: .inlineOnlyPreservingWhitespace,
+            failurePolicy: .returnPartiallyParsedIfPossible
+        )
+        let parsed = (try? AttributedString(markdown: source, options: options))
+            ?? AttributedString(source)
+        inlineCache.setObject(Inline(parsed), forKey: key)
+        return parsed
+    }
 }
 
 private enum MarkdownBlockParser {
@@ -1126,6 +1460,7 @@ private enum MarkdownBlockParser {
 }
 
 private struct AIComposer: View {
+    @Environment(\.locale) private var appLocale
     @Binding var question: String
     let isSending: Bool
     let isFloating: Bool
@@ -1158,7 +1493,7 @@ private struct AIComposer: View {
 
     private var standardComposer: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            TextField("询问你的投资组合", text: $question, axis: .vertical)
+            TextField(L10n.text("询问你的投资组合"), text: $question, axis: .vertical)
                 .lineLimit(1...4)
                 .focused(focus)
                 .padding(.leading, 14)
@@ -1175,7 +1510,7 @@ private struct AIComposer: View {
             }
             .disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
             .padding(5)
-            .accessibilityLabel("发送")
+            .accessibilityLabel(L10n.text("发送"))
         }
     }
 
@@ -1196,27 +1531,27 @@ private struct AIComposer: View {
 
     private var quickActionsMenu: some View {
         Menu {
-            Button("今天哪些持仓值得我关注？", systemImage: "eye") {
-                onQuickSend("今天哪些持仓值得我关注？")
+            Button(L10n.text("今天哪些持仓值得我关注？"), systemImage: "eye") {
+                onQuickSend(L10n.text("今天哪些持仓值得我关注？"))
             }
 
             Divider()
-            Button("组合风险摘要", systemImage: "shield.lefthalf.filled") {
-                question = "请总结我当前组合最重要的三个风险。"
+            Button(L10n.text("组合风险摘要"), systemImage: "shield.lefthalf.filled") {
+                question = L10n.text("请总结我当前组合最重要的三个风险。")
                 focus.wrappedValue = true
             }
-            Button("持仓集中度", systemImage: "chart.pie") {
-                question = "请分析我的持仓集中度，并指出最需要关注的风险。"
+            Button(L10n.text("持仓集中度"), systemImage: "chart.pie") {
+                question = L10n.text("请分析我的持仓集中度，并指出最需要关注的风险。")
                 focus.wrappedValue = true
             }
-            Button("近期表现", systemImage: "chart.line.uptrend.xyaxis") {
-                question = "请解读我的组合近期表现，以及主要的收益和拖累来源。"
+            Button(L10n.text("近期表现"), systemImage: "chart.line.uptrend.xyaxis") {
+                question = L10n.text("请解读我的组合近期表现，以及主要的收益和拖累来源。")
                 focus.wrappedValue = true
             }
 
             if hasMessages {
                 Divider()
-                Button("清空对话", systemImage: "trash", role: .destructive, action: onClear)
+                Button(L10n.text("清空对话"), systemImage: "trash", role: .destructive, action: onClear)
             }
         } label: {
             Image(systemName: "plus")
@@ -1225,16 +1560,19 @@ private struct AIComposer: View {
                 .contentShape(Circle())
                 .floatingGlassSurface(in: Circle())
         }
+        // The menu's symbols take the tint, which otherwise resolves to the
+        // page's accent and prints them blue against a dark sheet.
+        .tint(.white)
         .buttonStyle(.plain)
-        .accessibilityLabel("AI 快捷操作")
+        .accessibilityLabel(L10n.text("AI 快捷操作"))
     }
 
     private var floatingTextField: some View {
         HStack(spacing: 8) {
             TextField(
-                "Ask AI",
+                L10n.text("Ask AI"),
                 text: $question,
-                prompt: Text("Ask AI").foregroundStyle(.white.opacity(0.82)),
+                prompt: Text(L10n.text("Ask AI")).foregroundStyle(.white.opacity(0.82)),
                 axis: .vertical
             )
                 .font(.body)
@@ -1261,7 +1599,7 @@ private struct AIComposer: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
-                .accessibilityLabel("发送")
+                .accessibilityLabel(L10n.text("发送"))
             }
         }
         .padding(.leading, 14)
@@ -1282,6 +1620,7 @@ private struct AIComposer: View {
 
 /// The presentation host owns the zoom geometry and interactive dismissal.
 struct AIAssistantPage: View {
+    @Environment(\.locale) private var appLocale
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -1299,7 +1638,7 @@ struct AIAssistantPage: View {
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.cancelAction)
-                .accessibilityLabel("关闭 AI 投资助手")
+                .accessibilityLabel(L10n.text("关闭 AI 投资助手"))
                 .padding(14)
             }
             .background {
@@ -1319,7 +1658,13 @@ struct AIAssistantPage: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .background(.white)
+                // Composited over black, not white. The last stop is 20%
+                // opacity, so over white it resolved to rgb(230, 243, 255) —
+                // a near-white band across the bottom of a page that forces
+                // `.preferredColorScheme(.dark)` and so draws every label in
+                // a light colour. The composer and the disclaimer sit in that
+                // band and were close to invisible.
+                .background(.black)
                 .ignoresSafeArea()
             }
             .preferredColorScheme(.dark)

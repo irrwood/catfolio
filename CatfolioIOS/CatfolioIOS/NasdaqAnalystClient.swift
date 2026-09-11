@@ -5,7 +5,7 @@ import Foundation
 /// FMP reports five buckets and Nasdaq three, but the card has only ever drawn
 /// the three-way collapse. Storing three keeps both providers honest: padding
 /// Nasdaq out to five would mean inventing the two it does not measure.
-struct RatingSpread: Equatable, Sendable {
+struct RatingSpread: Codable, Equatable, Sendable {
     let bearish: Int
     let neutral: Int
     let bullish: Int

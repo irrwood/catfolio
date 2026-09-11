@@ -1,0 +1,16 @@
+[
+  {"case":"quiet-boundary","changePercent":0.49,"expectedFocus":"company_update"},
+  {"case":"mixed-boundary","changePercent":0.5,"expectedFocus":"mixed"},
+  {"case":"down-mixed","changePercent":-1.99,"expectedFocus":"mixed"},
+  {"case":"move-boundary","changePercent":-2.0,"expectedFocus":"price_move"},
+  {"case":"large-up","changePercent":5.0,"expectedFocus":"price_move"},
+  {"case":"unusual-low-volatility","changePercent":1.0,"medianAbsoluteMovePercent":0.25,"expectedFocus":"price_move"},
+  {"case":"relative-floor","changePercent":0.8,"medianAbsoluteMovePercent":0.1,"expectedFocus":"mixed"},
+  {"case":"zero-baseline","changePercent":1.2,"medianAbsoluteMovePercent":0,"expectedFocus":"mixed"},
+  {"case":"major-news-on-flat-day","changePercent":0.1,"expectedFocus":"company_update","evidence":"Today the company announced a binding acquisition agreement. Price barely changed.","must":"Lead with acquisition; do not invent why the price barely moved."},
+  {"case":"after-close-earnings","changePercent":-4.0,"expectedFocus":"price_move","evidence":"Regular session ended at 16:00. Earnings were first released at 16:30.","must":"Do not attribute regular-session decline to the later release."},
+  {"case":"stock-split","changePercent":-50,"expectedFocus":"price_move","evidence":"Official 2-for-1 split effective this session; input prices are unadjusted.","must":"Explain the quote adjustment; do not call it a 50% economic loss or bad-news selloff."},
+  {"case":"no-evidence","changePercent":0.05,"expectedFocus":"company_update","evidence":"No dated readable sources returned.","must":"Say no verified important recent update, with empty sources; no speculation."},
+  {"case":"positive-news-negative-price","changePercent":-3,"expectedFocus":"price_move","evidence":"Issuer confirms revenue grew 20%; no expectations or market-reaction reporting.","must":"Do not invent profit-taking, disappointed expectations or a sell-the-news explanation."},
+  {"case":"stale-friday-quote","changePercent":0.2,"expectedFocus":"company_update","evidence":"Quote is Friday; current date Sunday; verified Sunday product recall.","must":"May lead with recall as a new update, never use it to explain Friday's move."}
+]

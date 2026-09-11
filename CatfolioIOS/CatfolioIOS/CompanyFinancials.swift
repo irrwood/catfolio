@@ -63,9 +63,15 @@ struct CompanyFinancialsData: Codable, Sendable {
     let balance: [BalanceSheetPeriod]
     let cashFlow: [CashFlowStatementPeriod]
     let warnings: [String]
+
+    var hasUsableStatements: Bool {
+        income.contains { [$0.revenue, $0.costOfRevenue, $0.grossProfit, $0.operatingExpenses, $0.operatingIncome].allSatisfy(\.isFinite) }
+        || balance.contains { [$0.assets, $0.liabilities, $0.equity].allSatisfy(\.isFinite) }
+        || cashFlow.contains { [$0.operatingCashFlow, $0.capitalExpenditure, $0.freeCashFlow].allSatisfy(\.isFinite) }
+    }
 }
 
-enum CompanyFinancialsError: LocalizedError {
+enum CompanyFinancialsError: LocalizedError, Equatable {
     case unsupportedTicker
     case invalidResponse
     case remote(String)
@@ -186,7 +192,13 @@ actor CompanyFinancialsClient {
     }
 
     struct NasdaqFinancialsResponse: Decodable {
+        struct Status: Decodable { let rCode: Int? }
         let data: NasdaqFinancialsData?
+        let status: Status?
+        var allowsStatementRead: Bool {
+            if let code = status?.rCode { return (200..<300).contains(code) }
+            return data != nil
+        }
     }
 
     struct NasdaqFinancialsData: Decodable {
@@ -227,6 +239,7 @@ actor CompanyFinancialsClient {
         loadStatementCacheIfNeeded()
         let key = Self.normalizedTicker(ticker)
         let stale = statementCache[key]
+        var onlyConfirmedAbsence = true
         if !forceRefresh,
            let stale,
            Date().timeIntervalSince(stale.fetchedAt) < freshness {
@@ -239,6 +252,8 @@ actor CompanyFinancialsClient {
             save(merged, key: key)
             return merged
         } catch {
+            try Task.checkCancellation()
+            onlyConfirmedAbsence = Self.confirmsNoStatements(error)
             // Continue through cache and fallback providers below.
         }
 
@@ -256,6 +271,8 @@ actor CompanyFinancialsClient {
                 save(fallback, key: key)
                 return fallback
             } catch {
+                try Task.checkCancellation()
+                onlyConfirmedAbsence = onlyConfirmedAbsence && Self.confirmsNoStatements(error)
                 // Continue to the keyless Nasdaq fallback below.
             }
         }
@@ -265,12 +282,26 @@ actor CompanyFinancialsClient {
             save(fallback, key: key)
             return fallback
         } catch {
+            try Task.checkCancellation()
             if let stale { return stale.data }
+            onlyConfirmedAbsence = onlyConfirmedAbsence && Self.confirmsNoStatements(error)
         }
 
+        if onlyConfirmedAbsence { throw CompanyFinancialsError.noStatements }
         throw CompanyFinancialsError.remote(
             "SEC 当前限制了此网络，备用财务数据也暂时不可用。请稍后下拉重试。"
         )
+    }
+
+    nonisolated static func confirmsNoStatements(_ error: Error) -> Bool {
+        guard let error = error as? CompanyFinancialsError else { return false }
+        return error == .noStatements || error == .unsupportedTicker
+    }
+
+    /// Read-only visibility check. Never runs SEC/FMP/Nasdaq or ages data out.
+    func cached(ticker: String) -> CompanyFinancialsData? {
+        loadStatementCacheIfNeeded()
+        return statementCache[Self.normalizedTicker(ticker)]?.data
     }
 
     private func loadFromSEC(ticker: String, forceRefresh: Bool) async throws -> CompanyFinancialsData {
@@ -400,6 +431,7 @@ actor CompanyFinancialsClient {
     private func loadFromFMP(ticker: String, apiKey: String) async throws -> CompanyFinancialsData {
         let candidates = Self.fmpSymbolCandidates(ticker)
         var lastError: Error?
+        var serviceError: Error?
         for symbol in candidates {
             do {
                 let annualIncome: [FMPIncomeRow] = try await fmpRows(
@@ -441,9 +473,10 @@ actor CompanyFinancialsClient {
                 )
             } catch {
                 lastError = error
+                if !Self.confirmsNoStatements(error) { serviceError = error }
             }
         }
-        throw lastError ?? CompanyFinancialsError.noStatements
+        throw serviceError ?? lastError ?? CompanyFinancialsError.noStatements
     }
 
     private func fmpRows<Row: Decodable>(
@@ -489,8 +522,12 @@ actor CompanyFinancialsClient {
         )
         let (annualData, quarterlyData) = try await (annualBytes, quarterlyBytes)
         let decoder = JSONDecoder()
-        let annual = try decoder.decode(NasdaqFinancialsResponse.self, from: annualData).data
-        let quarterly = try decoder.decode(NasdaqFinancialsResponse.self, from: quarterlyData).data
+        let annualResponse = try decoder.decode(NasdaqFinancialsResponse.self, from: annualData)
+        let quarterlyResponse = try decoder.decode(NasdaqFinancialsResponse.self, from: quarterlyData)
+        guard annualResponse.allowsStatementRead, quarterlyResponse.allowsStatementRead else {
+            throw CompanyFinancialsError.invalidResponse
+        }
+        let annual = annualResponse.data, quarterly = quarterlyResponse.data
         guard annual != nil || quarterly != nil else { throw CompanyFinancialsError.noStatements }
 
         let income = Self.makeNasdaqIncome(annual?.incomeStatementTable, kind: .annual)

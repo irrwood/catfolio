@@ -1,0 +1,12 @@
+{
+  "version": "1.0.0",
+  "quietBelowPercent": 0.5,
+  "moveAtPercent": 2.0,
+  "largeMoveAtPercent": 5.0,
+  "relativeMoveFloorPercent": 1.0,
+  "relativeMoveMultiple": 2.5,
+  "baselineSessions": 20,
+  "minimumBaselineSamples": 15,
+  "recentDays": 7,
+  "extendedDays": 30
+}

@@ -124,3 +124,67 @@ struct CompanyReferenceCatalog: Decodable, Sendable {
         value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
     }
 }
+
+/// Detail-page applicability only; never inferred from position size, broker,
+/// sector, or the ETF that a real look-through constituent came from.
+enum HoldingSecurityKind: Equatable {
+    case fund, company, unknown
+
+    static func classify(_ holding: Holding) -> Self {
+        let entry = (try? CompanyReferenceCatalog.bundled.get())?.entry(brokerSymbol: holding.ticker)
+        return classify(instrumentType: entry?.instrumentType,
+            names: [entry?.name, holding.displayName].compactMap { $0 },
+            knownFund: { LocalETFLookThrough.isKnownFund(symbol: holding.ticker) })
+    }
+
+    static func classify(instrumentType: String?, names: [String], knownFund: () -> Bool = { false }) -> Self {
+        switch instrumentType?.uppercased() {
+        case "ETF", "FUND", "MUTUAL_FUND", "CLOSED_END_FUND": return .fund
+        case "COMPANY_SECURITY", "EQUITY_SECURITY": return .company
+        default: break
+        }
+        // Tokens and explicit product phrases, not arbitrary FUND / INDEX
+        // substrings (e.g. Fundtech, Index Systems or a fund-management company).
+        let patterns = [#"(?i)\b(?:ETF|UCITS)\b"#,
+                        #"(?i)\b(?:mutual|index|closed[ -]end|exchange[ -]traded)\s+fund(?=$|[\s]*[,(（-]|\s+(?:class|shares|acc|dist)\b)"#,
+                        #"(?i)\binvestment\s+trust(?=$|[\s]*[,(（]|\s+(?:plc|ltd|limited)\b)"#,
+                        #"(?:指数|股票型|债券型|货币|混合|证券投资)基金(?:$|[（(\s])"#]
+        if names.contains(where: { name in patterns.contains { name.range(of: $0, options: .regularExpression) != nil } }) {
+            return .fund
+        }
+        return knownFund() ? .fund : .unknown
+    }
+}
+
+enum HoldingResearchModule: CaseIterable, Hashable {
+    case developments, consensus, analystHistory, earnings, financials, predictionMarkets
+}
+
+enum HoldingResearchAvailability: Equatable {
+    case unknown, available, empty, failed
+}
+
+/// Unknown / failed never means "permanently absent". Fund modules need actual
+/// content before appearing; company entry points stay available on demand.
+struct HoldingResearchVisibility {
+    let kind: HoldingSecurityKind
+    let currency: String?
+    private(set) var availability: [HoldingResearchModule: HoldingResearchAvailability] = [:]
+
+    func shows(_ module: HoldingResearchModule) -> Bool {
+        if module == .consensus, currency?.uppercased() != "USD" { return false }
+        let state = availability[module] ?? .unknown
+        if state == .available { return true }
+        if state == .empty { return false }
+        if module == .analystHistory { return false } // offline snapshot, no fetch action
+        return kind != .fund
+    }
+
+    var hasVisibleModules: Bool { HoldingResearchModule.allCases.contains(where: shows) }
+
+    mutating func record(_ state: HoldingResearchAvailability, for module: HoldingResearchModule) {
+        // A failed/empty refresh cannot make previously valid cached content disappear.
+        guard availability[module] != .available || state == .available else { return }
+        availability[module] = state
+    }
+}

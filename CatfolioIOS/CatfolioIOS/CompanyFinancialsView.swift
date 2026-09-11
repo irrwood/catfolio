@@ -15,6 +15,7 @@ struct CompanyFinancialsView: View {
 
     let ticker: String
     let companyName: String
+    var onAvailability: (HoldingResearchAvailability) -> Void = { _ in }
 
     @State private var statement: Statement = .income
     @State private var periodKind: FinancialPeriodKind = .annual
@@ -23,16 +24,14 @@ struct CompanyFinancialsView: View {
     @State private var errorMessage: String?
     @State private var isLoading = false
 
-    init(holding: Holding) {
+    init(holding: Holding, onAvailability: @escaping (HoldingResearchAvailability) -> Void = { _ in }) {
         ticker = holding.ticker
         companyName = holding.shortName
+        self.onAvailability = onAvailability
     }
 
     static func supports(_ holding: Holding) -> Bool {
-        let searchable = "\(holding.ticker) \(holding.displayName)".uppercased()
-        let exclusions = [" ETF", "UCITS", "FUND", "INDEX", " ETF "]
-        return !exclusions.contains(where: searchable.contains)
-            && holding.ticker.rangeOfCharacter(from: .letters) != nil
+        HoldingSecurityKind.classify(holding) != .fund
     }
 
     var body: some View {
@@ -54,9 +53,20 @@ struct CompanyFinancialsView: View {
             .padding(.bottom, 40)
         }
         .background(Color(uiColor: .systemBackground))
-        .navigationTitle("财务 · \(ticker)")
+        .softTopScrollEdge()
+        .navigationTitle(L10n.text("财务 · \(ticker)"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button {
+                    dismiss()
+                } label: {
+                    Label(L10n.text("关闭"), systemImage: "xmark")
+                }
+                .labelStyle(.iconOnly)
+            }
+        }
         .refreshable { await load(forceRefresh: true) }
         .task { await load(forceRefresh: false) }
         .onChange(of: statement) { _, _ in selectedPeriodEnd = nil }
@@ -67,7 +77,7 @@ struct CompanyFinancialsView: View {
         VStack(alignment: .leading, spacing: 5) {
             Text(companyName)
                 .font(.title2.weight(.bold))
-            Text("\(ticker) · SEC 原始申报数据")
+            Text(L10n.text("\(ticker) · SEC 原始申报数据"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -83,7 +93,7 @@ struct CompanyFinancialsView: View {
                         withAnimation(.easeOut(duration: 0.18)) { statement = item }
                     } label: {
                         VStack(spacing: 9) {
-                            Text(item.rawValue)
+                            Text(L10n.label(item.rawValue))
                                 .font(.subheadline.weight(statement == item ? .semibold : .regular))
                                 .foregroundStyle(statement == item ? .primary : .secondary)
                                 .frame(maxWidth: .infinity)
@@ -97,13 +107,14 @@ struct CompanyFinancialsView: View {
                 }
             }
 
-            Picker("报告周期", selection: $periodKind) {
-                Text("年度").tag(FinancialPeriodKind.annual)
-                Text("季度").tag(FinancialPeriodKind.quarterly)
+            Picker(L10n.text("报告周期"), selection: $periodKind) {
+                Text(L10n.text("年度")).tag(FinancialPeriodKind.annual)
+                Text(L10n.text("季度")).tag(FinancialPeriodKind.quarterly)
             }
             .pickerStyle(.segmented)
             .frame(maxWidth: 230)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .sensoryFeedback(.selection, trigger: periodKind) { _, _ in hapticsEnabled }
         }
     }
 
@@ -114,7 +125,6 @@ struct CompanyFinancialsView: View {
             let periods = data.income.filter { $0.kind == periodKind }
             if let selected = selected(from: periods) {
                 IncomeFlowView(period: selected)
-            .sensoryFeedback(.selection, trigger: periodKind) { _, _ in hapticsEnabled }
                 periodSelector(periods, label: { periodLabel($0.fiscalYear, $0.fiscalPeriod) })
                 incomeRows(selected)
             } else {
@@ -168,6 +178,7 @@ struct CompanyFinancialsView: View {
                 }
             }
         }
+        .sensoryFeedback(.selection, trigger: selectedPeriodEnd) { _, _ in hapticsEnabled }
     }
 
     private func periodLabel(_ year: Int, _ fiscalPeriod: String) -> String {
@@ -176,40 +187,39 @@ struct CompanyFinancialsView: View {
 
     private func incomeRows(_ period: IncomeStatementPeriod) -> some View {
         FinancialRows(currency: period.currency, rows: [
-            ("营业收入", period.revenue, true),
-            ("营业成本", period.costOfRevenue, false),
-        .sensoryFeedback(.selection, trigger: selectedPeriodEnd) { _, _ in hapticsEnabled }
-            ("毛利润", period.grossProfit, true),
-            ("营业费用", period.operatingExpenses, false),
-            ("营业利润", period.operatingIncome, true),
-            ("净利润", period.netIncome, true),
+            (L10n.text("营业收入"), period.revenue, true),
+            (L10n.text("营业成本"), period.costOfRevenue, false),
+            (L10n.text("毛利润"), period.grossProfit, true),
+            (L10n.text("营业费用"), period.operatingExpenses, false),
+            (L10n.text("营业利润"), period.operatingIncome, true),
+            (L10n.text("净利润"), period.netIncome, true),
         ])
     }
 
     private func balanceRows(_ period: BalanceSheetPeriod) -> some View {
         FinancialRows(currency: period.currency, rows: [
-            ("总资产", period.assets, true),
-            ("总负债", period.liabilities, false),
-            ("股东权益", period.equity, true),
-            ("现金及等价物", period.cash, true),
-            ("有息债务", period.debt, false),
+            (L10n.text("总资产"), period.assets, true),
+            (L10n.text("总负债"), period.liabilities, false),
+            (L10n.text("股东权益"), period.equity, true),
+            (L10n.text("现金及等价物"), period.cash, true),
+            (L10n.text("有息债务"), period.debt, false),
         ])
     }
 
     private func cashFlowRows(_ period: CashFlowStatementPeriod) -> some View {
         FinancialRows(currency: period.currency, rows: [
-            ("经营现金流", period.operatingCashFlow, true),
-            ("资本开支", period.capitalExpenditure, false),
-            ("自由现金流", period.freeCashFlow, true),
-            ("投资现金流", period.investingCashFlow, false),
-            ("融资现金流", period.financingCashFlow, false),
+            (L10n.text("经营现金流"), period.operatingCashFlow, true),
+            (L10n.text("资本开支"), period.capitalExpenditure, false),
+            (L10n.text("自由现金流"), period.freeCashFlow, true),
+            (L10n.text("投资现金流"), period.investingCashFlow, false),
+            (L10n.text("融资现金流"), period.financingCashFlow, false),
         ])
     }
 
     private var loadingState: some View {
         VStack(spacing: 14) {
             ProgressView()
-            Text("正在读取 SEC Company Facts…")
+            Text(L10n.text("正在读取 SEC Company Facts…"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -219,20 +229,20 @@ struct CompanyFinancialsView: View {
 
     private var emptyState: some View {
         ContentUnavailableView {
-            Label("暂未读取到财务数据", systemImage: "chart.bar.xaxis")
+            Label(L10n.text("暂未读取到财务数据"), systemImage: "chart.bar.xaxis")
         } description: {
-            Text(errorMessage ?? "SEC 没有返回可用的 10-K / 10-Q 数据")
+            Text(errorMessage ?? L10n.text("SEC 没有返回可用的 10-K / 10-Q 数据"))
         } actions: {
-            Button("重新读取") { Task { await load(forceRefresh: true) } }
+            Button(L10n.text("重新读取")) { Task { await load(forceRefresh: true) } }
         }
         .frame(minHeight: 360)
     }
 
     private var missingPeriodState: some View {
         ContentUnavailableView(
-            "这个周期暂无数据",
+            L10n.text("这个周期暂无数据"),
             systemImage: "doc.text.magnifyingglass",
-            description: Text("可以切换年度或季度；非美国证券会在 SEC 无覆盖时尝试使用已配置的 FMP。")
+            description: Text(L10n.text("可以切换年度或季度；非美国证券会在 SEC 无覆盖时尝试使用已配置的 FMP。"))
         )
         .frame(minHeight: 320)
     }
@@ -241,7 +251,7 @@ struct CompanyFinancialsView: View {
         VStack(alignment: .leading, spacing: 7) {
             Label(data.source, systemImage: "building.columns")
                 .font(.caption.weight(.semibold))
-            Text("同一报告期存在重述时取最新申报值。金额保留报表原币种，不按持仓展示币种换算。")
+            Text(L10n.text("同一报告期存在重述时取最新申报值。金额保留报表原币种，不按持仓展示币种换算。"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             ForEach(data.warnings, id: \.self) { warning in
@@ -264,13 +274,16 @@ struct CompanyFinancialsView: View {
                 forceRefresh: forceRefresh
             )
             errorMessage = nil
+            onAvailability(financials?.hasUsableStatements == true ? .available : .empty)
         } catch {
             errorMessage = error.localizedDescription
+            onAvailability(error as? CompanyFinancialsError == .noStatements ? .empty : .failed)
         }
     }
 }
 
 private struct IncomeFlowView: View {
+    @Environment(\.locale) private var appLocale
     let period: IncomeStatementPeriod
 
     var body: some View {
@@ -286,6 +299,7 @@ private struct IncomeFlowView: View {
 }
 
 private struct BalanceFlowView: View {
+    @Environment(\.locale) private var appLocale
     let period: BalanceSheetPeriod
 
     var body: some View {
@@ -299,6 +313,7 @@ private struct BalanceFlowView: View {
 }
 
 private struct CashFlowDiagram: View {
+    @Environment(\.locale) private var appLocale
     let period: CashFlowStatementPeriod
 
     var body: some View {
@@ -329,9 +344,18 @@ private struct FlowNode {
         case .outflow: CatfolioPalette.statementOutflow
         }
     }
+
+    /// The ribbon's own tint, not a faded bar.
+    var ribbonColor: Color {
+        switch tone {
+        case .inflow: CatfolioPalette.statementInflowRibbon
+        case .outflow: CatfolioPalette.statementOutflowRibbon
+        }
+    }
 }
 
 private struct FinancialFlowDiagram: View {
+    @Environment(\.locale) private var appLocale
     let currency: String
     let left: FlowNode
     let middleTop: FlowNode
@@ -345,14 +369,6 @@ private struct FinancialFlowDiagram: View {
             let revenueFlows = pairedFlowThickness(
                 middleTop.value,
                 middleBottom.value,
-
-    /// The ribbon's own tint, not a faded bar.
-    var ribbonColor: Color {
-        switch tone {
-        case .inflow: CatfolioPalette.statementInflowRibbon
-        case .outflow: CatfolioPalette.statementOutflowRibbon
-        }
-    }
                 span: 112
             )
             let grossThickness = revenueFlows.first
@@ -400,6 +416,7 @@ private struct FinancialFlowDiagram: View {
 }
 
 private struct FinancialSplitDiagram: View {
+    @Environment(\.locale) private var appLocale
     let currency: String
     let source: FlowNode
     let upper: FlowNode
@@ -440,7 +457,7 @@ private func nodeLabel(_ node: FlowNode, currency: String) -> some View {
             .font(.caption.weight(.semibold))
             .multilineTextAlignment(.center)
         Text(FinancialAmountFormatter.string(node.value, currency: currency))
-            .font(.caption.weight(.bold))
+            .currencyFont(.caption1, weight: .bold)
             .foregroundStyle(node.color)
             .lineLimit(1)
             .minimumScaleFactor(0.72)
@@ -501,6 +518,7 @@ private func pairedFlowThickness(
 }
 
 private struct FinancialRows: View {
+    @Environment(\.locale) private var appLocale
     let currency: String
     let rows: [(String, Double?, Bool)]
 
