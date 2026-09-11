@@ -179,7 +179,7 @@
 		BF1000000000000000000004 /* PolicyTemplates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyTemplates.swift; sourceTree = "<group>"; };
 		BF1000000000000000000005 /* PolicyFieldsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyFieldsViewController.swift; sourceTree = "<group>"; };
 		BF1000000000000000000006 /* PolicyCandidateViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyCandidateViewController.swift; sourceTree = "<group>"; };
-		BF1000000000000000000090 /* strategy.schema.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "../core/reference/strategy.schema.json"; sourceTree = SOURCE_ROOT; };
+		BF1000000000000000000090 /* strategy.schema.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = strategy.schema.json; sourceTree = "<group>"; };
 		B1E100000000000000000001 /* PortfolioHomeScrollInteraction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioHomeScrollInteraction.swift; sourceTree = "<group>"; };
 		B1E099000000000000000001 /* HistoryPagingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryPagingView.swift; sourceTree = "<group>"; };
 		B1E092000000000000000001 /* SettingsInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsInteractionTests.swift; sourceTree = "<group>"; };
@@ -365,7 +365,6 @@
 				BF1000000000000000000004 /* PolicyTemplates.swift */,
 				BF1000000000000000000005 /* PolicyFieldsViewController.swift */,
 				BF1000000000000000000006 /* PolicyCandidateViewController.swift */,
-				BF1000000000000000000090 /* strategy.schema.json */,
 				B1000000000000000000000A /* SettingsView.swift */,
 				B1000000000000000000000E /* ETFLookThroughView.swift */,
 				B1000000000000000000000F /* CSVImportView.swift */,
@@ -442,6 +441,7 @@
 				BE1100000000000000000041 /* catfolio-daily-brief */,
 				B19800000000000000000004 /* company_reference.json */,
 				B199000000000000000000E3 /* public_investors.json */,
+				BF1000000000000000000090 /* strategy.schema.json */,
 				BC9200000000000000000002 /* analyst_history_catalog.json */,
 				BE1100000000000000000002 /* industry_sentiment.json */,
 				B5EC70000000000000000003 /* sector_rotation_history.json */,
