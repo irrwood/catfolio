@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ETFLookThroughView: View {
+    @Environment(\.locale) private var appLocale
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
 
@@ -42,14 +43,15 @@ struct ETFLookThroughView: View {
                 }
 
                 if let response {
-                    Section("ETF 概览") {
-                        LabeledContent("包含 ETF", value: response.etfTickers.joined(separator: " · "))
-                        LabeledContent("用于穿透的\(basis.title)", value: DisplayFormat.money(response.etfTotalUSD))
-                        LabeledContent("成分覆盖", value: DisplayFormat.percent(response.coveredWeightPercent, signed: false))
-                        LabeledContent("底层证券", value: "\(response.constituentCount) 项")
+                    Section(L10n.text("ETF 概览")) {
+                        LabeledContent(L10n.text("包含 ETF"), value: response.etfTickers.joined(separator: " · "))
+                        LabeledContent(L10n.text("用于穿透的\(basis.title)"), value: DisplayFormat.money(response.etfTotalUSD))
+                            .currencyFont(.body)
+                        LabeledContent(L10n.text("成分覆盖"), value: DisplayFormat.percent(response.coveredWeightPercent, signed: false))
+                        LabeledContent(L10n.text("底层证券"), value: L10n.text("\(response.constituentCount) 项"))
 
                         if let asOf = response.holdingsAsOf {
-                            LabeledContent("持仓日期", value: asOf)
+                            LabeledContent(L10n.text("持仓日期"), value: asOf)
                         }
 
                         if let source = response.holdingsSource,
@@ -67,9 +69,9 @@ struct ETFLookThroughView: View {
                         }
                     } header: {
                         HStack {
-                            Text("底层暴露")
+                            Text(L10n.text("底层暴露"))
                             Spacer()
-                            Text("\(filteredRows.count) 项")
+                            Text(L10n.text("\(filteredRows.count) 项"))
                         }
                     } footer: {
                         Text(footerText(for: response))
@@ -78,26 +80,27 @@ struct ETFLookThroughView: View {
                     Section {
                         HStack(spacing: 12) {
                             ProgressView()
-                            Text("正在展开 ETF 底层持仓…")
+                            Text(L10n.text("正在展开 ETF 底层持仓…"))
                                 .foregroundStyle(.secondary)
                         }
                     }
                 } else if let errorMessage {
                     Section {
                         ContentUnavailableView(
-                            "无法读取 ETF 穿透",
+                            L10n.text("无法读取 ETF 穿透"),
                             systemImage: "square.3.layers.3d.slash",
                             description: Text(errorMessage)
                         )
                     }
                 }
             }
-            .navigationTitle("ETF 穿透")
+            .softTopScrollEdge()
+            .navigationTitle(L10n.text("ETF 穿透"))
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "搜索股票或行业")
+            .searchable(text: $searchText, prompt: L10n.text("搜索股票或行业"))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("完成") { dismiss() }
+                    Button(L10n.text("完成")) { dismiss() }
                 }
             }
             .refreshable { await load() }
@@ -121,16 +124,17 @@ struct ETFLookThroughView: View {
     }
 
     private func footerText(for response: ETFLookThroughResponse) -> String {
-        let base = "直接持仓始终按当前市值；\(basis.title)按基金权重拆分后加入直接市值。使用内置的有日期基金持仓快照；部分原有产品共用同指数基金快照。未支持的 ETF 保留原持仓，覆盖率仅统计已展开的 ETF。未识别成分和未分配权重计入 ETF 其他。"
+        let base = L10n.text("直接持仓始终按当前市值；\(basis.title)按基金权重拆分后加入直接市值。使用内置的有日期基金持仓快照；部分原有产品共用同指数基金快照。未支持的 ETF 保留原持仓，覆盖率仅统计已展开的 ETF。未识别成分和未分配权重计入 ETF 其他。")
         let xs2dAliases = Set(["XS2D", "XS2D.L", "DBPG", "DBPG.DE", "XS2L", "XS2L.MI"])
         guard response.etfTickers.contains(where: { xs2dAliases.contains($0.uppercased()) }) else {
             return base
         }
-        return base + " XS2D 是合成日杠杆产品，这里展示标普 500 经济暴露近似；净成本和净市值只分配一次，不会再次乘 2。"
+        return base + L10n.text(" XS2D 是合成日杠杆产品，这里展示标普 500 经济暴露近似；净成本和净市值只分配一次，不会再次乘 2。")
     }
 }
 
 private struct ETFLookThroughRowView: View {
+    @Environment(\.locale) private var appLocale
     let row: ETFLookThroughRow
     let basis: ETFLookThroughBasis
 
@@ -157,7 +161,7 @@ private struct ETFLookThroughRowView: View {
                     Text(DisplayFormat.money(row.totalUSD))
                         .appNumber(.subheading, weight: .semibold)
                     if row.etfWeightPercent > 0 {
-                        Text("ETF 权重 \(DisplayFormat.percent(row.etfWeightPercent, signed: false))")
+                        Text(L10n.text("ETF 权重 \(DisplayFormat.percent(row.etfWeightPercent, signed: false))"))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     } else if let sector = row.sector {
@@ -183,11 +187,11 @@ private struct ETFLookThroughRowView: View {
             .accessibilityHidden(true)
 
             HStack(spacing: 16) {
-                exposureLabel("直接市值", value: row.directUSD, color: CatfolioStyle.blue)
+                exposureLabel(L10n.text("直接市值"), value: row.directUSD, color: CatfolioStyle.blue)
                 exposureLabel(basis.title, value: row.fromETFUSD, color: CatfolioStyle.green)
                 Spacer()
                 if row.fromETFUSD > 0 {
-                    Text("间接 \(DisplayFormat.percent(indirectRatio * 100, signed: false))")
+                    Text(L10n.text("间接 \(DisplayFormat.percent(indirectRatio * 100, signed: false))"))
                         .appNumber(.micro)
                         .foregroundStyle(.tertiary)
                 }

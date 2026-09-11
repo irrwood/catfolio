@@ -56,6 +56,12 @@ enum PublicInvestorPreferences {
         selectedIDs(raw) == [demoID]
     }
 
+    static func setting(_ id: String, isSelected: Bool, in raw: String) -> String {
+        let current = id == demoID ? isDemo(raw) : selectedIDs(raw).contains(id)
+        guard current != isSelected else { return raw }
+        return selecting(id, in: raw)
+    }
+
     private static let migrationKey = "catfolio.demoSelectionMigrated"
 
     /// Points the selection at the demo for anyone upgrading from the build
@@ -107,6 +113,7 @@ struct PublicInvestor: Decodable, Identifiable {
         case "hh": L10n.text("段永平 / H&H")
         case "berkshire": L10n.text("巴菲特 / Berkshire")
         case "scion": L10n.text("Michael Burry / Scion")
+        case "ark": L10n.text("石头姐 / ARK")
         case "musk": L10n.text("埃隆·马斯克")
         default: displayName
         }
@@ -588,34 +595,94 @@ enum PublicInvestorLedger {
     }
 }
 
+enum PortfolioSource: Hashable, Sendable {
+    case personal
+    case demo
+    case publicInvestors(String)
+}
+
 actor PublicInvestorSimulationStore {
     static let shared = PublicInvestorSimulationStore()
     private var pending: [String: Task<LocalPortfolioDocument, Error>] = [:]
     private var cached: [String: (Date, LocalPortfolioDocument)] = [:]
+    private var lastAttempt: [String: Date] = [:]
+    private let directory: URL
+    private let now: @Sendable () -> Date
+    private let histories: @Sendable ([String], String) async -> [String: [String: Double]]
+
+    init(
+        directory: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("InvestorSimulation", isDirectory: true),
+        now: @escaping @Sendable () -> Date = { Date() },
+        histories: @escaping @Sendable ([String], String) async -> [String: [String: Double]] = { symbols, day in
+            await LocalMarketDataClient().historicalCloses(symbols: symbols, from: "2022-01-01", to: day, dividendAdjusted: false)
+        }
+    ) {
+        self.directory = directory
+        self.now = now
+        self.histories = histories
+    }
+
+    private func key(catalog: PublicInvestorCatalog, selection: String) -> String {
+        let selected = PublicInvestorPreferences.selectedIDs(selection)
+        let names = catalog.investors.filter { selected.contains($0.id) }.map(\.id).sorted().joined(separator: "-")
+        return "v2-\(catalog.releaseId)-\(names)"
+    }
+
+    /// Keep old snapshots usable, including after relaunch. Expiry never deletes
+    /// a snapshot, another investor's cache, or the shared market-data cache.
+    func cachedDocument(catalog: PublicInvestorCatalog, selection: String) -> LocalPortfolioDocument? {
+        let key = key(catalog: catalog, selection: selection)
+        if let hit = cached[key] { return hit.1 }
+        let file = directory.appendingPathComponent("\(key).json")
+        guard let data = try? Data(contentsOf: file),
+              let document = try? JSONDecoder().decode(LocalPortfolioDocument.self, from: data) else { return nil }
+        let fetchedAt = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+        cached[key] = (fetchedAt, document)
+        return document
+    }
 
     func load(catalog: PublicInvestorCatalog, selection: String) async throws -> LocalPortfolioDocument {
-        let day = DayDateCodec.string(from: Date())
-        let key = "v2:\(catalog.releaseId):\(PublicInvestorPreferences.selectedIDs(selection).sorted().joined(separator: ",")):\(day)"
-        if let cached = cached[key], Date().timeIntervalSince(cached.0) < 300 { return cached.1 }
+        if let hit = cachedDocument(catalog: catalog, selection: selection) { return hit }
+        return try await fetch(catalog: catalog, selection: selection)
+    }
+
+    /// Called by portfolio refresh after the cached presentation is on screen.
+    /// One request per selection; fresh caches and recent failed attempts do not
+    /// create a request on each toggle. Historical prices have their own TTL.
+    func refreshIfNeeded(catalog: PublicInvestorCatalog, selection: String) async throws -> LocalPortfolioDocument? {
+        let key = key(catalog: catalog, selection: selection)
+        _ = cachedDocument(catalog: catalog, selection: selection)
         if let task = pending[key] { return try await task.value }
-        let task = Task<LocalPortfolioDocument, Error> {
+        if let hit = cached[key], now().timeIntervalSince(hit.0) < 300,
+           DayDateCodec.string(from: hit.0) == DayDateCodec.string(from: now()) { return nil }
+        if cached[key] != nil, let attempt = lastAttempt[key], now().timeIntervalSince(attempt) < 300 { return nil }
+        return try await fetch(catalog: catalog, selection: selection)
+    }
+
+    private func fetch(catalog: PublicInvestorCatalog, selection: String) async throws -> LocalPortfolioDocument {
+        let key = key(catalog: catalog, selection: selection)
+        if let task = pending[key] { return try await task.value }
+        let day = DayDateCodec.string(from: now())
+        let previous = cachedDocument(catalog: catalog, selection: selection)
+        lastAttempt[key] = now()
+        let directory = directory
+        let historiesProvider = histories
+        let task = Task.detached(priority: .userInitiated) {
             let symbols = PublicInvestorLedger.symbols(catalog: catalog, selection: selection)
             let providerSymbols = Array(Set(symbols.map { $0.replacingOccurrences(of: ".", with: "-") })).sorted()
-            let providerHistories = await LocalMarketDataClient().historicalCloses(symbols: providerSymbols, from: "2022-01-01", to: day, dividendAdjusted: false)
+            let providerHistories = await historiesProvider(providerSymbols, day)
             let histories = Dictionary(uniqueKeysWithValues: symbols.compactMap { ticker in
                 providerHistories[ticker.replacingOccurrences(of: ".", with: "-")].map { (ticker, $0) }
             })
             let result = PublicInvestorLedger.build(catalog: catalog, selection: selection,
                 prices: histories, splits: try? StockSplitCatalog.bundled.get(), asOf: day)
             // Store diagnostics separately from the real portfolio database.
-            let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("InvestorSimulation", isDirectory: true)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let selectedNames = catalog.investors.filter { PublicInvestorPreferences.selectedIDs(selection).contains($0.id) }.map(\.id).sorted().joined(separator: "-")
             try JSONEncoder().encode(result.issues).write(to: directory.appendingPathComponent("issues-\(selectedNames).json"), options: .atomic)
-            let file = directory.appendingPathComponent("v2-\(catalog.releaseId)-\(selectedNames).json")
+            let file = directory.appendingPathComponent("\(key).json")
             if !symbols.isEmpty && result.document.positions.isEmpty {
-                if let data = try? Data(contentsOf: file), let previous = try? JSONDecoder().decode(LocalPortfolioDocument.self, from: data) { return previous }
                 throw LocalServiceError.noHistoricalPrices
             }
             try JSONEncoder().encode(result.document).write(to: file, options: [.atomic, .completeFileProtection])
@@ -625,10 +692,11 @@ actor PublicInvestorSimulationStore {
         do {
             let document = try await task.value
             pending[key] = nil
-            cached[key] = (Date(), document)
+            cached[key] = (now(), document)
             return document
         } catch {
             pending[key] = nil
+            if let previous { return previous }
             throw error
         }
     }

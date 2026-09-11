@@ -3,20 +3,13 @@ import SwiftUI
 struct RootTabView: View {
     @Environment(\.locale) private var appLocale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Two sizes for the tab bar, and the gap between them is the feature.
-    ///
-    /// The first pass moved the icon by 4pt and the row height by 4pt, which
-    /// is a change you can measure and cannot see — the bar appeared not to
-    /// respond to the gesture at all. Shrinking is only worth doing if the
-    /// reader notices it happen, so the compact state now takes about a
-    /// quarter off the icon and a quarter off the height.
     private enum TabBarMetrics {
         static let regularIconSize: CGFloat = 27
         static let compactIconSize: CGFloat = 20
         static let regularControlSize: CGFloat = 56
-        static let compactControlSize: CGFloat = 42
+        static let compactControlSize: CGFloat = 44
         static let regularTabButtonHeight: CGFloat = 48
-        static let compactTabButtonHeight: CGFloat = 36
+        static let compactTabButtonHeight: CGFloat = 40
         static let nativeVerticalOffset: CGFloat = 6
         static let compactVerticalOffset: CGFloat = 6
     }
@@ -32,7 +25,6 @@ struct RootTabView: View {
     @State private var selection: Destination
     @State private var showsAIAssistant: Bool
     @State private var isTabBarCompact = false
-    @State private var lastVerticalDragTranslation: CGFloat = 0
     @Namespace private var assistantZoom
 
     init() {
@@ -40,7 +32,8 @@ struct RootTabView: View {
         let showsLocalServiceRoute = arguments.contains("--show-local-services")
             || arguments.contains { $0.hasPrefix("--show-local-service-") }
         let initialSelection: Destination
-        if arguments.contains("--show-returns-page") {
+        if arguments.contains("--show-returns-page") || arguments.contains("--show-heatmap")
+            || arguments.contains("--show-policy-composer") {
             initialSelection = .returns
         } else if arguments.contains("--show-settings") || showsLocalServiceRoute {
             initialSelection = .settings
@@ -111,9 +104,13 @@ struct RootTabView: View {
         .navigationBarTitleDisplayMode(.large)
         .toolbarVisibility(selection == .portfolio ? .hidden : .visible, for: .navigationBar)
         .toolbarVisibility(.hidden, for: .tabBar)
-        .simultaneousGesture(tabBarResizeGesture, including: .subviews)
+        .environment(\.rootTabBarCompact, $isTabBarCompact)
+        .onChange(of: selection) { _, _ in isTabBarCompact = false }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             navigationBar
+                // Shrinking the controls must not resize the ScrollView's
+                // viewport or feed a spurious scroll delta back into the bar.
+                .frame(height: TabBarMetrics.regularControlSize, alignment: .bottom)
         }
     }
 
@@ -126,6 +123,7 @@ struct RootTabView: View {
             }
             .padding(isTabBarCompact ? 2 : 4)
             .navigationGlass()
+            .accessibilityIdentifier("root-tab-bar")
 
             Button(action: presentAI) {
                 Image("TabAI")
@@ -138,14 +136,20 @@ struct RootTabView: View {
             }
             .buttonStyle(.plain)
             .navigationGlass()
+            // Half the control's own side, so the source stays a circle at
+            // both sizes. The radius was fixed at 28 — exactly half of the
+            // regular 56pt control, and so a circle there, but more than half
+            // of the compact 44pt one, where a continuous corner past half
+            // the side bulges out into a diamond. `matchedTransitionSource`
+            // accepts only a RoundedRectangle, so this cannot be a `Circle`.
             .matchedTransitionSource(id: "ai-bubble", in: assistantZoom) { source in
                 source.clipShape(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    RoundedRectangle(cornerRadius: tabControlSize / 2, style: .continuous)
                 )
             }
             .accessibilityLabel(L10n.text("AI 助手"))
         }
-        .padding(.horizontal, isTabBarCompact ? 28 : 20)
+        .padding(.horizontal, isTabBarCompact ? 48 : 20)
         // Match the lower visual baseline of iOS 26/27's floating tab bar
         // while the safe-area inset continues reserving content space.
         .offset(y: TabBarMetrics.nativeVerticalOffset + (isTabBarCompact
@@ -201,34 +205,75 @@ struct RootTabView: View {
         isTabBarCompact ? TabBarMetrics.compactControlSize : TabBarMetrics.regularControlSize
     }
 
-    private var tabBarResizeGesture: some Gesture {
-        DragGesture(minimumDistance: 10, coordinateSpace: .global)
-            .onChanged { value in
-                let vertical = value.translation.height
-                let horizontal = value.translation.width
-                guard abs(vertical) > abs(horizontal) * 1.2 else { return }
-
-                let delta = vertical - lastVerticalDragTranslation
-                guard abs(delta) >= 6 else { return }
-                lastVerticalDragTranslation = vertical
-                let shouldCompact = delta < 0
-                guard shouldCompact != isTabBarCompact else { return }
-
-                if reduceMotion {
-                    isTabBarCompact = shouldCompact
-                } else {
-                    withAnimation(.smooth(duration: 0.28)) {
-                        isTabBarCompact = shouldCompact
-                    }
-                }
-            }
-            .onEnded { _ in
-                lastVerticalDragTranslation = 0
-            }
-    }
-
     private func presentAI() {
         showsAIAssistant = true
+    }
+}
+
+extension EnvironmentValues {
+    @Entry var rootTabBarCompact: Binding<Bool> = .constant(false)
+}
+
+// One detector per root scroll view. Accumulate small scroll deltas so slow
+// gestures work too; require deliberate travel after a direction reversal.
+struct RootTabBarScrollDirection {
+    private var travel: CGFloat = 0
+
+    mutating func reset() { travel = 0 }
+
+    mutating func update(from oldOffset: CGFloat, to newOffset: CGFloat) -> Bool? {
+        let delta = newOffset - oldOffset
+        guard abs(delta) > 0.01 else { return nil }
+        if newOffset <= 4 {
+            reset()
+            return false
+        }
+        if (delta > 0) != (travel > 0) { travel = 0 }
+        travel += delta
+        guard abs(travel) >= 12 else { return nil }
+        let compact = travel > 0
+        reset()
+        return compact
+    }
+}
+
+private struct RootTabBarScrollTracking: ViewModifier {
+    @Environment(\.rootTabBarCompact) private var compact
+    @State private var direction = RootTabBarScrollDirection()
+    @State private var isInteracting = false
+    var onOffsetChange: (CGFloat) -> Void
+    var onPhaseChange: (ScrollPhase, ScrollPhase, ScrollPhaseChangeContext) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                let maximum = max(0, geometry.contentSize.height
+                    + geometry.contentInsets.top + geometry.contentInsets.bottom
+                    - geometry.containerSize.height)
+                return min(maximum, max(0, geometry.contentOffset.y + geometry.contentInsets.top))
+            } action: { oldOffset, newOffset in
+                onOffsetChange(newOffset)
+                guard isInteracting,
+                      let value = direction.update(from: oldOffset, to: newOffset),
+                      compact.wrappedValue != value else { return }
+                compact.wrappedValue = value
+            }
+            .onScrollPhaseChange { oldPhase, phase, context in
+                // Inertia and rubber-band recovery must not undo the state
+                // chosen by the user's swipe, nor should programmatic scrolling.
+                isInteracting = phase == .interacting
+                if phase == .tracking || phase == .idle { direction.reset() }
+                onPhaseChange(oldPhase, phase, context)
+            }
+    }
+}
+
+extension View {
+    func tracksRootTabBarScroll(
+        onPhaseChange: @escaping (ScrollPhase, ScrollPhase, ScrollPhaseChangeContext) -> Void = { _, _, _ in },
+        onOffsetChange: @escaping (CGFloat) -> Void = { _ in }
+    ) -> some View {
+        modifier(RootTabBarScrollTracking(onOffsetChange: onOffsetChange, onPhaseChange: onPhaseChange))
     }
 }
 

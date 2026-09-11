@@ -603,6 +603,8 @@ struct PortfolioAccount: Identifiable, Equatable, Codable {
         return name
     }
 
+    var localizedDisplayName: String { L10n.accountName(displayName) }
+
     var syncedSourceTitle: String {
         switch source {
         case "Trading 212": "Trading 212 API / 同步数据"
@@ -621,6 +623,9 @@ struct HoldingDetailAccountOption: Identifiable, Equatable {
     let marketValue: Double
     let currency: String
     let marketValueUSD: Double
+    /// Existing engine P&L converted to the card's quote currency. Public
+    /// disclosures without a cost basis leave this unknown, never zero.
+    var unrealized: Double? = nil
 }
 
 struct HoldingDetailAccountContext: Equatable {
@@ -1303,13 +1308,13 @@ enum LocalPortfolioError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noPortfolio:
-            "手机中还没有组合数据，请先直连券商或导入 CSV"
+            L10n.text("手机中还没有组合数据，请先直连券商或导入 CSV")
         case let .invalidCSV(message):
-            "CSV 无法导入：\(message)"
+            L10n.text("CSV 无法导入：\(message)")
         case let .unsupportedCurrency(currency):
-            "暂不支持 \(currency) 换算为 USD"
+            L10n.text("暂不支持 \(currency) 换算为 USD")
         case .writeFailed:
-            "无法保存到 iPhone 本地存储"
+            L10n.text("无法保存到 iPhone 本地存储")
         }
     }
 }
@@ -1340,7 +1345,7 @@ actor LocalPortfolioStore {
             document = try decoder.decode(LocalPortfolioDocument.self, from: data)
         } catch is DecodingError {
             let backup = try archivePortfolio(reason: "corrupt")
-            recoveryNotice = "组合文件无法读取，已备份为 \(backup.lastPathComponent)。请重新导入组合；原始数据保留在本机备份中。"
+            recoveryNotice = L10n.text("组合文件无法读取，已备份为 \(backup.lastPathComponent)。请重新导入组合；原始数据保留在本机备份中。")
             return .empty
         }
         let migrated = try migrateKnownInstrumentCurrencies(in: document)
@@ -1722,9 +1727,20 @@ final class LocalCurrentFXCache: @unchecked Sendable {
         return records[currency]
     }
     func update(_ incoming: [String: Record]) {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
         records.merge(incoming) { _, new in new }
-        if let data = try? JSONEncoder().encode(records) { UserDefaults.standard.set(data, forKey: "catfolio.currentFX.v1") }
+        let snapshot = records
+        lock.unlock()
+        // Persisted after the lock is released, never under it. Setting a
+        // UserDefaults value posts `didChangeNotification` synchronously, and
+        // `@AppStorage` answers it on the main thread — which is exactly the
+        // thread that reads a rate here while it draws a figure. Holding the
+        // lock across the write left this thread waiting on the main thread
+        // and the main thread waiting on this lock: the app froze on launch
+        // whenever the FX refresh landed while the home page was drawing.
+        if let data = try? JSONEncoder().encode(snapshot) {
+            UserDefaults.standard.set(data, forKey: "catfolio.currentFX.v1")
+        }
     }
 }
 
@@ -1789,9 +1805,9 @@ enum LocalPortfolioEngine {
 
     static var fxStatus: String {
         if let record = LocalCurrentFXCache.shared.record(DisplayCurrency.current == .usd ? "GBP" : DisplayCurrency.current.rawValue) {
-            return "汇率缓存 · \(record.date)；缺失币种使用离线估值。历史快照保留原记录汇率。"
+            return L10n.text("汇率缓存 · \(record.date)；缺失币种使用离线估值。历史快照保留原记录汇率。")
         }
-        return "汇率未更新 · 使用离线估值，不适用于历史成交对账。"
+        return L10n.text("汇率未更新 · 使用离线估值，不适用于历史成交对账。")
     }
 
     static func totals(for positions: [LocalPositionRecord]) throws -> Totals {
@@ -2204,19 +2220,19 @@ enum LocalCSVImporter {
 
     static func parse(_ data: Data) throws -> ([LocalPositionRecord], [LocalTransactionRecord], CSVImportResult) {
         guard var text = decodedText(from: data) else {
-            throw LocalPortfolioError.invalidCSV("文件编码无法识别，请使用 UTF-8 或 UTF-16")
+            throw LocalPortfolioError.invalidCSV(L10n.text("文件编码无法识别，请使用 UTF-8 或 UTF-16"))
         }
         text = text.replacingOccurrences(of: "\u{feff}", with: "")
         let records = parseRecords(text)
-        guard !records.isEmpty else { throw LocalPortfolioError.invalidCSV("文件为空") }
+        guard !records.isEmpty else { throw LocalPortfolioError.invalidCSV(L10n.text("文件为空")) }
         guard let headerIndex = headerRowIndex(in: records) else {
-            throw LocalPortfolioError.invalidCSV("没有找到可识别的表头")
+            throw LocalPortfolioError.invalidCSV(L10n.text("没有找到可识别的表头"))
         }
         let header = records[headerIndex]
         let columns = columns(in: header)
         let missing = missingRequiredColumns(in: header)
         guard missing.isEmpty else {
-            throw LocalPortfolioError.invalidCSV("缺少列：\(missing.joined(separator: "、"))")
+            throw LocalPortfolioError.invalidCSV(L10n.text("缺少列：\(missing.joined(separator: L10n.listSeparator))"))
         }
 
         var transactions: [Transaction] = []
@@ -2245,7 +2261,7 @@ enum LocalCSVImporter {
                 let digest = SHA256.hash(data: Data(canonical.utf8)).map { String(format: "%02x", $0) }.joined()
                 rowOccurrences[digest, default: 0] += 1
                 if result != nil && resultCurrency.isEmpty {
-                    warnings.append("第 \(headerIndex + offset + 2) 行：Result 缺少币种，不计入券商已实现盈亏。")
+                    warnings.append(L10n.text("第 \(headerIndex + offset + 2) 行：Result 缺少币种，不计入券商已实现盈亏。"))
                 }
                 transactions.append(Transaction(
                     date: try date(field("date")),
@@ -2260,10 +2276,10 @@ enum LocalCSVImporter {
                     realisedProfitLossCurrency: resultCurrency.isEmpty ? nil : resultCurrency
                 ))
             } catch {
-                warnings.append("第 \(headerIndex + offset + 2) 行：\(error.localizedDescription)")
+                warnings.append(L10n.text("第 \(headerIndex + offset + 2) 行：\(error.localizedDescription)"))
             }
         }
-        guard !transactions.isEmpty else { throw LocalPortfolioError.invalidCSV("没有有效交易") }
+        guard !transactions.isEmpty else { throw LocalPortfolioError.invalidCSV(L10n.text("没有有效交易")) }
 
         struct PositionState {
             var shares = 0.0
@@ -2342,14 +2358,14 @@ enum LocalCSVImporter {
 
     private static func number(_ value: String) throws -> Double {
         guard let number = numericValue(value) else {
-            throw LocalPortfolioError.invalidCSV("无效数字 \(value)")
+            throw LocalPortfolioError.invalidCSV(L10n.text("无效数字 \(value)"))
         }
         return number
     }
 
     private static func date(_ value: String) throws -> Date {
         guard let parsed = parsedDate(value) else {
-            throw LocalPortfolioError.invalidCSV("无效日期 \(value)")
+            throw LocalPortfolioError.invalidCSV(L10n.text("无效日期 \(value)"))
         }
         return parsed
     }

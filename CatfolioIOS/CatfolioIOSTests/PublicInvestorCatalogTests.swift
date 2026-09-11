@@ -4,7 +4,7 @@ import XCTest
 final class PublicInvestorCatalogTests: XCTestCase {
     func testBundledCoreReleasePreservesDisclosureBoundaries() throws {
         let catalog = try PublicInvestorCatalog.loaded.get()
-        XCTAssertEqual(catalog.investors.count, 5)
+        XCTAssertEqual(catalog.investors.count, 6)
         let pelosi = try XCTUnwrap(catalog.investors.first { $0.id == "pelosi" })
         XCTAssertEqual(pelosi.snapshot?.effectiveDate, "2025-12-31")
         XCTAssertTrue(try XCTUnwrap(pelosi.snapshot).positions.contains { $0.reportedValue == nil && $0.reportedValueLow != nil })
@@ -182,7 +182,7 @@ final class PublicInvestorCatalogTests: XCTestCase {
             if let oldMode { defaults.set(oldMode, forKey: PublicInvestorPreferences.enabledKey) } else { defaults.removeObject(forKey: PublicInvestorPreferences.enabledKey) }
             if let oldSelection { defaults.set(oldSelection, forKey: PublicInvestorPreferences.selectionKey) } else { defaults.removeObject(forKey: PublicInvestorPreferences.selectionKey) }
         }
-        for selection in ["pelosi", "hh", "berkshire", "scion", "pelosi,hh"] {
+        for selection in ["pelosi", "hh", "berkshire", "scion", "ark", "pelosi,hh,ark"] {
             defaults.set(selection, forKey: PublicInvestorPreferences.selectionKey)
             let model = AppModel()
             await model.refreshPortfolio()
@@ -194,7 +194,7 @@ final class PublicInvestorCatalogTests: XCTestCase {
             await model.refreshReturns()
             XCTAssertNil(model.returnsError, selection)
             XCTAssertEqual(model.comparison?.available, true, selection)
-            if selection == "pelosi" {
+            if selection == "pelosi" || selection == "ark" {
                 await model.refreshReturnsPage()
                 XCTAssertNotNil(model.returnsAnalytics)
                 XCTAssertFalse(model.isReturnsLoading)

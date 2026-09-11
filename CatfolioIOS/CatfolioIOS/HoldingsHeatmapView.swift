@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct HoldingsHeatmapView: View {
+    @Environment(\.locale) private var appLocale
     static let maximumLookThroughTiles = 28
     static let maximumGroupedConstituentTiles = 36
     static let minimumGroupedConstituentFraction = 0.0025
@@ -27,17 +28,16 @@ struct HoldingsHeatmapView: View {
         VStack(alignment: .leading, spacing: 12) {
             if models.isEmpty {
                 ContentUnavailableView(
-                    "暂无持仓",
+                    L10n.text("暂无持仓"),
                     systemImage: "square.grid.3x3",
-                    description: Text("同步持仓后会在这里显示资产分布。")
+                    description: Text(L10n.text("同步持仓后会在这里显示资产分布。"))
                 )
                 .frame(minHeight: 260)
             } else {
                 Group {
                     if groupsBySector {
                         GroupedHoldingsHeatmap(
-                            groups: sectorGroups,
-                            onSelect: select
+                            groups: sectorGroups
                         )
                     } else {
                         HoldingsHeatmapTileCloud(models: models, onSelect: select)
@@ -60,19 +60,11 @@ struct HoldingsHeatmapView: View {
                     }
                 }
 
-                HStack(spacing: 7) {
-                    Circle()
-                        .fill(CatfolioPalette.rose500)
-                        .frame(width: 7, height: 7)
-                    Text("下跌")
-                    Spacer()
-                    Text("上涨")
-                    Circle()
-                        .fill(CatfolioPalette.green500)
-                        .frame(width: 7, height: 7)
+                if usesETFLookThrough, performancePeriod == .holdingPeriod {
+                    Text(L10n.text("≈ 按当前成分权重分摊 ETF 成本与市值，并合并直接持仓；不代表成分股自身的历史收益。"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
             }
         }
     }
@@ -84,7 +76,7 @@ struct HoldingsHeatmapView: View {
         return makeHoldingModels()
     }
 
-    private func makeHoldingModels() -> [HoldingsHeatmapTile.Model] {
+    private func makeHoldingModels(collapsesRemainder: Bool = true) -> [HoldingsHeatmapTile.Model] {
         let valid = holdings
             .filter { $0.marketValue.isFinite && $0.marketValue > 0 }
             .sorted {
@@ -97,14 +89,14 @@ struct HoldingsHeatmapView: View {
         let total = valid.reduce(0) { $0 + $1.marketValue }
         guard total.isFinite, total > 0 else { return [] }
 
-        let visible = Array(
+        let visible = collapsesRemainder ? Array(
             valid.enumerated()
                 .filter { index, holding in
                     index < 4 || holding.marketValue / total >= minimumIndividualFraction
                 }
                 .prefix(maximumHoldingTiles)
                 .map(\.element)
-        )
+        ) : valid
         let visibleTickers = Set(visible.map(\.ticker))
         let remainder = valid.filter { !visibleTickers.contains($0.ticker) }
 
@@ -115,20 +107,21 @@ struct HoldingsHeatmapView: View {
                 marketValue: holding.marketValue,
                 portfolioFraction: holding.marketValue / total,
                 changePercent: changePercent(for: holding),
-                performanceTitle: performancePeriod.title
+                performanceTitle: performancePeriod.title,
+                performancePeriod: performancePeriod
             )
         }
         let remainderValue = remainder.reduce(0) { $0 + $1.marketValue }
         if remainderValue > 0 {
             models.append(
-                HoldingsHeatmapTile.Model(
-                    id: "__remainder__",
-                    content: .remainder(count: remainder.count),
-                    marketValue: remainderValue,
-                    portfolioFraction: remainderValue / total,
-                    changePercent: nil,
-                    performanceTitle: performancePeriod.title
-                )
+                HoldingsHeatmapTile.Model.remainder(id: "__remainder__", items: remainder.map { holding in
+                    HoldingsHeatmapTile.Model(
+                        id: holding.ticker, content: .holding(holding), marketValue: holding.marketValue,
+                        portfolioFraction: holding.marketValue / total,
+                        changePercent: changePercent(for: holding), performanceTitle: performancePeriod.title,
+                        performancePeriod: performancePeriod
+                    )
+                })
             )
         }
         return models
@@ -156,13 +149,9 @@ struct HoldingsHeatmapView: View {
         let remainderValue = remainder.reduce(0) { $0 + $1.totalUSD }
         if remainderValue > 0 {
             models.append(
-                HoldingsHeatmapTile.Model(
+                HoldingsHeatmapTile.Model.remainder(
                     id: "__look_through_remainder__",
-                    content: .remainder(count: remainder.count),
-                    marketValue: remainderValue,
-                    portfolioFraction: remainderValue / total,
-                    changePercent: nil,
-                    performanceTitle: performancePeriod.title
+                    items: remainder.map { lookThroughModel(for: $0, portfolioTotal: total) }
                 )
             )
         }
@@ -173,7 +162,7 @@ struct HoldingsHeatmapView: View {
         if usesETFLookThrough, let lookThroughRows {
             return makeLookThroughSectorGroups(from: lookThroughRows)
         }
-        return makeSectorGroups(from: makeHoldingModels())
+        return makeSectorGroups(from: makeHoldingModels(collapsesRemainder: false))
     }
 
     private func makeLookThroughSectorGroups(
@@ -210,13 +199,9 @@ struct HoldingsHeatmapView: View {
             let tailValue = tailRows.reduce(0) { $0 + $1.totalUSD }
             if tailValue > 0 {
                 models.append(
-                    HoldingsHeatmapTile.Model(
+                    HoldingsHeatmapTile.Model.remainder(
                         id: "__sector_micro_tail__\(title)",
-                        content: .remainder(count: tailRows.count),
-                        marketValue: tailValue,
-                        portfolioFraction: tailValue / portfolioTotal,
-                        changePercent: nil,
-                        performanceTitle: performancePeriod.title
+                        items: tailRows.map { lookThroughModel(for: $0, portfolioTotal: portfolioTotal) }
                     )
                 )
             }
@@ -241,7 +226,9 @@ struct HoldingsHeatmapView: View {
             marketValue: row.totalUSD,
             portfolioFraction: row.totalUSD / portfolioTotal,
             changePercent: changePercent(for: row, directHolding: directHolding),
-            performanceTitle: performancePeriod.title
+            performanceTitle: performancePeriod.title,
+            performancePeriod: performancePeriod,
+            isEstimated: performancePeriod == .holdingPeriod && row.fromETFUSD > 0
         )
     }
 
@@ -267,7 +254,7 @@ struct HoldingsHeatmapView: View {
         case let .exposure(row, directHolding):
             return sectorTitle(for: row, directHolding: directHolding)
         case .remainder:
-            return "其他"
+            return L10n.text("其他")
         }
     }
 
@@ -275,9 +262,10 @@ struct HoldingsHeatmapView: View {
         for row: ETFLookThroughRow,
         directHolding: Holding?
     ) -> String {
-        if row.sector == "ETF / Other" { return "ETF 其他" }
+        if row.sector == "ETF / Other" { return L10n.text("ETF 其他") }
         if let title = normalizedSectorTitle(row.sector) { return title }
-        return directHolding.map(sectorTitle(for:)) ?? "未分类"
+        if let directHolding { return sectorTitle(for: directHolding) }
+        return SectorAttribution.primarySector(ticker: row.ticker)?.displayName ?? L10n.text("未分类")
     }
 
     private func sectorTitle(for holding: Holding) -> String {
@@ -288,13 +276,13 @@ struct HoldingsHeatmapView: View {
         if attribution.weights.count == 1, let sector = attribution.weights.keys.first {
             return sector.displayName
         }
-        return "未分类"
+        return L10n.text("未分类")
     }
 
     private func normalizedSectorTitle(_ rawValue: String?) -> String? {
         guard let rawValue = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines),
               !rawValue.isEmpty else { return nil }
-        return PortfolioSector(sourceName: rawValue)?.displayName ?? rawValue
+        return PortfolioSector(sourceName: rawValue)?.displayName
     }
 
     private func changePercent(for holding: Holding) -> Double? {
@@ -317,7 +305,10 @@ struct HoldingsHeatmapView: View {
                 ?? dailyChanges[row.ticker.uppercased()]
                 ?? lookThroughDailyChanges[row.ticker.uppercased()]
         case .holdingPeriod:
-            guard row.fromETFUSD <= 0.001, let directHolding else { return nil }
+            if row.fromETFUSD > 0 {
+                return row.estimatedHoldingPeriodPercent.flatMap { $0.isFinite ? $0 : nil }
+            }
+            guard let directHolding else { return nil }
             return directHolding.unrealizedPercent.isFinite ? directHolding.unrealizedPercent : nil
         }
     }
@@ -352,53 +343,60 @@ private struct HoldingsHeatmapSectorGroup: Identifiable {
 }
 
 private struct HoldingsHeatmapTileCloud: View {
+    @Environment(\.locale) private var appLocale
     let models: [HoldingsHeatmapTile.Model]
     var tileInset: CGFloat = 2
+    var isInteractive = true
     let onSelect: (HoldingsHeatmapTile.Model) -> Void
+    @State private var expandedRemainder: HoldingsHeatmapTile.Model?
 
     var body: some View {
         GeometryReader { geometry in
+            let displayModels = HoldingsHeatmapAggregation.modelsForDisplay(models, in: geometry.size)
             let placements = HoldingsTreemapLayout.layout(
-                items: models.map {
-                    HoldingsTreemapLayout.Item(ticker: $0.id, weight: $0.marketValue)
-                },
-                in: CGRect(origin: .zero, size: geometry.size)
+                items: displayModels.map { HoldingsTreemapLayout.Item(ticker: $0.id, weight: $0.marketValue) },
+                in: CGRect(origin: .zero, size: geometry.size),
+                lastItemIndex: displayModels.firstIndex(where: \.isRemainder)
             )
 
             ZStack(alignment: .topLeading) {
                 ForEach(placements, id: \.sourceIndex) { placement in
-                    let shortestSide = min(placement.frame.width, placement.frame.height)
-                    let effectiveInset = min(tileInset, max(0, shortestSide * 0.025))
+                    let effectiveInset = HoldingsHeatmapTile.inset(in: placement.frame.size, maximum: tileInset)
                     let frame = placement.frame.insetBy(dx: effectiveInset, dy: effectiveInset)
-                    let model = models[placement.sourceIndex]
+                    let model = displayModels[placement.sourceIndex]
 
                     HoldingsHeatmapTile(
                         model: model,
                         fraction: model.portfolioFraction,
                         size: frame.size,
-                        action: model.holding != nil
-                            ? { onSelect(model) }
-                            : nil
+                        action: isInteractive && (model.holding != nil || !model.detailItems.isEmpty) ? {
+                            if model.isRemainder { expandedRemainder = model }
+                            else { onSelect(model) }
+                        } : nil
                     )
                     .frame(width: max(0, frame.width), height: max(0, frame.height))
                     .position(x: frame.midX, y: frame.midY)
                 }
+
             }
+        }
+        .sheet(item: $expandedRemainder) { remainder in
+            HoldingsHeatmapRemainderDetail(model: remainder)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
     }
 }
 
 private struct GroupedHoldingsHeatmap: View {
+    @Environment(\.locale) private var appLocale
     let groups: [HoldingsHeatmapSectorGroup]
-    let onSelect: (HoldingsHeatmapTile.Model) -> Void
     @State private var expandedGroup: HoldingsHeatmapSectorGroup?
 
     var body: some View {
         GeometryReader { geometry in
             let placements = HoldingsTreemapLayout.layout(
-                items: groups.map {
-                    HoldingsTreemapLayout.Item(ticker: $0.id, weight: $0.marketValue)
-                },
+                items: groups.map { HoldingsTreemapLayout.Item(ticker: $0.id, weight: $0.marketValue) },
                 in: CGRect(origin: .zero, size: geometry.size)
             )
 
@@ -409,28 +407,18 @@ private struct GroupedHoldingsHeatmap: View {
 
                     HoldingsHeatmapSectorView(
                         group: group,
-                        onSelect: onSelect,
                         onExpand: { expandedGroup = $0 }
                     )
-                        .frame(width: max(0, frame.width), height: max(0, frame.height))
-                        .position(x: frame.midX, y: frame.midY)
+                    .frame(width: max(0, frame.width), height: max(0, frame.height))
+                    .position(x: frame.midX, y: frame.midY)
                 }
             }
         }
         .sheet(item: $expandedGroup) { group in
-            HoldingsHeatmapSectorDetail(
-                group: group,
-                onSelect: { model in
-                    expandedGroup = nil
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(250))
-                        onSelect(model)
-                    }
-                }
-            )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-            .presentationBackground(Color(uiColor: .systemBackground))
+            HoldingsHeatmapSectorDetail(group: group)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(Color(uiColor: .systemBackground))
         }
         #if DEBUG
         .task {
@@ -443,19 +431,14 @@ private struct GroupedHoldingsHeatmap: View {
 }
 
 private struct HoldingsHeatmapSectorView: View {
+    @Environment(\.locale) private var appLocale
     let group: HoldingsHeatmapSectorGroup
-    let onSelect: (HoldingsHeatmapTile.Model) -> Void
     let onExpand: (HoldingsHeatmapSectorGroup) -> Void
 
     var body: some View {
         GeometryReader { geometry in
             let showsHeader = geometry.size.width >= 54 && geometry.size.height >= 42
-            let showsExpandIcon = geometry.size.width >= 110
             let headerHeight: CGFloat = geometry.size.height < 64 ? 20 : 24
-            let tileHeight = max(0, geometry.size.height - (showsHeader ? headerHeight : 0))
-            let displayModels = modelsForDisplay(
-                in: CGSize(width: geometry.size.width, height: tileHeight)
-            )
 
             Button {
                 onExpand(group)
@@ -471,71 +454,116 @@ private struct HoldingsHeatmapSectorView: View {
                             Text(group.title)
                                 .lineLimit(1)
                             Spacer(minLength: 0)
-                            Text("\(group.constituentCount)")
-                                .appNumber(.caption)
-                            if showsExpandIcon {
-                                Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                    .imageScale(.small)
-                            }
                         }
-                        .contentShape(Rectangle())
+                        .appText(.micro, weight: .semibold)
+                        .foregroundStyle(.secondary)
+                        .minimumScaleFactor(0.7)
+                        .padding(.horizontal, 7)
+                        .frame(height: headerHeight)
                     }
-                    .buttonStyle(.plain)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .minimumScaleFactor(0.7)
-                    .padding(.horizontal, 7)
-                    .frame(height: headerHeight)
-                    .accessibilityLabel("放大查看\(group.title)行业")
+
+                    // The sector is one tap target, including its company and
+                    // remainder tiles. Stock selection belongs to its sheet.
+                    HoldingsHeatmapTileCloud(
+                        models: group.models,
+                        tileInset: 2,
+                        isInteractive: false,
+                        onSelect: { _ in }
+                    )
+                    .allowsHitTesting(false)
                 }
-
-                HoldingsHeatmapTileCloud(
-                    models: displayModels,
-                    tileInset: 1.5,
-                    onSelect: onSelect
-                )
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(L10n.text("查看\(group.title)行业"))
+            .accessibilityValue(Text("\(group.constituentCount)"))
         }
-    }
-
-    private func modelsForDisplay(in size: CGSize) -> [HoldingsHeatmapTile.Model] {
-        let canvasArea = max(0, size.width * size.height)
-        guard canvasArea > 0, group.marketValue > 0 else { return group.models }
-
-        let firstTinyIndex = group.models.firstIndex { model in
-            CGFloat(model.marketValue / group.marketValue) * canvasArea < 324
-        } ?? group.models.count
-        let visibleCount = max(min(6, group.models.count), firstTinyIndex)
-        let visible = group.models.prefix(visibleCount)
-        let tail = group.models.dropFirst(visibleCount)
-        guard tail.count > 1 else { return group.models }
-
-        let tailValue = tail.reduce(0) { $0 + $1.marketValue }
-        let tailFraction = tail.reduce(0) { $0 + $1.portfolioFraction }
-        let tailCount = tail.reduce(0) { count, model in
-            switch model.content {
-            case .holding, .exposure:
-                return count + 1
-            case let .remainder(remainderCount):
-                return count + remainderCount
-            }
-        }
-        let remainder = HoldingsHeatmapTile.Model(
-            id: "__rendered_sector_tail__\(group.id)",
-            content: .remainder(count: tailCount),
-            marketValue: tailValue,
-            portfolioFraction: tailFraction,
-            changePercent: nil,
-            performanceTitle: group.models.first?.performanceTitle ?? ""
-        )
-        return Array(visible) + [remainder]
     }
 }
 
 private struct HoldingsHeatmapSectorDetail: View {
     let group: HoldingsHeatmapSectorGroup
-    let onSelect: (HoldingsHeatmapTile.Model) -> Void
+
+    var body: some View {
+        HoldingsHeatmapRemainderDetail(
+            model: .remainder(id: "__sector_detail__", items: group.models),
+            title: group.title
+        )
+    }
+}
+
+/// Consolidate the unreadable tail using actual layout dimensions. The merged
+/// rectangle keeps its exact area and every constituent remains in its sheet.
+enum HoldingsHeatmapAggregation {
+    static func modelsForDisplay(
+        _ models: [HoldingsHeatmapTile.Model], in size: CGSize
+    ) -> [HoldingsHeatmapTile.Model] {
+        guard size.width > 0, size.height > 0, models.count > 1 else { return models }
+        let sorted = models.sorted {
+            if $0.isRemainder != $1.isRemainder { return !$0.isRemainder }
+            return $0.marketValue == $1.marketValue ? $0.id < $1.id : $0.marketValue > $1.marketValue
+        }
+        func placements(_ items: [HoldingsHeatmapTile.Model]) -> [HoldingsTreemapLayout.Tile] {
+            HoldingsTreemapLayout.layout(
+                items: items.map { HoldingsTreemapLayout.Item(ticker: $0.id, weight: $0.marketValue) },
+                in: CGRect(origin: .zero, size: size),
+                lastItemIndex: items.firstIndex(where: \.isRemainder)
+            )
+        }
+        let tinyIndices = placements(sorted).filter {
+            let inset = HoldingsHeatmapTile.inset(in: $0.frame.size)
+            return !HoldingsHeatmapTile.canShowIdentifier(in: $0.frame.insetBy(dx: inset, dy: inset).size)
+        }.map(\.sourceIndex)
+        guard var keepCount = tinyIndices.min() else { return sorted }
+        if let existingTail = sorted.firstIndex(where: \.isRemainder) {
+            keepCount = min(keepCount, existingTail)
+        }
+        while true {
+            let tail = Array(sorted.dropFirst(keepCount))
+            let remainder = HoldingsHeatmapTile.Model.remainder(id: "__compact_tail__", items: tail)
+            let result = Array(sorted.prefix(keepCount)) + [remainder]
+            // Absorb the preceding tile when necessary to give the aggregate
+            // a usable touch target, without inflating its portfolio weight.
+            let updatedPlacements = placements(result)
+            // Anchoring a larger aggregate can make the preceding row thin.
+            // Recheck the remaining companies after each merge as well.
+            if let firstUnreadable = updatedPlacements.filter({ placement in
+                guard placement.sourceIndex < keepCount else { return false }
+                let inset = HoldingsHeatmapTile.inset(in: placement.frame.size)
+                return !HoldingsHeatmapTile.canShowIdentifier(in: placement.frame.insetBy(dx: inset, dy: inset).size)
+            }).map(\.sourceIndex).min() {
+                keepCount = firstUnreadable
+                continue
+            }
+            let frame = updatedPlacements.first { $0.sourceIndex == keepCount }?.frame ?? .zero
+            // Never swallow the last readable major holding just to enlarge
+            // the tail. A genuinely narrow sector starts with keepCount == 0.
+            if keepCount <= 1 || (frame.width >= 30 && frame.height >= 28) { return result }
+            keepCount -= 1
+        }
+    }
+}
+
+private struct HoldingsHeatmapRemainderDetail: View {
+    let model: HoldingsHeatmapTile.Model
+    var title: String? = nil
+    @State private var loadedChanges: [String: Double] = [:]
+    @State private var completedQuoteIDs: Set<String> = []
+    @State private var loadingQuotes = false
+    @State private var selectedHolding: Holding?
+    @Namespace private var holdingZoom
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
+
+    private var items: [HoldingsHeatmapTile.Model] {
+        model.leafItems.sorted { $0.marketValue == $1.marketValue ? $0.id < $1.id : $0.marketValue > $1.marketValue }
+    }
+
+    private var summary: HoldingsHeatmapTile.Model.PerformanceSummary {
+        model.performanceSummary(dailyChanges: loadedChanges)
+    }
 
     var body: some View {
         NavigationStack {
@@ -551,6 +579,7 @@ private struct HoldingsHeatmapSectorDetail: View {
                         summary.knownCount > 0
                             ? (summary.isEstimated ? "≈" : "") + (summary.amount > 0 ? "+" : "") + DisplayFormat.money(summary.amount)
                             : L10n.text("暂无数据"))
+                        .currencyFont(.body)
                     LabeledContent(L10n.text("收益率"), value:
                         summary.percent.map { (summary.isEstimated ? "≈" : "") + DisplayFormat.percent($0) }
                             ?? L10n.text("暂无数据"))
@@ -569,6 +598,7 @@ private struct HoldingsHeatmapSectorDetail: View {
                         if let holding = item.detailHolding {
                             Button { selectedHolding = holding } label: { detailRow(item) }
                                 .buttonStyle(.plain)
+                                .catfolioZoomSource(holding.ticker, in: holdingZoom)
                         } else {
                             detailRow(item)
                         }
@@ -578,15 +608,90 @@ private struct HoldingsHeatmapSectorDetail: View {
                 }
 
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
-            .navigationTitle(group.title)
+            .softTopScrollEdge()
+            .navigationTitle(title ?? L10n.text("其他"))
+            .task { await loadMissingDailyChanges() }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("完成") { dismiss() }
+                    Button(L10n.text("完成")) { dismiss() }
                 }
             }
+        }
+        // Present from the list sheet itself so UIKit keeps the first sheet
+        // underneath, including its scroll position, and owns the stacked
+        // presentation and interactive dismissal animations.
+        .sheet(item: $selectedHolding) { holding in
+            HoldingDetailView(holding: holding)
+                .securityDetailSheet()
+                .navigationTransition(.zoom(sourceID: holding.ticker, in: holdingZoom))
+        }
+        .securityDetailOpenFeedback(trigger: selectedHolding?.ticker, enabled: hapticsEnabled)
+    }
+
+    private func detailRow(_ item: HoldingsHeatmapTile.Model) -> some View {
+        let identity: (ticker: String, name: String, logo: String?) = {
+            switch item.content {
+            case let .holding(holding): (holding.ticker, holding.shortName, holding.logoSymbol)
+            case let .exposure(row, _): (row.ticker, CompanyNameCatalog.displayName(ticker: row.ticker, fallback: row.name), row.logoSymbol)
+            case .remainder: (item.id, "", nil)
+            }
+        }()
+        return HStack(spacing: 10) {
+            AssetLogo(ticker: identity.ticker, logoSymbol: identity.logo)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(identity.name).appText(.body, weight: .semibold)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 6) {
+                    Text(identity.ticker).appText(.caption)
+                    Text("·").appText(.caption)
+                    Text(DisplayFormat.percent(item.portfolioFraction * 100, signed: false))
+                        .appNumber(.caption)
+                }
+                .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 4) {
+                if let change = item.changePercent ?? loadedChanges[item.id.uppercased()] {
+                    Text((item.isEstimated ? "≈" : "") + DisplayFormat.percent(change))
+                        .appNumber(.body)
+                        .foregroundStyle(change == 0 ? Color.secondary : (change > 0 ? CatfolioTheme.gain(for: colorScheme) : CatfolioTheme.loss(for: colorScheme)))
+                } else if loadingQuotes && !completedQuoteIDs.contains(item.id) {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Text(L10n.text("暂无数据")).appText(.caption).foregroundStyle(.secondary)
+                }
+                Text(DisplayFormat.money(item.marketValue)).appNumber(.caption).foregroundStyle(.secondary)
+            }
+            .fixedSize(horizontal: true, vertical: false)
+        }
+        .padding(.vertical, 4)
+    }
+
+    @MainActor
+    private func loadMissingDailyChanges() async {
+        // Holding-period returns are already supplied by the portfolio pipeline.
+        // Never fill a missing holding-period return with a daily quote.
+        guard model.performancePeriod == .today else { return }
+        let missing = items.filter { $0.changePercent == nil && !completedQuoteIDs.contains($0.id) }
+        guard !missing.isEmpty else { return }
+        loadingQuotes = true
+        defer { loadingQuotes = false }
+        let client = LocalMarketDataClient()
+        // Reuse cached histories and the client's bounded concurrency. Only an
+        // opened detail sheet requests quotes beyond the main heatmap's top tiles.
+        for start in stride(from: 0, to: missing.count, by: 24) {
+            guard !Task.isCancelled else { return }
+            let batch = Array(missing[start..<min(start + 24, missing.count)])
+            let holdings = batch.compactMap(\.holding)
+            let directChanges = await client.dailyChanges(for: holdings)
+            guard !Task.isCancelled else { return }
+            loadedChanges.merge(directChanges) { _, fresh in fresh }
+            let tickers = batch.filter { $0.holding == nil }.map(\.id)
+            let constituentChanges = await client.dailyChanges(tickers: tickers)
+            guard !Task.isCancelled else { return }
+            loadedChanges.merge(constituentChanges) { _, fresh in fresh }
+            completedQuoteIDs.formUnion(batch.map(\.id))
         }
     }
 }

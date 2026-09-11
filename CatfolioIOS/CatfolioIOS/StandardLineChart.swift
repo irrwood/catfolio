@@ -62,7 +62,7 @@ struct StandardLineChartSeries: Identifiable {
     }
 }
 
-private enum StandardLineChartLoadingTemplate {
+enum StandardLineChartLoadingTemplate {
     static let xFractions: [CGFloat] = [-0.08, 0.08, 0.20, 0.31, 0.58, 1]
 
     static func yFractions(seriesIndex: Int, seriesCount: Int) -> [CGFloat] {
@@ -81,14 +81,61 @@ private enum StandardLineChartLoadingTemplate {
     }
 
     static func color(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? .white.opacity(0.09) : Color(white: 0.957)
+        CatfolioTheme.skeletonFill
     }
 
-    static let adaptiveColor = Color(uiColor: UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor.white.withAlphaComponent(0.09)
-            : UIColor(white: 0.957, alpha: 1)
-    })
+    static let adaptiveColor = CatfolioTheme.skeletonFill
+
+    static func value(at fraction: Double, domain: ClosedRange<Double>, seriesIndex: Int = 0, seriesCount: Int = 1) -> Double {
+        let values = yFractions(seriesIndex: seriesIndex, seriesCount: seriesCount)
+        let x = min(1, max(Double(xFractions[0]), fraction))
+        let index = (1..<xFractions.count).first { Double(xFractions[$0]) >= x } ?? xFractions.count - 1
+        let t = (x - Double(xFractions[index - 1])) / Double(xFractions[index] - xFractions[index - 1])
+        let y = Double(values[index - 1]) + Double(values[index] - values[index - 1]) * t
+        return domain.upperBound - (domain.upperBound - domain.lowerBound) * y
+    }
+}
+
+/// Swift Charts consumers keep their native marks, missing-data segments,
+/// bands, axes and selection. Only their displayed Y values use the same
+/// entrance template as Canvas; their underlying observations stay untouched.
+struct StandardLineChartEntrance<Content: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var progress: CGFloat = 0
+    @State private var appeared = false
+    let content: (StandardLineChartEntrancePhase) -> Content
+
+    init(@ViewBuilder content: @escaping (StandardLineChartEntrancePhase) -> Content) {
+        self.content = content
+    }
+
+    var body: some View {
+        StandardLineChartTransitionDriver(progress: reduceMotion ? 1 : progress) { value in
+            content(StandardLineChartEntrancePhase(progress: min(1, max(0, value))))
+        }
+        .onAppear {
+            guard !appeared else { return }
+            appeared = true
+            if reduceMotion { progress = 1 }
+            else { withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.45)) { progress = 1 } }
+        }
+    }
+}
+
+struct StandardLineChartEntrancePhase {
+    let progress: CGFloat
+
+    func value(_ actual: Double, fraction: Double, domain: ClosedRange<Double>, seriesIndex: Int = 0, seriesCount: Int = 1) -> Double {
+        let from = StandardLineChartLoadingTemplate.value(at: fraction, domain: domain, seriesIndex: seriesIndex, seriesCount: seriesCount)
+        return from + (actual - from) * Double(progress)
+    }
+
+    static func domain(_ values: [Double]) -> ClosedRange<Double> {
+        let finite = values.filter(\.isFinite)
+        let low = finite.min() ?? 0, high = finite.max() ?? 1
+        let padding = max(high - low, max(abs(high) * 0.01, 0.01)) * 0.05
+        return (low - padding)...(high + padding)
+    }
 }
 
 struct StandardLineChartMarker: Identifiable {
@@ -104,6 +151,8 @@ struct StandardLineChartMarker: Identifiable {
     let outlineColor: Color?
     let outlineWidth: CGFloat
     let style: Style
+    /// The rendered series this annotation belongs to (not a trade price).
+    let seriesID: String?
 
     init(
         id: String,
@@ -112,7 +161,8 @@ struct StandardLineChartMarker: Identifiable {
         radius: CGFloat = 4.5,
         outlineColor: Color? = Color(uiColor: .systemBackground),
         outlineWidth: CGFloat = 1.5,
-        style: Style = .solid
+        style: Style = .solid,
+        seriesID: String? = nil
     ) {
         self.id = id
         self.point = point
@@ -121,7 +171,69 @@ struct StandardLineChartMarker: Identifiable {
         self.outlineColor = outlineColor
         self.outlineWidth = outlineWidth
         self.style = style
+        self.seriesID = seriesID
     }
+}
+
+/// One value per date, never a splice of two differently rebased histories.
+/// Build correspondence once per update, not once per animation frame.
+struct StandardLineChartViewportPath {
+    let dates: [Date]
+    let oldValues: [Double]
+    let newValues: [Double]
+    let oldPoints: [StandardLineChartPoint]
+    let newPoints: [StandardLineChartPoint]
+
+    init(from old: [StandardLineChartPoint], to new: [StandardLineChartPoint]) {
+        oldPoints = old
+        newPoints = new
+        dates = Array(Set(old.map(\.date) + new.map(\.date))).sorted()
+        oldValues = dates.map { Self.value(at: $0, in: old) }
+        newValues = dates.map { Self.value(at: $0, in: new) }
+    }
+
+    func samples(progress raw: CGFloat) -> [StandardLineChartPoint] {
+        guard let oldFirst = oldPoints.first, let oldLast = oldPoints.last,
+              let newFirst = newPoints.first, let newLast = newPoints.last else { return [] }
+        let t = Double(min(1, max(0, raw)))
+        if t == 0 { return oldPoints }
+        if t == 1 { return newPoints }
+        let first = oldFirst.date.addingTimeInterval(newFirst.date.timeIntervalSince(oldFirst.date) * t)
+        let last = oldLast.date.addingTimeInterval(newLast.date.timeIntervalSince(oldLast.date) * t)
+        func boundary(_ date: Date) -> StandardLineChartPoint {
+            let old = Self.value(at: date, in: oldPoints)
+            let new = Self.value(at: date, in: newPoints)
+            return StandardLineChartPoint(date: date, value: old + (new - old) * t)
+        }
+        var result = [boundary(first)]
+        for index in dates.indices where dates[index] > first && dates[index] < last {
+            result.append(StandardLineChartPoint(date: dates[index],
+                value: oldValues[index] + (newValues[index] - oldValues[index]) * t))
+        }
+        if last > first { result.append(boundary(last)) }
+        return result
+    }
+
+    static func value(at date: Date, in points: [StandardLineChartPoint]) -> Double {
+        guard let first = points.first, let last = points.last else { return 0 }
+        if date <= first.date { return first.value }
+        if date >= last.date { return last.value }
+        var low = 0
+        var high = points.count - 1
+        while low + 1 < high {
+            let middle = (low + high) / 2
+            if points[middle].date <= date { low = middle } else { high = middle }
+        }
+        let before = points[low], after = points[high]
+        let fraction = date.timeIntervalSince(before.date) / max(after.date.timeIntervalSince(before.date), 0.000_001)
+        return before.value + (after.value - before.value) * fraction
+    }
+}
+
+/// Non-observable presentation state: recording a drawn frame must not publish
+/// a SwiftUI update or invalidate the chart's parent while a finger is moving.
+private final class StandardLineChartPresentationProgress {
+    var value: CGFloat = 1
 }
 
 /// A value that remains visually anchored to the chart while every consumer
@@ -258,6 +370,9 @@ struct StandardLineChart: View {
     @State private var outgoingDomain: ClosedRange<Double>
     @State private var transitionProgress: CGFloat = 1
     @State private var transitionGeneration = 0
+    @State private var viewportPaths: [String: StandardLineChartViewportPath] = [:]
+    @State private var morphPairs: [String: [(CGPoint, CGPoint)]] = [:]
+    @State private var presentationProgress = StandardLineChartPresentationProgress()
     @State private var needsInitialTransition: Bool
     @State private var initialRevealProgress: CGFloat
     @State private var needsInitialReveal: Bool
@@ -374,6 +489,8 @@ struct StandardLineChart: View {
                     ZStack(alignment: .topLeading) {
                         StandardLineChartTransitionDriver(progress: transitionProgress) { progress in
                             Canvas { context, _ in
+                                let progress = min(1, max(0, progress))
+                                presentationProgress.value = progress
                                 var lineContext = context
                                 lineContext.translateBy(x: lineLayerBleed, y: 0)
                                 lineContext.clip(to: Path(CGRect(
@@ -421,7 +538,9 @@ struct StandardLineChart: View {
                             }
                         }
 
-                        referenceLineLayer(plot: plot)
+                        StandardLineChartTransitionDriver(progress: transitionProgress) { progress in
+                            referenceLineLayer(plot: plot, progress: min(1, max(0, progress)))
+                        }
                     }
                 }
                 // Plain endpoints punch their centre through the complete
@@ -441,7 +560,9 @@ struct StandardLineChart: View {
                 .allowsHitTesting(false)
 
                 yAxisLabels(plot: plot)
-                referenceAxisLabels(plot: plot)
+                StandardLineChartTransitionDriver(progress: transitionProgress) { progress in
+                    referenceAxisLabels(plot: plot, progress: min(1, max(0, progress)))
+                }
                 xAxisLabels(plot: plot)
 
                 if let selectionIndicatorLabel,
@@ -489,6 +610,12 @@ struct StandardLineChart: View {
         .onAppear {
             startInitialRevealIfNeeded()
             startInitialTransitionIfNeeded()
+        }
+        .onChange(of: reduceMotion) { _, enabled in
+            guard enabled else { return }
+            var transaction = Transaction(animation: nil)
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { syncLatestData() }
         }
     }
 
@@ -540,27 +667,37 @@ struct StandardLineChart: View {
             syncLatestData()
             return
         }
-        transitionGeneration &+= 1
-        let generation = transitionGeneration
-        outgoingSeries = presentedSeries
-        outgoingMarkers = presentedMarkers
-        outgoingDates = presentedDates
-        outgoingDomain = presentedDomain
-        presentedSeries = series
-        presentedMarkers = markers
-        presentedDates = interactionDates
-        presentedDomain = domain
-
+        // Interrupt from the last actually drawn shape, not the previous
+        // target (which may still be 400 ms away during rapid range taps).
+        let current = currentPresentation(progress: presentationProgress.value)
         var resetTransaction = Transaction(animation: nil)
         resetTransaction.disablesAnimations = true
         withTransaction(resetTransaction) {
+            transitionGeneration &+= 1
+            outgoingSeries = current.series
+            outgoingMarkers = current.markers
+            outgoingDates = current.dates
+            outgoingDomain = current.domain
+            presentedSeries = series
+            presentedMarkers = markers
+            presentedDates = interactionDates
+            presentedDomain = domain
+            viewportPaths = Dictionary(uniqueKeysWithValues: series.compactMap { incoming in
+                guard let old = outgoingSeries.first(where: { $0.id == incoming.id }) else { return nil }
+                return (incoming.id, StandardLineChartViewportPath(from: old.points, to: incoming.points))
+            })
+            morphPairs = Dictionary(uniqueKeysWithValues: series.compactMap { incoming in
+                guard let old = outgoingSeries.first(where: { $0.id == incoming.id }) else { return nil }
+                return (incoming.id, pairedMorphSamples(from: old, to: incoming))
+            })
+            presentationProgress.value = 0
             transitionProgress = 0
         }
-
+        let generation = transitionGeneration
         Task { @MainActor in
             await Task.yield()
             guard generation == transitionGeneration else { return }
-            withAnimation(.smooth(duration: 0.42)) {
+            withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.45)) {
                 transitionProgress = 1
             }
         }
@@ -624,7 +761,63 @@ struct StandardLineChart: View {
         outgoingSeries = []
         outgoingMarkers = []
         outgoingDates = []
+        viewportPaths = [:]
+        morphPairs = [:]
+        presentationProgress.value = 1
         transitionProgress = 1
+    }
+
+    private func copySeries(_ source: StandardLineChartSeries,
+                            points: [StandardLineChartPoint]) -> StandardLineChartSeries {
+        StandardLineChartSeries(id: source.id, points: points, color: source.color,
+            lineWidth: source.lineWidth, dash: source.dash, areaFill: source.areaFill,
+            areaBaseline: source.areaBaseline, areaStripeColor: source.areaStripeColor,
+            areaStripeSpacing: source.areaStripeSpacing, selectionRadius: source.selectionRadius,
+            latestPointRadius: source.latestPointRadius, latestPointColor: source.latestPointColor,
+            latestPointUsesGlass: source.latestPointUsesGlass)
+    }
+
+    private func transitionDates(_ progress: CGFloat) -> [Date] {
+        guard let oldFirst = outgoingDates.first, let oldLast = outgoingDates.last,
+              let newFirst = presentedDates.first, let newLast = presentedDates.last else { return presentedDates }
+        return [interpolatedDate(from: oldFirst, to: newFirst, progress: progress),
+                interpolatedDate(from: oldLast, to: newLast, progress: progress)]
+    }
+
+    private func currentPresentation(progress raw: CGFloat) -> (
+        series: [StandardLineChartSeries], markers: [StandardLineChartMarker],
+        dates: [Date], domain: ClosedRange<Double>
+    ) {
+        let progress = min(1, max(0, raw))
+        guard progress < 1, !outgoingSeries.isEmpty else {
+            return (presentedSeries, presentedMarkers, presentedDates, presentedDomain)
+        }
+        let dates = transitionDates(progress)
+        let domain = interpolatedDomain(from: outgoingDomain, to: presentedDomain, progress: progress)
+        guard let first = dates.first, let last = dates.last else {
+            return (presentedSeries, presentedMarkers, presentedDates, presentedDomain)
+        }
+        func dataPoint(_ position: CGPoint, id: String? = nil) -> StandardLineChartPoint {
+            StandardLineChartPoint(id: id,
+                date: first.addingTimeInterval(last.timeIntervalSince(first) * Double(position.x)),
+                value: domain.lowerBound + (domain.upperBound - domain.lowerBound) * Double(position.y))
+        }
+        let visible = presentedSeries.map { incoming in
+            guard let old = outgoingSeries.first(where: { $0.id == incoming.id }) else { return incoming }
+            if dataTransition == .viewportZoom && !old.isLoadingPlaceholder,
+               let path = viewportPaths[incoming.id] {
+                return copySeries(incoming, points: path.samples(progress: progress))
+            }
+            return copySeries(incoming, points: morphedSamples(from: old, to: incoming, progress: progress).map { dataPoint($0) })
+        }
+        let visibleMarkers = animatedMarkers(progress: progress).compactMap { item -> StandardLineChartMarker? in
+            guard item.scale > 0.01 else { return nil }
+            let marker = item.marker
+            return StandardLineChartMarker(id: marker.id, point: dataPoint(item.position, id: marker.point.id),
+                color: marker.color, radius: marker.radius, outlineColor: marker.outlineColor,
+                outlineWidth: marker.outlineWidth, style: marker.style, seriesID: marker.seriesID)
+        }
+        return (visible, visibleMarkers, dates, domain)
     }
 
     /// Builds the same quiet loading curve for every line-chart consumer.
@@ -774,9 +967,8 @@ struct StandardLineChart: View {
 
         for incoming in presentedSeries where !incoming.points.isEmpty {
             if let outgoing = outgoingByID[incoming.id],
-               !outgoing.points.isEmpty,
-               !outgoing.isLoadingPlaceholder {
-                if dataTransition == .viewportZoom {
+               !outgoing.points.isEmpty {
+                if dataTransition == .viewportZoom && !outgoing.isLoadingPlaceholder {
                     drawViewportZoomedSeries(
                         from: outgoing,
                         to: incoming,
@@ -793,24 +985,6 @@ struct StandardLineChart: View {
                         plot: plot
                     )
                 }
-            } else if let outgoing = outgoingByID[incoming.id], outgoing.isLoadingPlaceholder {
-                // Fade in rather than morph. A placeholder is a flat line at
-                // an arbitrary level with an arbitrary value domain, so
-                // interpolating geometry from it to real data sweeps the
-                // whole series across the plot — the line appearing to fall
-                // in from above the chart, and garbled frames when the range
-                // changes while a placeholder is still on screen. There is
-                // no correspondence between the two to animate.
-                drawBase(
-                    series: [incoming],
-                    markers: [],
-                    dates: presentedDates,
-                    valueDomain: presentedDomain,
-                    xOffset: 0,
-                    opacity: Double(progress),
-                    context: &context,
-                    plot: plot
-                )
             } else {
                 drawBase(
                     series: [incoming],
@@ -862,16 +1036,8 @@ struct StandardLineChart: View {
             to: presentedDomain,
             progress: progress
         )
-        var samplesByDate: [Date: StandardLineChartPoint] = [:]
-        for point in outgoing.points {
-            samplesByDate[point.date] = point
-        }
-        // Prefer the incoming point when both sampled ranges contain the same
-        // date so the final frame is pixel-identical to the selected range.
-        for point in incoming.points {
-            samplesByDate[point.date] = point
-        }
-        let samples = samplesByDate.values.sorted { $0.date < $1.date }
+        let samples = viewportPaths[incoming.id]?.samples(progress: progress)
+            ?? StandardLineChartViewportPath(from: outgoing.points, to: incoming.points).samples(progress: progress)
 
         drawPath(
             samples,
@@ -914,32 +1080,7 @@ struct StandardLineChart: View {
         context: inout GraphicsContext,
         plot: CGRect
     ) {
-        let pathProgresses = mergedMorphProgresses(
-            outgoing.points,
-            incoming.points
-        )
-        let pairedSamples = pathProgresses.compactMap { pathProgress -> (CGPoint, CGPoint)? in
-            guard let old = normalizedSample(
-                for: outgoing,
-                dates: outgoingDates,
-                domain: outgoingDomain,
-                pathProgress: pathProgress
-            ), let new = normalizedSample(
-                for: incoming,
-                dates: presentedDates,
-                domain: presentedDomain,
-                pathProgress: pathProgress
-            ) else { return nil }
-            return (old, new)
-        }
-        guard !pairedSamples.isEmpty else { return }
-
-        let samples = pairedSamples.map { old, new in
-            CGPoint(
-                x: old.x + (new.x - old.x) * progress,
-                y: old.y + (new.y - old.y) * progress
-            )
-        }
+        let samples = morphedSamples(from: outgoing, to: incoming, progress: progress)
         let points = samples.map { point(in: plot, normalized: $0) }
         guard let first = points.first else { return }
 
@@ -962,33 +1103,41 @@ struct StandardLineChart: View {
             var fillContext = context
             fillContext.opacity = outgoing.isLoadingPlaceholder ? Double(progress) : 1
             fillContext.fill(area, with: .color(fill))
-            drawAreaStripes(
-                in: area,
-                color: incoming.areaStripeColor,
-                spacing: incoming.areaStripeSpacing,
-                context: &fillContext,
-                plot: plot
-            )
+            drawAreaStripes(in: area, color: incoming.areaStripeColor,
+                spacing: incoming.areaStripeSpacing, context: &fillContext, plot: plot)
         }
 
         if outgoing.isLoadingPlaceholder {
-            // Both strokes follow the same interpolated geometry. Crossfading
-            // them here makes loading grey become the semantic series colour
-            // while the curve itself continuously reshapes.
-            stroke(
-                path,
-                series: outgoing,
-                opacity: 1 - Double(progress),
-                context: &context
-            )
-            stroke(
-                path,
-                series: incoming,
-                opacity: Double(progress),
-                context: &context
-            )
+            stroke(path, series: outgoing, opacity: 1 - Double(progress), context: &context)
+            stroke(path, series: incoming, opacity: Double(progress), context: &context)
         } else {
             stroke(path, series: incoming, opacity: 1, context: &context)
+        }
+    }
+
+    private func morphedSamples(from outgoing: StandardLineChartSeries,
+                                to incoming: StandardLineChartSeries, progress: CGFloat) -> [CGPoint] {
+        let pairs = morphPairs[incoming.id] ?? pairedMorphSamples(from: outgoing, to: incoming)
+        return pairs.map { old, new in
+            CGPoint(x: old.x + (new.x - old.x) * progress, y: old.y + (new.y - old.y) * progress)
+        }
+    }
+
+    private func pairedMorphSamples(from outgoing: StandardLineChartSeries,
+                                    to incoming: StandardLineChartSeries) -> [(CGPoint, CGPoint)] {
+        mergedMorphProgresses(outgoing.points, incoming.points).compactMap { pathProgress -> (CGPoint, CGPoint)? in
+            guard let old = normalizedSample(
+                for: outgoing,
+                dates: outgoingDates,
+                domain: outgoingDomain,
+                pathProgress: pathProgress
+            ), let new = normalizedSample(
+                for: incoming,
+                dates: presentedDates,
+                domain: presentedDomain,
+                pathProgress: pathProgress
+            ) else { return nil }
+            return (old, new)
         }
     }
 
@@ -1093,38 +1242,55 @@ struct StandardLineChart: View {
         context: inout GraphicsContext,
         plot: CGRect
     ) {
-        // Trade markers should not slide across the graph while the time scale
-        // changes. Collapse every old marker in place, then let the markers for
-        // the new range grow at their final coordinates.
-        let outgoingScale = markerScale(1 - progress / 0.45)
-        let incomingScale = markerScale((progress - 0.55) / 0.45)
-
-        for outgoing in outgoingMarkers {
-            let position = normalizedPosition(
-                for: outgoing.point,
-                dates: outgoingDates,
-                domain: outgoingDomain
-            )
-            drawMarker(
-                outgoing,
-                at: point(in: plot, normalized: position),
-                scale: outgoingScale,
-                context: &context
-            )
+        for item in animatedMarkers(progress: progress) {
+            drawMarker(item.marker, at: point(in: plot, normalized: item.position),
+                       scale: item.scale, context: &context)
         }
+    }
 
-        for incoming in presentedMarkers {
-            let position = normalizedPosition(
-                for: incoming.point,
-                dates: presentedDates,
-                domain: presentedDomain
-            )
-            drawMarker(
-                incoming,
-                at: point(in: plot, normalized: position),
-                scale: incomingScale,
-                context: &context
-            )
+    private func animatedMarkers(progress: CGFloat) -> [(marker: StandardLineChartMarker, position: CGPoint, scale: CGFloat)] {
+        let oldByID = Dictionary(uniqueKeysWithValues: outgoingMarkers.map { ($0.id, $0) })
+        let newByID = Dictionary(uniqueKeysWithValues: presentedMarkers.map { ($0.id, $0) })
+        let ids = presentedMarkers.map(\.id) + outgoingMarkers.filter { newByID[$0.id] == nil }.map(\.id)
+        let dates = transitionDates(progress)
+        let domain = interpolatedDomain(from: outgoingDomain, to: presentedDomain, progress: progress)
+        let paths = viewportPaths.mapValues { $0.samples(progress: progress) }
+        return ids.compactMap { id in
+            guard let marker = newByID[id] ?? oldByID[id] else { return nil }
+            let oldMarker = oldByID[id], newMarker = newByID[id]
+            let scale = oldMarker == nil ? markerScale(progress)
+                : newMarker == nil ? markerScale(1 - progress) : 1
+            let oldPoint = oldMarker?.point ?? marker.point
+            let newPoint = newMarker?.point ?? marker.point
+            let position: CGPoint
+            if let seriesID = marker.seriesID,
+               let old = outgoingSeries.first(where: { $0.id == seriesID }),
+               let new = presentedSeries.first(where: { $0.id == seriesID }) {
+                if dataTransition == .viewportZoom && !old.isLoadingPlaceholder,
+                   let samples = paths[seriesID] {
+                    let date = interpolatedDate(from: oldPoint.date, to: newPoint.date, progress: progress)
+                    position = normalizedPosition(for: StandardLineChartPoint(date: date,
+                        value: StandardLineChartViewportPath.value(at: date, in: samples)), dates: dates, domain: domain)
+                } else {
+                    // A marker rides the same correspondence as its series.
+                    // Its path fraction moves between its two real date anchors.
+                    func fraction(_ point: StandardLineChartPoint, _ series: StandardLineChartSeries) -> Double {
+                        guard let first = series.points.first, let last = series.points.last else { return 0 }
+                        return min(1, max(0, point.date.timeIntervalSince(first.date) / max(last.date.timeIntervalSince(first.date), 1)))
+                    }
+                    let end = fraction(newPoint, new)
+                    let start = old.isLoadingPlaceholder ? end : fraction(oldPoint, old)
+                    let fraction = start + (end - start) * Double(progress)
+                    guard let a = normalizedSample(for: old, dates: outgoingDates, domain: outgoingDomain, pathProgress: fraction),
+                          let b = normalizedSample(for: new, dates: presentedDates, domain: presentedDomain, pathProgress: fraction) else { return nil }
+                    position = CGPoint(x: a.x + (b.x - a.x) * progress, y: a.y + (b.y - a.y) * progress)
+                }
+            } else {
+                let a = normalizedPosition(for: oldPoint, dates: outgoingDates, domain: outgoingDomain)
+                let b = normalizedPosition(for: newPoint, dates: presentedDates, domain: presentedDomain)
+                position = CGPoint(x: a.x + (b.x - a.x) * progress, y: a.y + (b.y - a.y) * progress)
+            }
+            return (marker, position, scale)
         }
     }
 
@@ -1235,7 +1401,7 @@ struct StandardLineChart: View {
         let outgoingByID = Dictionary(uniqueKeysWithValues: outgoingSeries.map { ($0.id, $0) })
         let presentedIDs = Set(presentedSeries.map(\.id))
         ZStack(alignment: .topLeading) {
-            ForEach(presentedSeries) { item in
+            ForEach(presentedSeries.filter { $0.latestPointRadius != nil }) { item in
                 if progress < 1, let outgoing = outgoingByID[item.id] {
                     if dataTransition == .viewportZoom,
                        !outgoing.isLoadingPlaceholder,
@@ -1246,8 +1412,8 @@ struct StandardLineChart: View {
                         // The stroke projects values through the animated
                         // domain. Interpolating screen positions instead takes
                         // a different path as the domain's span changes.
-                        let endpointSeries = (outgoing.points.last?.date ?? .distantPast)
-                            > (item.points.last?.date ?? .distantPast) ? outgoing : item
+                        let endpointSeries = copySeries(item,
+                            points: viewportPaths[item.id]?.samples(progress: progress) ?? item.points)
                         endpoint(
                             for: endpointSeries,
                             dates: [
@@ -1558,25 +1724,31 @@ struct StandardLineChart: View {
     }
 
     @ViewBuilder
-    private func referenceLineLayer(plot: CGRect) -> some View {
+    private func referenceLineLayer(plot: CGRect, progress: CGFloat) -> some View {
         ForEach(referenceLines) { reference in
             StandardLineChartGlassReferenceLine(tint: reference.color)
                 .frame(width: plot.width, height: reference.lineWidth)
-                .position(x: plot.midX, y: y(for: reference.value, in: plot))
+                .position(x: plot.midX, y: referenceY(reference.value, plot: plot, progress: progress))
         }
     }
 
     @ViewBuilder
-    private func referenceAxisLabels(plot: CGRect) -> some View {
+    private func referenceAxisLabels(plot: CGRect, progress: CGFloat) -> some View {
         ForEach(referenceLines) { reference in
             Text(reference.label)
                 .font(referenceAxisFont)
                 .foregroundStyle(reference.color)
                 .position(
                     x: yAxisSide == .leading ? axisWidth / 2 : plot.maxX + axisWidth / 2,
-                    y: y(for: reference.value, in: plot)
+                    y: referenceY(reference.value, plot: plot, progress: progress)
                 )
         }
+    }
+
+    private func referenceY(_ value: Double, plot: CGRect, progress: CGFloat) -> CGFloat {
+        let activeDomain = outgoingSeries.isEmpty ? presentedDomain
+            : interpolatedDomain(from: outgoingDomain, to: presentedDomain, progress: progress)
+        return y(for: value, in: plot, domain: activeDomain)
     }
 
     @ViewBuilder

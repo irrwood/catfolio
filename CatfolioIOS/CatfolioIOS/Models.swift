@@ -74,6 +74,11 @@ struct HoldingsResponse: Decodable {
 }
 
 struct Holding: Decodable, Identifiable, Equatable {
+    var publicDisclosure: PublicAccountDisclosure? = nil
+    var displayedMarketValue: String {
+        if let publicDisclosure { return publicDisclosure.amountLabel }
+        return DisplayFormat.money(marketValue, fractionDigits: 2)
+    }
     let ticker: String
     let logoSymbol: String?
     let displayName: String
@@ -101,6 +106,7 @@ struct Holding: Decodable, Identifiable, Equatable {
     }
 
     enum CodingKeys: String, CodingKey {
+        case publicDisclosure
         case ticker
         case logoSymbol = "logo_symbol"
         case displayName = "display_name"
@@ -169,15 +175,30 @@ struct VolumeProfileBin: Codable, Equatable, Identifiable {
     }
 }
 
-struct SecurityPriceHistory: Equatable {
+struct SecurityPriceHistory: Equatable, Sendable {
     let ticker: String
     let currency: String
     let points: [SecurityPricePoint]
     let intradayPoints: [SecurityPricePoint]
     let trades: [SecurityTrade]
+
+    /// Use the same latest market observation for every chart range. A minute
+    /// quote can update its own session, but must never replace a newer day.
+    /// Never stamp an undated portfolio reference price onto today's history.
+    var chartDailyPoints: [SecurityPricePoint] {
+        let daily = points.filter { $0.close.isFinite && $0.close > 0 }.sorted { $0.date < $1.date }
+        guard let minute = intradayPoints.filter({ $0.close.isFinite && $0.close > 0 && $0.timestamp != nil })
+            .max(by: { $0.date < $1.date }) else { return daily }
+        let sessionDay = DayDateCodec.string(from: minute.date)
+        guard daily.last.map({ sessionDay >= $0.dateText }) ?? true else { return daily }
+        return daily.filter { $0.dateText != sessionDay }
+            + [SecurityPricePoint(dateText: sessionDay, close: minute.close)]
+    }
+
+    var latestAvailablePrice: Double? { chartDailyPoints.last?.close }
 }
 
-struct SecurityPricePoint: Equatable, Identifiable {
+struct SecurityPricePoint: Equatable, Identifiable, Sendable {
     let dateText: String
     let close: Double
     let timestamp: Date?
@@ -192,7 +213,7 @@ struct SecurityPricePoint: Equatable, Identifiable {
     var date: Date { timestamp ?? DayDateCodec.date(from: dateText) ?? .distantPast }
 }
 
-struct SecurityTrade: Equatable, Identifiable {
+struct SecurityTrade: Equatable, Identifiable, Sendable {
     let dateText: String
     let action: String
     let quantity: Double
@@ -672,11 +693,13 @@ struct ETFLookThroughRow: Decodable, Identifiable {
     let totalUSD: Double
     let etfWeightPercent: Double
     let sector: String?
+    var estimatedHoldingPeriodPercent: Double? = nil
 
     var id: String { ticker }
 
     enum CodingKeys: String, CodingKey {
         case ticker, name, sector
+        case estimatedHoldingPeriodPercent = "estimated_holding_period_percent"
         case logoSymbol = "logo_symbol"
         case directUSD = "direct_usd"
         case fromETFUSD = "from_etf_usd"

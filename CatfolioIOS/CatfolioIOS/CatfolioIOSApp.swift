@@ -12,6 +12,25 @@ struct CatfolioIOSApp: App {
 
     var body: some Scene {
         WindowGroup {
+            if isIsolatedResearchTestHost {
+                Color.clear
+            } else {
+                appContent
+            }
+        }
+    }
+
+    /// Opt-in XCTest host: public-news checks must not start portfolio refresh,
+    /// account migration or cloud preferences on a person's physical device.
+    private var isIsolatedResearchTestHost: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["CATFOLIO_RESEARCH_TEST_HOST"] == "1"
+        #else
+        false
+        #endif
+    }
+
+    private var appContent: some View {
             RootTabView()
                 .fontDesign(.rounded)
                 .task { ReferenceCatalogs.warm() }
@@ -34,6 +53,5 @@ struct CatfolioIOSApp: App {
                     }
                 }
                 #endif
-        }
     }
 }

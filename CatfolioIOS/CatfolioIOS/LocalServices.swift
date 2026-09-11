@@ -24,27 +24,27 @@ enum LocalServiceError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingMarketKey:
-            "成交量分析需要行情数据。请在设置中填写 Financial Modeling Prep API Key。"
+            L10n.text("成交量分析需要行情数据。请在设置中填写 Financial Modeling Prep API Key。")
         case .missingMassiveKey:
-            "请先在设置中填写 Massive API Key。"
+            L10n.text("请先在设置中填写 Massive API Key。")
         case .missingAIKey:
-            "DeepSeek 模式需要 API Key。请在设置中填写，Key 只保存在此 iPhone。"
+            L10n.text("DeepSeek 模式需要 API Key。请在设置中填写，Key 只保存在此 iPhone。")
         case .missingCodexConnection:
-            "请先在设置中连接 ChatGPT Codex。"
+            L10n.text("请先在设置中连接 ChatGPT Codex。")
         case let .appleModelUnavailable(reason):
-            "Apple 本地模型暂不可用：\(reason)"
+            L10n.text("Apple 本地模型暂不可用：\(reason)")
         case let .noAvailableAIProvider(reason):
-            "当前没有可用的 AI 模型：\(reason)"
+            L10n.text("当前没有可用的 AI 模型：\(reason)")
         case .invalidResponse:
-            "第三方服务返回了无法识别的数据"
+            L10n.text("第三方服务返回了无法识别的数据")
         case let .remote(message):
             message
         case .noMarketData:
-            "没有读取到这只证券的历史成交量"
+            L10n.text("没有读取到这只证券的历史成交量")
         case .noHistoricalPrices:
-            "无法读取历史价格，请检查行情 API 设置与网络后重试"
+            L10n.text("无法读取历史价格，请检查行情 API 设置与网络后重试")
         case .noSupportedETF:
-            "当前组合中的 ETF 暂无可用持仓快照"
+            L10n.text("当前组合中的 ETF 暂无可用持仓快照")
         }
     }
 }
@@ -67,8 +67,8 @@ enum AIProviderPreference: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .automatic: "自动"
-        case .apple: "Apple 本地"
+        case .automatic: L10n.text("自动")
+        case .apple: L10n.text("Apple 本地")
         case .codex: "Codex"
         case .deepSeek: "DeepSeek"
         }
@@ -77,13 +77,13 @@ enum AIProviderPreference: String, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .automatic:
-            "优先使用 Apple 本地模型；不可用时依次使用已连接的 Codex 和 DeepSeek。"
+            L10n.text("优先使用 Apple 本地模型；不可用时依次使用已连接的 Codex 和 DeepSeek。")
         case .apple:
-            "组合摘要只在设备上处理，可离线使用；需要 Apple Intelligence 已开启且模型就绪。"
+            L10n.text("组合摘要只在设备上处理，可离线使用；需要 Apple Intelligence 已开启且模型就绪。")
         case .codex:
-            "在此 iPhone 上登录 ChatGPT，直接使用你的 Codex 订阅进行分析。"
+            L10n.text("在此 iPhone 上登录 ChatGPT，直接使用你的 Codex 订阅进行分析。")
         case .deepSeek:
-            "组合摘要会直接发送给 DeepSeek，需要 API Key 和网络连接。"
+            L10n.text("组合摘要会直接发送给 DeepSeek，需要 API Key 和网络连接。")
         }
     }
 }
@@ -129,7 +129,7 @@ struct CodexOAuthClient: Sendable {
             body: requestBody,
             contentType: "application/json"
         )
-        try Self.requireSuccess(response, data: data, fallback: "无法开始 ChatGPT 登录")
+        try Self.requireSuccess(response, data: data, fallback: L10n.text("无法开始 ChatGPT 登录"))
         let deviceCode = try JSONDecoder().decode(DeviceCodeResponse.self, from: data)
         let session = CodexLoginSession(
             loginID: UUID().uuidString,
@@ -171,7 +171,7 @@ struct CodexOAuthClient: Sendable {
         }
         guard Date().timeIntervalSince(pending.createdAt) < 15 * 60 else {
             try? KeychainStore.set("", for: Self.pendingLoginKey)
-            throw LocalServiceError.remote("登录已超时，请重新开始")
+            throw LocalServiceError.remote(L10n.text("登录已超时，请重新开始"))
         }
 
         let pollBody = try JSONEncoder().encode(DeviceTokenPollRequest(
@@ -194,7 +194,7 @@ struct CodexOAuthClient: Sendable {
                 error: nil
             )
         }
-        try Self.requireSuccess(pollResponse, data: pollData, fallback: "ChatGPT 授权失败")
+        try Self.requireSuccess(pollResponse, data: pollData, fallback: L10n.text("ChatGPT 授权失败"))
         let authorization = try JSONDecoder().decode(DeviceAuthorizationResponse.self, from: pollData)
         let credentials = try await exchange(authorization)
         try Self.save(credentials, key: Self.credentialsKey)
@@ -302,7 +302,7 @@ struct CodexOAuthClient: Sendable {
             body: Data(body.utf8),
             contentType: "application/x-www-form-urlencoded"
         )
-        try Self.requireSuccess(response, data: data, fallback: "ChatGPT 令牌交换失败")
+        try Self.requireSuccess(response, data: data, fallback: L10n.text("ChatGPT 令牌交换失败"))
         let tokens = try JSONDecoder().decode(TokenResponse.self, from: data)
         return try Self.credentials(from: tokens)
     }
@@ -324,9 +324,9 @@ struct CodexOAuthClient: Sendable {
             if response.statusCode == 400 || response.statusCode == 401 {
                 try? KeychainStore.set("", for: Self.credentialsKey)
                 Self.cache(Self.disconnectedStatus)
-                throw LocalServiceError.remote("ChatGPT 登录已失效，请重新登录")
+                throw LocalServiceError.remote(L10n.text("ChatGPT 登录已失效，请重新登录"))
             }
-            try Self.requireSuccess(response, data: data, fallback: "ChatGPT 登录刷新失败")
+            try Self.requireSuccess(response, data: data, fallback: L10n.text("ChatGPT 登录刷新失败"))
             throw LocalServiceError.invalidResponse
         }
         let refreshed = try JSONDecoder().decode(RefreshTokenResponse.self, from: data)
@@ -348,11 +348,7 @@ struct CodexOAuthClient: Sendable {
     ) async throws -> String {
         var body: [String: Any] = [
             "model": Self.model,
-            "instructions": "你是 Catfolio 的投资组合分析助手。用简洁、可验证的中文回答；明确区分数据与推断，不承诺收益。",
-        if webSearch {
-            body["tools"] = [["type": "web_search"]]
-            body["tool_choice"] = "auto"
-        }
+            "instructions": "你是 Catfolio 的投资组合分析助手。用简洁、可验证的语言回答；明确区分数据与推断，不承诺收益。" + L10n.responseLanguageInstruction,
             "input": [[
                 "type": "message",
                 "role": "user",
@@ -365,6 +361,10 @@ struct CodexOAuthClient: Sendable {
             "stream": true,
             "include": [],
         ]
+        if webSearch {
+            body["tools"] = [["type": "web_search"]]
+            body["tool_choice"] = "auto"
+        }
         let encoded = try JSONSerialization.data(withJSONObject: body)
         var request = URLRequest(url: Self.codexResponsesURL)
         request.httpMethod = "POST"
@@ -378,7 +378,11 @@ struct CodexOAuthClient: Sendable {
         let (data, response) = try await Self.session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         if http.statusCode == 401 { throw CodexRequestError.unauthorized }
-        try Self.requireSuccess(http, data: data, fallback: "Codex 分析请求失败")
+        try Self.requireSuccess(http, data: data, fallback: L10n.text("Codex 分析请求失败"))
+        // A requested tool is not proof that the server actually searched.
+        if webSearch, !Self.containsCompletedWebSearch(data) {
+            throw LocalServiceError.invalidResponse
+        }
         return try Self.parseCompletion(data)
     }
 
@@ -433,7 +437,7 @@ struct CodexOAuthClient: Sendable {
         let idClaims = try jwtClaims(tokens.idToken)
         let accessClaims = try? jwtClaims(tokens.accessToken)
         guard let accountID = idClaims.accountID ?? accessClaims?.accountID, !accountID.isEmpty else {
-            throw LocalServiceError.remote("无法识别 ChatGPT 账户")
+            throw LocalServiceError.remote(L10n.text("无法识别 ChatGPT 账户"))
         }
         return CodexCredentials(
             idToken: tokens.idToken,
@@ -464,6 +468,19 @@ struct CodexOAuthClient: Sendable {
             plan: auth?["chatgpt_plan_type"] as? String,
             expiration: (root["exp"] as? TimeInterval).map(Date.init(timeIntervalSince1970:))
         )
+    }
+
+    static func containsCompletedWebSearch(_ data: Data) -> Bool {
+        guard let stream = String(data: data, encoding: .utf8) else { return false }
+        return stream.split(whereSeparator: \.isNewline).contains { line in
+            guard line.hasPrefix("data:"),
+                  let bytes = String(line.dropFirst(5)).data(using: .utf8),
+                  let event = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any] else { return false }
+            if event["type"] as? String == "response.web_search_call.completed" { return true }
+            let response = event["response"] as? [String: Any]
+            let items = response?["output"] as? [[String: Any]] ?? [event["item"] as? [String: Any] ?? [:]]
+            return items.contains { $0["type"] as? String == "web_search_call" && $0["status"] as? String == "completed" }
+        }
     }
 
     private static func parseCompletion(_ data: Data) throws -> String {
@@ -662,12 +679,12 @@ enum AppleFoundationModelStatus: Equatable {
 
     var message: String {
         switch self {
-        case .available: "Apple 本地模型已就绪"
-        case .requiresNewerOS: "需要 iOS 26 或更高版本"
-        case .deviceNotEligible: "这台设备不支持 Apple Intelligence"
-        case .appleIntelligenceNotEnabled: "请先在系统设置中开启 Apple Intelligence"
-        case .modelNotReady: "Apple 模型仍在下载或暂未就绪"
-        case .unknown: "Apple 模型当前不可用"
+        case .available: L10n.text("Apple 本地模型已就绪")
+        case .requiresNewerOS: L10n.text("需要 iOS 26 或更高版本")
+        case .deviceNotEligible: L10n.text("这台设备不支持 Apple Intelligence")
+        case .appleIntelligenceNotEnabled: L10n.text("请先在系统设置中开启 Apple Intelligence")
+        case .modelNotReady: L10n.text("Apple 模型仍在下载或暂未就绪")
+        case .unknown: L10n.text("Apple 模型当前不可用")
         }
     }
 }
@@ -941,13 +958,27 @@ struct LocalMarketDataClient {
         let message: String?
     }
 
-    func portfolioChart(document: LocalPortfolioDocument) async throws -> PortfolioChartResponse {
+    func portfolioChart(
+        document: LocalPortfolioDocument,
+        cachedOnly: Bool = false
+    ) async throws -> PortfolioChartResponse {
+        if document.isPublicDisclosure, let current = document.snapshots.last {
+            let rows = document.snapshots.map { ChartPoint(dateText: $0.date, marketValue: $0.marketValueUSD, cost: $0.costUSD) }
+            return PortfolioChartResponse(positionCount: document.positions.count,
+                positionHistory: PositionHistory(available: rows.count > 1, rows: rows),
+                currentPoint: ChartPoint(dateText: current.date, marketValue: current.marketValueUSD, cost: current.costUSD),
+                warning: nil)
+        }
         guard !document.positions.isEmpty else { throw LocalPortfolioError.noPortfolio }
 
         let end = DayDateCodec.string(from: Date())
         var pointsByDate: [String: ChartPoint] = [:]
         var chartWarnings: [String] = []
-        let backcast = try await currentOpenPositionsHistory(document: document, end: end)
+        let backcast = try await currentOpenPositionsHistory(
+            document: document,
+            end: end,
+            cachedOnly: cachedOnly
+        )
         for point in backcast.rows {
             pointsByDate[point.dateText] = point
         }
@@ -1043,7 +1074,8 @@ struct LocalMarketDataClient {
     /// The latest point is calibrated separately from the live broker snapshot.
     private func currentOpenPositionsHistory(
         document: LocalPortfolioDocument,
-        end: String
+        end: String,
+        cachedOnly: Bool = false
     ) async throws -> (rows: [ChartPoint], warnings: [String]) {
         var earliestBuyDates: [String: String] = [:]
         for transaction in document.transactions ?? [] where transaction.action.uppercased() == "BUY" {
@@ -1063,7 +1095,15 @@ struct LocalMarketDataClient {
         let symbols = datedPositions.map {
             Self.yahooSymbol(ticker: $0.position.ticker, currency: $0.position.quoteCurrency)
         }.uniqued()
-        let histories = await historicalCloses(symbols: symbols, from: start, to: end)
+        let histories = await historicalCloses(
+            symbols: symbols,
+            from: start,
+            to: end,
+            cachedOnly: cachedOnly
+        )
+        if cachedOnly, histories.count != symbols.count {
+            throw LocalServiceError.noHistoricalPrices
+        }
         let dates = histories.values.flatMap(\.keys).sorted().uniqued()
         guard !dates.isEmpty else {
             return ([], ["暂未读取到当前持仓的历史行情，当前只能显示最新值。"])
@@ -1288,7 +1328,8 @@ struct LocalMarketDataClient {
     func volumeProfile(
         ticker: String,
         currency: String,
-        referencePrice: Double? = nil
+        referencePrice: Double? = nil,
+        forceRefresh: Bool = false
     ) async throws -> VolumeProfile {
         let end = DayDateFormatter.shared.string(from: Date())
         let start = DayDateFormatter.shared.string(
@@ -1296,7 +1337,7 @@ struct LocalMarketDataClient {
         )
         let marketSymbol = Self.yahooSymbol(ticker: ticker, currency: currency)
         let cached = await LocalVolumeBarCache.shared.lookup(symbol: marketSymbol)
-        if let cached, cached.isFresh {
+        if !forceRefresh, let cached, cached.isFresh {
             return try Self.makeVolumeProfile(
                 bars: cached.bars,
                 ticker: ticker,
@@ -1370,7 +1411,8 @@ struct LocalMarketDataClient {
         ticker: String,
         currency: String,
         referencePrice: Double? = nil,
-        document: LocalPortfolioDocument
+        document: LocalPortfolioDocument,
+        forceRefresh: Bool = false
     ) async throws -> SecurityPriceHistory {
         let normalizedTicker = ticker.uppercased()
         let transactions = (document.transactions ?? []).filter {
@@ -1386,17 +1428,16 @@ struct LocalMarketDataClient {
         let start = "1900-01-01"
         let end = DayDateCodec.string(from: Date())
         let symbol = Self.yahooSymbol(ticker: ticker, currency: currency)
-        async let dailyCloses = historicalCloses(symbol: symbol, from: start, to: end)
-        async let latestIntradayBars = intradayBars(symbol: symbol)
-        var closes = try await dailyCloses
+        async let dailyCloses = historicalCloses(symbol: symbol, from: start, to: end, forceRefresh: forceRefresh)
+        async let latestIntradayBars = intradayBars(symbol: symbol, forceRefresh: forceRefresh)
+        let closes = try await dailyCloses
         let intradayBars = (try? await latestIntradayBars) ?? []
         guard !closes.isEmpty else { throw LocalServiceError.noHistoricalPrices }
 
         let latestMarketClose = closes.max(by: { $0.key < $1.key })?.value
         let scale = Self.priceScale(ticker: ticker, currency: currency, referencePrice: referencePrice, marketPrice: latestMarketClose)
-        if let referencePrice, referencePrice.isFinite, referencePrice > 0 {
-            closes[end] = referencePrice / scale
-        }
+        // referencePrice is only a unit-normalization hint, not a timestamped
+        // quote. SecurityPriceHistory merges the dated minute observation.
         let points = closes
             .compactMap { dateText, value -> SecurityPricePoint? in
                 let adjusted = value * scale
@@ -1460,9 +1501,9 @@ struct LocalMarketDataClient {
         )
     }
 
-    private func intradayBars(symbol: String) async throws -> [MarketIntradayBar] {
+    private func intradayBars(symbol: String, forceRefresh: Bool = false) async throws -> [MarketIntradayBar] {
         let cached = await LocalIntradayPriceCache.shared.lookup(symbol: symbol)
-        if let cached, cached.isFresh { return cached.bars }
+        if !forceRefresh, let cached, cached.isFresh { return cached.bars }
 
         var latestError: Error?
         if Self.supportsMassiveStockSymbol(symbol),
@@ -2146,7 +2187,9 @@ struct LocalMarketDataClient {
     func historicalCloses(
         symbols: [String],
         from: String,
-        to: String
+        to: String,
+        dividendAdjusted: Bool = true,
+        cachedOnly: Bool = false
     ) async -> [String: [String: Double]] {
         await withTaskGroup(of: (String, [String: Double]?).self) { group in
             // A large broker CSV can contain hundreds of symbols. Sending all
@@ -2157,7 +2200,13 @@ struct LocalMarketDataClient {
             for _ in 0..<concurrencyLimit {
                 guard let symbol = iterator.next() else { break }
                 group.addTask {
-                    (symbol, try? await historicalCloses(symbol: symbol, from: from, to: to))
+                    (symbol, try? await historicalCloses(
+                        symbol: symbol,
+                        from: from,
+                        to: to,
+                        dividendAdjusted: dividendAdjusted,
+                        cachedOnly: cachedOnly
+                    ))
                 }
             }
 
@@ -2168,7 +2217,13 @@ struct LocalMarketDataClient {
                 }
                 if let nextSymbol = iterator.next() {
                     group.addTask {
-                        (nextSymbol, try? await historicalCloses(symbol: nextSymbol, from: from, to: to))
+                        (nextSymbol, try? await historicalCloses(
+                            symbol: nextSymbol,
+                            from: from,
+                            to: to,
+                            dividendAdjusted: dividendAdjusted,
+                            cachedOnly: cachedOnly
+                        ))
                     }
                 }
             }
@@ -2176,17 +2231,31 @@ struct LocalMarketDataClient {
         }
     }
 
-    private func historicalCloses(symbol: String, from: String, to: String) async throws -> [String: Double] {
-        let cached = await LocalHistoricalPriceCache.shared.lookup(symbol: symbol, from: from, to: to)
-        if let cached, cached.isFresh, cached.values.count > 1 {
+    private func historicalCloses(
+        symbol: String,
+        from: String,
+        to: String,
+        dividendAdjusted: Bool = true,
+        cachedOnly: Bool = false,
+        forceRefresh: Bool = false
+    ) async throws -> [String: Double] {
+        let cacheSymbol = dividendAdjusted ? symbol : symbol + "#split-only"
+        let cached = await LocalHistoricalPriceCache.shared.lookup(symbol: cacheSymbol, from: from, to: to)
+        if cachedOnly {
+            guard let cached, cached.values.count > 1 else {
+                throw LocalServiceError.noHistoricalPrices
+            }
+            return cached.values
+        }
+        if !forceRefresh, let cached, cached.isFresh, cached.values.count > 1 {
             return cached.values
         }
         var latestError: Error?
         do {
-            let yahoo = try await yahooHistoricalCloses(symbol: symbol, from: from, to: to)
+            let yahoo = try await yahooHistoricalCloses(symbol: symbol, from: from, to: to, dividendAdjusted: dividendAdjusted)
             if !yahoo.isEmpty {
                 await LocalHistoricalPriceCache.shared.save(
-                    symbol: symbol,
+                    symbol: cacheSymbol,
                     values: yahoo,
                     requestedFrom: from,
                     requestedTo: to
@@ -2197,13 +2266,18 @@ struct LocalMarketDataClient {
             latestError = error
         }
 
+        if !dividendAdjusted {
+            if let cached, cached.values.count > 1 { return cached.values }
+            throw latestError ?? LocalServiceError.noHistoricalPrices
+        }
+
         if Self.supportsMassiveStockSymbol(symbol),
            let key = KeychainStore.string(for: LocalServiceKeys.massive), !key.isEmpty {
             do {
                 let bars = try await massiveHistoricalBars(symbol: symbol, from: from, to: to, key: key)
                 let massive = Dictionary(uniqueKeysWithValues: bars.map { ($0.date, $0.close) })
                 await LocalHistoricalPriceCache.shared.save(
-                    symbol: symbol,
+                    symbol: cacheSymbol,
                     values: massive,
                     requestedFrom: from,
                     requestedTo: to
@@ -2218,7 +2292,7 @@ struct LocalMarketDataClient {
             do {
                 let fmp = try await fmpHistoricalCloses(symbol: symbol, from: from, to: to)
                 await LocalHistoricalPriceCache.shared.save(
-                    symbol: symbol,
+                    symbol: cacheSymbol,
                     values: fmp,
                     requestedFrom: from,
                     requestedTo: to
@@ -2233,7 +2307,7 @@ struct LocalMarketDataClient {
         throw latestError ?? LocalServiceError.noHistoricalPrices
     }
 
-    private func yahooHistoricalCloses(symbol: String, from: String, to: String) async throws -> [String: Double] {
+    private func yahooHistoricalCloses(symbol: String, from: String, to: String, dividendAdjusted: Bool = true) async throws -> [String: Double] {
         guard let fromDate = DayDateCodec.date(from: from),
               let toDate = DayDateCodec.date(from: to) else {
             throw LocalServiceError.invalidResponse
@@ -2273,7 +2347,7 @@ struct LocalMarketDataClient {
         }
         let adjusted = result.indicators.adjclose?.first?.adjclose ?? []
         let raw = result.indicators.quote?.first?.close ?? []
-        let closes = adjusted.contains(where: { $0 != nil }) ? adjusted : raw
+        let closes = dividendAdjusted && adjusted.contains(where: { $0 != nil }) ? adjusted : raw
         guard let unitScale = InstrumentCurrencyRules.providerPriceScale(symbol: symbol, sourceCurrency: result.meta?.currency) else {
             throw LocalServiceError.remote("行情报价币种无法确认：\(symbol)")
         }
@@ -2830,39 +2904,10 @@ private struct PortfolioEventResearchClient {
     }
 
     func recentSources(ticker: String, name: String) async -> [PortfolioAttentionSource] {
-        var components = URLComponents(string: "https://query1.finance.yahoo.com/v1/finance/search")!
-        components.queryItems = [
-            URLQueryItem(name: "q", value: "\(ticker) \(name)"),
-            URLQueryItem(name: "quotesCount", value: "0"),
-            URLQueryItem(name: "newsCount", value: "8"),
-        ]
-        var request = URLRequest(url: components.url!)
-        request.timeoutInterval = 9
-        request.setValue("Mozilla/5.0 Catfolio-iOS", forHTTPHeaderField: "User-Agent")
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
-              let http = response as? HTTPURLResponse,
-              (200..<300).contains(http.statusCode),
-              let payload = try? JSONDecoder().decode(Response.self, from: data) else { return [] }
-        return (payload.news ?? []).enumerated().map { index, item in
-            let publisher = item.publisher ?? "Unknown"
-            let normalized = publisher.lowercased()
-            let tier: String
-            if ["reuters", "bloomberg", "associated press", "ap news"].contains(where: normalized.contains) {
-                tier = "wire"
-            } else if ["business wire", "globenewswire", "pr newswire"].contains(where: normalized.contains) {
-                tier = "primary"
-            } else {
-                tier = "media"
-            }
-            return PortfolioAttentionSource(
-                id: "\(ticker.lowercased())-\(index + 1)",
-                title: item.title,
-                publisher: publisher,
-                url: item.link,
-                publishedAt: item.providerPublishTime.map { Date(timeIntervalSince1970: TimeInterval($0)) },
-                tier: tier
-            )
-        }
+        let research = SecurityDebateResearch()
+        async let google = research.googleNews(ticker: ticker, name: name)
+        async let yahoo = research.yahooNews(ticker: ticker, name: name)
+        return await SecurityDebateResearch.deduplicated(google + yahoo)
     }
 }
 
@@ -2950,7 +2995,7 @@ struct LocalAIClient {
 
     func briefing(document: LocalPortfolioDocument) async throws -> String {
         try await complete(
-            question: "请生成一段简洁的中文组合简报，指出集中度、盈亏和最值得关注的风险。",
+            question: L10n.text("请生成一段简洁的中文组合简报，指出集中度、盈亏和最值得关注的风险。"),
             document: document
         )
     }
@@ -3123,7 +3168,7 @@ struct LocalAIClient {
                     appleFailure = error.localizedDescription
                 }
             }
-            var codexFailure = "Codex 尚未连接"
+            var codexFailure = L10n.text("Codex 尚未连接")
             if CodexOAuthClient.cachedConnected {
                 do {
                     return try await completeWithCodex(question: question, context: context)
@@ -3141,51 +3186,6 @@ struct LocalAIClient {
         }
     }
 
-    private func portfolioContext(document: LocalPortfolioDocument) throws -> String {
-        let presentation = try LocalPortfolioEngine.presentation(for: document)
-        let top = presentation.2.prefix(15).map {
-            "\($0.ticker): 市值 \(DisplayFormat.money($0.marketValue))，权重 \(String(format: "%.1f", $0.weight * 100))%，未实现收益 \(String(format: "%.1f", $0.unrealizedPercent))%"
-        }.joined(separator: "\n")
-        return """
-        组合市值：\(DisplayFormat.money(presentation.0.summary.marketValue))
-        组合成本：\(DisplayFormat.money(presentation.0.summary.totalCost))
-        持仓数：\(presentation.0.summary.openPositions)
-        主要持仓：
-        \(top)
-        """
-    }
-
-    @available(iOS 26.0, *)
-    private func completeWithApple(question: String, context: String, structured: Bool = false) async throws -> String {
-        let model = SystemLanguageModel.default
-        guard model.availability == .available else {
-            throw LocalServiceError.appleModelUnavailable(Self.appleModelStatus.message)
-        }
-        let chinese = Locale(identifier: "zh-Hans")
-        guard model.supportsLocale(chinese) else {
-            throw LocalServiceError.appleModelUnavailable("当前系统模型暂不支持简体中文")
-        }
-
-        let session = LanguageModelSession(
-            model: model,
-            instructions: structured ? "你是筛选条件解析器。严格按提供的 JSON schema 输出单个 JSON 对象，不附加解释、Markdown 或免责声明。不支持的条件放入 unsupported，不可忽略。" : """
-            你是 Catfolio 的投资组合分析助手。只根据用户设备提供的组合摘要回答，使用简洁中文；不要虚构实时新闻、行情或组合中未提供的数据。金融数字由 Catfolio 计算，你只负责解释，不要重新推算或改写。回答末尾简短说明这不是投资建议。
-            """
-        )
-        let response: LanguageModelSession.Response<String>
-        do {
-            response = try await session.respond(
-                to: "\(context)\n\n问题：\(question)",
-                options: GenerationOptions(temperature: 0.2, maximumResponseTokens: 1_800)
-            )
-        } catch let error as LanguageModelSession.GenerationError {
-            throw LocalServiceError.appleModelUnavailable(Self.appleGenerationErrorMessage(error))
-        } catch {
-            throw LocalServiceError.appleModelUnavailable(
-                error.localizedDescription.isEmpty ? "生成请求失败，请稍后再试" : error.localizedDescription
-            )
-        }
-        let content = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
     /// Research where the model is also allowed to look things up itself.
     ///
     /// Only one of the three providers can: Apple's on-device model has no
@@ -3196,6 +3196,16 @@ struct LocalAIClient {
     /// the floor, and live search is the part only it can add.
     ///
     /// - Returns: the answer, and whether search actually happened.
+    /// Daily notes need evidence before accepting any answer. Skip an ungrounded
+    /// completion when native search is unavailable; the caller supplies articles next.
+    func researchAnswerWithNativeSearch(_ question: String) async throws -> (text: String, searched: Bool) {
+        let preference = AIProviderPreference.current
+        guard (preference == .codex || preference == .automatic), CodexOAuthClient.cachedConnected else {
+            throw LocalServiceError.missingCodexConnection
+        }
+        return try await CodexOAuthClient().completion(prompt: question, webSearch: true)
+    }
+
     func researchAnswerAllowingSearch(
         _ question: String,
         context: String
@@ -3215,6 +3225,58 @@ struct LocalAIClient {
         return (try await researchAnswer(question, context: context, structured: true), false)
     }
 
+    private func portfolioContext(document: LocalPortfolioDocument) throws -> String {
+        let presentation = try LocalPortfolioEngine.presentation(for: document)
+        if document.isPublicDisclosure {
+            let rows = presentation.2.map { holding in
+                "\(holding.ticker): 市值 \(holding.displayedMarketValue)，持股 \(DisplayFormat.shares(holding.shares))，模拟成本 \(DisplayFormat.money(holding.shares * holding.averageCost))，浮动盈亏 \(DisplayFormat.money(holding.unrealized))"
+            }.joined(separator: "\n")
+            return "模拟账户：\(document.accounts.map(\.name).joined(separator: ", "))。账本根据历史披露重建；13F 在申报日收盘价调整股数，佩洛西按披露上限及对应日期收盘价计算。以下成本与盈亏来自模拟交易和行情，可以用于分析该模拟组合，但不是人物真实账户收益。不包含未确定合约的期权及未匹配证券。\n\(rows)"
+        }
+        let top = presentation.2.prefix(15).map {
+            "\($0.ticker): 市值 \(DisplayFormat.money($0.marketValue))，权重 \(String(format: "%.1f", $0.weight * 100))%，未实现收益 \(String(format: "%.1f", $0.unrealizedPercent))%"
+        }.joined(separator: "\n")
+        return """
+        组合市值：\(DisplayFormat.money(presentation.0.summary.marketValue))
+        组合成本：\(DisplayFormat.money(presentation.0.summary.totalCost))
+        持仓数：\(presentation.0.summary.openPositions)
+        主要持仓：
+        \(top)
+        """
+    }
+
+    @available(iOS 26.0, *)
+    private func completeWithApple(question: String, context: String, structured: Bool = false) async throws -> String {
+        let model = SystemLanguageModel.default
+        guard model.availability == .available else {
+            throw LocalServiceError.appleModelUnavailable(Self.appleModelStatus.message)
+        }
+        let responseLocale = Locale(identifier: ContentLanguage.current)
+        guard model.supportsLocale(responseLocale) else {
+            throw LocalServiceError.appleModelUnavailable(L10n.text("当前系统模型暂不支持所选语言"))
+        }
+
+        let session = LanguageModelSession(
+            model: model,
+            instructions: structured ? "严格按当前请求提供的 JSON schema 输出单个 JSON 对象，不附加解释或 Markdown。仅使用提供的证据，证据不足时遵循请求中的空结果规则，不要编造内容。若请求是筛选条件解析，不支持的条件放入 unsupported，不可忽略。" : """
+            你是 Catfolio 的投资组合分析助手。只根据用户设备提供的组合摘要回答，使用简洁语言；不要虚构实时新闻、行情或组合中未提供的数据。金融数字由 Catfolio 计算，你只负责解释，不要重新推算或改写。回答末尾简短说明这不是投资建议。
+            \(L10n.responseLanguageInstruction)
+            """
+        )
+        let response: LanguageModelSession.Response<String>
+        do {
+            response = try await session.respond(
+                to: "\(context)\n\n问题：\(question)",
+                options: GenerationOptions(temperature: 0.2, maximumResponseTokens: 1_800)
+            )
+        } catch let error as LanguageModelSession.GenerationError {
+            throw LocalServiceError.appleModelUnavailable(Self.appleGenerationErrorMessage(error))
+        } catch {
+            throw LocalServiceError.appleModelUnavailable(
+                error.localizedDescription.isEmpty ? L10n.text("生成请求失败，请稍后再试") : error.localizedDescription
+            )
+        }
+        let content = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { throw LocalServiceError.invalidResponse }
         return content
     }
@@ -3225,25 +3287,25 @@ struct LocalAIClient {
     ) -> String {
         switch error {
         case .exceededContextWindowSize:
-            "组合摘要超过本地模型的上下文长度"
+            L10n.text("组合摘要超过本地模型的上下文长度")
         case .assetsUnavailable:
-            "模型资源暂不可用，请等待系统完成下载后重试"
+            L10n.text("模型资源暂不可用，请等待系统完成下载后重试")
         case .guardrailViolation:
-            "请求被 Apple Intelligence 的安全规则拦截"
+            L10n.text("请求被 Apple Intelligence 的安全规则拦截")
         case .unsupportedGuide:
-            "当前系统模型不支持此输出格式"
+            L10n.text("当前系统模型不支持此输出格式")
         case .unsupportedLanguageOrLocale:
-            "当前系统模型暂不支持所用语言"
+            L10n.text("当前系统模型暂不支持所用语言")
         case .decodingFailure:
-            "本地模型返回内容无法解析"
+            L10n.text("本地模型返回内容无法解析")
         case .rateLimited:
-            "本地模型请求过于频繁，请稍后再试"
+            L10n.text("本地模型请求过于频繁，请稍后再试")
         case .concurrentRequests:
-            "本地模型正在处理另一个请求"
+            L10n.text("本地模型正在处理另一个请求")
         case .refusal:
-            "本地模型拒绝回答此问题"
+            L10n.text("本地模型拒绝回答此问题")
         @unknown default:
-            "本地模型生成失败，请稍后再试"
+            L10n.text("本地模型生成失败，请稍后再试")
         }
     }
 
@@ -3255,7 +3317,7 @@ struct LocalAIClient {
             "model": "deepseek-chat",
             "temperature": 0.2,
             "messages": [
-                ["role": "system", "content": structured ? "你是筛选条件解析器。严格按提供的 JSON schema 输出单个 JSON 对象，不附加解释、Markdown 或免责声明。不支持的条件放入 unsupported，不可忽略。" : "你是 Catfolio 的投资组合分析助手。只根据用户手机提供的组合摘要回答，不虚构实时新闻或行情；明确说明这不是投资建议。"],
+                ["role": "system", "content": structured ? "严格按当前请求提供的 JSON schema 输出单个 JSON 对象，不附加解释或 Markdown。仅使用提供的证据，证据不足时遵循请求中的空结果规则，不要编造内容。若请求是筛选条件解析，不支持的条件放入 unsupported，不可忽略。" : "你是 Catfolio 的投资组合分析助手。只根据用户手机提供的组合摘要回答，不虚构实时新闻或行情；明确说明这不是投资建议。" + L10n.responseLanguageInstruction],
                 ["role": "user", "content": "\(context)\n\n问题：\(question)"],
             ],
         ]
@@ -3303,6 +3365,10 @@ struct LocalAIClient {
 }
 
 enum LocalETFLookThrough {
+    /// Exact offline directory membership; does not expand positions or fetch holdings.
+    static func isKnownFund(symbol: String) -> Bool {
+        funds[symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()] != nil
+    }
     private struct FundDefinition {
         let resource: String
         let label: String
@@ -3338,6 +3404,7 @@ enum LocalETFLookThrough {
         var name: String
         var sector: String?
         var fromETFUSD: Double
+        var costUSD: Double? = 0
     }
 
     private struct HoldingsCatalog: Decodable {
@@ -3377,6 +3444,12 @@ enum LocalETFLookThrough {
     }()
 
     static func make(document: LocalPortfolioDocument, basis: ETFLookThroughBasis) throws -> ETFLookThroughResponse {
+        if document.positions.contains(where: { $0.publicDisclosure != nil }) {
+            guard basis == .market,
+                  document.positions.allSatisfy({ $0.publicDisclosure?.value != nil && $0.publicDisclosure?.instrumentLabel == nil }) else {
+                throw LocalServiceError.remote("当前数据不足，暂时无法按该口径计算。")
+            }
+        }
         let supported = Set(funds.keys)
         let etfs = document.positions.filter { supported.contains($0.ticker.uppercased()) }
         guard !etfs.isEmpty else { throw LocalServiceError.noSupportedETF }
@@ -3398,16 +3471,28 @@ enum LocalETFLookThrough {
         func etfExposure(_ position: LocalPositionRecord) throws -> Double {
             switch basis {
             case .market:
-                try LocalPortfolioEngine.usd(position.shares * position.quotePrice, currency: position.quoteCurrency)
+                try LocalPortfolioEngine.usd(position.publicDisclosure.map { $0.value ?? .nan } ?? (position.shares * position.quotePrice), currency: position.quoteCurrency)
             case .cost:
                 try LocalPortfolioEngine.usd(position.shares * position.averageCost, currency: position.currency)
             }
         }
         func directMarketValue(_ position: LocalPositionRecord) throws -> Double {
             try LocalPortfolioEngine.usd(
-                position.shares * position.quotePrice,
+                position.publicDisclosure.map { $0.value ?? .nan } ?? (position.shares * position.quotePrice),
                 currency: position.quoteCurrency
             )
+        }
+        func positionCost(_ position: LocalPositionRecord) throws -> Double? {
+            guard position.publicDisclosure == nil, position.shares.isFinite,
+                  position.shares > 0, position.averageCost.isFinite,
+                  position.averageCost > 0 else { return nil }
+            let cost = try LocalPortfolioEngine.usd(position.shares * position.averageCost, currency: position.currency)
+            return cost.isFinite && cost > 0 ? cost : nil
+        }
+        func estimatedPercent(market: Double, cost: Double?) -> Double? {
+            guard basis == .market, let cost, cost.isFinite, cost > 0, market.isFinite else { return nil }
+            let result = (market / cost - 1) * 100
+            return result.isFinite ? result : nil
         }
 
         var etfExposures: [(position: LocalPositionRecord, amount: Double, definition: FundDefinition)] = []
@@ -3418,17 +3503,26 @@ enum LocalETFLookThrough {
         let etfTotal = etfExposures.reduce(0) { $0 + $1.amount }
         let directPositions = document.positions.filter { !supported.contains($0.ticker.uppercased()) }
         var direct: [String: (value: Double, name: String)] = [:]
+        var directCosts: [String: Double] = [:]
+        var missingDirectCosts: Set<String> = []
         for position in directPositions {
             let ticker = position.ticker.uppercased()
             let current = direct[ticker]?.value ?? 0
             direct[ticker] = (try current + directMarketValue(position), position.name)
+            if let cost = try positionCost(position) {
+                directCosts[ticker, default: 0] += cost
+            } else {
+                missingDirectCosts.insert(ticker)
+            }
         }
 
         var aggregated: [String: AggregatedExposure] = [:]
         var otherFromETFUSD = 0.0
+        var otherCostUSD: Double? = 0
 
         for exposure in etfExposures {
             guard let dataset = datasets[exposure.definition.resource] else { continue }
+            let etfCost = try positionCost(exposure.position)
             var allocatedWeight = 0.0
             for constituent in dataset.rows {
                 let weight = max(0, constituent.weight)
@@ -3437,6 +3531,9 @@ enum LocalETFLookThrough {
                 let ticker = constituent.ticker.uppercased()
                 if ticker == "CASH" || ticker == "ETF 其他" {
                     otherFromETFUSD += amount
+                    if weight > 0 {
+                        otherCostUSD = otherCostUSD.flatMap { sum in etfCost.map { sum + $0 * weight / 100 } }
+                    }
                     continue
                 }
                 var current = aggregated[ticker] ?? AggregatedExposure(
@@ -3445,16 +3542,27 @@ enum LocalETFLookThrough {
                     fromETFUSD: 0
                 )
                 current.fromETFUSD += amount
+                // Use the same weights for both known fund market value and
+                // cost. This allocates fund P/L; it is not a constituent's
+                // historical price return and requires no extra quote request.
+                if weight > 0 {
+                    current.costUSD = current.costUSD.flatMap { sum in etfCost.map { sum + $0 * weight / 100 } }
+                }
                 if current.sector == nil { current.sector = constituent.sector }
                 aggregated[ticker] = current
             }
             let unallocatedWeight = max(0, 100 - allocatedWeight)
             otherFromETFUSD += exposure.amount * unallocatedWeight / 100
+            if unallocatedWeight > 0 {
+                otherCostUSD = otherCostUSD.flatMap { sum in etfCost.map { sum + $0 * unallocatedWeight / 100 } }
+            }
         }
 
         var rows = aggregated.map { ticker, exposure -> ETFLookThroughRow in
             let directValue = direct.removeValue(forKey: ticker)
             let directUSD = directValue?.value ?? 0
+            let combinedCost = missingDirectCosts.contains(ticker) ? nil
+                : exposure.costUSD.map { $0 + (directCosts[ticker] ?? 0) }
             return ETFLookThroughRow(
                 ticker: ticker,
                 logoSymbol: ticker,
@@ -3463,7 +3571,8 @@ enum LocalETFLookThrough {
                 fromETFUSD: exposure.fromETFUSD,
                 totalUSD: directUSD + exposure.fromETFUSD,
                 etfWeightPercent: etfTotal > 0 ? exposure.fromETFUSD / etfTotal * 100 : 0,
-                sector: exposure.sector
+                sector: SectorAttribution.resolvedSector(ticker: ticker, reportedSector: exposure.sector)?.displayName,
+                estimatedHoldingPeriodPercent: estimatedPercent(market: directUSD + exposure.fromETFUSD, cost: combinedCost)
             )
         }
 
@@ -3473,13 +3582,15 @@ enum LocalETFLookThrough {
             rows.append(ETFLookThroughRow(
                 ticker: "ETF 其他", logoSymbol: nil, name: "基金现金、衍生品及未识别部分",
                 directUSD: 0, fromETFUSD: otherFromETFUSD,
-                totalUSD: otherFromETFUSD, etfWeightPercent: otherWeight, sector: "ETF / Other"
+                totalUSD: otherFromETFUSD, etfWeightPercent: otherWeight, sector: "ETF / Other",
+                estimatedHoldingPeriodPercent: estimatedPercent(market: otherFromETFUSD, cost: otherCostUSD)
             ))
         }
         rows.append(contentsOf: direct.map { ticker, item in
             ETFLookThroughRow(
                 ticker: ticker, logoSymbol: ticker, name: item.name.isEmpty ? ticker : item.name,
-                directUSD: item.value, fromETFUSD: 0, totalUSD: item.value, etfWeightPercent: 0, sector: nil
+                directUSD: item.value, fromETFUSD: 0, totalUSD: item.value, etfWeightPercent: 0,
+                sector: SectorAttribution.primarySector(ticker: ticker)?.displayName
             )
         })
         rows.sort { $0.totalUSD > $1.totalUSD }

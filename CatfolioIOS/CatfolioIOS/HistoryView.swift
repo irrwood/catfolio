@@ -7,7 +7,7 @@ struct PortfolioActivityLedger {
     let securityNames: [String: String]
 }
 
-private enum HistoryCategory: String, CaseIterable, Identifiable {
+enum HistoryCategory: String, CaseIterable, Identifiable {
     case all = "All"
     case orders = "Orders"
     case dividends = "Dividends"
@@ -40,7 +40,7 @@ private enum HistoryCategory: String, CaseIterable, Identifiable {
     }
 }
 
-private enum PortfolioActivityKind: Equatable {
+enum PortfolioActivityKind: Equatable {
     case buy
     case sell
     case dividend
@@ -107,15 +107,18 @@ private enum PortfolioActivityKind: Equatable {
     }
 }
 
-private struct PortfolioActivity: Identifiable {
+struct PortfolioActivity: Identifiable {
     let transaction: LocalTransactionRecord
     let securityName: String
+    let kind: PortfolioActivityKind
+
+    init(transaction: LocalTransactionRecord, securityName: String) {
+        self.transaction = transaction
+        self.securityName = securityName
+        kind = PortfolioActivityKind(action: transaction.action)
+    }
 
     var id: String { transaction.id }
-
-    var kind: PortfolioActivityKind {
-        PortfolioActivityKind(action: transaction.action)
-    }
 
     var nativeAmount: Double {
         let amount = transaction.quantity * transaction.price
@@ -168,13 +171,17 @@ private struct HistorySummaryMetric: Identifiable {
 struct HistoryView: View {
     @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Namespace private var categorySelection
+    @Environment(\.colorScheme) private var colorScheme
 
     private let initialAccountIDs: Set<String>?
+    #if DEBUG
+    private var usesPreviewLedger = false
+    #endif
     @State private var ledger = PortfolioActivityLedger(accounts: [], transactions: [], securityNames: [:])
     @State private var selectedAccountIDs: Set<String>?
     @State private var category: HistoryCategory = .all
+    @State private var ledgerRevision = 0
+    @State private var preparedLedger = HistoryPreparedLedger()
     @AppStorage("history.taxYearBasis") private var taxYearBasisRaw = TaxYearBasis.calendar.rawValue
     @State private var selectedTaxYear: String?
 
@@ -182,13 +189,8 @@ struct HistoryView: View {
         TaxYearBasis(rawValue: taxYearBasisRaw) ?? .calendar
     }
 
-    /// The scope applies to the whole page, so dividends and interest can be
-    /// read a year at a time too — not just disposals.
-    private func inScope(_ date: String) -> Bool {
-        guard let selectedTaxYear else { return true }
-        return taxYearBasis.label(for: date) == selectedTaxYear
-    }
     @State private var scopedHoldings: [Holding] = []
+    @State private var feeCharges: [HistoryFeeCharge] = []
     @State private var isLoading = true
     @State private var isSyncing = false
     @State private var errorMessage: String?
@@ -206,6 +208,17 @@ struct HistoryView: View {
         #endif
     }
 
+    #if DEBUG
+    /// Deterministic native navigation tests without touching stored accounts.
+    init(previewLedger: PortfolioActivityLedger, prepared: HistoryPreparedLedger) {
+        initialAccountIDs = nil
+        usesPreviewLedger = true
+        _ledger = State(initialValue: previewLedger)
+        _preparedLedger = State(initialValue: prepared)
+        _isLoading = State(initialValue: false)
+    }
+    #endif
+
     var body: some View {
         Group {
             if isLoading {
@@ -218,24 +231,36 @@ struct HistoryView: View {
                     description: Text(errorMessage)
                 )
             } else {
-                historyList
+                HistoryPagingView(selection: $category) { pageCategory in
+                    AnyView(historyList(for: pageCategory))
+                }
+                .ignoresSafeArea(.container, edges: [.top, .bottom])
             }
         }
+        // Cover the home-indicator safe area, not just the list's safe frame.
+        .background { SettingsTemplate.pageBackground.ignoresSafeArea() }
+        .softTopScrollEdge()
         .navigationTitle(L10n.text("History"))
         .navigationBarTitleDisplayMode(.large)
         .toolbarVisibility(.visible, for: .navigationBar)
         .toolbarVisibility(.hidden, for: .tabBar)
-        .toolbar {
-            if model.accounts.count > 1 {
-                ToolbarItem(id: "history-accounts", placement: .topBarTrailing) {
-                    accountFilter
-                        .disabled(isLoading)
-                        .tint(.primary)
-                }
-                if #available(iOS 26.0, *) {
-                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
-                }
+        // The pager supplies one continuous material behind the native title
+        // and category row. The navigation bar must not paint a second layer.
+        .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
+        .toolbarVisibility(.hidden, for: .bottomBar)
+        .accessibilityIdentifier("page.history")
+        .overlay(alignment: .bottomLeading) {
+            if ledger.accounts.count > 1 {
+                floatingAccountFilter
+                    .disabled(isLoading)
+                    .tint(.primary)
+                    .buttonBorderShape(.circle)
+                    .controlSize(.large)
+                    .padding(.leading, 26)
+                    .padding(.bottom, 10)
             }
+        }
+        .toolbar {
             ToolbarItem(id: "history-scope", placement: .topBarTrailing) {
                 taxYearPicker
                     .disabled(isLoading)
@@ -271,13 +296,20 @@ struct HistoryView: View {
         } message: {
             Text(exportError ?? "")
         }
-        .onChange(of: selectedAccountIDs) {
-            Task {
-                await loadScopedHoldings()
-                await loadMatchedDisposals()
-            }
+        .task(id: HistoryPreparationKey(
+            revision: ledgerRevision, accountIDs: effectiveAccountIDs, locale: appLocale.identifier
+        )) {
+            guard ledgerRevision > 0 else { return }
+            await prepareLedger()
+        }
+        .onChange(of: effectiveAccountIDs) {
+            // Do not show the previous account's amounts under the new scope.
+            isLoading = true
         }
         .task {
+            #if DEBUG
+            if usesPreviewLedger { return }
+            #endif
             await loadLedger()
             await synchronizeTrading212History()
             // Trading 212 builds activity reports asynchronously and allows
@@ -295,50 +327,56 @@ struct HistoryView: View {
         }
     }
 
-    private var historyList: some View {
-        List {
-            categorySection
-
-            if category == .fees {
+    private func historyList(for pageCategory: HistoryCategory) -> some View {
+        let page = preparedLedger.page(category: pageCategory, basis: taxYearBasis, year: selectedTaxYear)
+        return List {
+            if pageCategory == .fees {
                 feeSections
             } else {
-            Section {
-                ForEach(summaryMetrics) { metric in
-                    summaryRow(metric)
-                }
-            } footer: {
-                if let explanation = realisedExplanation {
-                    Text(explanation)
-                }
-            }
-
-            if filteredActivities.isEmpty {
                 Section {
-                    ContentUnavailableView(
-                        emptyTitle,
-                        systemImage: emptySystemImage,
-                        description: Text(emptyDescription)
-                    )
-                    .frame(maxWidth: .infinity)
-                    .listRowBackground(Color.clear)
-                }
-            } else {
-                ForEach(groupedActivities) { group in
-                    Section {
-                        ForEach(group.activities) { activity in
-                            activityRow(activity)
-                        }
-                    } header: {
-                        Text(group.title)
-                            .textCase(nil)
+                    ForEach(summaryMetrics(for: pageCategory)) { metric in
+                        summaryRow(metric)
                     }
-                    .headerProminence(.increased)
+                } footer: {
+                    if let explanation = realisedExplanation(for: pageCategory) {
+                        Text(explanation)
+                    }
                 }
-            }
+
+                if page.activities.isEmpty {
+                    Section {
+                        ContentUnavailableView(
+                            emptyTitle(for: pageCategory),
+                            systemImage: emptySystemImage,
+                            description: Text(emptyDescription)
+                        )
+                        .frame(maxWidth: .infinity)
+                        .listRowBackground(Color.clear)
+                    }
+                } else {
+                    ForEach(page.groups) { group in
+                        Section {
+                            ForEach(group.activities) { activity in
+                                activityRow(activity)
+                            }
+                        } header: {
+                            Text(group.title)
+                                .textCase(nil)
+                        }
+                        .headerProminence(.increased)
+                    }
+                }
             }
         }
         .listStyle(.insetGrouped)
+        // The list draws its own grouped grey, which is #F2F2F7 and reads as a
+        // seam against the template's #F7F7F7 under the chip row.
+        .scrollContentBackground(.hidden)
         .contentMargins(.top, 0, for: .scrollContent)
+        // Space to scroll the last row clear of the floating scope control,
+        // without reserving an opaque toolbar-sized viewport at the bottom.
+        .contentMargins(.bottom, 76, for: .scrollContent)
+        .accessibilityIdentifier("history-list")
         .refreshable {
             await synchronizeTrading212History()
             await loadLedger(showLoading: false)
@@ -352,14 +390,6 @@ struct HistoryView: View {
     /// out of the price — so the only way to see it is to price the holding
     /// against a published rate. That is also why it is worth showing: it is
     /// the one cost in this app that is never itemised anywhere else.
-    private var feeCharges: [(holding: Holding, rate: Double, annual: Double, isVerified: Bool)] {
-        guard let catalog = try? FundFeeCatalog.bundled.get() else { return [] }
-        return scopedHoldings.compactMap { holding in
-            guard let fee = catalog.fee(brokerSymbol: holding.ticker) else { return nil }
-            return (holding, fee.rate, holding.marketValue * fee.rate, fee.isVerified)
-        }.sorted { $0.annual > $1.annual }
-    }
-
     @ViewBuilder
     private var feeSections: some View {
         let charges = feeCharges
@@ -406,7 +436,7 @@ struct HistoryView: View {
     }
 
     private func feeRow(
-        _ charge: (holding: Holding, rate: Double, annual: Double, isVerified: Bool)
+        _ charge: HistoryFeeCharge
     ) -> some View {
         HStack(spacing: 12) {
             AssetLogo(
@@ -442,14 +472,14 @@ struct HistoryView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var summaryMetrics: [HistorySummaryMetric] {
+    private func summaryMetrics(for category: HistoryCategory) -> [HistorySummaryMetric] {
         switch category {
         // Fees have their own section rather than a metric strip: they are a
         // rate applied to a holding, not a count of things that happened.
         case .fees: []
         case .all:
             [
-                HistorySummaryMetric(title: L10n.text("Activity"), value: "\(filteredActivities.count)", color: .primary),
+                HistorySummaryMetric(title: L10n.text("Activity"), value: "\(preparedLedger.page(category: .all, basis: taxYearBasis, year: selectedTaxYear).activities.count)", color: .primary),
                 HistorySummaryMetric(title: L10n.text("Accounts"), value: "\(selectedAccounts.count)", color: .secondary),
             ]
         case .orders:
@@ -518,7 +548,7 @@ struct HistoryView: View {
     /// actually received. Nothing above says that, and for an account whose
     /// disposals are entirely broker-reported, recounting them here would add
     /// nothing at all.
-    private var realisedExplanation: String? {
+    private func realisedExplanation(for category: HistoryCategory) -> String? {
         guard category == .orders else { return nil }
         let calculation = realisedCalculation
         guard calculation.saleCount > 0 else { return nil }
@@ -536,7 +566,7 @@ struct HistoryView: View {
             let names = calculation.unconvertibleCurrencies.sorted().joined(separator: "/")
             parts.append(L10n.text("\(names) 缺汇率，只出现在原币行"))
         }
-        return parts.isEmpty ? nil : parts.joined(separator: "。") + "。"
+        return parts.isEmpty ? nil : L10n.sentences(parts)
     }
 
     private var realisedSummaryMetrics: [HistorySummaryMetric] {
@@ -598,6 +628,15 @@ struct HistoryView: View {
         }
     }
 
+    @ViewBuilder
+    private var floatingAccountFilter: some View {
+        if #available(iOS 26.0, *) {
+            accountFilter.buttonStyle(.glass)
+        } else {
+            accountFilter.buttonStyle(.bordered)
+        }
+    }
+
     private var accountFilter: some View {
         Menu {
             Button {
@@ -625,96 +664,7 @@ struct HistoryView: View {
         .menuActionDismissBehavior(.disabled)
         .accessibilityLabel(L10n.text("Account filter"))
         .accessibilityValue(accountFilterTitle)
-    }
-
-    @ViewBuilder
-    private var categorySection: some View {
-        let section = Section {
-            categoryPicker
-                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-        }
-        if #available(iOS 26.0, *) {
-            section.listSectionMargins(.horizontal, 0)
-        } else {
-            section
-        }
-    }
-
-    private var categoryContentInset: CGFloat {
-        if #available(iOS 26.0, *) { 16 } else { 0 }
-    }
-
-    private var categoryPicker: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal) {
-                Group {
-                    if #available(iOS 26.0, *) {
-                        GlassEffectContainer(spacing: 8) {
-                            categoryButtons
-                        }
-                    } else {
-                        categoryButtons
-                    }
-                }
-                .padding(.vertical, 8)
-            }
-            .contentMargins(.horizontal, categoryContentInset, for: .scrollContent)
-            .scrollIndicators(.hidden)
-            .scrollClipDisabled()
-            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-            .onChange(of: category) {
-                withAnimation(reduceMotion ? nil : .smooth(duration: 0.22)) {
-                    proxy.scrollTo(category.id)
-                }
-            }
-        }
-    }
-
-    private var categoryButtons: some View {
-        HStack(spacing: 8) {
-            ForEach(HistoryCategory.allCases) { option in
-                categoryButton(option)
-                    .id(option.id)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func categoryButton(_ option: HistoryCategory) -> some View {
-        let isSelected = category == option
-        let button = Button {
-            withAnimation(reduceMotion ? nil : .smooth(duration: 0.22)) {
-                category = option
-            }
-        } label: {
-            Text(L10n.label(option.rawValue))
-                .font(.body.weight(.medium))
-                .foregroundStyle(isSelected ? Color.primary : Color.secondary)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .frame(minWidth: 80, minHeight: 48)
-                .contentShape(.capsule)
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-
-        if isSelected {
-            if #available(iOS 26.0, *) {
-                button
-                    .glassEffect(.regular.interactive(), in: .capsule)
-                    .glassEffectID("category-selection", in: categorySelection)
-            } else {
-                button
-                    .background(.thinMaterial, in: Capsule())
-                    .matchedGeometryEffect(id: "category-selection", in: categorySelection)
-            }
-        } else {
-            button
-        }
+        .accessibilityIdentifier("history-accounts")
     }
 
     private func activityRow(_ activity: PortfolioActivity) -> some View {
@@ -805,7 +755,7 @@ struct HistoryView: View {
         for (date, quantity) in later {
             parts.append(L10n.text("\(DisplayFormat.shares(quantity)) 股与 \(shortDate(date)) 的买入配对"))
         }
-        return parts.joined(separator: "；") + L10n.text("（英国 30 天规则，未计入 Section 104 池）")
+        return parts.joined(separator: L10n.clauseSeparator) + L10n.text("（英国 30 天规则，未计入 Section 104 池）")
     }
 
     private func shortDate(_ iso: String) -> String {
@@ -861,36 +811,12 @@ struct HistoryView: View {
         .accessibilityHint("Filter History to this account; tap again to show all accounts")
     }
 
-    private var allActivities: [PortfolioActivity] {
-        ledger.transactions.compactMap { transaction in
-            let activity = PortfolioActivity(
-                transaction: transaction,
-                securityName: ledger.securityNames[transaction.ticker.uppercased()] ?? transaction.ticker
-            )
-            return activity.kind.isCashTransfer ? nil : activity
-        }
+    private var currentPage: HistoryActivityPage {
+        preparedLedger.page(category: category, basis: taxYearBasis, year: selectedTaxYear)
     }
 
     private var filteredActivities: [PortfolioActivity] {
-        allActivities
-            .filter { effectiveAccountIDs.contains($0.transaction.accountKey) }
-            .filter { category.includes($0.kind) }
-            .filter { inScope($0.transaction.date) }
-            .sorted {
-                if $0.transaction.date == $1.transaction.date { return $0.id > $1.id }
-                return $0.transaction.date > $1.transaction.date
-            }
-    }
-
-    private var groupedActivities: [ActivityDateGroup] {
-        let groups = Dictionary(grouping: filteredActivities) { $0.transaction.date }
-        return groups.keys.sorted(by: >).map { dateText in
-            ActivityDateGroup(
-                id: dateText,
-                title: dateGroupTitle(dateText),
-                activities: groups[dateText] ?? []
-            )
-        }
+        currentPage.activities
     }
 
     private var selectedAccounts: [PortfolioAccount] {
@@ -917,7 +843,7 @@ struct HistoryView: View {
         return "\(accountNickname(first)) + \(accounts.count - 1)"
     }
 
-    private var emptyTitle: String {
+    private func emptyTitle(for category: HistoryCategory) -> String {
         effectiveAccountIDs.isEmpty ? L10n.text("No accounts selected") : L10n.text("No \(L10n.label(category.rawValue))")
     }
 
@@ -931,62 +857,21 @@ struct HistoryView: View {
     }
 
     private func totalUSD(for kind: PortfolioActivityKind) -> Double {
-        allActivities
-            .filter { effectiveAccountIDs.contains($0.transaction.accountKey) && $0.kind == kind }
-            .filter { inScope($0.transaction.date) }
-            .reduce(0) { $0 + $1.amountUSD }
+        let category: HistoryCategory = kind == .dividend ? .dividends : .interest
+        return preparedLedger.page(category: category, basis: taxYearBasis, year: selectedTaxYear).totalUSD
     }
 
-    /// Account-scoped but never year-scoped: FIFO has to see the whole
-    /// history, or a lot bought outside the selected year stops backing the
-    /// sale it actually settled.
-    private var accountTransactions: [LocalTransactionRecord] {
-        allActivities
-            .filter { effectiveAccountIDs.contains($0.transaction.accountKey) }
-            .map(\.transaction)
-    }
-
-    /// Every tax year present in the ledger, newest first. FIFO runs across
-    /// the whole history inside the calculator; only the results are grouped.
-    /// Disposals that were matched against an acquisition rather than the
-    /// pool, keyed by the ledger row they came from.
-    ///
-    /// Held in state and computed once per ledger, never in the body. As a
-    /// computed property this ran on every row: the matcher walks the whole
-    /// transaction list once per security, so rendering N rows cost N × T × X
-    /// and the screen simply never finished. That is the second time this
-    /// page has been given an expensive answer to a per-row question.
-    @State private var matchedDisposals: [String: UKShareMatching.Disposal] = [:]
-
-    private func loadMatchedDisposals() async {
-        let transactions = accountTransactions
-        matchedDisposals = await Task.detached(priority: .userInitiated) {
-            let splits = try? StockSplitCatalog.bundled.get()
-            let tickers = Set(
-                transactions
-                    .filter { $0.action.uppercased() == "SELL" }
-                    .map { $0.ticker.uppercased() }
-            )
-            var byRow: [String: UKShareMatching.Disposal] = [:]
-            for ticker in tickers {
-                for disposal in UKShareMatching.disposals(
-                    ticker: ticker, transactions: transactions, splits: splits
-                ) where !disposal.isFullyFromPool {
-                    byRow[disposal.sourceID] = disposal
-                }
-            }
-            return byRow
-        }.value
+    private var matchedDisposals: [String: UKShareMatching.Disposal] {
+        preparedLedger.matchedDisposals
     }
 
     private var realisedByTaxYear: [(label: String, summary: RealisedProfitSummary)] {
-        RealisedProfitCalculator.summarize(transactions: accountTransactions, basis: taxYearBasis)
-            .filter { $0.summary.saleCount > 0 }
+        preparedLedger.realisedByTaxYear[taxYearBasis] ?? []
     }
 
     private var realisedCalculation: RealisedProfitSummary {
         guard let year = selectedTaxYear else {
-            return RealisedProfitCalculator.summarize(transactions: accountTransactions)
+            return preparedLedger.realisedTotal
         }
         return realisedByTaxYear.first { $0.label == year }?.summary ?? RealisedProfitSummary()
     }
@@ -1006,7 +891,7 @@ struct HistoryView: View {
     }
 
     private func accountNickname(_ account: PortfolioAccount) -> String {
-        AccountNaming.nickname(from: account.displayName, provider: AccountNaming.providerName(for: account.source))
+        AccountNaming.nickname(from: account.localizedDisplayName, provider: AccountNaming.providerName(for: account.source))
     }
 
     private func accountTagTitle(_ account: PortfolioAccount) -> String {
@@ -1038,31 +923,19 @@ struct HistoryView: View {
         }
     }
 
-    private func dateGroupTitle(_ text: String) -> String {
-        guard let date = localDate(from: text) else { return text }
-        let calendar = Calendar.current
-        if calendar.isDateInToday(date) { return L10n.text("Today") }
-        if calendar.isDateInYesterday(date) { return L10n.text("Yesterday") }
-        return date.formatted(.dateTime.month(.wide).day().year())
-    }
-
-    private func localDate(from text: String) -> Date? {
-        let values = text.split(separator: "-").compactMap { Int($0) }
-        guard values.count == 3 else { return nil }
-        return Calendar.current.date(from: DateComponents(year: values[0], month: values[1], day: values[2]))
-    }
-
     @MainActor
     private func loadLedger(showLoading: Bool = true) async {
         if showLoading { isLoading = true }
-        defer { isLoading = false }
         do {
-            ledger = try await model.activityLedger()
+            let loaded = try await model.activityLedger()
+            guard !Task.isCancelled else { return }
+            ledger = loaded
+            ledgerRevision += 1
             errorMessage = nil
-            await loadScopedHoldings()
-            await loadMatchedDisposals()
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
+            isLoading = false
         }
     }
 
@@ -1072,13 +945,37 @@ struct HistoryView: View {
     /// because market value and weight depend on the scope they are computed
     /// in — and the fee figures are money, so an apportioned number would be
     /// wrong rather than approximate.
-    private func loadScopedHoldings() async {
-        scopedHoldings = (try? await model.holdings(forAccounts: effectiveAccountIDs)) ?? []
+    private func prepareLedger() async {
+        let ledger = ledger
+        let accountIDs = effectiveAccountIDs
+        let locale = appLocale
+        let worker = Task.detached(priority: .userInitiated) {
+            try HistoryPreparedLedger.build(ledger: ledger, accountIDs: accountIDs, locale: locale)
+        }
+        async let scopedPositions = model.holdings(forAccounts: accountIDs)
+        do {
+            let prepared = try await withTaskCancellationHandler {
+                try await worker.value
+            } onCancel: { worker.cancel() }
+            try Task.checkCancellation()
+            let holdings = (try? await scopedPositions) ?? []
+            try Task.checkCancellation()
+            let charges = await Task.detached(priority: .userInitiated) {
+                HistoryFeeCharge.build(holdings: holdings)
+            }.value
+            try Task.checkCancellation()
+            preparedLedger = prepared
+            scopedHoldings = holdings
+            feeCharges = charges
+            isLoading = false
+        } catch {
+            // Superseded scopes and a popped page must not publish old results.
+        }
     }
 
     @MainActor
     private func synchronizeTrading212History() async {
-        guard !isSyncing else { return }
+        guard !isSyncing, !Task.isCancelled else { return }
         let targetIDs = initialAccountIDs ?? Set(ledger.accounts.map(\.id))
         let targetAccounts = ledger.accounts.filter {
             targetIDs.contains($0.id) && $0.source == "Trading 212"
@@ -1104,6 +1001,7 @@ struct HistoryView: View {
                 accounts: credentials,
                 environment: environment
             )
+            try Task.checkCancellation()
             let names = Dictionary(uniqueKeysWithValues: targetAccounts.compactMap { account in
                 account.accountID.map { ($0, account.name) }
             })
@@ -1112,6 +1010,7 @@ struct HistoryView: View {
                 accountNames: names,
                 replacingAccountsOnly: true
             )
+            try Task.checkCancellation()
             await loadLedger(showLoading: false)
         } catch {
             // Keep the locally cached ledger visible. Pull to refresh can retry.
@@ -1153,10 +1052,148 @@ struct HistoryView: View {
     }
 }
 
-private struct ActivityDateGroup: Identifiable {
+struct ActivityDateGroup: Identifiable {
     let id: String
     let title: String
     let activities: [PortfolioActivity]
+}
+
+struct HistoryHeaderPosition: Equatable {
+    let pullDown: CGFloat
+    let materialOpacity: Double
+
+    init(scrollOffset: CGFloat) {
+        pullDown = max(0, -scrollOffset)
+        let progress = min(1, max(0, scrollOffset / 16))
+        materialOpacity = Double(progress * progress * (3 - 2 * progress))
+    }
+}
+
+private struct HistoryPreparationKey: Hashable {
+    let revision: Int
+    let accountIDs: Set<String>
+    let locale: String
+}
+
+struct HistoryActivityPage {
+    var activities: [PortfolioActivity] = []
+    var groups: [ActivityDateGroup] = []
+    var totalUSD: Double = 0
+}
+
+/// Immutable UI indexes, rebuilt off the main actor only when the ledger or
+/// account scope changes. A category tap or a scroll never runs FIFO, parses
+/// the catalogues, sorts transactions, or regroups a whole history.
+struct HistoryPreparedLedger {
+    private struct Period: Hashable {
+        var basis: TaxYearBasis = .calendar
+        var year: String?
+    }
+
+    private var pages: [Period: [HistoryCategory: HistoryActivityPage]] = [:]
+    var realisedTotal = RealisedProfitSummary()
+    var realisedByTaxYear: [TaxYearBasis: [(label: String, summary: RealisedProfitSummary)]] = [:]
+    var matchedDisposals: [String: UKShareMatching.Disposal] = [:]
+
+    func page(category: HistoryCategory, basis: TaxYearBasis, year: String?) -> HistoryActivityPage {
+        let period = year.map { Period(basis: basis, year: $0) } ?? Period()
+        return pages[period]?[category] ?? HistoryActivityPage()
+    }
+
+    static func build(
+        ledger: PortfolioActivityLedger, accountIDs: Set<String>, locale: Locale
+    ) throws -> Self {
+        try Task.checkCancellation()
+        let activities = ledger.transactions.compactMap { transaction -> PortfolioActivity? in
+            guard accountIDs.contains(transaction.accountKey) else { return nil }
+            let activity = PortfolioActivity(
+                transaction: transaction,
+                securityName: ledger.securityNames[transaction.ticker.uppercased()] ?? transaction.ticker
+            )
+            return activity.kind.isCashTransfer ? nil : activity
+        }
+        // Keep the calculator's existing whole-history inputs and algorithms.
+        // The year filters apply to its results, never to acquisition lots.
+        let transactions = activities.map(\.transaction)
+        var result = Self()
+        result.realisedTotal = RealisedProfitCalculator.summarize(transactions: transactions)
+        for basis in TaxYearBasis.allCases {
+            try Task.checkCancellation()
+            result.realisedByTaxYear[basis] = RealisedProfitCalculator
+                .summarize(transactions: transactions, basis: basis)
+                .filter { $0.summary.saleCount > 0 }
+        }
+        let splits = try? StockSplitCatalog.bundled.get()
+        let tickers = Set(transactions.filter { $0.action.uppercased() == "SELL" }.map { $0.ticker.uppercased() })
+        for ticker in tickers {
+            try Task.checkCancellation()
+            for disposal in UKShareMatching.disposals(ticker: ticker, transactions: transactions, splits: splits)
+            where !disposal.isFullyFromPool {
+                result.matchedDisposals[disposal.sourceID] = disposal
+            }
+        }
+
+        let titles = Dictionary(uniqueKeysWithValues: Set(activities.map { $0.transaction.date }).map {
+            ($0, dateGroupTitle($0, locale: locale))
+        })
+        result.pages[Period()] = makePages(activities, titles: titles)
+        for basis in TaxYearBasis.allCases {
+            let groups = Dictionary(grouping: activities) { basis.label(for: $0.transaction.date) }
+            for (year, entries) in groups {
+                try Task.checkCancellation()
+                guard let year else { continue }
+                result.pages[Period(basis: basis, year: year)] = makePages(entries, titles: titles)
+            }
+        }
+        return result
+    }
+
+    private static func makePages(
+        _ activities: [PortfolioActivity], titles: [String: String]
+    ) -> [HistoryCategory: HistoryActivityPage] {
+        let sorted = activities.sorted {
+            if $0.transaction.date == $1.transaction.date { return $0.id > $1.id }
+            return $0.transaction.date > $1.transaction.date
+        }
+        return Dictionary(uniqueKeysWithValues: HistoryCategory.allCases.map { category in
+            let filtered = sorted.filter { category.includes($0.kind) }
+            let grouped = Dictionary(grouping: filtered) { $0.transaction.date }
+            let groups = grouped.keys.sorted(by: >).map {
+                ActivityDateGroup(id: $0, title: titles[$0] ?? $0, activities: grouped[$0] ?? [])
+            }
+            return (category, HistoryActivityPage(
+                activities: filtered, groups: groups,
+                // Sum in the original ledger order, as the previous display did.
+                totalUSD: activities.filter { category.includes($0.kind) }.reduce(0) { $0 + $1.amountUSD }
+            ))
+        })
+    }
+
+    private static func dateGroupTitle(_ text: String, locale: Locale) -> String {
+        let values = text.split(separator: "-").compactMap { Int($0) }
+        guard values.count == 3,
+              let date = Calendar.current.date(from: DateComponents(year: values[0], month: values[1], day: values[2]))
+        else { return text }
+        if Calendar.current.isDateInToday(date) { return L10n.text("Today") }
+        if Calendar.current.isDateInYesterday(date) { return L10n.text("Yesterday") }
+        return date.formatted(.dateTime.month(.wide).day().year().locale(locale))
+    }
+}
+
+private struct HistoryFeeCharge {
+    let holding: Holding
+    let rate: Double
+    let annual: Double
+    let isVerified: Bool
+
+    static func build(holdings: [Holding]) -> [Self] {
+        guard let catalog = try? FundFeeCatalog.bundled.get() else { return [] }
+        return holdings.compactMap { holding in
+            guard let fee = catalog.fee(brokerSymbol: holding.ticker) else { return nil }
+            return Self(holding: holding, rate: fee.rate,
+                        annual: holding.marketValue * fee.rate, isVerified: fee.isVerified)
+        }.sorted { $0.annual > $1.annual }
+    }
 }
 
 private struct HistoryCSVDocument: FileDocument {

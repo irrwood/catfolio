@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct HoldingsHeatmapTile: View {
+    @Environment(\.locale) private var appLocale
     struct Model: Identifiable {
         enum Content {
             case holding(Holding)
@@ -14,7 +15,6 @@ struct HoldingsHeatmapTile: View {
         let portfolioFraction: Double
         let changePercent: Double?
         let performanceTitle: String
-
         var performancePeriod: HoldingPerformancePeriod = .today
         var isEstimated = false
         var detailItems: [Model] = []
@@ -127,6 +127,7 @@ struct HoldingsHeatmapTile: View {
                 fxPnlSource: nil
             )
         }
+
         var holding: Holding? {
             switch content {
             case let .holding(holding): holding
@@ -146,18 +147,36 @@ struct HoldingsHeatmapTile: View {
     let size: CGSize
     let action: (() -> Void)?
 
+    static func canShowIdentifier(in size: CGSize) -> Bool {
+        (size.width >= 40 && size.height >= 22) || min(size.width, size.height) >= 24
+    }
+
+    static func usesCapsule(in size: CGSize) -> Bool {
+        let shortSide = min(size.width, size.height)
+        let longSide = max(size.width, size.height)
+        return shortSide > 0 && shortSide <= 16 && longSide >= shortSide * 4
+    }
+
+    static func inset(in size: CGSize, maximum: CGFloat = 2) -> CGFloat {
+        // Keep a consistent gutter; clamp only when a sliver cannot afford it.
+        min(maximum, max(0, min(size.width, size.height)) / 4)
+    }
+
     private var showsTicker: Bool {
-        size.width >= 46 && size.height >= 40
+        size.width >= 40 && size.height >= 22
     }
 
     private var showsChange: Bool {
-        size.width >= 62 && size.height >= 58
+        size.width >= 44 && size.height >= 44
     }
 
     private var showsLogo: Bool {
-        size.width >= 88 && size.height >= 92
+        size.width >= 88 && size.height >= 112
     }
 
+    /// Wherever a return is shown, so is the weight. These were 8pt apart in
+    /// height, which is why most mid-sized tiles carried one figure and not the
+    /// pair; the weight's own scale drops instead of the tile going without it.
     private var showsWeight: Bool {
         showsChange
     }
@@ -202,18 +221,15 @@ struct HoldingsHeatmapTile: View {
             }
         }
         .accessibilityLabel(accessibilityText)
-    /// Wherever a return is shown, so is the weight. These were 8pt apart in
-    /// height, which is why most mid-sized tiles carried one figure and not the
-    /// pair; the weight's own scale drops instead of the tile going without it.
     }
 
     private var tileBody: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: tileRadius)
+            RoundedRectangle(cornerRadius: tileRadius, style: tileCornerStyle)
                 .fill(backgroundColor)
 
             if usesMicroSeparator {
-                RoundedRectangle(cornerRadius: tileRadius)
+                RoundedRectangle(cornerRadius: tileRadius, style: tileCornerStyle)
                     .strokeBorder(Color(uiColor: .systemBackground), lineWidth: 0.75)
             }
 
@@ -221,7 +237,8 @@ struct HoldingsHeatmapTile: View {
                 .padding(tilePadding)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .contentShape(.rect(cornerRadius: tileRadius))
+        .clipShape(RoundedRectangle(cornerRadius: tileRadius, style: tileCornerStyle))
+        .contentShape(RoundedRectangle(cornerRadius: tileRadius, style: tileCornerStyle))
     }
 
     @ViewBuilder
@@ -245,15 +262,12 @@ struct HoldingsHeatmapTile: View {
         }
     }
 
+    @ViewBuilder
     private func securityContent(ticker: String, logoSymbol: String?) -> some View {
-        VStack(spacing: showsLogo ? 6 : 3) {
-            if showsLogo {
-                AssetLogo(ticker: ticker, logoSymbol: logoSymbol)
-            }
-
+        if !showsChange && !showsLogo {
             if showsTicker {
                 Text(ticker)
-                    .font(showsLogo ? .headline : .caption.bold())
+                    .appText(identifierScale, weight: .semibold)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
             } else if Self.canShowIdentifier(in: size) {
@@ -274,6 +288,8 @@ struct HoldingsHeatmapTile: View {
 
                 performanceLabels(change: model.changePercent)
             }
+        }
+    }
 
     /// The return sits above the weight, always.
     ///
@@ -287,26 +303,34 @@ struct HoldingsHeatmapTile: View {
         if showsChange {
             if let change {
                 Text(DisplayFormat.percent(change))
-                    .appNumber(.callout, weight: .bold)
+                    .appNumber(returnScale, weight: .bold)
                     .foregroundStyle(changeColor)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-
-            if showsWeight {
-                Text("仓位 \(DisplayFormat.percent(fraction * 100, signed: false))")
-                    .appNumber(.caption)
-                    .foregroundStyle(.secondary)
+                    .minimumScaleFactor(0.65)
+            } else {
+                Text(DisplayFormat.percent(0))
+                    .appNumber(returnScale, weight: .bold)
                     .lineLimit(1)
+                    .hidden()
             }
+        }
+        if showsWeight {
+            Text(DisplayFormat.percent(fraction * 100, signed: false))
+                .appNumber(detailScale)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
     }
 
     private var tileRadius: CGFloat {
         let shortestSide = max(0, min(size.width, size.height))
-        if shortestSide < 16 { return shortestSide * 0.06 }
-        if shortestSide < 60 { return min(8, shortestSide * 0.2) }
-        return 11
+        if Self.usesCapsule(in: size) { return shortestSide / 2 }
+        return min(11, shortestSide * 0.25)
+    }
+
+    private var tileCornerStyle: RoundedCornerStyle {
+        Self.usesCapsule(in: size) ? .circular : .continuous
     }
 
     private var usesMicroSeparator: Bool {
@@ -314,11 +338,12 @@ struct HoldingsHeatmapTile: View {
     }
 
     private var tilePadding: CGFloat {
-        min(size.width, size.height) < 72 ? 5 : 9
+        if min(size.width, size.height) < 48 { return 3 }
+        return min(size.width, size.height) < 72 ? 5 : 9
     }
 
     private var changeText: String {
-        model.changePercent.map { DisplayFormat.percent($0) } ?? "暂无行情"
+        model.changePercent.map { (model.isEstimated ? "≈" : "") + DisplayFormat.percent($0) } ?? L10n.text("暂无行情")
     }
 
     private var changeColor: Color {
@@ -327,11 +352,8 @@ struct HoldingsHeatmapTile: View {
     }
 
     private var backgroundColor: Color {
-        if model.isRemainder {
-            return Color(uiColor: .secondarySystemFill)
-        }
         guard let change = model.changePercent, abs(change) >= 0.005 else {
-            return CatfolioPalette.neutral100
+            return CatfolioTheme.neutralFill
         }
         let intensity = min(abs(change) / 3, 1)
         let opacity = 0.12 + intensity * 0.22
@@ -341,13 +363,13 @@ struct HoldingsHeatmapTile: View {
     private var accessibilityText: String {
         switch model.content {
         case let .holding(holding):
-            return "\(holding.shortName)，仓位 \(DisplayFormat.percent(fraction * 100, signed: false))，\(model.performanceTitle) \(changeText)"
+            return L10n.text("\(holding.shortName)，占组合 \(DisplayFormat.percent(fraction * 100, signed: false))，\(model.performanceTitle) \(changeText)")
         case let .exposure(row, directHolding):
             let name = CompanyNameCatalog.displayName(ticker: row.ticker, fallback: row.name)
             let source = directHolding == nil ? "ETF 穿透持仓" : "直接与 ETF 合并持仓"
-            return "\(name)，\(source)，仓位 \(DisplayFormat.percent(fraction * 100, signed: false))，\(model.performanceTitle) \(changeText)"
+            return L10n.text("\(name)，\(source)，占组合 \(DisplayFormat.percent(fraction * 100, signed: false))，\(model.performanceTitle) \(changeText)")
         case let .remainder(count):
-            return "其他 \(count) 项合并持仓"
+            return L10n.text("其他 \(count) 项合并持仓")
         }
     }
 }

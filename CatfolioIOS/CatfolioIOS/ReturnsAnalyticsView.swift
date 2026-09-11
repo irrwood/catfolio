@@ -2,20 +2,27 @@ import SwiftUI
 
 private typealias ReturnsAnalyticsTypography = LegacyType
 
+enum ReturnsAnalyticsChart {
+    case drawdown, valuation
+}
+
 struct ReturnsAnalyticsView: View {
+    @Environment(\.locale) private var appLocale
     let response: ReturnsAnalyticsResponse
     let pendingParts: Set<ReturnsAnalyticsPart>
+    let chart: ReturnsAnalyticsChart
 
     var body: some View {
-        VStack(spacing: 64) {
+        switch chart {
+        case .drawdown:
             if pendingParts.contains(.drawdown) {
-                AnalyticsLoadingCard(title: "回撤水下曲线", height: 210)
+                ReturnsAnalyticsLoadingView(chart: chart)
             } else {
                 DrawdownCard(series: response.drawdown)
             }
-
+        case .valuation:
             if pendingParts.contains(.valuation) {
-                AnalyticsLoadingCard(title: "估值矩阵 (P/E vs 成长)", height: 240)
+                ReturnsAnalyticsLoadingView(chart: chart)
             } else {
                 ValuationMatrixCard(matrix: response.valuation)
             }
@@ -24,15 +31,21 @@ struct ReturnsAnalyticsView: View {
 }
 
 struct ReturnsAnalyticsLoadingView: View {
+    @Environment(\.locale) private var appLocale
+    let chart: ReturnsAnalyticsChart
+
     var body: some View {
-        VStack(spacing: 64) {
-            AnalyticsLoadingCard(title: "回撤水下曲线", height: 210)
-            AnalyticsLoadingCard(title: "估值矩阵 (P/E vs 成长)", height: 240)
+        switch chart {
+        case .drawdown:
+            AnalyticsLoadingCard(title: L10n.text("回撤水下曲线"), height: 210)
+        case .valuation:
+            AnalyticsLoadingCard(title: L10n.text("估值矩阵 (P/E vs 成长)"), height: 240)
         }
     }
 }
 
 private struct AnalyticsLoadingCard: View {
+    @Environment(\.locale) private var appLocale
     let title: String
     let height: CGFloat
 
@@ -48,42 +61,21 @@ private struct AnalyticsLoadingCard: View {
 }
 
 struct ReturnsAnalyticsUnavailableView: View {
+    @Environment(\.locale) private var appLocale
     var body: some View {
         ContentUnavailableView(
-            "暂无分析图表",
+            L10n.text("暂无分析图表"),
             systemImage: "chart.xyaxis.line",
-            description: Text("下拉刷新后重试。")
+            description: Text(L10n.text("下拉刷新后重试。"))
         )
         .frame(maxWidth: .infinity, minHeight: 140)
     }
 }
 
-private enum DrawdownRange: String, CaseIterable, Identifiable {
-    case oneDay = "1D"
-    case oneWeek = "1W"
-    case oneMonth = "1M"
-    case threeMonths = "3M"
-    case yearToDate = "YTD"
-    case oneYear = "1Y"
-    case maximum = "MAX"
-
-    var id: String { rawValue }
-
-    var dayWindow: Int? {
-        switch self {
-        case .oneDay: 1
-        case .oneWeek: 7
-        case .oneMonth: 31
-        case .threeMonths: 93
-        case .oneYear: 366
-        case .yearToDate, .maximum: nil
-        }
-    }
-}
-
 private struct DrawdownCard: View {
+    @Environment(\.locale) private var appLocale
     let series: DrawdownSeries
-    @State private var range = DrawdownRange.maximum
+    @State private var range = ChartTimeRange.maximum
     @State private var rows: [DrawdownPoint]
     @State private var selectedDate: Date?
 
@@ -95,12 +87,12 @@ private struct DrawdownCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("回撤水下曲线")
+                Text(L10n.text("回撤水下曲线"))
                     .font(ReturnsAnalyticsTypography.medium(19, relativeTo: .headline))
 
                 Spacer(minLength: 8)
 
-                Text("最大回撤 \(DisplayFormat.ratioPercent(series.maxDrawdown))")
+                Text(L10n.text("最大回撤 \(DisplayFormat.ratioPercent(series.maxDrawdown))"))
                     .appNumber(.label, weight: .semibold)
                     .foregroundStyle(CatfolioStyle.blue)
                     .lineLimit(1)
@@ -127,14 +119,14 @@ private struct DrawdownCard: View {
                     onInteractionEnded: { selectedDate = nil }
                 )
                 .frame(height: 230)
-                .accessibilityLabel("回撤水下曲线。\(range.rawValue)。最大回撤 \(DisplayFormat.ratioPercent(series.maxDrawdown))")
+                .accessibilityLabel(L10n.text("回撤水下曲线。\(range.rawValue)。最大回撤 \(DisplayFormat.ratioPercent(series.maxDrawdown))"))
 
                 drawdownRangePicker
             } else {
                 ContentUnavailableView(
-                    "暂无回撤数据",
+                    L10n.text("暂无回撤数据"),
                     systemImage: "water.waves",
-                    description: Text("至少需要两个持仓共同交易日。")
+                    description: Text(L10n.text("至少需要两个持仓共同交易日。"))
                 )
                 .frame(maxWidth: .infinity, minHeight: 130)
             }
@@ -152,12 +144,10 @@ private struct DrawdownCard: View {
 
     private var drawdownRangePicker: some View {
         ChartTimeRangePicker(
-            choices: DrawdownRange.allCases,
-            selection: $range,
-            title: { $0.rawValue }
+            selection: $range
         )
         .frame(height: 44)
-        .accessibilityLabel("回撤图表时间范围")
+        .accessibilityLabel(L10n.text("回撤图表时间范围"))
     }
 
     private func select(_ date: Date) {
@@ -167,20 +157,19 @@ private struct DrawdownCard: View {
 
     private static func filteredRows(
         _ source: [DrawdownPoint],
-        for range: DrawdownRange
+        for range: ChartTimeRange
     ) -> [DrawdownPoint] {
         let allRows = source.sorted { $0.date < $1.date }
         guard let endDate = allRows.last?.date else { return [] }
 
-        let filtered: [DrawdownPoint]
-        if range == .yearToDate {
-            let year = financeCalendar.component(.year, from: endDate)
-            filtered = allRows.filter { financeCalendar.component(.year, from: $0.date) == year }
-        } else if let dayWindow = range.dayWindow,
-                  let startDate = financeCalendar.date(byAdding: .day, value: -dayWindow, to: endDate) {
-            filtered = allRows.filter { $0.date >= startDate }
-        } else {
-            filtered = allRows
+        let previousTradingDate = allRows.dropLast().last?.date
+        let filtered = allRows.filter {
+            range.includes(
+                $0.date,
+                through: endDate,
+                previousTradingDate: previousTradingDate,
+                calendar: financeCalendar
+            )
         }
 
         return filtered.count >= 2 ? filtered : Array(allRows.suffix(2))
@@ -215,6 +204,7 @@ private struct DrawdownCard: View {
 }
 
 private struct DrawdownPlot: View {
+    @Environment(\.locale) private var appLocale
     let rows: [DrawdownPoint]
     let transitionKey: String
     let selectedDate: Date?
@@ -246,6 +236,8 @@ private struct DrawdownPlot: View {
             bottomHeight: 0,
             leadingLineOverflow: 20,
             transitionKey: transitionKey,
+            dataTransition: .viewportZoom,
+            animatesInitialAppearance: true,
             selectedDate: selectedDate,
             selectionSeriesIDs: ["drawdown"],
             yAxisFont: Typography.number(.micro),
@@ -279,6 +271,7 @@ private struct DrawdownPlot: View {
 }
 
 private struct ValuationMatrixCard: View {
+    @Environment(\.locale) private var appLocale
     let matrix: ValuationMatrix
     @State private var selectedTicker: String?
 
@@ -292,9 +285,9 @@ private struct ValuationMatrixCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("估值矩阵 (P/E vs 成长)")
+                Text(L10n.text("估值矩阵 (P/E vs 成长)"))
                     .font(ReturnsAnalyticsTypography.medium(19, relativeTo: .headline))
-                Text("气泡大小 = 仓位权重")
+                Text(L10n.text("气泡大小 = 仓位权重"))
                     .font(ReturnsAnalyticsTypography.medium(12, relativeTo: .subheadline))
                     .foregroundStyle(.secondary)
 
@@ -311,7 +304,7 @@ private struct ValuationMatrixCard: View {
 
             if matrix.rows.isEmpty {
                 ContentUnavailableView(
-                    "暂无估值数据",
+                    L10n.text("暂无估值数据"),
                     systemImage: "chart.dots.scatter",
                     description: Text(emptyDescription)
                 )
@@ -339,30 +332,31 @@ private struct ValuationMatrixCard: View {
 
     private var emptyDescription: String {
         matrix.warnings.contains(where: { $0.contains("FMP API Key") })
-            ? "请在设置中配置 FMP API Key 后下拉刷新。"
-            : "暂无同时具备 P/E 与成长数据的持仓。"
+            ? L10n.text("请在设置中配置 FMP API Key 后下拉刷新。")
+            : L10n.text("暂无同时具备 P/E 与成长数据的持仓。")
     }
 
     private func selectedSummary(_ row: ValuationBubble) -> String {
         let pe = row.pe.formatted(.number.precision(.fractionLength(1)))
         let growth = DisplayFormat.percent(row.growthPercent)
         let weight = DisplayFormat.percent(row.weight * 100, signed: false)
-        return "\(row.ticker) · P/E \(pe)× · \(growthLabel(row.growthSource)) \(growth) · 仓位 \(weight)"
+        return L10n.text("\(row.ticker) · P/E \(pe)× · \(growthLabel(row.growthSource)) \(growth) · 仓位 \(weight)")
     }
 
     private func selectedAccessibilitySummary(_ row: ValuationBubble) -> String {
         let pe = row.pe.formatted(.number.precision(.fractionLength(1)))
         let growth = DisplayFormat.percent(row.growthPercent)
         let weight = DisplayFormat.percent(row.weight * 100, signed: false)
-        return "\(row.ticker)，市盈率 \(pe) 倍，\(growthLabel(row.growthSource)) \(growth)，仓位 \(weight)"
+        return L10n.text("\(row.ticker)，市盈率 \(pe) 倍，\(growthLabel(row.growthSource)) \(growth)，仓位 \(weight)")
     }
 
     private func growthLabel(_ source: String) -> String {
-        source.localizedCaseInsensitiveContains("EPS") ? "EPS同比" : "营收同比"
+        source.localizedCaseInsensitiveContains("EPS") ? L10n.text("EPS同比") : L10n.text("营收同比")
     }
 }
 
 private struct ValuationBubblePlot: View {
+    @Environment(\.locale) private var appLocale
     let rows: [ValuationBubble]
     let selectedTicker: String?
     let onSelect: (String) -> Void
@@ -403,8 +397,8 @@ private struct ValuationBubblePlot: View {
                 )
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("估值矩阵，气泡大小表示仓位权重")
-            .accessibilityValue("\(rows.count) 个持仓有可用估值与成长数据")
+            .accessibilityLabel(L10n.text("估值矩阵，气泡大小表示仓位权重"))
+            .accessibilityValue(L10n.text("\(rows.count) 个持仓有可用估值与成长数据"))
         }
     }
 

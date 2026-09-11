@@ -36,8 +36,22 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 
 /// Exact-key localization. Interpolated values remain data and are never translated.
 enum L10n {
+    static var listSeparator: String { AppLanguage.currentIdentifier == "en" ? ", " : "、" }
+    static var clauseSeparator: String { AppLanguage.currentIdentifier == "en" ? "; " : "；" }
+
+    /// App-authored sentence fragments only. Strip existing terminators to avoid doubled punctuation.
+    static func sentences(_ parts: [String], language: String = AppLanguage.currentIdentifier) -> String {
+        let fragments = parts.map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: CharacterSet(charactersIn: ".。"))
+        }.filter { !$0.isEmpty }
+        guard !fragments.isEmpty else { return "" }
+        return fragments.joined(separator: language == "en" ? ". " : "。")
+            + (language == "en" ? "." : "。")
+    }
+
     static var responseLanguageInstruction: String {
-        AppLanguage.currentIdentifier == "en"
+        ContentLanguage.current == "en"
             ? " Respond in English. Keep ticker symbols, schema keys and numeric values unchanged."
             : " 请用简体中文回答，保留股票代码、JSON 字段名和数字原值。"
     }
@@ -103,7 +117,7 @@ enum L10n {
     }
 
     static func text(_ message: Message) -> String {
-        render(message, language: AppLanguage.currentIdentifier)
+        render(message, language: ContentLanguage.current)
     }
 
     static func render(_ message: Message, language: String, bundle: Bundle = .main) -> String {
@@ -119,5 +133,27 @@ enum L10n {
             result += argument + parts[index + 1]
         }
         return result
+    }
+}
+
+/// Capture once at the start of a content job; child tasks inherit the selection.
+enum ContentLanguage {
+    @TaskLocal static var requested: String?
+    static var current: String { requested ?? AppLanguage.currentIdentifier }
+    static func cacheKey(_ key: String, language: String) -> String { "\(language)|\(key)" }
+    static func newsURL(ticker: String, name: String, language: String) -> URL {
+        let chinese = language.hasPrefix("zh")
+        var url = URLComponents(string: "https://news.google.com/rss/search")!
+        url.queryItems = [
+            URLQueryItem(name: "q", value: "\(ticker) \(name) " + (chinese ? "股票" : "stock analyst")),
+            URLQueryItem(name: "hl", value: chinese ? "zh-CN" : "en-US"),
+            URLQueryItem(name: "gl", value: chinese ? "CN" : "US"),
+            URLQueryItem(name: "ceid", value: chinese ? "CN:zh-Hans" : "US:en")
+        ]
+        return url.url!
+    }
+    static func acceptsHeadline(_ title: String, language: String) -> Bool {
+        let hasHan = title.unicodeScalars.contains { (0x3400...0x9fff).contains($0.value) }
+        return language.hasPrefix("zh") ? hasHan : !hasHan
     }
 }

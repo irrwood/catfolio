@@ -67,8 +67,12 @@ private enum PortfolioContentSheetLayout {
     // TODAY sits 30pt from the card top and is 17pt tall. Once it has left the
     // screen, use the card's remaining travel to finish the colour transition.
     static let backdropFadeDistance: CGFloat = transitionHeight - 47
+    // Leaves the sheet at the screenshot's resting position: the account
+    // summary remains visible while the chart is covered by Today.
+    static let firstScrollDetent = PortfolioHeroChartLayout.sectionHeight - PortfolioHeroChartLayout.plotTop
     static let topRadius: CGFloat = 38
 }
+
 
 private struct PortfolioContentSheet<Content: View>: View {
     @Environment(\.locale) private var appLocale
@@ -183,11 +187,32 @@ struct PortfolioView: View {
     @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var selectedHolding: Holding?
     @State private var showsTodayDetail = false
     @State private var homeScrollOffset: CGFloat = 0
+    @State private var homePullDistance: CGFloat = 0
+    @State private var homeScrollController = PortfolioHomeScrollController()
     @State private var todayTitleExitScrollOffset: CGFloat?
+    @State private var holdingsContentTop: CGFloat?
+    @State private var homeScrollViewportHeight: CGFloat = 0
     @Namespace private var todayZoom
+    // One namespace per origin. A security shown both in the Today bars and
+    // in the holdings list would otherwise publish two sources under the same
+    // id, and the transition has no way to know which one it grew from.
+    @Namespace private var holdingsRowZoom
+    @Namespace private var todayBarZoom
+    @State private var activeHoldingZoom: Namespace.ID?
+
+    private var holdingsIndicatorTopInset: CGFloat {
+        max(0, (holdingsContentTop ?? 0) - homeScrollOffset)
+    }
+
+    private var showsHoldingsScrollIndicator: Bool {
+        holdingsContentTop != nil && !previewsLoading && !model.holdings.isEmpty
+            && homeScrollViewportHeight - holdingsIndicatorTopInset > 32
+    }
 
     private var previewsLoading: Bool {
         #if DEBUG
@@ -222,12 +247,12 @@ struct PortfolioView: View {
                             )
 
                             if previewsLoading {
-                                PortfolioLoadingView()
+                                PortfolioLoadingView(scrollOffset: homeScrollOffset)
                             } else if model.holdings.isEmpty, model.overview != nil {
-                                if model.isPublicInvestorMode {
+                                if model.isPublicInvestorMode && !model.isPortfolioLoading {
                                     ContentUnavailableView(L10n.text("暂无持仓数据"), systemImage: "person.crop.circle", description: Text(L10n.text("请在设置中选择账户。")))
                                 } else {
-                                    PortfolioLoadingView(isAnimating: model.isPortfolioLoading)
+                                    PortfolioLoadingView(isAnimating: model.isPortfolioLoading, scrollOffset: homeScrollOffset)
                                 }
                             } else if let overview = model.overview, let chart = model.portfolioChart {
                                 CostMarketCard(
@@ -253,26 +278,39 @@ struct PortfolioView: View {
                                             isLoading: model.isHoldingDailyChangesLoading,
                                             onOpenDetail: { showsTodayDetail = true },
                                             onTitleBottomPositionChange: { titleBottomY in
+                                                guard homePullDistance < 0.5 else { return }
                                                 let exitOffset = homeScrollOffset + titleBottomY
                                                 if todayTitleExitScrollOffset.map({ abs($0 - exitOffset) > 0.5 }) ?? true {
                                                     todayTitleExitScrollOffset = exitOffset
                                                 }
-                                            }
+                                            },
+                                            zoomNamespace: todayBarZoom
                                         ) { holding in
+                                            activeHoldingZoom = todayBarZoom
                                             selectedHolding = holding
                                         }
                                         .id("today-contribution")
                                         .matchedTransitionSource(id: "today-detail", in: todayZoom)
 
-                                        PortfolioDetailsCard(holdings: model.holdings) { holding in
-                                            selectedHolding = holding
-                                        }
+                                        PortfolioDetailsCard(
+                                            holdings: model.holdings,
+                                            onSelect: { holding in
+                                                activeHoldingZoom = holdingsRowZoom
+                                                selectedHolding = holding
+                                            },
+                                            zoomNamespace: holdingsRowZoom
+                                        )
                                         .id("portfolio-details")
+                                        .onGeometryChange(for: CGFloat.self) { geometry in
+                                            geometry.frame(in: .named("portfolio-home-content")).minY
+                                        } action: { _, top in
+                                            holdingsContentTop = top
+                                        }
                                     }
                                 }
                                 .zIndex(1)
                             } else if model.isPortfolioLoading {
-                                PortfolioLoadingView()
+                                PortfolioLoadingView(scrollOffset: homeScrollOffset)
                             } else if let error = model.portfolioError {
                                 ContentUnavailableView {
                                     Label(L10n.text("暂时无法加载"), systemImage: "wifi.exclamationmark")
@@ -283,24 +321,42 @@ struct PortfolioView: View {
                                 }
                                 .frame(minHeight: 420)
                             } else {
-                                PortfolioLoadingView()
+                                PortfolioLoadingView(scrollOffset: homeScrollOffset)
                             }
                         }
                         // Leave a deliberate scroll tail above the floating
                         // custom tab bar so the final portfolio content can
                         // settle fully in view instead of ending beneath it.
                         .padding(.bottom, 96)
+                        .coordinateSpace(name: "portfolio-home-content")
+                        .background {
+                            PortfolioHomeScrollBridge(
+                                controller: homeScrollController,
+                                detent: PortfolioContentSheetLayout.firstScrollDetent,
+                                reduceMotion: reduceMotion,
+                                onOffset: { offset, pull in
+                                    homeScrollOffset = offset
+                                    homePullDistance = pull
+                                },
+                                refresh: { await model.refreshPortfolio() }
+                            )
+                        }
                     }
                     .background(Color.clear)
-                    .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                        max(0, geometry.contentOffset.y + geometry.contentInsets.top)
-                    } action: { _, newValue in
-                        homeScrollOffset = newValue
+                    // Keep the native indicator track beside the holdings only;
+                    // changing indicator margins leaves content and detents intact.
+                    .contentMargins(.top, holdingsIndicatorTopInset, for: .scrollIndicators)
+                    .scrollIndicators(showsHoldingsScrollIndicator ? .automatic : .hidden, axes: .vertical)
+                    .onGeometryChange(for: CGFloat.self) { geometry in
+                        max(0, geometry.size.height - geometry.safeAreaInsets.top - geometry.safeAreaInsets.bottom)
+                    } action: { _, height in
+                        homeScrollViewportHeight = height
                     }
-                    // Keep native rubber-banding intact: UIRefreshControl relies on
-                    // the full pull distance and release transition to trigger.
+                    .tracksRootTabBarScroll()
+                    // One native rubber-band and refresh control, armed only
+                    // by a new touch at the completely settled lower stop.
                     .scrollBounceBehavior(.always, axes: .vertical)
-                    .refreshable { await model.refreshPortfolio() }
+                    .accessibilityIdentifier("portfolio-scroll")
                     .task {
                         if model.overview == nil && !model.isPortfolioLoading {
                             await model.refreshPortfolio()
@@ -316,10 +372,7 @@ struct PortfolioView: View {
                                 model.holdings.first { $0.ticker.uppercased() == ticker }
                             } ?? model.holdings.first
                         }
-                        if arguments.contains("--show-heatmap") {
-                            try? await Task.sleep(for: .milliseconds(250))
-                            scrollProxy.scrollTo("portfolio-details", anchor: .top)
-                        } else if arguments.contains("--show-today-contribution") {
+                        if arguments.contains("--show-today-contribution") {
                             try? await Task.sleep(for: .milliseconds(250))
                             scrollProxy.scrollTo("today-contribution", anchor: .top)
                         }
@@ -328,10 +381,17 @@ struct PortfolioView: View {
                 .sheet(item: $selectedHolding) { holding in
                     HoldingDetailView(holding: holding)
                         .environment(model)
-                        .presentationDetents([.large])
-                        .presentationDragIndicator(.hidden)
-                        .presentationBackground(Color(uiColor: .systemBackground))
+                        .securityDetailSheet()
+                        // Grows out of the row that was tapped, and pinches
+                        // back into it. The source id is the ticker, so the
+                        // holdings list and the Today bars can both be the
+                        // origin for the same security.
+                        .navigationTransition(.zoom(
+                            sourceID: holding.ticker,
+                            in: activeHoldingZoom ?? holdingsRowZoom
+                        ))
                 }
+                .securityDetailOpenFeedback(trigger: selectedHolding?.ticker, enabled: hapticsEnabled)
                 .navigationDestination(isPresented: $showsTodayDetail) {
                     TodayDetailView(
                         holdings: model.holdings,
@@ -348,7 +408,9 @@ struct PortfolioView: View {
             // over no background at all.
             .toolbar(.hidden, for: .navigationBar)
         }
+        .accessibilityIdentifier("page.portfolio")
     }
+
 }
 
 private struct PortfolioRefreshTimestamp: View {
@@ -401,6 +463,7 @@ private struct TodayContributionCard: View {
     var onOpenDetail: (() -> Void)? = nil
     var onTitleBottomPositionChange: ((CGFloat) -> Void)? = nil
     let onSelect: (Holding) -> Void
+    let zoomNamespace: Namespace.ID?
 
     /// Derived once per view value rather than on every `body` pass.
     ///
@@ -426,6 +489,7 @@ private struct TodayContributionCard: View {
         isLoading: Bool,
         onOpenDetail: (() -> Void)? = nil,
         onTitleBottomPositionChange: ((CGFloat) -> Void)? = nil,
+        zoomNamespace: Namespace.ID? = nil,
         onSelect: @escaping (Holding) -> Void
     ) {
         self.holdings = holdings
@@ -434,6 +498,7 @@ private struct TodayContributionCard: View {
         self.isLoading = isLoading
         self.onOpenDetail = onOpenDetail
         self.onTitleBottomPositionChange = onTitleBottomPositionChange
+        self.zoomNamespace = zoomNamespace
         self.onSelect = onSelect
         self.contributions = Self.makeContributions(holdings: holdings, dailyChanges: dailyChanges)
     }
@@ -677,6 +742,7 @@ private struct TodayContributionCard: View {
                         // a newly ranked company cannot retain the previous
                         // slot's logo or other view-local state.
                         .id(contribution.id)
+                        .holdingZoomSource(contribution.holding.ticker, in: zoomNamespace)
                     } else {
                         Color.clear
                             .frame(height: 167)
@@ -872,6 +938,7 @@ private struct TodayContributionBar: View {
     /// The same amount, abbreviated. Pence are noise at this magnitude, so
     /// the compact form drops them rather than carrying two decimals into a
     /// space that could not hold the digits.
+    ///
     private var compactAmountText: String {
         DisplayFormat.compact(DisplayCurrency.current.fromUSD(abs(amount)))
     }
@@ -1237,13 +1304,7 @@ private struct CostMarketCard: View {
     }
 
     private var financialAccent: Color {
-        let value = rangePerformance.amount
-        if value >= 0 {
-            return colorScheme == .light
-                ? CatfolioTheme.gain(for: .light)
-                : CatfolioTheme.gain(for: .dark)
-        }
-        return CatfolioPalette.rose500
+        CatfolioTheme.heroPerformance(for: rangePerformance.amount, scheme: colorScheme)
     }
 
     /// Nil while the reader is looking at their own portfolio.
@@ -1283,15 +1344,17 @@ private struct CostMarketCard: View {
                     signed: false,
                     fractionDigits: 2
                 ),
+                size: 40,
+                symbolSize: 25.8,
                 color: .primary
             )
             .contentTransition(.numericText(value: displayedPrimaryAmount))
             .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: displayedPrimaryAmount)
-            .frame(height: 38, alignment: .leading)
+            .frame(height: 44, alignment: .leading)
             .offset(x: CatfolioStyle.pageHorizontalInset, y: 32)
 
             HStack(spacing: 4) {
-                let summaryAccent = colorScheme == .light ? Color.primary : financialAccent
+                let summaryAccent = financialAccent
                 Group {
                     Text(DisplayFormat.money(rangePerformance.amount, signed: true))
                         .foregroundStyle(summaryAccent)
@@ -1331,7 +1394,7 @@ private struct CostMarketCard: View {
             .appNumber(.footnote)
             .lineLimit(1)
             .minimumScaleFactor(0.62)
-            .offset(x: CatfolioStyle.pageHorizontalInset, y: 75)
+            .offset(x: CatfolioStyle.pageHorizontalInset, y: 82)
 
             chartContent(data: data)
                 .frame(height: PortfolioHeroChartLayout.plotHeight)
@@ -1484,6 +1547,8 @@ private struct CostMarketCard: View {
         .allowsHitTesting(false)
     }
 
+    /// An axis label. This stopped at M, so a portfolio past a billion drew
+    /// `1234M` where the ladder now gives `1B`.
     private func compactAxisValue(_ value: Double) -> String {
         DisplayFormat.compact(value, precision: .whole)
     }
@@ -1582,8 +1647,7 @@ private struct FastCostMarketPlot: View {
             gridOpacity: 0,
             transitionKey: "\(transitionKey)-\(colorScheme == .light ? "light" : "dark")",
             dataTransition: .viewportZoom,
-            animatesInitialAppearance: false,
-            revealsInitialAppearance: true,
+            animatesInitialAppearance: true,
             selectedDate: selectedPoint?.date,
             measuredRange: measuredRange,
             selectionIndicatorLabel: selectionIndicatorLabel,
@@ -1733,22 +1797,50 @@ private struct CostMarketPlotPoint: Identifiable {
     var id: String { dateText }
 }
 
-private struct PortfolioDetailsCard: View {
+/// Marks a row as the thing the security page grows out of.
+///
+/// The namespace is optional because this card is also built in places that
+/// present the page without a zoom, and a source without a matching
+/// destination animates from nowhere.
+extension View {
+    @ViewBuilder
+    func holdingZoomSource(_ ticker: String, in namespace: Namespace.ID?) -> some View {
+        if let namespace {
+            catfolioZoomSource(ticker, in: namespace)
+        } else {
+            self
+        }
+    }
+}
+
+struct PortfolioDetailsCard: View {
     @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
     let holdings: [Holding]
     let onSelect: (Holding) -> Void
+    let showsHeatmap: Bool
+    let zoomNamespace: Namespace.ID?
 
-    @State private var tableMode: String = {
-        let arguments = ProcessInfo.processInfo.arguments
-        if arguments.contains("--show-etf") { return "ETF 穿透" }
-        if arguments.contains("--show-heatmap") { return "热力图" }
-        return "持仓"
-    }()
+    @State private var tableMode: String
+
+    init(
+        holdings: [Holding],
+        onSelect: @escaping (Holding) -> Void,
+        showsHeatmap: Bool = false,
+        zoomNamespace: Namespace.ID? = nil
+    ) {
+        self.holdings = holdings
+        self.onSelect = onSelect
+        self.showsHeatmap = showsHeatmap
+        self.zoomNamespace = zoomNamespace
+        _tableMode = State(initialValue: showsHeatmap ? "热力图"
+            : ProcessInfo.processInfo.arguments.contains("--show-etf") ? "ETF 穿透" : "持仓")
+    }
     @State private var etfResponse: ETFLookThroughResponse?
     @State private var etfError: String?
     @State private var isLoadingETF = false
+    @State private var etfLoadGeneration = 0
     @State private var loadedETFHoldingsKey = ""
     @State private var etfConstituentDailyChanges: [String: Double] = [:]
     @State private var loadedETFConstituentChangesKey = ""
@@ -1769,16 +1861,15 @@ private struct PortfolioDetailsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .center, spacing: 10) {
+                if showsHeatmap {
+                    Text(L10n.text("持仓热力图"))
+                        .font(.title2.weight(.semibold))
+                } else {
                 Menu {
                     Button {
                         tableMode = "持仓"
                     } label: {
                         Label(L10n.text("持仓明细"), systemImage: tableMode == "持仓" ? "checkmark" : "list.bullet")
-                    }
-                    Button {
-                        tableMode = "热力图"
-                    } label: {
-                        Label(L10n.text("持仓热力图"), systemImage: tableMode == "热力图" ? "checkmark" : "rectangle.3.group")
                     }
                     Button {
                         tableMode = "ETF 穿透"
@@ -1798,6 +1889,7 @@ private struct PortfolioDetailsCard: View {
                     .foregroundStyle(.primary)
                 }
                 .buttonStyle(.plain)
+                }
 
                 Spacer()
                 HStack(spacing: 12) {
@@ -1843,9 +1935,9 @@ private struct PortfolioDetailsCard: View {
                     HoldingsHeatmapView(
                         holdings: holdings,
                         dailyChanges: model.holdingDailyChanges,
-                        isLoading: model.isHoldingDailyChangesLoading
-                            || (heatmapLooksThroughETF
-                                && (isLoadingETF || isLoadingETFConstituentChanges)),
+                        isLoading: (heatmapLooksThroughETF && isLoadingETF)
+                            || (heatmapPerformancePeriod == .today
+                                && (model.isHoldingDailyChangesLoading || isLoadingETFConstituentChanges)),
                         performancePeriod: heatmapPerformancePeriod,
                         groupsBySector: heatmapGroupsBySector,
                         usesETFLookThrough: heatmapLooksThroughETF,
@@ -1864,19 +1956,20 @@ private struct PortfolioDetailsCard: View {
         .padding(.top, 24)
         .padding(.bottom, 18)
         .background(colorScheme == .light ? Color.white : Color(red: 0, green: 0.008, blue: 0))
+        // Local exposure preparation must not wait for network quotes.
         .task(id: "\(tableMode)-\(etfHoldingsKey)-\(heatmapLooksThroughETF)") {
-            if tableMode == "ETF 穿透" {
-                guard etfResponse == nil || loadedETFHoldingsKey != etfHoldingsKey else { return }
-                await loadETF()
-            } else if tableMode == "热力图" {
-                await model.refreshHoldingDailyChanges()
-                if heatmapLooksThroughETF {
-                    if etfResponse == nil || loadedETFHoldingsKey != etfHoldingsKey {
-                        await loadETF()
-                    }
-                    await loadETFConstituentDailyChanges()
-                }
-            }
+            guard tableMode == "ETF 穿透" || (tableMode == "热力图" && heatmapLooksThroughETF),
+                  etfResponse == nil || loadedETFHoldingsKey != etfHoldingsKey else { return }
+            await loadETF()
+        }
+        .task(id: "heatmap-daily-\(tableMode)-\(etfHoldingsKey)-\(heatmapPerformancePeriod.rawValue)") {
+            guard tableMode == "热力图", heatmapPerformancePeriod == .today else { return }
+            await model.refreshHoldingDailyChanges()
+        }
+        .task(id: "heatmap-constituents-\(tableMode)-\(loadedETFHoldingsKey)-\(heatmapLooksThroughETF)-\(heatmapPerformancePeriod.rawValue)") {
+            guard tableMode == "热力图", heatmapLooksThroughETF,
+                  heatmapPerformancePeriod == .today else { return }
+            await loadETFConstituentDailyChanges()
         }
         .onChange(of: etfSortField) { _, _ in etfVisibleLimit = 20 }
         .onChange(of: etfSortAscending) { _, _ in etfVisibleLimit = 20 }
@@ -1929,6 +2022,7 @@ private struct PortfolioDetailsCard: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .holdingZoomSource(holding.ticker, in: zoomNamespace)
                 .accessibilityHint(L10n.text("打开成交量分析"))
             }
         }
@@ -1980,7 +2074,13 @@ private struct PortfolioDetailsCard: View {
                     ? comparison == .orderedAscending
                     : comparison == .orderedDescending
             }
-        }
+            return compareOptional(
+                left.value,
+                right.value,
+                leftTicker: left.holding.ticker,
+                rightTicker: right.holding.ticker
+            )
+        }.map(\.holding)
     }
 
     private func compare(
@@ -2093,7 +2193,9 @@ private struct PortfolioDetailsCard: View {
     }
 
     private var etfHoldingsKey: String {
-        holdings.map { "\($0.ticker):\($0.shares):\($0.quotePrice)" }.joined(separator: "|")
+        model.selectedAccountKeys.sorted().joined(separator: ",") + "|" + holdings.map {
+            "\($0.ticker):\($0.shares):\($0.quotePrice):\($0.averageCost):\($0.costCurrency ?? ""):\($0.marketValue)"
+        }.joined(separator: "|")
     }
 
     private var sortedETFRows: [ETFLookThroughRow] {
@@ -2141,16 +2243,27 @@ private struct PortfolioDetailsCard: View {
     }
 
     private func loadETF() async {
+        etfLoadGeneration &+= 1
+        let generation = etfLoadGeneration
+        let requestedKey = etfHoldingsKey
         isLoadingETF = true
         etfError = nil
-        defer { isLoadingETF = false }
+        defer {
+            if generation == etfLoadGeneration { isLoadingETF = false }
+        }
         do {
-            etfResponse = try await model.loadETFLookThrough(basis: .market)
-            loadedETFHoldingsKey = etfHoldingsKey
-            etfConstituentDailyChanges = [:]
+            let response = try await model.loadETFLookThrough(basis: .market)
+            guard !Task.isCancelled, generation == etfLoadGeneration,
+                  requestedKey == etfHoldingsKey else { return }
+            etfResponse = response
+            let activeTickers = Set(response.rows.map { $0.ticker.uppercased() })
+            etfConstituentDailyChanges = etfConstituentDailyChanges.filter { activeTickers.contains($0.key) }
             loadedETFConstituentChangesKey = ""
+            loadedETFHoldingsKey = requestedKey
             etfVisibleLimit = 20
         } catch {
+            guard !Task.isCancelled, generation == etfLoadGeneration,
+                  requestedKey == etfHoldingsKey else { return }
             etfResponse = nil
             etfError = error.localizedDescription
         }
@@ -2162,16 +2275,26 @@ private struct PortfolioDetailsCard: View {
         let tickers = rows
             .filter { $0.totalUSD.isFinite && $0.totalUSD > 0 && $0.ticker != "ETF 其他" }
             .sorted { $0.totalUSD > $1.totalUSD }
-            .prefix(HoldingsHeatmapView.maximumLookThroughTiles)
             .map(\.ticker)
         let signature = "\(etfHoldingsKey)|\(tickers.map { $0.uppercased() }.joined(separator: ","))"
         guard signature != loadedETFConstituentChangesKey else { return }
 
         isLoadingETFConstituentChanges = true
         defer { isLoadingETFConstituentChanges = false }
-        let changes = await LocalMarketDataClient().dailyChanges(tickers: tickers)
-        guard !Task.isCancelled, loadedETFHoldingsKey == etfHoldingsKey else { return }
-        etfConstituentDailyChanges = changes
+        let holdingsKey = etfHoldingsKey
+        let client = LocalMarketDataClient()
+        // Populate the leading tiles first, then the tail needed for aggregate
+        // P&L. Each batch reuses the quote cache and bounded request concurrency.
+        let batchSize = HoldingsHeatmapView.maximumLookThroughTiles
+        for start in stride(from: 0, to: tickers.count, by: batchSize) {
+            guard !Task.isCancelled, loadedETFHoldingsKey == holdingsKey else { return }
+            let batch = Array(tickers[start..<min(start + batchSize, tickers.count)])
+            let changes = await client.dailyChanges(tickers: batch)
+            guard !Task.isCancelled, loadedETFHoldingsKey == holdingsKey else { return }
+            etfConstituentDailyChanges.merge(changes) { _, fresh in fresh }
+            // Later batches fill the summaries without blocking the whole map.
+            isLoadingETFConstituentChanges = false
+        }
         loadedETFConstituentChangesKey = signature
     }
 }
@@ -2291,6 +2414,7 @@ private enum ETFExposureSortField: String, CaseIterable, Identifiable {
 
 private struct HoldingSortMenu: View {
     @Environment(\.locale) private var appLocale
+    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @Binding var field: HoldingSortField
     @Binding var ascending: Bool
     @Binding var performancePeriod: HoldingPerformancePeriod
@@ -2302,6 +2426,7 @@ private struct HoldingSortMenu: View {
         .buttonStyle(.plain)
         .appText(.footnote, weight: .medium)
         .foregroundStyle(.secondary)
+        .sensoryFeedback(.selection, trigger: performancePeriod) { _, _ in hapticsEnabled }
         .accessibilityLabel(L10n.text("筛选：\(performancePeriod.title)；排序：\(field.title)，\(ascending ? "升序" : "降序")"))
     }
 
@@ -2538,7 +2663,6 @@ private struct ETFExposureRow: View {
             }
         }
         .padding(.vertical, 9)
-    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
         .frame(minHeight: 76)
         .accessibilityElement(children: .combine)
     }
@@ -2550,7 +2674,6 @@ private struct ETFExposureRow: View {
                 .frame(width: 7, height: 7)
             Text("\(title) \(DisplayFormat.money(value))")
                 .appNumber(.micro, weight: .semibold)
-        .sensoryFeedback(.selection, trigger: performancePeriod) { _, _ in hapticsEnabled }
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
@@ -2787,7 +2910,7 @@ private struct HoldingMetrics: View {
 
 private enum HomeSkeletonStyle {
     static func color(for scheme: ColorScheme) -> Color {
-        scheme == .light ? Color(white: 244.0 / 255.0) : Color(white: 0.12)
+        CatfolioTheme.skeletonFill
     }
 }
 
@@ -2848,14 +2971,17 @@ private struct TodayLoadingHeader: View {
     var body: some View {
         let color = HomeSkeletonStyle.color(for: colorScheme)
         HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 0) {
                 HomeSkeletonBlock(width: 52, height: 10, color: color)
-                HomeSkeletonBlock(width: 133, height: 22, color: color)
+                    .frame(height: 17, alignment: .top)
+                HomeSkeletonBlock(width: 180, height: 32, color: color)
+                    .frame(height: 39, alignment: .leading)
                 HStack(spacing: 4) {
                     HomeSkeletonBlock(width: 46, height: 11, color: color)
                     HomeSkeletonBlock(width: 71, height: 11, color: color)
                     HomeSkeletonBlock(width: 39, height: 11, color: color)
                 }
+                .frame(height: 20, alignment: .bottom)
             }
             Spacer(minLength: 8)
             HStack(spacing: 2) {
@@ -2877,24 +3003,27 @@ private struct PortfolioLoadingView: View {
     @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
     var isAnimating = true
+    var scrollOffset: CGFloat = 0
 
     var body: some View {
         let color = HomeSkeletonStyle.color(for: colorScheme)
         VStack(spacing: 0) {
             PortfolioChartLoadingPlaceholder(isAnimating: isAnimating)
                 .frame(height: PortfolioHeroChartLayout.sectionHeight)
+                .offset(y: scrollOffset)
 
-            VStack(spacing: 33) {
+            PortfolioContentSheet(scrollOffset: scrollOffset) {
+            VStack(spacing: 0) {
+            ZStack(alignment: .top) {
                 TodayLoadingHeader(isAnimating: isAnimating)
+                    .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
+                    .padding(.top, 30)
                 TodayContributionLoadingBars(isAnimating: isAnimating)
+                    .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
+                    .frame(height: 167, alignment: .top)
+                    .offset(y: 139)
             }
-            .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
-            .padding(.vertical, 30)
             .frame(height: 326, alignment: .top)
-            .background(
-                Color(uiColor: .systemBackground),
-                in: UnevenRoundedRectangle(topLeadingRadius: 38, topTrailingRadius: 38)
-            )
 
             VStack(spacing: 18) {
                 HStack {
@@ -2933,7 +3062,9 @@ private struct PortfolioLoadingView: View {
             .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
             .padding(.vertical, 24)
             .frame(maxWidth: .infinity, minHeight: 240, alignment: .top)
-            .background(Color(uiColor: .systemBackground))
+            }
+            }
+            .zIndex(1)
         }
         .allowsHitTesting(false)
         .accessibilityElement(children: .ignore)
@@ -2942,60 +3073,34 @@ private struct PortfolioLoadingView: View {
 }
 
 private struct PortfolioChartLoadingPlaceholder: View {
-    @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
     var isAnimating = true
 
     var body: some View {
+        let color = Color.primary.opacity(colorScheme == .light ? 0.08 : 0.14)
         ZStack(alignment: .topLeading) {
-            VStack(alignment: .leading, spacing: 12) {
-                HomeSkeletonBlock(width: 72, height: 10, color: .white)
-                HomeSkeletonBlock(width: 172, height: 22, color: .white)
-                HStack(spacing: 4) {
-                    HomeSkeletonBlock(width: 65, height: 11, color: .white)
-                    HomeSkeletonBlock(width: 38, height: 11, color: .white)
-                    HomeSkeletonBlock(width: 104, height: 11, color: .white)
-                    HomeSkeletonBlock(width: 68, height: 11, color: .white)
-                }
+            HomeSkeletonBlock(width: 88, height: 10, color: color)
+                .offset(x: CatfolioStyle.pageHorizontalInset, y: 15)
+            HomeSkeletonBlock(width: 240, height: 44, color: color)
+                .offset(x: CatfolioStyle.pageHorizontalInset, y: 32)
+            HStack(spacing: 8) {
+                HomeSkeletonBlock(width: 72, height: 13, color: color)
+                HomeSkeletonBlock(width: 42, height: 13, color: color)
+                HomeSkeletonBlock(width: 124, height: 13, color: color)
             }
-            .opacity(colorScheme == .light ? 0.5 : 0.15)
-            .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
-            .padding(.top, 15)
+            .offset(x: CatfolioStyle.pageHorizontalInset, y: 82)
 
-            GeometryReader { geometry in
-                Image("HomeSkeletonLineOne")
-                    .resizable()
-                    .frame(width: geometry.size.width * 407.169 / 402,
-                           height: geometry.size.height * 187.016 / 226)
-                    .offset(x: -geometry.size.width * 24 / 402)
-                Image("HomeSkeletonLineTwo")
-                    .resizable()
-                    .frame(width: geometry.size.width * 416 / 402,
-                           height: geometry.size.height * 155 / 226)
-                    .offset(x: -geometry.size.width * 34 / 402,
-                            y: geometry.size.height * 72 / 226)
-            }
-            .frame(height: PortfolioHeroChartLayout.plotHeight)
-            .opacity(colorScheme == .light ? 1 : 0.22)
-            .offset(y: PortfolioHeroChartLayout.plotTop)
+            // Match the current quiet chart-loading state, not the old mock
+            // asset curves, which briefly looked like a different portfolio.
+            Color.clear
+                .frame(height: PortfolioHeroChartLayout.plotHeight)
+                .offset(y: PortfolioHeroChartLayout.plotTop)
 
-            HStack(spacing: 0) {
-                ForEach(0..<7, id: \.self) { index in
-                    HomeSkeletonBlock(
-                        width: [12.0, 15, 14, 17, 20, 12, 23][index],
-                        height: 11, color: .white
-                    )
-                    .frame(width: 44, height: 30)
-                    .background(index == 3 ? Color.white.opacity(0.5) : .clear,
-                                in: RoundedRectangle(cornerRadius: 10))
-                    .frame(maxWidth: .infinity)
-                }
-            }
-            .frame(height: PortfolioHeroChartLayout.pickerHeight)
-            .opacity(colorScheme == .light ? 1 : 0.22)
-            .padding(.horizontal, 16)
-            .offset(y: PortfolioHeroChartLayout.pickerTop)
+            ChartTimeRangePickerSkeleton()
+                .frame(height: PortfolioHeroChartLayout.pickerHeight)
+                .offset(y: PortfolioHeroChartLayout.pickerTop)
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .frame(height: PortfolioHeroChartLayout.sectionHeight, alignment: .topLeading)
     }
 }

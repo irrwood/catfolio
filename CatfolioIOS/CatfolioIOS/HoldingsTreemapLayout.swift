@@ -29,22 +29,22 @@ struct HoldingsTreemapLayout {
     /// Creates a squarified treemap for all finite, positive-weight items.
     ///
     /// Invalid or zero-weight items are omitted. Tiles are returned in descending weight
-    /// order; equal weights keep their input order so the layout does not flicker between
-    /// otherwise identical refreshes.
-    static func layout(items: [Item], in bounds: CGRect) -> [Tile] {
+    /// order, except an optional final item anchored at the bottom-right corner. Its
+    /// area still matches its weight. Equal weights keep their input order.
+    static func layout(items: [Item], in bounds: CGRect, lastItemIndex: Int? = nil) -> [Tile] {
         guard isUsable(bounds) else { return [] }
 
         let weightedItems = items.enumerated()
             .filter { $0.element.weight.isFinite && $0.element.weight > 0 }
             .sorted { lhs, rhs in
-                if lhs.element.weight == rhs.element.weight {
-                    lhs.offset < rhs.offset
-                } else {
-                    lhs.element.weight > rhs.element.weight
+                if (lhs.offset == lastItemIndex) != (rhs.offset == lastItemIndex) {
+                    return rhs.offset == lastItemIndex
                 }
+                return lhs.element.weight == rhs.element.weight
+                    ? lhs.offset < rhs.offset : lhs.element.weight > rhs.element.weight
             }
 
-        guard let largestWeight = weightedItems.first?.element.weight else { return [] }
+        guard let largestWeight = weightedItems.map({ $0.element.weight }).max() else { return [] }
 
         // Scaling by the largest weight prevents overflow when summing very large values.
         let scaledTotal = weightedItems.reduce(into: 0.0) { result, entry in

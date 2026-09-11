@@ -79,6 +79,172 @@ struct PresentationDidAppearReader: UIViewControllerRepresentable {
     }
 }
 
+/// Content scrolling under a top bar fades out through a progressive blur
+/// instead of meeting it at a hard line.
+///
+/// Set explicitly rather than left to `.automatic`, which on some screens
+/// resolves to the hard edge — a visible boundary under the bar exactly where
+/// the page should dissolve into it. Top edge only: the bottom edge and the
+/// tab bar keep whatever the system gives them.
+///
+/// Applied per page, next to the page's navigation title, not once at the
+/// root: the modifier reaches every scroll view below it, and the root stack
+/// also holds the portfolio home, which has no top bar to blur under.
+extension View {
+    @ViewBuilder
+    func softTopScrollEdge() -> some View {
+        if #available(iOS 26.0, *) {
+            scrollEdgeEffectStyle(.soft, for: .top)
+        } else {
+            self
+        }
+    }
+}
+
+extension UIScrollView {
+    /// The same decision for a scroll view SwiftUI does not reach — one owned
+    /// by a UIKit container, such as the History pager's pages.
+    func applySoftTopScrollEdge() {
+        if #available(iOS 26.0, *) {
+            topEdgeEffect.style = .soft
+        }
+    }
+}
+
+/// How a security page is presented, and what it stands on.
+///
+/// One definition for every place that opens `HoldingDetailView`, because each
+/// used to set its own background, corners and indicator, and none of them
+/// agreed with the design (Figma `282:2003`).
+///
+/// The rule the whole thing rests on: the page draws **no background of its
+/// own**. The ground is the sheet's `presentationBackground`, which the system
+/// clips to the sheet's rounded shape in every frame — at rest, through the
+/// zoom morph and while the reader drags it down. A background drawn inside
+/// the page is not under that clip the whole time, and every square corner
+/// that showed during a drag or a morph was one of those.
+enum SecurityDetailPresentation {
+    /// The sheet's top corners in the design. Also the corner every zoom
+    /// source is clipped to, so the morph keeps one radius from the row to the
+    /// sheet instead of passing through a square corner on the way.
+    static let cornerRadius: CGFloat = 38
+
+    /// The top of the designed ground. Figma paints `rgba(45,50,57,0.5)` over a
+    /// black frame; composited, that is this colour, drawn opaque so the dimmed
+    /// page behind a sheet never shows through it.
+    static let uiGroundTop = UIColor { trait in
+        trait.userInterfaceStyle == .dark
+            ? UIColor(red: 23 / 255, green: 25 / 255, blue: 29 / 255, alpha: 1)
+            : UIColor(red: 0xF2 / 255, green: 0xF3 / 255, blue: 0xF5 / 255, alpha: 1)
+    }
+    static let uiGroundBottom = UIColor { trait in
+        trait.userInterfaceStyle == .dark ? .black : .white
+    }
+
+    /// Blue-grey at the top of the sheet, black by its bottom edge. The design
+    /// draws this on a rectangle as long as the content, reaching black at
+    /// 43% — which on that rectangle is exactly the height of one screen. It is
+    /// fixed to the sheet here rather than to the scrolling content: attached
+    /// to the content, pulling down at the top dragged the rectangle's square
+    /// upper edge into view over the black beneath it.
+    static var ground: LinearGradient {
+        LinearGradient(
+            colors: [Color(uiColor: uiGroundTop), Color(uiColor: uiGroundBottom)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    /// The open is confirmed with a click, not a thud — a rigid impact, which
+    /// is the crisp one — and at the instant the row is let go, not when the
+    /// sheet finishes arriving.
+    static let openFeedback = SensoryFeedback.impact(flexibility: .rigid, intensity: 0.8)
+}
+
+extension View {
+    /// Presents a security page as a sheet: the designed ground, the designed
+    /// corners, no grabber.
+    func securityDetailSheet() -> some View {
+        presentationDetents([.large])
+            .presentationDragIndicator(.hidden)
+            .presentationCornerRadius(SecurityDetailPresentation.cornerRadius)
+            .presentationBackground { SecurityDetailPresentation.ground }
+    }
+
+    /// The same ground for a security page pushed onto a navigation stack,
+    /// where there is no sheet to carry it.
+    func securityDetailPushedBackground() -> some View {
+        background(SecurityDetailPresentation.ground.ignoresSafeArea())
+    }
+
+    /// Marks the view a zoom grows out of.
+    ///
+    /// Deliberately without a `clipShape` configuration. That configuration
+    /// does not only shape the transition — it clips the source view at rest,
+    /// all the time. Clipping every holding row to the sheet's 38pt corner cut
+    /// the trailing figures off each row and shaved the corners off each logo
+    /// on the home page. The square corners that showed mid-morph came from
+    /// the page's own backgrounds, which the sheet's single ground now
+    /// replaces; the sources did not need reshaping.
+    func catfolioZoomSource(_ id: some Hashable, in namespace: Namespace.ID) -> some View {
+        matchedTransitionSource(id: id, in: namespace)
+    }
+
+    /// Clicks when a security page is asked for — in the same run-loop turn
+    /// as the tap that set `trigger`, which is before the zoom has begun.
+    /// Nothing fires on the way back: the reader already feels the drag.
+    func securityDetailOpenFeedback<ID: Equatable>(trigger: ID?, enabled: Bool) -> some View {
+        sensoryFeedback(SecurityDetailPresentation.openFeedback, trigger: trigger) { _, new in
+            enabled && new != nil
+        }
+    }
+}
+
+/// Tells the navigation bar which scroll view it belongs to.
+///
+/// The root is a `TabView` inside one `NavigationStack`, so the bar has three
+/// tabs' scroll views to choose from and guesses. It guessed the home page's
+/// — the first tab — and so on a tab's first scroll the large title slid away
+/// with the content and the collapsed bar never came in. With no bar there,
+/// the soft scroll edge had nothing to cover but the status bar and stopped at
+/// about 60pt instead of running under the bar to about 110pt. Switching tabs
+/// happened to correct it, which is why it looked intermittent.
+///
+/// Placed inside the scroll content, so the scroll view is found by walking up
+/// from this view; nominated on every appearance, because a tab that comes
+/// back has to be nominated again.
+struct NavigationBarScrollAnchor: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> Controller { Controller() }
+    func updateUIViewController(_ controller: Controller, context: Context) {}
+
+    final class Controller: UIViewController {
+        override func loadView() {
+            let view = UIView(frame: .zero)
+            view.backgroundColor = .clear
+            view.isUserInteractionEnabled = false
+            self.view = view
+        }
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            nominate()
+        }
+
+        private func nominate() {
+            var candidate = view.superview
+            while let current = candidate, !(current is UIScrollView) {
+                candidate = current.superview
+            }
+            guard let scrollView = candidate as? UIScrollView else { return }
+            var controller: UIViewController? = self
+            while let current = controller, !(current is UINavigationController) {
+                current.setContentScrollView(scrollView, for: .top)
+                controller = current.parent
+            }
+        }
+    }
+}
+
 enum CatfolioStyle {
     static let green = Color(red: 47 / 255, green: 138 / 255, blue: 62 / 255)
     static let red = Color(red: 228 / 255, green: 0, blue: 20 / 255)
@@ -251,6 +417,8 @@ enum CatfolioPalette {
 /// Semantic application colors. Views should depend on these roles instead of
 /// palette swatches so changing one token updates every related screen.
 enum CatfolioTheme {
+    // Figma 241:45228: white stationery on a black backdrop.
+    static let paperFold = Color(white: 239.0 / 255.0)
     static let accent = CatfolioPalette.blue500
     static let positive = CatfolioPalette.green500
     static let danger = CatfolioPalette.rose500
@@ -263,7 +431,11 @@ enum CatfolioTheme {
     static let services = CatfolioPalette.violet500
     static let preference = CatfolioPalette.teal500
     static let localData = CatfolioPalette.sky700
-    static let neutralIcon = CatfolioPalette.neutral600
+    static let neutralIcon = Color(uiColor: .secondaryLabel)
+    static let neutralFill = Color(uiColor: .secondarySystemFill)
+    static let subtleFill = Color(uiColor: .quaternarySystemFill)
+    static let skeletonFill = Color(uiColor: .tertiarySystemFill)
+    static let skeletonEmphasis = Color(uiColor: .systemFill)
 
     static let disclosure = accent.opacity(0.68)
 
@@ -287,18 +459,30 @@ enum CatfolioTheme {
             : Color(red: 1.000, green: 0.271, blue: 0.404)
     }
 
+    /// Readable performance text over Home's blue hero background.
+    static func heroPerformance(for value: Double, scheme: ColorScheme) -> Color {
+        if scheme == .dark {
+            return value >= 0 ? gain(for: scheme) : loss(for: scheme)
+        }
+        return value >= 0
+            ? Color(red: 13 / 255, green: 125 / 255, blue: 41 / 255)
+            : loss(for: scheme).mix(with: .black, by: 0.12)
+    }
+
     /// For contexts with no `ColorScheme` to hand — a `Canvas` closure, a
     /// value computed off the view tree. Prefer the scheme-aware pair.
     static let gainDefault = Color(red: 0.204, green: 0.780, blue: 0.349)
     static let lossDefault = CatfolioPalette.rose500
-    static let settingsBackground = Color(uiColor: .systemGroupedBackground)
+    /// Points at the settings template so a screen that has not been moved
+    /// over yet still sits on the same ground as one that has.
+    static let settingsBackground = SettingsTemplate.pageBackground
 
     static func pageBackground(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? CatfolioPalette.neutral50 : CatfolioPalette.neutral900
+        Color(uiColor: .systemGroupedBackground)
     }
 
     static func surface(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .light ? CatfolioPalette.white : CatfolioPalette.neutral800
+        Color(uiColor: .secondarySystemGroupedBackground)
     }
 }
 
@@ -1113,11 +1297,11 @@ private struct ChartTimeRangeMorphingLabel: View {
 
 struct ChartTimeRangePicker: View {
     @Environment(\.locale) private var appLocale
+    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @Binding var selection: ChartTimeRange
     var isDisabled = false
     var usesBrightSelectedBackground = false
     @Environment(\.colorScheme) private var colorScheme
-    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
 
     var body: some View {
         HStack(spacing: 0) {
@@ -1160,13 +1344,13 @@ struct ChartTimeRangePicker: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, ChartTimeRangePickerMetrics.horizontalInset)
         .disabled(isDisabled)
+        // Fires on the change, so tapping the range already selected stays
+        // silent — there is nothing for the tap to confirm.
+        .sensoryFeedback(.selection, trigger: selection) { _, _ in hapticsEnabled }
         .opacity(isDisabled ? 0.55 : 1)
     }
 
     private func displayedChoice(in group: [ChartTimeRange]) -> ChartTimeRange {
-        // Fires on the change, so tapping the range already selected stays
-        // silent — there is nothing for the tap to confirm.
-        .sensoryFeedback(.selection, trigger: selection) { _, _ in hapticsEnabled }
         group.first(where: { $0 == selection }) ?? group[0]
     }
 
@@ -1193,16 +1377,14 @@ struct ChartTimeRangePicker: View {
         if isSelected {
             return colorScheme == .light ? .black : .white
         }
-        return colorScheme == .light ? Color.black.opacity(0.40) : Color.white.opacity(0.40)
+        return .secondary
     }
 
     private var selectedBackgroundColor: Color {
         if usesBrightSelectedBackground, colorScheme == .light {
             return .white
         }
-        return colorScheme == .light
-            ? Color.black.opacity(0.045)
-            : Color.white.opacity(0.075)
+        return CatfolioTheme.subtleFill
     }
 }
 
@@ -1217,7 +1399,7 @@ struct ChartTimeRangePickerSkeleton: View {
     var selectedIndex = 1
 
     private var skeletonColor: Color {
-        colorScheme == .dark ? .white.opacity(0.09) : Color(white: 0.957)
+        CatfolioTheme.skeletonFill
     }
 
     var body: some View {
@@ -1705,10 +1887,13 @@ enum DisplayFormat {
             adjusted = displayCurrency.fromUSD(value)
         }
 
+        // Apply the display threshold after currency/GBX conversion, including
+        // callers that otherwise request fixed cents for headlines and holdings.
+        let displayedFractionDigits = abs(adjusted) > 1_000_000 ? 0 : fractionDigits
         let formatter = CurrencyFormatterCache.formatter(
             currencyCode: targetCurrency,
-            minimumFractionDigits: fractionDigits ?? 0,
-            maximumFractionDigits: fractionDigits ?? (abs(adjusted) >= 1_000 ? 0 : 2)
+            minimumFractionDigits: displayedFractionDigits ?? 0,
+            maximumFractionDigits: displayedFractionDigits ?? (abs(adjusted) >= 1_000 ? 0 : 2)
         )
         let text = formatter.string(from: NSNumber(value: abs(adjusted))) ?? "\(adjusted)"
         guard signed else { return text }
@@ -1721,6 +1906,15 @@ enum DisplayFormat {
         case whole
         /// Up to one decimal. The default for a figure read at a glance.
         case tenth
+        /// Three significant digits, which is what a statement line needs:
+        /// 1.23万 / 12.3亿 / 3910亿, or 1.23M / 12.3B / 391B. A fixed two
+        /// decimals would print 3910.35亿, which is six digits of precision
+        /// nobody asked for.
+        case statement
+    }
+
+    /// The one magnitude ladder. Everything abbreviated in this app comes
+    /// through here; nothing else divides by a million.
     ///
     /// The suffix follows the language: 万, 亿 and 万亿 under zh-Hans, K/M/B/T
     /// under English. That is one convention, not two — the app had a
@@ -1732,21 +1926,6 @@ enum DisplayFormat {
     /// lives in `AppLanguage` and does not set `AppleLanguages`, so a person
     /// reading the app in Chinese on an English phone would still be shown K
     /// and M.
-        /// Two decimals below 100 and none at or above it, which holds a
-        /// statement line to roughly three significant digits.
-        case statement
-
-        fileprivate var range: ClosedRange<Int> {
-            switch self {
-            case .whole: 0...0
-            case .tenth: 0...1
-            case .statement: 0...2
-            }
-        }
-    }
-
-    /// The one magnitude ladder. Everything abbreviated in this app comes
-    /// through here; nothing else divides by a million.
     static func compact(
         _ value: Double,
         precision: CompactPrecision = .tenth

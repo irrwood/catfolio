@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CoreText
 
 /// The app's one type scale.
 ///
@@ -138,13 +139,13 @@ enum TypeScale: CaseIterable, Sendable {
 /// the reader changes their text size.
 enum Typography {
     static func text(_ scale: TypeScale, weight: Font.Weight? = nil) -> Font {
-        .system(size: scaled(scale), weight: weight ?? scale.weight, design: .rounded)
+        text(size: scaled(scale), weight: weight ?? scale.weight)
     }
 
     /// SF Rounded with fixed-width digits, so a changing value never changes
     /// the width of its own frame.
     static func number(_ scale: TypeScale, weight: Font.Weight? = nil) -> Font {
-        .system(size: scaled(scale), weight: weight ?? scale.numberWeight, design: .rounded)
+        text(size: scaled(scale), weight: weight ?? scale.numberWeight)
             .monospacedDigit()
     }
 
@@ -165,11 +166,85 @@ enum Typography {
 
     /// Prose at a size the scale does not name.
     static func text(size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .rounded)
+        Font(CurrencySymbolAlternates.font(size: size, weight: NumericAlternates.uiWeight(weight), rounded: true))
+    }
+
+    /// Native semantic sizes used by form rows and financial tables. Only
+    /// currency glyphs change; the existing size, weight and digits stay intact.
+    static func currency(
+        _ style: UIFont.TextStyle,
+        weight: UIFont.Weight? = nil,
+        contentSizeCategory: UIContentSizeCategory? = nil
+    ) -> Font {
+        let traits = contentSizeCategory.map { UITraitCollection(preferredContentSizeCategory: $0) }
+        let base = UIFont.preferredFont(forTextStyle: style, compatibleWith: traits)
+        var descriptor = base.fontDescriptor.withDesign(.rounded) ?? base.fontDescriptor
+        if let weight {
+            descriptor = descriptor.addingAttributes([.traits: [UIFontDescriptor.TraitKey.weight: weight.rawValue]])
+        }
+        return Font(CurrencySymbolAlternates.applying(to: UIFont(descriptor: descriptor, size: base.pointSize)))
     }
 
     private static func scaled(_ scale: TypeScale) -> CGFloat {
         UIFontMetrics(forTextStyle: scale.uiTextStyle).scaledValue(for: scale.size)
+    }
+}
+
+private struct CurrencySemanticFont: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let style: UIFont.TextStyle
+    let weight: UIFont.Weight?
+
+    private var contentSizeCategory: UIContentSizeCategory {
+        switch dynamicTypeSize {
+        case .xSmall: .extraSmall
+        case .small: .small
+        case .medium: .medium
+        case .large: .large
+        case .xLarge: .extraLarge
+        case .xxLarge: .extraExtraLarge
+        case .xxxLarge: .extraExtraExtraLarge
+        case .accessibility1: .accessibilityMedium
+        case .accessibility2: .accessibilityLarge
+        case .accessibility3: .accessibilityExtraLarge
+        case .accessibility4: .accessibilityExtraExtraLarge
+        case .accessibility5: .accessibilityExtraExtraExtraLarge
+        @unknown default: .large
+        }
+    }
+
+    func body(content: Content) -> some View {
+        content.font(Typography.currency(style, weight: weight, contentSizeCategory: contentSizeCategory))
+    }
+}
+
+/// SF's OpenType Character Variant 9: the alternate dollar/cent glyphs.
+/// Keep the real Unicode currency characters for formatting, copying and
+/// VoiceOver. This is a font feature, not an SF Symbol or a replacement image.
+enum CurrencySymbolAlternates {
+    static let openTypeTag = "cv09"
+    private static let cache = NSCache<UIFont, UIFont>()
+
+    static func font(size: CGFloat, weight: UIFont.Weight, rounded: Bool) -> UIFont {
+        var descriptor = UIFont.systemFont(ofSize: size, weight: weight).fontDescriptor
+        if rounded, let round = descriptor.withDesign(.rounded) { descriptor = round }
+        return applying(to: UIFont(descriptor: descriptor, size: size))
+    }
+
+    static func applying(to font: UIFont) -> UIFont {
+        if let cached = cache.object(forKey: font) { return cached }
+        // Append rather than replace: numeric fonts already carry the open
+        // four and straight-sided six/nine, and may have tabular figures too.
+        let existing = font.fontDescriptor.object(forKey: .featureSettings) as? [[String: Any]] ?? []
+        let descriptor = font.fontDescriptor.addingAttributes([
+            .featureSettings: existing + [[
+                kCTFontOpenTypeFeatureTag as String: openTypeTag,
+                kCTFontOpenTypeFeatureValue as String: 1,
+            ]],
+        ])
+        let alternate = UIFont(descriptor: descriptor, size: font.pointSize)
+        cache.setObject(alternate, forKey: font)
+        return alternate
     }
 }
 
@@ -210,7 +285,7 @@ enum NumericAlternates {
                 ]
             },
         ])
-        let font = UIFont(descriptor: descriptor, size: size)
+        let font = CurrencySymbolAlternates.applying(to: UIFont(descriptor: descriptor, size: size))
         cache.setObject(font, forKey: key)
         return font
     }
@@ -268,7 +343,9 @@ private struct ScaledFont: ViewModifier {
                 rounded: design == .rounded
             ))
         } else {
-            font = Font.system(size: size, weight: weight, design: design)
+            font = Font(CurrencySymbolAlternates.font(
+                size: size, weight: NumericAlternates.uiWeight(weight), rounded: design == .rounded
+            ))
         }
         if monospacedDigit { font = font.monospacedDigit() }
         return content
@@ -279,6 +356,12 @@ private struct ScaledFont: ViewModifier {
 }
 
 extension View {
+    /// Currency variants at the existing native semantic size, including
+    /// live Dynamic Type changes. No numeric alternates or weight bump.
+    func currencyFont(_ style: UIFont.TextStyle, weight: UIFont.Weight? = nil) -> some View {
+        modifier(CurrencySemanticFont(style: style, weight: weight))
+    }
+
     /// Body copy, labels, names.
     ///
     /// There is no `width` parameter. SF Rounded has a single width, so a

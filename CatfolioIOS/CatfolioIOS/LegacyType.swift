@@ -10,19 +10,19 @@ import UIKit
 /// the Dynamic Type ramp. New code should call `appText` / `appNumber`.
 enum LegacyType {
     static func regular(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .system(size: scaled(size, style), weight: .regular, design: .rounded)
+        Typography.text(size: scaled(size, style), weight: .regular)
     }
 
     static func medium(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .system(size: scaled(size, style), weight: .medium, design: .rounded)
+        Typography.text(size: scaled(size, style), weight: .medium)
     }
 
     static func semibold(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .system(size: scaled(size, style), weight: .semibold, design: .rounded)
+        Typography.text(size: scaled(size, style), weight: .semibold)
     }
 
     static func italic(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .system(size: scaled(size, style), weight: .regular, design: .rounded).italic()
+        Typography.text(size: scaled(size, style), weight: .regular).italic()
     }
 
     private static func scaled(_ size: CGFloat, _ style: Font.TextStyle) -> CGFloat {
