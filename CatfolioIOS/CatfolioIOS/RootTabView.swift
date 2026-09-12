@@ -22,6 +22,7 @@ struct RootTabView: View {
 
     @AppStorage(DisplayCurrency.preferenceKey) private var displayCurrencyRawValue = DisplayCurrency.usd.rawValue
     @AppStorage(CompanyNameDisplay.preferenceKey) private var companyNameDisplayRawValue = CompanyNameDisplay.original.rawValue
+    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var selection: Destination
     @State private var showsAIAssistant: Bool
     @State private var isTabBarCompact = false
@@ -123,6 +124,9 @@ struct RootTabView: View {
             }
             .padding(isTabBarCompact ? 2 : 4)
             .navigationGlass()
+            // Fires on the change, so tapping the tab already open stays
+            // silent — there is nothing for the tap to confirm.
+            .sensoryFeedback(.selection, trigger: selection) { _, _ in hapticsEnabled }
             .accessibilityIdentifier("root-tab-bar")
 
             Button(action: presentAI) {
