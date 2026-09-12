@@ -2029,6 +2029,9 @@ struct HoldingResearchSection: View {
                             showsHistoryEntry: visibility.shows(.analystHistory), initialData: consensus,
                             onAvailability: { record($0, for: .consensus) })
                     }
+                    if visibility.shows(.insiders) {
+                        HoldingInsiderTradesCard(holding: holding)
+                    }
                     if visibility.shows(.earnings) {
                         EarningsHistoryView(symbol: holding.ticker, initialSnapshot: earnings,
                             onAvailability: { record($0, for: .earnings) })

@@ -157,7 +157,7 @@ enum HoldingSecurityKind: Equatable {
 }
 
 enum HoldingResearchModule: CaseIterable, Hashable {
-    case developments, consensus, analystHistory, earnings, financials, predictionMarkets
+    case developments, consensus, analystHistory, earnings, financials, predictionMarkets, insiders
 }
 
 enum HoldingResearchAvailability: Equatable {
@@ -172,7 +172,8 @@ struct HoldingResearchVisibility {
     private(set) var availability: [HoldingResearchModule: HoldingResearchAvailability] = [:]
 
     func shows(_ module: HoldingResearchModule) -> Bool {
-        if module == .consensus, currency?.uppercased() != "USD" { return false }
+        // Analyst coverage and Form 4 insider filings are US-listed only.
+        if module == .consensus || module == .insiders, currency?.uppercased() != "USD" { return false }
         let state = availability[module] ?? .unknown
         if state == .available { return true }
         if state == .empty { return false }

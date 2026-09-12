@@ -117,6 +117,8 @@
 		A19900000000000000000009 /* OptionsOIView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000009 /* OptionsOIView.swift */; };
 		A199000000000000000000F0 /* IsometricHeatmapLab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F0 /* IsometricHeatmapLab.swift */; };
 		A199000000000000000000F2 /* PerformanceHeatmapHero.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F2 /* PerformanceHeatmapHero.swift */; };
+		A199000000000000000000F3 /* InsiderTrades.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F3 /* InsiderTrades.swift */; };
+		A199000000000000000000F4 /* InsiderTradesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F4 /* InsiderTradesView.swift */; };
 		A199000000000000000000EB /* SecurityDebate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EB /* SecurityDebate.swift */; };
 		A199000000000000000000ED /* SecurityDebateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000ED /* SecurityDebateStore.swift */; };
 		A199000000000000000000EE /* SecurityDebateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EE /* SecurityDebateView.swift */; };
@@ -136,6 +138,7 @@
 		A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B7 /* Trading212FillDecodingTests.swift */; };
 		A199000000000000000000AD /* NasdaqAnalystLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */; };
 		E10100000000000000000003 /* EarningsHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000003 /* EarningsHistoryTests.swift */; };
+		E101000000000000000000F1 /* InsiderTradesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F1 /* InsiderTradesTests.swift */; };
 		A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000C1 /* SectorAttributionTests.swift */; };
 		A19900000000000000FFB0 /* NumericAlternatesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FFB0 /* NumericAlternatesTests.swift */; };
 		A19900000000000000FFA0 /* PublicInvestorSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */; };
@@ -211,6 +214,8 @@
 		B19900000000000000000009 /* OptionsOIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptionsOIView.swift; sourceTree = "<group>"; };
 		B199000000000000000000F0 /* IsometricHeatmapLab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IsometricHeatmapLab.swift; sourceTree = "<group>"; };
 		B199000000000000000000F2 /* PerformanceHeatmapHero.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceHeatmapHero.swift; sourceTree = "<group>"; };
+		B199000000000000000000F3 /* InsiderTrades.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsiderTrades.swift; sourceTree = "<group>"; };
+		B199000000000000000000F4 /* InsiderTradesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsiderTradesView.swift; sourceTree = "<group>"; };
 		B199000000000000000000EB /* SecurityDebate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebate.swift; sourceTree = "<group>"; };
 		B199000000000000000000ED /* SecurityDebateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebateStore.swift; sourceTree = "<group>"; };
 		B199000000000000000000EE /* SecurityDebateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebateView.swift; sourceTree = "<group>"; };
@@ -291,6 +296,7 @@
 		B199000000000000000000B7 /* Trading212FillDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212FillDecodingTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NasdaqAnalystLogicTests.swift; sourceTree = "<group>"; };
 		F10100000000000000000003 /* EarningsHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarningsHistoryTests.swift; sourceTree = "<group>"; };
+		F101000000000000000000F1 /* InsiderTradesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsiderTradesTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000C1 /* SectorAttributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttributionTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FFB0 /* NumericAlternatesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericAlternatesTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicInvestorSelectionTests.swift; sourceTree = "<group>"; };
@@ -429,6 +435,8 @@
 				B19900000000000000000009 /* OptionsOIView.swift */,
 				B199000000000000000000F0 /* IsometricHeatmapLab.swift */,
 				B199000000000000000000F2 /* PerformanceHeatmapHero.swift */,
+				B199000000000000000000F3 /* InsiderTrades.swift */,
+				B199000000000000000000F4 /* InsiderTradesView.swift */,
 				B199000000000000000000EB /* SecurityDebate.swift */,
 				B199000000000000000000ED /* SecurityDebateStore.swift */,
 				B199000000000000000000EE /* SecurityDebateView.swift */,
@@ -510,6 +518,7 @@
 				B199000000000000000000B7 /* Trading212FillDecodingTests.swift */,
 				B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */,
 				F10100000000000000000003 /* EarningsHistoryTests.swift */,
+				F101000000000000000000F1 /* InsiderTradesTests.swift */,
 				B199000000000000000000C1 /* SectorAttributionTests.swift */,
 				B19900000000000000FFB0 /* NumericAlternatesTests.swift */,
 				B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */,
@@ -758,6 +767,8 @@
 				A19900000000000000000009 /* OptionsOIView.swift in Sources */,
 				A199000000000000000000F0 /* IsometricHeatmapLab.swift in Sources */,
 				A199000000000000000000F2 /* PerformanceHeatmapHero.swift in Sources */,
+				A199000000000000000000F3 /* InsiderTrades.swift in Sources */,
+				A199000000000000000000F4 /* InsiderTradesView.swift in Sources */,
 				A199000000000000000000EB /* SecurityDebate.swift in Sources */,
 				A199000000000000000000ED /* SecurityDebateStore.swift in Sources */,
 				A199000000000000000000EE /* SecurityDebateView.swift in Sources */,
@@ -787,6 +798,7 @@
 				A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */,
 				A199000000000000000000AD /* NasdaqAnalystLogicTests.swift in Sources */,
 				E10100000000000000000003 /* EarningsHistoryTests.swift in Sources */,
+				E101000000000000000000F1 /* InsiderTradesTests.swift in Sources */,
 				A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */,
 				A19900000000000000FFB0 /* NumericAlternatesTests.swift in Sources */,
 				A19900000000000000FFA0 /* PublicInvestorSelectionTests.swift in Sources */,
