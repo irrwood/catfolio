@@ -59,6 +59,7 @@ struct SettingsView: View {
     @State private var showsHistoryPreview = ProcessInfo.processInfo.arguments.contains("--show-history-preview")
     @State private var showsResearchPreview = ProcessInfo.processInfo.arguments.contains("--preview-research-analysis")
     @State private var showsOIPreview = ProcessInfo.processInfo.arguments.contains("--preview-options-oi")
+    @State private var showsIsometricHeatmap = ProcessInfo.processInfo.arguments.contains("--show-isometric-heatmap")
     #endif
 
     init(showsCloseButton: Bool = false) {
@@ -238,6 +239,18 @@ struct SettingsView: View {
                     .textSelection(.enabled)
             }
 
+            SettingsSection(L10n.text("实验")) {
+                SettingsNavigationRow(
+                    icon: .symbol("square.3.layers.3d"),
+                    title: L10n.text("等距热力图"),
+                    subtitle: L10n.text("渐进模糊与缓慢平移"),
+                    subtitleSpacing: 2
+                ) {
+                    IsometricHeatmapLabView().environment(model)
+                }
+                .accessibilityIdentifier("settings.isometric-heatmap")
+            }
+
             SettingsSection(L10n.text("关于")) {
                 SettingsValueRow(
                     icon: .symbol("info.circle"),
@@ -260,6 +273,7 @@ struct SettingsView: View {
                     .softTopScrollEdge()
                     .navigationTitle(L10n.text("OI 布局验证"))
             }
+            .navigationDestination(isPresented: $showsIsometricHeatmap) { IsometricHeatmapLabView().environment(model) }
             #endif
             .toolbar {
                 if showsCloseButton {

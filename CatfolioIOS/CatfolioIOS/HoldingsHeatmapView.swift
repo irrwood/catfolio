@@ -14,6 +14,9 @@ struct HoldingsHeatmapView: View {
     let usesETFLookThrough: Bool
     let lookThroughRows: [ETFLookThroughRow]?
     let lookThroughDailyChanges: [String: Double]
+    /// The inset the heatmap's container already has from the screen edge.
+    /// The grouped layout bleeds out to `groupedScreenInset` from there.
+    var screenInset: CGFloat = CatfolioStyle.pageHorizontalInset
     let onSelect: (Holding) -> Void
 
     private let maximumHoldingTiles = 20
@@ -47,7 +50,7 @@ struct HoldingsHeatmapView: View {
                 .padding(
                     .horizontal,
                     groupsBySector
-                        ? groupedScreenInset - CatfolioStyle.pageHorizontalInset
+                        ? groupedScreenInset - screenInset
                         : 0
                 )
                 .transaction { transaction in transaction.animation = nil }

@@ -6,6 +6,8 @@ struct ReturnsView: View {
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var showsPolicyComposer = false
     @State private var selectedHolding: Holding?
+    @State private var heatmapExpanded = ProcessInfo.processInfo.arguments.contains("--expand-performance-heatmap")
+    @State private var heroScroll = HeroScroll()
     #if DEBUG
     @State private var showsHeatmapPreview = ProcessInfo.processInfo.arguments.contains("--show-heatmap")
     #endif
@@ -14,12 +16,19 @@ struct ReturnsView: View {
         SettingsPage {
             // The heatmap lives on the tab itself, not behind a row: it reads
             // the same holdings and daily changes the home list already has.
+            // It starts lying on an isometric plane; a pull stands it up.
             PortfolioDetailsCard(
                 holdings: model.holdings,
                 onSelect: { selectedHolding = $0 },
-                showsHeatmap: true
+                showsHeatmap: true,
+                hero: HeatmapHeroState(
+                    isExpanded: heatmapExpanded,
+                    pull: heroScroll.pull,
+                    topInset: heroScroll.topInset,
+                    isOnScreen: heroScroll.isHeroOnScreen,
+                    onToggle: toggleHeatmap
+                )
             )
-            .clipShape(RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius, style: .continuous))
             .accessibilityIdentifier("performance.heatmap")
             SettingsSection(L10n.text("Performance")) {
                 ForEach(ReturnsChartDestination.allCases.filter { $0 != .heatmap }) { chart in
@@ -52,6 +61,27 @@ struct ReturnsView: View {
                     .accessibilityHint(L10n.text("功能暂未开放"))
             }
         }
+        // Only what the hero needs, so ordinary scrolling does not redraw
+        // the page: the pull past the top, the bar's height, and whether the
+        // hero is still in sight.
+        .onScrollGeometryChange(for: HeroScroll.self) { geometry in
+            let offset = geometry.contentOffset.y + geometry.contentInsets.top
+            return HeroScroll(
+                pull: max(0, -offset),
+                topInset: geometry.contentInsets.top,
+                isHeroOnScreen: offset < 480
+            )
+        } action: { _, scroll in
+            heroScroll = scroll
+        }
+        .onScrollPhaseChange { oldPhase, newPhase in
+            guard oldPhase == .interacting, newPhase != .interacting,
+                  heroScroll.pull >= HeatmapHeroState.threshold else { return }
+            toggleHeatmap()
+        }
+        .sensoryFeedback(.impact(weight: .light), trigger: heroScroll.pull >= HeatmapHeroState.threshold) { wasPast, isPast in
+            hapticsEnabled && !wasPast && isPast
+        }
         .tracksRootTabBarScroll()
         .accessibilityIdentifier("returns-root")
         .softTopScrollEdge()
@@ -75,6 +105,18 @@ struct ReturnsView: View {
             showsPolicyComposer = ProcessInfo.processInfo.arguments.contains("--show-policy-composer")
         }
         #endif
+    }
+}
+
+private extension ReturnsView {
+    struct HeroScroll: Equatable {
+        var pull: CGFloat = 0
+        var topInset: CGFloat = 0
+        var isHeroOnScreen = true
+    }
+
+    func toggleHeatmap() {
+        withAnimation(.smooth(duration: 0.7)) { heatmapExpanded.toggle() }
     }
 }
 

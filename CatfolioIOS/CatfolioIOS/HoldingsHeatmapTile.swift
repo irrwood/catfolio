@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HoldingsHeatmapTile: View {
     @Environment(\.locale) private var appLocale
+    @Environment(\.reportsHeatmapTileFrames) private var reportsFrame
     struct Model: Identifiable {
         enum Content {
             case holding(Holding)
@@ -221,6 +222,16 @@ struct HoldingsHeatmapTile: View {
             }
         }
         .accessibilityLabel(accessibilityText)
+        .background {
+            if reportsFrame {
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: HeatmapTileFramesKey.self,
+                        value: [proxy.frame(in: .named(HeatmapTileFramesKey.space))]
+                    )
+                }
+            }
+        }
     }
 
     private var tileBody: some View {

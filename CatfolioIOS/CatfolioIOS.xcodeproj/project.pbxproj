@@ -115,6 +115,8 @@
 		A19900000000000000000002 /* StockScreenerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000002 /* StockScreenerView.swift */; };
 		A19900000000000000000003 /* AnalystConsensusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000003 /* AnalystConsensusView.swift */; };
 		A19900000000000000000009 /* OptionsOIView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000009 /* OptionsOIView.swift */; };
+		A199000000000000000000F0 /* IsometricHeatmapLab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F0 /* IsometricHeatmapLab.swift */; };
+		A199000000000000000000F2 /* PerformanceHeatmapHero.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F2 /* PerformanceHeatmapHero.swift */; };
 		A199000000000000000000EB /* SecurityDebate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EB /* SecurityDebate.swift */; };
 		A199000000000000000000ED /* SecurityDebateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000ED /* SecurityDebateStore.swift */; };
 		A199000000000000000000EE /* SecurityDebateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EE /* SecurityDebateView.swift */; };
@@ -207,6 +209,8 @@
 		B19900000000000000000002 /* StockScreenerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockScreenerView.swift; sourceTree = "<group>"; };
 		B19900000000000000000003 /* AnalystConsensusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalystConsensusView.swift; sourceTree = "<group>"; };
 		B19900000000000000000009 /* OptionsOIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptionsOIView.swift; sourceTree = "<group>"; };
+		B199000000000000000000F0 /* IsometricHeatmapLab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IsometricHeatmapLab.swift; sourceTree = "<group>"; };
+		B199000000000000000000F2 /* PerformanceHeatmapHero.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceHeatmapHero.swift; sourceTree = "<group>"; };
 		B199000000000000000000EB /* SecurityDebate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebate.swift; sourceTree = "<group>"; };
 		B199000000000000000000ED /* SecurityDebateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebateStore.swift; sourceTree = "<group>"; };
 		B199000000000000000000EE /* SecurityDebateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebateView.swift; sourceTree = "<group>"; };
@@ -423,6 +427,8 @@
 				B19900000000000000000003 /* AnalystConsensusView.swift */,
 				BC9200000000000000000001 /* AnalystHistoryView.swift */,
 				B19900000000000000000009 /* OptionsOIView.swift */,
+				B199000000000000000000F0 /* IsometricHeatmapLab.swift */,
+				B199000000000000000000F2 /* PerformanceHeatmapHero.swift */,
 				B199000000000000000000EB /* SecurityDebate.swift */,
 				B199000000000000000000ED /* SecurityDebateStore.swift */,
 				B199000000000000000000EE /* SecurityDebateView.swift */,
@@ -750,6 +756,8 @@
 				A19900000000000000000003 /* AnalystConsensusView.swift in Sources */,
 				AC9200000000000000000001 /* AnalystHistoryView.swift in Sources */,
 				A19900000000000000000009 /* OptionsOIView.swift in Sources */,
+				A199000000000000000000F0 /* IsometricHeatmapLab.swift in Sources */,
+				A199000000000000000000F2 /* PerformanceHeatmapHero.swift in Sources */,
 				A199000000000000000000EB /* SecurityDebate.swift in Sources */,
 				A199000000000000000000ED /* SecurityDebateStore.swift in Sources */,
 				A199000000000000000000EE /* SecurityDebateView.swift in Sources */,

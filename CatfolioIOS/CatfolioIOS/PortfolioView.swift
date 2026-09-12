@@ -1821,6 +1821,9 @@ struct PortfolioDetailsCard: View {
     let onSelect: (Holding) -> Void
     let showsHeatmap: Bool
     let zoomNamespace: Namespace.ID?
+    /// Set on the Performance tab: the heatmap is drawn as the isometric hero
+    /// rather than inside a card.
+    let hero: HeatmapHeroState?
 
     @State private var tableMode: String
 
@@ -1828,12 +1831,14 @@ struct PortfolioDetailsCard: View {
         holdings: [Holding],
         onSelect: @escaping (Holding) -> Void,
         showsHeatmap: Bool = false,
-        zoomNamespace: Namespace.ID? = nil
+        zoomNamespace: Namespace.ID? = nil,
+        hero: HeatmapHeroState? = nil
     ) {
         self.holdings = holdings
         self.onSelect = onSelect
         self.showsHeatmap = showsHeatmap
         self.zoomNamespace = zoomNamespace
+        self.hero = hero
         _tableMode = State(initialValue: showsHeatmap ? "热力图"
             : ProcessInfo.processInfo.arguments.contains("--show-etf") ? "ETF 穿透" : "持仓")
     }
@@ -1859,103 +1864,34 @@ struct PortfolioDetailsCard: View {
         .contains("--look-through-heatmap-etf")
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .center, spacing: 10) {
-                if showsHeatmap {
-                    Text(L10n.text("持仓热力图"))
-                        .font(.title2.weight(.semibold))
-                } else {
-                Menu {
-                    Button {
-                        tableMode = "持仓"
-                    } label: {
-                        Label(L10n.text("持仓明细"), systemImage: tableMode == "持仓" ? "checkmark" : "list.bullet")
-                    }
-                    Button {
-                        tableMode = "ETF 穿透"
-                    } label: {
-                        Label(L10n.text("ETF 穿透"), systemImage: tableMode == "ETF 穿透" ? "checkmark" : "square.3.layers.3d")
-                    }
-                } label: {
-                    HStack(spacing: 0) {
-                        Text(tableTitle)
-                        Image("PortfolioHeaderDisclosure")
-                            .renderingMode(.template)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 24, height: 24)
-                    }
-                    .font(Typography.number(size: colorScheme == .light ? 28 : 32))
-                    .foregroundStyle(.primary)
-                }
-                .buttonStyle(.plain)
-                }
+        Group {
+            if showsHeatmap, let hero {
+                PerformanceHeatmapHero(
+                    state: hero,
+                    renderKey: heatmapRenderKey,
+                    header: { headerRow },
+                    heatmap: { heatmapView(isSnapshot: $0) }
+                )
+            } else {
+                VStack(alignment: .leading, spacing: 18) {
+                    headerRow
 
-                Spacer()
-                HStack(spacing: 12) {
-                if tableMode == "持仓" {
-                    HoldingSortMenu(
-                        field: Binding(
-                            get: { holdingSortField },
-                            set: { holdingSortFieldRawValue = $0.rawValue }
-                        ),
-                        ascending: $holdingSortAscending,
-                        performancePeriod: $holdingPerformancePeriod,
-                        iconOnly: true,
-                        usesGlass: headerUsesGlass
-                    )
-                } else if tableMode == "ETF 穿透" {
-                    ETFExposureSortMenu(field: $etfSortField, ascending: $etfSortAscending)
-                } else {
-                    HeatmapPerformancePeriodMenu(
-                        period: $heatmapPerformancePeriod,
-                        groupsBySector: $heatmapGroupsBySector,
-                        looksThroughETF: $heatmapLooksThroughETF,
-                        usesGlass: headerUsesGlass
-                    )
+                    Group {
+                        if tableMode == "持仓" {
+                            holdingsTable
+                        } else if tableMode == "热力图" {
+                            heatmapView(isSnapshot: false)
+                        } else {
+                            etfTable
+                        }
+                    }
                 }
-                }
-            }
-            .background {
-                GeometryReader { geometry in
-                    Color.clear.preference(
-                        key: PortfolioHeaderMidYPreferenceKey.self,
-                        value: geometry.frame(in: .global).midY
-                    )
-                }
-            }
-            .onPreferenceChange(PortfolioHeaderMidYPreferenceKey.self) { midY in
-                updateHeaderMaterial(for: midY)
-            }
-
-            Group {
-                if tableMode == "持仓" {
-                    holdingsTable
-                } else if tableMode == "热力图" {
-                    HoldingsHeatmapView(
-                        holdings: holdings,
-                        dailyChanges: model.holdingDailyChanges,
-                        isLoading: (heatmapLooksThroughETF && isLoadingETF)
-                            || (heatmapPerformancePeriod == .today
-                                && (model.isHoldingDailyChangesLoading || isLoadingETFConstituentChanges)),
-                        performancePeriod: heatmapPerformancePeriod,
-                        groupsBySector: heatmapGroupsBySector,
-                        usesETFLookThrough: heatmapLooksThroughETF,
-                        lookThroughRows: loadedETFHoldingsKey == etfHoldingsKey
-                            ? etfResponse?.rows
-                            : nil,
-                        lookThroughDailyChanges: etfConstituentDailyChanges,
-                        onSelect: onSelect
-                    )
-                } else {
-                    etfTable
-                }
+                .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
+                .padding(.top, 24)
+                .padding(.bottom, 18)
+                .background(colorScheme == .light ? Color.white : Color(red: 0, green: 0.008, blue: 0))
             }
         }
-        .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
-        .padding(.top, 24)
-        .padding(.bottom, 18)
-        .background(colorScheme == .light ? Color.white : Color(red: 0, green: 0.008, blue: 0))
         // Local exposure preparation must not wait for network quotes.
         .task(id: "\(tableMode)-\(etfHoldingsKey)-\(heatmapLooksThroughETF)") {
             guard tableMode == "ETF 穿透" || (tableMode == "热力图" && heatmapLooksThroughETF),
@@ -1973,6 +1909,117 @@ struct PortfolioDetailsCard: View {
         }
         .onChange(of: etfSortField) { _, _ in etfVisibleLimit = 20 }
         .onChange(of: etfSortAscending) { _, _ in etfVisibleLimit = 20 }
+    }
+
+    private func heatmapView(isSnapshot: Bool) -> HoldingsHeatmapView {
+        HoldingsHeatmapView(
+            holdings: holdings,
+            dailyChanges: model.holdingDailyChanges,
+            isLoading: !isSnapshot && ((heatmapLooksThroughETF && isLoadingETF)
+                || (heatmapPerformancePeriod == .today
+                    && (model.isHoldingDailyChangesLoading || isLoadingETFConstituentChanges))),
+            performancePeriod: heatmapPerformancePeriod,
+            groupsBySector: heatmapGroupsBySector,
+            usesETFLookThrough: heatmapLooksThroughETF,
+            lookThroughRows: loadedETFHoldingsKey == etfHoldingsKey
+                ? etfResponse?.rows
+                : nil,
+            lookThroughDailyChanges: etfConstituentDailyChanges,
+            screenInset: hero == nil ? CatfolioStyle.pageHorizontalInset : SettingsTemplate.pageInset,
+            onSelect: onSelect
+        )
+    }
+
+    /// Everything that changes how the heatmap draws, so the hero re-renders
+    /// its textures only when one of them does.
+    private var heatmapRenderKey: Int {
+        var hasher = Hasher()
+        for holding in holdings {
+            hasher.combine(holding.ticker)
+            hasher.combine(holding.marketValue)
+            hasher.combine(holding.todayChangePercent)
+            hasher.combine(holding.unrealizedPercent)
+        }
+        for (ticker, change) in model.holdingDailyChanges.sorted(by: { $0.key < $1.key }) {
+            hasher.combine(ticker)
+            hasher.combine(change)
+        }
+        hasher.combine(heatmapPerformancePeriod.rawValue)
+        hasher.combine(heatmapGroupsBySector)
+        hasher.combine(heatmapLooksThroughETF)
+        hasher.combine(loadedETFHoldingsKey == etfHoldingsKey ? etfResponse?.rows.count ?? -1 : -1)
+        hasher.combine(etfConstituentDailyChanges.count)
+        return hasher.finalize()
+    }
+
+    private var headerRow: some View {
+        HStack(alignment: .center, spacing: 10) {
+            if showsHeatmap {
+                Text(L10n.text("持仓热力图"))
+                    .font(.title2.weight(.semibold))
+            } else {
+            Menu {
+                Button {
+                    tableMode = "持仓"
+                } label: {
+                    Label(L10n.text("持仓明细"), systemImage: tableMode == "持仓" ? "checkmark" : "list.bullet")
+                }
+                Button {
+                    tableMode = "ETF 穿透"
+                } label: {
+                    Label(L10n.text("ETF 穿透"), systemImage: tableMode == "ETF 穿透" ? "checkmark" : "square.3.layers.3d")
+                }
+            } label: {
+                HStack(spacing: 0) {
+                    Text(tableTitle)
+                    Image("PortfolioHeaderDisclosure")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 24, height: 24)
+                }
+                .font(Typography.number(size: colorScheme == .light ? 28 : 32))
+                .foregroundStyle(.primary)
+            }
+            .buttonStyle(.plain)
+            }
+
+            Spacer()
+            HStack(spacing: 12) {
+            if tableMode == "持仓" {
+                HoldingSortMenu(
+                    field: Binding(
+                        get: { holdingSortField },
+                        set: { holdingSortFieldRawValue = $0.rawValue }
+                    ),
+                    ascending: $holdingSortAscending,
+                    performancePeriod: $holdingPerformancePeriod,
+                    iconOnly: true,
+                    usesGlass: headerUsesGlass
+                )
+            } else if tableMode == "ETF 穿透" {
+                ETFExposureSortMenu(field: $etfSortField, ascending: $etfSortAscending)
+            } else {
+                HeatmapPerformancePeriodMenu(
+                    period: $heatmapPerformancePeriod,
+                    groupsBySector: $heatmapGroupsBySector,
+                    looksThroughETF: $heatmapLooksThroughETF,
+                    usesGlass: headerUsesGlass
+                )
+            }
+            }
+        }
+        .background {
+            GeometryReader { geometry in
+                Color.clear.preference(
+                    key: PortfolioHeaderMidYPreferenceKey.self,
+                    value: geometry.frame(in: .global).midY
+                )
+            }
+        }
+        .onPreferenceChange(PortfolioHeaderMidYPreferenceKey.self) { midY in
+            updateHeaderMaterial(for: midY)
+        }
     }
 
     private var itemCount: String {

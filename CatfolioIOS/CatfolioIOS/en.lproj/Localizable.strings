@@ -328,6 +328,11 @@
 "公开披露" = "Public disclosures";
 "公用事业" = "Utilities";
 "关于" = "About";
+"展开持仓热力图" = "Expand the holdings heatmap";
+"收起持仓热力图" = "Lay the holdings heatmap down";
+"实验" = "Experiments";
+"等距热力图" = "Isometric Heatmap";
+"渐进模糊与缓慢平移" = "Progressive blur and a slow drift";
 "关注半导体板块相对强弱" = "Watch relative semiconductor-sector strength";
 "关注回撤是否跌破短期趋势" = "Watch for a break below the short-term trend";
 "关注成交量是否恢复正常" = "Watch whether volume returns to normal";
