@@ -319,25 +319,31 @@ enum CatfolioPalette {
     /// what is subtracted from it — cost of revenue, operating expenses,
     /// liabilities, capital expenditure — reads as the other.
     ///
-    /// Blue against violet, each with the pale tint its ribbon is drawn in.
+    /// Blue against amber. Violet was the second colour until it was judged
+    /// unattractive; amber is blue's complement, so the two sides separate at
+    /// a glance, and it is not the red a reader takes for a loss.
     ///
     /// The ribbons carry their own colour rather than a translucent copy of the
     /// bar. A tint chosen directly can be lighter than an opacity of the bar
     /// would ever be while keeping enough saturation to still read as the same
-    /// identity, which is what these four values do.
+    /// identity.
     ///
-    /// `#007DFF` as asked for is `blue500` to within two parts in 255 — one
-    /// step in the red channel, invisible on screen — so it points at the
-    /// existing swatch instead of adding a near-duplicate for a future reader
-    /// to have to tell apart. `#804DDE` is `violet500` exactly.
+    /// Each value has a dark counterpart. The light-mode ribbons are pale tints
+    /// meant to sit on white; on a black page the same tints glared like lit
+    /// bands, so dark mode draws deep tints of the same hues and lifts the
+    /// bars a step so they still stand off the ribbons.
     ///
     /// Neither side is `gain` or `loss`: revenue is not a gain and a liability
     /// is not a loss, so borrowing either would tell the reader something
     /// untrue about a statement.
-    static let statementInflow = blue500
-    static let statementInflowRibbon = blue100
-    static let statementOutflow = violet500
-    static let statementOutflowRibbon = violet100
+    static let statementInflow = dynamic(light: 0x027DFF, dark: 0x3D9BFF)
+    static let statementInflowRibbon = dynamic(light: 0xCCEBFF, dark: 0x0F3257)
+    static let statementOutflow = dynamic(light: 0xEF7A00, dark: 0xFFA238)
+    static let statementOutflowRibbon = dynamic(light: 0xFFE4C7, dark: 0x4A2C0C)
+    /// Figures printed in a flow diagram's colours: a step darker than the bar
+    /// in light mode, where amber on white would be too faint to read.
+    static let statementInflowText = dynamic(light: 0x0068D6, dark: 0x6CB4FF)
+    static let statementOutflowText = dynamic(light: 0xB85C00, dark: 0xFFB366)
     /// Figma Today-card negative series and its ambient dark-mode light source.
     static let contributionRed = color(0xD5312C)
     static let contributionRedGlow = color(0xE2433C)
@@ -411,6 +417,22 @@ enum CatfolioPalette {
             green: Double((hex >> 8) & 0xFF) / 255,
             blue: Double(hex & 0xFF) / 255
         )
+    }
+
+    private static func uiColor(_ hex: UInt32) -> UIColor {
+        UIColor(
+            red: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: 1
+        )
+    }
+
+    /// One swatch for each appearance.
+    private static func dynamic(light: UInt32, dark: UInt32) -> Color {
+        let light = uiColor(light)
+        let dark = uiColor(dark)
+        return Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? dark : light })
     }
 }
 
