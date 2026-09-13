@@ -821,6 +821,41 @@ struct PortfolioAttentionDailyBar: Sendable {
     let low: Double
     let volume: Double
 }
+/// Each current holding's value by day; see `LocalMarketDataClient.holdingValueHistory`.
+struct HoldingValueHistory: Sendable {
+    struct Row: Sendable {
+        let dateText: String
+        let cost: Double
+        /// USD by upper-cased ticker.
+        let values: [String: Double]
+        /// What the holdings open on this day cost, USD by upper-cased ticker.
+        var costs: [String: Double] = [:]
+
+        /// A holding's gain on this day: its value less what it cost.
+        func gain(_ ticker: String) -> Double {
+            guard let value = values[ticker] else { return 0 }
+            return value - (costs[ticker] ?? value)
+        }
+
+        var date: Date { DayDateCodec.date(from: dateText) ?? .distantPast }
+        var total: Double { values.values.reduce(0, +) }
+    }
+
+    let rows: [Row]
+    /// What each holding cost, USD by upper-cased ticker.
+    let costs: [String: Double]
+    let names: [String: String]
+
+    /// Each holding's gain on the latest day: its value then less its cost.
+    var gains: [String: Double] {
+        guard let last = rows.last else { return [:] }
+        var result: [String: Double] = [:]
+        for (ticker, value) in last.values {
+            result[ticker] = value - (last.costs[ticker] ?? costs[ticker] ?? value)
+        }
+        return result
+    }
+}
 
 private struct CurrentOpenBackcastPosition {
     let position: LocalPositionRecord
@@ -997,6 +1032,118 @@ struct LocalMarketDataClient {
             currentPoint: current,
             warning: chartWarnings.isEmpty ? nil : chartWarnings.joined(separator: " ")
         )
+    }
+
+    /// The home chart's history, kept apart by holding: each current
+    /// holding's shares at each day's close from the day it was first bought,
+    /// by the same method as `currentOpenPositionsHistory`, so the holdings of
+    /// a day add up to the home chart's value for it. Values are USD, keyed by
+    /// upper-cased ticker with accounts added together; `cost` is the same
+    /// net-deposit line the home chart draws.
+    func holdingValueHistory(
+        document: LocalPortfolioDocument,
+        cachedOnly: Bool = false
+    ) async throws -> HoldingValueHistory {
+        guard !document.positions.isEmpty else { throw LocalPortfolioError.noPortfolio }
+        let end = DayDateCodec.string(from: Date())
+        var earliestBuyDates: [String: String] = [:]
+        for transaction in document.transactions ?? [] where transaction.action.uppercased() == "BUY" {
+            let key = "\(transaction.accountKey)|\(transaction.ticker.uppercased())"
+            earliestBuyDates[key] = min(earliestBuyDates[key] ?? transaction.date, transaction.date)
+        }
+        let dated = document.positions.compactMap { position -> CurrentOpenBackcastPosition? in
+            let key = "\(position.accountKey)|\(position.ticker.uppercased())"
+            guard let startDate = position.openedDate ?? earliestBuyDates[key],
+                  DayDateCodec.date(from: startDate) != nil else { return nil }
+            return CurrentOpenBackcastPosition(position: position, startDate: startDate)
+        }
+        guard let start = dated.map(\.startDate).min() else { return HoldingValueHistory(rows: [], costs: [:], names: [:]) }
+
+        let symbols = dated.map { Self.yahooSymbol(ticker: $0.position.ticker, currency: $0.position.quoteCurrency) }.uniqued()
+        let histories = await historicalCloses(symbols: symbols, from: start, to: end, cachedOnly: cachedOnly)
+        var scales: [String: Double] = [:]
+        for item in dated {
+            let symbol = Self.yahooSymbol(ticker: item.position.ticker, currency: item.position.quoteCurrency)
+            guard let latest = histories[symbol]?.max(by: { $0.key < $1.key })?.value else { continue }
+            scales[symbol] = Self.priceScale(ticker: item.position.ticker, currency: item.position.quoteCurrency,
+                                             referencePrice: item.position.quotePrice, marketPrice: latest)
+        }
+
+        var lastClose: [String: Double] = [:]
+        var rows: [HoldingValueHistory.Row] = []
+        for date in histories.values.flatMap(\.keys).sorted().uniqued() where date >= start {
+            var values: [String: Double] = [:]
+            var costs: [String: Double] = [:]
+            var cost = 0.0
+            for item in dated where date >= item.startDate {
+                let position = item.position
+                let positionCost = try LocalPortfolioEngine.usd(position.shares * position.averageCost, currency: position.currency)
+                cost += positionCost
+                costs[position.ticker.uppercased(), default: 0] += positionCost
+                let symbol = Self.yahooSymbol(ticker: position.ticker, currency: position.quoteCurrency)
+                if let close = histories[symbol]?[date] { lastClose[symbol] = close }
+                let value = try lastClose[symbol].map {
+                    try LocalPortfolioEngine.usd(position.shares * $0 * (scales[symbol] ?? 1), currency: position.quoteCurrency)
+                } ?? positionCost
+                values[position.ticker.uppercased(), default: 0] += value
+            }
+            if !values.isEmpty { rows.append(.init(dateText: date, cost: cost, values: values, costs: costs)) }
+        }
+        var costs: [String: Double] = [:]
+        var names: [String: String] = [:]
+        for item in dated {
+            let key = item.position.ticker.uppercased()
+            costs[key, default: 0] += try LocalPortfolioEngine.usd(item.position.shares * item.position.averageCost,
+                                                                   currency: item.position.currency)
+            names[key] = names[key] ?? item.position.name
+        }
+        return HoldingValueHistory(rows: rows, costs: costs, names: names)
+    }
+
+    /// Today's share counts held through the whole window, priced at each
+    /// day's close. Unlike `holdingValueHistory`, nothing enters on its
+    /// purchase date, so a buy never reads as a rise: the total's fall from a
+    /// high splits exactly into each holding's own fall, which is what the
+    /// underwater analysis draws. A holding with no close yet — listed later
+    /// than the window starts — sits at its first close until it trades.
+    func fixedShareHistory(
+        document: LocalPortfolioDocument,
+        years: Int = 5,
+        cachedOnly: Bool = false
+    ) async throws -> HoldingValueHistory {
+        let positions = document.positions.filter { $0.shares > 0 }
+        guard !positions.isEmpty else { throw LocalPortfolioError.noPortfolio }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let endDate = Date()
+        let startDate = calendar.date(byAdding: .year, value: -years, to: endDate) ?? endDate
+        let symbols = positions.map { Self.yahooSymbol(ticker: $0.ticker, currency: $0.quoteCurrency) }.uniqued()
+        let histories = await historicalCloses(symbols: symbols, from: DayDateCodec.string(from: startDate),
+                                               to: DayDateCodec.string(from: endDate), cachedOnly: cachedOnly)
+        var scales: [String: Double] = [:]
+        var lastClose: [String: Double] = [:]
+        for position in positions {
+            let symbol = Self.yahooSymbol(ticker: position.ticker, currency: position.quoteCurrency)
+            guard let history = histories[symbol], let latest = history.max(by: { $0.key < $1.key })?.value else { continue }
+            scales[symbol] = Self.priceScale(ticker: position.ticker, currency: position.quoteCurrency,
+                                             referencePrice: position.quotePrice, marketPrice: latest)
+            lastClose[symbol] = history.min(by: { $0.key < $1.key })?.value
+        }
+        var rows: [HoldingValueHistory.Row] = []
+        for date in histories.values.flatMap(\.keys).sorted().uniqued() {
+            var values: [String: Double] = [:]
+            for position in positions {
+                let symbol = Self.yahooSymbol(ticker: position.ticker, currency: position.quoteCurrency)
+                if let close = histories[symbol]?[date] { lastClose[symbol] = close }
+                guard let close = lastClose[symbol] else { continue }
+                values[position.ticker.uppercased(), default: 0] += try LocalPortfolioEngine.usd(
+                    position.shares * close * (scales[symbol] ?? 1), currency: position.quoteCurrency)
+            }
+            if !values.isEmpty { rows.append(.init(dateText: date, cost: 0, values: values)) }
+        }
+        var names: [String: String] = [:]
+        for position in positions { names[position.ticker.uppercased()] = names[position.ticker.uppercased()] ?? position.name }
+        return HoldingValueHistory(rows: rows, costs: [:], names: names)
     }
 
     /// Refreshes the quote carried by every locally stored position. The

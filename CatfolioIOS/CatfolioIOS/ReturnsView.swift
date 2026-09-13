@@ -118,15 +118,17 @@ private extension ReturnsView {
 }
 
 enum ReturnsChartDestination: String, CaseIterable, Identifiable {
-    case heatmap, comparison, drawdown, valuation
+    case heatmap, contributors, comparison, drawdown, underwater, valuation
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .heatmap: L10n.text("持仓热力图")
+        case .contributors: L10n.text("收益来源")
         case .comparison: L10n.text("收益对比")
         case .drawdown: L10n.text("回撤水下曲线")
+        case .underwater: L10n.text("水下分析")
         case .valuation: L10n.text("估值矩阵 (P/E vs 成长)")
         }
     }
@@ -134,8 +136,10 @@ enum ReturnsChartDestination: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .heatmap: "square.grid.2x2"
+        case .contributors: "square.stack.3d.up"
         case .comparison: "chart.line.uptrend.xyaxis"
         case .drawdown: "water.waves"
+        case .underwater: "water.waves.and.arrow.down"
         case .valuation: "chart.dots.scatter"
         }
     }
@@ -148,6 +152,16 @@ private struct ReturnsChartPage: View {
     @State private var selectedHolding: Holding?
 
     var body: some View {
+        // A chart that changes what it shows from further down the page can
+        // take the reader back up to it.
+        ScrollViewReader { proxy in
+            page.environment(\.scrollChartPageToTop, ChartPageScrollToTop {
+                withAnimation(.snappy) { proxy.scrollTo("chart-page-top", anchor: .top) }
+            })
+        }
+    }
+
+    private var page: some View {
         ScrollView {
             Group {
                 switch chart {
@@ -157,14 +171,19 @@ private struct ReturnsChartPage: View {
                         onSelect: { selectedHolding = $0 },
                         showsHeatmap: true
                     )
+                case .contributors:
+                    HoldingContributionChart()
                 case .comparison:
                     ReturnsComparisonPanel()
                 case .drawdown:
                     analytics(.drawdown)
+                case .underwater:
+                    UnderwaterAnalysisChart()
                 case .valuation:
                     analytics(.valuation)
                 }
             }
+            .id("chart-page-top")
             .padding(.top, 20)
             .padding(.bottom, 72)
         }

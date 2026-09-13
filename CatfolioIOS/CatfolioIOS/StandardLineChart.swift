@@ -1368,12 +1368,29 @@ struct StandardLineChart: View {
     ) {
         guard points.count > 1 else { return }
         var path = Path()
+        var locations: [CGPoint] = []
         for (index, point) in points.enumerated() {
             let location = CGPoint(
                 x: x(for: point.date, in: plot, dates: dates),
                 y: y(for: point.value, in: plot, domain: valueDomain)
             )
+            locations.append(location)
             index == 0 ? path.move(to: location) : path.addLine(to: location)
+        }
+        // The viewport-zoom transition draws through here. Without this, a
+        // filled series lost its area for the length of every range change.
+        if let fill = series.areaFill, let baseline = series.areaBaseline,
+           let first = locations.first, let last = locations.last {
+            let baseY = y(for: baseline, in: plot, domain: valueDomain)
+            var area = path
+            area.addLine(to: CGPoint(x: last.x, y: baseY))
+            area.addLine(to: CGPoint(x: first.x, y: baseY))
+            area.closeSubpath()
+            var fillContext = context
+            fillContext.opacity = opacity
+            fillContext.fill(area, with: .color(fill))
+            drawAreaStripes(in: area, color: series.areaStripeColor,
+                            spacing: series.areaStripeSpacing, context: &fillContext, plot: plot)
         }
         stroke(path, series: series, opacity: opacity, context: &context)
     }

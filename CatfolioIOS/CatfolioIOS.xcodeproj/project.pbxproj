@@ -27,6 +27,8 @@
 		AF1000000000000000000021 /* PolicyRunTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000021; };
 		AF1000000000000000000022 /* PolicyComposerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000022; };
 		AF1000000000000000000023 /* PolicyComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000023; };
+		AF1000000000000000000024 /* UnderwaterAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000024; };
+		AF1000000000000000000025 /* UnderwaterAnalysisChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000025; };
 		AF1000000000000000000001 /* PolicyWorkspaceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000001; };
 		AF1000000000000000000003 /* PolicyContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000003; };
 		AF1000000000000000000004 /* PolicyTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000004; };
@@ -120,6 +122,7 @@
 		A199000000000000000000F3 /* InsiderTrades.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F3 /* InsiderTrades.swift */; };
 		A199000000000000000000F4 /* InsiderTradesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F4 /* InsiderTradesView.swift */; };
 		A199000000000000000000F5 /* RevenueSegments.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F5 /* RevenueSegments.swift */; };
+		A199000000000000000000F7 /* HoldingContributionChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F7 /* HoldingContributionChart.swift */; };
 		A199000000000000000000F6 /* revenue_segments.json in Resources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F6 /* revenue_segments.json */; };
 		A199000000000000000000EB /* SecurityDebate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EB /* SecurityDebate.swift */; };
 		A199000000000000000000ED /* SecurityDebateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000ED /* SecurityDebateStore.swift */; };
@@ -143,6 +146,8 @@
 		E101000000000000000000F1 /* InsiderTradesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F1 /* InsiderTradesTests.swift */; };
 		E101000000000000000000F2 /* RevenueSegmentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F2 /* RevenueSegmentsTests.swift */; };
 		E101000000000000000000F4 /* PolicyShortcutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F4 /* PolicyShortcutTests.swift */; };
+		E101000000000000000000F5 /* UnderwaterAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F5 /* UnderwaterAnalysisTests.swift */; };
+		E101000000000000000000F3 /* HoldingContributionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F3 /* HoldingContributionTests.swift */; };
 		A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000C1 /* SectorAttributionTests.swift */; };
 		A19900000000000000FFB0 /* NumericAlternatesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FFB0 /* NumericAlternatesTests.swift */; };
 		A19900000000000000FFA0 /* PublicInvestorSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */; };
@@ -185,6 +190,8 @@
 		BF1000000000000000000021 /* PolicyRunTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyRunTrace.swift; sourceTree = "<group>"; };
 		BF1000000000000000000022 /* PolicyComposerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyComposerStore.swift; sourceTree = "<group>"; };
 		BF1000000000000000000023 /* PolicyComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyComposerView.swift; sourceTree = "<group>"; };
+		BF1000000000000000000024 /* UnderwaterAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnderwaterAnalysis.swift; sourceTree = "<group>"; };
+		BF1000000000000000000025 /* UnderwaterAnalysisChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnderwaterAnalysisChart.swift; sourceTree = "<group>"; };
 		BF1000000000000000000001 /* PolicyWorkspaceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyWorkspaceStore.swift; sourceTree = "<group>"; };
 		BF1000000000000000000003 /* PolicyContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyContract.swift; sourceTree = "<group>"; };
 		BF1000000000000000000004 /* PolicyTemplates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyTemplates.swift; sourceTree = "<group>"; };
@@ -221,6 +228,7 @@
 		B199000000000000000000F3 /* InsiderTrades.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsiderTrades.swift; sourceTree = "<group>"; };
 		B199000000000000000000F4 /* InsiderTradesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsiderTradesView.swift; sourceTree = "<group>"; };
 		B199000000000000000000F5 /* RevenueSegments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RevenueSegments.swift; sourceTree = "<group>"; };
+		B199000000000000000000F7 /* HoldingContributionChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingContributionChart.swift; sourceTree = "<group>"; };
 		B199000000000000000000F6 /* revenue_segments.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = revenue_segments.json; sourceTree = "<group>"; };
 		B199000000000000000000EB /* SecurityDebate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebate.swift; sourceTree = "<group>"; };
 		B199000000000000000000ED /* SecurityDebateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebateStore.swift; sourceTree = "<group>"; };
@@ -305,6 +313,8 @@
 		F101000000000000000000F1 /* InsiderTradesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsiderTradesTests.swift; sourceTree = "<group>"; };
 		F101000000000000000000F2 /* RevenueSegmentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RevenueSegmentsTests.swift; sourceTree = "<group>"; };
 		F101000000000000000000F4 /* PolicyShortcutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyShortcutTests.swift; sourceTree = "<group>"; };
+		F101000000000000000000F5 /* UnderwaterAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnderwaterAnalysisTests.swift; sourceTree = "<group>"; };
+		F101000000000000000000F3 /* HoldingContributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingContributionTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000C1 /* SectorAttributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttributionTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FFB0 /* NumericAlternatesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericAlternatesTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicInvestorSelectionTests.swift; sourceTree = "<group>"; };
@@ -380,6 +390,8 @@
 				BF1000000000000000000021 /* PolicyRunTrace.swift */,
 				BF1000000000000000000022 /* PolicyComposerStore.swift */,
 				BF1000000000000000000023 /* PolicyComposerView.swift */,
+				BF1000000000000000000024 /* UnderwaterAnalysis.swift */,
+				BF1000000000000000000025 /* UnderwaterAnalysisChart.swift */,
 				BF1000000000000000000001 /* PolicyWorkspaceStore.swift */,
 				BF1000000000000000000003 /* PolicyContract.swift */,
 				BF1000000000000000000004 /* PolicyTemplates.swift */,
@@ -446,6 +458,7 @@
 				B199000000000000000000F3 /* InsiderTrades.swift */,
 				B199000000000000000000F4 /* InsiderTradesView.swift */,
 				B199000000000000000000F5 /* RevenueSegments.swift */,
+				B199000000000000000000F7 /* HoldingContributionChart.swift */,
 				B199000000000000000000EB /* SecurityDebate.swift */,
 				B199000000000000000000ED /* SecurityDebateStore.swift */,
 				B199000000000000000000EE /* SecurityDebateView.swift */,
@@ -531,6 +544,8 @@
 				F101000000000000000000F1 /* InsiderTradesTests.swift */,
 				F101000000000000000000F2 /* RevenueSegmentsTests.swift */,
 				F101000000000000000000F4 /* PolicyShortcutTests.swift */,
+				F101000000000000000000F5 /* UnderwaterAnalysisTests.swift */,
+				F101000000000000000000F3 /* HoldingContributionTests.swift */,
 				B199000000000000000000C1 /* SectorAttributionTests.swift */,
 				B19900000000000000FFB0 /* NumericAlternatesTests.swift */,
 				B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */,
@@ -717,6 +732,8 @@
 				AF1000000000000000000021 /* PolicyRunTrace.swift in Sources */,
 				AF1000000000000000000022 /* PolicyComposerStore.swift in Sources */,
 				AF1000000000000000000023 /* PolicyComposerView.swift in Sources */,
+				AF1000000000000000000024 /* UnderwaterAnalysis.swift in Sources */,
+				AF1000000000000000000025 /* UnderwaterAnalysisChart.swift in Sources */,
 				AF1000000000000000000001 /* PolicyWorkspaceStore.swift in Sources */,
 				AF1000000000000000000003 /* PolicyContract.swift in Sources */,
 				AF1000000000000000000004 /* PolicyTemplates.swift in Sources */,
@@ -783,6 +800,7 @@
 				A199000000000000000000F3 /* InsiderTrades.swift in Sources */,
 				A199000000000000000000F4 /* InsiderTradesView.swift in Sources */,
 				A199000000000000000000F5 /* RevenueSegments.swift in Sources */,
+				A199000000000000000000F7 /* HoldingContributionChart.swift in Sources */,
 				A199000000000000000000EB /* SecurityDebate.swift in Sources */,
 				A199000000000000000000ED /* SecurityDebateStore.swift in Sources */,
 				A199000000000000000000EE /* SecurityDebateView.swift in Sources */,
@@ -815,6 +833,8 @@
 				E101000000000000000000F1 /* InsiderTradesTests.swift in Sources */,
 				E101000000000000000000F2 /* RevenueSegmentsTests.swift in Sources */,
 				E101000000000000000000F4 /* PolicyShortcutTests.swift in Sources */,
+				E101000000000000000000F5 /* UnderwaterAnalysisTests.swift in Sources */,
+				E101000000000000000000F3 /* HoldingContributionTests.swift in Sources */,
 				A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */,
 				A19900000000000000FFB0 /* NumericAlternatesTests.swift in Sources */,
 				A19900000000000000FFA0 /* PublicInvestorSelectionTests.swift in Sources */,

@@ -1349,6 +1349,18 @@ final class AppModel {
     /// opening the heatmap fetched every change again (with its spinner) that
     /// the home list was already showing. A real refresh still resets this
     /// signature and reads the changes afresh.
+    /// Each current holding's value by day, for the revenue-sources chart on
+    /// the Performance tab. Built from the same document and history as the
+    /// home chart.
+    func holdingValueHistory(cachedOnly: Bool = false) async throws -> HoldingValueHistory {
+        try await LocalMarketDataClient().holdingValueHistory(document: document, cachedOnly: cachedOnly)
+    }
+
+    /// Current share counts over five years, for the underwater analysis.
+    func fixedShareHistory(cachedOnly: Bool = false) async throws -> HoldingValueHistory {
+        try await LocalMarketDataClient().fixedShareHistory(document: document, cachedOnly: cachedOnly)
+    }
+
     private static func dailyChangesSignature(for holdings: [Holding]) -> String {
         Set(holdings.map { $0.ticker.uppercased() })
             .sorted()
