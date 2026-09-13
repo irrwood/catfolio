@@ -49,6 +49,41 @@ def strategy(ctx):
     w = 1.0 / len(picks)
     return {t: w for t in picks}
 ''',
+    "composer_absolute": '''# Composer 风格改编：绝对动量轮动
+# 只持有过去 6 个月上涨的标的，按动量强弱排序后等权。
+def strategy(ctx):
+    scored = sorted(((ctx.momentum(t, 126) or -9, t) for t in ctx.universe), reverse=True)
+    picks = [score_ticker[1] for score_ticker in scored[:3] if score_ticker[0] > 0]
+    if not picks:
+        return {}
+    return {t: 1.0 / len(picks) for t in picks}
+''',
+    "composer_dual": '''# Composer 风格改编：双重动量防守
+# 相对动量选最强标的，同时要求价格站上 200 日均线；否则持现金。
+def strategy(ctx):
+    scored = sorted(((ctx.momentum(t, 126) or -9, t) for t in ctx.universe), reverse=True)
+    picks = [score_ticker[1] for score_ticker in scored[:2]
+             if score_ticker[0] > 0 and ctx.price(score_ticker[1])
+             and ctx.sma(score_ticker[1], 200)
+             and ctx.price(score_ticker[1]) > ctx.sma(score_ticker[1], 200)]
+    if not picks:
+        return {}
+    return {t: 1.0 / len(picks) for t in picks}
+''',
+    "composer_trend": '''# Composer 风格改编：趋势过滤后的相对强弱
+# 先用 50 日均线过滤趋势，再从通过过滤的标的中选动量最强的 2 只。
+def strategy(ctx):
+    scored = []
+    for t in ctx.universe:
+        price = ctx.price(t)
+        average = ctx.sma(t, 50)
+        if price and average and price > average:
+            scored.append((ctx.momentum(t, 63) or -9, t))
+    picks = [score_ticker[1] for score_ticker in sorted(scored, reverse=True)[:2]]
+    if not picks:
+        return {}
+    return {t: 1.0 / len(picks) for t in picks}
+''',
 }
 
 
@@ -306,6 +341,9 @@ def strategy_page(request: Request):
             <option value="equal">等权买入持有</option>
             <option value="sma">200 日均线择时</option>
             <option value="topn">动量前 2 强</option>
+            <option value="composer_absolute">Composer 改编：6个月绝对动量</option>
+            <option value="composer_dual">Composer 改编：双重动量防守</option>
+            <option value="composer_trend">Composer 改编：趋势相对强弱</option>
           </select>
         </label>
         <button class="btn" onclick="importHoldings()" style="height:30px;"><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-download"></use></svg> 从持仓导入标的</button>
