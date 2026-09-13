@@ -76,6 +76,7 @@
 		A10000000000000000000013 /* Trading212Client.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000015 /* Trading212Client.swift */; };
 		A10000000000000000000014 /* Trading212View.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000016 /* Trading212View.swift */; };
 		A10000000000000000000015 /* LocalPortfolioStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000017 /* LocalPortfolioStore.swift */; };
+		A1D710000000000000000001 /* DailyTimeWeightedReturn.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D710000000000000000001 /* DailyTimeWeightedReturn.swift */; };
 		A10000000000000000000016 /* LocalServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000018 /* LocalServices.swift */; };
 		A10000000000000000000017 /* sp500_holdings.json in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000019 /* sp500_holdings.json */; };
 		A10000000000000000000018 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001A /* PrivacyInfo.xcprivacy */; };
@@ -261,6 +262,7 @@
 		B10000000000000000000015 /* Trading212Client.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212Client.swift; sourceTree = "<group>"; };
 		B10000000000000000000016 /* Trading212View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212View.swift; sourceTree = "<group>"; };
 		B10000000000000000000017 /* LocalPortfolioStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalPortfolioStore.swift; sourceTree = "<group>"; };
+		B1D710000000000000000001 /* DailyTimeWeightedReturn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyTimeWeightedReturn.swift; sourceTree = "<group>"; };
 		B10000000000000000000018 /* LocalServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalServices.swift; sourceTree = "<group>"; };
 		B10000000000000000000019 /* sp500_holdings.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = sp500_holdings.json; sourceTree = "<group>"; };
 		B1000000000000000000001A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -416,6 +418,7 @@
 				B10000000000000000000015 /* Trading212Client.swift */,
 				B10000000000000000000016 /* Trading212View.swift */,
 				B10000000000000000000017 /* LocalPortfolioStore.swift */,
+				B1D710000000000000000001 /* DailyTimeWeightedReturn.swift */,
 				B10000000000000000000018 /* LocalServices.swift */,
 				B1000000000000000000001C /* LocalChatStore.swift */,
 				B1000000000000000000001D /* ReturnsAnalyticsModels.swift */,
@@ -763,6 +766,7 @@
 				A10000000000000000000013 /* Trading212Client.swift in Sources */,
 				A10000000000000000000014 /* Trading212View.swift in Sources */,
 				A10000000000000000000015 /* LocalPortfolioStore.swift in Sources */,
+				A1D710000000000000000001 /* DailyTimeWeightedReturn.swift in Sources */,
 				A10000000000000000000016 /* LocalServices.swift in Sources */,
 				A1000000000000000000001A /* LocalChatStore.swift in Sources */,
 				A1000000000000000000001B /* ReturnsAnalyticsModels.swift in Sources */,

@@ -821,6 +821,7 @@ struct PortfolioAttentionDailyBar: Sendable {
     let low: Double
     let volume: Double
 }
+
 /// Each current holding's value by day; see `LocalMarketDataClient.holdingValueHistory`.
 struct HoldingValueHistory: Sendable {
     struct Row: Sendable {
@@ -1004,34 +1005,17 @@ struct LocalMarketDataClient {
                 currentPoint: ChartPoint(dateText: current.date, marketValue: current.marketValueUSD, cost: current.costUSD),
                 warning: nil)
         }
-        guard !document.positions.isEmpty else { throw LocalPortfolioError.noPortfolio }
-
-        let end = DayDateCodec.string(from: Date())
-        var pointsByDate: [String: ChartPoint] = [:]
-        var chartWarnings: [String] = []
-        let backcast = try await currentOpenPositionsHistory(
-            document: document,
-            end: end,
-            cachedOnly: cachedOnly
-        )
-        for point in backcast.rows {
-            pointsByDate[point.dateText] = point
+        if document.isSynthetic == true { return try LocalPortfolioEngine.presentation(for: document).1 }
+        do {
+            let account = try await accountTimeWeightedSeries(document: document,
+                to: DayDateCodec.string(from: Date()), cachedOnly: cachedOnly, includeBenchmarks: false)
+            guard let ledger = account.ledger else { throw LocalServiceError.noHistoricalPrices }
+            return .accountHistory(ledger: ledger, nav: account.portfolio, positionCount: document.positions.count)
+        } catch {
+            if cachedOnly { throw error }
+            return .unavailableAccountHistory(positionCount: document.positions.count,
+                reason: error.localizedDescription.replacingOccurrences(of: "TWR：", with: "账户历史："))
         }
-        chartWarnings.append(contentsOf: backcast.warnings)
-
-        let totals = try LocalPortfolioEngine.totals(for: document.positions)
-        let current = ChartPoint(dateText: end, marketValue: totals.marketValue, cost: totals.cost)
-        pointsByDate[end] = current
-        let rows = pointsByDate.values.sorted { $0.dateText < $1.dateText }
-        if rows.count <= 1, chartWarnings.isEmpty {
-            chartWarnings.append("历史价格尚未准备完成，当前只能显示最新值。")
-        }
-        return PortfolioChartResponse(
-            positionCount: document.positions.count,
-            positionHistory: PositionHistory(available: rows.count > 1, rows: rows),
-            currentPoint: current,
-            warning: chartWarnings.isEmpty ? nil : chartWarnings.joined(separator: " ")
-        )
     }
 
     /// The home chart's history, kept apart by holding: each current
@@ -2075,28 +2059,10 @@ struct LocalMarketDataClient {
     }
 
     func comparison(document: LocalPortfolioDocument) async throws -> ComparisonResponse {
-        guard !document.positions.isEmpty else { throw LocalPortfolioError.noPortfolio }
+        guard !document.positions.isEmpty || !(document.transactions ?? []).isEmpty else { throw LocalPortfolioError.noPortfolio }
         let end = DayDateCodec.string(from: Date())
-        let calendar = Calendar(identifier: .gregorian)
-        let oneYearAgo = calendar.date(byAdding: .year, value: -1, to: Date()) ?? Date()
-        // Reuse the exact same inferred market-value/cost path shown on the
-        // home page. Daily cost changes are the matched cash flows for every
-        // benchmark, so this comparison does not depend on a CSV or a complete
-        // broker order history.
-        let homeChart = try await portfolioChart(document: document)
-        let cashFlowRows = homeChart.positionHistory.rows.sorted { $0.dateText < $1.dateText }
-        let positionStart = document.positions.compactMap(\.openedDate).min()
-        let inferredStart = cashFlowRows.first?.dateText
-        let requestedStart = [positionStart, inferredStart].compactMap { $0 }.min()
-            ?? DayDateCodec.string(from: oneYearAgo)
-        let benchmarkStart = requestedStart
+        // All three modes share the same private, on-device account ledger.
         let benchmarkSymbols = ComparisonBenchmarkCatalog.symbols
-
-        let histories = await historicalCloses(
-            symbols: benchmarkSymbols,
-            from: benchmarkStart,
-            to: end
-        )
         var dates: [String] = []
         var portfolio: [Double?] = []
         var series = Dictionary(uniqueKeysWithValues: benchmarkSymbols.map { ($0, [Double?]()) })
@@ -2112,52 +2078,35 @@ struct LocalMarketDataClient {
         var comparisonWarnings: [String] = []
         var cashFlowPortfolioReturn: Double?
 
-        if cashFlowRows.count > 1 {
-            dates = cashFlowRows.map(\.dateText)
-            let adjustedPortfolio = Self.cashFlowAdjustedPortfolio(in: cashFlowRows)
-            portfolio = adjustedPortfolio.values.map(Optional.some)
-            portfolioReturnSeries = adjustedPortfolio.returns
-            mwrPortfolioSeries = adjustedPortfolio.mwr
-            cashFlowPortfolioReturn = adjustedPortfolio.returns.compactMap { $0 }.last
-            for symbol in benchmarkSymbols {
-                let prices = Self.closes(onOrBefore: dates, in: histories[symbol] ?? [:])
-                let matched = Self.cashFlowMatchedBenchmark(prices: prices, chartRows: cashFlowRows)
-                series[symbol] = matched.values
-                benchmarkReturnSeries[symbol] = matched.returns
-                mwrBenchmarkSeries[symbol] = matched.mwr
-                returns[symbol] = matched.totalReturn
+        var twr: (dates: [String], portfolio: [Double?], benchmarks: [String: [Double?]], ledger: AccountMWRLedger?) = ([], [], [:], nil)
+        do {
+            twr = try await accountTimeWeightedSeries(document: document, to: end)
+            guard let ledger = twr.ledger, let mirrored = ledger.cashFlowComparison() else {
+                throw DailyTimeWeightedReturn.Failure(message: "缺少完整入金和出金金额。")
             }
-            let unavailableBenchmarks = benchmarkSymbols.filter {
-                (series[$0] ?? []).compactMap { $0 }.count <= 1
+            dates = ledger.dates
+            portfolio = mirrored.portfolio
+            series = mirrored.benchmarks
+            portfolioReturnSeries = mirrored.portfolioReturns
+            benchmarkReturnSeries = mirrored.benchmarkReturns
+            cashFlowPortfolioReturn = mirrored.portfolioReturns.last ?? nil
+            for symbol in benchmarkSymbols { returns[symbol] = mirrored.benchmarkReturns[symbol]?.last ?? nil }
+            comparisonWarnings.append("现金流镜像：组合与基准使用相同日期、相同金额的真实外部资金流。曲线为剩余资产（含现金）＋累计取出金额，单位 USD；百分比为累计盈亏÷累计入金。基准按同日可用收盘总收益价格模拟，不含额外交易费用，非实际日内成交。现金余额尚未与券商核对。")
+            let unavailable = benchmarkSymbols.filter { (mirrored.benchmarks[$0]?.last ?? nil) == nil }
+            if !unavailable.isEmpty {
+                comparisonWarnings.append("现金流镜像：\(unavailable.joined(separator: "、")) 缺少可用行情或无法支付同额出金，最新结果不可用。")
             }
-            if !unavailableBenchmarks.isEmpty {
-                comparisonWarnings.append(
-                    "暂未读取到 \(unavailableBenchmarks.joined(separator: "、")) 行情，其余曲线仍可正常比较。"
-                )
-            }
-            if let warning = homeChart.warning, !warning.isEmpty {
-                comparisonWarnings.append(warning)
-            }
-        } else {
-            comparisonWarnings.append("首页的历史市值与成本路径不足两个数据点，暂时无法计算现金流镜像。")
+            let mwr = twr.ledger?.returns()
+            mwrPortfolioSeries = mwr?.portfolio ?? []
+            mwrBenchmarkSeries = mwr?.benchmarks ?? [:]
+            comparisonWarnings.append("每日 TWR 基于资金流水重建；入金按日初、出金按日末处理，股息按到账日计入。期末现金尚未与券商余额核对。")
+            comparisonWarnings.append("MWR：按实际入出金日期和含现金的账户净值计算所选期间收益，非年化；股息按到账日计入，现金余额尚未与券商核对。基准按同日收盘价模拟资金进出。")
+        } catch {
+            let reason = error.localizedDescription
+            comparisonWarnings.append(reason.hasPrefix("TWR：") ? reason : "TWR：\(reason)")
+            comparisonWarnings.append("MWR：" + reason.replacingOccurrences(of: "TWR：", with: ""))
+            comparisonWarnings.append("现金流镜像：" + reason.replacingOccurrences(of: "TWR：", with: ""))
         }
-
-        // Web TWR rule: current market-value weights × each holding's daily
-        // adjusted-close return, compounded day by day. This is deliberately a
-        // separate path from account value and therefore removes cash-flow jumps.
-        let positionSymbols = document.positions.map {
-            Self.yahooSymbol(ticker: $0.ticker, currency: $0.quoteCurrency)
-        }.uniqued()
-        let positionHistories = await historicalCloses(
-            symbols: positionSymbols,
-            from: benchmarkStart,
-            to: end
-        )
-        let twr = try Self.timeWeightedSeries(
-            document: document,
-            positionHistories: positionHistories,
-            benchmarkHistories: histories
-        )
         return ComparisonResponse(
             available: !dates.isEmpty || !twr.dates.isEmpty,
             dates: dates,
@@ -2175,92 +2124,225 @@ struct LocalMarketDataClient {
                 portfolioReturn: cashFlowPortfolioReturn,
                 benchmarkReturn: returns["SPY"] ?? nil,
                 benchmarkReturns: returns
-            )
+            ),
+            mwrLedger: twr.ledger
         )
     }
 
-    private static func cashFlowMatchedBenchmark(
-        prices: [Double?],
-        chartRows: [ChartPoint]
-    ) -> (values: [Double?], returns: [Double?], mwr: [Double?], totalReturn: Double?) {
-        var units = 0.0
-        var previousCost = 0.0
-        var pendingCashFlow = 0.0
-        var totalBuys = 0.0
-        var withdrawn = 0.0
-        var values: [Double?] = []
-        var returns: [Double?] = []
-        var cashFlows: [Double] = []
-        var terminalValues: [Double?] = []
-
-        for index in chartRows.indices {
-            let cost = chartRows[index].cost
-            let cashFlow = cost - previousCost
-            previousCost = cost
-            cashFlows.append(cashFlow)
-            pendingCashFlow += cashFlow
-            if cashFlow > 0 { totalBuys += cashFlow }
-            if cashFlow < 0 { withdrawn += -cashFlow }
-
-            guard index < prices.count, let price = prices[index], price > 0 else {
-                values.append(nil)
-                returns.append(nil)
-                terminalValues.append(nil)
-                continue
-            }
-            if pendingCashFlow != 0 {
-                units = max(0, units + pendingCashFlow / price)
-                pendingCashFlow = 0
-            }
-            let terminalValue = units * price
-            let adjustedValue = terminalValue + withdrawn
-            values.append(adjustedValue)
-            returns.append(totalBuys > 0 ? adjustedValue / totalBuys - 1 : nil)
-            terminalValues.append(terminalValue)
+    /// All private ledger data stays on-device. Only public symbols/dates are
+    /// sent to the market provider. Core is not a runtime dependency.
+    private func accountTimeWeightedSeries(
+        document: LocalPortfolioDocument, to end: String, cachedOnly: Bool = false, includeBenchmarks: Bool = true
+    ) async throws -> (dates: [String], portfolio: [Double?], benchmarks: [String: [Double?]], ledger: AccountMWRLedger?) {
+        typealias T = DailyTimeWeightedReturn
+        let records = document.transactions ?? []
+        guard document.isSynthetic != true, !document.isPublicDisclosure,
+              let start = records.map(\.date).min(), start <= end else {
+            throw T.Failure(message: "TWR：需要完整账户资金流水。")
         }
-
-        let finalValue = values.compactMap { $0 }.last
-        let totalReturn = totalBuys > 0 ? finalValue.map { $0 / totalBuys - 1 } : nil
-        let mwr = MoneyWeightedReturnCalculator.rolling(
-            dates: chartRows.map(\.dateText),
-            cashFlows: cashFlows,
-            terminalValues: terminalValues
-        )
-        return (values, returns, mwr, totalReturn)
-    }
-
-    private static func cashFlowAdjustedPortfolio(
-        in rows: [ChartPoint]
-    ) -> (values: [Double], returns: [Double?], mwr: [Double?]) {
-        var previousCost = 0.0
-        var cumulativeWithdrawals = 0.0
-        var cumulativeBuys = 0.0
-        var values: [Double] = []
-        var returns: [Double?] = []
-        var cashFlows: [Double] = []
-        for row in rows {
-            let cashFlow = row.cost - previousCost
-            previousCost = row.cost
-            cashFlows.append(cashFlow)
-            if cashFlow > 0 {
-                cumulativeBuys += cashFlow
+        var events: [T.Event] = []
+        var currencies = Set<String>()
+        var symbols = Set<String>()
+        for row in records {
+            let action = row.action.uppercased()
+            guard ["BUY", "SELL", "DEPOSIT", "WITHDRAWAL", "DIVIDEND", "INTEREST", "FEE", "TAX"].contains(action) else {
+                throw T.Failure(message: "TWR：暂不能处理流水类型 \(row.action)，请补全换汇或公司行动分录。")
             }
-            if cashFlow < 0 {
-                cumulativeWithdrawals += -cashFlow
+            guard let cash = row.cashPostings, !cash.isEmpty else {
+                throw T.Failure(message: "TWR：\(row.date) \(row.ticker) 缺少净现金金额及币种，请导入完整资金流水。")
             }
-            let adjustedValue = row.marketValue + cumulativeWithdrawals
-            values.append(adjustedValue)
-            returns.append(cumulativeBuys > 0 ? adjustedValue / cumulativeBuys - 1 : nil)
+            let trade = action == "BUY" || action == "SELL"
+            guard row.quantity.isFinite, !trade || row.quantity > 0 else {
+                throw T.Failure(message: "TWR：交易数量无效。")
+            }
+            let debit = ["BUY", "WITHDRAWAL", "FEE", "TAX"].contains(action)
+            guard cash.allSatisfy({ !$0.amount.isNaN && (debit ? $0.amount <= 0 : $0.amount >= 0) }) else {
+                throw T.Failure(message: "TWR：净现金金额方向与流水类型不符。")
+            }
+            let symbol = trade ? Self.yahooSymbol(ticker: row.ticker, currency: row.currency) : nil
+            if let symbol { symbols.insert(symbol) }
+            currencies.formUnion(cash.map(\.currency))
+            events.append(T.Event(id: row.id, date: row.date, account: row.accountKey,
+                symbol: symbol, quantity: trade ? Decimal(row.quantity) * (action == "BUY" ? 1 : -1) : 0,
+                cash: cash, external: action == "DEPOSIT" || action == "WITHDRAWAL"))
         }
-        let mwr = MoneyWeightedReturnCalculator.rolling(
-            dates: rows.map(\.dateText),
-            cashFlows: cashFlows,
-            terminalValues: rows.map { Optional($0.marketValue) }
-        )
-        return (values, returns, mwr)
+        var prices: [String: LedgerPriceHistory] = [:]
+        var splits: [T.Split] = []
+        for symbol in symbols.sorted() {
+            try Task.checkCancellation()
+            let history = try await ledgerPriceHistory(symbol: symbol, from: start, to: end, cachedOnly: cachedOnly)
+            prices[symbol] = history
+            currencies.insert(history.currency)
+            splits += history.splits
+        }
+        var fx: [String: [String: Double]] = [:]
+        for currency in currencies where currency != "USD" {
+            let normalized = currency == "GBX" ? "GBP" : currency
+            let fxStart = DayDateCodec.string(from: DayDateCodec.date(from: start)!.addingTimeInterval(-7 * 86400))
+            let history = try await historicalCloses(symbol: "\(normalized)USD=X", from: fxStart, to: end, cachedOnly: cachedOnly)
+            fx[currency] = history.mapValues { currency == "GBX" ? $0 / 100 : $0 }
+        }
+        guard var date = DayDateCodec.date(from: start), let last = DayDateCodec.date(from: end) else {
+            throw T.Failure(message: "TWR：日期无效。")
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        var days: [T.Day] = []
+        var lastQuotes: [String: (date: Date, quote: T.Quote)] = [:]
+        var lastRates: [String: (date: Date, rate: Decimal)] = [:]
+        for (symbol, history) in prices {
+            if let key = history.closes.keys.filter({ $0 < start }).max(), let close = history.closes[key], let prior = DayDateCodec.date(from: key) {
+                lastQuotes[symbol] = (prior, T.Quote(price: Decimal(close), currency: history.currency))
+            }
+        }
+        for (currency, history) in fx {
+            if let key = history.keys.filter({ $0 < start }).max(), let rate = history[key], let prior = DayDateCodec.date(from: key) {
+                lastRates[currency] = (prior, Decimal(rate))
+            }
+        }
+        while date <= last {
+            let key = DayDateCodec.string(from: date)
+            // A pre-split close cannot value post-split quantities. Require a
+            // fresh quote on the new basis even within the short carry window.
+            for split in splits where split.date == key { lastQuotes.removeValue(forKey: split.symbol) }
+            for (symbol, history) in prices {
+                if let close = history.closes[key] {
+                    lastQuotes[symbol] = (date, T.Quote(price: Decimal(close), currency: history.currency))
+                }
+            }
+            for (currency, history) in fx {
+                if let rate = history[key], rate.isFinite, rate > 0 { lastRates[currency] = (date, Decimal(rate)) }
+            }
+            // Carry an already observed close across short market closures;
+            // never backfill from a future quote or flatten long missing spans.
+            let maxAge: TimeInterval = 4 * 86_400
+            let quotes = lastQuotes.filter { date.timeIntervalSince($0.value.date) <= maxAge }.mapValues(\.quote)
+            let rates = lastRates.filter { date.timeIntervalSince($0.value.date) <= maxAge }.mapValues(\.rate)
+            days.append(T.Day(date: key, quotes: quotes, usdRates: rates))
+            date = calendar.date(byAdding: .day, value: 1, to: date)!
+        }
+        let result = try T.calculate(events: events, days: days, splits: splits)
+        var expected: [String: [String: Decimal]] = [:]
+        for position in document.positions {
+            let symbol = Self.yahooSymbol(ticker: position.ticker, currency: position.quoteCurrency)
+            expected[position.accountKey, default: [:]][symbol, default: 0] += Decimal(position.shares)
+        }
+        for account in Set(expected.keys).union(result.holdings.keys) {
+            for symbol in Set(expected[account]?.keys.map { $0 } ?? []).union(result.holdings[account]?.keys.map { $0 } ?? []) {
+                let difference = (expected[account]?[symbol] ?? 0) - (result.holdings[account]?[symbol] ?? 0)
+                guard abs(NSDecimalNumber(decimal: difference).doubleValue) < 0.000001 else {
+                    throw T.Failure(message: "TWR：\(symbol) 重建持仓与当前账户不符，请核查流水、拆股和证券转账。")
+                }
+            }
+        }
+        // An explicit baseline preserves the first funded day's return when
+        // the chart rebases the selected range to its first point.
+        let baseline = calendar.date(byAdding: .day, value: -1, to: DayDateCodec.date(from: result.points[0].date)!)!
+        let dates = [DayDateCodec.string(from: baseline)] + result.points.map(\.date)
+        let benchmarkSymbols = includeBenchmarks ? ComparisonBenchmarkCatalog.symbols : []
+        let benchmarks = await historicalCloses(symbols: benchmarkSymbols, from: dates[0], to: end, cachedOnly: cachedOnly)
+        var series: [String: [Double?]] = [:]
+        for symbol in benchmarkSymbols {
+            let closes = Self.closes(onOrBefore: dates, in: benchmarks[symbol] ?? [:])
+            // No different starting line for a benchmark missing the baseline.
+            if let first = closes.first, let base = first, base > 0 {
+                series[symbol] = closes.map { $0.map { $0 / base } }
+            }
+        }
+        let flows = [0.0] + result.points.map { NSDecimalNumber(decimal: $0.inflow - $0.outflow).doubleValue }
+        var benchmarkValues: [String: [Double?]] = [:]
+        for symbol in benchmarkSymbols {
+            let history = benchmarks[symbol] ?? [:]
+            var quoteDate = history.keys.filter { $0 <= dates[0] }.max()
+            let aligned: [Double?] = dates.map { date in
+                if history[date] != nil { quoteDate = date }
+                guard let quoteDate, let quoted = DayDateCodec.date(from: quoteDate), let day = DayDateCodec.date(from: date),
+                      day.timeIntervalSince(quoted) <= 4 * 86400 else { return nil }
+                return history[quoteDate]
+            }
+            benchmarkValues[symbol] = AccountMWRLedger.mirror(cashFlows: flows, prices: aligned)
+        }
+        let ledger = AccountMWRLedger(dates: dates, cashFlows: flows,
+            values: [0] + result.points.map { NSDecimalNumber(decimal: $0.value).doubleValue },
+            benchmarkValues: benchmarkValues,
+            inflows: [0] + result.points.map { NSDecimalNumber(decimal: $0.inflow).doubleValue },
+            outflows: [0] + result.points.map { NSDecimalNumber(decimal: $0.outflow).doubleValue })
+        return (dates, [1] + result.points.map { NSDecimalNumber(decimal: $0.nav).doubleValue }, series, ledger)
     }
 
-    private static func timeWeightedSeries(
+    private struct LedgerPriceHistory: Codable {
+        var currency: String
+        var closes: [String: Double]
+        var splits: [DailyTimeWeightedReturn.Split]
+        var fetchedAt: Date
+    }
+
+    /// Yahoo quote.close is split-adjusted. Undo subsequent splits to get the
+    /// contemporaneous price used with actual historical share quantities.
+    private func ledgerPriceHistory(symbol: String, from: String, to: String, cachedOnly: Bool = false) async throws -> LedgerPriceHistory {
+        let cacheKey = Data("ledger-v1|\(symbol)|\(from)|\(to)".utf8).base64EncodedString()
+            .replacingOccurrences(of: "/", with: "_")
+        let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(cacheKey + ".json")
+        let cached = (try? Data(contentsOf: cacheURL)).flatMap { try? JSONDecoder().decode(LedgerPriceHistory.self, from: $0) }
+        if cachedOnly {
+            guard let cached else { throw LocalServiceError.noHistoricalPrices }
+            return cached
+        }
+        if let cached, Date().timeIntervalSince(cached.fetchedAt) < 12 * 3600 { return cached }
+        guard let start = DayDateCodec.date(from: from), let end = DayDateCodec.date(from: to) else { throw LocalServiceError.invalidResponse }
+        var url = URLComponents(string: "https://query1.finance.yahoo.com/v8/finance/chart/")!
+        url.path += symbol
+        url.queryItems = [URLQueryItem(name: "period1", value: String(Int(start.timeIntervalSince1970 - 7 * 86400))),
+            URLQueryItem(name: "period2", value: String(Int(end.timeIntervalSince1970 + 86400))),
+            URLQueryItem(name: "interval", value: "1d"), URLQueryItem(name: "events", value: "splits")]
+        var request = URLRequest(url: url.url!)
+        request.timeoutInterval = 15
+        request.setValue("Mozilla/5.0 Catfolio-iOS", forHTTPHeaderField: "User-Agent")
+        do {
+            let (data, response) = try await Self.yahooSession.data(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200,
+                  let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let chart = root["chart"] as? [String: Any],
+                  let result = (chart["result"] as? [[String: Any]])?.first,
+                  let meta = result["meta"] as? [String: Any], let currency = meta["currency"] as? String,
+                  let timezone = meta["exchangeTimezoneName"] as? String, let zone = TimeZone(identifier: timezone),
+                  let timestamps = result["timestamp"] as? [Double],
+                  let indicators = result["indicators"] as? [String: Any],
+                  let quote = (indicators["quote"] as? [[String: Any]])?.first,
+                  let closes = quote["close"] as? [Any] else { throw LocalServiceError.invalidResponse }
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = zone
+            formatter.dateFormat = "yyyy-MM-dd"
+            func day(_ timestamp: Double) -> String { formatter.string(from: Date(timeIntervalSince1970: timestamp)) }
+            let eventMap = result["events"] as? [String: Any]
+            let rawSplits = eventMap?["splits"] as? [String: [String: Any]] ?? [:]
+            var splits: [DailyTimeWeightedReturn.Split] = []
+            for event in rawSplits.values {
+                guard let timestamp = event["date"] as? Double, let numerator = event["numerator"] as? Double,
+                      let denominator = event["denominator"] as? Double, numerator > 0, denominator > 0 else { throw LocalServiceError.invalidResponse }
+                splits.append(.init(date: day(timestamp), symbol: symbol, factor: Decimal(numerator / denominator)))
+            }
+            var values: [String: Double] = [:]
+            for (index, timestamp) in timestamps.enumerated() where closes.indices.contains(index) {
+                guard let close = closes[index] as? Double, close.isFinite, close > 0 else { continue }
+                let date = day(timestamp)
+                let factor = splits.filter { $0.date > date }.reduce(1.0) { $0 * NSDecimalNumber(decimal: $1.factor).doubleValue }
+                values[date] = close * factor
+            }
+            guard !values.isEmpty else { throw LocalServiceError.noHistoricalPrices }
+            let history = LedgerPriceHistory(currency: currency == "GBp" ? "GBX" : currency.uppercased(), closes: values,
+                splits: splits.filter { $0.date >= from && $0.date <= to }, fetchedAt: Date())
+            try? JSONEncoder().encode(history).write(to: cacheURL, options: .atomic)
+            return history
+        } catch {
+            if let cached { return cached }
+            throw error
+        }
+    }
+
+    private static func currentWeightModelSeries(
         document: LocalPortfolioDocument,
         positionHistories: [String: [String: Double]],
         benchmarkHistories: [String: [String: Double]]

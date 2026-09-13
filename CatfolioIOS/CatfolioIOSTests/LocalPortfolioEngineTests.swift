@@ -6,6 +6,112 @@ import XCTest
 /// pence/pound relationship that an earlier build got wrong for Trading 212
 /// positions (see `migrateKnownInstrumentCurrencies`).
 final class LocalPortfolioEngineTests: XCTestCase {
+    func testHomeChartUsesAccountCashAndNetDeposits() throws {
+        let ledger = AccountMWRLedger(dates: ["2026-01-01", "2026-01-02", "2026-01-03"],
+            cashFlows: [0, 1000, -500], values: [0, 1000, 600], benchmarkValues: [:])
+        let response = PortfolioChartResponse.accountHistory(ledger: ledger, nav: [1, 1, 1.1], positionCount: 0)
+        XCTAssertEqual(response.positionHistory.rows.map(\.cost), [0, 1000, 500])
+        XCTAssertEqual(response.currentPoint.marketValue, 600)
+        let all = response.accountPerformance(from: "2026-01-01", to: "2026-01-03")
+        XCTAssertEqual(all.amount, 100, accuracy: 1e-9)
+        XCTAssertEqual(all.percentage, 10, accuracy: 1e-9)
+        let selected = response.accountPerformance(from: "2026-01-02", to: "2026-01-03")
+        XCTAssertEqual(selected.amount, 100, accuracy: 1e-9)
+        XCTAssertEqual(selected.percentage, 10, accuracy: 1e-9)
+    }
+
+    func testHomeNetDepositCanBeNegativeAfterProfitableWithdrawal() {
+        let ledger = AccountMWRLedger(dates: ["2026-01-01", "2026-01-02"], cashFlows: [100, -120], values: [100, 0], benchmarkValues: [:])
+        let response = PortfolioChartResponse.accountHistory(ledger: ledger, nav: [1, 1.2], positionCount: 0)
+        XCTAssertEqual(response.currentPoint.cost, -20)
+        XCTAssertEqual(response.accountPerformance(from: "2026-01-01", to: "2026-01-02").amount, 20)
+    }
+
+    func testHomeMissingLedgerDoesNotShowSnapshotAsAccountNAV() throws {
+        let chart = try LocalPortfolioEngine.presentation(for: .empty).1
+        XCTAssertFalse(chart.positionHistory.available)
+        XCTAssertTrue(chart.positionHistory.rows.isEmpty)
+        XCTAssertTrue(chart.currentPoint.marketValue.isNaN)
+        XCTAssertNotNil(chart.accountNAV)
+    }
+
+    func testCashOnlyHomeWorksFromLocalLedgerWithoutMarketRequests() async throws {
+        var document = LocalPortfolioDocument.empty
+        document.transactions = [LocalTransactionRecord(date: "2026-09-01", action: "DEPOSIT", ticker: "CASH",
+            quantity: 1, price: 1000, currency: "USD", source: "CSV", accountID: "A", accountName: "A",
+            cashPostings: [.init(currency: "USD", amount: 1000)])]
+        let response = try await LocalMarketDataClient().portfolioChart(document: document, cachedOnly: true)
+        XCTAssertTrue(response.positionHistory.available)
+        XCTAssertEqual(response.currentPoint.marketValue, 1000)
+        XCTAssertEqual(response.currentPoint.cost, 1000)
+        XCTAssertEqual(response.accountNAV?[response.currentPoint.dateText], 1)
+    }
+
+    func testIncompleteLedgerFailsClosedOnHome() async throws {
+        var document = LocalPortfolioDocument.empty
+        document.transactions = [LocalTransactionRecord(date: "2026-09-01", action: "BUY", ticker: "AAPL",
+            quantity: 1, price: 100, currency: "USD", source: "CSV", accountID: nil, accountName: nil)]
+        let response = try await LocalMarketDataClient().portfolioChart(document: document)
+        XCTAssertFalse(response.positionHistory.available)
+        XCTAssertTrue(response.currentPoint.marketValue.isNaN)
+        XCTAssertTrue(response.warning?.contains("缺少净现金") == true)
+    }
+
+    func testMalformedHomeSeriesDoesNotPartiallyPublish() {
+        let ledger = AccountMWRLedger(dates: ["2026-01-01", "2026-01-02"], cashFlows: [100, 0], values: [100, nil], benchmarkValues: [:])
+        let response = PortfolioChartResponse.accountHistory(ledger: ledger, nav: [1, 1], positionCount: 1)
+        XCTAssertFalse(response.positionHistory.available)
+        XCTAssertTrue(response.currentPoint.marketValue.isNaN)
+    }
+    func testCashOnlyCSVRetainsFundingAndWithdrawal() throws {
+        let csv = "Action,Time,Total,Currency (Total)\nDeposit,2026-01-01,1000,USD\nWithdrawal,2026-01-02,200,USD\n"
+        let (positions, rows, _) = try LocalCSVImporter.parse(Data(csv.utf8))
+        XCTAssertTrue(positions.isEmpty)
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertEqual(rows[0].cashPostings?.first?.amount, 1000)
+        XCTAssertEqual(rows[1].cashPostings?.first?.amount, -200)
+        XCTAssertEqual(rows[0].assignedAccount(id: "A", name: "A").cashPostings, rows[0].cashPostings)
+        let encoded = try JSONEncoder().encode(rows)
+        XCTAssertEqual(try JSONDecoder().decode([LocalTransactionRecord].self, from: encoded), rows)
+    }
+
+    func testFeeBearingCSVRequiresExplicitNetCash() throws {
+        let header = "Action,Time,Ticker,No. of shares,Price / share,Currency (Price / share),Total,Currency (Total),Currency conversion fee,Net cash amount,Cash currency\n"
+        let ambiguous = header + "Market buy,2026-01-01,AAPL,1,100,USD,100,USD,1,,\n"
+        XCTAssertNil(try LocalCSVImporter.parse(Data(ambiguous.utf8)).1[0].cashPostings)
+        let explicit = header + "Market buy,2026-01-01,AAPL,1,100,USD,100,USD,1,-101,USD\n"
+        XCTAssertEqual(try LocalCSVImporter.parse(Data(explicit.utf8)).1[0].cashPostings?.first?.amount, -101)
+    }
+
+    func testUnsupportedCashEventIsRetained() throws {
+        let csv = "Action,Time,Total,Currency (Total)\nDeposit,2026-01-01,100,USD\nCurrency conversion,2026-01-02,50,GBP\n"
+        let rows = try LocalCSVImporter.parse(Data(csv.utf8)).1
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertTrue(rows[1].action.hasPrefix("UNSUPPORTED"))
+    }
+
+    func testMalformedRowInvalidatesCashLedger() throws {
+        let csv = "Action,Time,Total,Currency (Total)\nDeposit,2026-01-01,100,USD\nWithdrawal,invalid,10,USD\n"
+        let (_, rows, report) = try LocalCSVImporter.parse(Data(csv.utf8))
+        XCTAssertFalse(report.warnings.isEmpty)
+        XCTAssertNil(rows[0].cashPostings)
+    }
+
+    func testLegacyTransactionsDoNotInventSettlementCash() throws {
+        let row = LocalTransactionRecord(date: "2026-01-01", action: "BUY", ticker: "X", quantity: 1, price: 100,
+            currency: "USD", source: "CSV", accountID: nil, accountName: nil)
+        let restored = try JSONDecoder().decode(LocalTransactionRecord.self, from: JSONEncoder().encode(row))
+        XCTAssertNil(restored.cashPostings)
+    }
+
+    func testReimportDoesNotReuseObsoleteCashAmount() throws {
+        var old = LocalTransactionRecord(date: "2026-01-01", action: "BUY", ticker: "X", quantity: 1, price: 100,
+            currency: "USD", source: "CSV", accountID: nil, accountName: nil, tradeID: "1", entryMethod: "csv")
+        old.cashPostings = [.init(currency: "USD", amount: -100)]
+        var corrected = old
+        corrected.cashPostings = nil
+        XCTAssertNil(corrected.preservingBrokerResult(from: old).cashPostings)
+    }
 
     private func position(
         ticker: String = "TEST",

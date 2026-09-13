@@ -4,6 +4,104 @@ import XCTest
 /// The money-weighted return drives the Returns tab's headline number, so the
 /// Newton solver and its bisection fallback are pinned to hand-checkable cases.
 final class MoneyWeightedReturnCalculatorTests: XCTestCase {
+    func testCashFlowComparisonCountsGrossSameDayFlowsAndRetainedCash() throws {
+        let ledger = AccountMWRLedger(dates: ["2024-01-01", "2024-01-02", "2024-01-03"],
+            cashFlows: [1000, 50, -200], values: [1000, 1150, 950], benchmarkValues: ["SPY": [1000, 1050, 850]],
+            inflows: [1000, 100, 0], outflows: [0, 50, 200])
+        let result = try XCTUnwrap(ledger.cashFlowComparison())
+        XCTAssertEqual(result.portfolio, [1000, 1200, 1200])
+        XCTAssertEqual(result.benchmarks["SPY"], [1000, 1100, 1100])
+        XCTAssertEqual(try XCTUnwrap(result.portfolioReturns.last ?? nil), 100.0 / 1100, accuracy: 1e-10)
+        XCTAssertEqual(result.benchmarkReturns["SPY"]?.last ?? nil, 0)
+    }
+
+    func testCashFlowComparisonDoesNotInventGrossFlowsOrReviveMissingBenchmark() throws {
+        var ledger = AccountMWRLedger(dates: ["2024-01-01", "2024-01-02"], cashFlows: [100, -50],
+            values: [100, 50], benchmarkValues: ["SPY": [100, nil]])
+        XCTAssertNil(ledger.cashFlowComparison())
+        ledger.inflows = [100, 0]; ledger.outflows = [0, 50]
+        let result = try XCTUnwrap(ledger.cashFlowComparison())
+        XCTAssertEqual(result.portfolio, [100, 100])
+        XCTAssertNil(result.benchmarks["SPY"]?.last ?? nil)
+        XCTAssertNil(result.benchmarkReturns["SPY"]?.last ?? nil)
+        ledger.outflows = [0, 20]
+        XCTAssertNil(ledger.cashFlowComparison())
+    }
+
+    func testCostSnapshotFallbackCannotReturnCashFlowComparison() throws {
+        let response = try LocalPortfolioEngine.comparison(for: .empty)
+        XCTAssertFalse(response.available)
+        XCTAssertTrue(response.portfolio.isEmpty)
+        XCTAssertNil(response.summary.portfolioReturn)
+    }
+
+    func testBenchmarkMissingFundedDateCannotShiftDepositToFuturePrice() {
+        let result = AccountMWRLedger.mirror(cashFlows: [100, 0, 0], prices: [nil, 100, 110])
+        XCTAssertTrue(result.allSatisfy { $0 == nil })
+    }
+    func testLedgerRangeUsesOpeningNAVAndDoesNotDoubleCountOpeningDeposit() throws {
+        let ledger = AccountMWRLedger(dates: ["2024-01-01", "2024-07-01", "2025-01-01"],
+            cashFlows: [100, 500, 0], values: [100, 610, 671], benchmarkValues: ["SPY": [100, 600, 600]])
+        let interval = ledger.returns(startIndex: 1)
+        XCTAssertEqual(try XCTUnwrap(interval.portfolio.last ?? nil), 0.10, accuracy: 1e-9)
+        XCTAssertEqual(try XCTUnwrap(interval.benchmarks["SPY"]?.last ?? nil), 0, accuracy: 1e-9)
+        XCTAssertNotEqual(try XCTUnwrap(ledger.returns().portfolio.last ?? nil), 0.10, accuracy: 1e-5)
+    }
+
+    func testLocalLedgerMWRIncludesUninvestedCashAndIgnoresTradingAsExternalFlow() throws {
+        typealias T = DailyTimeWeightedReturn
+        let result = try T.calculate(events: [
+            T.Event(id: "deposit", date: "2024-01-01", account: "A", cash: [.init(currency: "USD", amount: 1000)], external: true),
+            T.Event(id: "buy", date: "2024-01-02", account: "A", symbol: "X", quantity: 5, cash: [.init(currency: "USD", amount: -500)]),
+            T.Event(id: "sell", date: "2025-01-01", account: "A", symbol: "X", quantity: -5, cash: [.init(currency: "USD", amount: 550)])
+        ], days: [
+            T.Day(date: "2024-01-01", quotes: [:], usdRates: [:]),
+            T.Day(date: "2024-01-02", quotes: ["X": .init(price: 100, currency: "USD")], usdRates: [:]),
+            T.Day(date: "2025-01-01", quotes: [:], usdRates: [:])
+        ])
+        let ledger = AccountMWRLedger(dates: result.points.map(\.date),
+            cashFlows: result.points.map { NSDecimalNumber(decimal: $0.inflow - $0.outflow).doubleValue },
+            values: result.points.map { NSDecimalNumber(decimal: $0.value).doubleValue }, benchmarkValues: [:])
+        XCTAssertEqual(ledger.cashFlows, [1000, 0, 0])
+        XCTAssertEqual(try XCTUnwrap(ledger.returns().portfolio.last ?? nil), 0.05, accuracy: 1e-9)
+    }
+
+    func testBenchmarkDoesNotPretendToFundImpossibleWithdrawal() {
+        let values = AccountMWRLedger.mirror(cashFlows: [100, -150, 100], prices: [100, 100, 100])
+        XCTAssertEqual(values[0], 100)
+        XCTAssertNil(values[1])
+        XCTAssertNil(values[2])
+    }
+
+    func testBenchmarkUsesActualFlowDates() throws {
+        let flows = [100.0, 100, -50]
+        let prices: [Double?] = [100, 200, 100]
+        XCTAssertEqual(AccountMWRLedger.mirror(cashFlows: flows, prices: prices), [100, 300, 100])
+    }
+
+    func testPeriodMWRIsNotAnnualized() throws {
+        let ledger = AccountMWRLedger(dates: ["2024-01-01", "2024-07-01"],
+            cashFlows: [100, 0], values: [100, 110], benchmarkValues: [:])
+        XCTAssertEqual(try XCTUnwrap(ledger.returns().portfolio.last ?? nil), 0.10, accuracy: 1e-9)
+    }
+
+    func testTotalLossIsMinusOneHundredPercent() throws {
+        let result = MoneyWeightedReturnCalculator.rolling(dates: ["2024-01-01", "2025-01-01"], cashFlows: [100, 0], terminalValues: [100, 0])
+        XCTAssertEqual(try XCTUnwrap(result.last ?? nil), -1)
+    }
+
+    func testBenchmarkCanStartAfterUnfundedBaselineWithoutQuote() {
+        XCTAssertEqual(AccountMWRLedger.mirror(cashFlows: [0, 100, 0], prices: [nil, 100, 110]), [0, 100, 110])
+    }
+
+    func testMalformedLedgerAndMissingOpeningValueStayUnavailable() {
+        var ledger = AccountMWRLedger(dates: ["2024-01-01", "2025-01-01"],
+            cashFlows: [100], values: [100, 110], benchmarkValues: [:])
+        XCTAssertTrue(ledger.returns().portfolio.isEmpty)
+        ledger.cashFlows = [100, 0]
+        ledger.values = [100, nil]
+        XCTAssertTrue(ledger.returns(startIndex: 1).portfolio.allSatisfy { $0 == nil })
+    }
 
     // MARK: - Known answers
 

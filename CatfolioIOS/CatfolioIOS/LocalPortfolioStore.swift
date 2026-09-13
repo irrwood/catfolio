@@ -376,19 +376,26 @@ extension LocalTransactionRecord {
     }
     /// Keep the broker's amount/currency pair through lightweight refreshes.
     func preservingBrokerResult(from previous: LocalTransactionRecord?) -> LocalTransactionRecord {
+        var retained = self
+        if entryMethod != "csv", let previous, previous.id == id, retained.cashPostings == nil {
+            retained.cashPostings = previous.cashPostings
+        }
         guard (realisedProfitLoss == nil || realisedProfitLossCurrency?.isEmpty != false),
               let previous, previous.id == id,
               let result = previous.realisedProfitLoss, result.isFinite,
-              let resultCurrency = previous.realisedProfitLossCurrency, !resultCurrency.isEmpty else { return self }
+              let resultCurrency = previous.realisedProfitLossCurrency, !resultCurrency.isEmpty else { return retained }
         return LocalTransactionRecord(date: date, action: action, ticker: ticker,
             quantity: quantity, price: price, currency: currency, source: source,
             accountID: accountID, accountName: accountName, tradeID: tradeID,
             brokerFXRate: brokerFXRate, entryMethod: entryMethod,
-            realisedProfitLoss: result, realisedProfitLossCurrency: resultCurrency, executedAt: executedAt)
+            realisedProfitLoss: result, realisedProfitLossCurrency: resultCurrency, executedAt: executedAt, cashPostings: retained.cashPostings)
     }
 }
 
 struct LocalTransactionRecord: Codable, Equatable, Identifiable {
+    /// Signed account cash postings, net of charges. Nil means legacy or
+    /// unverified settlement data and cannot fund an account-return ledger.
+    var cashPostings: [DailyTimeWeightedReturn.Cash]? = nil
     let date: String
     var executedAt: String? = nil
     let action: String
@@ -422,10 +429,12 @@ struct LocalTransactionRecord: Codable, Equatable, Identifiable {
         entryMethod: String? = nil,
         realisedProfitLoss: Double? = nil,
         realisedProfitLossCurrency: String? = nil,
-        executedAt: String? = nil
+        executedAt: String? = nil,
+        cashPostings: [DailyTimeWeightedReturn.Cash]? = nil
     ) {
         self.date = date
         self.executedAt = executedAt
+        self.cashPostings = cashPostings
         self.action = action
         self.ticker = ticker
         self.quantity = quantity
@@ -477,7 +486,8 @@ struct LocalTransactionRecord: Codable, Equatable, Identifiable {
             entryMethod: entryMethod,
             realisedProfitLoss: realisedProfitLoss,
             realisedProfitLossCurrency: realisedProfitLossCurrency,
-            executedAt: executedAt
+            executedAt: executedAt,
+            cashPostings: cashPostings
         )
     }
 
@@ -497,7 +507,8 @@ struct LocalTransactionRecord: Codable, Equatable, Identifiable {
             entryMethod: entryMethod,
             realisedProfitLoss: realisedProfitLoss,
             realisedProfitLossCurrency: realisedProfitLossCurrency,
-            executedAt: executedAt
+            executedAt: executedAt,
+            cashPostings: cashPostings
         )
     }
 }
@@ -753,7 +764,8 @@ extension LocalPortfolioDocument {
             positions: selectedPositions,
             snapshots: selectedSnapshots,
             transactions: selectedTransactions,
-            knownAccounts: accounts.filter { effectiveKeys.contains($0.id) }
+            knownAccounts: accounts.filter { effectiveKeys.contains($0.id) },
+            isSynthetic: isSynthetic
         )
     }
 }
@@ -1680,7 +1692,8 @@ actor LocalPortfolioStore {
                 entryMethod: transaction.entryMethod,
                 realisedProfitLoss: transaction.realisedProfitLoss,
                 realisedProfitLossCurrency: transaction.realisedProfitLossCurrency,
-                executedAt: transaction.executedAt
+                executedAt: transaction.executedAt,
+                cashPostings: transaction.cashPostings
             )
         }
         guard positions != source.positions || transactions != source.transactions else { return source }
@@ -1924,12 +1937,16 @@ enum LocalPortfolioEngine {
             marketValue: totals.marketValue,
             cost: totals.cost
         )
-        let chart = PortfolioChartResponse(
+        var chart = PortfolioChartResponse(
             positionCount: rows.count,
             positionHistory: PositionHistory(available: !chartRows.isEmpty, rows: chartRows),
             currentPoint: current,
             warning: chartRows.count > 1 ? nil : "没有历史成交记录或多日快照，当前只能显示最新值。"
         )
+        if document.isSynthetic != true {
+            chart = .unavailableAccountHistory(positionCount: rows.count,
+                reason: "账户历史需要完整资金流水和历史估值；正在准备数据，持仓市值可在持仓列表查看。")
+        }
         return (overview, chart, rows)
     }
 
@@ -2065,50 +2082,21 @@ enum LocalPortfolioEngine {
     }
 
     static func comparison(for document: LocalPortfolioDocument) throws -> ComparisonResponse {
-        guard let first = document.snapshots.first, first.marketValueUSD > 0 else {
-            throw LocalPortfolioError.noPortfolio
-        }
-        var previousCost = 0.0
-        var cumulativeBuys = 0.0
-        var cumulativeWithdrawals = 0.0
-        var cashFlowReturns: [Double?] = []
-        var cashFlows: [Double] = []
-        var terminalValues: [Double?] = []
-        let values = document.snapshots.map { snapshot -> Double? in
-            let cashFlow = snapshot.costUSD - previousCost
-            previousCost = snapshot.costUSD
-            cashFlows.append(cashFlow)
-            terminalValues.append(snapshot.marketValueUSD)
-            if cashFlow > 0 { cumulativeBuys += cashFlow }
-            if cashFlow < 0 { cumulativeWithdrawals += -cashFlow }
-            let adjustedValue = snapshot.marketValueUSD + cumulativeWithdrawals
-            cashFlowReturns.append(cumulativeBuys > 0 ? adjustedValue / cumulativeBuys - 1 : nil)
-            return adjustedValue
-        }
-        let portfolioReturn = cashFlowReturns.compactMap { $0 }.last
-        let emptyBenchmark = document.snapshots.map { _ in Optional<Double>.none }
-        let benchmarks = Dictionary(uniqueKeysWithValues: ComparisonBenchmarkCatalog.symbols.map {
-            ($0, emptyBenchmark)
-        })
         return ComparisonResponse(
-            available: true,
-            dates: document.snapshots.map(\.date),
-            portfolio: values,
-            benchmarks: benchmarks,
-            cashFlowPortfolioReturns: cashFlowReturns,
+            available: false,
+            dates: [],
+            portfolio: [],
+            benchmarks: [:],
+            cashFlowPortfolioReturns: nil,
             cashFlowBenchmarkReturns: nil,
-            mwrPortfolio: MoneyWeightedReturnCalculator.rolling(
-                dates: document.snapshots.map(\.date),
-                cashFlows: cashFlows,
-                terminalValues: terminalValues
-            ),
+            mwrPortfolio: nil,
             mwrBenchmarks: nil,
             twrDates: nil,
             twrPortfolio: nil,
             twrBenchmarks: nil,
-            warnings: ["尚未读取历史行情，现金流镜像暂不可用。"],
+            warnings: ["现金流镜像：缺少完整资金账本和账户估值，暂不可用。", "MWR：缺少完整资金账本和账户估值，暂不可用。", "TWR：缺少完整资金账本和账户估值，暂不可用。"],
             summary: ComparisonSummary(
-                portfolioReturn: portfolioReturn,
+                portfolioReturn: nil,
                 benchmarkReturn: nil,
                 benchmarkReturns: Dictionary(uniqueKeysWithValues: ComparisonBenchmarkCatalog.symbols.map {
                     ($0, Optional<Double>.none)
@@ -2130,9 +2118,14 @@ enum LocalCSVImporter {
         let reference: String?
         let realisedProfitLoss: Double?
         let realisedProfitLossCurrency: String?
+        let cashPostings: [DailyTimeWeightedReturn.Cash]?
     }
 
     static let aliases: [String: [String]] = [
+        "total": ["total"],
+        "totalCurrency": ["currency total"],
+        "netCash": ["net cash amount"],
+        "cashCurrency": ["cash currency"],
         "result": ["result", "realised profit loss", "realized profit loss"],
         "resultCurrency": ["currency result", "result currency"],
         "reference": ["id", "reference", "trade id"],
@@ -2215,6 +2208,9 @@ enum LocalCSVImporter {
 
     static func missingRequiredColumns(in header: [String]) -> [String] {
         let resolved = columns(in: header)
+        if resolved["total"] != nil || resolved["netCash"] != nil {
+            return ["date", "action"].filter { resolved[$0] == nil }
+        }
         return requiredColumnKeys.filter { resolved[$0] == nil }
     }
 
@@ -2237,6 +2233,7 @@ enum LocalCSVImporter {
 
         var transactions: [Transaction] = []
         var warnings: [String] = []
+        var ledgerIncomplete = false
         var rowOccurrences: [String: Int] = [:]
         for (offset, row) in records.dropFirst(headerIndex + 1).enumerated() {
             do {
@@ -2244,12 +2241,36 @@ enum LocalCSVImporter {
                     guard let index = columns[name], row.indices.contains(index) else { return "" }
                     return row[index].trimmingCharacters(in: .whitespacesAndNewlines)
                 }
-                guard let action = normalizedAction(field("action")) else { continue }
+                guard !field("action").isEmpty else { continue }
+                let action = normalizedAction(field("action")) ?? "UNSUPPORTED: \(field("action"))"
+                let isTrade = action == "BUY" || action == "SELL"
                 let rawTicker = field("ticker")
-                let ticker = Trading212Position.catfolioTicker(rawTicker)
-                guard !ticker.isEmpty else { continue }
-                let quantity = try number(field("quantity"))
-                let price = try number(field("price"))
+                let ticker = rawTicker.isEmpty && !isTrade ? "CASH" : Trading212Position.catfolioTicker(rawTicker)
+                guard !ticker.isEmpty else { throw LocalPortfolioError.invalidCSV("交易缺少股票代码") }
+                let quantity = isTrade ? abs(try number(field("quantity"))) : 1
+                let price = isTrade ? try number(field("price")) : (numericValue(field("total")) ?? numericValue(field("netCash")) ?? numericValue(field("price")) ?? 0)
+                var postings: [DailyTimeWeightedReturn.Cash]? = nil
+                let locale = Locale(identifier: "en_US_POSIX")
+                if let net = Decimal(string: field("netCash").replacingOccurrences(of: ",", with: ""), locale: locale), !field("cashCurrency").isEmpty {
+                    postings = [.init(currency: field("cashCurrency").uppercased(), amount: net)]
+                } else if let total = Decimal(string: field("total").replacingOccurrences(of: ",", with: ""), locale: locale), !field("totalCurrency").isEmpty {
+                    // Total semantics vary across broker exports. Fee-bearing
+                    // rows need an explicit signed net cash amount; do not guess
+                    // whether a fee column was already included in Total.
+                    let hasCharges = header.enumerated().contains { index, name in
+                        let key = name.lowercased()
+                        let currencyLabel = key.hasPrefix("currency (") || key.hasPrefix("currency currency ") || key.hasSuffix(" currency")
+                        guard !currencyLabel, key.contains("fee") || key.contains("tax") || key.contains("commission"),
+                              row.indices.contains(index), !row[index].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+                        guard let amount = numericValue(row[index]), amount.isFinite else { return true }
+                        return amount != 0
+                    }
+                    if !hasCharges {
+                        let magnitude = total < 0 ? -total : total
+                        let debit = ["BUY", "WITHDRAWAL", "FEE", "TAX"].contains(action)
+                        postings = [.init(currency: field("totalCurrency").uppercased(), amount: debit ? -magnitude : magnitude)]
+                    }
+                }
                 let reportedCurrency = field("currency")
                 let currency = Trading212Position.currency(
                     reportedCurrency.isEmpty ? nil : reportedCurrency,
@@ -2273,9 +2294,11 @@ enum LocalCSVImporter {
                     name: field("name"),
                     reference: field("reference").isEmpty ? "csv-\(digest)-\(rowOccurrences[digest]!)" : field("reference"),
                     realisedProfitLoss: result,
-                    realisedProfitLossCurrency: resultCurrency.isEmpty ? nil : resultCurrency
+                    realisedProfitLossCurrency: resultCurrency.isEmpty ? nil : resultCurrency,
+                    cashPostings: postings
                 ))
             } catch {
+                ledgerIncomplete = true
                 warnings.append(L10n.text("第 \(headerIndex + offset + 2) 行：\(error.localizedDescription)"))
             }
         }
@@ -2290,7 +2313,7 @@ enum LocalCSVImporter {
         }
         var states: [String: PositionState] = [:]
         for transaction in transactions.sorted(by: { $0.date < $1.date }) {
-            guard transaction.action != "DIVIDEND" else { continue }
+            guard transaction.action == "BUY" || transaction.action == "SELL" else { continue }
             var state = states[transaction.ticker] ?? PositionState()
             state.currency = transaction.currency
             if !transaction.name.isEmpty { state.name = transaction.name }
@@ -2343,7 +2366,8 @@ enum LocalCSVImporter {
                 entryMethod: "csv",
                 realisedProfitLoss: $0.realisedProfitLoss,
                 realisedProfitLossCurrency: $0.realisedProfitLossCurrency,
-                executedAt: ISO8601DateFormatter().string(from: $0.date)
+                executedAt: ISO8601DateFormatter().string(from: $0.date),
+                cashPostings: ledgerIncomplete ? nil : $0.cashPostings
             )
         }
         return (positions, storedTransactions, CSVImportResult(
@@ -2431,6 +2455,11 @@ enum LocalCSVImporter {
 
     static func normalizedAction(_ value: String) -> String? {
         let action = normalizeHeader(value)
+        if action == "deposit" || action == "入金" { return "DEPOSIT" }
+        if action == "withdrawal" || action == "withdraw" || action == "出金" { return "WITHDRAWAL" }
+        if action.contains("interest") { return "INTEREST" }
+        if action == "fee" { return "FEE" }
+        if action == "tax" { return "TAX" }
         if action.contains("buy") || action.contains("买入") { return "BUY" }
         if action.contains("sell") || action.contains("卖出") { return "SELL" }
         if action.contains("dividend") || action.contains("股息") || action.contains("红利") {

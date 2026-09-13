@@ -39,12 +39,49 @@ struct PortfolioChartResponse: Decodable {
     let positionHistory: PositionHistory
     let currentPoint: ChartPoint
     let warning: String?
+    /// Present for real account history (empty when unavailable). In this
+    /// mode ChartPoint.cost means cumulative NET EXTERNAL DEPOSITS.
+    var accountNAV: [String: Double]? = nil
 
     enum CodingKeys: String, CodingKey {
         case warning
         case positionCount = "position_count"
         case positionHistory = "position_history"
         case currentPoint = "current_point"
+        case accountNAV = "account_nav"
+    }
+
+    static func unavailableAccountHistory(positionCount: Int, reason: String) -> Self {
+        Self(positionCount: positionCount, positionHistory: .init(available: false, rows: []),
+            currentPoint: .init(dateText: "", marketValue: .nan, cost: .nan), warning: reason, accountNAV: [:])
+    }
+
+    static func accountHistory(ledger: AccountMWRLedger, nav: [Double?], positionCount: Int) -> Self {
+        guard ledger.values.count == ledger.dates.count, ledger.cashFlows.count == ledger.dates.count,
+              nav.count == ledger.dates.count, !ledger.dates.isEmpty else {
+            return .unavailableAccountHistory(positionCount: positionCount, reason: "账户账本与净值日期不完整。")
+        }
+        var netDeposit = 0.0
+        var points: [ChartPoint] = []
+        var units: [String: Double] = [:]
+        for index in ledger.dates.indices {
+            guard ledger.cashFlows[index].isFinite, let value = ledger.values[index], value.isFinite,
+                  let unit = nav[index], unit.isFinite else {
+                return .unavailableAccountHistory(positionCount: positionCount, reason: "账户账本与净值日期不完整。")
+            }
+            netDeposit += ledger.cashFlows[index]
+            points.append(.init(dateText: ledger.dates[index], marketValue: value, cost: netDeposit))
+            units[ledger.dates[index]] = unit
+        }
+        return Self(positionCount: positionCount, positionHistory: .init(available: points.count > 1, rows: points),
+            currentPoint: points.last!, warning: "账户资产包含持仓和现金，按历史日线及汇率重建；净入金为累计入金减累计出金。金额显示扣除外部资金流后的盈亏，百分比为区间 TWR。股息按到账日计入，现金余额尚未与券商核对；不是实时账户余额。", accountNAV: units)
+    }
+
+    func accountPerformance(from startDate: String, to endDate: String) -> (amount: Double, percentage: Double) {
+        guard let accountNAV, let start = positionHistory.rows.first(where: { $0.dateText == startDate }),
+              let end = positionHistory.rows.first(where: { $0.dateText == endDate }), startDate <= endDate,
+              let base = accountNAV[startDate], base > 0, let last = accountNAV[endDate] else { return (.nan, .nan) }
+        return ((end.marketValue - start.marketValue) - (end.cost - start.cost), (last / base - 1) * 100)
     }
 }
 
@@ -259,6 +296,7 @@ struct ComparisonResponse: Decodable {
     let twrBenchmarks: [String: [Double?]]?
     let warnings: [String]?
     let summary: ComparisonSummary
+    var mwrLedger: AccountMWRLedger? = nil
 
     enum CodingKeys: String, CodingKey {
         case available, dates, portfolio, benchmarks, warnings, summary
@@ -269,13 +307,14 @@ struct ComparisonResponse: Decodable {
         case twrDates = "twr_dates"
         case twrPortfolio = "twr_portfolio"
         case twrBenchmarks = "twr_benchmarks"
+        case mwrLedger = "mwr_ledger"
     }
 }
 
 enum MoneyWeightedReturnCalculator {
-    /// Builds a cumulative, date-aware MWR series. Cost increases are investor
-    /// contributions and cost decreases are withdrawals; the value at each
-    /// point closes the cash-flow stream for that date.
+    /// Date-aware PERIOD return (not annualized XIRR). Positive cash flows
+    /// enter the account; negative flows leave it. Inputs must be external
+    /// investor flows, never changes in stock cost or trading proceeds.
     static func rolling(
         dates: [String],
         cashFlows: [Double],
@@ -315,8 +354,9 @@ enum MoneyWeightedReturnCalculator {
     ) -> Double? {
         guard let startDate = events.first?.date,
               terminalDate > startDate,
-              events.contains(where: { $0.amount < 0 }),
-              events.contains(where: { $0.amount > 0 }) || terminalValue > 0 else { return nil }
+              events.contains(where: { $0.amount < 0 }) else { return nil }
+        if terminalValue == 0, events.allSatisfy({ $0.amount <= 0 }) { return -1 }
+        guard events.contains(where: { $0.amount > 0 }) || terminalValue > 0 else { return nil }
 
         let duration = terminalDate.timeIntervalSince(startDate)
         guard duration > 0 else { return nil }
@@ -395,6 +435,88 @@ enum MoneyWeightedReturnCalculator {
         }
         let rate = exp((bracket.lower + bracket.upper) / 2) - 1
         return rate.isFinite ? rate : nil
+    }
+}
+
+/// Shared, reconstructed account valuations and external flows in reporting USD.
+/// Retain the inputs so each selected interval can solve its own MWR.
+struct AccountMWRLedger: Codable, Sendable {
+    var dates: [String]
+    var cashFlows: [Double]
+    var values: [Double?]
+    var benchmarkValues: [String: [Double?]]
+    var inflows: [Double]? = nil
+    var outflows: [Double]? = nil
+
+    /// USD assets plus actual cumulative withdrawals. Returns here are simple
+    /// profit / gross deposits, not time- or money-weighted returns.
+    func cashFlowComparison() -> (portfolio: [Double?], benchmarks: [String: [Double?]], portfolioReturns: [Double?], benchmarkReturns: [String: [Double?]])? {
+        guard let inflows, let outflows, inflows.count == dates.count, outflows.count == dates.count,
+              values.count == dates.count, cashFlows.count == dates.count,
+              inflows.allSatisfy({ $0.isFinite && $0 >= 0 }), outflows.allSatisfy({ $0.isFinite && $0 >= 0 }),
+              cashFlows.indices.allSatisfy({ cashFlows[$0].isFinite && abs(cashFlows[$0] - (inflows[$0] - outflows[$0])) < 1e-7 }) else { return nil }
+        func adjust(_ series: [Double?]) -> (values: [Double?], returns: [Double?]) {
+            guard series.count == dates.count else { return (dates.map { _ in nil }, dates.map { _ in nil }) }
+            var deposited = 0.0
+            var withdrawn = 0.0
+            var adjusted: [Double?] = []
+            var returns: [Double?] = []
+            for index in dates.indices {
+                deposited += inflows[index]
+                withdrawn += outflows[index]
+                guard let value = series[index], value.isFinite, value >= 0 else {
+                    adjusted.append(nil); returns.append(nil); continue
+                }
+                adjusted.append(value + withdrawn)
+                returns.append(deposited > 0 ? (value + withdrawn) / deposited - 1 : nil)
+            }
+            return (adjusted, returns)
+        }
+        let portfolio = adjust(values)
+        let benchmarks = benchmarkValues.mapValues(adjust)
+        return (portfolio.values, benchmarks.mapValues(\.values), portfolio.returns, benchmarks.mapValues(\.returns))
+    }
+
+    func returns(startIndex: Int = 0, endIndex: Int? = nil) -> (dates: [String], portfolio: [Double?], benchmarks: [String: [Double?]]) {
+        let end = endIndex ?? (dates.count - 1)
+        guard cashFlows.count == dates.count, values.count == dates.count,
+              startIndex >= 0, end >= startIndex, end < dates.count,
+              cashFlows.allSatisfy(\.isFinite) else { return ([], [], [:]) }
+        let range = startIndex...end
+        let selectedDates = Array(dates[range])
+        func calculate(_ valuations: [Double?]) -> [Double?] {
+            guard valuations.count == dates.count else { return selectedDates.map { _ in nil } }
+            var flows = Array(cashFlows[range])
+            if startIndex > 0 {
+                // The opening valuation already includes that day's flows.
+                guard let opening = valuations[startIndex], opening.isFinite, opening >= 0 else {
+                    return selectedDates.map { _ in nil }
+                }
+                flows[0] = opening
+            }
+            return MoneyWeightedReturnCalculator.rolling(dates: selectedDates, cashFlows: flows,
+                terminalValues: Array(valuations[range]))
+        }
+        return (selectedDates, calculate(values), benchmarkValues.mapValues(calculate))
+    }
+
+    /// Invest exactly the account's dated net external flows in a total-return
+    /// benchmark. A withdrawal the benchmark cannot fund makes it unavailable;
+    /// never clamp units to zero and pretend the same cash flow was funded.
+    static func mirror(cashFlows: [Double], prices: [Double?]) -> [Double?] {
+        guard prices.count == cashFlows.count else { return [] }
+        var units = 0.0
+        var valid = true
+        return cashFlows.indices.map { index in
+            if valid, units == 0, cashFlows[index] == 0 { return 0 }
+            guard valid, cashFlows[index].isFinite, let price = prices[index], price.isFinite, price > 0 else {
+                valid = false
+                return nil
+            }
+            units += cashFlows[index] / price
+            guard units >= -1e-10 else { valid = false; return nil }
+            return max(0, units) * price
+        }
     }
 }
 

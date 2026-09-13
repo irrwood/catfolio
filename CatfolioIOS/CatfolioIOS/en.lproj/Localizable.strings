@@ -1,4 +1,13 @@
 // Catfolio UI. Keep %@ placeholders in order; never translate user values.
+"账户资产与收益口径" = "Account value and return methodology";
+"账户历史暂不可用。" = "Account history is unavailable.";
+"账户资产与净入金时间范围" = "Account value and net deposits date range";
+"账户资产与净入金对比图，长按查看单日，双指测量区间" = "Account value and net deposits. Hold to inspect a day; use two fingers to measure a period.";
+"账户资产包含持仓和现金，按历史日线及汇率重建；净入金为累计入金减累计出金。金额显示扣除外部资金流后的盈亏，百分比为区间 TWR。股息按到账日计入，现金余额尚未与券商核对；不是实时账户余额。" = "Account value includes positions and cash reconstructed from daily prices and historical FX. Net deposits are deposits minus withdrawals. Profit excludes external cash flows; the percentage is period TWR. Dividends count when paid. Cash has not been reconciled with the broker; this is not a live account balance.";
+"现金流镜像：组合与基准使用相同日期、相同金额的真实外部资金流。曲线为剩余资产（含现金）＋累计取出金额，单位 USD；百分比为累计盈亏÷累计入金。基准按同日可用收盘总收益价格模拟，不含额外交易费用，非实际日内成交。现金余额尚未与券商核对。" = "Cash-flow match uses the same actual external flows and dates for your account and each benchmark. USD values show remaining assets including cash plus cumulative withdrawals; percentages show cumulative profit divided by gross deposits. Benchmarks use that day's available total-return closing price, without extra trading costs or intraday execution. Cash balances are not yet reconciled with the broker.";
+"现金流镜像：缺少完整资金账本和账户估值，暂不可用。" = "Cash-flow comparison is unavailable without a complete cash ledger and account valuations.";
+"期间收益（非年化）" = "Period return (not annualized)";
+"MWR：按实际入出金日期和含现金的账户净值计算所选期间收益，非年化；股息按到账日计入，现金余额尚未与券商核对。基准按同日收盘价模拟资金进出。" = "MWR uses actual dated deposits and withdrawals and account value including cash. Returns are for the selected period, not annualized. Dividends count when paid; cash balances have not been reconciled with the broker. Benchmark flows use the same day's available closing price.";
 " XS2D 是合成日杠杆产品，这里展示标普 500 经济暴露近似；净成本和净市值只分配一次，不会再次乘 2。" = " XS2D is a synthetic daily leveraged product. This approximates S&P 500 economic exposure; net cost and value are allocated once and are not multiplied by two again.";
 " · " = " · ";
 " · 合计" = " · Total";
@@ -1955,6 +1964,7 @@
 "离线证券目录：美股与主要海外市场的股票和 ETF。轻点查看个股页。" = "An offline directory of stocks and ETFs in the US and major overseas markets. Tap one to open its page.";
 "已持有" = "Held";
 "清除" = "Clear";
+
 /* Management follow-through */
 "资料下载失败，请检查网络后重试。" = "Download failed. Check your connection and try again.";
 "资料服务限流，请稍后重试。" = "The data provider is rate limiting requests. Try again later.";

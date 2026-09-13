@@ -1228,6 +1228,7 @@ private struct CostMarketCard: View {
     @State private var selectedDate: Date?
     @State private var measuredRange: ChartDateRange?
     @State private var showsNetDeposit = true
+    @State private var showsAccountBasis = false
     @Environment(\.colorScheme) private var colorScheme
 
     private var forcesChartLoadingState: Bool {
@@ -1269,11 +1270,13 @@ private struct CostMarketCard: View {
     }
 
     private var displayedMarketValue: Double {
-        selectedPoint?.marketValue ?? overview.summary.marketValue
+        if response.accountNAV != nil { return selectedPoint?.marketValue ?? response.currentPoint.marketValue }
+        return selectedPoint?.marketValue ?? overview.summary.marketValue
     }
 
     private var displayedCost: Double {
-        selectedPoint?.cost ?? overview.summary.totalCost
+        if response.accountNAV != nil { return selectedPoint?.cost ?? response.currentPoint.cost }
+        return selectedPoint?.cost ?? overview.summary.totalCost
     }
 
     private var displayedProfit: Double {
@@ -1281,6 +1284,15 @@ private struct CostMarketCard: View {
     }
 
     private var rangePerformance: (amount: Double, percentage: Double) {
+        if response.accountNAV != nil {
+            if let measurement = measuredPoints {
+                return response.accountPerformance(from: measurement.start.dateText, to: measurement.end.dateText)
+            }
+            guard let first = rangeData.rows.first, let end = selectedPoint,
+                  let index = response.positionHistory.rows.firstIndex(where: { $0.dateText == first.dateText }) else { return (.nan, .nan) }
+            let opening = response.positionHistory.rows[max(0, index - 1)].dateText
+            return response.accountPerformance(from: opening, to: end.dateText)
+        }
         if let measurement = measuredPoints {
             return costMarketChange(from: measurement.start, to: measurement.end)
         }
@@ -1304,7 +1316,8 @@ private struct CostMarketCard: View {
     }
 
     private var financialAccent: Color {
-        CatfolioTheme.heroPerformance(for: rangePerformance.amount, scheme: colorScheme)
+        if !rangePerformance.amount.isFinite { return .secondary }
+        return CatfolioTheme.heroPerformance(for: rangePerformance.amount, scheme: colorScheme)
     }
 
     /// Nil while the reader is looking at their own portfolio.
@@ -1333,6 +1346,13 @@ private struct CostMarketCard: View {
                 }
                 Image(systemName: "chevron.down")
                     .font(.system(size: 6, weight: .bold))
+                if response.accountNAV != nil {
+                    Button { showsAccountBasis = true } label: {
+                        Image(systemName: "info.circle").font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.text("账户资产与收益口径"))
+                }
             }
             .lineLimit(1)
             .foregroundStyle(.primary)
@@ -1364,7 +1384,7 @@ private struct CostMarketCard: View {
                     Text("·")
                         .foregroundStyle(.tertiary)
 
-                    Text(DisplayFormat.percent(rangePerformance.percentage, signed: false))
+                    Text((response.accountNAV != nil ? "TWR " : "") + (rangePerformance.percentage.isFinite ? DisplayFormat.percent(rangePerformance.percentage, signed: false) : "—"))
                         .foregroundStyle(summaryAccent)
                         .contentTransition(.numericText(value: rangePerformance.percentage))
                         .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: rangePerformance.percentage)
@@ -1417,9 +1437,14 @@ private struct CostMarketCard: View {
             .contentShape(Rectangle())
             .offset(y: PortfolioHeroChartLayout.pickerTop)
             .zIndex(2)
-            .accessibilityLabel(L10n.text("成本与市值时间范围"))
+            .accessibilityLabel(response.accountNAV != nil ? L10n.text("账户资产与净入金时间范围") : L10n.text("成本与市值时间范围"))
         }
         .frame(height: PortfolioHeroChartLayout.sectionHeight, alignment: .topLeading)
+        .alert(L10n.text("账户资产与收益口径"), isPresented: $showsAccountBasis) {
+            Button(L10n.text("知道了"), role: .cancel) { }
+        } message: {
+            Text(warning.map { L10n.label($0) } ?? L10n.text("账户历史暂不可用。"))
+        }
         .task(id: "\(model.portfolioChartRevision)-\(isAwaitingEnrichedHistory)") {
             // Keep the last prepared curve mounted during background refresh.
             // Interim snapshot-only responses must not replace enriched history.
@@ -1518,7 +1543,7 @@ private struct CostMarketCard: View {
                     measuredRange = nil
                 }
             )
-            .accessibilityLabel(L10n.text("成本与市值对比图，长按后单指拖动查看单日，保持第一指并加入第二指测量区间"))
+            .accessibilityLabel(response.accountNAV != nil ? L10n.text("账户资产与净入金对比图，长按查看单日，双指测量区间") : L10n.text("成本与市值对比图，长按后单指拖动查看单日，保持第一指并加入第二指测量区间"))
         } else {
             StandardLineChartPlaceholder(
                 title: L10n.text("历史数据不足"),
@@ -1562,7 +1587,7 @@ private struct CostMarketCard: View {
             return rangeDateText(from: measurement.start.date, to: measurement.end.date)
         }
         guard selectedDate != nil, let selectedPoint else { return nil }
-        if range == .oneDay {
+        if range == .oneDay && response.accountNAV == nil {
             return selectedPoint.date.formatted(.dateTime.hour().minute())
         }
         return selectedPoint.date.formatted(.dateTime.year().month(.abbreviated).day())
@@ -1747,7 +1772,7 @@ private final class CostMarketPreparedData: @unchecked Sendable {
         return CostMarketRangeData(
             rows: points,
             plottedRows: points,
-            domain: max(0, minimum - padding)...(maximum + padding)
+            domain: (minimum < 0 ? minimum - padding : max(0, minimum - padding))...(maximum + padding)
         )
     }
 }

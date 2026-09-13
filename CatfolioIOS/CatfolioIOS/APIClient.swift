@@ -1063,7 +1063,7 @@ final class AppModel {
             try LocalPortfolioEngine.presentation(for: scoped)
         }.value
         let cachedChart: PortfolioChartResponse?
-        if !isFakeDataMode && !isPublicInvestorMode && !scoped.positions.isEmpty {
+        if !isFakeDataMode && !isPublicInvestorMode && (!scoped.positions.isEmpty || !(scoped.transactions ?? []).isEmpty) {
             cachedChart = try? await LocalMarketDataClient().portfolioChart(
                 document: scoped,
                 cachedOnly: true
@@ -1079,7 +1079,7 @@ final class AppModel {
         isPortfolioChartLoading = cachedChart == nil
             && !isFakeDataMode
             && !isPublicInvestorMode
-            && !scoped.positions.isEmpty
+            && (!scoped.positions.isEmpty || !(scoped.transactions ?? []).isEmpty)
         portfolioChartRevision &+= 1
         holdings = presentation.2
         if invalidatesDailyChanges {

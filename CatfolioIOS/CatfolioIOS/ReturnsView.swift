@@ -295,19 +295,17 @@ struct ReturnsComparisonPanel: View {
             && comparison.portfolio.compactMap { $0 }.count > 1
         let hasTWRLine = (comparison.twrDates?.count ?? 0) > 1
             && (comparison.twrPortfolio?.compactMap { $0 }.count ?? 0) > 1
-        let hasMWRLine = comparison.dates.count > 1
+        let hasMWRLine = (comparison.mwrLedger?.dates.count ?? 0) > 1
             && (comparison.mwrPortfolio?.compactMap { $0 }.count ?? 0) > 1
 
         switch chartMode {
         case .cashFlowMatched where !hasActiveLine:
-            if hasTWRLine { chartMode = .twr }
-            else if hasMWRLine { chartMode = .mwr }
+            break
         case .twr where !hasTWRLine:
-            if hasActiveLine { chartMode = .cashFlowMatched }
-            else if hasMWRLine { chartMode = .mwr }
+            // Keep the requested metric visible with its missing-ledger reason.
+            break
         case .mwr where !hasMWRLine:
-            if hasTWRLine { chartMode = .twr }
-            else if hasActiveLine { chartMode = .cashFlowMatched }
+            break
         default:
             break
         }
@@ -717,6 +715,27 @@ private struct ReturnsChart: View {
                 ReturnsTimeRangeControl(selection: $timeRange)
             }
 
+            if mode == .twr, hasDrawableLine,
+               let note = comparison.warnings?.first(where: { $0.hasPrefix("每日 TWR") }) {
+                Text(note)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
+                    .padding(.vertical, 8)
+            }
+            if mode == .mwr, hasDrawableLine,
+               let note = comparison.warnings?.first(where: { $0.hasPrefix("MWR：") }) {
+                Text(L10n.label(note)).font(.caption).foregroundStyle(.secondary)
+                    .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
+                    .padding(.vertical, 8)
+            }
+            if mode == .cashFlowMatched, hasDrawableLine,
+               let note = comparison.warnings?.first(where: { $0.hasPrefix("现金流镜像：") }) {
+                Text(L10n.label(note)).font(.caption).foregroundStyle(.secondary)
+                    .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
+                    .padding(.vertical, 8)
+            }
+
             Group {
                 if isChartLoading {
                     ReturnsModePickerSkeleton()
@@ -815,13 +834,15 @@ private struct ReturnsChart: View {
 
     private var emptyChartDescription: String {
         if mode == .cashFlowMatched {
-            return comparison.warnings?.first
-                ?? L10n.text("首页的历史市值与成本路径至少需要两个数据点。")
+            return comparison.warnings?.first(where: { $0.hasPrefix("现金流镜像：") })
+                ?? L10n.text("现金流镜像：缺少完整资金账本和账户估值，暂不可用。")
         }
         if mode == .mwr {
-            return L10n.text("MWR 至少需要两个日期的组合价值与一笔有效现金流。")
+            return comparison.warnings?.first(where: { $0.hasPrefix("MWR：") })
+                ?? L10n.text("MWR 至少需要两个日期的组合价值与一笔有效现金流。")
         }
-        return L10n.text("请先同步一次持仓，然后下拉刷新。")
+        return comparison.warnings?.first(where: { $0.hasPrefix("TWR：") })
+            ?? L10n.text("请先同步一次持仓，然后下拉刷新。")
     }
 
     private func values(on date: Date?) -> [ReturnsSelectedValue] {
@@ -853,6 +874,17 @@ private struct ReturnsChart: View {
 
     private func rangeMeasurement() -> ReturnsRangeMeasurement? {
         guard let measuredRange else { return nil }
+        if mode == .mwr {
+            guard let ledger = comparison.mwrLedger,
+                  let first = ledger.dates.firstIndex(of: DayDateCodec.string(from: measuredRange.start)),
+                  let last = ledger.dates.firstIndex(of: DayDateCodec.string(from: measuredRange.end)),
+                  let value = ledger.returns(startIndex: first, endIndex: last).portfolio.last ?? nil else { return nil }
+            return ReturnsRangeMeasurement(
+                dateText: "\(rangeDate(measuredRange.start)) – \(rangeDate(measuredRange.end))",
+                primaryValue: DisplayFormat.ratioPercent(value),
+                secondaryValue: "MWR · " + L10n.text("期间收益（非年化）"),
+                color: value >= 0 ? CatfolioStyle.green : CatfolioStyle.red)
+        }
 
         if mode == .cashFlowMatched {
             guard let startReturn = displayData.returnsByDate[measuredRange.start]?[ReturnsSeriesStyle.portfolio],
@@ -1189,12 +1221,6 @@ private final class ReturnsPreparedData: @unchecked Sendable {
             benchmarks: comparison.twrBenchmarks ?? [:],
             transform: { ($0 - 1) * 100 }
         )
-        let mwrPoints = Self.makePoints(
-            dates: comparison.dates,
-            portfolio: comparison.mwrPortfolio ?? [],
-            benchmarks: comparison.mwrBenchmarks ?? [:],
-            transform: { $0 * 100 }
-        )
         var valuesByDate: [Date: [String: Double]] = [:]
         for point in cashFlowMatchedPoints {
             valuesByDate[point.date, default: [:]][point.series] = point.value
@@ -1206,7 +1232,7 @@ private final class ReturnsPreparedData: @unchecked Sendable {
             mode: .cashFlowMatched
         )
         twrRanges = Self.makeRanges(from: twrPoints, suppliedReturns: [], mode: .twr)
-        mwrRanges = Self.makeRanges(from: mwrPoints, suppliedReturns: [], mode: .mwr)
+        mwrRanges = Self.makeMWRRanges(ledger: comparison.mwrLedger)
     }
 
     func cashFlowValue(for series: String, on date: Date?) -> Double? {
@@ -1308,6 +1334,25 @@ private final class ReturnsPreparedData: @unchecked Sendable {
             }
         }
         return result
+    }
+
+    private static func makeMWRRanges(ledger: AccountMWRLedger?) -> [ChartTimeRange: ReturnsPreparedRange] {
+        guard let ledger, let lastText = ledger.dates.last, let last = DayDateCodec.date(from: lastText) else {
+            return Dictionary(uniqueKeysWithValues: ChartTimeRange.allCases.map { ($0, .empty) })
+        }
+        let dates = ledger.dates.compactMap { DayDateCodec.date(from: $0) }
+        guard dates.count == ledger.dates.count else { return [:] }
+        return Dictionary(uniqueKeysWithValues: ChartTimeRange.allCases.map { range in
+            guard let first = dates.firstIndex(where: {
+                range.includes($0, through: last, previousTradingDate: dates.dropLast().last,
+                    calendar: ChartTimeRange.financeCalendar)
+            }) else { return (range, .empty) }
+            let values = ledger.returns(startIndex: max(0, first - 1))
+            let points = makePoints(dates: values.dates, portfolio: values.portfolio,
+                benchmarks: values.benchmarks, transform: { $0 * 100 })
+                .filter { $0.date >= dates[first] }
+            return (range, preparedRange(from: points, suppliedReturns: [], mode: .mwr))
+        })
     }
 
     private static func makeRanges(
