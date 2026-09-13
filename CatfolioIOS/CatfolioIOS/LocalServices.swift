@@ -1010,7 +1010,8 @@ struct LocalMarketDataClient {
             let account = try await accountTimeWeightedSeries(document: document,
                 to: DayDateCodec.string(from: Date()), cachedOnly: cachedOnly, includeBenchmarks: false)
             guard let ledger = account.ledger else { throw LocalServiceError.noHistoricalPrices }
-            return .accountHistory(ledger: ledger, nav: account.portfolio, positionCount: document.positions.count)
+            return .accountHistory(ledger: ledger, nav: account.portfolio, positionCount: document.positions.count,
+                                   inferredFunding: account.inferredFunding)
         } catch {
             if cachedOnly { throw error }
             return .unavailableAccountHistory(positionCount: document.positions.count,
@@ -2078,7 +2079,7 @@ struct LocalMarketDataClient {
         var comparisonWarnings: [String] = []
         var cashFlowPortfolioReturn: Double?
 
-        var twr: (dates: [String], portfolio: [Double?], benchmarks: [String: [Double?]], ledger: AccountMWRLedger?) = ([], [], [:], nil)
+        var twr: (dates: [String], portfolio: [Double?], benchmarks: [String: [Double?]], ledger: AccountMWRLedger?, inferredFunding: Bool) = ([], [], [:], nil, false)
         do {
             twr = try await accountTimeWeightedSeries(document: document, to: end)
             guard let ledger = twr.ledger, let mirrored = ledger.cashFlowComparison() else {
@@ -2091,6 +2092,7 @@ struct LocalMarketDataClient {
             benchmarkReturnSeries = mirrored.benchmarkReturns
             cashFlowPortfolioReturn = mirrored.portfolioReturns.last ?? nil
             for symbol in benchmarkSymbols { returns[symbol] = mirrored.benchmarkReturns[symbol]?.last ?? nil }
+            if twr.inferredFunding { comparisonWarnings.append(Self.impliedFundingNote) }
             comparisonWarnings.append("现金流镜像：组合与基准使用相同日期、相同金额的真实外部资金流。曲线为剩余资产（含现金）＋累计取出金额，单位 USD；百分比为累计盈亏÷累计入金。基准按同日可用收盘总收益价格模拟，不含额外交易费用，非实际日内成交。现金余额尚未与券商核对。")
             let unavailable = benchmarkSymbols.filter { (mirrored.benchmarks[$0]?.last ?? nil) == nil }
             if !unavailable.isEmpty {
@@ -2129,31 +2131,51 @@ struct LocalMarketDataClient {
         )
     }
 
+    /// Said wherever an account was rebuilt on implied funding.
+    static let impliedFundingNote = "资金流水不完整：部分交易没有导入现金金额，已按「股数 × 成交价」推算；当天现金不够付款的部分视为当天入金，交易记录解释不了的持仓视为在最早有价格的那天按收盘价转入。这些推算都按市值入金，不会凭空产生收益。"
+
     /// All private ledger data stays on-device. Only public symbols/dates are
     /// sent to the market provider. Core is not a runtime dependency.
     private func accountTimeWeightedSeries(
         document: LocalPortfolioDocument, to end: String, cachedOnly: Bool = false, includeBenchmarks: Bool = true
-    ) async throws -> (dates: [String], portfolio: [Double?], benchmarks: [String: [Double?]], ledger: AccountMWRLedger?) {
+    ) async throws -> (dates: [String], portfolio: [Double?], benchmarks: [String: [Double?]], ledger: AccountMWRLedger?, inferredFunding: Bool) {
         typealias T = DailyTimeWeightedReturn
         let records = document.transactions ?? []
+        // An account with positions and no rows starts where the broker says
+        // its positions were opened.
+        let unrecorded = Set(document.positions.map(\.accountKey)).subtracting(records.map(\.accountKey))
+        let openings = document.positions.filter { unrecorded.contains($0.accountKey) }.compactMap(\.openedDate)
         guard document.isSynthetic != true, !document.isPublicDisclosure,
-              let start = records.map(\.date).min(), start <= end else {
+              let start = (records.map(\.date) + openings).min(), start <= end else {
             throw T.Failure(message: "TWR：需要完整账户资金流水。")
         }
         var events: [T.Event] = []
         var currencies = Set<String>()
         var symbols = Set<String>()
+        // Accounts rebuilt on the implied-funding assumptions: some row came
+        // without its cash legs, or the account has positions and no rows.
+        var inferredAccounts = unrecorded
         for row in records {
             let action = row.action.uppercased()
             guard ["BUY", "SELL", "DEPOSIT", "WITHDRAWAL", "DIVIDEND", "INTEREST", "FEE", "TAX"].contains(action) else {
                 throw T.Failure(message: "TWR：暂不能处理流水类型 \(row.action)，请补全换汇或公司行动分录。")
             }
-            guard let cash = row.cashPostings, !cash.isEmpty else {
-                throw T.Failure(message: "TWR：\(row.date) \(row.ticker) 缺少净现金金额及币种，请导入完整资金流水。")
-            }
             let trade = action == "BUY" || action == "SELL"
             guard row.quantity.isFinite, !trade || row.quantity > 0 else {
                 throw T.Failure(message: "TWR：交易数量无效。")
+            }
+            var cash = row.cashPostings ?? []
+            if cash.isEmpty {
+                // Imported without its cash legs. A trade's are its fill; a
+                // cash row's amount is unknown, and it is left out — a
+                // deposit it recorded is implied later if it was needed.
+                inferredAccounts.insert(row.accountKey)
+                guard trade else { continue }
+                guard row.price.isFinite, row.price > 0 else {
+                    throw T.Failure(message: "TWR：\(row.date) \(row.ticker) 缺少成交价，无法推算成交金额。")
+                }
+                let amount = Decimal(row.quantity) * Decimal(row.price)
+                cash = [T.Cash(currency: row.currency.uppercased(), amount: action == "BUY" ? -amount : amount)]
             }
             let debit = ["BUY", "WITHDRAWAL", "FEE", "TAX"].contains(action)
             guard cash.allSatisfy({ !$0.amount.isNaN && (debit ? $0.amount <= 0 : $0.amount >= 0) }) else {
@@ -2165,6 +2187,17 @@ struct LocalMarketDataClient {
             events.append(T.Event(id: row.id, date: row.date, account: row.accountKey,
                 symbol: symbol, quantity: trade ? Decimal(row.quantity) * (action == "BUY" ? 1 : -1) : 0,
                 cash: cash, external: action == "DEPOSIT" || action == "WITHDRAWAL"))
+        }
+        var expected: [String: [String: Decimal]] = [:]
+        var openedDates: [String: [String: String]] = [:]
+        for position in document.positions {
+            let symbol = Self.yahooSymbol(ticker: position.ticker, currency: position.quoteCurrency)
+            expected[position.accountKey, default: [:]][symbol, default: 0] += Decimal(position.shares)
+            if unrecorded.contains(position.accountKey), let opened = position.openedDate {
+                openedDates[position.accountKey, default: [:]][symbol] = min(openedDates[position.accountKey]?[symbol] ?? opened, opened)
+            }
+            // An implied opening needs the price of what it opens.
+            if inferredAccounts.contains(position.accountKey) { symbols.insert(symbol) }
         }
         var prices: [String: LedgerPriceHistory] = [:]
         var splits: [T.Split] = []
@@ -2221,12 +2254,16 @@ struct LocalMarketDataClient {
             days.append(T.Day(date: key, quotes: quotes, usdRates: rates))
             date = calendar.date(byAdding: .day, value: 1, to: date)!
         }
-        let result = try T.calculate(events: events, days: days, splits: splits)
-        var expected: [String: [String: Decimal]] = [:]
-        for position in document.positions {
-            let symbol = Self.yahooSymbol(ticker: position.ticker, currency: position.quoteCurrency)
-            expected[position.accountKey, default: [:]][symbol, default: 0] += Decimal(position.shares)
+        if !inferredAccounts.isEmpty {
+            let quotes = prices.mapValues { history in
+                history.closes.filter { $0.key >= start && $0.key <= end }
+                    .mapValues { T.Quote(price: Decimal($0), currency: history.currency) }
+            }
+            events += T.openingTransfers(events: events, splits: splits, expected: expected, quotes: quotes,
+                                         start: start, openedDates: openedDates, accounts: inferredAccounts)
+            events += T.fundingShortfalls(events: events, accounts: inferredAccounts)
         }
+        let result = try T.calculate(events: events, days: days, splits: splits)
         for account in Set(expected.keys).union(result.holdings.keys) {
             for symbol in Set(expected[account]?.keys.map { $0 } ?? []).union(result.holdings[account]?.keys.map { $0 } ?? []) {
                 let difference = (expected[account]?[symbol] ?? 0) - (result.holdings[account]?[symbol] ?? 0)
@@ -2267,7 +2304,7 @@ struct LocalMarketDataClient {
             benchmarkValues: benchmarkValues,
             inflows: [0] + result.points.map { NSDecimalNumber(decimal: $0.inflow).doubleValue },
             outflows: [0] + result.points.map { NSDecimalNumber(decimal: $0.outflow).doubleValue })
-        return (dates, [1] + result.points.map { NSDecimalNumber(decimal: $0.nav).doubleValue }, series, ledger)
+        return (dates, [1] + result.points.map { NSDecimalNumber(decimal: $0.nav).doubleValue }, series, ledger, !inferredAccounts.isEmpty)
     }
 
     private struct LedgerPriceHistory: Codable {

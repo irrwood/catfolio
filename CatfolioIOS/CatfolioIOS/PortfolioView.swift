@@ -1443,7 +1443,9 @@ private struct CostMarketCard: View {
         .alert(L10n.text("账户资产与收益口径"), isPresented: $showsAccountBasis) {
             Button(L10n.text("知道了"), role: .cancel) { }
         } message: {
-            Text(warning.map { L10n.label($0) } ?? L10n.text("账户历史暂不可用。"))
+            // Paragraph by paragraph, so each is found in the catalogue.
+            Text(warning.map { $0.components(separatedBy: "\n\n").map { L10n.label($0) }.joined(separator: "\n\n") }
+                 ?? L10n.text("账户历史暂不可用。"))
         }
         .task(id: "\(model.portfolioChartRevision)-\(isAwaitingEnrichedHistory)") {
             // Keep the last prepared curve mounted during background refresh.

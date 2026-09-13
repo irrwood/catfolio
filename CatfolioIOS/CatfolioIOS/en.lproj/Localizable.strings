@@ -2238,3 +2238,4 @@
 "现在在高点" = "At a high now";
 "%@ · 高点在 %@" = "%@ · high on %@";
 "水下分析" = "Underwater analysis";
+"资金流水不完整：部分交易没有导入现金金额，已按「股数 × 成交价」推算；当天现金不够付款的部分视为当天入金，交易记录解释不了的持仓视为在最早有价格的那天按收盘价转入。这些推算都按市值入金，不会凭空产生收益。" = "Incomplete cash ledger: some trades were imported without their cash amounts, so they are estimated as shares × fill price. Cash a day was short of is treated as deposited that day, and shares the trade history cannot explain are treated as transferred in at the first available close. Each estimate adds money at market value, so none creates a gain.";

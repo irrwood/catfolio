@@ -56,7 +56,7 @@ struct PortfolioChartResponse: Decodable {
             currentPoint: .init(dateText: "", marketValue: .nan, cost: .nan), warning: reason, accountNAV: [:])
     }
 
-    static func accountHistory(ledger: AccountMWRLedger, nav: [Double?], positionCount: Int) -> Self {
+    static func accountHistory(ledger: AccountMWRLedger, nav: [Double?], positionCount: Int, inferredFunding: Bool = false) -> Self {
         guard ledger.values.count == ledger.dates.count, ledger.cashFlows.count == ledger.dates.count,
               nav.count == ledger.dates.count, !ledger.dates.isEmpty else {
             return .unavailableAccountHistory(positionCount: positionCount, reason: "账户账本与净值日期不完整。")
@@ -74,7 +74,10 @@ struct PortfolioChartResponse: Decodable {
             units[ledger.dates[index]] = unit
         }
         return Self(positionCount: positionCount, positionHistory: .init(available: points.count > 1, rows: points),
-            currentPoint: points.last!, warning: "账户资产包含持仓和现金，按历史日线及汇率重建；净入金为累计入金减累计出金。金额显示扣除外部资金流后的盈亏，百分比为区间 TWR。股息按到账日计入，现金余额尚未与券商核对；不是实时账户余额。", accountNAV: units)
+            currentPoint: points.last!,
+            warning: (inferredFunding ? LocalMarketDataClient.impliedFundingNote + "\n\n" : "")
+                + "账户资产包含持仓和现金，按历史日线及汇率重建；净入金为累计入金减累计出金。金额显示扣除外部资金流后的盈亏，百分比为区间 TWR。股息按到账日计入，现金余额尚未与券商核对；不是实时账户余额。",
+            accountNAV: units)
     }
 
     func accountPerformance(from startDate: String, to endDate: String) -> (amount: Double, percentage: Double) {

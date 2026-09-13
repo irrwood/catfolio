@@ -735,6 +735,13 @@ private struct ReturnsChart: View {
                     .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
                     .padding(.vertical, 8)
             }
+            // Whatever the metric: part of the account's cash was implied.
+            if hasDrawableLine,
+               let note = comparison.warnings?.first(where: { $0.hasPrefix("资金流水不完整") }) {
+                Text(L10n.label(note)).font(.caption).foregroundStyle(.secondary)
+                    .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
+                    .padding(.bottom, 8)
+            }
 
             Group {
                 if isChartLoading {

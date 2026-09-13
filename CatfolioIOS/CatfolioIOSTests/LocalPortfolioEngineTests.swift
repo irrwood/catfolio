@@ -47,14 +47,18 @@ final class LocalPortfolioEngineTests: XCTestCase {
         XCTAssertEqual(response.accountNAV?[response.currentPoint.dateText], 1)
     }
 
-    func testIncompleteLedgerFailsClosedOnHome() async throws {
+    /// A trade imported without its cash legs is funded from its fill and
+    /// says so, rather than taking the whole account's history down.
+    func testTradesWithoutCashAreFundedFromTheirFillsOnHome() async throws {
         var document = LocalPortfolioDocument.empty
         document.transactions = [LocalTransactionRecord(date: "2026-09-01", action: "BUY", ticker: "AAPL",
             quantity: 1, price: 100, currency: "USD", source: "CSV", accountID: nil, accountName: nil)]
+        document.positions = [LocalPositionRecord(ticker: "AAPL", name: "Apple", shares: 1, averageCost: 100, currency: "USD",
+            quotePrice: 100, quoteCurrency: "USD", source: "CSV", openedDate: "2026-09-01")]
         let response = try await LocalMarketDataClient().portfolioChart(document: document)
-        XCTAssertFalse(response.positionHistory.available)
-        XCTAssertTrue(response.currentPoint.marketValue.isNaN)
-        XCTAssertTrue(response.warning?.contains("缺少净现金") == true)
+        XCTAssertTrue(response.positionHistory.available, response.warning ?? "")
+        XCTAssertTrue(response.warning?.contains("资金流水不完整") == true)
+        XCTAssertEqual(response.positionHistory.rows.last?.cost ?? 0, 100, accuracy: 0.0001, "the fill is the implied deposit")
     }
 
     func testMalformedHomeSeriesDoesNotPartiallyPublish() {
