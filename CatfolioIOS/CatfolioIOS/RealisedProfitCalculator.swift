@@ -262,3 +262,30 @@ enum RealisedProfitCalculator {
         return (decimal, currency, raw)
     }
 }
+
+/// Reuses the history calculation with the detail page's security/account scope.
+struct HoldingDetailRealisedProfitRequest: Equatable {
+    let context: HoldingDetailAccountContext?
+    let accountKeys: Set<String>
+
+    func summary() -> RealisedProfitSummary? {
+        guard let context else { return nil }
+        let keys = accountKeys.intersection(context.allAccountKeys)
+        guard !keys.isEmpty else { return nil }
+        let transactions = (context.document.transactions ?? []).filter {
+            keys.contains($0.accountKey)
+                && $0.ticker.caseInsensitiveCompare(context.ticker) == .orderedSame
+        }
+        let sales = RealisedProfitCalculator.sales(transactions: transactions)
+        let hasValue = sales.contains { sale in
+            switch sale.outcome {
+            case let .broker(_, _, usd): return usd?.isFinite == true
+            case let .estimated(usd): return usd.isFinite
+            case .unavailable: return false
+            }
+        }
+        guard hasValue else { return nil }
+        let summary = RealisedProfitCalculator.summarize(sales: sales)
+        return summary.combinedUSD.isFinite ? summary : nil
+    }
+}

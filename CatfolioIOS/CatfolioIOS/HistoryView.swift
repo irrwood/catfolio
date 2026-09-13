@@ -198,9 +198,10 @@ struct HistoryView: View {
     @State private var showsExporter = false
     @State private var exportError: String?
 
-    init(initialAccountIDs: Set<String>? = nil) {
+    init(initialAccountIDs: Set<String>? = nil, initialCategory: HistoryCategory = .all) {
         self.initialAccountIDs = initialAccountIDs
         _selectedAccountIDs = State(initialValue: initialAccountIDs)
+        _category = State(initialValue: initialCategory)
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--verify-history-orders") {
             _category = State(initialValue: .orders)
@@ -1180,7 +1181,7 @@ struct HistoryPreparedLedger {
     }
 }
 
-private struct HistoryFeeCharge {
+struct HistoryFeeCharge {
     let holding: Holding
     let rate: Double
     let annual: Double

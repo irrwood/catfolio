@@ -35,12 +35,10 @@ struct TodayDetailView: View {
             guard amount.isFinite else { return nil }
             return Contribution(holding: holding, changePercent: change, amount: amount)
         }
-        .sorted { $0.amount > $1.amount }
+        .sorted { $0.amount == $1.amount ? $0.id < $1.id : $0.amount > $1.amount }
     }
 
     private var total: Double { contributions.reduce(0) { $0 + $1.amount } }
-    private var gainers: [Contribution] { Array(contributions.filter { $0.amount > 0 }.prefix(5)) }
-    private var losers: [Contribution] { Array(contributions.filter { $0.amount < 0 }.reversed().prefix(5)) }
     private var percentageGainers: [Contribution] {
         Array(contributions.filter { $0.changePercent > 0 }.sorted {
             $0.changePercent == $1.changePercent ? $0.id < $1.id : $0.changePercent > $1.changePercent
@@ -53,9 +51,6 @@ struct TodayDetailView: View {
     }
     private var largestPercentageMagnitude: Double {
         max(contributions.map { abs($0.changePercent) }.max() ?? 1, 0.01)
-    }
-    private var largestMagnitude: Double {
-        max(contributions.map { abs($0.amount) }.max() ?? 1, 0.01)
     }
 
     /// Sum of every move regardless of sign — how much actually happened today,
@@ -159,18 +154,23 @@ struct TodayDetailView: View {
             }
         }
 
-        var rows = totals.map { sector, amount in
-            SectorBreakdown(
-                sector: sector, amount: amount,
-                components: (members[sector] ?? []).sorted { abs($0.amount) > abs($1.amount) }
-            )
+        let componentOrder: (SectorBreakdown.Component, SectorBreakdown.Component) -> Bool = { lhs, rhs in
+            if abs(lhs.amount) == abs(rhs.amount) { return lhs.id < rhs.id }
+            return abs(lhs.amount) > abs(rhs.amount)
         }
-        .sorted { abs($0.amount) > abs($1.amount) }
+        var rows: [SectorBreakdown] = totals.map { sector, amount in
+            let components = (members[sector] ?? []).sorted(by: componentOrder)
+            return SectorBreakdown(sector: sector, amount: amount, components: components)
+        }
+        rows.sort { lhs, rhs in
+            if abs(lhs.amount) == abs(rhs.amount) { return lhs.id < rhs.id }
+            return abs(lhs.amount) > abs(rhs.amount)
+        }
 
         if !unclassifiedMembers.isEmpty {
             rows.append(SectorBreakdown(
                 sector: nil, amount: unclassified,
-                components: unclassifiedMembers.sorted { abs($0.amount) > abs($1.amount) }
+                components: unclassifiedMembers.sorted(by: componentOrder)
             ))
         }
         return (rows, usedLookThrough, totalValue > 0 ? unclassifiedValue / totalValue : 0)
@@ -192,129 +192,41 @@ struct TodayDetailView: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(L10n.text("今日盈亏"))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Text(DisplayFormat.money(total, signed: true, fractionDigits: 2))
-                        .appNumber(.display, weight: .bold)
-                        .foregroundStyle(total >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
-                        .contentTransition(.numericText(value: total))
-                    if let benchmarkChange, benchmarkChange.isFinite {
-                        HStack(spacing: 5) {
-                            Image(systemName: "chart.line.uptrend.xyaxis")
-                                .font(.footnote.weight(.semibold))
-                                .foregroundStyle(CatfolioTheme.accent)
-                            Text("SPY")
-                                .font(.subheadline).foregroundStyle(.secondary)
-                            Text(DisplayFormat.percent(benchmarkChange, signed: true))
-                                .appNumber(.callout, weight: .medium)
-                                .foregroundStyle(benchmarkChange >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
-                        }
-                        .padding(.top, 2)
-                    }
-                    if let headline {
-                        Text(headline)
-                            .currencyFont(.footnote)
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 4)
-                    }
-                }
-                .padding(.vertical, 6)
-            }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 28) {
+                summary
 
-            if !sectorRows.isEmpty {
-                Section {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12),
-                                             count: typeSize.isAccessibilitySize ? 1 : 2), spacing: 12) {
-                        ForEach(sectorRows) { row in
-                            let definition = row.sector.map { SectorPerformanceDefinition.definition(for: $0) }
-                            Button {
-                                selectedSector = row
-                                showsSectorMembers = true
-                            } label: {
-                                SectorGlassCard(
-                                    title: row.displayName,
-                                    icon: definition?.icon ?? row.symbolName,
-                                    caption: L10n.text("\(row.components.count) 项"),
-                                    value: DisplayFormat.money(row.amount, signed: true, fractionDigits: 2),
-                                    tint: definition?.color ?? .gray,
-                                    valueColor: row.amount >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger
-                                )
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityElement(children: .combine)
-                            .accessibilityIdentifier("today-sector.\(row.id)")
-                        }
-                    }
-                    .padding(.vertical, 4)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                } header: {
-                    Text(L10n.text("按行业"))
-                } footer: {
-                    Text(sectorFootnote)
+                if !sectorRows.isEmpty {
+                    sectorSection
                 }
-                .headerProminence(.increased)
-            }
 
-            if !gainers.isEmpty {
-                Section {
-                    ForEach(gainers) { contributionRow($0) }
-                } header: {
-                    Text(L10n.text("推动上涨 · \(gainers.count) 项"))
+                if !percentageGainers.isEmpty {
+                    ranking(percentageGainers, title: L10n.text("持仓涨幅榜"))
+                        .accessibilityIdentifier("today.percentage-gainers")
                 }
-                .headerProminence(.increased)
-            }
-
-            if !losers.isEmpty {
-                Section {
-                    ForEach(losers) { contributionRow($0) }
-                } header: {
-                    Text(L10n.text("拖累下跌 · \(losers.count) 项"))
+                if !percentageLosers.isEmpty {
+                    ranking(percentageLosers, title: L10n.text("持仓跌幅榜"))
+                        .accessibilityIdentifier("today.percentage-losers")
                 }
-                .headerProminence(.increased)
-            }
 
-            if !percentageGainers.isEmpty {
-                Section {
-                    ForEach(percentageGainers) { contributionRow($0, byPercentage: true) }
-                } header: {
-                    Text(L10n.text("持仓涨幅榜")) + Text(" · %")
-                }
-                .headerProminence(.increased)
-                .accessibilityIdentifier("today.percentage-gainers")
-            }
-
-            if !percentageLosers.isEmpty {
-                Section {
-                    ForEach(percentageLosers) { contributionRow($0, byPercentage: true) }
-                } header: {
-                    Text(L10n.text("持仓跌幅榜")) + Text(" · %")
-                }
-                .headerProminence(.increased)
-                .accessibilityIdentifier("today.percentage-losers")
-            }
-
-            if contributions.isEmpty {
-                Section {
+                if contributions.isEmpty {
                     ContentUnavailableView(
                         L10n.text("暂无今日行情"),
                         systemImage: "chart.bar.xaxis",
                         description: Text(L10n.text("持仓的当日涨跌还没有读取到。"))
                     )
-                }
-            } else {
-                Section {
+                } else {
                     Text(L10n.text("按持仓当前市值和当日涨跌推算，未计入今日的买入卖出。行情为各标的最近可用报价。"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(CatfolioStyle.pageHorizontalInset)
         }
+        .background(Color(uiColor: .systemBackground))
+        .accessibilityIdentifier("today-detail-scroll")
         .navigationDestination(isPresented: $showsSectorMembers) {
             if let selectedSector {
                 SectorMembersView(breakdown: selectedSector)
@@ -325,8 +237,123 @@ struct TodayDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func contributionRow(_ contribution: Contribution, byPercentage: Bool = false) -> some View {
-        let value = byPercentage ? contribution.changePercent : contribution.amount
+    private var summary: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(L10n.text("今日盈亏"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text(DisplayFormat.money(total, signed: true, fractionDigits: 2))
+                .appNumber(.display, weight: .bold)
+                .foregroundStyle(total >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+            if let benchmarkChange, benchmarkChange.isFinite {
+                HStack(spacing: 5) {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(CatfolioTheme.accent)
+                    Text("SPY")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Text(DisplayFormat.percent(benchmarkChange, signed: true))
+                        .appNumber(.callout, weight: .medium)
+                        .foregroundStyle(benchmarkChange >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
+                }
+                .padding(.top, 2)
+            }
+            if let headline {
+                Text(headline)
+                    .currencyFont(.footnote)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            }
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var sectorSection: some View {
+        let rows = sectorRows
+        let columns = typeSize >= .xxxLarge ? 1 : 2
+        return VStack(alignment: .leading, spacing: 12) {
+            Text(L10n.text("按行业"))
+                .font(.headline)
+            // Eleven sectors at most plus unclassified. Eager rows keep the
+            // scroll content height stable as cards enter and leave the screen.
+            VStack(spacing: 12) {
+                ForEach(Array(stride(from: 0, to: rows.count, by: columns)), id: \.self) { index in
+                    HStack(alignment: .top, spacing: 12) {
+                        sectorCard(rows[index])
+                        if columns == 2 {
+                            if index + 1 < rows.count {
+                                sectorCard(rows[index + 1])
+                            } else {
+                                Color.clear.frame(maxWidth: .infinity).frame(height: 0)
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                    }
+                }
+            }
+            Text(sectorFootnote)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func sectorCard(_ row: SectorBreakdown) -> some View {
+        Button {
+            selectedSector = row
+            showsSectorMembers = true
+        } label: {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 6) {
+                    Image(systemName: row.symbolName)
+                        .accessibilityHidden(true)
+                    Spacer(minLength: 0)
+                    Text(L10n.text("\(row.components.count) 项"))
+                        .font(.caption)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                        .accessibilityHidden(true)
+                }
+                .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(row.displayName)
+                        .font(.body.weight(.medium))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(DisplayFormat.money(row.amount, signed: true, fractionDigits: 2))
+                        .appNumber(.body, weight: .semibold)
+                        .foregroundStyle(row.amount >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .modifier(ContentCard())
+            .contentShape(RoundedRectangle(cornerRadius: CatfolioStyle.cardRadius))
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("today-sector.\(row.id)")
+    }
+
+    private func ranking(_ rows: [Contribution], title: String) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(title + " · %")
+                .font(.headline)
+            VStack(spacing: 12) {
+                ForEach(rows) { contribution in
+                    contributionRow(contribution)
+                    if contribution.id != rows.last?.id { Divider() }
+                }
+            }
+        }
+    }
+
+    private func contributionRow(_ contribution: Contribution) -> some View {
+        let value = contribution.changePercent
         let tint = value >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger
         let money = DisplayFormat.money(contribution.amount, signed: true, fractionDigits: 2)
         let percentage = DisplayFormat.percent(contribution.changePercent, signed: true)
@@ -334,22 +361,23 @@ struct TodayDetailView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(contribution.holding.shortName)
                     .font(.body.weight(.medium))
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
-                Text(byPercentage ? percentage : money)
+                Text(percentage)
                     .appNumber(.subheading, weight: .semibold)
                     .foregroundStyle(tint)
+                    .fixedSize(horizontal: true, vertical: false)
             }
             HStack(spacing: 8) {
-                // Each ranking scales bars in its own unit: money or daily percentage.
+                // Both rankings share the daily percentage scale.
                 GeometryReader { geo in
-                    let ratio = abs(value) / (byPercentage ? largestPercentageMagnitude : largestMagnitude)
+                    let ratio = abs(value) / largestPercentageMagnitude
                     Capsule()
                         .fill(tint.opacity(0.85))
                         .frame(width: max(3, geo.size.width * ratio), height: 5)
                 }
                 .frame(height: 5)
-                Text(byPercentage ? money : percentage)
+                Text(money)
                     .appNumber(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: true, vertical: false)

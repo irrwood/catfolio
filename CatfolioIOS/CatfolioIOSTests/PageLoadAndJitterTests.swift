@@ -132,6 +132,85 @@ final class PageLoadAndJitterTests: XCTestCase {
     }
 
     @MainActor
+    func testTodayDetailKeepsItsMeasuredHeightWhileScrolling() async throws {
+        try await verifyTodayLayout(width: 393, typeSize: .large, scheme: .light)
+    }
+
+    @MainActor
+    func testTodayDetailFitsNarrowScreenInDarkMode() async throws {
+        try await verifyTodayLayout(width: 320, typeSize: .large, scheme: .dark)
+    }
+
+    @MainActor
+    func testTodayDetailFitsAccessibilityTextWithoutHorizontalOverflow() async throws {
+        try await verifyTodayLayout(width: 320, typeSize: .accessibility3, scheme: .light)
+    }
+
+    @MainActor
+    private func verifyTodayLayout(width: CGFloat, typeSize: DynamicTypeSize, scheme: ColorScheme) async throws {
+        let tickers = ["MSFT", "AMZN", "META", "JPM", "XOM", "UNH", "CAT", "PG", "NEE", "PLD", "LIN", "ZZTEST"]
+        let holdings = tickers.enumerated().map { index, ticker in
+            Holding(
+                ticker: ticker, logoSymbol: ticker,
+                displayName: "A long company name for layout verification \(ticker)",
+                sector: nil, source: "test", shares: 10, averageCost: 100,
+                costCurrency: "USD", quotePrice: 110, quoteCurrency: "USD",
+                todayChangePercent: index.isMultiple(of: 2) ? 2.5 : -1.5,
+                marketValue: 1_100, weight: 1.0 / Double(tickers.count),
+                unrealized: 100, unrealizedPercent: 10,
+                fxPnl: nil, fxPnlPercent: nil, fxPnlStatus: nil, fxPnlSource: nil
+            )
+        }
+        let scene = try connectedWindowScene()
+        let previousWindow = scene.windows.first(where: \.isKeyWindow)
+        let host = UIHostingController(rootView:
+            NavigationStack {
+                TodayDetailView(holdings: holdings, dailyChanges: [:], benchmarkChange: 0.5)
+            }
+            .environment(\.dynamicTypeSize, typeSize)
+            .environment(\.colorScheme, scheme)
+            .environment(\.locale, Locale(identifier: "en_US"))
+        )
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: width, height: 720)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer {
+            window.isHidden = true
+            previousWindow?.makeKeyAndVisible()
+        }
+        try await Task.sleep(for: .milliseconds(250))
+        host.view.layoutIfNeeded()
+        let scroll = try XCTUnwrap(descendants(host.view, of: UIScrollView.self)
+            .first { $0.contentSize.height > $0.bounds.height })
+        let initialHeight = scroll.contentSize.height
+        XCTAssertGreaterThan(initialHeight, scroll.bounds.height)
+        XCTAssertLessThanOrEqual(scroll.contentSize.width, scroll.bounds.width + 1)
+
+        // Force every section through the viewport. Estimated nested-grid
+        // heights used to change here and displace the reader's position.
+        let top = -scroll.adjustedContentInset.top
+        let bottom = initialHeight - scroll.bounds.height + scroll.adjustedContentInset.bottom
+        for fraction in [0.0, 0.35, 0.7, 1.0, 0.5, 0.0] {
+            let target = top + (bottom - top) * fraction
+            scroll.setContentOffset(CGPoint(x: 0, y: target), animated: false)
+            try await Task.sleep(for: .milliseconds(100))
+            host.view.layoutIfNeeded()
+            XCTAssertEqual(scroll.contentSize.height, initialHeight, accuracy: 1,
+                           "Scrolling must not remeasure the industry section")
+            XCTAssertEqual(scroll.contentOffset.y, target, accuracy: 1,
+                           "The page must not jump after scrolling settles")
+            XCTAssertLessThanOrEqual(scroll.contentSize.width, scroll.bounds.width + 1)
+        }
+        let attachment = XCTAttachment(image: UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
+            host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+        })
+        attachment.name = "Today-\(Int(width))-\(typeSize)-\(scheme)"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
     private func connectedWindowScene() throws -> UIWindowScene {
         guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
             .first(where: { $0.activationState == .foregroundActive }) else {

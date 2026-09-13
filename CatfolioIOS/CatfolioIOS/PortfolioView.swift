@@ -197,7 +197,6 @@ struct PortfolioView: View {
     @State private var todayTitleExitScrollOffset: CGFloat?
     @State private var holdingsContentTop: CGFloat?
     @State private var homeScrollViewportHeight: CGFloat = 0
-    @Namespace private var todayZoom
     // One namespace per origin. A security shown both in the Today bars and
     // in the holdings list would otherwise publish two sources under the same
     // id, and the transition has no way to know which one it grew from.
@@ -290,7 +289,6 @@ struct PortfolioView: View {
                                             selectedHolding = holding
                                         }
                                         .id("today-contribution")
-                                        .matchedTransitionSource(id: "today-detail", in: todayZoom)
 
                                         PortfolioDetailsCard(
                                             holdings: model.holdings,
@@ -398,7 +396,6 @@ struct PortfolioView: View {
                         dailyChanges: model.holdingDailyChanges,
                         benchmarkChange: model.benchmarkDailyChange
                     )
-                    .navigationTransition(.zoom(sourceID: "today-detail", in: todayZoom))
                 }
             }
             // Inside the stack, so it hides the bar for this screen only.
@@ -612,14 +609,14 @@ private struct TodayContributionCard: View {
                     }
                     .appNumber(.footnote)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                    .frame(height: 20, alignment: .bottomLeading)
+                }
                 // The title, the amount and the line under it all open the
                 // day's detail, up to the direction picker.
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
                 .onTapGesture { onOpenDetail?() }
-                    .minimumScaleFactor(0.72)
-                    .frame(height: 20, alignment: .bottomLeading)
-                }
 
                 directionPicker
             }

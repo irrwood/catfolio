@@ -125,6 +125,7 @@ struct SectorGlassCard: View {
     let value: String
     let tint: Color
     var valueColor: Color = .primary
+    var usesGlass = true
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius, style: .continuous)
@@ -169,7 +170,9 @@ struct SectorGlassCard: View {
     }
 
     @ViewBuilder private var surface: some View {
-        if reduceTransparency {
+        if !usesGlass {
+            content.background(SettingsTemplate.card, in: shape)
+        } else if reduceTransparency {
             content.background(Color(uiColor: .secondarySystemGroupedBackground), in: shape)
                 .overlay(shape.strokeBorder(tint, lineWidth: 1))
         } else if #available(iOS 26.0, *) {

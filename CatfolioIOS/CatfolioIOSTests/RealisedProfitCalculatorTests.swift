@@ -33,6 +33,66 @@ final class RealisedProfitCalculatorTests: XCTestCase {
         )
     }
 
+    private func detailRequest(
+        _ transactions: [LocalTransactionRecord], ticker: String = "AAA",
+        selectedKeys: Set<String>? = nil
+    ) -> HoldingDetailRealisedProfitRequest {
+        var document = LocalPortfolioDocument.empty
+        document.transactions = transactions
+        let keys = Set(transactions.map(\.accountKey))
+        let context = HoldingDetailAccountContext(ticker: ticker, document: document, options: keys.map {
+            HoldingDetailAccountOption(id: $0, displayName: $0, marketValue: 0, currency: "USD", marketValueUSD: 0)
+        })
+        return HoldingDetailRealisedProfitRequest(context: context, accountKeys: selectedKeys ?? keys)
+    }
+
+    func testDetailHidesMissingSalesAndUnavailableCost() {
+        XCTAssertNil(detailRequest([]).summary())
+        XCTAssertNil(detailRequest([trade("BUY", date: "2024-01-01", quantity: 10, price: 100)]).summary())
+        XCTAssertNil(detailRequest([trade("SELL", date: "2024-06-01", quantity: 10, price: 120)]).summary())
+        XCTAssertNil(HoldingDetailRealisedProfitRequest(context: nil, accountKeys: []).summary())
+    }
+
+    func testDetailKeepsZeroAndNegativeBrokerResults() {
+        for result in [0.0, -20.0, 35.0] {
+            let summary = detailRequest([
+                trade("SELL", date: "2024-06-01", quantity: 1, price: 100, result: result, resultCurrency: "USD")
+            ]).summary()
+            XCTAssertNotNil(summary)
+            XCTAssertEqual(summary?.combinedUSD, result)
+        }
+    }
+
+    func testDetailScopesSecurityAndSelectedAccounts() {
+        let first = trade("SELL", date: "2024-06-01", quantity: 1, price: 100, result: 10, resultCurrency: "USD")
+        let second = trade("SELL", date: "2024-06-01", quantity: 1, price: 100, source: "IBKR Flex", result: -4, resultCurrency: "USD")
+        let other = trade("SELL", "BBB", date: "2024-06-01", quantity: 1, price: 100, result: 999, resultCurrency: "USD")
+        let transactions = [first, second, other]
+        XCTAssertEqual(detailRequest(transactions, ticker: "aaa").summary()?.combinedUSD, 6)
+        XCTAssertEqual(detailRequest(transactions, selectedKeys: [first.accountKey]).summary()?.combinedUSD, 10)
+        XCTAssertEqual(detailRequest(transactions, selectedKeys: [second.accountKey]).summary()?.combinedUSD, -4)
+        XCTAssertNil(detailRequest(transactions, selectedKeys: []).summary())
+        XCTAssertNil(detailRequest(transactions, selectedKeys: ["unknown"]).summary())
+    }
+
+    func testDetailUsesCompletePurchaseHistoryForFIFOAndMarksPartialResults() {
+        let buy = trade("BUY", date: "2020-01-01", quantity: 10, price: 100)
+        let sell = trade("SELL", date: "2024-06-01", quantity: 10, price: 120)
+        let summary = detailRequest([buy, sell]).summary()
+        XCTAssertEqual(summary?.combinedUSD, 200)
+        XCTAssertEqual(summary?.estimatedCount, 1)
+        XCTAssertEqual(summary?.isComplete, true)
+        let missing = trade("SELL", date: "2025-06-01", quantity: 1, price: 120)
+        let partial = detailRequest([buy, sell, missing]).summary()
+        XCTAssertEqual(partial?.combinedUSD, 200)
+        XCTAssertEqual(partial?.isComplete, false)
+    }
+
+    func testDetailDoesNotShowUnconvertibleResultsAsZero() {
+        let missingFX = trade("SELL", date: "2024-06-01", quantity: 1, price: 100, result: 20, resultCurrency: "XYZ")
+        XCTAssertNil(detailRequest([missingFX]).summary())
+    }
+
     // MARK: - Broker Results stay exact and unconverted
 
     func testBrokerResultIsKeptInItsOwnCurrency() {

@@ -2255,8 +2255,11 @@
 "收益按持仓市值和成本推算：成本增加视为入金、减少视为出金，没有现金流水。" = "Returns are estimated from holdings' value and cost: a rise in cost counts as a deposit and a fall as a withdrawal, as there is no cash ledger.";
 "收益对比没能按流水重建：%@" = "Performance could not be rebuilt from the records: %@";
 
+"Realised P&L" = "Realised P&L";
 
+"Realised P&L · Known" = "Realised P&L · Known";
 
+"Realised P&L · Est." = "Realised P&L · Est.";
 
 
 "添加对比" = "Add comparison";
@@ -2283,15 +2286,29 @@
 
 "离线证券目录：美股与主要海外市场的股票和 ETF。" = "Offline directory: stocks and ETFs in the US and major overseas markets.";
 
+"历史速览" = "History at a glance";
+"已实现盈亏" = "Realised P/L";
 
+"全部账户 · 全部年份" = "All accounts · All years";
 
+"当前持仓估算" = "Holding estimate";
 
+"无法读取速览，轻点重试" = "Unable to load overview. Tap to retry.";
 
+"正在读取历史汇总…" = "Loading history totals…";
 
+"金额按当前汇率折算；年费用为估算，未从收益重复扣除。" = "Amounts use current exchange rates. Annual fees are estimates and are not deducted again from returns.";
 
+"暂无卖出" = "No sales yet";
 
+"部分数据" = "Partial data";
 
 /* Analyst history controls and empty state */
+"持有" = "Hold";
+"图表" = "Chart";
+"1 年" = "1 year";
+"2 年" = "2 years";
+"来源暂无目标价和股价，可切换查看推荐建议。" = "The source has no price targets or share prices available. Switch to analyst ratings to view recommendations.";
 
 " 等 %@ 天" = " and %@ days in all";
 

@@ -91,6 +91,7 @@ struct SettingsView: View {
                         HistoryView().environment(model)
                     }
                 }
+                SettingsHistoryOverview()
             }
 
             SettingsSection(L10n.text("新建账户")) {
@@ -228,7 +229,6 @@ struct SettingsView: View {
                         value: compactDate(updatedAt)
                     )
                 }
-            }
                 // Problems with the history never stop the chart: they are
                 // listed here, each with what was assumed in its place.
                 let issues = Array(NSOrderedSet(array: (model.portfolioChart?.dataIssues ?? []) + (model.comparison?.dataIssues ?? []))) as? [String] ?? []
@@ -242,6 +242,7 @@ struct SettingsView: View {
                     }
                     .accessibilityIdentifier("settings.data-issues")
                 }
+            }
             if let reconciliation, !reconciliation.reconciles {
                 SettingsFootnote(reconciliationDetail(reconciliation))
             }
@@ -735,6 +736,139 @@ private struct AccountDetailView: View {
             } catch {
                 notice = AccountNotice(title: L10n.text("无法删除账户"), message: error.localizedDescription)
             }
+        }
+    }
+}
+
+/// Uses the same prepared ledger and fund charges as History, across all
+/// accounts and years. Display currency remains a presentation preference.
+private struct SettingsHistoryOverview: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.locale) private var locale
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @AppStorage(DisplayCurrency.preferenceKey) private var displayCurrency = DisplayCurrency.usd.rawValue
+    @State private var prepared: HistoryPreparedLedger?
+    @State private var annualFees: Double?
+    @State private var failed = false
+
+    private struct LoadKey: Hashable {
+        let updatedAt: Date?
+        let accountIDs: Set<String>
+        let investorSelection: String
+        let locale: String
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(L10n.text("历史速览"))
+                    .font(.subheadline.weight(.medium))
+                Spacer()
+                Text(L10n.text("全部账户 · 全部年份"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12),
+                                     count: typeSize.isAccessibilitySize ? 1 : 2), spacing: 12) {
+                overviewCard(.orders, title: L10n.text("已实现盈亏"), icon: "arrow.up.arrow.down",
+                             caption: realisedCaption, amount: realisedAmount, signed: true)
+                overviewCard(.dividends, title: L10n.text("Total dividends"), icon: "banknote",
+                             caption: L10n.text("累计"), amount: total(for: .dividends))
+                overviewCard(.interest, title: L10n.text("Total interest"), icon: "percent",
+                             caption: L10n.text("累计"), amount: total(for: .interest))
+                overviewCard(.fees, title: L10n.text("年费用合计"), icon: "creditcard",
+                             caption: L10n.text("当前持仓估算"), amount: annualFees)
+            }
+            if failed {
+                Button(L10n.text("无法读取速览，轻点重试")) {
+                    Task { await load() }
+                }
+                .font(.caption)
+                .tint(.primary)
+            } else if prepared == nil {
+                ProgressView(L10n.text("正在读取历史汇总…"))
+                    .font(.caption)
+            } else {
+                Text(L10n.text("金额按当前汇率折算；年费用为估算，未从收益重复扣除。"))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityIdentifier("settings.history-overview")
+        .task(id: LoadKey(updatedAt: model.localUpdatedAt,
+                          accountIDs: Set(model.accounts.map(\.id)),
+                          investorSelection: model.publicInvestorSelection, locale: locale.identifier)) {
+            await load()
+        }
+    }
+
+    private var realisedAmount: Double? {
+        guard let calculation = prepared?.realisedTotal,
+              calculation.brokerCount + calculation.estimatedCount > 0 else { return nil }
+        return calculation.combinedUSD
+    }
+
+    private var realisedCaption: String {
+        guard let calculation = prepared?.realisedTotal else { return L10n.text("累计") }
+        if calculation.saleCount == 0 { return L10n.text("暂无卖出") }
+        if !calculation.isComplete { return L10n.text("部分数据") }
+        return L10n.text("累计")
+    }
+
+    private func total(for category: HistoryCategory) -> Double? {
+        prepared?.page(category: category, basis: .calendar, year: nil).totalUSD
+    }
+
+    private func overviewCard(_ category: HistoryCategory, title: String, icon: String,
+                              caption: String, amount: Double?, signed: Bool = false) -> some View {
+        let validAmount = amount.flatMap { $0.isFinite ? $0 : nil }
+        let currency = DisplayCurrency(rawValue: displayCurrency) ?? .usd
+        let value = validAmount.map {
+            DisplayFormat.money(currency.fromUSD($0), currency: currency.rawValue,
+                                signed: signed, fractionDigits: 2)
+        } ?? "—"
+        let color: Color = category == .fees || validAmount == nil || validAmount == 0
+            ? .primary : ((validAmount ?? 0) < 0 ? CatfolioTheme.danger : CatfolioTheme.positive)
+        return NavigationLink {
+            HistoryView(initialCategory: category).environment(model)
+        } label: {
+            SectorGlassCard(title: title, icon: icon, caption: caption, value: value,
+                            tint: .clear, valueColor: color, usesGlass: false)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue("\(caption) · \(value)")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("settings.history-overview.\(category.rawValue.lowercased())")
+    }
+
+    @MainActor
+    private func load() async {
+        prepared = nil
+        annualFees = nil
+        failed = false
+        do {
+            let ledger = try await model.activityLedger()
+            let accountIDs = Set(ledger.accounts.map(\.id))
+            let locale = locale
+            async let holdings = model.holdings(forAccounts: accountIDs)
+            let worker = Task.detached(priority: .utility) {
+                try HistoryPreparedLedger.build(ledger: ledger, accountIDs: accountIDs, locale: locale)
+            }
+            let result = try await withTaskCancellationHandler {
+                try await worker.value
+            } onCancel: { worker.cancel() }
+            let positions = try? await holdings
+            try Task.checkCancellation()
+            if let positions {
+                let charges = HistoryFeeCharge.build(holdings: positions)
+                annualFees = charges.isEmpty ? nil : charges.reduce(0) { $0 + $1.annual }
+            }
+            prepared = result
+        } catch {
+            guard !Task.isCancelled else { return }
+            failed = true
         }
     }
 }

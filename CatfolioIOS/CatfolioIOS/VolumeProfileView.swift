@@ -20,6 +20,7 @@ struct HoldingDetailView: View {
     @State private var priceHistoryError: String?
     @State private var accountContext: HoldingDetailAccountContext?
     @State private var selectedAccountKeys: Set<String> = []
+    @State private var realisedProfit: RealisedProfitSummary?
     @State private var presentationReady = false
     @State private var marketDataRevision = 0
     @State private var completedMarketDataRevision: Int?
@@ -72,7 +73,7 @@ struct HoldingDetailView: View {
             ScrollView {
                 Group {
                 if showsDataDesignPreview {
-                    HoldingPositionDetails(holding: displayedHolding)
+                    HoldingPositionDetails(holding: displayedHolding, realisedProfit: realisedProfit)
                         .padding(.horizontal, HoldingDetailCardStyle.pageInset)
                         .padding(.top, 40)
                         .padding(.bottom, 72)
@@ -153,7 +154,7 @@ struct HoldingDetailView: View {
                             refreshRevision: marketDataRevision)
 
                         if showsPosition {
-                            HoldingPositionDetails(holding: displayedHolding)
+                            HoldingPositionDetails(holding: displayedHolding, realisedProfit: realisedProfit)
                         }
                     }
                     // One 16pt page margin below the price chart, the same as
@@ -187,6 +188,13 @@ struct HoldingDetailView: View {
             // while the native presentation animation is still running. The
             // available holding header renders immediately; only genuinely
             // missing chart sections show their own loading treatment.
+            .task(id: HoldingDetailRealisedProfitRequest(context: accountContext, accountKeys: selectedAccountKeys)) {
+                realisedProfit = nil
+                let request = HoldingDetailRealisedProfitRequest(context: accountContext, accountKeys: selectedAccountKeys)
+                let summary = await Task.detached(priority: .userInitiated) { request.summary() }.value
+                guard !Task.isCancelled else { return }
+                realisedProfit = summary
+            }
             .task(id: marketDataRevision) {
                 guard completedMarketDataRevision != marketDataRevision else { return }
                 isLoadingMarketData = true
@@ -1691,6 +1699,7 @@ struct HoldingDetailHeader: View {
 private struct HoldingPositionDetails: View {
     @Environment(\.locale) private var appLocale
     let holding: Holding
+    var realisedProfit: RealisedProfitSummary? = nil
 
     /// Resolved off the main thread, because reaching for it here would not
     /// be a lookup — it is the first touch of a 6 MB package, and on the
@@ -1732,6 +1741,25 @@ private struct HoldingPositionDetails: View {
         expenseRatio = await Task.detached(priority: .userInitiated) {
             try? FundFeeCatalog.bundled.get().fee(brokerSymbol: ticker)?.rate
         }.value
+    }
+
+    private var realisedProfitRow: HoldingDataRow.Model? {
+        guard let realisedProfit else { return nil }
+        let title: String
+        if !realisedProfit.isComplete {
+            title = L10n.text("Realised P&L · Known")
+        } else if realisedProfit.estimatedCount > 0 {
+            title = L10n.text("Realised P&L · Est.")
+        } else {
+            title = L10n.text("Realised P&L")
+        }
+        let value = realisedProfit.combinedUSD
+        return .init(
+            title: title,
+            icon: .unrealisedProfitLoss,
+            value: DisplayFormat.money(value, signed: true),
+            color: value == 0 ? .secondary : (value > 0 ? CatfolioTheme.gainDefault : CatfolioTheme.lossDefault)
+        )
     }
 
     private var rows: [HoldingDataRow.Model] {
@@ -1789,7 +1817,7 @@ private struct HoldingPositionDetails: View {
                 value: DisplayFormat.percent(holding.unrealizedPercent),
                 color: profitColor
             ),
-        ] + [expenseRatioRow].compactMap { $0 }
+        ] + [realisedProfitRow, expenseRatioRow].compactMap { $0 }
     }
 
     var body: some View {
