@@ -106,6 +106,17 @@ struct SettingsView: View {
                 connector(L10n.text("CSV 导入"), detail: L10n.text("从交易记录创建账户"), icon: "doc.badge.plus") {
                     showsCSVImport = true
                 }
+                // An entry only for now: shown so the direction is visible,
+                // disabled like the photo row below until it is built.
+                SettingsButtonRow(
+                    icon: .symbol("link"),
+                    title: L10n.text("连接交易所账户"),
+                    subtitle: L10n.text("支持 1000+ 家交易所，即将开放"),
+                    subtitleSpacing: 2,
+                    action: {}
+                )
+                .disabled(true)
+                .accessibilityHint(L10n.text("功能暂未开放"))
                 SettingsButtonRow(
                     icon: .symbol("camera"),
                     title: L10n.text("拍照 AI 添加持仓"),

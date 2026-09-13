@@ -194,6 +194,26 @@ final class HomeScrollInteractionTests: XCTestCase {
         XCTAssertTrue(scroll.refreshControl === controller.refreshControl)
     }
 
+    /// On a phone the control, put back before UIKit laid it out, kept a
+    /// zero width and drew its spinner centred on the left edge.
+    @MainActor
+    func testRefreshControlKeepsTheScrollViewWidthWhenPutBack() {
+        let controller = PortfolioHomeScrollController()
+        let scroll = nativeScroll(controller)
+        defer { controller.detach() }
+        controller.refreshControl.frame.size.width = 0
+        controller.scrollViewDidEndDragging(scroll, willDecelerate: false)
+        controller.touchBegan()
+        XCTAssertTrue(scroll.refreshControl === controller.refreshControl)
+        XCTAssertEqual(controller.refreshControl.frame.width, scroll.bounds.width)
+        XCTAssertEqual(controller.refreshControl.frame.minX, 0)
+
+        controller.refreshControl.frame.size.width = 0
+        controller.scrollViewWillBeginDragging(scroll)
+        scroll.contentOffset.y = -60 - scroll.adjustedContentInset.top
+        XCTAssertEqual(controller.refreshControl.frame.width, scroll.bounds.width, "Re-held while pulling")
+    }
+
     @MainActor
     func testAnimationTouchCannotUnlockRefreshEvenAfterZeroCrossing() {
         let controller = PortfolioHomeScrollController()

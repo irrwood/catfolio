@@ -49,7 +49,6 @@ struct PerformanceHeatmapHero<Header: View, Heatmap: View>: View {
     @State private var heatmapSize: CGSize = .zero
     @State private var drift = HeatmapHeroDrift()
     @State private var isSettling = false
-    @State private var tileFrames: [CGRect] = []
 
     var body: some View {
         let hint = IsometricBands.smoothstep(0, HeatmapHeroState.threshold, state.pull)
@@ -64,14 +63,11 @@ struct PerformanceHeatmapHero<Header: View, Heatmap: View>: View {
             heatmapSize: heatmapSize,
             drift: drift,
             drifts: drifts,
-            pulses: !reduceMotion,
-            tileFrames: tileFrames,
             glows: colorScheme == .dark,
             header: header,
             heatmap: heatmap(false),
             onHeaderHeight: { headerHeight = $0 },
-            onHeatmapSize: { heatmapSize = $0 },
-            onTileFrames: { tileFrames = $0 }
+            onHeatmapSize: { heatmapSize = $0 }
         )
         .onChange(of: drifts, initial: true) { _, drifts in
             if drifts { drift.resume(at: .now) } else { drift.pause(at: .now) }
@@ -262,14 +258,11 @@ private struct HeatmapHeroMorph<Header: View, Heatmap: View>: View, Animatable {
     let heatmapSize: CGSize
     let drift: HeatmapHeroDrift
     let drifts: Bool
-    let pulses: Bool
-    let tileFrames: [CGRect]
     let glows: Bool
     let header: Header
     let heatmap: Heatmap
     let onHeaderHeight: (CGFloat) -> Void
     let onHeatmapSize: (CGSize) -> Void
-    let onTileFrames: ([CGRect]) -> Void
 
     /// How much of the page the plane takes below the large title.
     static var collapsedHeight: CGFloat { 250 }
@@ -293,11 +286,6 @@ private struct HeatmapHeroMorph<Header: View, Heatmap: View>: View, Animatable {
                 .allowsHitTesting(isUpright)
                 .accessibilityAction(named: L10n.text("收起持仓热力图")) { state.onToggle() }
             heatmap
-                // The live heatmap reports where its tiles are, which is
-                // where they are in the texture too: the pulses need them.
-                .environment(\.reportsHeatmapTileFrames, true)
-                .coordinateSpace(.named(HeatmapTileFramesKey.space))
-                .onPreferenceChange(HeatmapTileFramesKey.self) { onTileFrames($0) }
                 .onGeometryChange(for: CGSize.self) { $0.size } action: { onHeatmapSize($0) }
                 .opacity(isUpright ? 1 : 0)
                 .allowsHitTesting(isUpright)
@@ -333,9 +321,7 @@ private struct HeatmapHeroMorph<Header: View, Heatmap: View>: View, Animatable {
             e: e,
             canvas: size,
             isometricAnchor: CGPoint(x: size.width / 2, y: top + Self.collapsedHeight * 0.45),
-            uprightOrigin: CGPoint(x: inset, y: top + headerHeight + Self.spacing),
-            // Below the title and above the fade: where a pulse can be seen.
-            pulseBand: (top + 10)...(bottom - 70)
+            uprightOrigin: CGPoint(x: inset, y: top + headerHeight + Self.spacing)
         )
         var bands = IsometricBands(
             // Fully blurred through the large title, clear just below it.
@@ -369,8 +355,7 @@ private struct HeatmapHeroMorph<Header: View, Heatmap: View>: View, Animatable {
                 layer: layer,
                 settings: settings,
                 drift: drift,
-                moves: drifts,
-                tileFrames: pulses ? tileFrames : []
+                moves: drifts
             )
         }
         .overlay {
@@ -398,18 +383,14 @@ private struct HeatmapHeroSurface: View {
         let isometricAnchor: CGPoint
         /// Where the heatmap's top-left corner sits once it stands up.
         let uprightOrigin: CGPoint
-        let pulseBand: ClosedRange<CGFloat>
     }
 
     let textures: HeatmapHeroTextures
-    /// Which copy to draw: the sharp one, with the live pulses, or one of
-    /// the pre-blurred ones.
+    /// Which copy to draw: the sharp one or one of the pre-blurred ones.
     let layer: IsometricLayer
     let settings: Settings
     let drift: HeatmapHeroDrift
     let moves: Bool
-    /// The heatmap's tiles in its own coordinates; empty for no pulses.
-    let tileFrames: [CGRect]
 
     /// The plane is drawn a little smaller than the heatmap stands, so it
     /// reads as a field of tiles rather than a few big ones.
@@ -428,7 +409,6 @@ private struct HeatmapHeroSurface: View {
         let e = settings.e
         let cell = textures.cell
         let travel = drift.travel(at: date)
-        let pulseStrength = 1 - IsometricBands.smoothstep(0, 0.25, e)
 
         ZStack(alignment: .topLeading) {
             SettingsTemplate.pageBackground
@@ -457,16 +437,6 @@ private struct HeatmapHeroSurface: View {
                         .frame(width: cell.width, height: cell.height, alignment: .top)
                         .clipped()
                 }
-                if layer == .sharp, pulseStrength > 0 {
-                    ForEach(pulses(cell: cell, at: date)) { pulse in
-                        HeatmapHeroPulseTile(
-                            image: textures.heatmap,
-                            cell: cell,
-                            pulse: pulse,
-                            strength: pulse.strength * pulseStrength
-                        )
-                    }
-                }
             }
             .frame(width: cell.width, height: cell.height, alignment: .topLeading)
             .transformEffect(transform(e: e, cell: cell, travel: travel))
@@ -481,51 +451,6 @@ private struct HeatmapHeroSurface: View {
         case let .blur(index): textures.blurred[index]
         case let .glow(index): textures.glows[index]
         }
-    }
-
-    /// The tiles lit at this moment. A new pulse starts every
-    /// `HeatmapHeroPulse.interval`; each picks, from its own seed, a tile in
-    /// one of the copies around the main one that was in sight when it
-    /// started, so it stays on the same tile for its whole life.
-    private func pulses(cell: CGSize, at date: Date) -> [HeatmapHeroPulse] {
-        let tiles = tileFrames.filter { min($0.width, $0.height) >= 24 }
-        guard !tiles.isEmpty else { return [] }
-        let now = date.timeIntervalSinceReferenceDate
-        let interval = HeatmapHeroPulse.interval
-        let newest = Int((now / interval).rounded(.down))
-        let oldest = newest - Int((HeatmapHeroPulse.duration / interval).rounded(.up))
-        var result: [HeatmapHeroPulse] = []
-        for slot in oldest...newest {
-            let start = Double(slot) * interval
-            let age = now - start
-            guard age >= 0, age < HeatmapHeroPulse.duration else { continue }
-            let lying = transform(
-                e: 0, cell: cell,
-                travel: drift.travel(at: Date(timeIntervalSinceReferenceDate: start))
-            )
-            var seed = UInt64(bitPattern: Int64(slot))
-            for _ in 0..<12 {
-                seed = HeatmapHeroPulse.mix(seed)
-                let tile = tiles[Int(seed % UInt64(tiles.count))]
-                seed = HeatmapHeroPulse.mix(seed)
-                let column = CGFloat(Int(seed % 3) - 1)
-                seed = HeatmapHeroPulse.mix(seed)
-                let row = Int(seed % 4) - 1
-                let origin = CGPoint(
-                    x: column * cell.width + (row.isMultiple(of: 2) ? 0 : cell.width / 2),
-                    y: CGFloat(row) * cell.height
-                )
-                let centre = CGPoint(x: origin.x + tile.midX, y: origin.y + tile.midY).applying(lying)
-                guard settings.pulseBand.contains(centre.y),
-                      centre.x > 20, centre.x < settings.canvas.width - 20 else { continue }
-                result.append(HeatmapHeroPulse(
-                    id: slot, tile: tile, origin: origin,
-                    strength: HeatmapHeroPulse.envelope(age: age)
-                ))
-                break
-            }
-        }
-        return result
     }
 
     /// Cell coordinates to canvas coordinates: around an anchor that slides
@@ -556,82 +481,4 @@ private struct HeatmapHeroSurface: View {
             .concatenating(linear)
             .concatenating(CGAffineTransform(translationX: target.x, y: target.y))
     }
-}
-
-/// One tile lighting up and fading back while the plane lies down.
-struct HeatmapHeroPulse: Identifiable {
-    static let interval: Double = 0.5
-    static let duration: Double = 2.2
-    private static let rise: Double = 0.45
-
-    let id: Int
-    /// The tile, in the heatmap's coordinates.
-    let tile: CGRect
-    /// The copy of the heatmap it is in, in cell coordinates.
-    let origin: CGPoint
-    let strength: CGFloat
-
-    /// Quick to light, slow to fade.
-    static func envelope(age: Double) -> CGFloat {
-        let up = IsometricBands.smoothstep(0, CGFloat(rise), CGFloat(age))
-        let down = 1 - IsometricBands.smoothstep(CGFloat(rise), CGFloat(duration), CGFloat(age))
-        return min(up, down)
-    }
-
-    /// SplitMix64: a well-spread next value from any seed.
-    static func mix(_ seed: UInt64) -> UInt64 {
-        var z = seed &+ 0x9E37_79B9_7F4A_7C15
-        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
-        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
-        return z ^ (z >> 31)
-    }
-}
-
-/// A lit tile: the tile's own pixels, brighter and more saturated, with a
-/// halo of the same colour added around it.
-private struct HeatmapHeroPulseTile: View {
-    let image: Image
-    let cell: CGSize
-    let pulse: HeatmapHeroPulse
-    let strength: CGFloat
-
-    var body: some View {
-        let tile = pulse.tile
-        // The tile's own corner, as `HoldingsHeatmapTile` draws it.
-        let radius = min(11, min(tile.width, tile.height) * 0.25)
-        let lit = image
-            .resizable()
-            .frame(width: cell.width, height: cell.height)
-            .offset(x: -tile.minX, y: -tile.minY)
-            .frame(width: tile.width, height: tile.height, alignment: .topLeading)
-            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .brightness(0.3 * strength)
-            .saturation(1 + 0.6 * strength)
-
-        ZStack(alignment: .topLeading) {
-            lit
-                .blur(radius: 12)
-                .opacity(0.8 * strength)
-                .blendMode(.plusLighter)
-            lit
-        }
-        .offset(x: pulse.origin.x + tile.minX, y: pulse.origin.y + tile.minY)
-        .allowsHitTesting(false)
-    }
-}
-
-/// Where each heatmap tile is, in the heatmap's own coordinates. Tiles only
-/// report it under `reportsHeatmapTileFrames`, which the hero sets on its
-/// live heatmap.
-struct HeatmapTileFramesKey: PreferenceKey {
-    static let space = "heatmap.tiles"
-    static var defaultValue: [CGRect] { [] }
-
-    static func reduce(value: inout [CGRect], nextValue: () -> [CGRect]) {
-        value += nextValue()
-    }
-}
-
-extension EnvironmentValues {
-    @Entry var reportsHeatmapTileFrames = false
 }

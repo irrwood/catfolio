@@ -157,6 +157,7 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
             scroll.addGestureRecognizer(observer)
             touchObserver = observer
             scroll.refreshControl = refreshControl
+            alignRefreshControl()
         }
         if scroll.delegate !== self {
             forwardedDelegate = scroll.delegate
@@ -217,6 +218,22 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
         if !gate.isRefreshing {
             scroll.refreshControl = gate.permitsRefresh ? refreshControl : nil
         }
+        alignRefreshControl()
+    }
+
+    /// The control is taken off and put back as touches lock and unlock
+    /// refresh. Put back before UIKit has laid it out, it can keep a zero
+    /// width, and its spinner is then centred on the left edge — half of it
+    /// showing beside the account name. Hold it to the scroll view's width.
+    func alignRefreshControl() {
+        guard let scroll = scrollView, scroll.refreshControl === refreshControl else { return }
+        let width = scroll.bounds.width
+        var frame = refreshControl.frame
+        guard width > 0, abs(frame.width - width) > 0.5 || abs(frame.minX) > 0.5 else { return }
+        frame.origin.x = 0
+        frame.size.width = width
+        refreshControl.frame = frame
+        refreshControl.layoutIfNeeded()
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
@@ -251,6 +268,7 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
             }
         }
         forwardedDelegate?.scrollViewDidScroll?(scrollView)
+        if raw < 0 { alignRefreshControl() }
         // Signed animation offsets also pin the hero during the lower-stop
         // overshoot. Only eligible native pulls are exposed as pull distance.
         onOffset(isSettling || (!gate.permitsRefresh && !gate.isRefreshing) ? offset : max(0, offset),

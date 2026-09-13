@@ -328,6 +328,8 @@
 "公开披露" = "Public disclosures";
 "公用事业" = "Utilities";
 "关于" = "About";
+"连接交易所账户" = "Connect exchange accounts";
+"支持 1000+ 家交易所，即将开放" = "1,000+ exchanges · coming soon";
 "收入构成" = "Revenue mix";
 "产品与业务" = "Products & business";
 "地区" = "Regions";
@@ -1936,3 +1938,4 @@
 "Unrealised P&L %" = "Unrealised P&L %";
 "Polymarket · %@ 个相关事件" = "Polymarket · %@ related events";
 "峰值" = "Peak";
+"AI" = "AI";
