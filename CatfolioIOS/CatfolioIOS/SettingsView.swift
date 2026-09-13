@@ -112,7 +112,7 @@ struct SettingsView: View {
                 SettingsButtonRow(
                     icon: .symbol("link"),
                     title: L10n.text("连接交易所账户"),
-                    subtitle: L10n.text("支持 1000+ 家交易所，即将开放"),
+                    subtitle: L10n.text("支持 2000+ 家交易所，即将开放"),
                     subtitleSpacing: 2,
                     action: {}
                 )

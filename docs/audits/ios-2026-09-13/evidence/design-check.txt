@@ -1,0 +1,100 @@
+Design rule violations:
+
+CycleComparison.swift: 1 font(s) built outside the type tokens
+    CycleComparison.swift:399
+    Use Typography.number(size:) or Typography.text(size:).
+
+IsometricHeatmapLab.swift: 2 font(s) built outside the type tokens
+    IsometricHeatmapLab.swift:455
+    IsometricHeatmapLab.swift:458
+    Use Typography.number(size:) or Typography.text(size:).
+
+SectorPerformance.swift: 1 font(s) built outside the type tokens
+    SectorPerformance.swift:100
+    Use Typography.number(size:) or Typography.text(size:).
+
+SectorRotationView.swift: 3 font(s) built outside the type tokens
+    SectorRotationView.swift:58
+    SectorRotationView.swift:69
+    SectorRotationView.swift:78
+    Use Typography.number(size:) or Typography.text(size:).
+
+SecurityDebateView.swift: 5 font(s) built outside the type tokens
+    SecurityDebateView.swift:789
+    SecurityDebateView.swift:816
+    SecurityDebateView.swift:828
+    SecurityDebateView.swift:843
+    SecurityDebateView.swift:844
+    Use Typography.number(size:) or Typography.text(size:).
+
+StockChartsRotationView.swift: 12 font(s) built outside the type tokens
+    StockChartsRotationView.swift:27
+    StockChartsRotationView.swift:32
+    StockChartsRotationView.swift:52
+    StockChartsRotationView.swift:115
+    StockChartsRotationView.swift:118
+    StockChartsRotationView.swift:132
+    StockChartsRotationView.swift:157
+    StockChartsRotationView.swift:158
+    StockChartsRotationView.swift:160
+    StockChartsRotationView.swift:169
+    StockChartsRotationView.swift:183
+    StockChartsRotationView.swift:184
+    Use Typography.number(size:) or Typography.text(size:).
+
+CycleComparison.swift: 1 figure(s) scaled outside DisplayFormat, budget 0
+    CycleComparison.swift:472
+    Use DisplayFormat.compact or .compactMoney.
+
+CycleComparison.swift: 11 colour literals, budget 0
+    CycleComparison.swift:452
+    CycleComparison.swift:454
+    CycleComparison.swift:455
+    CycleComparison.swift:456
+    CycleComparison.swift:457
+
+HoldingContributionChart.swift: 3 colour literals, budget 0
+    HoldingContributionChart.swift:315
+    HoldingContributionChart.swift:323
+    HoldingContributionChart.swift:325
+
+OptionsOIView.swift: 1 colour literals, budget 0
+    OptionsOIView.swift:546
+
+ReturnsView.swift: 17 colour literals, budget 9
+    ReturnsView.swift:427
+    ReturnsView.swift:428
+    ReturnsView.swift:429
+    ReturnsView.swift:430
+    ReturnsView.swift:431
+    ReturnsView.swift:432
+    ReturnsView.swift:433
+    ReturnsView.swift:436
+    ReturnsView.swift:437
+    ReturnsView.swift:443
+    ReturnsView.swift:444
+    ReturnsView.swift:445
+    ReturnsView.swift:446
+    ReturnsView.swift:447
+
+SectorRotationUIKit.swift: 16 colour literals, budget 0
+    SectorRotationUIKit.swift:57
+    SectorRotationUIKit.swift:58
+    SectorRotationUIKit.swift:59
+    SectorRotationUIKit.swift:72
+    SectorRotationUIKit.swift:216
+
+SettingsTemplate.swift: 5 colour literals, budget 0
+    SettingsTemplate.swift:124
+    SettingsTemplate.swift:157
+    SettingsTemplate.swift:182
+    SettingsTemplate.swift:191
+    SettingsTemplate.swift:197
+
+StockChartsRotationUIKit.swift: 1 colour literals, budget 0
+    StockChartsRotationUIKit.swift:169
+
+UnderwaterAnalysisChart.swift: 1 colour literals, budget 0
+    UnderwaterAnalysisChart.swift:573
+
+Name a token or the shared ladder instead. See CatfolioIOS/DESIGN.md.

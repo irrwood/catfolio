@@ -277,5 +277,22 @@
   "关闭": "Close",
   "关闭截图": "Close screenshot",
   "上一张截图": "Previous screenshot",
-  "下一张截图": "Next screenshot"
+  "下一张截图": "Next screenshot",
+  "投资管理 · 金融学习": "Portfolio management · Financial learning",
+  "管理你的投资。": "Manage your investments.",
+  "也读懂投资背后的知识。": "Understand the ideas behind them.",
+  "Catfolio 是投资管理平台，也是一个在使用中学习的地方。从自己的持仓出发，把金融概念放回具体的数据与图表，在每一次查看、比较和复盘中，积累更多金融知识。": "Catfolio is a place to manage your investments and learn as you go. Start with your own holdings, connect financial concepts to real figures and charts, and build your understanding as you explore, compare, and review.",
+  "从收益中学习": "Learn from returns",
+  "赚了多少，也理解怎么算。 ↗": "See the return. Understand the calculation. ↗",
+  "结合收益来源、TWR、MWR 与回撤，理解现金流、收益口径和风险之间的关系。": "Explore return sources, TWR, MWR, and drawdowns to understand how cash flows, performance measures, and risk relate.",
+  "从公司中学习": "Learn from companies",
+  "看股价，也读懂生意。 ↗": "Follow the price. Understand the business. ↗",
+  "从收入、利润和现金流，到估值、分析师预期与成交量，让公司研究有更具体的依据。": "From revenue, profit, and cash flow to valuation, analyst expectations, and trading volume, ground your company research in the details.",
+  "从组合中学习": "Learn from your portfolio",
+  "看清持仓，也认识配置。 ↗": "Know your holdings. Understand allocation. ↗",
+  "通过行业拆分、ETF 穿透与汇率影响，理解分散投资、重叠暴露和跨市场投资。": "Use sector breakdowns, ETF look-through, and currency effects to explore diversification, overlapping exposure, and investing across markets.",
+  "带着问题继续探索": "Keep exploring with questions",
+  "把不懂的，变成下一步。 ↗": "Let a question guide your next step. ↗",
+  "连接自己的 AI，围绕组合与金融概念提问，再结合数据和来源核对理解。": "Connect your own AI to ask about your portfolio and financial concepts, then check your understanding against data and sources.",
+  "边管理，边学习 ↗": "Manage and learn ↗"
 }

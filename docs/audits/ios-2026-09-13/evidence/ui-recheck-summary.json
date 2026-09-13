@@ -1,0 +1,49 @@
+{
+  "devicesAndConfigurations" : [
+    {
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "271110E9-674E-40D1-B6DA-09D5BB0AD916",
+        "deviceName" : "Catfolio Audit 20260913",
+        "modelName" : "iPhone 17 Pro",
+        "osBuildNumber" : "23F77",
+        "osVersion" : "26.5",
+        "platform" : "iOS Simulator"
+      },
+      "expectedFailures" : 0,
+      "failedTests" : 1,
+      "passedTests" : 1,
+      "skippedTests" : 0,
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ],
+  "environmentDescription" : "CatfolioIOS · Built with macOS 26.6.2",
+  "expectedFailures" : 0,
+  "failedTests" : 1,
+  "finishTime" : 1789312464.108,
+  "passedTests" : 1,
+  "result" : "Failed",
+  "skippedTests" : 0,
+  "startTime" : 1789312371.32,
+  "statistics" : [
+
+  ],
+  "testFailures" : [
+    {
+      "failureText" : "XCTAssertNil failed: \"<SwiftUI.UIKitRefreshControl: 0x10c28f480; baseClass = UIRefreshControl; frame = (0 0; 55.3333 60); hidden = YES; autoresize = W; layer = <CALayer: 0x10c2fd980>>\"",
+      "targetName" : "CatfolioIOSTests",
+      "testIdentifier" : 1,
+      "testIdentifierString" : "HoldingDetailInteractionTests/testDetailRemovesInheritedRefreshWithoutDisablingParentOrChildRefresh()",
+      "testIdentifierURL" : "test://com.apple.xcode/CatfolioIOS/CatfolioIOSTests/HoldingDetailInteractionTests/testDetailRemovesInheritedRefreshWithoutDisablingParentOrChildRefresh",
+      "testName" : "testDetailRemovesInheritedRefreshWithoutDisablingParentOrChildRefresh()"
+    }
+  ],
+  "title" : "Test - CatfolioIOS",
+  "topInsights" : [
+
+  ],
+  "totalTestCount" : 2
+}

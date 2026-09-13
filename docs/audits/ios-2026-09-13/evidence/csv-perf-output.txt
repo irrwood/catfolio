@@ -1,0 +1,19 @@
+CSV_PREVIEW bytes=40950048 rows=650001 seconds=13.65989899635315
+       14.31 real         3.08 user         0.39 sys
+           128860160  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               27065  page reclaims
+                  30  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  12  voluntary context switches
+               58322  involuntary context switches
+         44665759404  instructions retired
+         10272177770  cycles elapsed
+           200589936  peak memory footprint

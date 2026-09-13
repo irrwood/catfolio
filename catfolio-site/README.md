@@ -75,3 +75,5 @@ python3 catfolio-site/render_features.py
 Maintain page copy in `translations.en.json` and feature copy in `features.en.json`. Run `python3 catfolio-site/render_features.py` to regenerate both languages; `render_english.py` rejects missing translations, mismatched feature IDs, and unexpected untranslated Chinese. New Chinese content needs a corresponding English translation.
 
 Verified English/Chinese switching with section retention, category counts, screenshot dialog, interaction captions, download dialog, and desktop/390px mobile layouts without horizontal overflow. Local asset/link checks and JavaScript syntax check pass. No external deployment performed.
+
+新增中英文「投资管理 · 金融学习」专区，定位为结合持仓、图表、复盘和 AI 问答的使用中学习，连接收益来源、个股研究、组合透视和自有 AI 四个现有章节；未宣称独立课程或学习进度系统。

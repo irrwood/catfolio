@@ -510,7 +510,8 @@ private final class RotationVectorSurface {
         // about half strength, and the white highlights nearly gone, since a
         // white patch on black reads as a grey smudge rather than light.
         func tone(_ color: UIColor) -> UIColor {
-            guard dark else { return color }
+            // Label glazes have their own night paints and opacity below.
+            guard dark, !glazesOnly else { return color }
             var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
             color.getRed(&r, green: &g, blue: &b, alpha: &a)
             let neutral = r > 0.99 && g > 0.99 && b > 0.99
@@ -525,8 +526,10 @@ private final class RotationVectorSurface {
             (.init(x:-121,y:146,width:241,height:241), [rgb(0xE93620,0.5)], [0], .zero,.zero,54.55),
             (.init(x:126,y:-239,width:394,height:394), [rgb(0x47FF2A,0.6),rgb(0xC9FF97,0.6)], [0,1], .init(x:357,y:-42),.init(x:278.5,y:198.5),54.55),
             (.init(x:130,y:72,width:109,height:109), [UIColor.white.withAlphaComponent(0.5)], [0], .zero,.zero,25),
-            (.init(x:-2,y:208,width:72,height:41), [rgb(0xF59FA5)], [0], .zero,.zero,10),
-            (.init(x:0,y:0,width:90,height:38), [rgb(0xEF93FE)], [0], .zero,.zero,10)
+            // Pastel glazes wash out the dark corners and compete with the labels.
+            // Use a faint tint matching each quadrant on the night surface.
+            (.init(x:-2,y:208,width:72,height:41), [dark ? rgb(0xE93620,0.16) : rgb(0xF59FA5)], [0], .zero,.zero,10),
+            (.init(x:0,y:0,width:90,height:38), [dark ? rgb(0xE235FF,0.16) : rgb(0xEF93FE)], [0], .zero,.zero,10)
         ]
         for (rect, colors, stops, start, end, blur) in (glazesOnly ? Array(layers.suffix(2)) : Array(layers.prefix(6))) {
             let source = UIGraphicsImageRenderer(size: size, format: format).image { renderer in

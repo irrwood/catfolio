@@ -1,0 +1,10 @@
+FX_UNITS raw=1666.6666666666674GBP; caller displays=1666.6666666666674USD; expected USD=2000.000000000001
+FX_STALE returned 2024-01-03 for 2026-09-13 within 7 days; match=carriedForward(daysBack: 1)
+FX_ACCOUNT FIFO remainingCost=20000.0, expected=10000; fx=0.0, expectedGBP=1666.6666666666674
+UK_PRIORITY audit|A|s1 -> ["thirtyDay(acquired: \"2024-01-10\")"]
+UK_PRIORITY audit|A|s2 -> ["section104"]
+TWR_REAL_MOVE nav=1, expected=1.6; inventedInflow=60
+CSV_SPLIT remaining=[], expected=[50.0]; warnings=[]
+CSV_CRLF records=1
+CSV_CRLF failed: invalidCSV("没有有效交易")
+FIFO_TIME outcomes=[repros.RealisedSale.Outcome.estimated(usd: 1500.0)]; expectedProfit=1000

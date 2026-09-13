@@ -1,0 +1,275 @@
+{
+  "captured_at": "2026-09-13T15:22:08.468638+00:00",
+  "anchors": [
+    {
+      "path": "CatfolioIOS/CatfolioIOS/MoomooOAuthClient.swift",
+      "line": 475,
+      "sha256": "d8eea0b7db716dbbafed4193fbe481d69b2d4136b4b55cb7cdb4d692d1494e39",
+      "excerpt": "471:                         accessToken: token.accessToken\n472:                     )\n473:                     allFills.append(contentsOf: fills.map { $0.assigned(to: account.accountID) })\n474:                 } catch {\n475:                     historyWarnings.append(L10n.text(\"\\(account.accountCardNumber) · \\(market)：历史成交未完整同步\"))\n476:                 }\n477:             }\n478:         }\n479:         guard !allPositions.isEmpty else { throw MoomooOpenAPIError.noPositions }\n480:         return MoomooSnapshot(\n481:             accounts: accounts,\n482:             positions: allPositions,\n483:             fills: allFills,\n484:             accountCurrencies: accountCurrencies,\n485:             historyWarnings: historyWarnings\n486:         )\n487:     }"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/APIClient.swift",
+      "line": 977,
+      "sha256": "46053d5529e8747013328c73c23772edb032daf74d1a5c935d6c327c1abe31a4",
+      "excerpt": "973:         return try await replace(\n974:             enriched,\n975:             source: \"Moomoo\",\n976:             warnings: warnings,\n977:             transactions: transactions,\n978:             replacingAccountsOnly: replacingAccountsOnly\n979:         )\n980:     }\n981: \n982:     func importIBKR(\n983:         _ snapshot: IBKRFlexSnapshot,\n984:         accountNames: [String: String] = [:],\n985:         replacingAccountsOnly: Bool = false\n986:     ) async throws -> CSVImportResult {\n987:         var warnings: [String] = []\n988:         let positions = snapshot.positions.compactMap { position -> LocalPositionRecord? in\n989:             guard position.quantity > 0 else { return nil }"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/LocalPortfolioStore.swift",
+      "line": 1425,
+      "sha256": "e198f28b6974ad37414d4045edbfa06f07fedb20d36cd5e0beb978df5879a728",
+      "excerpt": "1421:         }\n1422:         let sources = Set(combinedPositions.map(\\.source)).sorted()\n1423:         let combinedTransactions: [LocalTransactionRecord]\n1424:         if let transactions {\n1425:             let previousByID = Dictionary((previous.transactions ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })\n1426:             combinedTransactions = (previous.transactions ?? []).filter { transaction in\n1427:                 replacingAccountsOnly\n1428:                     ? !incomingAccountKeys.contains(transaction.accountKey)\n1429:                     : transaction.source != source\n1430:             } + transactions.map { $0.preservingBrokerResult(from: previousByID[$0.id]) }\n1431:         } else {\n1432:             combinedTransactions = previous.transactions ?? []\n1433:         }\n1434:         let document = LocalPortfolioDocument(\n1435:             schemaVersion: 4,\n1436:             source: sources.joined(separator: \" + \"),\n1437:             updatedAt: now,"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/APIClient.swift",
+      "line": 935,
+      "sha256": "46053d5529e8747013328c73c23772edb032daf74d1a5c935d6c327c1abe31a4",
+      "excerpt": "931:                 accountName: accountNames[position.accountID] ?? Self.maskedAccountName(provider: \"Moomoo\", accountID: position.accountID),\n932:                 accountCurrency: snapshot.accountCurrencies[position.accountID]\n933:             )\n934:         }\n935:         let positionCurrencies = snapshot.positions.reduce(into: [String: String]()) { result, position in\n936:             result[\"\\(position.accountID)|\\(position.code.uppercased())\"] = position.currency.uppercased()\n937:         }\n938:         let transactions = snapshot.fills.compactMap { fill -> LocalTransactionRecord? in\n939:             guard fill.quantity > 0, fill.price > 0, !fill.date.isEmpty else { return nil }\n940:             let side = fill.side.uppercased()\n941:             let action: String\n942:             if [\"BUY\", \"BUY_BACK\"].contains(side) {\n943:                 action = \"BUY\"\n944:             } else if [\"SELL\", \"SELL_SHORT\"].contains(side) {\n945:                 action = \"SELL\"\n946:             } else {\n947:                 return nil"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/APIClient.swift",
+      "line": 949,
+      "sha256": "46053d5529e8747013328c73c23772edb032daf74d1a5c935d6c327c1abe31a4",
+      "excerpt": "945:                 action = \"SELL\"\n946:             } else {\n947:                 return nil\n948:             }\n949:             guard let currency = positionCurrencies[\"\\(fill.accountID)|\\(fill.code.uppercased())\"] else {\n950:                 return nil\n951:             }\n952:             return LocalTransactionRecord(\n953:                 date: fill.date,\n954:                 action: action,\n955:                 ticker: Self.moomooTicker(fill.code),\n956:                 quantity: fill.quantity,\n957:                 price: fill.price,\n958:                 currency: currency,\n959:                 source: \"Moomoo\",\n960:                 accountID: fill.accountID,\n961:                 accountName: accountNames[fill.accountID],"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/MoomooOAuthClient.swift",
+      "line": 463,
+      "sha256": "d8eea0b7db716dbbafed4193fbe481d69b2d4136b4b55cb7cdb4d692d1494e39",
+      "excerpt": "459:             allPositions.append(contentsOf: assignedPositions)\n460: \n461:             accountCurrencies[account.accountID] = reportingCurrency\n462: \n463:             let markets = Set(assignedPositions.compactMap {\n464:                 Self.tradeMarket(forCode: $0.code)\n465:             })\n466:             for market in markets.sorted() {\n467:                 do {\n468:                     let fills = try await fetchHistoricalFills(\n469:                         encodedAccountID: encodedID,\n470:                         market: market,\n471:                         accessToken: token.accessToken\n472:                     )\n473:                     allFills.append(contentsOf: fills.map { $0.assigned(to: account.accountID) })\n474:                 } catch {\n475:                     historyWarnings.append(L10n.text(\"\\(account.accountCardNumber) · \\(market)：历史成交未完整同步\"))"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/IBKRFlexClient.swift",
+      "line": 225,
+      "sha256": "29b78cbbc4a667cdcf8b7e763877c6a974554611ce8d2113aa0ce990aa9d690f",
+      "excerpt": "221:                     status.errorMessage ?? L10n.text(\"报表生成失败\")\n222:                 )\n223:             }\n224:             let snapshot = try parseStatement(statementData)\n225:             guard !snapshot.positions.isEmpty else { throw IBKRFlexError.noPositions }\n226:             return snapshot\n227:         }\n228:         throw IBKRFlexError.generationTimedOut\n229:     }\n230: \n231:     private func data(from url: URL) async throws -> Data {\n232:         var request = URLRequest(url: url)\n233:         request.timeoutInterval = 30\n234:         request.cachePolicy = .reloadIgnoringLocalCacheData\n235:         request.setValue(\"CatfolioIOS/1.0\", forHTTPHeaderField: \"User-Agent\")\n236:         request.setValue(\"application/xml,text/xml\", forHTTPHeaderField: \"Accept\")\n237:         let (data, response) = try await session.data(for: request)"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/MoomooOAuthClient.swift",
+      "line": 479,
+      "sha256": "d8eea0b7db716dbbafed4193fbe481d69b2d4136b4b55cb7cdb4d692d1494e39",
+      "excerpt": "475:                     historyWarnings.append(L10n.text(\"\\(account.accountCardNumber) · \\(market)：历史成交未完整同步\"))\n476:                 }\n477:             }\n478:         }\n479:         guard !allPositions.isEmpty else { throw MoomooOpenAPIError.noPositions }\n480:         return MoomooSnapshot(\n481:             accounts: accounts,\n482:             positions: allPositions,\n483:             fills: allFills,\n484:             accountCurrencies: accountCurrencies,\n485:             historyWarnings: historyWarnings\n486:         )\n487:     }\n488: \n489:     private static func tradeMarket(forCode code: String) -> String? {\n490:         guard let rawPrefix = code.split(separator: \".\", maxSplits: 1).first else { return nil }\n491:         switch rawPrefix.uppercased() {"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/LocalPortfolioStore.swift",
+      "line": 1392,
+      "sha256": "e198f28b6974ad37414d4045edbfa06f07fedb20d36cd5e0beb978df5879a728",
+      "excerpt": "1388:         replacingAccountsOnly: Bool = false,\n1389:         syncedAccounts: [PortfolioAccount] = []\n1390:     ) throws -> LocalPortfolioDocument {\n1391:         let previous = try load()\n1392:         let incomingAccountKeys = Set(positions.map(\\.accountKey)).union(syncedAccounts.map(\\.id)).union((transactions ?? []).map(\\.accountKey))\n1393:         guard !replacingAccountsOnly || !incomingAccountKeys.isEmpty else { throw LocalPortfolioError.noPortfolio }\n1394:         let combinedPositions = previous.positions.filter { position in\n1395:             replacingAccountsOnly\n1396:                 ? !incomingAccountKeys.contains(position.accountKey)\n1397:                 : position.source != source\n1398:         } + positions\n1399:         let now = Date()\n1400:         let date = DayDateFormatter.shared.string(from: now)\n1401:         let totals = try LocalPortfolioEngine.totals(for: combinedPositions)\n1402:         let groupedAccounts = Dictionary(grouping: combinedPositions, by: \\.accountKey)\n1403:         let accountTotals = try groupedAccounts.mapValues { accountPositions in\n1404:             let totals = try LocalPortfolioEngine.totals(for: accountPositions)"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/LocalPortfolioStore.swift",
+      "line": 2513,
+      "sha256": "e198f28b6974ad37414d4045edbfa06f07fedb20d36cd5e0beb978df5879a728",
+      "excerpt": "2509: \n2510:     /// RFC 4180-style records shared by the manual importer and broker CSV\n2511:     /// downloads. Keeping the parser local means downloaded statements never\n2512:     /// need to leave the iPhone for conversion.\n2513:     static func parseRecords(_ text: String) -> [[String]] {\n2514:         let delimiter = detectedDelimiter(in: text)\n2515:         var records: [[String]] = []\n2516:         var record: [String] = []\n2517:         var field = \"\"\n2518:         var insideQuotes = false\n2519:         var index = text.startIndex\n2520:         while index < text.endIndex {\n2521:             let character = text[index]\n2522:             if character == \"\\\"\" {\n2523:                 let next = text.index(after: index)\n2524:                 if insideQuotes, next < text.endIndex, text[next] == \"\\\"\" {\n2525:                     field.append(\"\\\"\")"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/LocalPortfolioStore.swift",
+      "line": 2533,
+      "sha256": "e198f28b6974ad37414d4045edbfa06f07fedb20d36cd5e0beb978df5879a728",
+      "excerpt": "2529:                 }\n2530:             } else if character == delimiter, !insideQuotes {\n2531:                 record.append(field)\n2532:                 field = \"\"\n2533:             } else if (character == \"\\n\" || character == \"\\r\"), !insideQuotes {\n2534:                 if character == \"\\n\" || !record.isEmpty || !field.isEmpty {\n2535:                     record.append(field)\n2536:                     if record.contains(where: { !$0.isEmpty }) { records.append(record) }\n2537:                     record = []\n2538:                     field = \"\"\n2539:                 }\n2540:             } else {\n2541:                 field.append(character)\n2542:             }\n2543:             index = text.index(after: index)\n2544:         }\n2545:         record.append(field)"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/LocalPortfolioStore.swift",
+      "line": 2354,
+      "sha256": "e198f28b6974ad37414d4045edbfa06f07fedb20d36cd5e0beb978df5879a728",
+      "excerpt": "2350:             var name = \"\"\n2351:             var openedDate: Date?\n2352:         }\n2353:         var states: [String: PositionState] = [:]\n2354:         for transaction in transactions.sorted(by: { $0.date < $1.date }) {\n2355:             guard transaction.action == \"BUY\" || transaction.action == \"SELL\" else { continue }\n2356:             var state = states[transaction.ticker] ?? PositionState()\n2357:             state.currency = transaction.currency\n2358:             if !transaction.name.isEmpty { state.name = transaction.name }\n2359:             if transaction.action == \"BUY\" {\n2360:                 if state.shares <= 0.001 {\n2361:                     state.openedDate = transaction.date\n2362:                 }\n2363:                 let newShares = state.shares + transaction.quantity\n2364:                 if newShares > 0 {\n2365:                     state.average = (state.average * state.shares + transaction.price * transaction.quantity) / newShares\n2366:                 }"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/LocalPortfolioStore.swift",
+      "line": 2369,
+      "sha256": "e198f28b6974ad37414d4045edbfa06f07fedb20d36cd5e0beb978df5879a728",
+      "excerpt": "2365:                     state.average = (state.average * state.shares + transaction.price * transaction.quantity) / newShares\n2366:                 }\n2367:                 state.shares = newShares\n2368:             } else {\n2369:                 state.shares = max(0, state.shares - transaction.quantity)\n2370:                 if state.shares <= 0.001 {\n2371:                     state.openedDate = nil\n2372:                 }\n2373:             }\n2374:             states[transaction.ticker] = state\n2375:         }\n2376:         let positions = states.compactMap { ticker, state -> LocalPositionRecord? in\n2377:             guard state.shares > 0.001 else { return nil }\n2378:             return LocalPositionRecord(\n2379:                 ticker: ticker,\n2380:                 name: state.name,\n2381:                 shares: state.shares,"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/DailyTimeWeightedReturn.swift",
+      "line": 158,
+      "sha256": "b0918219d5a6e37303edd43550e73aa60b61757012039b85d290d45b3a05100f",
+      "excerpt": "154:             }\n155:             let capital = previous + inflow\n156:             if capital > 0 {\n157:                 let growth = (value + outflow) / capital\n158:                 if let limit = implausibleGrowth, previous > 0, growth > limit || growth < 1 / limit {\n159:                     let gap = value + outflow - capital\n160:                     if gap > 0 { inflow += gap } else { outflow -= gap }\n161:                     neutralized.append((day.date, growth))\n162:                 } else {\n163:                     nav *= growth\n164:                 }\n165:                 started = true\n166:             } else if value != 0 || outflow != 0 {\n167:                 throw fail(\"TWR：缺少期初资金，无法确定收益分母。\")\n168:             }\n169:             guard !nav.isNaN, nav >= 0 else { throw fail(\"TWR：净值无效。\") }\n170:             if started { points.append(Point(date: day.date, value: value, cashUSD: cashValue, inflow: inflow, outflow: outflow, nav: nav)) }"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/LocalServices.swift",
+      "line": 2494,
+      "sha256": "a98c3aff4cb19a74ea0f7cd9ee49643f57864bc567230d69b64b78c15a210a58",
+      "excerpt": "2490:                 assumptions.append(L10n.text(\"\\(names(unpricedSymbols)) 找不到历史行情，没有计入账户历史。\"))\n2491:             }\n2492:         }\n2493:         let result = try T.calculate(events: events, days: days, splits: splits,\n2494:                                      implausibleGrowth: inferredAccounts.isEmpty ? nil : Decimal(string: \"1.5\"))\n2495:         if !result.neutralized.isEmpty {\n2496:             let listed = result.neutralized.prefix(5).map { day -> String in\n2497:                 let growth = NSDecimalNumber(decimal: day.growth).doubleValue\n2498:                 let change = (growth - 1) * 100\n2499:                 return \"\\(day.date)（\\(change >= 0 ? \"+\" : \"\")\\(change.formatted(.number.precision(.fractionLength(0))))%）\"\n2500:             }.joined(separator: \"、\")\n2501:             let more = result.neutralized.count > 5 ? L10n.text(\" 等 \\(result.neutralized.count) 天\") : \"\"\n2502:             assumptions.append(L10n.text(\"\\(listed)\\(more) 账户单日涨跌远超行情能解释的幅度，多半是推算的入金或持仓有误，这些天按未记录的转入转出处理、不计收益。\"))\n2503:         }\n2504:         for account in Set(expected.keys).union(result.holdings.keys) {\n2505:             for symbol in Set(expected[account]?.keys.map { $0 } ?? []).union(result.holdings[account]?.keys.map { $0 } ?? []) {\n2506:                 let difference = (expected[account]?[symbol] ?? 0) - (result.holdings[account]?[symbol] ?? 0)"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/FXImpactCalculator.swift",
+      "line": 83,
+      "sha256": "ee2839c6d0de898060778421b3dbb77302adf8264558506c3bc58d7894f9faa4",
+      "excerpt": "79:             }\n80:             if case .carriedForward = then.match { isExact = false }\n81:             let lotCost = lot.quantity * lot.price\n82:             cost += lotCost\n83:             amount += lotCost * (1 / now.rate - 1 / then.rate)\n84:         }\n85:         return Result(amount: amount, cost: cost, isExact: isExact)\n86:     }\n87: \n88:     /// Buys still open after sells are matched against them, oldest first.\n89:     ///\n90:     /// FIFO, matching the app's realised-profit engine. It is not the UK's\n91:     /// tax matching, and is not used for tax anywhere — this is a display\n92:     /// figure about the money currently invested.\n93:     private static func openLots(\n94:         ticker: String,\n95:         transactions: [LocalTransactionRecord],"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/LocalPortfolioStore.swift",
+      "line": 1896,
+      "sha256": "e198f28b6974ad37414d4045edbfa06f07fedb20d36cd5e0beb978df5879a728",
+      "excerpt": "1892:             ) {\n1893:                 // No broker in this ledger reports an FX component, so\n1894:                 // without this every position showed \"—\". Rebuilt from the\n1895:                 // trade dates already on file and ECB's published rates.\n1896:                 fxPnlUSD = try usd(reconstructed.amount, currency: position.currency)\n1897:                 fxPnlStatus = reconstructed.isExact ? \"reconstructed\" : \"estimated\"\n1898:                 fxPnlSource = reconstructed.isExact\n1899:                     ? \"ecb_daily_on_trade_dates\"\n1900:                     : \"ecb_daily_nearest_prior\"\n1901:             } else {\n1902:                 fxPnlUSD = nil\n1903:                 fxPnlStatus = position.fxPnlStatus\n1904:                 fxPnlSource = position.fxPnlSource\n1905:             }\n1906:             return Holding(\n1907:                 ticker: position.ticker,\n1908:                 logoSymbol: position.ticker,"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/LocalServices.swift",
+      "line": 3038,
+      "sha256": "a98c3aff4cb19a74ea0f7cd9ee49643f57864bc567230d69b64b78c15a210a58",
+      "excerpt": "3034:     static func yahooSymbol(ticker: String, currency: String) -> String {\n3035:         let normalized = ticker.uppercased()\n3036:         let overrides = [\n3037:             \"BRK.B\": \"BRK-B\",\n3038:             \"ENR\": \"ENR.DE\",\n3039:             \"RWE\": \"RWE.DE\",\n3040:             \"VUAG\": \"VUAG.L\",\n3041:             \"VUSA\": \"VUSA.L\",\n3042:             \"BARC\": \"BARC.L\",\n3043:         ]\n3044:         if let override = overrides[normalized] { return override }\n3045:         if let londonSymbol = InstrumentCurrencyRules.marketDataSymbol(for: normalized) {\n3046:             return londonSymbol\n3047:         }\n3048:         if [\"GBP\", \"GBX\"].contains(currency.uppercased()), !normalized.contains(\".\") {\n3049:             return \"\\(normalized).L\"\n3050:         }"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/LocalServices.swift",
+      "line": 1745,
+      "sha256": "a98c3aff4cb19a74ea0f7cd9ee49643f57864bc567230d69b64b78c15a210a58",
+      "excerpt": "1741:         } catch {\n1742:             latestError = error\n1743:         }\n1744: \n1745:         if let cached { return cached.bars }\n1746:         throw latestError ?? LocalServiceError.noMarketData\n1747:     }\n1748: \n1749:     private func massiveIntradayBars(symbol: String, key: String) async throws -> [MarketIntradayBar] {\n1750:         let endDate = Date()\n1751:         let startDate = Calendar(identifier: .gregorian).date(\n1752:             byAdding: .day,\n1753:             value: -7,\n1754:             to: endDate\n1755:         ) ?? endDate\n1756:         let start = DayDateCodec.string(from: startDate)\n1757:         let end = DayDateCodec.string(from: endDate)"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/LocalServices.swift",
+      "line": 1253,
+      "sha256": "a98c3aff4cb19a74ea0f7cd9ee49643f57864bc567230d69b64b78c15a210a58",
+      "excerpt": "1249:             )] = adjusted\n1250:         }\n1251:     }\n1252: \n1253:     private func latestRawPrice(for symbol: String) async -> Double? {\n1254:         if let bars = try? await intradayBars(symbol: symbol),\n1255:            let price = bars.last?.close,\n1256:            price.isFinite,\n1257:            price > 0 {\n1258:             return price\n1259:         }\n1260: \n1261:         let endDate = Date()\n1262:         let startDate = Calendar(identifier: .gregorian).date(\n1263:             byAdding: .day,\n1264:             value: -14,\n1265:             to: endDate"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/LocalPortfolioStore.swift",
+      "line": 1489,
+      "sha256": "e198f28b6974ad37414d4045edbfa06f07fedb20d36cd5e0beb978df5879a728",
+      "excerpt": "1485:         if document.snapshots.count > 730 {\n1486:             document.snapshots.removeFirst(document.snapshots.count - 730)\n1487:         }\n1488:         document.updatedAt = refreshedAt\n1489:         document.marketDataUpdatedAt = refreshedAt\n1490:         try save(document)\n1491:         return document\n1492:     }\n1493: \n1494:     func renameAccount(_ accountKey: String, to rawName: String) throws -> LocalPortfolioDocument {\n1495:         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)\n1496:         guard !name.isEmpty else { throw LocalPortfolioError.writeFailed }\n1497:         var document = try load()\n1498:         guard document.accounts.contains(where: { $0.id == accountKey }) else {\n1499:             return document\n1500:         }\n1501:         document.positions = document.positions.map {"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/FXImpactCalculator.swift",
+      "line": 99,
+      "sha256": "ee2839c6d0de898060778421b3dbb77302adf8264558506c3bc58d7894f9faa4",
+      "excerpt": "95:         transactions: [LocalTransactionRecord],\n96:         splits: StockSplitCatalog?\n97:     ) -> [OpenLot] {\n98:         let symbol = ticker.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()\n99:         let ordered = transactions\n100:             .filter { $0.ticker.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == symbol }\n101:             .sorted { $0.date < $1.date }\n102: \n103:         var open: [OpenLot] = []\n104:         for transaction in ordered {\n105:             let split = splits?.adjustment(ticker: transaction.ticker, from: transaction.date) ?? 1\n106:             guard split > 0 else { continue }\n107:             let quantity = abs(transaction.quantity) * split\n108:             let price = transaction.price / split\n109:             guard quantity > 0, price.isFinite else { continue }\n110: \n111:             switch transaction.action.uppercased() {"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/GBPFXRates.swift",
+      "line": 104,
+      "sha256": "be15eea4e35f2dc992eafb60505c68fa43e444baf0132dda589f4857a1e99c8c",
+      "excerpt": "100:             return Quote(rate: rate, match: .exact, date: date)\n101:         }\n102: \n103:         // Otherwise find where the date would sit and step back from there.\n104:         var position = dates.firstIndex { $0 > date } ?? dates.count\n105:         var stepped = 0\n106:         while position > 0, stepped <= limit {\n107:             position -= 1\n108:             stepped += 1\n109:             if let rate = series[position] {\n110:                 return Quote(\n111:                     rate: rate,\n112:                     match: .carriedForward(daysBack: stepped),\n113:                     date: dates[position]\n114:                 )\n115:             }\n116:         }"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/FXImpactCalculator.swift",
+      "line": 68,
+      "sha256": "ee2839c6d0de898060778421b3dbb77302adf8264558506c3bc58d7894f9faa4",
+      "excerpt": "64:         }\n65: \n66:         let today = DayDateFormatter.shared.string(from: asOf)\n67:         guard let latest = rates.latestDate(currency: currency),\n68:               let now = rates.quote(currency: currency, on: min(today, latest)),\n69:               now.rate > 0 else { return nil }\n70: \n71:         var amount = 0.0\n72:         var cost = 0.0\n73:         var isExact = true\n74:         for lot in lots {\n75:             guard let then = rates.quote(currency: lot.currency, on: lot.date), then.rate > 0 else {\n76:                 // One unpriceable lot makes the total wrong by an unknown\n77:                 // amount, so the whole figure is withheld.\n78:                 return nil\n79:             }\n80:             if case .carriedForward = then.match { isExact = false }"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/RealisedProfitCalculator.swift",
+      "line": 167,
+      "sha256": "54b64d7e5f0ffc75b5e2546794f6ad9060cdf9db4fda7f39a694df0d0157b116",
+      "excerpt": "163:     static func sales(transactions: [LocalTransactionRecord]) -> [RealisedSale] {\n164:         var sales: [RealisedSale] = []\n165:         var lotsByPosition: [String: [Lot]] = [:]\n166: \n167:         let ordered = transactions\n168:             .filter { isBuy($0.action) || isSell($0.action) }\n169:             .sorted {\n170:                 if $0.date != $1.date { return $0.date < $1.date }\n171:                 let leftIsBuy = isBuy($0.action)\n172:                 if leftIsBuy != isBuy($1.action) { return leftIsBuy }\n173:                 return ($0.tradeID ?? \"\") < ($1.tradeID ?? \"\")\n174:             }\n175: \n176:         let catalog = try? StockSplitCatalog.bundled.get()\n177: \n178:         for transaction in ordered {\n179:             let key = \"\\(transaction.accountKey)|\\(transaction.ticker.uppercased())\""
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/UKShareMatching.swift",
+      "line": 114,
+      "sha256": "a9944dcca858cab05b0048f5e4ca2f92ca7b7264ed8167f30c67d6aedcb73638",
+      "excerpt": "110:         var acquisitions = entries.filter(\\.isBuy)\n111:             .map { (id: $0.id, date: $0.date, remaining: $0.quantity) }\n112: \n113:         var results: [Disposal] = []\n114:         for entry in entries where !entry.isBuy {\n115:             var outstanding = entry.quantity\n116:             var matches: [Match] = []\n117:             guard let windowEnd = Self.windowEnd(after: entry.date) else { continue }\n118: \n119:             // Same day first, then the following 30 days in date order. An\n120:             // acquisition outside the window is never reached, however close.\n121:             func consume(where predicate: (String) -> Bool, rule: (String) -> Rule) {\n122:                 for index in acquisitions.indices where outstanding > 0 {\n123:                     guard acquisitions[index].remaining > 0,\n124:                           predicate(acquisitions[index].date) else { continue }\n125:                     let taken = min(outstanding, acquisitions[index].remaining)\n126:                     acquisitions[index].remaining -= taken"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/UKShareMatching.swift",
+      "line": 135,
+      "sha256": "a9944dcca858cab05b0048f5e4ca2f92ca7b7264ed8167f30c67d6aedcb73638",
+      "excerpt": "131:                         acquisitionID: acquisitions[index].id\n132:                     ))\n133:                 }\n134:             }\n135:             consume(where: { $0 == entry.date }, rule: { _ in .sameDay })\n136:             consume(where: { $0 > entry.date && $0 <= windowEnd }, rule: { .thirtyDay(acquired: $0) })\n137: \n138:             if outstanding > 0 {\n139:                 matches.append(Match(rule: .section104, quantity: outstanding))\n140:             }\n141:             results.append(Disposal(\n142:                 sourceID: entry.id, date: entry.date,\n143:                 quantity: entry.quantity, matches: matches\n144:             ))\n145:         }\n146:         return results\n147:     }"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/HistoryView.swift",
+      "line": 1131,
+      "sha256": "01f31d7b0d8804eb826254e945c1f224c5a377743b124d9f060825c6440755b2",
+      "excerpt": "1127:         let splits = try? StockSplitCatalog.bundled.get()\n1128:         let tickers = Set(transactions.filter { $0.action.uppercased() == \"SELL\" }.map { $0.ticker.uppercased() })\n1129:         for ticker in tickers {\n1130:             try Task.checkCancellation()\n1131:             for disposal in UKShareMatching.disposals(ticker: ticker, transactions: transactions, splits: splits)\n1132:             where !disposal.isFullyFromPool {\n1133:                 result.matchedDisposals[disposal.sourceID] = disposal\n1134:             }\n1135:         }\n1136: \n1137:         let titles = Dictionary(uniqueKeysWithValues: Set(activities.map { $0.transaction.date }).map {\n1138:             ($0, dateGroupTitle($0, locale: locale))\n1139:         })\n1140:         result.pages[Period()] = makePages(activities, titles: titles)\n1141:         for basis in TaxYearBasis.allCases {\n1142:             let groups = Dictionary(grouping: activities) { basis.label(for: $0.transaction.date) }\n1143:             for (year, entries) in groups {"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/CloudPreferences.swift",
+      "line": 92,
+      "sha256": "a3cc8aedaa13911a00d121d2265a16c018bfc5f22b513c5d5916f0d1773dbaf9",
+      "excerpt": "88:             forName: UserDefaults.didChangeNotification,\n89:             object: defaults, queue: .main\n90:         ) { _ in pushToCloud() })\n91: \n92:         cloud.synchronize()\n93:         // A device that has never synced has nothing local worth keeping, so\n94:         // whatever iCloud already holds wins on first run. After that both\n95:         // directions are live and the last edit wins, which is the right\n96:         // answer for a scalar nobody edits on two devices at once.\n97:         pullFromCloud(keys: synchronised)\n98:         pushToCloud()\n99:     }\n100: \n101:     static func stop() {\n102:         observers.forEach(NotificationCenter.default.removeObserver)\n103:         observers.removeAll()\n104:     }"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/CloudPreferences.swift",
+      "line": 136,
+      "sha256": "a3cc8aedaa13911a00d121d2265a16c018bfc5f22b513c5d5916f0d1773dbaf9",
+      "excerpt": "132:         isApplyingRemoteChange = true\n133:         defer { isApplyingRemoteChange = false }\n134:         for key in keys.intersection(synchronised) {\n135:             guard let value = cloud.object(forKey: key) else {\n136:                 defaults.removeObject(forKey: key)\n137:                 continue\n138:             }\n139:             guard !equal(defaults.object(forKey: key), value) else { continue }\n140:             defaults.set(value, forKey: key)\n141:         }\n142:     }\n143: \n144:     private static func isSmallEnough(_ value: Any) -> Bool {\n145:         guard let data = try? PropertyListSerialization.data(\n146:             fromPropertyList: value, format: .binary, options: 0\n147:         ) else { return false }\n148:         return data.count <= maximumValueBytes"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/CatfolioIOSApp.swift",
+      "line": 37,
+      "sha256": "3f9c040a54abca937efa0cd51c975aa1ebb8fe990d83655b00db6872281d0f2c",
+      "excerpt": "33:     private var appContent: some View {\n34:             RootTabView()\n35:                 .fontDesign(.rounded)\n36:                 .task { ReferenceCatalogs.warm() }\n37:                 .task { CloudPreferences.start() }\n38:                 .task { PublicInvestorPreferences.migrateDemoSelectionIfNeeded() }\n39:                 .environment(model)\n40:                 .environment(\\.locale, Locale(identifier: AppLanguage.resolvedIdentifier(languageRawValue)))\n41:                 .tint(CatfolioTheme.accent)\n42:                 .preferredColorScheme(preferredColorScheme)\n43:                 #if DEBUG\n44:                 .task {\n45:                     if ProcessInfo.processInfo.arguments.contains(\"--run-foundation-checks\") {\n46:                         let report = await Task.detached {\n47:                             do { return try FoundationRegressionChecks.run() }\n48:                             catch { return \"FAILED: \\(error.localizedDescription)\" }\n49:                         }.value"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/AIView.swift",
+      "line": 446,
+      "sha256": "b2f14c5b68d378680b838859c9ce9cee64f82055cbe5f913c269f8c7fb3f1c7f",
+      "excerpt": "442:         // start portfolio decoding and an AI request while the panel was still\n443:         // animating, which made a cold launch visibly hitch.\n444:     }\n445: \n446:     private func sendQuestion(_ preset: String? = nil) {\n447:         let cleanQuestion = (preset ?? question).trimmingCharacters(in: .whitespacesAndNewlines)\n448:         guard !cleanQuestion.isEmpty, !isSending else { return }\n449:         question = \"\"\n450:         errorMessage = nil\n451:         messages.append(ChatMessage(role: .user, text: cleanQuestion))\n452:         isSending = true\n453: \n454:         Task {\n455:             defer { isSending = false }\n456: \n457:             if model.isFakeDataMode && !model.isPublicInvestorMode {\n458:                 try? await Task.sleep(for: .milliseconds(320))"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/AIView.swift",
+      "line": 551,
+      "sha256": "b2f14c5b68d378680b838859c9ce9cee64f82055cbe5f913c269f8c7fb3f1c7f",
+      "excerpt": "547:         errorMessage = nil\n548:         Task { await persistLibrary() }\n549:     }\n550: \n551:     private func openConversation(_ id: UUID) {\n552:         guard id != activeConversationID else { return }\n553:         foldActiveConversationIntoLibrary()\n554:         guard let conversation = conversations.first(where: { $0.id == id }) else { return }\n555:         activeConversationID = id\n556:         messages = conversation.messages\n557:         attentionReports = conversation.attentionReports\n558:         lastAttentionContext = conversation.messages.reversed().compactMap {\n559:             conversation.attentionReports[$0.id]?.contextSummary\n560:         }.first\n561:         errorMessage = nil\n562:         Task { await persistLibrary() }\n563:     }"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/AIView.swift",
+      "line": 527,
+      "sha256": "b2f14c5b68d378680b838859c9ce9cee64f82055cbe5f913c269f8c7fb3f1c7f",
+      "excerpt": "523:             conversations.append(updated)\n524:         }\n525:     }\n526: \n527:     private func persistMessages() async {\n528:         guard !model.isFakeDataMode && !model.isPublicInvestorMode else { return }\n529:         foldActiveConversationIntoLibrary()\n530:         do {\n531:             try await LocalChatStore.shared.save(\n532:                 LocalChatLibrary(conversations: conversations, activeID: activeConversationID)\n533:             )\n534:         } catch {\n535:             errorMessage = L10n.text(\"无法保存本机对话：\\(error.localizedDescription)\")\n536:         }\n537:     }\n538: \n539:     /// Opens an empty conversation. The current one is kept."
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/APIClient.swift",
+      "line": 139,
+      "sha256": "46053d5529e8747013328c73c23772edb032daf74d1a5c935d6c327c1abe31a4",
+      "excerpt": "135:                 guard generation == portfolioRequestGeneration else { return }\n136:                 try await apply(loaded)\n137:                 guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }\n138:             }\n139:             // Start history before quote and daily-change refreshes. Those\n140:             // independent vendor calls used to make the correct line wait\n141:             // behind unrelated home-screen data.\n142:             if !isFakeDataMode {\n143:                 await enrichPortfolioChart(from: document, generation: generation)\n144:                 guard generation == portfolioRequestGeneration else { return }\n145:             }\n146:             guard !loaded.positions.isEmpty else {\n147:                 isHoldingDailyChangesLoading = false\n148:                 isPortfolioChartLoading = false\n149:                 return\n150:             }\n151:             async let dailyRefresh: Void = refreshHoldingDailyChanges()"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/LocalServices.swift",
+      "line": 2364,
+      "sha256": "a98c3aff4cb19a74ea0f7cd9ee49643f57864bc567230d69b64b78c15a210a58",
+      "excerpt": "2360:         }\n2361:         var prices: [String: LedgerPriceHistory] = [:]\n2362:         var splits: [T.Split] = []\n2363:         var unpricedSymbols: [String] = []\n2364:         for symbol in symbols.sorted() {\n2365:             try Task.checkCancellation()\n2366:             do {\n2367:                 let history = try await ledgerPriceHistory(symbol: symbol, from: start, to: end, cachedOnly: cachedOnly)\n2368:                 prices[symbol] = history\n2369:                 currencies.insert(history.currency)\n2370:                 splits += history.splits\n2371:             } catch is CancellationError {\n2372:                 throw CancellationError()\n2373:             } catch {\n2374:                 if cachedOnly { throw error }\n2375:                 unpricedSymbols.append(symbol)\n2376:             }"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/CSVImportView.swift",
+      "line": 200,
+      "sha256": "0103fd99092f231a29b0afc68fa56081ecf9ff9712ca4077aba608dec9c7aea6",
+      "excerpt": "196:             }\n197:         }\n198:     }\n199: \n200:     private func handleFileSelection(_ result: Result<[URL], Error>) {\n201:         do {\n202:             guard let url = try result.get().first else { return }\n203:             let hasAccess = url.startAccessingSecurityScopedResource()\n204:             defer {\n205:                 if hasAccess { url.stopAccessingSecurityScopedResource() }\n206:             }\n207:             let data = try Data(contentsOf: url, options: .mappedIfSafe)\n208:             let file = try SelectedCSVFile(url: url, data: data)\n209:             selectedFile = file\n210:             if context.isCreating,\n211:                AccountNaming.generatedNicknames.contains(nickname),\n212:                let detectedName = file.detectedAccountNickname {"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/CSVImportView.swift",
+      "line": 284,
+      "sha256": "0103fd99092f231a29b0afc68fa56081ecf9ff9712ca4077aba608dec9c7aea6",
+      "excerpt": "280:         guard var text = LocalCSVImporter.decodedText(from: data) else {\n281:             throw CSVSelectionError.invalidEncoding\n282:         }\n283:         text = text.replacingOccurrences(of: \"\\u{feff}\", with: \"\")\n284:         let records = LocalCSVImporter.parseRecords(text)\n285:         guard !records.isEmpty else {\n286:             throw CSVSelectionError.emptyFile\n287:         }\n288:         guard let headerIndex = LocalCSVImporter.headerRowIndex(in: records) else {\n289:             throw CSVSelectionError.missingColumns([\"Date / Time\", \"Action\", \"Ticker\", \"Quantity\", \"Price\"])\n290:         }\n291:         let headers = records[headerIndex]\n292:         try Self.validate(headers: headers)\n293:         filename = url.lastPathComponent\n294:         self.data = data\n295:         dataRowCount = max(0, records.count - headerIndex - 1)\n296:         self.headers = Array(headers.prefix(8))"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/FMPRateLimiter.swift",
+      "line": 23,
+      "sha256": "affd0f17d0330d09e32afb113ce3d9475d61fe28bfd69ca51bf9bfaacfd083e7",
+      "excerpt": "19:     init(spacing: TimeInterval = 0.20) {\n20:         self.spacing = spacing\n21:     }\n22: \n23:     func waitForTurn() async throws {\n24:         let now = Date()\n25:         let slot = nextAllowedAt > now ? nextAllowedAt : now\n26:         // Reserve this request's unique slot before suspending. Actors are\n27:         // re-entrant across `await`, so updating afterwards can release a burst.\n28:         nextAllowedAt = slot.addingTimeInterval(spacing)\n29:         let delay = slot.timeIntervalSince(now)\n30:         if delay > 0 {\n31:             try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))\n32:         }\n33:         try Task.checkCancellation()\n34:     }\n35: "
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/FMPRateLimiter.swift",
+      "line": 38,
+      "sha256": "affd0f17d0330d09e32afb113ce3d9475d61fe28bfd69ca51bf9bfaacfd083e7",
+      "excerpt": "34:     }\n35: \n36:     /// Honour `Retry-After` when the server sends one; otherwise wait long\n37:     /// enough that a per-minute budget has a chance to recover.\n38:     func backOff(retryAfter: String?) {\n39:         let seconds = min(60, max(1, retryAfter.flatMap(Double.init) ?? 5))\n40:         let resume = Date().addingTimeInterval(seconds)\n41:         nextAllowedAt = max(nextAllowedAt, resume)\n42:     }\n43: \n44:     /// How long the next caller would wait, so a message can say so.\n45:     var secondsUntilFreeSlot: TimeInterval {\n46:         max(0, nextAllowedAt.timeIntervalSinceNow)\n47:     }\n48: }\n49: \n50: enum FMPFailure: LocalizedError {"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/CycleComparison.swift",
+      "line": 396,
+      "sha256": "ed46c09e0311eb0425c754769336413f6c69377d460856cba142dbed36bdc6af",
+      "excerpt": "392:     private func yLabels(step: Double, height: CGFloat) -> some View {\n393:         let unit = height / 2 * Self.labelledShare / 4\n394:         return ZStack {\n395:             ForEach(-4...4, id: \\.self) { index in\n396:                 Text(Self.axisText(abs(Double(index)) * step))\n397:                     .font(.system(size: 14, weight: .medium))\n398:                     .tracking(0.7)\n399:                     .foregroundStyle(Color.primary.opacity(0.4))\n400:                     .lineLimit(1)\n401:                     .fixedSize()\n402:                     .position(x: 11.5, y: height / 2 - CGFloat(index) * unit)\n403:             }\n404:         }\n405:         .opacity(0.4)\n406:         .allowsHitTesting(false)\n407:     }\n408: "
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/OptionsOIView.swift",
+      "line": 80,
+      "sha256": "f52b81d80975f05977d5726e8a98090ef4b672ff2176bd53df66250504dce237",
+      "excerpt": "76: \n77: enum OIPriceLabel {\n78:     static func text(_ value: Double, locale: Locale) -> String {\n79:         guard value.isFinite else { return \"—\" }\n80:         return \"$\" + value.rounded().formatted(.number.precision(.fractionLength(0)).locale(locale))\n81:     }\n82: }\n83: \n84: struct OIPlotGeometry {\n85:     enum Side { case put, call }\n86:     struct Vertex: Equatable { let strike: Double; let width: Double }\n87:     let rows: [OIDistribution.Row]\n88:     let maximum: Double\n89:     let domain: ClosedRange<Double>\n90:     let step: Double\n91: \n92:     init(_ distribution: OIDistribution, markers: [Double] = [], range: OIPlotRange = .all,"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/OptionsOIView.swift",
+      "line": 995,
+      "sha256": "f52b81d80975f05977d5726e8a98090ef4b672ff2176bd53df66250504dce237",
+      "excerpt": "991:     private func priceText(_ price: Double) -> String {\n992:         OIPriceLabel.text(price, locale: appLocale)\n993:     }\n994: \n995:     private func selectionDescription(_ geometry: OIPlotGeometry) -> String {\n996:         guard let selectedStrike, let row = geometry.nearest(to: selectedStrike) else { return \"\" }\n997:         let call = row.hasCall ? row.call.formatted(.number.precision(.fractionLength(0)).locale(appLocale)) : \"—\"\n998:         let put = row.hasPut ? row.put.formatted(.number.precision(.fractionLength(0)).locale(appLocale)) : \"—\"\n999:         return L10n.text(\"\\(priceText(row.strike)) · Call \\(call) 张 · Put \\(put) 张\")\n1000:     }\n1001: \n1002:     @ViewBuilder private func glassRule(color: Color, width: CGFloat, interactive: Bool = false) -> some View {\n1003:         let rule = Color.clear.frame(width: max(0, width), height: 5)\n1004:         if #available(iOS 26.0, *) {\n1005:             rule.glassEffect(glass(color, interactive), in: Capsule())\n1006:         } else {\n1007:             rule.background(.ultraThinMaterial, in: Capsule())"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOS/VolumeProfileView.swift",
+      "line": 314,
+      "sha256": "c2a8515e7e09962f9067491e02d6fb2865dbace9ffdfe09d20c9cc072ad6c750",
+      "excerpt": "310: /// `EnvironmentValues.refresh` is read-only. A detail reached from a refreshed\n311: /// list (including nested heatmap sheets) can inherit its UIRefreshControl even\n312: /// though the detail has no refresh action of its own. Remove only that native\n313: /// control; UIKit still owns scrolling, rubber-banding and sheet dismissal.\n314: struct HoldingDetailScrollBoundary: UIViewRepresentable {\n315:     func makeUIView(context: Context) -> BoundaryView {\n316:         let view = BoundaryView()\n317:         view.isUserInteractionEnabled = false\n318:         return view\n319:     }\n320: \n321:     func updateUIView(_ view: BoundaryView, context: Context) {\n322:         view.removeInheritedRefreshControl()\n323:         // SwiftUI can recreate its inherited control later in this same\n324:         // update even when the content size does not require another layout.\n325:         DispatchQueue.main.async { [weak view] in view?.removeInheritedRefreshControl() }\n326:     }"
+    },
+    {
+      "path": "CatfolioIOS/CatfolioIOSTests/HoldingDetailInteractionTests.swift",
+      "line": 232,
+      "sha256": "90244c3d2fbb4320f9f94f10a47d511c98d17d633dad91999f32f34d34afaf29",
+      "excerpt": "228:         let childRefresh = try XCTUnwrap(scrollView(in: childController.view)?.refreshControl)\n229:         childRefresh.sendActions(for: .valueChanged)\n230:         try await waitUntil { probe.childRefreshes == 1 }\n231:         XCTAssertEqual(probe.parentRefreshes, 0)\n232:         XCTAssertNil(detailScroll.refreshControl)\n233:         XCTAssertTrue(parentScroll.refreshControl === parentRefresh)\n234:     }\n235: \n236:     @MainActor\n237:     func testBoundaryOnlyTouchesItsNearestScrollView() {\n238:         let parent = UIScrollView()\n239:         let detail = UIScrollView()\n240:         let boundary = HoldingDetailScrollBoundary.BoundaryView()\n241:         let parentRefresh = UIRefreshControl()\n242:         parent.refreshControl = parentRefresh\n243:         detail.refreshControl = UIRefreshControl()\n244:         parent.addSubview(detail)"
+    }
+  ]
+}

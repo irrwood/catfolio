@@ -1,0 +1,93 @@
+{
+  "devicesAndConfigurations" : [
+    {
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "271110E9-674E-40D1-B6DA-09D5BB0AD916",
+        "deviceName" : "Catfolio Audit 20260913",
+        "modelName" : "iPhone 17 Pro",
+        "osBuildNumber" : "23F77",
+        "osVersion" : "26.5",
+        "platform" : "iOS Simulator"
+      },
+      "expectedFailures" : 0,
+      "failedTests" : 6,
+      "passedTests" : 615,
+      "skippedTests" : 1,
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ],
+  "environmentDescription" : "CatfolioIOS · Built with macOS 26.6.2",
+  "expectedFailures" : 0,
+  "failedTests" : 6,
+  "finishTime" : 1789312070.2,
+  "passedTests" : 615,
+  "result" : "Failed",
+  "skippedTests" : 1,
+  "startTime" : 1789311463.194,
+  "statistics" : [
+
+  ],
+  "testFailures" : [
+    {
+      "failureText" : "XCTAssertTrue failed - [\"资金流水不完整：部分交易没有导入现金金额，已按「股数 × 成交价」推算；当天现金不够付款的部分视为当天入金，交易记录解释不了的持仓视为在最早有价格的那天按收盘价转入。这些推算都按市值入金，不会凭空产生收益。\", \"AAPL: 1 trades had no fill price (common in takeover exchanges) and were valued at that day\\'s or the nearest close.\"]",
+      "targetName" : "CatfolioIOSTests",
+      "testIdentifier" : 243,
+      "testIdentifierString" : "LocalPortfolioEngineTests/testAFillWithoutAPriceIsValuedAtTheCloseAndListed()",
+      "testIdentifierURL" : "test://com.apple.xcode/CatfolioIOS/CatfolioIOSTests/LocalPortfolioEngineTests/testAFillWithoutAPriceIsValuedAtTheCloseAndListed",
+      "testName" : "testAFillWithoutAPriceIsValuedAtTheCloseAndListed()"
+    },
+    {
+      "failureText" : "XCTAssertEqual failed: (\"Optional(\"5\")\") is not equal to (\"Optional(\"5 只\")\")",
+      "targetName" : "CatfolioIOSTests",
+      "testIdentifier" : 360,
+      "testIdentifierString" : "PolicyShortcutTests/testARunSaysWhatEachStepDidToTheList()",
+      "testIdentifierURL" : "test://com.apple.xcode/CatfolioIOS/CatfolioIOSTests/PolicyShortcutTests/testARunSaysWhatEachStepDidToTheList",
+      "testName" : "testARunSaysWhatEachStepDidToTheList()"
+    },
+    {
+      "failureText" : "Test crashed with signal kill.",
+      "targetName" : "CatfolioIOSTests",
+      "testIdentifier" : 236,
+      "testIdentifierString" : "LineChartMotionTests/testCaptureEntranceRebaseRapidSwitchAndReducedMotion()",
+      "testIdentifierURL" : "test://com.apple.xcode/CatfolioIOS/CatfolioIOSTests/LineChartMotionTests/testCaptureEntranceRebaseRapidSwitchAndReducedMotion",
+      "testName" : "testCaptureEntranceRebaseRapidSwitchAndReducedMotion()"
+    },
+    {
+      "failureText" : "XCTAssertNil failed: \"<SwiftUI.UIKitRefreshControl: 0x119fcde00; baseClass = UIRefreshControl; frame = (0 0; 55.3333 60); hidden = YES; autoresize = W; layer = <CALayer: 0x119c5e190>>\"",
+      "targetName" : "CatfolioIOSTests",
+      "testIdentifier" : 135,
+      "testIdentifierString" : "HoldingDetailInteractionTests/testDetailRemovesInheritedRefreshWithoutDisablingParentOrChildRefresh()",
+      "testIdentifierURL" : "test://com.apple.xcode/CatfolioIOS/CatfolioIOSTests/HoldingDetailInteractionTests/testDetailRemovesInheritedRefreshWithoutDisablingParentOrChildRefresh",
+      "testName" : "testDetailRemovesInheritedRefreshWithoutDisablingParentOrChildRefresh()"
+    },
+    {
+      "failureText" : "XCTAssertEqual failed: (\"Optional([\"return 20.0%\", \"meets > 5%\", \"ranked by return: #1\"])\") is not equal to (\"Optional([\"return 20.0%\", \"满足 > 5%\", \"按涨跌幅排第 1\"])\")",
+      "targetName" : "CatfolioIOSTests",
+      "testIdentifier" : 363,
+      "testIdentifierString" : "PolicyShortcutTests/testEachResultCarriesItsTrailAndEachDropItsReason()",
+      "testIdentifierURL" : "test://com.apple.xcode/CatfolioIOS/CatfolioIOSTests/PolicyShortcutTests/testEachResultCarriesItsTrailAndEachDropItsReason",
+      "testName" : "testEachResultCarriesItsTrailAndEachDropItsReason()"
+    },
+    {
+      "failureText" : "XCTAssertEqual failed: (\"Optional(\"1 blanks still to fill\")\") is not equal to (\"Optional(\"还有 1 个空要填\")\") - the sizing value is never guessed",
+      "targetName" : "CatfolioIOSTests",
+      "testIdentifier" : 365,
+      "testIdentifierString" : "PolicyShortcutTests/testNormalizingSetsWhatNobodyShouldHaveToChoose()",
+      "testIdentifierURL" : "test://com.apple.xcode/CatfolioIOS/CatfolioIOSTests/PolicyShortcutTests/testNormalizingSetsWhatNobodyShouldHaveToChoose",
+      "testName" : "testNormalizingSetsWhatNobodyShouldHaveToChoose()"
+    }
+  ],
+  "title" : "Test - CatfolioIOS",
+  "topInsights" : [
+    {
+      "category" : "Longest Test Runs",
+      "impact" : "60% of duration",
+      "text" : "1 longest test run with outlier durations exceeding 18.27s (three standard deviations)"
+    }
+  ],
+  "totalTestCount" : 622
+}

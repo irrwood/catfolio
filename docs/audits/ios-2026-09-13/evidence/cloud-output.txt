@@ -1,0 +1,1 @@
+CLOUD_EMPTY_BOOT currency=nil rules=nil
