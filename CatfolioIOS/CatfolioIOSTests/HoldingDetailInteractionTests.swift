@@ -437,8 +437,9 @@ final class HoldingResearchCardLayoutTests: XCTestCase {
                 restoresCache: false, initialAvailability: [.earnings: .empty, .predictionMarkets: .empty]),
                 width: 402, dark: dark, name: "stock-look-through-research-\(dark)")
             XCTAssertGreaterThan(size.height, 450)
-            // One more on-demand entry than before: insider trades.
-            XCTAssertLessThan(size.height, 650 + HoldingDetailCardStyle.minimumRowHeight + HoldingDetailCardStyle.spacing)
+            // Two more on-demand entries than before: insider trades and
+            // management follow-through.
+            XCTAssertLessThan(size.height, 650 + 2 * (HoldingDetailCardStyle.minimumRowHeight + HoldingDetailCardStyle.spacing))
         }
     }
 

@@ -167,6 +167,11 @@
 		AE1100000000000000000002 /* industry_sentiment.json in Resources */ = {isa = PBXBuildFile; fileRef = BE1100000000000000000002 /* industry_sentiment.json */; };
 		AC9200000000000000000001 /* AnalystHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC9200000000000000000001 /* AnalystHistoryView.swift */; };
 		AC9200000000000000000002 /* analyst_history_catalog.json in Resources */ = {isa = PBXBuildFile; fileRef = BC9200000000000000000002 /* analyst_history_catalog.json */; };
+		A6D311000000000000000001 /* ManagementDelivery.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D311000000000000000001 /* ManagementDelivery.swift */; };
+		A6D311000000000000000002 /* ManagementDeliveryClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D311000000000000000002 /* ManagementDeliveryClient.swift */; };
+		A6D311000000000000000003 /* ManagementDeliveryAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D311000000000000000003 /* ManagementDeliveryAnalyzer.swift */; };
+		A6D311000000000000000004 /* ManagementDeliveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D311000000000000000004 /* ManagementDeliveryView.swift */; };
+		A6D311000000000000000005 /* ManagementDeliveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D311000000000000000005 /* ManagementDeliveryTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -334,6 +339,11 @@
 		BE1100000000000000000002 /* industry_sentiment.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = industry_sentiment.json; sourceTree = "<group>"; };
 		BC9200000000000000000001 /* AnalystHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalystHistoryView.swift; sourceTree = "<group>"; };
 		BC9200000000000000000002 /* analyst_history_catalog.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = analyst_history_catalog.json; sourceTree = "<group>"; };
+		B6D311000000000000000001 /* ManagementDelivery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagementDelivery.swift; sourceTree = "<group>"; };
+		B6D311000000000000000002 /* ManagementDeliveryClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagementDeliveryClient.swift; sourceTree = "<group>"; };
+		B6D311000000000000000003 /* ManagementDeliveryAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagementDeliveryAnalyzer.swift; sourceTree = "<group>"; };
+		B6D311000000000000000004 /* ManagementDeliveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagementDeliveryView.swift; sourceTree = "<group>"; };
+		B6D311000000000000000005 /* ManagementDeliveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagementDeliveryTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -434,6 +444,10 @@
 				B5EC70000000000000000007 /* StockChartsRotation.swift */,
 				B5EC70000000000000000001 /* SectorRotation.swift */,
 				F10100000000000000000001 /* EarningsHistory.swift */,
+				B6D311000000000000000004 /* ManagementDeliveryView.swift */,
+				B6D311000000000000000003 /* ManagementDeliveryAnalyzer.swift */,
+				B6D311000000000000000002 /* ManagementDeliveryClient.swift */,
+				B6D311000000000000000001 /* ManagementDelivery.swift */,
 				B199000000000000000000AE /* TodayDetailView.swift */,
 				B199000000000000000000AF /* SectorAttribution.swift */,
 				B19900000000000000FF90 /* PortfolioDocumentMerge.swift */,
@@ -541,6 +555,7 @@
 				B199000000000000000000B7 /* Trading212FillDecodingTests.swift */,
 				B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */,
 				F10100000000000000000003 /* EarningsHistoryTests.swift */,
+				B6D311000000000000000005 /* ManagementDeliveryTests.swift */,
 				F101000000000000000000F1 /* InsiderTradesTests.swift */,
 				F101000000000000000000F2 /* RevenueSegmentsTests.swift */,
 				F101000000000000000000F4 /* PolicyShortcutTests.swift */,
@@ -776,6 +791,10 @@
 				A5EC70000000000000000007 /* StockChartsRotation.swift in Sources */,
 				A5EC70000000000000000001 /* SectorRotation.swift in Sources */,
 				E10100000000000000000001 /* EarningsHistory.swift in Sources */,
+				A6D311000000000000000004 /* ManagementDeliveryView.swift in Sources */,
+				A6D311000000000000000003 /* ManagementDeliveryAnalyzer.swift in Sources */,
+				A6D311000000000000000002 /* ManagementDeliveryClient.swift in Sources */,
+				A6D311000000000000000001 /* ManagementDelivery.swift in Sources */,
 				A199000000000000000000AE /* TodayDetailView.swift in Sources */,
 				A199000000000000000000AF /* SectorAttribution.swift in Sources */,
 				A19900000000000000FF90 /* PortfolioDocumentMerge.swift in Sources */,
@@ -830,6 +849,7 @@
 				A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */,
 				A199000000000000000000AD /* NasdaqAnalystLogicTests.swift in Sources */,
 				E10100000000000000000003 /* EarningsHistoryTests.swift in Sources */,
+				A6D311000000000000000005 /* ManagementDeliveryTests.swift in Sources */,
 				E101000000000000000000F1 /* InsiderTradesTests.swift in Sources */,
 				E101000000000000000000F2 /* RevenueSegmentsTests.swift in Sources */,
 				E101000000000000000000F4 /* PolicyShortcutTests.swift in Sources */,

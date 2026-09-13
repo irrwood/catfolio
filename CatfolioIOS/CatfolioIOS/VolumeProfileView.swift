@@ -2029,7 +2029,7 @@ struct HoldingResearchSection: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if visibility.hasVisibleModules {
+            if visibility.hasVisibleModules || ManagementDeliveryRules.isEligible(holding) {
                 // Eager, not lazy: a handful of cards whose heights change as
                 // their content arrives. Lazily, the ones scrolled off above
                 // were re-measured on reaching the page's end and threw the
@@ -2043,6 +2043,9 @@ struct HoldingResearchSection: View {
                     }
                     if visibility.shows(.developments) {
                         SecurityDebateCard(ticker: holding.ticker, name: holding.shortName)
+                    }
+                    if ManagementDeliveryRules.isEligible(holding) {
+                        ManagementDeliveryCard(ticker: holding.ticker)
                     }
                     if visibility.shows(.consensus) || visibility.shows(.analystHistory) {
                         AnalystConsensusView(symbol: holding.ticker, currency: holding.quoteCurrency, price: price,
@@ -2068,7 +2071,7 @@ struct HoldingResearchSection: View {
 
             // Only under research cards: a fund with none keeps a zero-height
             // section, and the OI caveat stays in the wall's own ⓘ.
-            if visibility.hasVisibleModules {
+            if visibility.hasVisibleModules || ManagementDeliveryRules.isEligible(holding) {
                 // One running paragraph, not a line per caveat.
                 Text(L10n.sentences(disclaimers))
                 .appText(.micro, weight: .regular)

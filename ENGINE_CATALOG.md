@@ -22,6 +22,7 @@
 
 | 能力 | 实现入口 | 调用/消费位置 | 测试与边界 |
 |---|---|---|---|
+| 管理层兑现核对 | `ManagementDelivery.swift`、`ManagementDeliveryClient.swift`、`ManagementDeliveryAnalyzer.swift` | 个股研究区 `ManagementDeliveryCard`；iPhone 直接下载 FMP 文字稿与标准化财报，设备端 AI 提取/匹配，数字由规则判定 | `ManagementDeliveryTests.swift`；最近 4/6/8 季度、至少四个连续财季，最多核对 40 项承诺。资料不上传；需 iOS 26 Apple Intelligence 与 FMP 权限，证据不足为待验证。[边界与验收](docs/ios-management-delivery.md)，2026-09-13 新增；真机端到端尚未验收 |
 | 组合估值、成本和持仓汇总 | [LocalPortfolioStore.swift](CatfolioIOS/CatfolioIOS/LocalPortfolioStore.swift) → `LocalPortfolioEngine` | 本地组合 presentation、概览和持仓 | `LocalPortfolioEngineTests.swift`；当前估值 FX 有缓存及固定值兜底，不用于历史成交对账 |
 | 券商读取及导入 | [Trading212Client.swift](CatfolioIOS/CatfolioIOS/Trading212Client.swift)、[IBKRFlexClient.swift](CatfolioIOS/CatfolioIOS/IBKRFlexClient.swift)、[MoomooOAuthClient.swift](CatfolioIOS/CatfolioIOS/MoomooOAuthClient.swift)、[CSVImportView.swift](CatfolioIOS/CatfolioIOS/CSVImportView.swift) | 各券商连接页、CSV 导入、本地组合存储 | `Trading212FillDecodingTests.swift`、`BrokerResultPreservationTests.swift`；仍是多处适配代码，未统一成跨端账本引擎 |
 | 账本对账 | [LedgerReconciliation.swift](CatfolioIOS/CatfolioIOS/LedgerReconciliation.swift) | `SettingsView` 中生成和显示 report | `LedgerReconciliationTests.swift`；对账报告不等于自动修复原账本 |

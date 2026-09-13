@@ -48,6 +48,8 @@ IBKR 的 Activity Flex Query 应输出 XML，时间范围覆盖完整成交历�
 
 ## 运行
 
+个股研究区新增「管理层兑现情况」：在 iPhone 下载并分析最近 4、6 或 8 季度的已有电话会文字稿和财报，对照原话与后续结果。仅支持已确认的美国上市公司证券，需 FMP 文字稿/财报权限，以及支持 Apple Intelligence 的 iOS 26 设备。资料和结果仅存本机，未就绪时不切换云端模型。页面提供来源、待验证状态及本机资料删除入口。[实现边界与验证说明](../docs/ios-management-delivery.md)。
+
 1. 用 Xcode 26 打开 `CatfolioIOS.xcodeproj`。
 2. 选择模拟器或已签名的 iPhone 后直接运行。
 3. 在 App 的“设置”中直连券商或导入 CSV；不需要先启动后端。
