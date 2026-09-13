@@ -86,7 +86,7 @@ struct ReturnsView: View {
         .navigationBarTitleDisplayMode(.large)
         .toolbarVisibility(.visible, for: .navigationBar)
         .fullScreenCover(isPresented: $showsPolicyComposer) {
-            PolicyComposerEntry().ignoresSafeArea()
+            PolicyComposerEntry()
         }
         .sheet(item: $selectedHolding) { holding in
             HoldingDetailView(holding: holding)

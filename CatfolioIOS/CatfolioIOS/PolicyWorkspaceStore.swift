@@ -7,10 +7,14 @@ struct PolicyWorkspace: Codable, Identifiable, Sendable {
     var id: UUID
     var title: String
     var draft: String
+    var naturalLanguageDraft: String? = nil
     var validatedDocument: Data?
     var generation: Int
     var updatedAt: Date
     var adoptedCandidates: [String: Int]? = nil
+    /// For each step, the words of the description it came from — the cause
+    /// the editor shows under the step. Not part of the shared contract.
+    var stepSources: [String: String]? = nil
 
     init(id: UUID = UUID(), title: String = "", draft: String = "", validatedDocument: Data? = nil) {
         self.id = id
@@ -108,13 +112,28 @@ actor PolicyWorkspaceStore {
         catch { throw PolicyWorkspaceError.corrupt(file.lastPathComponent) }
     }
 
+    /// Permanently removes one user-owned strategy and its revision/candidate files.
+    /// Built-in templates are not stored here, so they remain available after deletion.
+    func delete(_ id: UUID, expectedGeneration: Int? = nil) throws {
+        if let expectedGeneration, let existing = try load(id),
+           existing.generation != expectedGeneration { throw PolicyWorkspaceError.conflict }
+        let file = url(id)
+        let folder = directory.appendingPathComponent(id.uuidString, isDirectory: true)
+        guard FileManager.default.fileExists(atPath: file.path) || FileManager.default.fileExists(atPath: folder.path) else { return }
+        if FileManager.default.fileExists(atPath: folder.path) { try FileManager.default.removeItem(at: folder) }
+        if FileManager.default.fileExists(atPath: file.path) { try FileManager.default.removeItem(at: file) }
+    }
+
     @discardableResult
     func save(_ workspace: PolicyWorkspace, adoptingCandidateID: String? = nil) throws -> PolicyWorkspace {
         guard workspace.draft.utf8.count <= Self.maximumDraftBytes,
+              (workspace.naturalLanguageDraft?.utf8.count ?? 0) <= Self.maximumDraftBytes,
               (workspace.validatedDocument?.count ?? 0) <= Self.maximumDraftBytes else {
             throw PolicyWorkspaceError.oversized
         }
         let existing = try load(workspace.id)
+        // An editor still holding a deleted workspace must not recreate it.
+        guard existing != nil || workspace.generation == 0 else { throw PolicyWorkspaceError.conflict }
         if let existing, existing.generation != workspace.generation {
             throw PolicyWorkspaceError.conflict
         }

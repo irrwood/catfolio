@@ -104,9 +104,15 @@ import Foundation
         let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("policy-tests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: temporary) }
         let store = PolicyWorkspaceStore(directory: temporary)
-        let draft = PolicyWorkspace(title: "Test", draft: "not valid; preserve me", validatedDocument: try document.data())
+        var draft = PolicyWorkspace(title: "Test", draft: "not valid; preserve me", validatedDocument: try document.data())
+        draft.naturalLanguageDraft = "筛选过去20个交易日涨幅超过5%的持仓"
         let saved = try await store.save(draft)
         let reopened = try await PolicyWorkspaceStore(directory: temporary).load(saved.id)
+        precondition(reopened?.naturalLanguageDraft == draft.naturalLanguageDraft, "Natural language must survive reopening independently of the executable document")
+        var legacyJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(draft)) as! [String: Any]
+        legacyJSON.removeValue(forKey: "naturalLanguageDraft")
+        let legacyWorkspace = try JSONDecoder().decode(PolicyWorkspace.self, from: JSONSerialization.data(withJSONObject: legacyJSON))
+        precondition(legacyWorkspace.naturalLanguageDraft == nil && legacyWorkspace.draft == draft.draft, "Existing workspaces remain readable")
         precondition(reopened?.draft == draft.draft && reopened?.validatedDocument == draft.validatedDocument)
         do { _ = try await store.save(draft); fatalError("Stale generation accepted") } catch PolicyWorkspaceError.conflict {}
         var conflicting = saved
@@ -130,6 +136,8 @@ import Foundation
         adopted.draft = "candidate text"
         adopted.validatedDocument = try changed.data()
         let committed = try await store.save(adopted, adoptingCandidateID: candidateID)
+        let reopenedAdoption = try await store.load(committed.id)
+        precondition(reopenedAdoption?.naturalLanguageDraft == draft.naturalLanguageDraft && reopenedAdoption?.draft == "candidate text", "Applying AI rules must preserve the original writing")
         let adoptedHistory = try await PolicyWorkspaceStore(directory: temporary).candidates(saved.id)
         precondition(adoptedHistory[0].record["status"].string == "ADOPTED")
         precondition(adoptedHistory[0].record["adoptedRevision"].number == 2)
@@ -147,6 +155,23 @@ import Foundation
         let revisions = try await store.revisions(saved.id)
         precondition(revisions.map { $0["revision"].number! } == [3, 2, 1])
         precondition(revisions.last == document, "Restore must not rewrite the original revision")
+        let neighbor = try await store.save(PolicyWorkspace(title: "Keep", draft: "Another strategy"))
+        do {
+            try await store.delete(saved.id, expectedGeneration: saved.generation)
+            fatalError("Stale library deleted a newer strategy")
+        } catch PolicyWorkspaceError.conflict {}
+        try await store.delete(saved.id)
+        let restartedStore = PolicyWorkspaceStore(directory: temporary)
+        let remaining = try await restartedStore.list()
+        precondition(remaining.map(\.id) == [neighbor.id], "Deletion must persist and preserve other strategies")
+        let deletedRevisions = try await restartedStore.revisions(saved.id)
+        let deletedCandidates = try await restartedStore.candidates(saved.id)
+        precondition(deletedRevisions.isEmpty && deletedCandidates.isEmpty)
+        do {
+            _ = try await restartedStore.save(restored)
+            fatalError("A stale editor resurrected a deleted strategy")
+        } catch PolicyWorkspaceError.conflict {}
+        try await restartedStore.delete(saved.id)
         var unsupported = document
         unsupported["statePolicy"]["initialSnapshotId"] = .string("missing-snapshot")
         precondition(PolicyCapabilities.diagnostics(unsupported).contains { $0.code == "UNSUPPORTED" })

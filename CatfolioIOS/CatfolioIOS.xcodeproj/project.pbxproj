@@ -23,13 +23,13 @@
 		AF1000000000000000000010 /* PolicyExecution.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000010; };
 		AF1000000000000000000011 /* PolicyMarketAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000011; };
 		AF1000000000000000000012 /* PolicyRunCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000012; };
-		AF1000000000000000000013 /* PolicyRunHistoryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000013; };
+		AF1000000000000000000020 /* PolicyShortcut.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000020; };
+		AF1000000000000000000021 /* PolicyRunTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000021; };
+		AF1000000000000000000022 /* PolicyComposerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000022; };
+		AF1000000000000000000023 /* PolicyComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000023; };
 		AF1000000000000000000001 /* PolicyWorkspaceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000001; };
-		AF1000000000000000000002 /* PolicyComposerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000002; };
 		AF1000000000000000000003 /* PolicyContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000003; };
 		AF1000000000000000000004 /* PolicyTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000004; };
-		AF1000000000000000000005 /* PolicyFieldsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000005; };
-		AF1000000000000000000006 /* PolicyCandidateViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000006; };
 		AF1000000000000000000090 /* strategy.schema.json in Resources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000090; };
 		A1E100000000000000000001 /* PortfolioHomeScrollInteraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E100000000000000000001 /* PortfolioHomeScrollInteraction.swift */; };
 		A1E099000000000000000001 /* HistoryPagingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E099000000000000000001 /* HistoryPagingView.swift */; };
@@ -142,6 +142,7 @@
 		E10100000000000000000003 /* EarningsHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000003 /* EarningsHistoryTests.swift */; };
 		E101000000000000000000F1 /* InsiderTradesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F1 /* InsiderTradesTests.swift */; };
 		E101000000000000000000F2 /* RevenueSegmentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F2 /* RevenueSegmentsTests.swift */; };
+		E101000000000000000000F4 /* PolicyShortcutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F4 /* PolicyShortcutTests.swift */; };
 		A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000C1 /* SectorAttributionTests.swift */; };
 		A19900000000000000FFB0 /* NumericAlternatesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FFB0 /* NumericAlternatesTests.swift */; };
 		A19900000000000000FFA0 /* PublicInvestorSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */; };
@@ -180,13 +181,13 @@
 		BF1000000000000000000010 /* PolicyExecution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyExecution.swift; sourceTree = "<group>"; };
 		BF1000000000000000000011 /* PolicyMarketAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyMarketAdapter.swift; sourceTree = "<group>"; };
 		BF1000000000000000000012 /* PolicyRunCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyRunCoordinator.swift; sourceTree = "<group>"; };
-		BF1000000000000000000013 /* PolicyRunHistoryViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyRunHistoryViewController.swift; sourceTree = "<group>"; };
+		BF1000000000000000000020 /* PolicyShortcut.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyShortcut.swift; sourceTree = "<group>"; };
+		BF1000000000000000000021 /* PolicyRunTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyRunTrace.swift; sourceTree = "<group>"; };
+		BF1000000000000000000022 /* PolicyComposerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyComposerStore.swift; sourceTree = "<group>"; };
+		BF1000000000000000000023 /* PolicyComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyComposerView.swift; sourceTree = "<group>"; };
 		BF1000000000000000000001 /* PolicyWorkspaceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyWorkspaceStore.swift; sourceTree = "<group>"; };
-		BF1000000000000000000002 /* PolicyComposerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyComposerViewController.swift; sourceTree = "<group>"; };
 		BF1000000000000000000003 /* PolicyContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyContract.swift; sourceTree = "<group>"; };
 		BF1000000000000000000004 /* PolicyTemplates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyTemplates.swift; sourceTree = "<group>"; };
-		BF1000000000000000000005 /* PolicyFieldsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyFieldsViewController.swift; sourceTree = "<group>"; };
-		BF1000000000000000000006 /* PolicyCandidateViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyCandidateViewController.swift; sourceTree = "<group>"; };
 		BF1000000000000000000090 /* strategy.schema.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = strategy.schema.json; sourceTree = "<group>"; };
 		B1E100000000000000000001 /* PortfolioHomeScrollInteraction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioHomeScrollInteraction.swift; sourceTree = "<group>"; };
 		B1E099000000000000000001 /* HistoryPagingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryPagingView.swift; sourceTree = "<group>"; };
@@ -303,6 +304,7 @@
 		F10100000000000000000003 /* EarningsHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarningsHistoryTests.swift; sourceTree = "<group>"; };
 		F101000000000000000000F1 /* InsiderTradesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsiderTradesTests.swift; sourceTree = "<group>"; };
 		F101000000000000000000F2 /* RevenueSegmentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RevenueSegmentsTests.swift; sourceTree = "<group>"; };
+		F101000000000000000000F4 /* PolicyShortcutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyShortcutTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000C1 /* SectorAttributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttributionTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FFB0 /* NumericAlternatesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericAlternatesTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicInvestorSelectionTests.swift; sourceTree = "<group>"; };
@@ -374,13 +376,13 @@
 				BF1000000000000000000010 /* PolicyExecution.swift */,
 				BF1000000000000000000011 /* PolicyMarketAdapter.swift */,
 				BF1000000000000000000012 /* PolicyRunCoordinator.swift */,
-				BF1000000000000000000013 /* PolicyRunHistoryViewController.swift */,
+				BF1000000000000000000020 /* PolicyShortcut.swift */,
+				BF1000000000000000000021 /* PolicyRunTrace.swift */,
+				BF1000000000000000000022 /* PolicyComposerStore.swift */,
+				BF1000000000000000000023 /* PolicyComposerView.swift */,
 				BF1000000000000000000001 /* PolicyWorkspaceStore.swift */,
-				BF1000000000000000000002 /* PolicyComposerViewController.swift */,
 				BF1000000000000000000003 /* PolicyContract.swift */,
 				BF1000000000000000000004 /* PolicyTemplates.swift */,
-				BF1000000000000000000005 /* PolicyFieldsViewController.swift */,
-				BF1000000000000000000006 /* PolicyCandidateViewController.swift */,
 				B1000000000000000000000A /* SettingsView.swift */,
 				B1000000000000000000000E /* ETFLookThroughView.swift */,
 				B1000000000000000000000F /* CSVImportView.swift */,
@@ -528,6 +530,7 @@
 				F10100000000000000000003 /* EarningsHistoryTests.swift */,
 				F101000000000000000000F1 /* InsiderTradesTests.swift */,
 				F101000000000000000000F2 /* RevenueSegmentsTests.swift */,
+				F101000000000000000000F4 /* PolicyShortcutTests.swift */,
 				B199000000000000000000C1 /* SectorAttributionTests.swift */,
 				B19900000000000000FFB0 /* NumericAlternatesTests.swift */,
 				B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */,
@@ -710,13 +713,13 @@
 				AF1000000000000000000010 /* PolicyExecution.swift in Sources */,
 				AF1000000000000000000011 /* PolicyMarketAdapter.swift in Sources */,
 				AF1000000000000000000012 /* PolicyRunCoordinator.swift in Sources */,
-				AF1000000000000000000013 /* PolicyRunHistoryViewController.swift in Sources */,
+				AF1000000000000000000020 /* PolicyShortcut.swift in Sources */,
+				AF1000000000000000000021 /* PolicyRunTrace.swift in Sources */,
+				AF1000000000000000000022 /* PolicyComposerStore.swift in Sources */,
+				AF1000000000000000000023 /* PolicyComposerView.swift in Sources */,
 				AF1000000000000000000001 /* PolicyWorkspaceStore.swift in Sources */,
-				AF1000000000000000000002 /* PolicyComposerViewController.swift in Sources */,
 				AF1000000000000000000003 /* PolicyContract.swift in Sources */,
 				AF1000000000000000000004 /* PolicyTemplates.swift in Sources */,
-				AF1000000000000000000005 /* PolicyFieldsViewController.swift in Sources */,
-				AF1000000000000000000006 /* PolicyCandidateViewController.swift in Sources */,
 				A1000000000000000000000A /* SettingsView.swift in Sources */,
 				A1000000000000000000000C /* ETFLookThroughView.swift in Sources */,
 				A1000000000000000000000D /* CSVImportView.swift in Sources */,
@@ -811,6 +814,7 @@
 				E10100000000000000000003 /* EarningsHistoryTests.swift in Sources */,
 				E101000000000000000000F1 /* InsiderTradesTests.swift in Sources */,
 				E101000000000000000000F2 /* RevenueSegmentsTests.swift in Sources */,
+				E101000000000000000000F4 /* PolicyShortcutTests.swift in Sources */,
 				A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */,
 				A19900000000000000FFB0 /* NumericAlternatesTests.swift in Sources */,
 				A19900000000000000FFA0 /* PublicInvestorSelectionTests.swift in Sources */,

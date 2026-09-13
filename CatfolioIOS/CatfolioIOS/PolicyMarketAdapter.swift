@@ -48,15 +48,32 @@ actor PolicyMarketAdapter {
         var seen = Set<String>()
         for position in positions where position.shares > 0 {
             try Task.checkCancellation()
+            // A holding this adapter cannot price stays in the run with its
+            // reason, rather than stopping the run for everything else: it
+            // reaches no indicator, so no step can treat it as passing.
+            func unsupported(_ reason: String) async throws {
+                let symbol = position.ticker.uppercased()
+                let key = "unsupported:" + symbol + "/" + symbol
+                guard seen.insert(key).inserted, !captured.contains(where: { $0.key == key }) else { return }
+                let snapshot = PolicySecuritySnapshot(securityId: "unsupported:" + symbol, listingId: symbol, symbol: symbol, name: position.name,
+                                                      currency: position.quoteCurrency.uppercased(), exchangeMIC: "", prices: [], referenceSessions: sessions,
+                                                      source: L10n.text("未取行情"), capturedAt: .now, issue: reason)
+                try await onCapture(snapshot)
+                captured.append(snapshot)
+            }
             guard let entry = catalog.entry(brokerSymbol: position.ticker), entry.market == "US", entry.currency == "USD", position.quoteCurrency.uppercased() == "USD" else {
-                throw PolicyContractError(message: L10n.text("\(position.ticker) 的挂牌或币种尚未适配。当前仅支持参考目录已确认的美元美股，不会按裸代码混合市场。"))
+                try await unsupported(L10n.text("暂不支持：目前只支持美元计价的美股"))
+                continue
             }
             let exchange = entry.exchange?.uppercased() ?? ""
             let mic: String
             if exchange.contains("NASDAQ") { mic = "XNAS" }
             else if exchange == "NYSE" || exchange.contains("NEW YORK") { mic = "XNYS" }
             else if exchange.contains("ARCA") || exchange.contains("AMEX") { mic = "ARCX" }
-            else { throw PolicyContractError(message: L10n.text("\(position.ticker) 缺少已适配的交易所日历")) }
+            else {
+                try await unsupported(L10n.text("暂不支持：还没有这家交易所的交易日历"))
+                continue
+            }
             let securityID = "reference:US:" + entry.symbol
             let listingID = mic + ":" + entry.symbol + ":USD"
             let key = securityID + "/" + listingID
@@ -69,7 +86,9 @@ actor PolicyMarketAdapter {
             try await onCapture(snapshot)
             captured.append(snapshot)
         }
-        guard !captured.isEmpty else { throw PolicyContractError(message: L10n.text("当前账户没有可分析的持仓")) }
+        guard captured.contains(where: { $0.issue == nil || !$0.prices.isEmpty }) else {
+            throw PolicyContractError(message: captured.isEmpty ? L10n.text("当前账户没有可分析的持仓") : L10n.text("所选账户里没有能取到行情的美股持仓"))
+        }
         return captured
     }
 }

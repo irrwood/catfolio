@@ -114,11 +114,10 @@ actor PolicyRunCoordinator {
         do {
             try await PolicyBackgroundService.shared.submit(runID: record.id) { await self.beginPending() }
         } catch {
-            pending = false
-            current?.artifact["status"] = .string("FAILED")
-            current?.notice = L10n.text("后台申请失败，可手动选择前台运行：\(error.localizedDescription)")
-            try await persist()
-            throw error
+            // No background time on offer — the simulator, an older system,
+            // a refused request. Running in the foreground beats not running.
+            current?.notice = L10n.text("系统没有提供后台运行时间，改在前台运行；离开 App 时可能暂停，回来后会继续。")
+            beginPending()
         }
     }
     private func beginPending() {
