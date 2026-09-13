@@ -2313,3 +2313,35 @@
 " 等 %@ 天" = " and %@ days in all";
 
 "%@%@ 账户单日涨跌远超行情能解释的幅度，多半是推算的入金或持仓有误，这些天按未记录的转入转出处理、不计收益。" = "On %@%@ the account moved far more in one day than prices explain — most likely an implied deposit or position is wrong. Those days are treated as unrecorded transfers and earn no return.";
+
+"周期对比" = "Cycle comparison";
+
+"对比对象" = "Compare";
+
+"暂无周期数据" = "No cycle data";
+
+"我的组合按每日 TWR 计算。" = "My portfolio uses daily TWR. ";
+
+"%@ 的历史行情暂时读不到，稍后再试。" = "Price history for %@ is unavailable right now. Try again later.";
+
+"还没有可用的组合收益历史。" = "There is no portfolio return history yet.";
+
+"（%@ 起）" = " (from %@)";
+
+"没有选中的曲线" = "No lines selected";
+
+"在下方轻点曲线把它加回来。" = "Tap a line below to bring it back.";
+
+"指数为价格指数，不含股息；我的组合按每日 TWR 计算。" = "Indexes are price indexes, without dividends; my portfolio uses daily TWR. ";
+
+"今年预计 %@" = "This year ~%@";
+
+"%@ 当前" = "%@ now";
+
+"对比年数" = "Years to compare";
+
+"%@ 最近 %@ 年的逐年走势对比" = "%@, each of the last %@ years laid over this one";
+
+"每条线是一个自然年，从上一年最后一个收盘价起计涨跌；横轴为 1–12 月。" = "Each line is a calendar year, measured from the previous year's last close; the axis runs January to December.";
+
+"%@ 年均值" = "%@-year average";

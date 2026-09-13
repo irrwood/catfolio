@@ -993,6 +993,16 @@ struct LocalMarketDataClient {
             let meta: Meta?
             let timestamp: [Int]?
             let indicators: Indicators
+            /// Present when the request asks for `div` events.
+            let events: Events?
+        }
+
+        struct Events: Decodable {
+            struct Dividend: Decodable {
+                let amount: Double
+                let date: Int
+            }
+            let dividends: [String: Dividend]?
         }
 
         struct Indicators: Decodable {
@@ -2925,6 +2935,69 @@ struct LocalMarketDataClient {
         return values
     }
 
+    /// Dividends per share over the last two years, by ex-date, in the
+    /// listing's own quote currency. Kept for half a day.
+    func dividendPayments(symbol: String) async throws -> [DividendForecast.Payment] {
+        if let cached = await DividendScheduleCache.shared.lookup(symbol) { return cached }
+        var components = URLComponents(string: "https://query1.finance.yahoo.com/v8/finance/chart/\(symbol.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? symbol)")!
+        components.queryItems = [
+            URLQueryItem(name: "range", value: "2y"),
+            URLQueryItem(name: "interval", value: "1mo"),
+            URLQueryItem(name: "events", value: "div"),
+        ]
+        var request = URLRequest(url: components.url!)
+        request.timeoutInterval = 9
+        request.setValue("Mozilla/5.0 Catfolio-iOS", forHTTPHeaderField: "User-Agent")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await Self.yahooSession.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw LocalServiceError.remote("Yahoo 分红记录请求失败")
+        }
+        let payload = try JSONDecoder().decode(YahooChartResponse.self, from: data)
+        guard let result = payload.chart.result?.first else { throw LocalServiceError.noMarketData }
+        let listed = result.meta?.currency ?? "USD"
+        let currency = listed == "GBp" ? "GBX" : listed.uppercased()
+        let payments = (result.events?.dividends?.values.map { $0 } ?? []).map {
+            DividendForecast.Payment(
+                exDate: DayDateCodec.string(from: Date(timeIntervalSince1970: TimeInterval($0.date))),
+                perShare: $0.amount, currency: currency)
+        }.sorted { $0.exDate < $1.exDate }
+        await DividendScheduleCache.shared.save(payments, for: symbol)
+        return payments
+    }
+
+    /// What today's holdings should still pay before the year is out, in
+    /// USD, on the assumption that each repeats last year's payments.
+    ///
+    /// - Returns: the amount, and how many holdings had a schedule to go on.
+    func remainingDividends(for holdings: [Holding], today: Date = Date()) async -> (usd: Double, covered: Int) {
+        let held = holdings.filter { $0.shares > 0 && $0.publicDisclosure == nil }
+        let schedules = await withTaskGroup(of: (Holding, [DividendForecast.Payment]?).self) { group in
+            var iterator = held.makeIterator()
+            for _ in 0..<min(8, held.count) {
+                guard let holding = iterator.next() else { break }
+                group.addTask { (holding, try? await dividendPayments(symbol: Self.yahooSymbol(ticker: holding.ticker, currency: holding.quoteCurrency ?? "USD"))) }
+            }
+            var result: [(Holding, [DividendForecast.Payment])] = []
+            while let (holding, payments) = await group.next() {
+                if let payments { result.append((holding, payments)) }
+                if let next = iterator.next() {
+                    group.addTask { (next, try? await dividendPayments(symbol: Self.yahooSymbol(ticker: next.ticker, currency: next.quoteCurrency ?? "USD"))) }
+                }
+            }
+            return result
+        }
+        var total = 0.0
+        var covered = 0
+        for (holding, payments) in schedules {
+            let expected = DividendForecast.remaining(shares: holding.shares, payments: payments, today: today)
+            guard expected.amount > 0, let usd = try? LocalPortfolioEngine.usd(expected.amount, currency: expected.currency) else { continue }
+            total += usd
+            covered += 1
+        }
+        return (total, covered)
+    }
+
     private func fmpHistoricalCloses(symbol: String, from: String, to: String) async throws -> [String: Double] {
         guard !symbol.uppercased().hasSuffix(".L"), InstrumentCurrencyRules.marketDataSymbol(for: symbol) == nil else {
             throw LocalServiceError.remote("FMP 无法确认伦敦标的报价币种")
@@ -4259,5 +4332,50 @@ enum ComparisonSnapshotCache {
         return FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("catfolio-comparison-v1", isDirectory: true)
             .appendingPathComponent(name + ".json")
+    }
+}
+
+/// This year's dividends, before they have all been paid: what has arrived,
+/// plus what the holdings paid over the same weeks last year.
+enum DividendForecast {
+    struct Payment: Equatable, Sendable {
+        let exDate: String
+        let perShare: Double
+        let currency: String
+    }
+
+    /// About how long a dividend takes from its ex-date to the account.
+    static let payLag: TimeInterval = 21 * 86_400
+
+    /// One holding's remaining payments this year: last year's with ex-dates
+    /// a year before the payments still to come — after today less the pay
+    /// lag, and before the year's end less it.
+    static func remaining(shares: Double, payments: [Payment], today: Date) -> (amount: Double, currency: String) {
+        guard shares > 0, let year = Int(DayDateCodec.string(from: today).prefix(4)),
+              let yearEnd = DayDateCodec.date(from: String(format: "%04d-12-31", year)) else { return (0, "USD") }
+        let from = DayDateCodec.string(from: oneYearBefore(today).addingTimeInterval(-payLag))
+        let through = DayDateCodec.string(from: oneYearBefore(yearEnd).addingTimeInterval(-payLag))
+        let due = payments.filter { $0.exDate > from && $0.exDate <= through }
+        return (due.reduce(0) { $0 + $1.perShare } * shares, due.first?.currency ?? payments.first?.currency ?? "USD")
+    }
+
+    private static func oneYearBefore(_ date: Date) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar.date(byAdding: .year, value: -1, to: date) ?? date
+    }
+}
+
+private actor DividendScheduleCache {
+    static let shared = DividendScheduleCache()
+    private var entries: [String: (fetched: Date, payments: [DividendForecast.Payment])] = [:]
+
+    func lookup(_ symbol: String) -> [DividendForecast.Payment]? {
+        guard let entry = entries[symbol], Date().timeIntervalSince(entry.fetched) < 12 * 3_600 else { return nil }
+        return entry.payments
+    }
+
+    func save(_ payments: [DividendForecast.Payment], for symbol: String) {
+        entries[symbol] = (Date(), payments)
     }
 }

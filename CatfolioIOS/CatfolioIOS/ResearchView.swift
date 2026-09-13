@@ -256,6 +256,7 @@ struct ResearchView: View {
             Section {
                 NavigationLink(L10n.text("板块轮动")) { SectorRotationView() }
                 NavigationLink(L10n.text("市场轮动 · RRG")) { StockChartsRotationView() }
+                NavigationLink(L10n.text("周期对比")) { CycleComparisonView() }
             }
             }
             if showsAttention {

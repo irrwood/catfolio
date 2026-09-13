@@ -749,6 +749,9 @@ private struct SettingsHistoryOverview: View {
     @AppStorage(DisplayCurrency.preferenceKey) private var displayCurrency = DisplayCurrency.usd.rawValue
     @State private var prepared: HistoryPreparedLedger?
     @State private var annualFees: Double?
+    /// This calendar year's dividends: received so far, plus what today's
+    /// holdings paid over the rest of the year last year.
+    @State private var dividendForecast: Double?
     @State private var failed = false
 
     private struct LoadKey: Hashable {
@@ -760,24 +763,16 @@ private struct SettingsHistoryOverview: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(L10n.text("历史速览"))
-                    .font(.subheadline.weight(.medium))
-                Spacer()
-                Text(L10n.text("全部账户 · 全部年份"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12),
                                      count: typeSize.isAccessibilitySize ? 1 : 2), spacing: 12) {
                 overviewCard(.orders, title: L10n.text("已实现盈亏"), icon: "arrow.up.arrow.down",
                              caption: realisedCaption, amount: realisedAmount, signed: true)
                 overviewCard(.dividends, title: L10n.text("Total dividends"), icon: "banknote",
-                             caption: L10n.text("累计"), amount: total(for: .dividends))
+                             caption: dividendForecastCaption, amount: total(for: .dividends))
                 overviewCard(.interest, title: L10n.text("Total interest"), icon: "percent",
-                             caption: L10n.text("累计"), amount: total(for: .interest))
+                             caption: "", amount: total(for: .interest))
                 overviewCard(.fees, title: L10n.text("年费用合计"), icon: "creditcard",
-                             caption: L10n.text("当前持仓估算"), amount: annualFees)
+                             caption: "", amount: annualFees)
             }
             if failed {
                 Button(L10n.text("无法读取速览，轻点重试")) {
@@ -788,10 +783,6 @@ private struct SettingsHistoryOverview: View {
             } else if prepared == nil {
                 ProgressView(L10n.text("正在读取历史汇总…"))
                     .font(.caption)
-            } else {
-                Text(L10n.text("金额按当前汇率折算；年费用为估算，未从收益重复扣除。"))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
             }
         }
         .accessibilityIdentifier("settings.history-overview")
@@ -808,11 +799,18 @@ private struct SettingsHistoryOverview: View {
         return calculation.combinedUSD
     }
 
+    private var dividendForecastCaption: String {
+        guard let dividendForecast, dividendForecast.isFinite, dividendForecast > 0 else { return "" }
+        let currency = DisplayCurrency(rawValue: displayCurrency) ?? .usd
+        let amount = DisplayFormat.money(currency.fromUSD(dividendForecast), currency: currency.rawValue, fractionDigits: 0)
+        return L10n.text("今年预计 \(amount)")
+    }
+
     private var realisedCaption: String {
-        guard let calculation = prepared?.realisedTotal else { return L10n.text("累计") }
+        guard let calculation = prepared?.realisedTotal else { return "" }
         if calculation.saleCount == 0 { return L10n.text("暂无卖出") }
         if !calculation.isComplete { return L10n.text("部分数据") }
-        return L10n.text("累计")
+        return ""
     }
 
     private func total(for category: HistoryCategory) -> Double? {
@@ -838,7 +836,7 @@ private struct SettingsHistoryOverview: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
-        .accessibilityValue("\(caption) · \(value)")
+        .accessibilityValue(caption.isEmpty ? value : "\(caption) · \(value)")
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("settings.history-overview.\(category.rawValue.lowercased())")
     }
@@ -847,6 +845,7 @@ private struct SettingsHistoryOverview: View {
     private func load() async {
         prepared = nil
         annualFees = nil
+        dividendForecast = nil
         failed = false
         do {
             let ledger = try await model.activityLedger()
@@ -866,6 +865,15 @@ private struct SettingsHistoryOverview: View {
                 annualFees = charges.isEmpty ? nil : charges.reduce(0) { $0 + $1.annual }
             }
             prepared = result
+            if let positions {
+                // After the cards are up: the schedules are a request per
+                // holding, the first time each day.
+                let year = String(DayDateCodec.string(from: Date()).prefix(4))
+                let received = result.page(category: .dividends, basis: .calendar, year: year).totalUSD
+                let remaining = await LocalMarketDataClient().remainingDividends(for: positions)
+                try Task.checkCancellation()
+                if remaining.covered > 0 || received > 0 { dividendForecast = received + remaining.usd }
+            }
         } catch {
             guard !Task.isCancelled else { return }
             failed = true

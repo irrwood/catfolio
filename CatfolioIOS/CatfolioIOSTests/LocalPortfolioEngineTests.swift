@@ -265,4 +265,19 @@ final class LocalPortfolioEngineTests: XCTestCase {
             ])
         )
     }
+
+    func testTheDividendForecastRepeatsLastYearsRemainingPayments() {
+        let today = DayDateCodec.date(from: "2026-09-13")!
+        let payments = [
+            ("2025-06-10", 0.5), // paid long ago
+            ("2025-08-20", 0.5), // ex-date passed a year ago; its payment has already arrived
+            ("2025-09-01", 0.5), // ex-date passed, payment still to come
+            ("2025-12-01", 0.5), // pays before the year is out
+            ("2025-12-20", 0.5), // pays in January
+        ].map { DividendForecast.Payment(exDate: $0.0, perShare: $0.1, currency: "USD") }
+        let remaining = DividendForecast.remaining(shares: 10, payments: payments, today: today)
+        XCTAssertEqual(remaining.amount, 10, accuracy: 1e-9)
+        XCTAssertEqual(remaining.currency, "USD")
+        XCTAssertEqual(DividendForecast.remaining(shares: 0, payments: payments, today: today).amount, 0)
+    }
 }
