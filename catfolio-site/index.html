@@ -4,106 +4,274 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Catfolio — 给你的投资，一个清晰的家。</title>
   <meta name="description" content="Catfolio 是为 iPhone 打造的原生投资组合 App。连接券商、看清持仓、比较收益，把投资放回自己手中。">
+  <link rel="alternate" hreflang="zh-CN" href="index.html"><link rel="alternate" hreflang="en" href="en.html">
   <link rel="icon" href="assets/cat.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
 </head>
 <body>
   <a class="skip" href="#main">跳转到内容</a>
   <header class="header wrap">
     <a class="brand" href="#" aria-label="Catfolio 首页"><img src="assets/cat.svg" width="36" height="36" alt="">catfolio.</a>
-    <nav aria-label="主导航"><a href="#features">功能</a><a href="#questions">常见问题</a><button class="button small" data-download>获取 App <span aria-hidden="true">↗</span></button></nav>
+    <nav aria-label="主导航"><a class="language-switch" href="en.html" hreflang="en" lang="en" data-language-switch>English</a><a href="#features">功能</a><a href="#privacy">安全</a><a href="#questions">常见问题</a><button class="button small" data-download>获取 App <span aria-hidden="true">↗</span></button></nav>
   </header>
   <main id="main">
     <section class="hero wrap">
       <div class="hero-copy"><p class="eyebrow">为 iPhone 而生的投资组合 App</p>
       <h1>给你的投资，<br>一个清晰的家。<br><span>持仓、收益与洞察。<br>都在你的口袋里。</span></h1>
       <div class="hero-actions"><button class="button" data-download>获取 Catfolio <span aria-hidden="true">↗</span></button><a class="button secondary" href="#preview">看看它如何工作 <span aria-hidden="true">↓</span></a></div>
-      <p class="compatibility">原生 iOS App <span>·</span> iOS 18 及以上</p></div>
+      <p class="compatibility">原生 iOS App <span>·</span> iOS 18 及以上</p><a class="security-promise" href="#privacy">本地计算 <span>·</span> 自主管理 <span>·</span> 只读连接 ↗</a></div>
     </section>
     <section id="preview" class="showcase wrap" aria-label="Catfolio App 展示">
       <div class="stage">
         <div class="stage-note"><span class="mini-label">LESS NOISE.</span><p>少一点纷扰。<br>多一点清晰。</p></div>
-        <div class="screens"><img class="screen screen-back" src="assets/returns.png" width="1206" height="2622" alt="Catfolio 收益页，比较投资组合与市场指数表现"><img class="screen screen-front" src="assets/portfolio.png" width="1206" height="2622" alt="Catfolio 持仓页，展示股票明细、成本与市值"></div>
+        <div class="screens"><img class="screen screen-back" src="assets/refresh/heatmap.png" width="1206" height="2622" alt="Catfolio 新版收益页的立体持仓热力图"><img class="screen screen-front" src="assets/refresh/overview.png" width="1206" height="2622" alt="Catfolio 持仓页，展示股票明细、成本与市值"></div>
         <div class="stage-bottom"><span>你熟悉的 iPhone。<br>更懂你的投资组合。</span><span>CATFOLIO FOR iOS</span></div>
-      </div><p class="caption">App 界面展示 · 数值仅用于展示界面，不代表收益承诺</p>
+      </div><p class="caption">2026.09.13 截图更新 · 演示组合，数值不代表收益承诺</p>
     </section>
-<nav class="wrap story-nav" aria-label="深入了解功能"><a href="#stock-research">看懂一只股票 ↗</a><a href="#cash-history">算清每一笔收支 ↗</a><a href="#currency-language">语言与货币 ↗</a><a href="#upcoming">接下来的功能 ↗</a><a href="#features">全部功能截图 ↓</a></nav>
+<nav class="wrap story-nav" aria-label="深入了解功能"><a href="#interactions">手指里的细节 ↗</a><a href="#widgets">系统小组件 ↗</a><a href="#latest">最近更新 ↗</a><a href="#today-returns">今日收益速览 ↗</a><a href="#portfolio-xray">组合透视 ↗</a><a href="#returns-review">收益来源与复盘 ↗</a><a href="#earnings-research">财报与承诺兑现 ↗</a><a href="#stock-research">看懂一只股票 ↗</a><a href="#all-accounts">全部账户统一分析 ↗</a><a href="#account-comparison">个股账户对比 ↗</a><a href="#cash-history">算清每一笔收支 ↗</a><a href="#currency-language">语言与货币 ↗</a><a href="#your-ai">连接自己的 AI ↗</a><a href="#privacy">安全与自主掌控 ↗</a><a href="#upcoming">接下来的功能 ↗</a><a href="#features">全部功能截图 ↓</a></nav>
+
+<section class="wrap section interaction-story" id="interactions" aria-labelledby="interaction-title">
+<p class="eyebrow">手指里的细节</p><h2 id="interaction-title">两根手指。<span>把一段涨跌，看清楚。</span></h2>
+<div class="interaction-layout"><div class="interaction-copy">
+<div class="interaction-options" role="group" aria-label="切换 App 交互截图">
+<button data-interaction="range" aria-pressed="true"><span>01</span><div><strong>双指，看一段。</strong><p>长按曲线，保持第一指，再加入第二指。移动端点，查看这段时间的变化。</p></div></button>
+<button data-interaction="day" aria-pressed="false"><span>02</span><div><strong>单指，看一天。</strong><p>长按后沿曲线滑动，日期和数值跟着指尖变化。</p></div></button>
+<button data-interaction="heatmap" aria-pressed="false"><span>03</span><div><strong>立体，一眼看全局。</strong><p>收益页的持仓热力图，用面积与颜色呈现组合分布。</p></div></button>
+<button data-interaction="expanded" aria-pressed="false"><span>04</span><div><strong>展开，再看细一点。</strong><p>轻点热力图展开，切换收益口径、板块分组或 ETF 穿透。</p></div></button>
+</div><p class="interaction-hint">点选上方条目切换截图，查看 App 的实际交互状态。</p>
+</div><figure class="interaction-visual"><a id="interaction-original" href="assets/refresh/chart-range.png" target="_blank" rel="noopener" aria-label="查看当前交互原始截图"><img id="interaction-image" src="assets/refresh/chart-range.png" width="1206" height="2622" loading="lazy" alt="演示组合曲线的双指区间选中状态"></a><figcaption id="interaction-caption" aria-live="polite">双指区间测量 · 原生选中状态 · 点击放大</figcaption></figure></div>
+</section>
+<section class="wrap section latest" id="widgets" aria-labelledby="widgets-title">
+<p class="eyebrow">丰富的系统小组件</p><h2 id="widgets-title">把投资，放在主屏幕上。<span>抬眼之间，了解投资表现。</span></h2>
+<p class="library-intro">用系统小组件，在 iPhone 主屏幕关注你的投资。把投资信息融入日常，让每一次查看都更轻松。</p>
+</section>
+<section class="wrap section latest" id="latest" aria-labelledby="latest-title"><p class="eyebrow">最近更新 · 2026.09</p><h2 id="latest-title">更深入一点。<span>从市场的轮动，到公司的细节。</span></h2>
+<div class="latest-links"><a href="#capability-market-rotation"><span>市场与板块</span><h3>看清轮动的方向 ↗</h3><p>指数 RRG、板块四象限与历史回放。</p></a><a href="#capability-composer"><span>策略编曲家</span><h3>把想法，整理成规则 ↗</h3><p>写策略、检查步骤，再看模拟结果。</p></a><a href="#returns-review"><span>收益来源 · 胜利复盘</span><h3>赚到的收益，再看一遍 ↗</h3><p>拆开盈利贡献，回顾组合如何走到今天。</p></a><a href="#capability-revenue"><span>公司研究</span><h3>不止看一个总数 ↗</h3><p>收入构成、内部人士交易、分析师历史回顾。</p></a></div></section>
+<section class="wrap section feature-story" id="today-returns" aria-labelledby="today-title">
+<p class="eyebrow">今日收益速览</p><h2 id="today-title">今天赚了多少。<span>快速看清，再做判断。</span></h2>
+<div class="story-layout"><figure class="story-visual"><a href="assets/refresh/today.png" target="_blank" rel="noopener"><img src="assets/refresh/today.png" width="1206" height="2622" loading="lazy" alt="今日收益详情，展示盈亏金额、市场基准及行业贡献"></a><figcaption>今日收益 · 演示组合<br>点击查看原始截图</figcaption></figure>
+<div class="story-rows"><article><span class="story-number">01</span><div><h3>打开首页，就知道今日表现。</h3><p>直接查看今日盈亏金额与涨跌幅，快速了解组合今天的变化。</p></div></article><article><span class="story-number">02</span><div><h3>谁在上涨，谁在拖累。</h3><p>切换上涨与下跌贡献，找到影响今日收益的持仓，再进入个股查看细节。</p></div></article><article><span class="story-number">03</span><div><h3>放回市场里，辅助判断。</h3><p>查看行业贡献并对照市场基准，了解变化来自哪些方向，为进一步研究提供线索。</p></div></article><p class="story-note">今日收益按当前持仓与最近可用报价推算，未计入今日买卖影响。数据用于辅助观察与判断，不是买卖信号。</p><a class="story-link" href="#capability-today">查看今日收益功能截图 ↓</a></div></div></section>
+<section class="wrap section feature-story" id="portfolio-xray" aria-labelledby="xray-title">
+<p class="eyebrow">PORTFOLIO X-RAY · 组合透视</p><h2 id="xray-title">给你的 Portfolio，做一次透视。<span>拆开收益，更了解你的投资。</span></h2>
+<div class="story-layout"><figure class="story-visual"><a href="assets/refresh/today.png" target="_blank" rel="noopener"><img src="assets/refresh/today.png" width="1206" height="2622" loading="lazy" alt="组合透视：按科技、消费、能源等行业展示今日盈亏贡献"></a><figcaption>按行业拆解今日收益 · 演示组合<br>点击查看原始截图</figcaption></figure>
+<div class="story-rows"><article><span class="story-number">01</span><div><h3>收益不止一个总数。</h3><p>把组合的今日盈亏按行业展开，看看科技、消费、能源等不同方向，各自带来了多少变化。</p></div></article><article><span class="story-number">02</span><div><h3>看行业，也看里面的公司。</h3><p>展开行业，查看其中的持仓与表现。从行业贡献追到具体公司，理解收益从哪里来。</p></div></article><article><span class="story-number">03</span><div><h3>更了解自己，投了什么。</h3><p>识别推动收益的行业与拖累组合的方向，把分散的股票放回同一个视野，为进一步研究提供依据。</p></div></article><p class="story-note">当前行业收益展示今日口径，按当前持仓与最近可用报价推算，未计入今日买卖影响。</p><a class="story-link" href="#capability-portfolio-xray">查看组合透视功能截图 ↓</a></div></div></section>
+<section class="wrap section feature-story" id="returns-review" aria-labelledby="returns-review-title">
+<p class="eyebrow">收益来源 · 胜利复盘</p><h2 id="returns-review-title">赚到的收益，值得再看一遍。<span>对胜利的复盘，也是对自己的了解。</span></h2>
+<div class="story-layout"><figure class="story-visual"><a href="assets/refresh/contributors.png" target="_blank" rel="noopener"><img src="assets/refresh/contributors.png" width="1206" height="2622" loading="lazy" alt="收益来源堆叠图，分层展示演示组合的本金、主要盈利持仓与其他收益"></a><figcaption>收益来源 · 演示组合<br>点击查看原始截图</figcaption></figure>
+<div class="story-rows"><article><span class="story-number">01</span><div><h3>这份收益，主要由谁贡献。</h3><p>把本金、主要盈利持仓与其他收益分层展开，看清哪些公司撑起了组合的增长。</p></div></article><article><span class="story-number">02</span><div><h3>回到时间里，看看增长的过程。</h3><p>切换时间范围，长按并拖动查看某一天。沿着各层的变化，回顾主要盈利持仓在不同阶段的表现。</p></div></article><article><span class="story-number">03</span><div><h3>聚焦一次，理解更深一点。</h3><p>点按图例，隐藏或显示持仓，重新聚焦收益来源。带着自己的投资逻辑回看表现，为下一次研究积累经验。</p></div></article><p class="story-note">图表按当前持仓股数回推历史市值，不包含已卖出的持仓，不是完整历史交易归因；其他持仓整体亏损时，亏损会从本金层扣除。</p><a class="story-link" href="#capability-contributors">查看收益来源功能截图 ↓</a></div></div></section>
+<section class="wrap section feature-story" id="earnings-research" aria-labelledby="earnings-title">
+<p class="eyebrow">财报电话会 · 管理层兑现追踪</p><h2 id="earnings-title">说过的话，后来兑现了吗？<span>把公司的承诺，放回结果里看。</span></h2>
+<div class="story-layout"><figure class="story-visual"><a href="assets/refresh/management-delivery.png" target="_blank" rel="noopener"><img src="assets/refresh/management-delivery.png" width="1206" height="2622" loading="lazy" alt="管理层兑现情况原生入口：选择最近 4、6 或 8 个季度，下载并在本机分析"></a><figcaption>管理层兑现情况 · 原生功能入口<br>尚未生成分析报告 · 点击查看原始截图</figcaption></figure>
+<div class="story-rows"><article><span class="story-number">01</span><div><h3>电话会里的承诺，自动整理。</h3><p>选择最近 4、6 或 8 个季度，发起下载与分析。从已有电话会文字稿中提取明确承诺，保留管理层原话与目标期限。</p></div></article><article><span class="story-number">02</span><div><h3>用后来的结果，核对当时的预期。</h3><p>对照后续财报和电话会证据，逐项整理已兑现、部分兑现、未兑现与待验证。看进展，也看差距；证据不足，就保留待验证。</p></div></article><article><span class="story-number">03</span><div><h3>每个判断，都能回到来源。</h3><p>查看承诺原文、后续结果和对应资料。资料与分析保存在 iPhone，之后可按需下载最新资料重新核对，或使用本机资料再次分析。</p></div></article><p class="story-note">适用于符合条件的美股公司。需 iOS 26、支持并启用 Apple Intelligence 的设备、FMP 资料权限及至少 4 个季度的已有文字稿。分析由你发起，资料按需更新。</p><a class="story-link" href="#capability-management-delivery">查看财报电话会功能截图 ↓</a></div></div></section>
 <section class="wrap section feature-story" id="stock-research" aria-labelledby="stock-title">
 <p class="eyebrow">个股研究</p><h2 id="stock-title">看懂一只股票。<span>从你的买卖，到公司的未来。</span></h2>
-<div class="story-layout"><figure class="story-visual"><a href="assets/features/detail.png" target="_blank" rel="noopener"><img src="assets/features/detail.png" width="1206" height="2622" loading="lazy" alt="个股页成交量价格分布与 52 周位置截图"></a><figcaption>个股详情 · 成交量分布与 52 周位置<br>点击查看原始截图</figcaption></figure><div class="story-rows"><article><span class="story-number">01</span><div><h3>买入点 · 卖出点</h3><p>把历史买卖标记放回价格曲线，结合成本参考线，回看每一次操作。</p></div></article><article><span class="story-number">02</span><div><h3>支撑与压力参考</h3><p>观察成交密集区与期权持仓集中位置，为潜在支撑、压力寻找依据。</p></div></article><article><span class="story-number">03</span><div><h3>成交量分析</h3><p>通过 Volume Profile 看成交集中在哪些价格，识别 POC 与价值区间。</p></div></article><article><span class="story-number">04</span><div><h3>52 周位置</h3><p>将当前价格放进过去 52 周的高低区间，理解它所处的位置。</p></div></article><article><span class="story-number">05</span><div><h3>分析师数据分析</h3><p>查看一致预期、评级与目标价，了解市场对公司的判断。</p></div></article><article><span class="story-number">06</span><div><h3>财务基本面分析</h3><p>从三大财务报表，到 EPS、收入与预期对比，按年度或季度研究公司。</p></div></article><article><span class="story-number">07</span><div><h3>预测市场</h3><p>查看与公司相关的 Polymarket 事件，补充对市场预期的观察。</p></div></article><p class="story-note">关键价位是观察参考；成交量分布与期权持仓不构成必然的支撑或压力。分析师、财报与预测市场的覆盖依赖各数据源。</p></div></div></section>
+<div class="story-layout"><figure class="story-visual"><a href="assets/refresh/detail.png" target="_blank" rel="noopener"><img src="assets/refresh/detail.png" width="1206" height="2622" loading="lazy" alt="个股价格曲线上的买卖标记与持仓成本线"></a><figcaption>个股详情 · 买卖标记与持仓成本<br>点击查看原始截图</figcaption></figure><div class="story-rows"><article><span class="story-number">01</span><div><h3>买入点 · 卖出点</h3><p>把历史买卖标记放回价格曲线，结合成本参考线，回看每一次操作。</p></div></article><article><span class="story-number">02</span><div><h3>支撑与压力参考</h3><p>观察成交密集区与期权持仓集中位置，为潜在支撑、压力寻找依据。</p></div></article><article><span class="story-number">03</span><div><h3>成交量分析</h3><p>通过 Volume Profile 看成交集中在哪些价格，识别 POC 与价值区间。</p></div></article><article><span class="story-number">04</span><div><h3>52 周位置</h3><p>将当前价格放进过去 52 周的高低区间，理解它所处的位置。</p></div></article><article><span class="story-number">05</span><div><h3>分析师数据分析</h3><p>查看一致预期、评级与目标价，了解市场对公司的判断。</p></div></article><article><span class="story-number">06</span><div><h3>财务基本面分析</h3><p>从三大财务报表，到 EPS、收入与预期对比，按年度或季度研究公司。</p></div></article><article><span class="story-number">07</span><div><h3>预测市场</h3><p>查看与公司相关的 Polymarket 事件，补充对市场预期的观察。</p></div></article><p class="story-note">关键价位是观察参考；成交量分布与期权持仓不构成必然的支撑或压力。分析师、财报与预测市场的覆盖依赖各数据源。</p></div></div></section>
+<section class="wrap section latest" id="your-ai" aria-labelledby="your-ai-title">
+<p class="eyebrow">你的 AI · 你的选择</p><h2 id="your-ai-title">连接你自己的 AI。<span>费用清楚，授权在你手里。</span></h2>
+<p class="library-intro">连接自己的受支持 AI 账户或服务，让熟悉的 AI 帮你研究投资组合。Catfolio 不额外收取 AI 接入费，你可以自主选择服务、配置连接并管理授权。</p>
+<p class="story-note">Apple 本地模型在支持的设备上处理；使用远程 AI 时，相关问题与分析上下文会发送至你选择的服务。第三方订阅与用量费用以对应服务为准。</p><a class="story-link" href="#capability-ai">查看 AI 助手截图 ↓</a>
+</section>
+<section class="wrap section latest" id="all-accounts" aria-labelledby="all-accounts-title">
+<p class="eyebrow">自行配置 · 连接数量不限</p><h2 id="all-accounts-title">账户再多，也能一起看清。<span>全部账户，一个投资全景。</span></h2>
+<p class="library-intro">自行添加支持的券商与账户，不限制连接数量。统一监控全部账户的持仓、收益与资产分布，也可以切换指定账户，独立查看、深入分析。</p>
+<p class="story-note">连接数量不限适用于当前支持的接入方式；各券商的授权要求与数据覆盖仍适用。2000+ 家券商与金融机构的覆盖计划为 Coming soon。</p><a class="story-link" href="#capability-accounts">查看账户管理截图 ↓</a>
+</section>
+<section class="wrap section feature-story" id="account-comparison" aria-labelledby="account-comparison-title">
+<p class="eyebrow">个股账户对比</p><h2 id="account-comparison-title">同一只股票，合起来看，分开看。<span>总持仓与各自表现，都清楚。</span></h2>
+<div class="story-layout"><figure class="story-visual"><a href="assets/refresh/account-combined.png" target="_blank" rel="noopener"><img src="assets/refresh/account-combined.png" width="1206" height="2622" loading="lazy" alt="个股页选择全部账户，合并展示 ORCL 持仓及成本线"></a><figcaption>全部账户 · 合并查看 · 演示数据<br>点击查看原始截图</figcaption></figure>
+<div class="story-rows"><article><span class="story-number">01</span><div><h3>合并看，了解完整持仓。</h3><p>同一只股票分布在多个账户，也能放在一起看。选择“全部”，汇总持仓股数、市值、成本与未实现盈亏。</p></div></article><article><span class="story-number">02</span><div><h3>独立看，了解各自表现。</h3><p>只保留一个账户，查看它自己的持仓数据与成本。切换账户，对照同一只股票在不同账户里的买入成本与盈亏差异。</p></div></article><article><span class="story-number">03</span><div><h3>自由组合，细节跟着切换。</h3><p>点按账户卡片选择或取消，可多选需要一起查看的账户。持仓汇总、成本参考线与历史买卖标记随所选范围更新。</p></div></article><p class="story-note">账户选择仅改变查看与汇总范围，不会合并券商账户或转移资产。截图使用虚构演示账户。</p><a class="story-link" href="#capability-account-comparison">查看独立账户状态截图 ↓</a></div></div></section>
 <section class="wrap section feature-story" id="cash-history" aria-labelledby="cash-title">
 <p class="eyebrow">历史与持有成本</p><h2 id="cash-title">算清每一笔收支。<span>买卖之外，收益还有这些细节。</span></h2>
-<div class="story-layout"><figure class="story-visual"><a href="assets/features/orders.png" target="_blank" rel="noopener"><img src="assets/features/orders.png" width="1206" height="2622" loading="lazy" alt="演示账户历史交易页，展示已实现盈亏及逐笔卖出记录"></a><figcaption>交易记录 · 演示账户截图<br>点击查看原始截图</figcaption></figure><div class="story-rows"><article><span class="story-number">01</span><div><h3>交易记录</h3><p>买入、卖出、数量与金额按时间归档。按账户和年份筛选，查看已实现盈亏并导出 CSV。</p></div></article><article><span class="story-number">02</span><div><h3>分红计算与汇总</h3><p>从已导入的分红流水汇总收入，逐笔查看派息记录，整理不同账户的分红。</p></div></article><article><span class="story-number">03</span><div><h3>利息计算与汇总</h3><p>汇总已入账的现金利息，查看每笔金额与来源账户，让闲置现金的收入也有迹可循。</p></div></article><article><span class="story-number">04</span><div><h3>基金费用计算</h3><p>按当前基金市值与年费率估算持有成本，查看年度费用、基金总市值和加权费率。</p></div></article><p class="story-note">分红与利息按已导入流水汇总。基金费用是年度估算，已反映在基金净值中的费用不应重复扣除；本地估算的已实现盈亏不能直接作为报税结果。</p><a class="story-link" href="#capability-history">查看历史模块完整介绍 ↓</a></div></div></section>
+<div class="story-layout"><figure class="story-visual"><a href="assets/refresh/orders.png" target="_blank" rel="noopener"><img src="assets/refresh/orders.png" width="1206" height="2622" loading="lazy" alt="演示账户历史交易页，展示已实现盈亏及逐笔卖出记录"></a><figcaption>交易记录 · 演示账户截图<br>点击查看原始截图</figcaption></figure><div class="story-rows"><article><span class="story-number">01</span><div><h3>交易记录</h3><p>买入、卖出、数量与金额按时间归档。按账户和年份筛选，查看已实现盈亏并导出 CSV。</p></div></article><article><span class="story-number">02</span><div><h3>股息计算与预测</h3><p>汇总已到账股息，逐笔查看派息记录；结合股息预测，了解未来可能收到的现金收入，为自己的现金流做规划。</p></div></article><article><span class="story-number">03</span><div><h3>利息计算与汇总</h3><p>汇总已入账的现金利息，查看每笔金额与来源账户，让闲置现金的收入也有迹可循。</p></div></article><article><span class="story-number">04</span><div><h3>基金费用计算</h3><p>按当前基金市值与年费率估算持有成本，查看年度费用、基金总市值和加权费率。</p></div></article><p class="story-note">历史股息与利息按已导入流水汇总；股息预测为估算，实际派息以公司公告及到账记录为准。基金费用是年度估算，已反映在基金净值中的费用不应重复扣除；本地估算的已实现盈亏不能直接作为报税结果。</p><a class="story-link" href="#capability-history">查看历史模块完整介绍 ↓</a></div></div></section>
 <section class="wrap section upcoming" id="currency-language" aria-labelledby="currency-title"><p class="eyebrow">跨市场投资</p><h2 id="currency-title">投资世界。<span>用你熟悉的语言和货币。</span></h2><div class="upcoming-grid">
+<article><span class="availability">汇率自动更新</span><h3>汇率变了，估值也跟上。</h3><p>加载组合时自动获取最近可用汇率，并缓存汇率与日期。跨币种资产按可用汇率估值；离线时沿用缓存，缺失币种使用离线估值。</p><a class="story-link" href="#capability-automatic-fx">查看汇率状态截图 ↗</a></article>
 <article><span class="availability">汇率盈亏</span><h3>看清汇率带来的变化。</h3><p>在个股详情查看汇率盈亏金额与可用的比例，了解汇率变动对持仓的影响。区分券商报告、本地计算与估算结果；历史数据不足时明确显示不可计算。</p></article>
 <article><span class="availability">简体中文 · English</span><h3>用你熟悉的语言。</h3><p>支持简体中文与英文，可手动选择，也可跟随系统语言。语言与显示货币独立设置，让界面符合你的阅读习惯。</p></article>
 <article><span class="availability">9 种显示货币</span><h3>换个币种，自动换算。</h3><p>选择美元、英镑、欧元、人民币、港币、加元、澳元、新加坡元或日元。组合汇总等采用显示货币的金额，按 App 可用汇率自动换算。</p></article>
 </div><p class="story-note">显示货币换算用于查看与比较，不执行实际换汇；交易原币金额在相应明细中保留。</p><a class="story-link" href="#capability-preferences">查看语言与货币设置模块 ↓</a></section>
 <section class="wrap section upcoming" id="upcoming" aria-labelledby="upcoming-title"><p class="eyebrow">待开放功能</p><h2 id="upcoming-title">让整理，再轻松一点。<span>也为下一步，留好位置。</span></h2><div class="upcoming-grid">
+<article><span class="availability">Coming soon · 即将推出</span><h3>连接 2000+ 家券商与金融机构。</h3><p>计划扩展账户连接，支持更多券商与金融机构，让分散的投资汇聚在同一个视野。当前尚未开放，具体支持机构与地区以正式上线为准。</p></article>
 <article><span class="availability">尚未开放</span><h3>税务计算</h3><p>税务计算入口已列入收益表现页，当前版本尚未开放。现阶段可查看历史交易和已实现盈亏。</p></article>
 <article><span class="availability">需求规划</span><h3>税损模拟</h3><p>计划探索卖出亏损持仓对税务结果的影响。当前版本尚未提供模拟器，支持范围与规则待确定。</p></article>
 <article><span class="availability">尚未开放</span><h3>拍照导入持仓与数据</h3><p>希望通过照片识别持仓，减少手工录入。当前拍照入口未开放；现有导入方式为支持的券商连接与 CSV 文件。</p></article>
 </div><p class="story-note">以上功能尚无可用界面截图，开放时间待定。</p></section>
 <section id="features" class="wrap section feature-library" aria-labelledby="feature-library-title">
  <h2 id="feature-library-title">每一个功能，都看得见。<span>从第一笔持仓，到更深入的研究。</span></h2>
- <p class="library-intro">逐一探索 Catfolio 的 19 个功能模块。已配图的模块可点击查看完整界面，市场轮动截图待补充。</p>
+ <p class="library-intro">逐一探索 Catfolio 的 <span data-feature-total>38</span> 个功能与交互细节。全部配有新版原生截图，点击可放大查看。</p>
  <div class="library-toolbar"><div class="category-filters" role="group" aria-label="筛选功能分类">
- <button data-category="all" aria-pressed="true">全部功能</button><button data-category="manage" aria-pressed="false">账户与持仓</button><button data-category="analyze" aria-pressed="false">收益与分析</button><button data-category="research" aria-pressed="false">研究与 AI</button><button data-category="personal" aria-pressed="false">模拟与设置</button>
- </div><span id="feature-count" role="status" aria-live="polite">19 项功能</span></div>
- <div class="capability-grid"><article class="capability" data-group="research" id="capability-market-rotation"><div class="screenshot-pending"><span>市场轮动 · RRG</span><p>独立界面截图待补充</p></div><p class="capability-label">市场轮动 · RRG</p><h3>放眼市场，看见轮动。</h3><p class="capability-description">比较六个市场指数相对标普 500 的强弱与动量。</p><ul><li>StockCharts 来源的 RS-Ratio 与 RS-Momentum</li><li>30 周轨迹、指数选择与历史回放</li><li>来源时间、刷新状态与离线快照</li></ul><p class="capability-note">使用来源周线快照，最新周点可能尚未收盘。独立界面截图待补充。</p></article><article class="capability" data-group="research" id="capability-sector-rotation"><button class="screenshot-button" data-shot="sector-rotation" aria-label="放大查看：板块轮动截图"><img src="assets/features/sector-rotation.png" width="1206" height="2622" alt="板块轮动原生开发版本截图" loading="lazy"><span class="zoom-label">查看截图 ↗</span></button><p class="capability-label">板块轮动</p><h3>看清行业，如何接棒。</h3><p class="capability-description">将 11 个美国行业板块，放在同一张四象限图中观察。</p><ul><li>领先、减弱、落后、改善四象限</li><li>板块选择、周轨迹与历史回放</li><li>板块最近收盘表现与走势详情</li></ul><p class="capability-note">截图为早期原生版本。轮动采用板块相对强弱与动量方法，不是 JdK RRG；行情更新依赖快照服务。</p></article><article class="capability" data-group="research" id="capability-composer"><button class="screenshot-button" data-shot="composer" aria-label="放大查看：策略编曲家截图"><img src="assets/features/composer.png" width="1206" height="2622" alt="策略编曲家原生开发版本截图" loading="lazy"><span class="zoom-label">查看截图 ↗</span></button><p class="capability-label">策略编曲家</p><h3>把研究思路，编成规则。</h3><p class="capability-description">从一个投资想法，到可检查、可追溯的研究流程。</p><ul><li>编排、文本、运行三种视图</li><li>指标、筛选、排序与风险保护规则</li><li>模拟预算、运行历史与结果追踪</li></ul><p class="capability-note">截图为原生策略编辑入口。当前主要支持可识别的美元美股日线，只读分析与模拟，不自动下单，也不是历史回测；新页面本地化仍在完善。</p></article><article class="capability" data-group="manage" id="capability-accounts">
- <button class="screenshot-button" data-shot="accounts" aria-label="放大查看：账户管理截图"><img src="assets/features/accounts.png" width="1206" height="2622" alt="账户管理：截图为演示账户。券商连接需要相应只读授权。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
- <p class="capability-label">账户管理</p><h3>多账户，一个全局。</h3><p class="capability-description">把分散在不同券商的资产，放回同一个视野。</p>
- <ul><li>Trading 212、Moomoo、IBKR 与 CSV 导入</li><li>全部或指定账户汇总，账户改名与管理</li><li>查看交易记录，手工补充历史交易</li></ul><p class="capability-note">截图为演示账户。券商连接需要相应只读授权。</p></article><article class="capability" data-group="manage" id="capability-overview">
- <button class="screenshot-button" data-shot="overview" aria-label="放大查看：组合首页截图"><img src="assets/features/overview.png" width="1206" height="2622" alt="组合首页：截图展示历史版本的演示组合首页。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
- <p class="capability-label">组合首页</p><h3>你的组合，一眼看清。</h3><p class="capability-description">从资产全貌，到每一只股票的变化。</p>
- <ul><li>市值、净入金、持仓盈亏与历史曲线</li><li>单日查看、双指区间测量</li><li>持仓排序、今日与持有期口径、热力图</li></ul><p class="capability-note">截图展示历史版本的演示组合首页。</p></article><article class="capability" data-group="manage" id="capability-today">
- <button class="screenshot-button" data-shot="today" aria-label="放大查看：今日盈亏截图"><img src="assets/features/today.png" width="1206" height="2622" alt="今日盈亏：按当前持仓与最近报价推算，未计入今日买卖影响。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
- <p class="capability-label">今日盈亏</p><h3>今天，谁在推动变化？</h3><p class="capability-description">知道涨跌多少，也知道变化从哪里来。</p>
- <ul><li>今日盈亏与持仓涨跌贡献</li><li>按行业拆解，查看行业中的成分</li><li>区分推动上涨与拖累下跌的持仓</li></ul><p class="capability-note">按当前持仓与最近报价推算，未计入今日买卖影响。</p></article><article class="capability" data-group="manage" id="capability-etf">
- <button class="screenshot-button" data-shot="etf" aria-label="放大查看：ETF 穿透截图"><img src="assets/features/etf.png" width="1206" height="2622" alt="ETF 穿透：截图为穿透后的热力图。覆盖取决于基金快照，部分使用指数代理。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
- <p class="capability-label">ETF 穿透</p><h3>穿过基金，看见持仓。</h3><p class="capability-description">你持有的不只是一只 ETF，而是它背后的公司。</p>
- <ul><li>展开支持基金的底层股票</li><li>合并直接持仓与 ETF 间接暴露</li><li>识别重叠持仓，按暴露大小排序</li></ul><p class="capability-note">截图为穿透后的热力图。覆盖取决于基金快照，部分使用指数代理。</p></article><article class="capability" data-group="analyze" id="capability-returns">
- <button class="screenshot-button" data-shot="returns" aria-label="放大查看：收益分析截图"><img src="assets/features/returns.png" width="1206" height="2622" alt="收益分析：截图为收益对比页；不同版本的口径名称可能不同。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
- <p class="capability-label">收益分析</p><h3>成长，放在时间里看。</h3><p class="capability-description">把自己的投资旅程，与市场放在一起比较。</p>
- <ul><li>现金流镜像、TWR 与 MWR 收益口径</li><li>基准对比、时间范围与区间测量</li><li>回撤曲线、最大回撤、估值成长矩阵</li></ul><p class="capability-note">截图为收益对比页；不同版本的口径名称可能不同。</p></article><article class="capability" data-group="analyze" id="capability-detail">
- <button class="screenshot-button" data-shot="detail" aria-label="放大查看：个股详情截图"><img src="assets/features/detail.png" width="1206" height="2622" alt="个股详情：截图展示成交量价格分布。行情依赖数据源覆盖。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
- <p class="capability-label">个股详情</p><h3>价格之外，还有细节。</h3><p class="capability-description">从买入时刻，到现在的价格位置。</p>
- <ul><li>历史价格、买卖标记与成本参考线</li><li>跨账户持仓、盈亏及汇率盈亏计算</li><li>52 周区间、Volume Profile 与 POC / VAH / VAL</li></ul><p class="capability-note">截图展示成交量价格分布。行情依赖数据源覆盖。</p></article><article class="capability" data-group="analyze" id="capability-oi">
- <button class="screenshot-button" data-shot="oi" aria-label="放大查看：期权 OI截图"><img src="assets/features/oi.png" width="1206" height="2622" alt="期权 OI：截图为布局演示数据。限支持的美国美元股票 / ETF；OI 不代表成交量或必然支撑阻力。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
- <p class="capability-label">期权 OI</p><h3>看见期权持仓的分布。</h3><p class="capability-description">按执行价，观察 Call 与 Put 聚集在哪里。</p>
- <ul><li>7、30、90 天到期范围</li><li>Call / Put 峰值和 OI 集中区</li><li>Yahoo 期权链、手动刷新与缓存</li></ul><p class="capability-note">截图为布局演示数据。限支持的美国美元股票 / ETF；OI 不代表成交量或必然支撑阻力。</p></article><article class="capability" data-group="analyze" id="capability-financial">
- <button class="screenshot-button" data-shot="financial" aria-label="放大查看：财务与市场预期截图"><img src="assets/features/financial.png" width="1170" height="1396" alt="财务与市场预期：截图为盈利历史组件的测试样本，非真实公司财报。各数据项取决于来源覆盖。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
- <p class="capability-label">财务与市场预期</p><h3>理解公司，从数字开始。</h3><p class="capability-description">让财报、盈利和预期，成为研究的依据。</p>
- <ul><li>利润表、资产负债表、现金流；年度 / 季度</li><li>EPS 与收入实际值和预期值对比</li><li>分析师一致预期、目标价及相关预测市场</li></ul><p class="capability-note">截图为盈利历史组件的测试样本，非真实公司财报。各数据项取决于来源覆盖。</p></article><article class="capability" data-group="research" id="capability-research">
- <button class="screenshot-button" data-shot="research" aria-label="放大查看：市场研究截图"><img src="assets/features/research.png" width="1206" height="2622" alt="市场研究：最近可用行情快照，非盘中实时全市场榜单。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
- <p class="capability-label">市场研究</p><h3>抬头看看，更大的市场。</h3><p class="capability-description">把持仓变化放回指数、波动率和行业背景中。</p>
- <ul><li>市场指数、VIX 与美国国债收益率</li><li>当前持仓涨幅榜与跌幅榜</li><li>11 个美国行业板块，搜索与手动刷新</li></ul><p class="capability-note">最近可用行情快照，非盘中实时全市场榜单。</p></article><article class="capability" data-group="research" id="capability-attention">
- <button class="screenshot-button" data-shot="attention" aria-label="放大查看：今天值得关注截图"><img src="assets/features/attention.png" width="1206" height="2622" alt="今天值得关注：截图为研究页内的演示分析，不是实时建议。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
- <p class="capability-label">今天值得关注</p><h3>把注意力，留给值得的事。</h3><p class="capability-description">整理变化、证据和风险，帮助你决定下一步研究什么。</p>
- <ul><li>分析当前账户持仓与关注理由</li><li>正反证据、风险与后续观察点</li><li>关注度筛选、结果数量设置、保留上次分析</li></ul><p class="capability-note">截图为研究页内的演示分析，不是实时建议。</p></article><article class="capability" data-group="research" id="capability-screener">
- <button class="screenshot-button" data-shot="screener" aria-label="放大查看：选股器截图"><img src="assets/features/screener.png" width="1206" height="2622" alt="选股器：截图展示条件入口。运行结果取决于数据服务权限和覆盖。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
- <p class="capability-label">选股器</p><h3>从想法，找到公司。</h3><p class="capability-description">写下你想找的公司，再逐项核验条件。</p>
- <ul><li>市值、营收、P/E、增长、净利率、FCF、52 周低点</li><li>自然语言生成条件，手动编辑上下限</li><li>分批筛选、匹配依据与 AI 解读</li></ul><p class="capability-note">截图展示条件入口。运行结果取决于数据服务权限和覆盖。</p></article><article class="capability" data-group="research" id="capability-sentiment">
- <button class="screenshot-button" data-shot="sentiment" aria-label="放大查看：行业情绪截图"><img src="assets/features/sentiment.png" width="1206" height="2622" alt="行业情绪：目前为半导体专项，使用导入快照；不是所有行业的实时情绪服务。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
- <p class="capability-label">行业情绪</p><h3>感受行业的温度。</h3><p class="capability-description">用波动率和成交量，补充价格之外的观察。</p>
- <ul><li>半导体行业情绪分数与市场状态</li><li>VXSMH 波动率趋势与 SMH 成交量</li><li>组合半导体直接持仓占比</li></ul><p class="capability-note">目前为半导体专项，使用导入快照；不是所有行业的实时情绪服务。</p></article><article class="capability" data-group="research" id="capability-ai">
- <button class="screenshot-button" data-shot="ai" aria-label="放大查看：AI 助手截图"><img src="assets/features/ai.png" width="1206" height="2622" alt="AI 助手：截图为演示分析。本地模型需设备支持；远程模型需网络与授权。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
- <p class="capability-label">AI 助手</p><h3>一个懂你组合的对话。</h3><p class="capability-description">从组合问答，到个股的正反方论点。</p>
- <ul><li>Apple 本地、ChatGPT Codex、DeepSeek</li><li>组合上下文问答、聊天记录与语言偏好</li><li>个股多空论据、来源引用与后台分析</li></ul><p class="capability-note">截图为演示分析。本地模型需设备支持；远程模型需网络与授权。</p></article><article class="capability" data-group="manage" id="capability-history">
- <button class="screenshot-button" data-shot="history" aria-label="放大查看：历史与费用截图"><img src="assets/features/history.png" width="1206" height="2622" alt="历史与费用：基金费用估算不是实际扣款流水，不应从净值收益中重复扣除。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
- <p class="capability-label">历史与费用</p><h3>每笔来去，都有记录。</h3><p class="capability-description">把交易、现金活动与持有成本，整理得清清楚楚。</p>
- <ul><li>买卖、分红、利息、入出金与转账</li><li>账户 / 年份筛选、已实现盈亏</li><li>基金运行费用估算、CSV 导出</li></ul><p class="capability-note">基金费用估算不是实际扣款流水，不应从净值收益中重复扣除。</p></article><article class="capability" data-group="personal" id="capability-investors">
- <button class="screenshot-button" data-shot="investors" aria-label="放大查看：公开投资者模拟截图"><img src="assets/features/investors.png" width="1206" height="2622" alt="公开投资者模拟：截图为人物选择页。模拟基于有时滞的披露，并非真实账户收益或自动跟单。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
- <p class="capability-label">公开投资者模拟</p><h3>换个组合，换个视角。</h3><p class="capability-description">从公开披露中，研究不同投资者的持仓。</p>
- <ul><li>佩洛西、段永平、Berkshire 等可用披露组合</li><li>多人物选择，复用持仓、收益、历史与 AI</li><li>独立演示账户，与个人账本隔离</li></ul><p class="capability-note">截图为人物选择页。模拟基于有时滞的披露，并非真实账户收益或自动跟单。</p></article><article class="capability" data-group="personal" id="capability-preferences">
- <button class="screenshot-button" data-shot="preferences" aria-label="放大查看：个性化与本地数据截图"><img src="assets/features/preferences.png" width="1206" height="2622" alt="个性化与本地数据：截图展示本机数据设置。个人账本、券商凭据和账户选择不通过偏好同步。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
- <p class="capability-label">个性化与本地数据</p><h3>按你的习惯，照顾你的数据。</h3><p class="capability-description">熟悉的语言、币种和外观，自主掌握的账本。</p>
- <ul><li>简体中文 / English，可跟随系统语言</li><li>九种显示货币，金额按可用汇率自动换算</li><li>外观、触控反馈、本地账本与部分偏好 iCloud 同步</li></ul><p class="capability-note">截图展示本机数据设置。个人账本、券商凭据和账户选择不通过偏好同步。</p></article></div>
- <p class="library-footnote">截图来自 App 的不同开发版本及演示 / 测试状态，具体说明见各模块。拍照添加持仓与税务计算尚未开放。</p>
+ <button data-category="all" aria-pressed="true">全部功能</button><button data-category="interaction" aria-pressed="false">交互细节</button><button data-category="manage" aria-pressed="false">账户与持仓</button><button data-category="analyze" aria-pressed="false">收益与分析</button><button data-category="research" aria-pressed="false">研究与 AI</button><button data-category="personal" aria-pressed="false">模拟与设置</button>
+ </div><span id="feature-count" role="status" aria-live="polite">38 项功能</span></div>
+ <!-- FEATURES:START -->
+<div class="capability-grid">
+<article class="capability" data-group="interaction" id="capability-chart-range">
+<button class="screenshot-button" data-shot="chart-range" aria-label="放大查看：双指区间测量截图"><img src="assets/refresh/chart-range.png" width="1206" height="2622" alt="双指区间测量：截图为原生区间选中状态，使用演示数据；不同图表的金额与收益口径不同。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">双指区间测量</p><h3>两根手指，看清一段涨跌。</h3><p class="capability-description">把曲线上的两个时刻，变成一段可以比较的变化。</p>
+<ul><li>长按曲线，保持第一指，再加入第二指</li><li>移动两个端点，查看起止日期与区间变化</li><li>组合曲线与收益对比支持区间查看</li></ul><p class="capability-note">截图为原生区间选中状态，使用演示数据；不同图表的金额与收益口径不同。</p></article>
+<article class="capability" data-group="interaction" id="capability-heatmap">
+<button class="screenshot-button" data-shot="heatmap" aria-label="放大查看：立体持仓热力图截图"><img src="assets/refresh/heatmap.png" width="1206" height="2622" alt="立体持仓热力图：截图为演示持仓的收起状态；展开状态可在上方交互展示中切换查看。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">立体持仓热力图</p><h3>轻轻展开，组合尽在眼前。</h3><p class="capability-description">收益页上的立体热力图，可以展开为完整的持仓视图。</p>
+<ul><li>轻点展开，查看持仓占比与涨跌</li><li>切换今日 / 持有期，或按板块分组</li><li>开启 ETF 穿透，点按直接持仓查看详情</li></ul><p class="capability-note">截图为演示持仓的收起状态；展开状态可在上方交互展示中切换查看。</p></article>
+<article class="capability" data-group="analyze" id="capability-contributors">
+<button class="screenshot-button" data-shot="contributors" aria-label="放大查看：收益来源 · 胜利复盘截图"><img src="assets/refresh/contributors.png" width="1206" height="2622" alt="收益来源 · 胜利复盘：按当前股数回推历史市值，不包含已卖出持仓；截图为演示组合，不是完整历史交易归因。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">收益来源 · 胜利复盘</p><h3>赚到的收益，值得再看一遍。</h3><p class="capability-description">拆开收益来源，回看主要盈利持仓的贡献与变化，为自己的投资做一次复盘。</p>
+<ul><li>本金、主要盈利持仓、其他收益分层展示</li><li>长按查看某一天，切换时间范围</li><li>点按图例隐藏或显示，重新聚焦收益来源</li></ul><p class="capability-note">按当前股数回推历史市值，不包含已卖出持仓；截图为演示组合，不是完整历史交易归因。</p></article>
+<article class="capability" data-group="research" id="capability-market-rotation">
+<button class="screenshot-button" data-shot="market-rotation" aria-label="放大查看：市场轮动 · RRG截图"><img src="assets/refresh/market-rotation.png" width="1206" height="2622" alt="市场轮动 · RRG：StockCharts 周线快照；最新周点可能尚未收盘，数据日期见界面。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">市场轮动 · RRG</p><h3>放眼市场，看见轮动。</h3><p class="capability-description">比较六个市场指数相对标普 500 的强弱与动量。</p>
+<ul><li>StockCharts 来源的 RS-Ratio 与 RS-Momentum</li><li>30 周轨迹、指数选择与历史回放</li><li>来源时间、刷新状态与离线快照</li></ul><p class="capability-note">StockCharts 周线快照；最新周点可能尚未收盘，数据日期见界面。</p></article>
+<article class="capability" data-group="research" id="capability-sector-rotation">
+<button class="screenshot-button" data-shot="sector-rotation" aria-label="放大查看：板块轮动截图"><img src="assets/refresh/sector-rotation.png" width="1206" height="2622" alt="板块轮动：采用板块相对强弱与动量方法，不是 JdK RRG。更新延迟时沿用最近可用快照，数据日期可在 App 内查看。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">板块轮动</p><h3>看清行业，如何接棒。</h3><p class="capability-description">将 11 个美国行业板块，放在同一张四象限图中观察。</p>
+<ul><li>领先、减弱、落后、改善四象限</li><li>板块选择、周轨迹与历史回放</li><li>板块最近收盘表现与走势详情</li></ul><p class="capability-note">采用板块相对强弱与动量方法，不是 JdK RRG。更新延迟时沿用最近可用快照，数据日期可在 App 内查看。</p></article>
+<article class="capability" data-group="research" id="capability-composer">
+<button class="screenshot-button" data-shot="composer" aria-label="放大查看：策略编曲家截图"><img src="assets/refresh/composer.png" width="1206" height="2622" alt="策略编曲家：截图为新版草稿入口。当前以可识别的美元美股日线为主，只读分析与模拟，不自动下单，也不是历史回测。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">策略编曲家</p><h3>把研究思路，编成规则。</h3><p class="capability-description">从一个投资想法，到可检查、可追溯的研究流程。</p>
+<ul><li>写策略、策略步骤、结果三个工作区</li><li>自然语言草稿，经 AI 整理后检查候选规则</li><li>指标、筛选、排序、模拟预算与风险保护</li></ul><p class="capability-note">截图为新版草稿入口。当前以可识别的美元美股日线为主，只读分析与模拟，不自动下单，也不是历史回测。</p></article>
+<article class="capability" data-group="research" id="capability-insiders">
+<button class="screenshot-button" data-shot="insiders" aria-label="放大查看：内部人士交易截图"><img src="assets/refresh/insiders.png" width="1206" height="2622" alt="内部人士交易：来源为 Nasdaq / SEC Form 4。过滤依赖披露标签及规则识别，可能不完整。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">内部人士交易</p><h3>看看公司里的人，如何行动。</h3><p class="capability-description">从公开申报中，观察内部人士的主动买入与卖出。</p>
+<ul><li>主动买卖 / 全部交易切换</li><li>汇总买卖金额，查看人员和交易明细</li><li>过滤识别出的计划交易、代扣税及行权卖出</li></ul><p class="capability-note">来源为 Nasdaq / SEC Form 4。过滤依赖披露标签及规则识别，可能不完整。</p></article>
+<article class="capability" data-group="analyze" id="capability-revenue">
+<button class="screenshot-button" data-shot="revenue" aria-label="放大查看：收入构成截图"><img src="assets/refresh/revenue.png" width="1206" height="2622" alt="收入构成：截图为 ORCL 2025 财年业务构成，来自 FMP 本地年度快照；与最新三表报告期可能不同。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">收入构成</p><h3>公司的收入，从哪里来？</h3><p class="capability-description">把一个营收总额，拆成业务和地区的具体贡献。</p>
+<ul><li>产品与业务 / 地区两个维度</li><li>流向图展示收入规模与构成占比</li><li>按年度切换，比较业务结构</li></ul><p class="capability-note">截图为 ORCL 2025 财年业务构成，来自 FMP 本地年度快照；与最新三表报告期可能不同。</p></article>
+<article class="capability" data-group="research" id="capability-analyst-history">
+<button class="screenshot-button" data-shot="analyst-history" aria-label="放大查看：分析师历史回顾截图"><img src="assets/refresh/analyst-history.png" width="1206" height="2622" alt="分析师历史回顾：使用本地月度快照，覆盖依公司而定；目标价代表分析师观点，不是收益承诺。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">分析师历史回顾</p><h3>把预期，放回时间里。</h3><p class="capability-description">将过去的目标价和评级，与股价放在一起回看。</p>
+<ul><li>股价与历史目标价对照</li><li>查看不同月份的推荐建议</li><li>月度快照和来源日期清晰可见</li></ul><p class="capability-note">使用本地月度快照，覆盖依公司而定；目标价代表分析师观点，不是收益承诺。</p></article>
+<article class="capability" data-group="interaction" id="capability-chart-selection">
+<button class="screenshot-button" data-shot="chart-selection" aria-label="放大查看：单指查看单日截图"><img src="assets/refresh/chart-selection.png" width="1206" height="2622" alt="单指查看单日：截图为原生单日选中状态，使用演示组合。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">单指查看单日</p><h3>停在一天，看清那一刻。</h3><p class="capability-description">沿着曲线滑动，把模糊的印象变成具体数字。</p>
+<ul><li>长按后单指拖动，逐日查看</li><li>日期、数值与曲线指示线同步变化</li><li>配合时间范围切换，查看长短周期</li></ul><p class="capability-note">截图为原生单日选中状态，使用演示组合。</p></article>
+<article class="capability" data-group="manage" id="capability-accounts">
+<button class="screenshot-button" data-shot="accounts" aria-label="放大查看：账户管理截图"><img src="assets/refresh/accounts.png" width="1206" height="2622" alt="账户管理：截图为演示账户。连接需相应只读授权，支持范围与数据可用性取决于各券商；2000+ 家机构覆盖计划尚未开放。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">账户管理</p><h3>账户再多，也能一起看清。</h3><p class="capability-description">自行配置支持的券商连接，不限制添加数量。把全部账户放在一起，统一监控持仓与分析收益。</p>
+<ul><li>自行添加支持的券商连接，不限制券商与账户数量</li><li>全部账户统一查看持仓、收益与资产分布</li><li>按需切换指定账户，独立查看与对比</li></ul><p class="capability-note">截图为演示账户。连接需相应只读授权，支持范围与数据可用性取决于各券商；2000+ 家机构覆盖计划尚未开放。</p></article>
+<article class="capability" data-group="manage" id="capability-overview">
+<button class="screenshot-button" data-shot="overview" aria-label="放大查看：组合首页截图"><img src="assets/refresh/overview.png" width="1206" height="2622" alt="组合首页：新版原生界面，使用完全虚构的演示组合。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">组合首页</p><h3>你的组合，一眼看清。</h3><p class="capability-description">从资产全貌，到每一只股票的变化。</p>
+<ul><li>市值、净入金、持仓盈亏与历史曲线</li><li>单日查看、双指区间测量</li><li>持仓排序、今日与持有期口径、热力图</li></ul><p class="capability-note">新版原生界面，使用完全虚构的演示组合。</p></article>
+<article class="capability" data-group="manage" id="capability-today">
+<button class="screenshot-button" data-shot="today" aria-label="放大查看：今日收益速览截图"><img src="assets/refresh/today.png" width="1206" height="2622" alt="今日收益速览：截图为演示组合的今日详情。按当前持仓与最近报价推算，未计入今日买卖影响；用于辅助判断，不是买卖信号。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">今日收益速览</p><h3>今天赚了多少，一眼就知道。</h3><p class="capability-description">快速了解今日盈亏与涨跌来源，为接下来的观察和判断提供依据。</p>
+<ul><li>首页直接查看今日盈亏金额与涨跌幅</li><li>切换上涨 / 下跌贡献，找到影响组合的持仓</li><li>进入今日详情，按行业拆解并对照市场基准</li></ul><p class="capability-note">截图为演示组合的今日详情。按当前持仓与最近报价推算，未计入今日买卖影响；用于辅助判断，不是买卖信号。</p></article>
+<article class="capability" data-group="manage" id="capability-etf">
+<button class="screenshot-button" data-shot="etf" aria-label="放大查看：ETF 穿透截图"><img src="assets/refresh/etf.png" width="1206" height="2622" alt="ETF 穿透：截图为穿透后的热力图。覆盖取决于基金快照，部分使用指数代理。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">ETF 穿透</p><h3>穿过基金，看见持仓。</h3><p class="capability-description">你持有的不只是一只 ETF，而是它背后的公司。</p>
+<ul><li>展开支持基金的底层股票</li><li>合并直接持仓与 ETF 间接暴露</li><li>识别重叠持仓，按暴露大小排序</li></ul><p class="capability-note">截图为穿透后的热力图。覆盖取决于基金快照，部分使用指数代理。</p></article>
+<article class="capability" data-group="analyze" id="capability-returns">
+<button class="screenshot-button" data-shot="returns" aria-label="放大查看：收益分析截图"><img src="assets/refresh/returns.png" width="1206" height="2622" alt="收益分析：演示组合的 TWR 对比界面；可切换 MWR 和现金流镜像，数据口径随选择变化。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">收益分析</p><h3>成长，放在时间里看。</h3><p class="capability-description">把自己的投资旅程，与市场放在一起比较。</p>
+<ul><li>现金流镜像、TWR 与 MWR 收益口径</li><li>基准对比、时间范围与区间测量</li><li>回撤曲线、最大回撤、估值成长矩阵</li></ul><p class="capability-note">演示组合的 TWR 对比界面；可切换 MWR 和现金流镜像，数据口径随选择变化。</p></article>
+<article class="capability" data-group="analyze" id="capability-detail">
+<button class="screenshot-button" data-shot="detail" aria-label="放大查看：个股详情截图"><img src="assets/refresh/detail.png" width="1206" height="2622" alt="个股详情：演示持仓的买卖标记与成本线；报价、历史曲线和持仓快照可能来自不同时间。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">个股详情</p><h3>价格之外，还有细节。</h3><p class="capability-description">从买入时刻，到现在的价格位置。</p>
+<ul><li>历史价格、买卖标记与成本参考线</li><li>跨账户持仓、盈亏及汇率盈亏计算</li><li>52 周区间、Volume Profile 与 POC / VAH / VAL</li></ul><p class="capability-note">演示持仓的买卖标记与成本线；报价、历史曲线和持仓快照可能来自不同时间。</p></article>
+<article class="capability" data-group="analyze" id="capability-volume">
+<button class="screenshot-button" data-shot="volume" aria-label="放大查看：成交量与 52 周位置截图"><img src="assets/refresh/volume.png" width="1206" height="2622" alt="成交量与 52 周位置：截图为个股页成交量区块；成交分布、52 周数据与报价可能有不同的更新时点。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">成交量与 52 周位置</p><h3>价格的位置，也有来处。</h3><p class="capability-description">从成交密集区到年度高低点，为当前价格补充坐标。</p>
+<ul><li>Volume Profile 与成交峰值 POC</li><li>VAH / VAL 价值区间及成本参考</li><li>52 周位置支持按住并横向拖动查看价格</li></ul><p class="capability-note">截图为个股页成交量区块；成交分布、52 周数据与报价可能有不同的更新时点。</p></article>
+<article class="capability" data-group="analyze" id="capability-oi">
+<button class="screenshot-button" data-shot="oi" aria-label="放大查看：期权 OI截图"><img src="assets/refresh/oi.png" width="1206" height="2622" alt="期权 OI：ORCL 期权链快照。限支持的美国美元股票 / ETF；OI 不代表成交量或必然支撑阻力。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">期权 OI</p><h3>看见期权持仓的分布。</h3><p class="capability-description">按执行价，观察 Call 与 Put 聚集在哪里。</p>
+<ul><li>7、30、90 天到期范围</li><li>Call / Put 峰值和 OI 集中区</li><li>Yahoo 期权链、手动刷新与缓存</li></ul><p class="capability-note">ORCL 期权链快照。限支持的美国美元股票 / ETF；OI 不代表成交量或必然支撑阻力。</p></article>
+<article class="capability" data-group="analyze" id="capability-financial">
+<button class="screenshot-button" data-shot="financial" aria-label="放大查看：财务基本面截图"><img src="assets/refresh/financial.png" width="1206" height="2622" alt="财务基本面：截图为 App 读取的 ORCL 财报页，使用 SEC / Nasdaq 来源；报告期及覆盖依来源而定。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">财务基本面</p><h3>理解公司，从数字开始。</h3><p class="capability-description">让财报、盈利和预期，成为研究的依据。</p>
+<ul><li>利润表、资产负债表、现金流：年度 / 季度</li><li>可视化收入、成本与利润的关系</li><li>按报告期切换，保留财报原始币种</li></ul><p class="capability-note">截图为 App 读取的 ORCL 财报页，使用 SEC / Nasdaq 来源；报告期及覆盖依来源而定。</p></article>
+<article class="capability" data-group="research" id="capability-research">
+<button class="screenshot-button" data-shot="research" aria-label="放大查看：市场研究截图"><img src="assets/refresh/research.png" width="1206" height="2622" alt="市场研究：最近可用行情快照，非盘中实时全市场榜单。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">市场研究</p><h3>抬头看看，更大的市场。</h3><p class="capability-description">把持仓变化放回指数、波动率和行业背景中。</p>
+<ul><li>市场指数、VIX 与美国国债收益率</li><li>当前持仓涨幅榜与跌幅榜</li><li>11 个美国行业板块，搜索与手动刷新</li></ul><p class="capability-note">最近可用行情快照，非盘中实时全市场榜单。</p></article>
+<article class="capability" data-group="research" id="capability-attention">
+<button class="screenshot-button" data-shot="attention" aria-label="放大查看：今天值得关注截图"><img src="assets/refresh/attention.png" width="1206" height="2622" alt="今天值得关注：新版独立关注页，使用演示组合；证据尚未核实的内容显示低置信度提示。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">今天值得关注</p><h3>把注意力，留给值得的事。</h3><p class="capability-description">整理变化、证据和风险，帮助你决定下一步研究什么。</p>
+<ul><li>分析当前账户持仓与关注理由</li><li>正反证据、风险与后续观察点</li><li>关注度筛选、结果数量设置、保留上次分析</li></ul><p class="capability-note">新版独立关注页，使用演示组合；证据尚未核实的内容显示低置信度提示。</p></article>
+<article class="capability" data-group="research" id="capability-screener">
+<button class="screenshot-button" data-shot="screener" aria-label="放大查看：选股器截图"><img src="assets/refresh/screener.png" width="1206" height="2622" alt="选股器：截图展示条件入口。运行结果取决于数据服务权限和覆盖。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">选股器</p><h3>从想法，找到公司。</h3><p class="capability-description">写下你想找的公司，再逐项核验条件。</p>
+<ul><li>一键预设，或自然语言生成筛选条件</li><li>市值、营收、估值、增长、利润率与现金流</li><li>逐项调整条件，查看匹配依据与 AI 解读</li></ul><p class="capability-note">截图展示条件入口。运行结果取决于数据服务权限和覆盖。</p></article>
+<article class="capability" data-group="research" id="capability-sentiment">
+<button class="screenshot-button" data-shot="sentiment" aria-label="放大查看：行业情绪截图"><img src="assets/refresh/sentiment.png" width="1206" height="2622" alt="行业情绪：目前为半导体专项，使用导入快照；不是所有行业的实时情绪服务。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">行业情绪</p><h3>感受行业的温度。</h3><p class="capability-description">用波动率和成交量，补充价格之外的观察。</p>
+<ul><li>半导体行业情绪分数与市场状态</li><li>VXSMH 波动率趋势与 SMH 成交量</li><li>组合半导体直接持仓占比</li></ul><p class="capability-note">目前为半导体专项，使用导入快照；不是所有行业的实时情绪服务。</p></article>
+<article class="capability" data-group="research" id="capability-ai">
+<button class="screenshot-button" data-shot="ai" aria-label="放大查看：AI 助手截图"><img src="assets/refresh/ai.png" width="1206" height="2622" alt="AI 助手：截图为演示分析。本地模型需设备支持；远程服务可能按其订阅或用量收费，并接收相关问题与分析上下文。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">AI 助手</p><h3>连接你自己的 AI。</h3><p class="capability-description">使用自己的 AI 账户或服务，为组合研究提供帮助。Catfolio 不额外收取 AI 接入费，服务与授权由你掌握。</p>
+<ul><li>Apple 本地、ChatGPT Codex、DeepSeek</li><li>组合上下文问答、聊天记录与语言偏好</li><li>个股多空论据、来源引用与后台分析</li></ul><p class="capability-note">截图为演示分析。本地模型需设备支持；远程服务可能按其订阅或用量收费，并接收相关问题与分析上下文。</p></article>
+<article class="capability" data-group="research" id="capability-daily-brief">
+<button class="screenshot-button" data-shot="daily-brief" aria-label="放大查看：行情解读纸张截图"><img src="assets/refresh/daily-brief.png" width="1206" height="2622" alt="行情解读纸张：本次截图为未获取到解读内容的重试状态。生成依赖可用 AI 服务和来源，不保证每次都有结果。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">行情解读纸张</p><h3>最近，有什么动静？</h3><p class="capability-description">从个股曲线打开一张纸，阅读简短的行情与公司动态解读。</p>
+<ul><li>从个股页直接打开</li><li>结合可用来源生成简短解读</li><li>纸张展开与收起，内容不可用时可重试</li></ul><p class="capability-note">本次截图为未获取到解读内容的重试状态。生成依赖可用 AI 服务和来源，不保证每次都有结果。</p></article>
+<article class="capability" data-group="manage" id="capability-history">
+<button class="screenshot-button" data-shot="history" aria-label="放大查看：历史与费用截图"><img src="assets/refresh/history.png" width="1206" height="2622" alt="历史与费用：基金费用估算不是实际扣款流水，不应从净值收益中重复扣除。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">历史与费用</p><h3>每笔来去，都有记录。</h3><p class="capability-description">把交易、现金活动与持有成本，整理得清清楚楚。</p>
+<ul><li>买卖、分红、利息、入出金与转账</li><li>账户 / 年份筛选、已实现盈亏</li><li>基金运行费用估算、CSV 导出</li></ul><p class="capability-note">基金费用估算不是实际扣款流水，不应从净值收益中重复扣除。</p></article>
+<article class="capability" data-group="manage" id="capability-orders">
+<button class="screenshot-button" data-shot="orders" aria-label="放大查看：交易记录截图"><img src="assets/refresh/orders.png" width="1206" height="2622" alt="交易记录：截图为演示交易；本地 FIFO 估算不能直接作为报税结果。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">交易记录</p><h3>每一次买卖，都有来路。</h3><p class="capability-description">按账户和年份整理交易，回看卖出记录与已实现盈亏。</p>
+<ul><li>按时间查看交易数量、价格与金额</li><li>已实现盈亏汇总与逐笔记录</li><li>账户 / 年份筛选及 CSV 导出</li></ul><p class="capability-note">截图为演示交易；本地 FIFO 估算不能直接作为报税结果。</p></article>
+<article class="capability" data-group="manage" id="capability-dividends">
+<button class="screenshot-button" data-shot="dividends" aria-label="放大查看：股息计算与预测截图"><img src="assets/refresh/dividends.png" width="1206" height="2622" alt="股息计算与预测：配图展示历史股息记录，非预测界面。预测是估算，实际派息以公司公告及到账记录为准。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">股息计算与预测</p><h3>收到多少，接下来期待多少。</h3><p class="capability-description">汇总已到账股息，结合股息预测，了解投资带来的现金收入。</p>
+<ul><li>汇总已入账股息，逐笔查看派息记录</li><li>按账户和年份整理历史股息收入</li><li>通过股息预测，辅助规划未来现金收入</li></ul><p class="capability-note">配图展示历史股息记录，非预测界面。预测是估算，实际派息以公司公告及到账记录为准。</p></article>
+<article class="capability" data-group="manage" id="capability-interest">
+<button class="screenshot-button" data-shot="interest" aria-label="放大查看：利息计算截图"><img src="assets/refresh/interest.png" width="1206" height="2622" alt="利息计算：截图为演示流水。统计已导入的利息，不按当前余额预测利息。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">利息计算</p><h3>现金的收入，也有记录。</h3><p class="capability-description">把分散的利息入账，放进同一份清晰的记录。</p>
+<ul><li>汇总已入账利息</li><li>查看时间、金额与来源账户</li><li>按选定账户及年份整理</li></ul><p class="capability-note">截图为演示流水。统计已导入的利息，不按当前余额预测利息。</p></article>
+<article class="capability" data-group="manage" id="capability-fees">
+<button class="screenshot-button" data-shot="fees" aria-label="放大查看：基金费用计算截图"><img src="assets/refresh/fees.png" width="1206" height="2622" alt="基金费用计算：截图为演示持仓。年度估算不是实际扣款流水，不应从基金净值收益中重复扣除。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">基金费用计算</p><h3>持有成本，心中有数。</h3><p class="capability-description">用当前基金市值和年费率，了解预计的年度成本。</p>
+<ul><li>预计年度费用与基金总市值</li><li>加权年费率</li><li>逐只基金查看估算费用</li></ul><p class="capability-note">截图为演示持仓。年度估算不是实际扣款流水，不应从基金净值收益中重复扣除。</p></article>
+<article class="capability" data-group="personal" id="capability-investors">
+<button class="screenshot-button" data-shot="investors" aria-label="放大查看：公开投资者模拟截图"><img src="assets/refresh/investors.png" width="1206" height="2622" alt="公开投资者模拟：截图为人物选择页。模拟基于有时滞的披露，并非真实账户收益或自动跟单。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">公开投资者模拟</p><h3>换个组合，换个视角。</h3><p class="capability-description">从公开披露中，研究不同投资者的持仓。</p>
+<ul><li>佩洛西、段永平、Berkshire 等可用披露组合</li><li>多人物选择，复用持仓、收益、历史与 AI</li><li>独立演示账户，与个人账本隔离</li></ul><p class="capability-note">截图为人物选择页。模拟基于有时滞的披露，并非真实账户收益或自动跟单。</p></article>
+<article class="capability" data-group="personal" id="capability-preferences">
+<button class="screenshot-button" data-shot="preferences" aria-label="放大查看：个性化与本地数据截图"><img src="assets/refresh/preferences.png" width="1206" height="2622" alt="个性化与本地数据：截图为语言、外观、公司名称和显示货币设置。个人账本及券商凭据不通过偏好同步。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">个性化与本地数据</p><h3>按你的习惯，照顾你的数据。</h3><p class="capability-description">熟悉的语言、币种和外观，自主掌握的账本。</p>
+<ul><li>简体中文 / English，可跟随系统语言</li><li>九种显示货币，金额按可用汇率自动换算</li><li>外观、触控反馈、本地账本与部分偏好 iCloud 同步</li></ul><p class="capability-note">截图为语言、外观、公司名称和显示货币设置。个人账本及券商凭据不通过偏好同步。</p></article>
+<article class="capability" data-group="personal" id="capability-currency">
+<button class="screenshot-button" data-shot="currency" aria-label="放大查看：货币自动换算截图"><img src="assets/refresh/currency.png" width="1206" height="2622" alt="货币自动换算：截图为货币菜单；离线估值有状态提示。显示换算不执行实际换汇。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">货币自动换算</p><h3>换个币种，换个熟悉的视角。</h3><p class="capability-description">用熟悉的货币查看组合，不必逐个换算金额。</p>
+<ul><li>九种显示货币可选</li><li>按 App 可用汇率换算汇总金额</li><li>与语言设置独立，明细保留相应原币</li></ul><p class="capability-note">截图为货币菜单；离线估值有状态提示。显示换算不执行实际换汇。</p></article>
+<article class="capability" data-group="personal" id="capability-automatic-fx">
+<button class="screenshot-button" data-shot="automatic-fx" aria-label="放大查看：汇率自动更新截图"><img src="assets/refresh/preferences.png" width="1206" height="2622" alt="汇率自动更新：截图展示设置中的汇率状态，演示模式为未更新状态。使用最近可用收盘汇率，非实时换汇报价；历史快照保留原记录汇率。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">汇率自动更新</p><h3>汇率变了，估值也跟上。</h3><p class="capability-description">加载组合时自动获取可用汇率，让跨币种资产按更新后的汇率估值。</p>
+<ul><li>随组合加载自动获取最近可用汇率</li><li>缓存汇率与日期，减少重复请求</li><li>离线时沿用缓存，缺失币种使用离线估值</li></ul><p class="capability-note">截图展示设置中的汇率状态，演示模式为未更新状态。使用最近可用收盘汇率，非实时换汇报价；历史快照保留原记录汇率。</p></article>
+<article class="capability" data-group="personal" id="capability-security">
+<button class="screenshot-button" data-shot="security" aria-label="放大查看：安全与自主掌控截图"><img src="assets/refresh/accounts.png" width="1206" height="2622" alt="安全与自主掌控：配图为演示账户管理页。请使用专用只读凭据；行情同步和可选远程 AI 需要连接对应服务，数据范围见安全专区。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">安全与自主掌控</p><h3>数据与权限，自己掌握。</h3><p class="capability-description">本地处理账本，自主管理连接，以只读方式了解自己的投资。</p>
+<ul><li>账本保存在本机，组合在本地计算</li><li>自行配置账户与服务，凭证保存在 Keychain</li><li>读取券商数据，不提供下单、撤单或转账功能</li></ul><p class="capability-note">配图为演示账户管理页。请使用专用只读凭据；行情同步和可选远程 AI 需要连接对应服务，数据范围见安全专区。</p></article>
+<article class="capability" data-group="analyze" id="capability-portfolio-xray">
+<button class="screenshot-button" data-shot="portfolio-xray" aria-label="放大查看：Portfolio X-Ray · 组合透视截图"><img src="assets/refresh/today.png" width="1206" height="2622" alt="Portfolio X-Ray · 组合透视：配图为演示组合的行业收益分析。当前展示今日口径，按当前持仓与最近报价推算，未计入今日买卖影响。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">Portfolio X-Ray · 组合透视</p><h3>给你的组合，做一次透视。</h3><p class="capability-description">按行业拆解今日收益，看清每一部分如何影响组合，更了解自己的投资。</p>
+<ul><li>按行业查看今日盈亏贡献</li><li>展开行业，查看其中的持仓与表现</li><li>识别推动收益与拖累组合的方向</li></ul><p class="capability-note">配图为演示组合的行业收益分析。当前展示今日口径，按当前持仓与最近报价推算，未计入今日买卖影响。</p></article>
+<article class="capability" data-group="analyze" id="capability-management-delivery">
+<button class="screenshot-button" data-shot="management-delivery" aria-label="放大查看：财报电话会 · 管理层兑现追踪截图"><img src="assets/refresh/management-delivery.png" width="1206" height="2622" alt="财报电话会 · 管理层兑现追踪：截图为原生功能入口，尚未生成分析报告。适用于符合条件的美股公司；需 iOS 26、可用的 Apple Intelligence 与 FMP 资料权限。用户发起分析、按需更新，证据不足时保留待验证。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">财报电话会 · 管理层兑现追踪</p><h3>说过的话，后来兑现了吗？</h3><p class="capability-description">自动整理财报电话会中的明确承诺，对照后续财报与原文证据，了解公司的预期如何落地。</p>
+<ul><li>选择最近 4 / 6 / 8 个季度，发起下载与本机分析</li><li>逐项查看承诺原话、目标期限、后续结果与来源</li><li>区分已兑现、部分兑现、未兑现与待验证</li></ul><p class="capability-note">截图为原生功能入口，尚未生成分析报告。适用于符合条件的美股公司；需 iOS 26、可用的 Apple Intelligence 与 FMP 资料权限。用户发起分析、按需更新，证据不足时保留待验证。</p></article>
+<article class="capability" data-group="manage" id="capability-account-comparison">
+<button class="screenshot-button" data-shot="account-comparison" aria-label="放大查看：个股账户对比截图"><img src="assets/refresh/account-single.png" width="1206" height="2622" alt="个股账户对比：截图为虚构演示组合中仅选中全球账户的状态。账户选择用于汇总与筛选查看，不会合并券商账户或转移资产。" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
+<p class="capability-label">个股账户对比</p><h3>同一只股票，合起来看，分开看。</h3><p class="capability-description">在个股页切换账户范围，看清跨账户的总持仓，也了解每个账户各自的表现。</p>
+<ul><li>选择全部，合并查看各账户中的同一只股票</li><li>保留单个账户，独立查看股数、成本与盈亏</li><li>多选账户自由组合，买卖标记随所选范围更新</li></ul><p class="capability-note">截图为虚构演示组合中仅选中全球账户的状态。账户选择用于汇总与筛选查看，不会合并券商账户或转移资产。</p></article>
+</div>
+<!-- FEATURES:END -->
+ <p class="library-footnote">截图更新于 2026 年 9 月 13 日，来自本次构建的原生 App。组合与账本使用虚构演示数据，研究数据采用 App 可用快照，数据日期见界面；行情解读展示未获取内容的状态。税务计算与拍照导入尚未开放。</p>
  </section>
-    <section class="wrap section ownership" id="privacy"><h2>属于你。<span>也留在你手里。<br>从每一笔记录，到每一个决定。</span></h2>
-      <div class="principles"><article><span class="symbol">01</span><h3>本地优先。</h3><p>投资账本保存在 iPhone 本机。无需让电脑或服务端一直在线，也能查看自己的组合。</p></article><article><span class="symbol">02</span><h3>原生，自然而然。</h3><p>用 SwiftUI 为 iPhone 打造。从点按到滑动，让熟悉的操作成为思考的延伸。</p></article><article><span class="symbol">03</span><h3>洞察，由你开启。</h3><p>需要时，向 AI 提问。Apple 本地模型在设备上处理；选择 Codex 或 DeepSeek 时，相关上下文会发送给对应服务。</p></article></div>
+    <section class="wrap section ownership" id="privacy" aria-labelledby="privacy-title">
+      <p class="eyebrow">安全与自主掌控</p><h2 id="privacy-title">你的数据。你的权限。<span>每一个决定，都在你手里。</span></h2>
+      <p class="security-intro">账本留在本机，组合在本地计算。自己配置连接，自己管理数据，让工具服务于你的判断。</p>
+      <div class="principles security-principles">
+        <article><span class="symbol">01</span><h3>本地计算。</h3><p>持仓、成本、收益与账本分析在 iPhone 上处理。CSV 文件在本机解析，组合计算无需上传个人账本到 Catfolio 服务端。</p></article>
+        <article><span class="symbol">02</span><h3>由你管理。</h3><p>选择连接哪些账户、导入哪些记录、查看哪些数据。账本保存在自己的设备，支持导出交易记录和重置本机组合数据。</p></article>
+        <article><span class="symbol">03</span><h3>只读连接。</h3><p>券商连接用于读取账户、持仓与历史记录。Catfolio 不提供下单、撤单或资金转账功能，策略编曲家也只进行研究与模拟。</p></article>
+        <article><span class="symbol">04</span><h3>权限，由你授予。</h3><p>自行创建专用只读凭据，或授予所需的读取权限。API 密钥与连接凭证保存在设备的系统 Keychain，授权可在相应服务商处管理。</p></article>
+        <article><span class="symbol">05</span><h3>自己配置，独立运行。</h3><p>在手机上配置支持的券商、行情与 AI 服务。日常使用无需搭建常驻服务器，也不需要让电脑一直开着。</p></article>
+        <article><span class="symbol">06</span><h3>AI，由你选择。</h3><p>Apple 本地模型在支持的设备上处理。选择 Codex 或 DeepSeek 等远程服务时，相关问题与分析上下文会发送给对应服务。</p></article>
+      </div>
+      <p class="security-boundary">联网范围清晰可见：同步券商记录、更新行情与汇率需要连接相应数据源；远程 AI 按所选服务处理上下文。部分偏好可通过 iCloud 同步，个人账本与券商凭据不参与偏好同步。</p>
     </section>
-    <section class="wrap section faq" id="questions"><h2>一些你可能想问的。</h2><div class="questions"><details><summary>Catfolio 是用来交易的吗？</summary><p>Catfolio 帮助你查看持仓、分析收益和理解组合。券商交易仍在你的券商 App 中完成。</p></details><details><summary>需要连接电脑或部署服务器吗？</summary><p>不需要。iOS App 可以独立运行，在手机上连接支持的券商，或从“文件”导入 CSV 交易记录。</p></details><details><summary>我的数据会存在哪里？</summary><p>持仓账本保存在 iPhone 本地，连接凭证保存在系统 Keychain。同步行情、券商数据和使用可选 AI 功能时，会连接相应的第三方服务。</p></details><details><summary>支持哪些 iPhone？在哪里下载？</summary><p>App 最低支持 iOS 18。当前官网尚未配置 App Store 或 TestFlight 链接；发布入口开放后，将在这里提供。</p></details></div></section>
+    <section class="wrap section faq" id="questions"><h2>一些你可能想问的。</h2><div class="questions"><details><summary>Catfolio 是用来交易的吗？</summary><p>Catfolio 只读取所需的账户、持仓与历史数据，不提供下单、撤单或转账功能。连接时请使用专用只读凭据或读取授权；实际交易仍由你在券商 App 中完成。</p></details><details><summary>需要连接电脑或部署服务器吗？</summary><p>不需要。iOS App 可以独立运行，在手机上连接支持的券商，或从“文件”导入 CSV 交易记录。</p></details><details><summary>我的数据会存在哪里？</summary><p>持仓账本保存在 iPhone 本地，连接凭证保存在系统 Keychain。同步行情、券商数据和使用可选 AI 功能时，会连接相应的第三方服务。</p></details><details><summary>支持哪些 iPhone？在哪里下载？</summary><p>App 最低支持 iOS 18。当前官网尚未配置 App Store 或 TestFlight 链接；发布入口开放后，将在这里提供。</p></details></div></section>
     <section class="wrap closing"><img src="assets/cat.svg" width="66" height="66" alt="Catfolio"><h2>让投资，<span>简单一点。</span></h2><button class="button" data-download>获取 Catfolio <span aria-hidden="true">↗</span></button><p class="compatibility">为你的 iPhone，也为你的长期计划。</p></section>
   </main>
   <footer class="wrap"><a class="brand" href="#">catfolio.</a><p>© 2026 Catfolio</p><a href="#privacy">数据与隐私</a></footer>

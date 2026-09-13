@@ -1,3 +1,11 @@
+const isEnglish = document.documentElement.lang === 'en';
+function updateLanguageLinks() {
+  document.querySelectorAll('[data-language-switch]').forEach(link => {
+    link.href = (isEnglish ? 'index.html' : 'en.html') + location.hash;
+  });
+}
+updateLanguageLinks();
+window.addEventListener('hashchange', updateLanguageLinks);
 const dialog = document.querySelector('#download-dialog');
 document.querySelectorAll('[data-download]').forEach(button => button.addEventListener('click', () => dialog.showModal()));
 document.querySelector('.close').addEventListener('click', () => dialog.close());
@@ -6,11 +14,21 @@ dialog.addEventListener('click', event => { if (event.target === dialog) { const
 
 const cards = [...document.querySelectorAll('.capability')];
 const categoryButtons = [...document.querySelectorAll('[data-category]')];
-categoryButtons.forEach(button => button.addEventListener('click', () => {
-  categoryButtons.forEach(other => other.setAttribute('aria-pressed', String(other === button)));
-  cards.forEach(card => { card.hidden = button.dataset.category !== 'all' && card.dataset.group !== button.dataset.category; });
-  document.querySelector('#feature-count').textContent = `${cards.filter(card => !card.hidden).length} 项功能`;
-}));
+function filterCategory(category) {
+  categoryButtons.forEach(other => other.setAttribute('aria-pressed', String(other.dataset.category === category)));
+  cards.forEach(card => { card.hidden = category !== 'all' && card.dataset.group !== category; });
+  document.querySelector('#feature-count').textContent = `${cards.filter(card => !card.hidden).length} ${isEnglish ? "features" : "项功能"}`;
+}
+categoryButtons.forEach(button => button.addEventListener('click', () => filterCategory(button.dataset.category)));
+function revealLinkedFeature() {
+  const target = document.getElementById(location.hash.slice(1));
+  if (target?.classList.contains('capability') && target.hidden) {
+    filterCategory('all');
+    target.scrollIntoView();
+  }
+}
+window.addEventListener('hashchange', revealLinkedFeature);
+revealLinkedFeature();
 const screenshotDialog = document.querySelector('#screenshot-dialog');
 let selectedCard;
 function displayScreenshot(card) {
@@ -46,3 +64,27 @@ screenshotDialog.addEventListener('click', event => {
   const r = screenshotDialog.getBoundingClientRect();
   if(event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) screenshotDialog.close();
 });
+
+// Switch between captured native states; the website does not calculate returns.
+const interactions = isEnglish ? {
+  range: ['chart-range', 'Two-finger interval selected on a demo portfolio chart', 'Two-finger interval · Native selection · Click to enlarge'],
+  day: ['chart-selection', 'Single day selected on a demo portfolio chart', 'Single-day inspection · Native selection · Click to enlarge'],
+  heatmap: ['heatmap', 'Dimensional portfolio heatmap', 'Portfolio heatmap · Collapsed · Click to enlarge'],
+  expanded: ['heatmap-expanded', 'Expanded portfolio heatmap', 'Portfolio heatmap · Expanded · Click to enlarge'],
+} : {
+  range: ['chart-range', '演示组合曲线的双指区间选中状态', '双指区间测量 · 原生选中状态 · 点击放大'],
+  day: ['chart-selection', '演示组合曲线的单日选中状态', '单指查看单日 · 原生选中状态 · 点击放大'],
+  heatmap: ['heatmap', '收益页立体持仓热力图', '立体热力图 · 收起状态 · 点击放大'],
+  expanded: ['heatmap-expanded', '展开后的完整持仓热力图', '持仓热力图 · 展开状态 · 点击放大'],
+};
+const interactionButtons = [...document.querySelectorAll('[data-interaction]')];
+interactionButtons.forEach(button => button.addEventListener('click', () => {
+  const [file, alt, caption] = interactions[button.dataset.interaction];
+  const src = `assets/refresh/${file}.png`;
+  interactionButtons.forEach(other => other.setAttribute('aria-pressed', String(other === button)));
+  const image = document.querySelector('#interaction-image');
+  image.src = src;
+  image.alt = alt;
+  document.querySelector('#interaction-original').href = src;
+  document.querySelector('#interaction-caption').textContent = caption;
+}));
