@@ -2081,7 +2081,46 @@ enum LocalPortfolioEngine {
             .joined(separator: " + ")
     }
 
+    /// Offline, without prices: the portfolio's own snapshots, value against
+    /// what went in, drawn in every view with no benchmark beside it. Only
+    /// a portfolio without two snapshots comes back unavailable.
     static func comparison(for document: LocalPortfolioDocument) throws -> ComparisonResponse {
+        let days = LocalMarketDataClient.impliedLedgerDays(values: document.snapshots.map { ($0.date, $0.marketValueUSD, $0.costUSD) })
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        if days.count > 1, let first = DayDateCodec.date(from: days[0].date),
+           let baseline = calendar.date(byAdding: .day, value: -1, to: first) {
+            let dates = [DayDateCodec.string(from: baseline)] + days.map(\.date)
+            let ledger = AccountMWRLedger(dates: dates, cashFlows: [0] + days.map { $0.inflow - $0.outflow },
+                values: [0] + days.map(\.value), benchmarkValues: [:],
+                inflows: [0] + days.map(\.inflow), outflows: [0] + days.map(\.outflow))
+            if let mirrored = ledger.cashFlowComparison() {
+                let mwr = ledger.returns()
+                let basis = L10n.text("收益按持仓市值和成本推算：成本增加视为入金、减少视为出金，没有现金流水。")
+                return ComparisonResponse(
+                    available: true,
+                    dates: dates,
+                    portfolio: mirrored.portfolio,
+                    benchmarks: [:],
+                    cashFlowPortfolioReturns: mirrored.portfolioReturns,
+                    cashFlowBenchmarkReturns: [:],
+                    mwrPortfolio: mwr.portfolio,
+                    mwrBenchmarks: [:],
+                    twrDates: dates,
+                    twrPortfolio: [1] + days.map(\.nav),
+                    twrBenchmarks: [:],
+                    warnings: ["每日 TWR " + basis, "MWR：" + basis, "现金流镜像：" + basis],
+                    summary: ComparisonSummary(
+                        portfolioReturn: mirrored.portfolioReturns.last ?? nil,
+                        benchmarkReturn: nil,
+                        benchmarkReturns: Dictionary(uniqueKeysWithValues: ComparisonBenchmarkCatalog.symbols.map {
+                            ($0, Optional<Double>.none)
+                        })
+                    ),
+                    mwrLedger: ledger
+                )
+            }
+        }
         return ComparisonResponse(
             available: false,
             dates: [],

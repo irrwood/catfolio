@@ -571,8 +571,6 @@ private struct TodayContributionCard: View {
                         }
                     }
                     .frame(height: 17, alignment: .topLeading)
-                    .contentShape(Rectangle())
-                    .onTapGesture { onOpenDetail?() }
                     .onGeometryChange(for: CGFloat.self) { geometry in
                         geometry.frame(in: .global).maxY
                     } action: { _, newValue in
@@ -614,11 +612,15 @@ private struct TodayContributionCard: View {
                     }
                     .appNumber(.footnote)
                     .lineLimit(1)
+                // The title, the amount and the line under it all open the
+                // day's detail, up to the direction picker.
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture { onOpenDetail?() }
                     .minimumScaleFactor(0.72)
                     .frame(height: 20, alignment: .bottomLeading)
                 }
 
-                Spacer(minLength: 0)
                 directionPicker
             }
             .padding(.horizontal, CatfolioStyle.pageHorizontalInset)

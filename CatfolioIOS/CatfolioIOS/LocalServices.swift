@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import FoundationModels
 import OSLog
 
@@ -693,6 +694,10 @@ private actor LocalHistoricalPriceCache {
     struct Hit: Sendable {
         let values: [String: Double]
         let isFresh: Bool
+        /// The saved history reaches back to the requested start, so only
+        /// the days after `lastDate` need fetching.
+        let coversStart: Bool
+        let lastDate: String?
     }
 
     private struct Entry: Codable {
@@ -706,6 +711,7 @@ private actor LocalHistoricalPriceCache {
 
     private var entries: [String: Entry] = [:]
     private var hasLoaded = false
+    private var isWriteScheduled = false
 
     func lookup(symbol: String, from: String, to: String) -> Hit? {
         loadIfNeeded()
@@ -716,8 +722,33 @@ private actor LocalHistoricalPriceCache {
             values: filtered,
             isFresh: Date().timeIntervalSince(entry.fetchedAt) < 12 * 60 * 60
                 && entry.requestedFrom.map { $0 <= from } == true
-                && entry.requestedTo.map { $0 >= to } == true
+                && entry.requestedTo.map { $0 >= to } == true,
+            coversStart: entry.requestedFrom.map { $0 <= from } == true,
+            lastDate: entry.values.keys.max()
         )
+    }
+
+    /// Adds the days fetched since the last save instead of replacing the
+    /// history. A dividend or split in those days re-bases every earlier
+    /// adjusted close at the source; the day both sets share says by how
+    /// much, and the saved days are re-based to match rather than fetched
+    /// again. Nil when the two share no day, which needs a full fetch.
+    func extend(symbol: String, tail: [String: Double], requestedTo: String) -> [String: Double]? {
+        loadIfNeeded()
+        guard var entry = entries[symbol],
+              let anchor = tail.keys.filter({ entry.values[$0] != nil }).min(),
+              let saved = entry.values[anchor], saved > 0,
+              let fetched = tail[anchor], fetched > 0 else { return nil }
+        let ratio = fetched / saved
+        if abs(ratio - 1) > 1e-9 {
+            entry.values = entry.values.mapValues { $0 * ratio }
+        }
+        entry.values.merge(tail) { _, new in new }
+        entry.fetchedAt = Date()
+        entry.requestedTo = max(entry.requestedTo ?? requestedTo, requestedTo)
+        entries[symbol] = entry
+        scheduleWrite()
+        return entry.values
     }
 
     func save(symbol: String, values: [String: Double], requestedFrom: String, requestedTo: String) {
@@ -732,6 +763,23 @@ private actor LocalHistoricalPriceCache {
             requestedFrom: min(previous?.requestedFrom ?? requestedFrom, requestedFrom),
             requestedTo: max(previous?.requestedTo ?? requestedTo, requestedTo)
         )
+        scheduleWrite()
+    }
+
+    /// The file holds every symbol's whole history. Writing it after each
+    /// save made a rebuild fetching hundreds of symbols re-encode the file
+    /// hundreds of times; saves close together now share one write.
+    private func scheduleWrite() {
+        guard !isWriteScheduled else { return }
+        isWriteScheduled = true
+        Task {
+            try? await Task.sleep(for: .seconds(1))
+            await LocalHistoricalPriceCache.shared.flush()
+        }
+    }
+
+    private func flush() {
+        isWriteScheduled = false
         guard let data = try? JSONEncoder().encode(entries) else { return }
         try? data.write(to: cacheURL, options: .atomic)
     }
@@ -1007,15 +1055,28 @@ struct LocalMarketDataClient {
         }
         if document.isSynthetic == true { return try LocalPortfolioEngine.presentation(for: document).1 }
         do {
-            let account = try await accountTimeWeightedSeries(document: document,
+            let account = try await tolerantAccountSeries(document: document,
                 to: DayDateCodec.string(from: Date()), cachedOnly: cachedOnly, includeBenchmarks: false)
             guard let ledger = account.ledger else { throw LocalServiceError.noHistoricalPrices }
             return .accountHistory(ledger: ledger, nav: account.portfolio, positionCount: document.positions.count,
-                                   inferredFunding: account.inferredFunding)
+                                   assumptions: account.assumptions)
         } catch {
             if cachedOnly { throw error }
-            return .unavailableAccountHistory(positionCount: document.positions.count,
+            let reason = error.localizedDescription.replacingOccurrences(of: "TWR：", with: "")
+            // Last resort, still a chart: today's positions backcast at
+            // each day's close against what they cost, as before the ledger.
+            if let backcast = try? await currentOpenPositionsHistory(document: document, end: DayDateCodec.string(from: Date())),
+               let last = backcast.rows.last, backcast.rows.count > 1 {
+                var response = PortfolioChartResponse(positionCount: document.positions.count,
+                    positionHistory: PositionHistory(available: true, rows: backcast.rows), currentPoint: last,
+                    warning: L10n.text("账户历史暂时无法按流水重建，首页先按当前持仓回推市值显示；蓝线是持仓成本，不是净入金。明细见 设置 → 本机数据 → 数据问题。"))
+                response.dataIssues = [L10n.text("账户历史重建失败：\(reason)")] + backcast.warnings
+                return response
+            }
+            var response = PortfolioChartResponse.unavailableAccountHistory(positionCount: document.positions.count,
                 reason: error.localizedDescription.replacingOccurrences(of: "TWR：", with: "账户历史："))
+            response.dataIssues = [L10n.text("账户历史重建失败：\(reason)")]
+            return response
         }
     }
 
@@ -1204,10 +1265,17 @@ struct LocalMarketDataClient {
     /// Mirrors the desktop/Web chart rule: backcast the currently open broker
     /// positions from their initial fill date using cached daily market prices.
     /// The latest point is calibrated separately from the live broker snapshot.
+    /// - Parameter fundingAtEntryValue: for the return views. Each position
+    ///   is funded with its market value on the first day it has a price,
+    ///   rather than with today's cost basis: a position built up over time
+    ///   has an average cost far from the price on the day it began, and
+    ///   funding it at that cost books the difference as a gain or loss that
+    ///   never happened. The home chart keeps the cost line.
     private func currentOpenPositionsHistory(
         document: LocalPortfolioDocument,
         end: String,
-        cachedOnly: Bool = false
+        cachedOnly: Bool = false,
+        fundingAtEntryValue: Bool = false
     ) async throws -> (rows: [ChartPoint], warnings: [String]) {
         var earliestBuyDates: [String: String] = [:]
         for transaction in document.transactions ?? [] where transaction.action.uppercased() == "BUY" {
@@ -1254,12 +1322,14 @@ struct LocalMarketDataClient {
         }
 
         var lastClose: [String: Double] = [:]
+        // By position: its value on the first day it had a price.
+        var entryValues: [Int: Double] = [:]
         var rows: [ChartPoint] = []
         for date in dates where date >= start {
             var marketValue = 0.0
             var cost = 0.0
             var activePositions = 0
-            for item in datedPositions {
+            for (index, item) in datedPositions.enumerated() {
                 guard date >= item.startDate else { continue }
                 let position = item.position
                 activePositions += 1
@@ -1267,19 +1337,24 @@ struct LocalMarketDataClient {
                     position.shares * position.averageCost,
                     currency: position.currency
                 )
-                cost += positionCost
 
                 let symbol = Self.yahooSymbol(ticker: position.ticker, currency: position.quoteCurrency)
                 if let close = histories[symbol]?[date] {
                     lastClose[symbol] = close
                 }
                 if let close = lastClose[symbol] {
-                    marketValue += try LocalPortfolioEngine.usd(
+                    let value = try LocalPortfolioEngine.usd(
                         position.shares * close * (scales[symbol] ?? 1),
                         currency: position.quoteCurrency
                     )
+                    marketValue += value
+                    if fundingAtEntryValue, entryValues[index] == nil { entryValues[index] = value }
+                    cost += fundingAtEntryValue ? entryValues[index] ?? value : positionCost
                 } else {
+                    // No price yet: carried at cost on both sides, so its
+                    // wait for a first close is neither a gain nor a loss.
                     marketValue += positionCost
+                    cost += positionCost
                 }
             }
             if activePositions > 0 {
@@ -2079,12 +2154,12 @@ struct LocalMarketDataClient {
         var comparisonWarnings: [String] = []
         var cashFlowPortfolioReturn: Double?
 
-        var twr: (dates: [String], portfolio: [Double?], benchmarks: [String: [Double?]], ledger: AccountMWRLedger?, inferredFunding: Bool) = ([], [], [:], nil, false)
-        do {
-            twr = try await accountTimeWeightedSeries(document: document, to: end)
-            guard let ledger = twr.ledger, let mirrored = ledger.cashFlowComparison() else {
-                throw DailyTimeWeightedReturn.Failure(message: "缺少完整入金和出金金额。")
-            }
+        var twr: (dates: [String], portfolio: [Double?], benchmarks: [String: [Double?]], ledger: AccountMWRLedger?, assumptions: [String]) = ([], [], [:], nil, [])
+        var dataIssues: [String] = []
+        // Fills every view from one rebuilt account, however it was rebuilt.
+        func present(_ account: (dates: [String], portfolio: [Double?], benchmarks: [String: [Double?]], ledger: AccountMWRLedger?, assumptions: [String])) -> Bool {
+            guard let ledger = account.ledger, let mirrored = ledger.cashFlowComparison() else { return false }
+            twr = account
             dates = ledger.dates
             portfolio = mirrored.portfolio
             series = mirrored.benchmarks
@@ -2092,22 +2167,66 @@ struct LocalMarketDataClient {
             benchmarkReturnSeries = mirrored.benchmarkReturns
             cashFlowPortfolioReturn = mirrored.portfolioReturns.last ?? nil
             for symbol in benchmarkSymbols { returns[symbol] = mirrored.benchmarkReturns[symbol]?.last ?? nil }
-            if twr.inferredFunding { comparisonWarnings.append(Self.impliedFundingNote) }
-            comparisonWarnings.append("现金流镜像：组合与基准使用相同日期、相同金额的真实外部资金流。曲线为剩余资产（含现金）＋累计取出金额，单位 USD；百分比为累计盈亏÷累计入金。基准按同日可用收盘总收益价格模拟，不含额外交易费用，非实际日内成交。现金余额尚未与券商核对。")
             let unavailable = benchmarkSymbols.filter { (mirrored.benchmarks[$0]?.last ?? nil) == nil }
             if !unavailable.isEmpty {
                 comparisonWarnings.append("现金流镜像：\(unavailable.joined(separator: "、")) 缺少可用行情或无法支付同额出金，最新结果不可用。")
             }
-            let mwr = twr.ledger?.returns()
-            mwrPortfolioSeries = mwr?.portfolio ?? []
-            mwrBenchmarkSeries = mwr?.benchmarks ?? [:]
-            comparisonWarnings.append("每日 TWR 基于资金流水重建；入金按日初、出金按日末处理，股息按到账日计入。期末现金尚未与券商余额核对。")
-            comparisonWarnings.append("MWR：按实际入出金日期和含现金的账户净值计算所选期间收益，非年化；股息按到账日计入，现金余额尚未与券商核对。基准按同日收盘价模拟资金进出。")
-        } catch {
-            let reason = error.localizedDescription
-            comparisonWarnings.append(reason.hasPrefix("TWR：") ? reason : "TWR：\(reason)")
-            comparisonWarnings.append("MWR：" + reason.replacingOccurrences(of: "TWR：", with: ""))
-            comparisonWarnings.append("现金流镜像：" + reason.replacingOccurrences(of: "TWR：", with: ""))
+            let mwr = ledger.returns()
+            mwrPortfolioSeries = mwr.portfolio
+            mwrBenchmarkSeries = mwr.benchmarks
+            return true
+        }
+        var failure: String?
+        if !document.isPublicDisclosure && document.isSynthetic != true {
+            do {
+                let account = try await tolerantAccountSeries(document: document, to: end)
+                if present(account) {
+                    dataIssues = account.assumptions
+                    if !account.assumptions.isEmpty { comparisonWarnings.append(Self.impliedFundingNote) }
+                    comparisonWarnings.append("现金流镜像：组合与基准使用相同日期、相同金额的真实外部资金流。曲线为剩余资产（含现金）＋累计取出金额，单位 USD；百分比为累计盈亏÷累计入金。基准按同日可用收盘总收益价格模拟，不含额外交易费用，非实际日内成交。现金余额尚未与券商核对。")
+                    comparisonWarnings.append("每日 TWR 基于资金流水重建；入金按日初、出金按日末处理，股息按到账日计入。期末现金尚未与券商余额核对。")
+                    comparisonWarnings.append("MWR：按实际入出金日期和含现金的账户净值计算所选期间收益，非年化；股息按到账日计入，现金余额尚未与券商核对。基准按同日收盘价模拟资金进出。")
+                } else {
+                    failure = "缺少完整入金和出金金额。"
+                }
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                failure = error.localizedDescription.replacingOccurrences(of: "TWR：", with: "")
+            }
+        }
+        if twr.ledger == nil {
+            // No ledger could be rebuilt — or the portfolio is a sample or a
+            // public filing, which has none. The views are drawn from its
+            // value and funding lines instead, and say so.
+            let lines: [(date: String, value: Double, funding: Double)]
+            if document.isPublicDisclosure {
+                lines = document.snapshots.map { ($0.date, $0.marketValueUSD, $0.costUSD) }
+            } else if document.isSynthetic == true {
+                lines = ((try? LocalPortfolioEngine.presentation(for: document).1.positionHistory.rows) ?? [])
+                    .map { ($0.dateText, $0.marketValue, $0.cost) }
+            } else {
+                lines = ((try? await currentOpenPositionsHistory(document: document, end: end, fundingAtEntryValue: true))?.rows ?? [])
+                    .map { ($0.dateText, $0.marketValue, $0.cost) }
+            }
+            let days = Self.impliedLedgerDays(values: lines)
+            if days.count > 1 {
+                let assembled = await accountLedger(days, end: end, cachedOnly: false, includeBenchmarks: true)
+                if present((assembled.dates, assembled.portfolio, assembled.benchmarks, assembled.ledger, [])) {
+                    let basis = L10n.text("收益按持仓市值和成本推算：成本增加视为入金、减少视为出金，没有现金流水。")
+                    if let failure { dataIssues = [L10n.text("收益对比没能按流水重建：\(failure)"), basis] }
+                    comparisonWarnings.append("每日 TWR " + basis)
+                    comparisonWarnings.append("MWR：" + basis)
+                    comparisonWarnings.append("现金流镜像：" + basis)
+                }
+            }
+        }
+        if twr.ledger == nil {
+            let reason = failure ?? "缺少可用的历史市值。"
+            comparisonWarnings.append("TWR：\(reason)")
+            comparisonWarnings.append("MWR：" + reason)
+            comparisonWarnings.append("现金流镜像：" + reason)
+            dataIssues = [L10n.text("收益对比没能按流水重建：\(reason)")]
         }
         return ComparisonResponse(
             available: !dates.isEmpty || !twr.dates.isEmpty,
@@ -2127,7 +2246,8 @@ struct LocalMarketDataClient {
                 benchmarkReturn: returns["SPY"] ?? nil,
                 benchmarkReturns: returns
             ),
-            mwrLedger: twr.ledger
+            mwrLedger: twr.ledger,
+            dataIssues: dataIssues.isEmpty ? nil : dataIssues
         )
     }
 
@@ -2136,9 +2256,30 @@ struct LocalMarketDataClient {
 
     /// All private ledger data stays on-device. Only public symbols/dates are
     /// sent to the market provider. Core is not a runtime dependency.
-    private func accountTimeWeightedSeries(
+    /// The account rebuild that does not give up: from the recorded cash
+    /// where the ledger holds together, and on implied funding for every
+    /// account where it does not. What went wrong is kept as an assumption
+    /// for Settings to list, not a reason to draw nothing.
+    private func tolerantAccountSeries(
         document: LocalPortfolioDocument, to end: String, cachedOnly: Bool = false, includeBenchmarks: Bool = true
-    ) async throws -> (dates: [String], portfolio: [Double?], benchmarks: [String: [Double?]], ledger: AccountMWRLedger?, inferredFunding: Bool) {
+    ) async throws -> (dates: [String], portfolio: [Double?], benchmarks: [String: [Double?]], ledger: AccountMWRLedger?, assumptions: [String]) {
+        do {
+            return try await accountTimeWeightedSeries(document: document, to: end, cachedOnly: cachedOnly, includeBenchmarks: includeBenchmarks)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            if cachedOnly { throw error }
+            let reason = error.localizedDescription.replacingOccurrences(of: "TWR：", with: "")
+            var retry = try await accountTimeWeightedSeries(document: document, to: end, includeBenchmarks: includeBenchmarks, rebuildAll: true)
+            retry.assumptions.append(L10n.text("按原始流水重建时出错（\(reason)），已对全部账户按推算重建。"))
+            return retry
+        }
+    }
+
+    private func accountTimeWeightedSeries(
+        document: LocalPortfolioDocument, to end: String, cachedOnly: Bool = false, includeBenchmarks: Bool = true,
+        rebuildAll: Bool = false
+    ) async throws -> (dates: [String], portfolio: [Double?], benchmarks: [String: [Double?]], ledger: AccountMWRLedger?, assumptions: [String]) {
         typealias T = DailyTimeWeightedReturn
         let records = document.transactions ?? []
         // An account with positions and no rows starts where the broker says
@@ -2154,32 +2295,40 @@ struct LocalMarketDataClient {
         var symbols = Set<String>()
         // Accounts rebuilt on the implied-funding assumptions: some row came
         // without its cash legs, or the account has positions and no rows.
-        var inferredAccounts = unrecorded
+        var inferredAccounts = rebuildAll ? Set(document.positions.map(\.accountKey)).union(records.map(\.accountKey)) : unrecorded
+        // One unusual row costs the account an assumption, stated here, and
+        // never the whole history: a takeover, a transfer or a gap in a
+        // broker's export is ordinary in real accounts.
+        var skippedTypes: [String] = []
+        var unpriced: [Int] = []
         for row in records {
             let action = row.action.uppercased()
-            guard ["BUY", "SELL", "DEPOSIT", "WITHDRAWAL", "DIVIDEND", "INTEREST", "FEE", "TAX"].contains(action) else {
-                throw T.Failure(message: "TWR：暂不能处理流水类型 \(row.action)，请补全换汇或公司行动分录。")
-            }
             let trade = action == "BUY" || action == "SELL"
-            guard row.quantity.isFinite, !trade || row.quantity > 0 else {
-                throw T.Failure(message: "TWR：交易数量无效。")
-            }
+            let known = ["BUY", "SELL", "DEPOSIT", "WITHDRAWAL", "DIVIDEND", "INTEREST", "FEE", "TAX"].contains(action)
             var cash = row.cashPostings ?? []
+            let debit = ["BUY", "WITHDRAWAL", "FEE", "TAX"].contains(action)
+            guard known, row.quantity.isFinite, !trade || row.quantity > 0,
+                  cash.allSatisfy({ !$0.amount.isNaN && (debit ? $0.amount <= 0 : $0.amount >= 0) }) else {
+                // A row the ledger cannot read. Leaving it out is safe: the
+                // holdings it moved are matched to today's below.
+                inferredAccounts.insert(row.accountKey)
+                skippedTypes.append(row.action)
+                continue
+            }
             if cash.isEmpty {
                 // Imported without its cash legs. A trade's are its fill; a
                 // cash row's amount is unknown, and it is left out — a
                 // deposit it recorded is implied later if it was needed.
                 inferredAccounts.insert(row.accountKey)
                 guard trade else { continue }
-                guard row.price.isFinite, row.price > 0 else {
-                    throw T.Failure(message: "TWR：\(row.date) \(row.ticker) 缺少成交价，无法推算成交金额。")
+                if row.price.isFinite, row.price > 0 {
+                    let amount = Decimal(row.quantity) * Decimal(row.price)
+                    cash = [T.Cash(currency: row.currency.uppercased(), amount: action == "BUY" ? -amount : amount)]
+                } else {
+                    // No price either — often a takeover's exchange. Valued
+                    // at the market's close once prices are in.
+                    unpriced.append(events.count)
                 }
-                let amount = Decimal(row.quantity) * Decimal(row.price)
-                cash = [T.Cash(currency: row.currency.uppercased(), amount: action == "BUY" ? -amount : amount)]
-            }
-            let debit = ["BUY", "WITHDRAWAL", "FEE", "TAX"].contains(action)
-            guard cash.allSatisfy({ !$0.amount.isNaN && (debit ? $0.amount <= 0 : $0.amount >= 0) }) else {
-                throw T.Failure(message: "TWR：净现金金额方向与流水类型不符。")
             }
             let symbol = trade ? Self.yahooSymbol(ticker: row.ticker, currency: row.currency) : nil
             if let symbol { symbols.insert(symbol) }
@@ -2201,13 +2350,53 @@ struct LocalMarketDataClient {
         }
         var prices: [String: LedgerPriceHistory] = [:]
         var splits: [T.Split] = []
+        var unpricedSymbols: [String] = []
         for symbol in symbols.sorted() {
             try Task.checkCancellation()
-            let history = try await ledgerPriceHistory(symbol: symbol, from: start, to: end, cachedOnly: cachedOnly)
-            prices[symbol] = history
-            currencies.insert(history.currency)
-            splits += history.splits
+            do {
+                let history = try await ledgerPriceHistory(symbol: symbol, from: start, to: end, cachedOnly: cachedOnly)
+                prices[symbol] = history
+                currencies.insert(history.currency)
+                splits += history.splits
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                if cachedOnly { throw error }
+                unpricedSymbols.append(symbol)
+            }
         }
+        // A security with no price history cannot be valued on any day. It
+        // is left out of the history altogether, trades and all, and the
+        // accounts it was in are rebuilt around it.
+        var valuationDrops = Set<Int>()
+        if !unpricedSymbols.isEmpty {
+            let missing = Set(unpricedSymbols)
+            for (index, event) in events.enumerated() where event.symbol.map(missing.contains) == true {
+                valuationDrops.insert(index)
+                inferredAccounts.insert(event.account)
+            }
+            for account in Array(expected.keys) {
+                for symbol in missing where expected[account]?[symbol] != nil {
+                    expected[account]?[symbol] = nil
+                    inferredAccounts.insert(account)
+                }
+            }
+        }
+        var valuedFills: [String] = []
+        for index in unpriced where !valuationDrops.contains(index) {
+            guard let symbol = events[index].symbol, let history = prices[symbol] else { continue }
+            let closes = history.closes.mapValues { T.Quote(price: Decimal($0), currency: history.currency) }
+            guard let near = T.close(near: events[index].date, in: closes) else {
+                valuationDrops.insert(index)
+                continue
+            }
+            let amount = events[index].quantity * near.quote.price
+            events[index].cash = [T.Cash(currency: near.quote.currency, amount: -amount)]
+            valuedFills.append(symbol)
+        }
+        let unvaluedFills = unpriced.filter { valuationDrops.contains($0) && !(events[$0].symbol.map(Set(unpricedSymbols).contains) ?? false) }
+            .compactMap { events[$0].symbol }
+        events = events.enumerated().filter { !valuationDrops.contains($0.offset) }.map(\.element)
         var fx: [String: [String: Double]] = [:]
         for currency in currencies where currency != "USD" {
             let normalized = currency == "GBX" ? "GBP" : currency
@@ -2248,12 +2437,15 @@ struct LocalMarketDataClient {
             }
             // Carry an already observed close across short market closures;
             // never backfill from a future quote or flatten long missing spans.
-            let maxAge: TimeInterval = 4 * 86_400
+            // A rebuild on assumptions also bridges longer gaps in a
+            // security's data, rather than failing on them.
+            let maxAge: TimeInterval = (rebuildAll ? 21 : 4) * 86_400
             let quotes = lastQuotes.filter { date.timeIntervalSince($0.value.date) <= maxAge }.mapValues(\.quote)
             let rates = lastRates.filter { date.timeIntervalSince($0.value.date) <= maxAge }.mapValues(\.rate)
             days.append(T.Day(date: key, quotes: quotes, usdRates: rates))
             date = calendar.date(byAdding: .day, value: 1, to: date)!
         }
+        var assumptions: [String] = []
         if !inferredAccounts.isEmpty {
             let quotes = prices.mapValues { history in
                 history.closes.filter { $0.key >= start && $0.key <= end }
@@ -2261,9 +2453,44 @@ struct LocalMarketDataClient {
             }
             events += T.openingTransfers(events: events, splits: splits, expected: expected, quotes: quotes,
                                          start: start, openedDates: openedDates, accounts: inferredAccounts)
+            let closings = T.closingTransfers(events: events, splits: splits, expected: expected, quotes: quotes,
+                                              accounts: inferredAccounts)
+            events += closings.events
             events += T.fundingShortfalls(events: events, accounts: inferredAccounts)
+
+            func names(_ symbols: [String]) -> String {
+                let unique = Array(NSOrderedSet(array: symbols.map { $0.replacingOccurrences(of: ".L", with: "") })) as? [String] ?? []
+                return unique.prefix(4).joined(separator: "、") + (unique.count > 4 ? L10n.text(" 等") : "")
+            }
+            assumptions.append(Self.impliedFundingNote)
+            if !valuedFills.isEmpty {
+                assumptions.append(L10n.text("\(names(valuedFills)) 有 \(valuedFills.count) 笔交易没有成交价（常见于并购换股），按当天或最近的收盘价估值。"))
+            }
+            if !unvaluedFills.isEmpty {
+                assumptions.append(L10n.text("\(names(unvaluedFills)) 有 \(unvaluedFills.count) 笔交易前后 10 天都没有收盘价，已跳过。"))
+            }
+            if !skippedTypes.isEmpty {
+                let kinds = Array(NSOrderedSet(array: skippedTypes)) as? [String] ?? []
+                assumptions.append(L10n.text("\(skippedTypes.count) 条流水（\(kinds.prefix(3).joined(separator: "、"))）暂时读不懂，已跳过；持仓按当前账户对齐。"))
+            }
+            if !closings.symbols.isEmpty {
+                assumptions.append(L10n.text("\(names(closings.symbols)) 已不在当前持仓里，但没有卖出记录，按最后一个收盘价转出。"))
+            }
+            if !unpricedSymbols.isEmpty {
+                assumptions.append(L10n.text("\(names(unpricedSymbols)) 找不到历史行情，没有计入账户历史。"))
+            }
         }
-        let result = try T.calculate(events: events, days: days, splits: splits)
+        let result = try T.calculate(events: events, days: days, splits: splits,
+                                     implausibleGrowth: inferredAccounts.isEmpty ? nil : Decimal(string: "1.5"))
+        if !result.neutralized.isEmpty {
+            let listed = result.neutralized.prefix(5).map { day -> String in
+                let growth = NSDecimalNumber(decimal: day.growth).doubleValue
+                let change = (growth - 1) * 100
+                return "\(day.date)（\(change >= 0 ? "+" : "")\(change.formatted(.number.precision(.fractionLength(0))))%）"
+            }.joined(separator: "、")
+            let more = result.neutralized.count > 5 ? L10n.text(" 等 \(result.neutralized.count) 天") : ""
+            assumptions.append(L10n.text("\(listed)\(more) 账户单日涨跌远超行情能解释的幅度，多半是推算的入金或持仓有误，这些天按未记录的转入转出处理、不计收益。"))
+        }
         for account in Set(expected.keys).union(result.holdings.keys) {
             for symbol in Set(expected[account]?.keys.map { $0 } ?? []).union(result.holdings[account]?.keys.map { $0 } ?? []) {
                 let difference = (expected[account]?[symbol] ?? 0) - (result.holdings[account]?[symbol] ?? 0)
@@ -2272,10 +2499,68 @@ struct LocalMarketDataClient {
                 }
             }
         }
+        let points = result.points.map {
+            LedgerDay(date: $0.date, value: NSDecimalNumber(decimal: $0.value).doubleValue,
+                      inflow: NSDecimalNumber(decimal: $0.inflow).doubleValue,
+                      outflow: NSDecimalNumber(decimal: $0.outflow).doubleValue,
+                      nav: NSDecimalNumber(decimal: $0.nav).doubleValue)
+        }
+        let assembled = await accountLedger(points, end: end, cachedOnly: cachedOnly, includeBenchmarks: includeBenchmarks)
+        return (assembled.dates, assembled.portfolio, assembled.benchmarks, assembled.ledger, assumptions)
+    }
+
+    /// One day of a rebuilt account, in USD.
+    struct LedgerDay: Equatable, Sendable {
+        var date: String
+        var value: Double
+        var inflow: Double
+        var outflow: Double
+        var nav: Double
+    }
+
+    /// Days from a value line and a funding line — today's holdings backcast
+    /// against what they cost, or a public filing's snapshots — for when no
+    /// ledger can be rebuilt. A rise in the funding line is a deposit, a fall
+    /// a withdrawal, and the unit value is chain-linked the way the ledger's
+    /// is, so every return view can still draw.
+    static func impliedLedgerDays(values: [(date: String, value: Double, funding: Double)]) -> [LedgerDay] {
+        var days: [LedgerDay] = []
+        var previousValue = 0.0, previousFunding = 0.0, nav = 1.0, started = false
+        for row in values.sorted(by: { $0.date < $1.date }) where row.value.isFinite && row.funding.isFinite {
+            let change = row.funding - previousFunding
+            var inflow = max(0, change), outflow = max(0, -change)
+            let capital = previousValue + inflow
+            if capital > 0 {
+                let growth = (row.value + outflow) / capital
+                // As in the ledger: a whole-account move no price explains
+                // is a gap in the data, taken as a transfer, not a return.
+                if previousValue > 0, growth > 1.5 || growth < 1 / 1.5 {
+                    let gap = row.value + outflow - capital
+                    if gap > 0 { inflow += gap } else { outflow -= gap }
+                } else {
+                    nav *= growth
+                }
+                started = true
+            }
+            if started { days.append(LedgerDay(date: row.date, value: row.value, inflow: inflow, outflow: outflow, nav: nav)) }
+            previousValue = row.value
+            previousFunding = row.funding
+        }
+        return days
+    }
+
+    /// A rebuilt account dressed for the three return views: a baseline day
+    /// before the first, benchmarks on the same dates, and benchmarks
+    /// mirroring the account's own deposits and withdrawals.
+    private func accountLedger(
+        _ points: [LedgerDay], end: String, cachedOnly: Bool, includeBenchmarks: Bool
+    ) async -> (dates: [String], portfolio: [Double?], benchmarks: [String: [Double?]], ledger: AccountMWRLedger) {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         // An explicit baseline preserves the first funded day's return when
         // the chart rebases the selected range to its first point.
-        let baseline = calendar.date(byAdding: .day, value: -1, to: DayDateCodec.date(from: result.points[0].date)!)!
-        let dates = [DayDateCodec.string(from: baseline)] + result.points.map(\.date)
+        let baseline = calendar.date(byAdding: .day, value: -1, to: DayDateCodec.date(from: points[0].date)!)!
+        let dates = [DayDateCodec.string(from: baseline)] + points.map(\.date)
         let benchmarkSymbols = includeBenchmarks ? ComparisonBenchmarkCatalog.symbols : []
         let benchmarks = await historicalCloses(symbols: benchmarkSymbols, from: dates[0], to: end, cachedOnly: cachedOnly)
         var series: [String: [Double?]] = [:]
@@ -2286,7 +2571,7 @@ struct LocalMarketDataClient {
                 series[symbol] = closes.map { $0.map { $0 / base } }
             }
         }
-        let flows = [0.0] + result.points.map { NSDecimalNumber(decimal: $0.inflow - $0.outflow).doubleValue }
+        let flows = [0.0] + points.map { $0.inflow - $0.outflow }
         var benchmarkValues: [String: [Double?]] = [:]
         for symbol in benchmarkSymbols {
             let history = benchmarks[symbol] ?? [:]
@@ -2300,11 +2585,11 @@ struct LocalMarketDataClient {
             benchmarkValues[symbol] = AccountMWRLedger.mirror(cashFlows: flows, prices: aligned)
         }
         let ledger = AccountMWRLedger(dates: dates, cashFlows: flows,
-            values: [0] + result.points.map { NSDecimalNumber(decimal: $0.value).doubleValue },
+            values: [0] + points.map(\.value),
             benchmarkValues: benchmarkValues,
-            inflows: [0] + result.points.map { NSDecimalNumber(decimal: $0.inflow).doubleValue },
-            outflows: [0] + result.points.map { NSDecimalNumber(decimal: $0.outflow).doubleValue })
-        return (dates, [1] + result.points.map { NSDecimalNumber(decimal: $0.nav).doubleValue }, series, ledger, !inferredAccounts.isEmpty)
+            inflows: [0] + points.map(\.inflow),
+            outflows: [0] + points.map(\.outflow))
+        return (dates, [1] + points.map(\.nav), series, ledger)
     }
 
     private struct LedgerPriceHistory: Codable {
@@ -2515,6 +2800,19 @@ struct LocalMarketDataClient {
         }
         if !forceRefresh, let cached, cached.isFresh, cached.values.count > 1 {
             return cached.values
+        }
+        // A stale history is extended, not refetched: only the days since the
+        // last saved one, with a week of overlap to line the two up.
+        if !forceRefresh, let cached, cached.coversStart, cached.values.count > 1,
+           let last = cached.lastDate, let lastDay = DayDateCodec.date(from: last) {
+            let overlapStart = DayDateCodec.string(from: lastDay.addingTimeInterval(-7 * 86_400))
+            let tailFrom = max(from, overlapStart)
+            if tailFrom > to { return cached.values }
+            if let tail = try? await yahooHistoricalCloses(symbol: symbol, from: tailFrom, to: to, dividendAdjusted: dividendAdjusted),
+               !tail.isEmpty,
+               let merged = await LocalHistoricalPriceCache.shared.extend(symbol: cacheSymbol, tail: tail, requestedTo: to) {
+                return merged.filter { $0.key >= from && $0.key <= to }
+            }
         }
         var latestError: Error?
         do {
@@ -3892,5 +4190,74 @@ enum LocalETFLookThrough {
             holdingsSourceURL: hasXS2D ? (onlyXS2D ? xs2dSourceURL : nil) : singleDataset?.sourceURL,
             rows: rows
         )
+    }
+}
+
+/// The last comparison computed for each portfolio scope, kept on disk. The
+/// page opens on it rather than on a placeholder, and a portfolio whose
+/// trades, positions and benchmarks have not changed since earlier the same
+/// day is not rebuilt at all — the rebuild fetches every holding's history
+/// and can take minutes for a long account.
+enum ComparisonSnapshotCache {
+    struct Entry: Codable {
+        let fingerprint: String
+        let computedAt: Date
+        let response: ComparisonResponse
+    }
+
+    /// Everything the comparison is computed from except prices, which the
+    /// daily history cache governs on its own. The day is part of it, so the
+    /// first visit each day rebuilds behind the saved result.
+    private struct Inputs: Encodable {
+        let version = 1
+        let day: String
+        let language: String
+        let benchmarks: [String]
+        let source: String
+        let isSynthetic: Bool?
+        let transactions: [LocalTransactionRecord]
+        let positions: [String]
+        let snapshots: [LocalPortfolioSnapshotRecord]
+    }
+
+    static func fingerprint(for document: LocalPortfolioDocument) -> String {
+        let inputs = Inputs(
+            day: DayDateCodec.string(from: Date()),
+            language: ContentLanguage.current,
+            benchmarks: ComparisonBenchmarkCatalog.symbols,
+            source: document.source,
+            isSynthetic: document.isSynthetic,
+            transactions: document.transactions ?? [],
+            positions: document.positions.map { "\($0.accountKey)|\($0.ticker)|\($0.shares)|\($0.openedDate ?? "")" }.sorted(),
+            snapshots: document.isPublicDisclosure ? document.snapshots : []
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        encoder.nonConformingFloatEncodingStrategy = .convertToString(positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan")
+        guard let data = try? encoder.encode(inputs) else { return UUID().uuidString }
+        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    static func load(scope: String) -> Entry? {
+        guard let data = try? Data(contentsOf: url(for: scope)) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.nonConformingFloatDecodingStrategy = .convertFromString(positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan")
+        return try? decoder.decode(Entry.self, from: data)
+    }
+
+    static func save(_ response: ComparisonResponse, fingerprint: String, scope: String) {
+        let encoder = JSONEncoder()
+        encoder.nonConformingFloatEncodingStrategy = .convertToString(positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan")
+        guard let data = try? encoder.encode(Entry(fingerprint: fingerprint, computedAt: Date(), response: response)) else { return }
+        let url = url(for: scope)
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? data.write(to: url, options: .atomic)
+    }
+
+    private static func url(for scope: String) -> URL {
+        let name = SHA256.hash(data: Data(scope.utf8)).map { String(format: "%02x", $0) }.joined()
+        return FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("catfolio-comparison-v1", isDirectory: true)
+            .appendingPathComponent(name + ".json")
     }
 }

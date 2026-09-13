@@ -61,6 +61,20 @@ final class LocalPortfolioEngineTests: XCTestCase {
         XCTAssertEqual(response.positionHistory.rows.last?.cost ?? 0, 100, accuracy: 0.0001, "the fill is the implied deposit")
     }
 
+    /// A fill recorded without a price — a takeover's exchange — is valued
+    /// at the day's close and listed as a data issue; the chart still draws.
+    func testAFillWithoutAPriceIsValuedAtTheCloseAndListed() async throws {
+        var document = LocalPortfolioDocument.empty
+        document.transactions = [LocalTransactionRecord(date: "2026-09-01", action: "BUY", ticker: "AAPL",
+            quantity: 1, price: 0, currency: "USD", source: "CSV", accountID: nil, accountName: nil)]
+        document.positions = [LocalPositionRecord(ticker: "AAPL", name: "Apple", shares: 1, averageCost: 100, currency: "USD",
+            quotePrice: 100, quoteCurrency: "USD", source: "CSV", openedDate: "2026-09-01")]
+        let response = try await LocalMarketDataClient().portfolioChart(document: document)
+        XCTAssertTrue(response.positionHistory.available, response.warning ?? "")
+        XCTAssertTrue(response.dataIssues?.contains { $0.contains("没有成交价") } == true, "\(response.dataIssues ?? [])")
+        XCTAssertTrue(response.warning?.contains("设置") == true, "the basis note points to Settings")
+    }
+
     func testMalformedHomeSeriesDoesNotPartiallyPublish() {
         let ledger = AccountMWRLedger(dates: ["2026-01-01", "2026-01-02"], cashFlows: [100, 0], values: [100, nil], benchmarkValues: [:])
         let response = PortfolioChartResponse.accountHistory(ledger: ledger, nav: [1, 1], positionCount: 1)

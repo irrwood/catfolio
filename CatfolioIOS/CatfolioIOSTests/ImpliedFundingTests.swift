@@ -70,6 +70,27 @@ final class ImpliedFundingTests: XCTestCase {
         XCTAssertEqual(openings.first { $0.external }?.cash.first?.amount, 240)
     }
 
+    func testAFillWithoutAPriceTakesTheNearestClose() {
+        let closes: [String: T.Quote] = ["2026-02-18": T.Quote(price: 400, currency: "USD"), "2026-02-24": T.Quote(price: 410, currency: "USD")]
+        XCTAssertEqual(T.close(near: "2026-02-20", in: closes)?.date, "2026-02-18", "the latest close before it comes first")
+        XCTAssertEqual(T.close(near: "2026-02-10", in: closes)?.date, "2026-02-18", "or the earliest after it")
+        XCTAssertNil(T.close(near: "2026-01-01", in: closes), "nothing within ten days")
+    }
+
+    func testSharesNoLongerHeldLeaveAtTheirLastCloseWithoutALoss() {
+        // Bought 10, no sale recorded, none held today: exchanged in a takeover.
+        let events = [trade("b1", "2026-01-02", "AAA", 10, at: 100)]
+        let quotes: [String: [String: T.Quote]] = ["AAA": ["2026-01-02": T.Quote(price: 100, currency: "USD"),
+                                                           "2026-02-20": T.Quote(price: 130, currency: "USD")]]
+        let closings = T.closingTransfers(events: events, splits: [], expected: [:], quotes: quotes, accounts: ["A"])
+        XCTAssertEqual(closings.symbols, ["AAA"])
+        let sale = closings.events.first { $0.symbol == "AAA" }
+        XCTAssertEqual(sale?.date, "2026-02-20")
+        XCTAssertEqual(sale?.quantity, -10)
+        let withdrawal = closings.events.first { $0.external }
+        XCTAssertEqual(withdrawal?.cash.first?.amount, -1300, "its value leaves as a withdrawal, so the account keeps the gain it had")
+    }
+
     func testTheImpliedLedgerMeasuresOnlyThePriceMove() throws {
         var events = [trade("b1", "2026-01-02", "AAA", 10, at: 100)]
         events += T.fundingShortfalls(events: events, accounts: ["A"])
@@ -77,5 +98,44 @@ final class ImpliedFundingTests: XCTestCase {
         XCTAssertEqual(result.points.map(\.nav), [1, Decimal(string: "1.1")!])
         XCTAssertEqual(result.points.first?.inflow, 1000)
         XCTAssertEqual(result.points.last?.value, 1100)
+    }
+
+    func testADayNoPriceExplainsIsTakenAsATransfer() throws {
+        // Funded for 1 share, but the account holds 15 the next day: a gap
+        // in the data, not a 1400% day.
+        var events = [trade("b1", "2026-01-02", "AAA", 1, at: 100)]
+        events += T.fundingShortfalls(events: events, accounts: ["A"])
+        events.append(T.Event(id: "gap", date: "2026-01-03", account: "A", symbol: "AAA", quantity: 14, cash: []))
+        let days = [day("2026-01-02", 100), day("2026-01-03", 100), day("2026-01-05", 110)]
+        let result = try T.calculate(events: events, days: days, implausibleGrowth: Decimal(string: "1.5"))
+        XCTAssertEqual(result.points.map(\.nav), [1, 1, Decimal(string: "1.1")!])
+        XCTAssertEqual(result.neutralized.map(\.date), ["2026-01-03"])
+        XCTAssertEqual(result.points[1].inflow, 1400, "the unexplained value came in as a transfer")
+        XCTAssertEqual(try T.calculate(events: events, days: days).points[1].nav, 15, "without the limit, a ledger is taken as it stands")
+    }
+
+    // MARK: Without a ledger
+
+    func testAValueJumpNoFundingExplainsIsNotAReturn() {
+        let days = LocalMarketDataClient.impliedLedgerDays(values: [
+            ("2026-01-02", 100, 100), ("2026-01-03", 1400, 100), ("2026-01-04", 1540, 100),
+        ])
+        XCTAssertEqual(days.last?.nav ?? 0, 1.1, accuracy: 1e-12)
+    }
+
+    func testValueAndFundingLinesChainLikeTheLedger() {
+        // 1000 in, grows 10%, 500 more in, flat, 300 out.
+        let days = LocalMarketDataClient.impliedLedgerDays(values: [
+            ("2026-01-02", 1000, 1000), ("2026-01-03", 1100, 1000),
+            ("2026-01-04", 1600, 1500), ("2026-01-05", 1300, 1200),
+        ])
+        XCTAssertEqual(days.map(\.inflow), [1000, 0, 500, 0])
+        XCTAssertEqual(days.map(\.outflow), [0, 0, 0, 300])
+        XCTAssertEqual(days.last?.nav ?? 0, 1.1, accuracy: 1e-12, "the deposit and the withdrawal are not returns")
+    }
+
+    func testNothingIsReturnedBeforeTheFirstDeposit() {
+        let days = LocalMarketDataClient.impliedLedgerDays(values: [("2026-01-01", 0, 0), ("2026-01-02", 100, 100)])
+        XCTAssertEqual(days.map(\.date), ["2026-01-02"])
     }
 }

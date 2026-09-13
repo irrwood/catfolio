@@ -200,10 +200,14 @@ private struct ReturnsChartPage: View {
         }
         .securityDetailOpenFeedback(trigger: selectedHolding?.ticker, enabled: hapticsEnabled)
         .task {
-            if (model.comparison == nil || model.returnsAnalytics == nil),
-               !model.isReturnsLoading,
-               !model.isReturnsAnalyticsLoading {
+            guard !model.isReturnsLoading, !model.isReturnsAnalyticsLoading else { return }
+            // Each part is fetched only when it is missing: analytics that
+            // failed must not send the comparison through a full rebuild on
+            // every visit.
+            if model.comparison == nil {
                 await model.refreshReturnsPage()
+            } else if model.returnsAnalytics == nil {
+                await model.refreshReturnsAnalytics()
             }
         }
     }
@@ -251,6 +255,10 @@ struct ReturnsComparisonPanel: View {
         return .oneMonth
     }()
     @State private var selectedDate: Date?
+    @AppStorage(ComparisonBenchmarkCatalog.preferenceKey) private var storedBenchmarks: String?
+    @State private var showsBenchmarkPicker = false
+    /// The list the comparison on screen was computed for.
+    @State private var computedBenchmarks = ComparisonBenchmarkCatalog.symbols
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -261,7 +269,9 @@ struct ReturnsComparisonPanel: View {
                     timeRange: $timeRange,
                     selectedDate: $selectedDate
                 )
-                .id(model.comparisonRevision)
+                // A removed symbol leaves at once; an added one arrives with
+                // the recomputed comparison.
+                .id("\(model.comparisonRevision)|\(storedBenchmarks ?? "")")
             } else if model.isReturnsLoading {
                 ReturnsComparisonPlaceholder(
                     mode: $chartMode,
@@ -283,10 +293,42 @@ struct ReturnsComparisonPanel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .task { selectDrawableModeIfNeeded() }
         .onChange(of: model.comparisonRevision) { _, _ in
+            computedBenchmarks = ComparisonBenchmarkCatalog.symbols
             selectDrawableModeIfNeeded()
         }
         .onChange(of: chartMode) { _, _ in selectedDate = nil }
         .onChange(of: timeRange) { _, _ in selectedDate = nil }
+        .onChange(of: showsBenchmarkPicker) { _, isShowing in
+            // Recompute once for everything added while searching.
+            if !isShowing { Task { await recomputeIfAdded() } }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showsBenchmarkPicker = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                }
+                .accessibilityLabel(L10n.text("添加对比"))
+            }
+        }
+        .sheet(isPresented: $showsBenchmarkPicker) {
+            ReturnsBenchmarkPicker()
+                .environment(model)
+        }
+        .onChange(of: storedBenchmarks) { _, _ in
+            Task { await recomputeIfAdded() }
+        }
+    }
+
+    /// Only an added symbol needs its history fetched; a removed one is
+    /// already gone from the chart.
+    private func recomputeIfAdded() async {
+        let current = ComparisonBenchmarkCatalog.symbols
+        let added = !Set(current).isSubset(of: Set(computedBenchmarks))
+        guard added, !showsBenchmarkPicker else { return }
+        computedBenchmarks = current
+        await model.refreshReturns()
     }
 
     private func selectDrawableModeIfNeeded() {
@@ -362,15 +404,19 @@ private struct ReturnsTimeRangeControl: View {
 
 private enum ReturnsSeriesStyle {
     static let portfolio = "组合"
-    static let order = [portfolio] + ComparisonBenchmarkCatalog.symbols
-    static let displayOrder = order
+    static var order: [String] { [portfolio] + ComparisonBenchmarkCatalog.symbols }
+    static var displayOrder: [String] { order }
     // LazyHGrid fills a column before moving horizontally. Keep VOO and VTI in
     // the final column so the broader comparison set appears before them.
-    static let selectorOrder = [
-        portfolio, "QQQ", "SPY",
-        "DIA", "IWM", "VEU",
-        "GLD", "VOO", "VTI",
-    ]
+    // A list the reader has changed keeps the order they built it in.
+    static var selectorOrder: [String] {
+        guard ComparisonBenchmarkCatalog.symbols == ComparisonBenchmarkCatalog.defaults else { return order }
+        return [
+            portfolio, "QQQ", "SPY",
+            "DIA", "IWM", "VEU",
+            "GLD", "VOO", "VTI",
+        ]
+    }
     /// One colour per series, used by the line and by the chip above it.
     ///
     /// Where a series has an obvious colour, it gets it: gold is gold, and
@@ -391,8 +437,26 @@ private enum ReturnsSeriesStyle {
         "GLD": Color(red: 1.000, green: 0.769, blue: 0.169),
     ]
 
+    /// For symbols the reader added: light enough to carry the black label
+    /// text, and apart from the fixed colours above.
+    static let addedColors: [Color] = [
+        Color(red: 0.722, green: 0.600, blue: 1.000),
+        Color(red: 1.000, green: 0.431, blue: 0.702),
+        Color(red: 0.722, green: 0.949, blue: 0.200),
+        Color(red: 1.000, green: 0.459, blue: 0.400),
+        Color(red: 0.302, green: 0.851, blue: 1.000),
+        Color(red: 0.831, green: 0.659, blue: 0.459),
+        Color(red: 0.749, green: 0.757, blue: 0.788),
+        Color(red: 0.580, green: 0.580, blue: 1.000),
+    ]
+
     static func color(for series: String) -> Color {
-        colors[series] ?? .secondary
+        if let fixed = colors[series] { return fixed }
+        // Added symbols take the next colour in the order they were added,
+        // so two never share one.
+        let added = ComparisonBenchmarkCatalog.symbols.filter { colors[$0] == nil }
+        guard let index = added.firstIndex(of: series) else { return .secondary }
+        return addedColors[index % addedColors.count]
     }
 
     static func title(for series: String) -> String {
@@ -810,6 +874,15 @@ private struct ReturnsChart: View {
                         .buttonStyle(.plain)
                         .frame(width: cardWidth)
                         .accessibilityValue(item.isVisible ? L10n.text("已显示") : L10n.text("已隐藏"))
+                        .contextMenu {
+                            if item.series != ReturnsSeriesStyle.portfolio {
+                                Button(role: .destructive) {
+                                    ComparisonBenchmarkCatalog.remove(item.series)
+                                } label: {
+                                    Label(L10n.text("移除对比"), systemImage: "minus.circle")
+                                }
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
@@ -986,7 +1059,7 @@ private struct FastReturnsPlot: View {
 
     private let axisWidth: CGFloat = 33
     private let bottomHeight: CGFloat = 0
-    private let endpointConnectorWidth: CGFloat = 9
+    private let endpointInset: CGFloat = 9
 
     var body: some View {
         let standardSeries = ReturnsSeriesStyle.order.compactMap { series -> StandardLineChartSeries? in
@@ -1004,7 +1077,9 @@ private struct FastReturnsPlot: View {
                 lineWidth: 2,
                 dash: dashPattern(for: series),
                 selectionRadius: series == ReturnsSeriesStyle.portfolio ? 3.6 : 2.8,
-                latestPointRadius: nil
+                // The home chart's ring, in place of a connector to the label.
+                latestPointRadius: series == ReturnsSeriesStyle.portfolio ? 5 : 4,
+                latestPointUsesGlass: false
             )
         }
         StandardLineChart(
@@ -1019,12 +1094,17 @@ private struct FastReturnsPlot: View {
             topInset: 0,
             bottomHeight: bottomHeight,
             leadingLineOverflow: 65,
-            trailingEndpointInset: endpointConnectorWidth,
+            trailingEndpointInset: endpointInset,
             transitionKey: transitionKey,
             dataTransition: .viewportZoom,
             animatesInitialAppearance: true,
             selectedDate: selectedDate,
             measuredRange: measuredRange,
+            // The day being read, as on the home chart. A measured range
+            // names its dates in the summary card instead.
+            selectionIndicatorLabel: measuredRange == nil
+                ? selectedDate?.formatted(.dateTime.year().month(.abbreviated).day().locale(appLocale))
+                : nil,
             rangeSeriesIDs: [ReturnsSeriesStyle.portfolio],
             rangePrimarySeriesID: ReturnsSeriesStyle.portfolio,
             yAxisFont: Typography.number(.micro),
@@ -1036,23 +1116,10 @@ private struct FastReturnsPlot: View {
             onInteractionEnded: onInteractionEnded
         )
         .overlay {
+            // Each line ends in its ring; the labels stand apart in the axis
+            // column, shifted vertically to keep neighbouring tickers apart.
             GeometryReader { geometry in
                 ForEach(endpointLayouts(height: geometry.size.height)) { endpoint in
-                    // Continue each curve into its capsule, including labels
-                    // shifted vertically to keep neighboring tickers apart.
-                    Path { path in
-                        let labelLeadingX = geometry.size.width - axisWidth
-                        path.move(to: CGPoint(
-                            x: labelLeadingX - endpointConnectorWidth,
-                            y: endpoint.lineY
-                        ))
-                        path.addLine(to: CGPoint(
-                            x: labelLeadingX + axisWidth / 2,
-                            y: endpoint.y
-                        ))
-                    }
-                    .stroke(endpoint.color, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-
                     Text(endpoint.text)
                         .font(Typography.text(size: 10, weight: .bold))
                         .foregroundStyle(Color.black)
@@ -1082,7 +1149,6 @@ private struct FastReturnsPlot: View {
                 id: series,
                 text: ReturnsSeriesStyle.title(for: series),
                 color: ReturnsSeriesStyle.color(for: series),
-                lineY: rawY,
                 y: min(max(rawY, halfHeight), max(halfHeight, height - halfHeight))
             )
         }
@@ -1161,7 +1227,6 @@ private struct ReturnsEndpointLabelLayout: Identifiable {
     let id: String
     let text: String
     let color: Color
-    let lineY: CGFloat
     var y: CGFloat
 }
 
@@ -1654,5 +1719,213 @@ private struct ReturnsSeriesCardSurface: View {
             shape
                 .fill(.ultraThinMaterial)
         }
+    }
+}
+
+/// What the comparison measures against: the list as it stands, the index
+/// funds it starts with, and a search of the whole market for any index
+/// fund or stock to add.
+private struct ReturnsBenchmarkPicker: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var appLocale
+    @AppStorage(ComparisonBenchmarkCatalog.preferenceKey) private var storedBenchmarks: String?
+    @State private var query = ""
+    @State private var results: [MarketSecurityResult] = []
+    /// The query `results` answer, so a stale list is not mistaken for an
+    /// empty one while the next search runs.
+    @State private var searchedQuery = ""
+
+    private var symbols: [String] { ComparisonBenchmarkCatalog.symbols(from: storedBenchmarks) }
+    private var searchText: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var isFull: Bool { symbols.count >= ComparisonBenchmarkCatalog.maximumCount }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if searchText.isEmpty {
+                    chosen
+                    recommended
+                } else {
+                    found
+                }
+            }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(SettingsTemplate.pageBackground)
+            .navigationTitle(L10n.text("对比标的"))
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(
+                text: $query,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: L10n.text("搜索指数或个股")
+            )
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.characters)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.text("完成")) { dismiss() }
+                }
+            }
+            .task(id: searchText) { await search() }
+        }
+    }
+
+    private var chosen: some View {
+        Section {
+            if symbols.isEmpty {
+                Text(L10n.text("还没有对比标的，搜索或从推荐里添加。"))
+                    .appText(.label)
+                    .foregroundStyle(SettingsTemplate.secondaryText)
+            }
+            ForEach(symbols, id: \.self) { symbol in
+                row(symbol: symbol, name: ComparisonBenchmarkCatalog.name(for: symbol)) {
+                    Button {
+                        ComparisonBenchmarkCatalog.remove(symbol)
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.red)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.text("移除 \(symbol)"))
+                }
+            }
+            .onDelete { offsets in
+                let current = symbols
+                ComparisonBenchmarkCatalog.store(current.enumerated().filter { !offsets.contains($0.offset) }.map(\.element))
+            }
+        } header: {
+            Text(L10n.text("已添加 \(symbols.count)/\(ComparisonBenchmarkCatalog.maximumCount)"))
+        } footer: {
+            Text(L10n.text("左滑或点 − 移除。收益对比页上长按卡片也可以移除。"))
+        }
+    }
+
+    @ViewBuilder
+    private var recommended: some View {
+        let missing = ComparisonBenchmarkCatalog.defaults.filter { !symbols.contains($0) }
+        if !missing.isEmpty {
+            Section {
+                ForEach(missing, id: \.self) { symbol in
+                    row(symbol: symbol, name: ComparisonBenchmarkCatalog.name(for: symbol)) {
+                        addButton(symbol: symbol, name: nil)
+                    }
+                }
+            } header: {
+                Text(L10n.text("推荐指数"))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var found: some View {
+        Section {
+            if results.isEmpty, searchedQuery == searchText {
+                Text(L10n.text("没有找到「\(searchText)」"))
+                    .appText(.label)
+                    .foregroundStyle(SettingsTemplate.secondaryText)
+            }
+            ForEach(results) { result in
+                let symbol = Self.benchmarkSymbol(for: result)
+                row(symbol: symbol, name: CompanyNameCatalog.displayName(ticker: result.ticker, fallback: result.name),
+                    venue: result.venue) {
+                    if symbols.contains(symbol) {
+                        Button {
+                            ComparisonBenchmarkCatalog.remove(symbol)
+                        } label: {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(CatfolioTheme.accent)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(L10n.text("移除 \(symbol)"))
+                    } else {
+                        addButton(symbol: symbol, name: result.name)
+                    }
+                }
+            }
+        } header: {
+            Text(L10n.text("证券"))
+        } footer: {
+            Text(L10n.text("离线证券目录：美股与主要海外市场的股票和 ETF。"))
+        }
+    }
+
+    private func addButton(symbol: String, name: String?) -> some View {
+        Button {
+            ComparisonBenchmarkCatalog.add(symbol, name: name)
+        } label: {
+            Image(systemName: "plus.circle.fill")
+                .font(.title3)
+                .foregroundStyle(isFull ? Color.secondary : CatfolioTheme.accent)
+        }
+        .buttonStyle(.plain)
+        .disabled(isFull)
+        .accessibilityLabel(L10n.text("添加 \(symbol)"))
+    }
+
+    private func row(symbol: String, name: String?, venue: String? = nil,
+                     @ViewBuilder trailing: () -> some View) -> some View {
+        HStack(spacing: 12) {
+            ZStack(alignment: .bottomTrailing) {
+                AssetLogo(ticker: symbol, logoSymbol: symbol, size: 36)
+                if symbols.contains(symbol) {
+                    // The colour the series draws in.
+                    Circle()
+                        .fill(ReturnsSeriesStyle.color(for: symbol))
+                        .frame(width: 11, height: 11)
+                        .overlay(Circle().stroke(SettingsTemplate.card, lineWidth: 2))
+                        .offset(x: 2, y: 2)
+                }
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(symbol)
+                    .appText(.body, weight: .semibold)
+                    .lineLimit(1)
+                if let name {
+                    // The built-in names are UI keys; a directory name is not.
+                    Text(ComparisonBenchmarkCatalog.names[symbol] == name ? L10n.label(name) : name)
+                        .appText(.label)
+                        .foregroundStyle(SettingsTemplate.secondaryText)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 8)
+            if let venue {
+                Text(venue)
+                    .appText(.label)
+                    .foregroundStyle(SettingsTemplate.secondaryText)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            trailing()
+        }
+        .frame(minHeight: 48)
+    }
+
+    /// The symbol the price history is fetched under: the broker's ticker
+    /// with the exchange suffix the quote provider needs.
+    private static func benchmarkSymbol(for result: MarketSecurityResult) -> String {
+        LocalMarketDataClient.yahooSymbol(ticker: result.ticker, currency: result.currency ?? "USD")
+    }
+
+    /// Off the main thread: the directory holds some twenty thousand
+    /// securities, and its first use decodes it.
+    @MainActor private func search() async {
+        let text = searchText
+        guard !text.isEmpty else {
+            results = []
+            searchedQuery = ""
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(120))
+        guard !Task.isCancelled else { return }
+        let found = await Task.detached(priority: .userInitiated) { () -> [MarketSecurityResult] in
+            guard let catalog = try? CompanyReferenceCatalog.bundled.get() else { return [] }
+            return MarketSecurityResult.search(text, in: catalog)
+        }.value
+        guard !Task.isCancelled else { return }
+        results = found
+        searchedQuery = text
     }
 }

@@ -229,6 +229,19 @@ struct SettingsView: View {
                     )
                 }
             }
+                // Problems with the history never stop the chart: they are
+                // listed here, each with what was assumed in its place.
+                let issues = Array(NSOrderedSet(array: (model.portfolioChart?.dataIssues ?? []) + (model.comparison?.dataIssues ?? []))) as? [String] ?? []
+                if !issues.isEmpty {
+                    SettingsNavigationRow(
+                        icon: .symbol("exclamationmark.triangle"),
+                        title: L10n.text("数据问题"),
+                        value: L10n.text("\(issues.count) 项")
+                    ) {
+                        AccountDataIssuesView(issues: issues)
+                    }
+                    .accessibilityIdentifier("settings.data-issues")
+                }
             if let reconciliation, !reconciliation.reconciles {
                 SettingsFootnote(reconciliationDetail(reconciliation))
             }
@@ -1749,3 +1762,31 @@ private struct LocalServiceDetailView: View {
 /// `chart.pie.fill` next to each other read as two different kinds of
 /// control. Boxing them equalises that: the tile is the constant, the symbol
 /// varies inside it, and the row's text starts at the same x every time.
+
+/// What the account rebuild assumed or had to leave out. None of it stops
+/// the home chart; this is where it is said.
+struct AccountDataIssuesView: View {
+    let issues: [String]
+
+    var body: some View {
+        SettingsPage {
+            SettingsSection(L10n.text("不影响出图")) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(issues.enumerated()), id: \.offset) { index, issue in
+                        if index > 0 { Divider() }
+                        Text(L10n.label(issue))
+                            .appText(.callout)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, SettingsTemplate.rowHorizontalPadding)
+                            .padding(.vertical, SettingsTemplate.rowVerticalPadding)
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+            SettingsFootnote(L10n.text("首页和收益页照常绘制，上面每一条是重建账户历史时做的推算或跳过的数据。导入券商的完整活动记录（带现金金额）后，这些推算会换成真实数据。"))
+        }
+        .navigationTitle(L10n.text("数据问题"))
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}

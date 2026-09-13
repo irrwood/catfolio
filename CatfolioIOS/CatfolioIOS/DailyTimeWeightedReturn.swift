@@ -50,6 +50,9 @@ enum DailyTimeWeightedReturn {
         var points: [Point]
         var cash: [String: [String: Decimal]]
         var holdings: [String: [String: Decimal]]
+        /// Days whose move the prices could not explain, with the growth the
+        /// day would otherwise have had. Only with `implausibleGrowth`.
+        var neutralized: [(date: String, growth: Decimal)] = []
     }
 
     struct Failure: LocalizedError {
@@ -59,7 +62,15 @@ enum DailyTimeWeightedReturn {
 
     /// Opening balances are zero; a truncated ledger must supply an explicit
     /// opening funding/position event, never inferred from today's positions.
-    static func calculate(events: [Event], days: [Day], splits: [Split] = []) throws -> Result {
+    ///
+    /// - Parameter implausibleGrowth: for ledgers rebuilt on assumptions. A
+    ///   day on which the whole account grows by more than this factor, or
+    ///   shrinks by more than its inverse, is a gap in the data rather than a
+    ///   return: the difference is taken as an unrecorded transfer, the day
+    ///   counts as flat, and it is listed in `neutralized`. Early in an
+    ///   account, when a few hundred dollars are the base, one such gap
+    ///   would otherwise multiply every return after it.
+    static func calculate(events: [Event], days: [Day], splits: [Split] = [], implausibleGrowth: Decimal? = nil) throws -> Result {
         func fail(_ message: String) -> Failure { Failure(message: message) }
         guard !events.isEmpty, !days.isEmpty else { throw fail("TWR：缺少完整资金流水或估值日期。") }
         guard Set(events.map(\.id)).count == events.count else { throw fail("TWR：存在重复流水。") }
@@ -75,6 +86,7 @@ enum DailyTimeWeightedReturn {
         var previous: Decimal = 0
         var nav: Decimal = 1
         var started = false
+        var neutralized: [(date: String, growth: Decimal)] = []
         for day in sortedDays {
             func usd(_ amount: Decimal, _ currency: String) throws -> Decimal {
                 if currency == "USD" { return amount }
@@ -142,7 +154,14 @@ enum DailyTimeWeightedReturn {
             }
             let capital = previous + inflow
             if capital > 0 {
-                nav *= (value + outflow) / capital
+                let growth = (value + outflow) / capital
+                if let limit = implausibleGrowth, previous > 0, growth > limit || growth < 1 / limit {
+                    let gap = value + outflow - capital
+                    if gap > 0 { inflow += gap } else { outflow -= gap }
+                    neutralized.append((day.date, growth))
+                } else {
+                    nav *= growth
+                }
                 started = true
             } else if value != 0 || outflow != 0 {
                 throw fail("TWR：缺少期初资金，无法确定收益分母。")
@@ -152,6 +171,6 @@ enum DailyTimeWeightedReturn {
             previous = value
         }
         guard !points.isEmpty else { throw fail("TWR：没有可计算的已注资区间。") }
-        return Result(points: points, cash: cash, holdings: holdings)
+        return Result(points: points, cash: cash, holdings: holdings, neutralized: neutralized)
     }
 }

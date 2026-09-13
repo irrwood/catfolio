@@ -2239,3 +2239,60 @@
 "%@ · 高点在 %@" = "%@ · high on %@";
 "水下分析" = "Underwater analysis";
 "资金流水不完整：部分交易没有导入现金金额，已按「股数 × 成交价」推算；当天现金不够付款的部分视为当天入金，交易记录解释不了的持仓视为在最早有价格的那天按收盘价转入。这些推算都按市值入金，不会凭空产生收益。" = "Incomplete cash ledger: some trades were imported without their cash amounts, so they are estimated as shares × fill price. Cash a day was short of is treated as deposited that day, and shares the trade history cannot explain are treated as transferred in at the first available close. Each estimate adds money at market value, so none creates a gain.";
+"账户历史暂时无法按流水重建，首页先按当前持仓回推市值显示；蓝线是持仓成本，不是净入金。明细见 设置 → 本机数据 → 数据问题。" = "The account history can't be rebuilt from its records yet, so Home shows today's holdings valued back through time for now; the blue line is their cost, not net deposits. See Settings → Local data → Data issues.";
+"账户历史重建失败：%@" = "The account history could not be rebuilt: %@";
+"按原始流水重建时出错（%@），已对全部账户按推算重建。" = "Rebuilding from the original records failed (%@), so every account was rebuilt on estimates.";
+"%@ 有 %@ 笔交易没有成交价（常见于并购换股），按当天或最近的收盘价估值。" = "%@: %@ trades had no fill price (common in takeover exchanges) and were valued at that day's or the nearest close.";
+"%@ 有 %@ 笔交易前后 10 天都没有收盘价，已跳过。" = "%@: %@ trades had no close within ten days and were left out.";
+"%@ 条流水（%@）暂时读不懂，已跳过；持仓按当前账户对齐。" = "%@ records (%@) can't be read yet and were left out; holdings were matched to the account today.";
+"%@ 已不在当前持仓里，但没有卖出记录，按最后一个收盘价转出。" = "%@ is no longer held but has no recorded sale, so it was moved out at its last close.";
+"%@ 找不到历史行情，没有计入账户历史。" = "%@ has no price history and is left out of the account history.";
+"数据问题" = "Data issues";
+"不影响出图" = "Charts still draw";
+"首页和收益页照常绘制，上面每一条是重建账户历史时做的推算或跳过的数据。导入券商的完整活动记录（带现金金额）后，这些推算会换成真实数据。" = "Home and Performance draw as usual. Each item above is an estimate made, or data left out, while rebuilding the account history. Import your broker's full activity statement, with cash amounts, and these estimates are replaced by real data.";
+"每条推算和数据问题列在 设置 → 本机数据 → 数据问题。" = "Each estimate and data issue is listed in Settings → Local data → Data issues.";
+" 等" = " and others";
+"收益按持仓市值和成本推算：成本增加视为入金、减少视为出金，没有现金流水。" = "Returns are estimated from holdings' value and cost: a rise in cost counts as a deposit and a fall as a withdrawal, as there is no cash ledger.";
+"收益对比没能按流水重建：%@" = "Performance could not be rebuilt from the records: %@";
+
+
+
+
+
+"添加对比" = "Add comparison";
+
+"移除对比" = "Remove from comparison";
+
+"对比标的" = "Compare against";
+
+"搜索指数或个股" = "Search indexes or stocks";
+
+"还没有对比标的，搜索或从推荐里添加。" = "Nothing to compare against yet. Search, or add one of the suggestions.";
+
+"移除 %@" = "Remove %@";
+
+"添加 %@" = "Add %@";
+
+"已添加 %@/%@" = "Added %@/%@";
+
+"左滑或点 − 移除。收益对比页上长按卡片也可以移除。" = "Swipe left or tap − to remove. You can also long-press a card on the comparison page.";
+
+"推荐指数" = "Suggested indexes";
+
+"没有找到「%@」" = "No results for “%@”";
+
+"离线证券目录：美股与主要海外市场的股票和 ETF。" = "Offline directory: stocks and ETFs in the US and major overseas markets.";
+
+
+
+
+
+
+
+
+
+/* Analyst history controls and empty state */
+
+" 等 %@ 天" = " and %@ days in all";
+
+"%@%@ 账户单日涨跌远超行情能解释的幅度，多半是推算的入金或持仓有误，这些天按未记录的转入转出处理、不计收益。" = "On %@%@ the account moved far more in one day than prices explain — most likely an implied deposit or position is wrong. Those days are treated as unrecorded transfers and earn no return.";

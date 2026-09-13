@@ -42,6 +42,9 @@ struct PortfolioChartResponse: Decodable {
     /// Present for real account history (empty when unavailable). In this
     /// mode ChartPoint.cost means cumulative NET EXTERNAL DEPOSITS.
     var accountNAV: [String: Double]? = nil
+    /// What the rebuild assumed or could not use, for Settings to list. The
+    /// chart is drawn regardless.
+    var dataIssues: [String]? = nil
 
     enum CodingKeys: String, CodingKey {
         case warning
@@ -56,7 +59,7 @@ struct PortfolioChartResponse: Decodable {
             currentPoint: .init(dateText: "", marketValue: .nan, cost: .nan), warning: reason, accountNAV: [:])
     }
 
-    static func accountHistory(ledger: AccountMWRLedger, nav: [Double?], positionCount: Int, inferredFunding: Bool = false) -> Self {
+    static func accountHistory(ledger: AccountMWRLedger, nav: [Double?], positionCount: Int, assumptions: [String] = []) -> Self {
         guard ledger.values.count == ledger.dates.count, ledger.cashFlows.count == ledger.dates.count,
               nav.count == ledger.dates.count, !ledger.dates.isEmpty else {
             return .unavailableAccountHistory(positionCount: positionCount, reason: "账户账本与净值日期不完整。")
@@ -75,9 +78,10 @@ struct PortfolioChartResponse: Decodable {
         }
         return Self(positionCount: positionCount, positionHistory: .init(available: points.count > 1, rows: points),
             currentPoint: points.last!,
-            warning: (inferredFunding ? LocalMarketDataClient.impliedFundingNote + "\n\n" : "")
+            warning: (assumptions.isEmpty ? "" : LocalMarketDataClient.impliedFundingNote + "\n\n" + "每条推算和数据问题列在 设置 → 本机数据 → 数据问题。" + "\n\n")
                 + "账户资产包含持仓和现金，按历史日线及汇率重建；净入金为累计入金减累计出金。金额显示扣除外部资金流后的盈亏，百分比为区间 TWR。股息按到账日计入，现金余额尚未与券商核对；不是实时账户余额。",
-            accountNAV: units)
+            accountNAV: units,
+            dataIssues: assumptions.isEmpty ? nil : assumptions)
     }
 
     func accountPerformance(from startDate: String, to endDate: String) -> (amount: Double, percentage: Double) {
@@ -285,7 +289,7 @@ struct SecurityTrade: Equatable, Identifiable, Sendable {
     }
 }
 
-struct ComparisonResponse: Decodable {
+struct ComparisonResponse: Codable {
     let available: Bool
     let dates: [String]
     let portfolio: [Double?]
@@ -300,6 +304,8 @@ struct ComparisonResponse: Decodable {
     let warnings: [String]?
     let summary: ComparisonSummary
     var mwrLedger: AccountMWRLedger? = nil
+    /// What the rebuild assumed or could not use, for Settings to list.
+    var dataIssues: [String]? = nil
 
     enum CodingKeys: String, CodingKey {
         case available, dates, portfolio, benchmarks, warnings, summary
@@ -311,6 +317,7 @@ struct ComparisonResponse: Decodable {
         case twrPortfolio = "twr_portfolio"
         case twrBenchmarks = "twr_benchmarks"
         case mwrLedger = "mwr_ledger"
+        case dataIssues = "data_issues"
     }
 }
 
@@ -523,8 +530,52 @@ struct AccountMWRLedger: Codable, Sendable {
     }
 }
 
+/// What the returns comparison measures the portfolio against. The reader
+/// picks the list — any index fund or stock the market search finds — and
+/// the eight index funds below are where it starts and what search
+/// recommends.
 enum ComparisonBenchmarkCatalog {
-    static let symbols = ["SPY", "QQQ", "VTI", "VOO", "DIA", "IWM", "VEU", "GLD"]
+    static let defaults = ["SPY", "QQQ", "VTI", "VOO", "DIA", "IWM", "VEU", "GLD"]
+    /// Each series draws a line and fetches a history, so the list is capped.
+    static let maximumCount = 12
+    /// The chosen symbols joined by commas; absent until the reader first
+    /// changes the list. Held as one string so views can observe it through
+    /// `@AppStorage`.
+    static let preferenceKey = "returns.comparisonBenchmarks"
+    private static let namesKey = "returns.comparisonBenchmarkNames"
+
+    /// The chosen symbols, in the order they were added.
+    static var symbols: [String] { symbols(from: UserDefaults.standard.string(forKey: preferenceKey)) }
+
+    static func symbols(from stored: String?) -> [String] {
+        guard let stored else { return defaults }
+        return stored.split(separator: ",").map(String.init)
+    }
+
+    static func store(_ symbols: [String]) {
+        var seen = Set<String>()
+        let unique = symbols.filter { seen.insert($0).inserted }.prefix(maximumCount)
+        UserDefaults.standard.set(unique.joined(separator: ","), forKey: preferenceKey)
+    }
+
+    /// Adds a symbol the search found, remembering its name for the list.
+    static func add(_ symbol: String, name: String?) {
+        guard !symbols.contains(symbol), symbols.count < maximumCount else { return }
+        if let name, names[symbol] == nil {
+            var stored = UserDefaults.standard.dictionary(forKey: namesKey) as? [String: String] ?? [:]
+            stored[symbol] = name
+            UserDefaults.standard.set(stored, forKey: namesKey)
+        }
+        store(symbols + [symbol])
+    }
+
+    static func remove(_ symbol: String) {
+        store(symbols.filter { $0 != symbol })
+    }
+
+    static func name(for symbol: String) -> String? {
+        names[symbol] ?? (UserDefaults.standard.dictionary(forKey: namesKey) as? [String: String])?[symbol]
+    }
 
     static let names = [
         "SPY": "标普500",
@@ -538,7 +589,7 @@ enum ComparisonBenchmarkCatalog {
     ]
 }
 
-struct ComparisonSummary: Decodable {
+struct ComparisonSummary: Codable {
     let portfolioReturn: Double?
     let benchmarkReturn: Double?
     let benchmarkReturns: [String: Double?]

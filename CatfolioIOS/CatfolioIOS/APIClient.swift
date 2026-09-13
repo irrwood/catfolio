@@ -243,12 +243,32 @@ final class AppModel {
             guard generation == returnsRequestGeneration else { return }
             let scoped = selectedDocument(from: loaded)
             document = scoped
+            // The saved comparison is drawn at once. When nothing it was
+            // computed from has changed today, it is the answer; otherwise
+            // it stays on screen while the rebuild runs behind it.
+            let scope = comparisonCacheScope
+            let fingerprint = await Task.detached(priority: .userInitiated) {
+                ComparisonSnapshotCache.fingerprint(for: scoped)
+            }.value
+            let saved = await Task.detached(priority: .userInitiated) {
+                ComparisonSnapshotCache.load(scope: scope)
+            }.value
+            guard generation == returnsRequestGeneration else { return }
+            if let saved, saved.fingerprint == fingerprint || comparison == nil {
+                comparison = saved.response
+                comparisonRevision &+= 1
+                comparisonWarning = saved.response.warnings?.joined(separator: "\n")
+                if saved.fingerprint == fingerprint { return }
+            }
             do {
                 let enriched = try await LocalMarketDataClient().comparison(document: scoped)
                 guard generation == returnsRequestGeneration else { return }
                 comparison = enriched
                 comparisonRevision &+= 1
                 comparisonWarning = enriched.warnings?.joined(separator: "\n")
+                Task.detached(priority: .utility) {
+                    ComparisonSnapshotCache.save(enriched, fingerprint: fingerprint, scope: scope)
+                }
             } catch {
                 guard generation == returnsRequestGeneration else { return }
                 let localFallback = try await Task.detached(priority: .userInitiated) {
@@ -297,7 +317,13 @@ final class AppModel {
         }
     }
 
-    private func refreshReturnsAnalytics() async {
+    /// One saved comparison per data mode and account selection.
+    private var comparisonCacheScope: String {
+        let mode = isPublicInvestorMode ? "public:\(publicInvestorSelection)" : (isFakeDataMode ? "demo" : "real")
+        return ([mode] + selectedAccountKeys.sorted()).joined(separator: "|")
+    }
+
+    func refreshReturnsAnalytics() async {
         guard !Task.isCancelled else { return }
         returnsAnalyticsRequestGeneration &+= 1
         let generation = returnsAnalyticsRequestGeneration
