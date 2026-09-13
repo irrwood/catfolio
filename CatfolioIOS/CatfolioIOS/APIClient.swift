@@ -337,11 +337,13 @@ final class AppModel {
         }
     }
 
-    func volumeProfile(for ticker: String, forceRefresh: Bool = false) async throws -> VolumeProfile {
+    /// `currency` stands in for a security that is not held, whose listing
+    /// currency no holding can supply.
+    func volumeProfile(for ticker: String, currency: String? = nil, forceRefresh: Bool = false) async throws -> VolumeProfile {
         let holding = holdings.first(where: { $0.ticker == ticker })
         return try await LocalMarketDataClient().volumeProfile(
             ticker: ticker,
-            currency: holding?.quoteCurrency ?? "USD",
+            currency: holding?.quoteCurrency ?? currency ?? "USD",
             referencePrice: holding?.quotePrice.isFinite == true ? holding?.quotePrice : nil,
             forceRefresh: forceRefresh
         )
@@ -356,6 +358,17 @@ final class AppModel {
             currency: holding?.quoteCurrency ?? "USD",
             referencePrice: holding?.quotePrice.isFinite == true ? holding?.quotePrice : nil,
             document: scoped
+        )
+    }
+
+    /// A security held in no account — one opened from search, or found only
+    /// inside an ETF: its market history alone, with no trades to mark.
+    func marketPriceHistory(for ticker: String, currency: String, forceRefresh: Bool = false) async throws -> SecurityPriceHistory {
+        try await LocalMarketDataClient().securityPriceHistory(
+            ticker: ticker,
+            currency: currency,
+            document: .empty,
+            forceRefresh: forceRefresh
         )
     }
 

@@ -17,6 +17,7 @@ struct RootTabView: View {
     private enum Destination: Hashable {
         case portfolio
         case returns
+        case research
         case settings
     }
 
@@ -36,6 +37,8 @@ struct RootTabView: View {
         if arguments.contains("--show-returns-page") || arguments.contains("--show-heatmap")
             || arguments.contains("--show-policy-composer") {
             initialSelection = .returns
+        } else if arguments.contains("--show-research-tab") {
+            initialSelection = .research
         } else if arguments.contains("--show-settings") || showsLocalServiceRoute {
             initialSelection = .settings
         } else {
@@ -86,6 +89,18 @@ struct RootTabView: View {
                 )
             }
 
+            Tab(value: .research) {
+                ResearchView()
+                    .toolbarVisibility(.hidden, for: .tabBar)
+            } label: {
+                tabIcon(
+                    for: .research,
+                    selectedAsset: "TabResearchSelected",
+                    unselectedAsset: "TabResearchUnselected",
+                    accessibilityLabel: L10n.text("研究")
+                )
+            }
+
             Tab(value: .settings) {
                 SettingsView()
                     .toolbarVisibility(.hidden, for: .tabBar)
@@ -101,7 +116,7 @@ struct RootTabView: View {
         }
         .id(presentationPreferencesID)
         .tint(.primary)
-        .navigationTitle(selection == .settings ? L10n.text("设置") : (selection == .returns ? L10n.text("Performance") : ""))
+        .navigationTitle(title(for: selection))
         .navigationBarTitleDisplayMode(.large)
         .toolbarVisibility(selection == .portfolio ? .hidden : .visible, for: .navigationBar)
         .toolbarVisibility(.hidden, for: .tabBar)
@@ -120,6 +135,7 @@ struct RootTabView: View {
             HStack(spacing: 0) {
                 navigationButton(.portfolio, selected: "TabPortfolioSelected", unselected: "TabPortfolioUnselected", label: L10n.text("持仓"))
                 navigationButton(.returns, selected: "TabPerformanceSelected", unselected: "TabPerformanceUnselected", label: L10n.text("收益"))
+                navigationButton(.research, selected: "TabResearchSelected", unselected: "TabResearchUnselected", label: L10n.text("研究"))
                 navigationButton(.settings, selected: "TabSettingsSelected", unselected: "TabSettingsUnselected", label: L10n.text("设置"))
             }
             .padding(isTabBarCompact ? 2 : 4)
@@ -207,6 +223,15 @@ struct RootTabView: View {
 
     private var tabControlSize: CGFloat {
         isTabBarCompact ? TabBarMetrics.compactControlSize : TabBarMetrics.regularControlSize
+    }
+
+    private func title(for destination: Destination) -> String {
+        switch destination {
+        case .portfolio: ""
+        case .returns: L10n.text("Performance")
+        case .research: L10n.text("研究")
+        case .settings: L10n.text("设置")
+        }
     }
 
     private func presentAI() {

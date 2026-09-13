@@ -212,7 +212,8 @@ struct HoldingDetailView: View {
     private func loadVolumeProfile(forceRefresh: Bool) async {
         guard forceRefresh || profile == nil else { return }
         do {
-            let loaded = try await model.volumeProfile(for: holding.ticker, forceRefresh: forceRefresh)
+            let loaded = try await model.volumeProfile(for: holding.ticker, currency: holding.quoteCurrency,
+                                                       forceRefresh: forceRefresh)
             guard !Task.isCancelled else { return }
             profile = loaded
             errorMessage = nil
@@ -226,7 +227,23 @@ struct HoldingDetailView: View {
     private func loadPriceHistory(forceRefresh: Bool) async {
         guard forceRefresh || priceHistory == nil else { return }
         do {
-            let context = try await model.holdingDetailAccountContext(for: holding.ticker)
+            let context: HoldingDetailAccountContext
+            do {
+                context = try await model.holdingDetailAccountContext(for: holding.ticker)
+            } catch LocalPortfolioError.noPortfolio {
+                // Held in no account: the market's history stands alone,
+                // with no accounts to pick and no trades to mark.
+                let loaded = try await model.marketPriceHistory(
+                    for: holding.ticker,
+                    currency: holding.quoteCurrency ?? "USD",
+                    forceRefresh: forceRefresh
+                )
+                guard !Task.isCancelled else { return }
+                accountContext = nil
+                priceHistory = loaded
+                priceHistoryError = nil
+                return
+            }
             guard !Task.isCancelled else { return }
             // Refresh data without resetting the user's account selection,
             // chart range, scroll position or the independent section caches.
@@ -1599,7 +1616,11 @@ struct HoldingDetailHeader: View {
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                         .minimumScaleFactor(0.76)
                     identityLayout {
-                        Text(DisplayFormat.shares(holding.shares)).appNumber(.label, monospaced: false)
+                        // No count for a security with no shares behind it:
+                        // "0" read as a position that had been sold.
+                        if holding.shares > 0 {
+                            Text(DisplayFormat.shares(holding.shares)).appNumber(.label, monospaced: false)
+                        }
                         Text(holding.ticker.uppercased()).appCaps(.label)
                     }
                     .foregroundStyle(.secondary)

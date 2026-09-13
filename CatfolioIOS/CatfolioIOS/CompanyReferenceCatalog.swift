@@ -99,8 +99,9 @@ struct CompanyReferenceCatalog: Decodable, Sendable {
         return entry(symbol: symbol, market: defaultMarket)
     }
 
-    /// Exact symbols rank first, then prefixes, then company-name matches.
-    /// Call from a background task for a large catalog; no network is used.
+    /// Exact symbols rank first, then prefixes, then company-name matches;
+    /// within a rank, US listings, then shorter symbols. Call from a
+    /// background task for a large catalog; no network is used.
     func search(_ query: String, market: String? = nil, limit: Int = 30) -> [Entry] {
         let query = Self.normalized(query.trimmingCharacters(in: .whitespacesAndNewlines))
         guard !query.isEmpty, limit > 0 else { return [] }
@@ -116,8 +117,38 @@ struct CompanyReferenceCatalog: Decodable, Sendable {
             else if name.contains(query) { rank = 3 }
             else { return nil }
             return (rank, key, value)
-        }.sorted { $0.0 == $1.0 ? $0.1 < $1.1 : $0.0 < $1.0 }
+        }.sorted { lhs, rhs in
+            if lhs.0 != rhs.0 { return lhs.0 < rhs.0 }
+            let lhsUS = lhs.2.market == "US", rhsUS = rhs.2.market == "US"
+            if lhsUS != rhsUS { return lhsUS }
+            if lhs.2.symbol.count != rhs.2.symbol.count { return lhs.2.symbol.count < rhs.2.symbol.count }
+            return lhs.1 < rhs.1
+        }
             .prefix(min(limit, 200)).map { $0.2 }
+    }
+
+    /// A listing's price currency when its profile carries none, from the
+    /// market it trades in. London quotes in pence, as the broker suffix
+    /// rule in `InstrumentCurrencyRules` has it.
+    static func listingCurrency(market: String) -> String? {
+        [
+            "US": "USD", "JP": "JPY", "IN": "INR", "HK": "HKD", "TW": "TWD", "GB": "GBX",
+            "CN": "CNY", "AU": "AUD", "KR": "KRW", "DE": "EUR", "FR": "EUR", "CH": "CHF",
+            "IL": "ILS", "SA": "SAR", "BR": "BRL", "CA": "CAD", "IT": "EUR", "MY": "MYR",
+            "SE": "SEK", "SG": "SGD", "TR": "TRY", "ZA": "ZAR", "TH": "THB", "NO": "NOK",
+            "ES": "EUR", "NL": "EUR", "ID": "IDR", "BE": "EUR", "PL": "PLN", "FI": "EUR",
+            "MX": "MXN", "DK": "DKK", "KW": "KWD", "CL": "CLP", "GR": "EUR", "QA": "QAR",
+            "AT": "EUR", "AE": "AED", "IE": "EUR", "PT": "EUR", "NZ": "NZD",
+        ][market.uppercased()]
+    }
+
+    /// The ticker the rest of the app and its quote sources use for an entry:
+    /// the bare symbol in the US, the broker's suffixed form elsewhere, so
+    /// `GB:NG` opens as `NG.L` and not as the US `NG`.
+    func brokerSymbol(for entry: Entry) -> String {
+        guard entry.market != "US" else { return entry.symbol }
+        let key = "\(entry.market):\(entry.symbol)"
+        return brokerAliases.filter { $0.value == key }.map(\.key).min() ?? entry.symbol
     }
 
     private static func normalized(_ value: String) -> String {

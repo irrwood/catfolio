@@ -1938,4 +1938,11 @@
 "Unrealised P&L %" = "Unrealised P&L %";
 "Polymarket · %@ 个相关事件" = "Polymarket · %@ related events";
 "峰值" = "Peak";
+"搜索股票、ETF 或公司名" = "Search stocks, ETFs or companies";
+"证券" = "Securities";
+"没有找到匹配的证券" = "No matching securities";
+"正在搜索…" = "Searching…";
+"离线证券目录：美股与主要海外市场的股票和 ETF。轻点查看个股页。" = "An offline directory of stocks and ETFs in the US and major overseas markets. Tap one to open its page.";
+"已持有" = "Held";
+"清除" = "Clear";
 "AI" = "AI";

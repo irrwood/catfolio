@@ -32,3 +32,38 @@ final class CompanyCIKSeedTests: XCTestCase {
         }
     }
 }
+
+/// Research searches the whole offline directory and opens any result in the
+/// security sheet, so a result has to carry the ticker and currency the
+/// quote sources expect.
+final class MarketSecuritySearchTests: XCTestCase {
+    func testAnExactSymbolComesFirstAndUSListingsLeadTheirRank() throws {
+        let catalog = try CompanyReferenceCatalog.bundled.get()
+        let results = MarketSecurityResult.search("aapl", in: catalog)
+        XCTAssertEqual(results.first?.ticker, "AAPL")
+        XCTAssertEqual(results.first?.currency, "USD")
+        let prefixes = catalog.search("to", limit: 200).filter { $0.symbol.uppercased().hasPrefix("TO") }
+        let firstOverseas = prefixes.firstIndex { $0.market != "US" } ?? prefixes.endIndex
+        XCTAssertFalse(prefixes[firstOverseas...].contains { $0.market == "US" })
+    }
+
+    func testAnOverseasListingOpensUnderItsBrokerTickerAndCurrency() throws {
+        let catalog = try CompanyReferenceCatalog.bundled.get()
+        let toyota = try XCTUnwrap(MarketSecurityResult.search("7203", in: catalog).first { $0.market == "JP" })
+        XCTAssertEqual(toyota.ticker, "7203.T")
+        XCTAssertEqual(toyota.currency, "JPY")
+        XCTAssertEqual(toyota.venue, "JP")
+
+        let holding = toyota.holding
+        XCTAssertEqual(holding.shares, 0, "nothing held, so the sheet leaves its position blocks out")
+        XCTAssertEqual(holding.quoteCurrency, "JPY")
+    }
+
+    func testFundsAreMarked() throws {
+        let catalog = try CompanyReferenceCatalog.bundled.get()
+        let spy = try XCTUnwrap(MarketSecurityResult.search("SPY", in: catalog).first)
+        XCTAssertEqual(spy.ticker, "SPY")
+        XCTAssertTrue(spy.isFund)
+        XCTAssertTrue(spy.venue.hasPrefix("ETF · "))
+    }
+}

@@ -49,9 +49,6 @@ struct ReturnsView: View {
                 SettingsNavigationRow(icon: .symbol("gauge.with.dots.needle.50percent"), title: L10n.text("行业情绪")) {
                     IndustrySentimentView()
                 }
-                SettingsNavigationRow(icon: .symbol("chart.xyaxis.line"), title: L10n.text("研究")) {
-                    ResearchView()
-                }
                 SettingsNavigationRow(icon: .symbol("line.3.horizontal.decrease"), title: L10n.text("选股器")) {
                     StockScreenerView()
                 }
