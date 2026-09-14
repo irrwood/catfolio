@@ -57,6 +57,17 @@ struct IBKRFlexSnapshot: Equatable {
     let accountCurrencies: [String: String]
     let accountNames: [String: String]
     let reportDate: String?
+    var positionAccountIDs: Set<String> = []
+
+    var syncedPositionAccountIDs: Set<String> {
+        positionAccountIDs.union(positions.map(\.accountID)).subtracting([""])
+    }
+
+    var quoteObservedAt: Date? {
+        let digits = String((reportDate ?? "").filter(\.isNumber))
+        guard digits.count >= 8 else { return nil }
+        return DayDateCodec.date(from: "\(digits.prefix(4))-\(digits.dropFirst(4).prefix(2))-\(digits.dropFirst(6).prefix(2))")
+    }
 
     func csvImportExport() throws -> IBKRFlexCSVExport {
         var warnings: [String] = []
@@ -221,9 +232,7 @@ struct IBKRFlexClient {
                     status.errorMessage ?? L10n.text("报表生成失败")
                 )
             }
-            let snapshot = try parseStatement(statementData)
-            guard !snapshot.positions.isEmpty else { throw IBKRFlexError.noPositions }
-            return snapshot
+            return try parseStatement(statementData)
         }
         throw IBKRFlexError.generationTimedOut
     }
@@ -272,18 +281,24 @@ struct IBKRFlexClient {
         return delegate.envelope
     }
 
-    private func parseStatement(_ data: Data) throws -> IBKRFlexSnapshot {
+    func parseStatement(_ data: Data) throws -> IBKRFlexSnapshot {
         let delegate = FlexStatementParser()
         let parser = XMLParser(data: data)
         parser.delegate = delegate
         guard parser.parse() else { throw IBKRFlexError.invalidResponse }
-        return IBKRFlexSnapshot(
+        let snapshot = IBKRFlexSnapshot(
             positions: delegate.positions,
             transactions: delegate.transactions,
             accountCurrencies: delegate.accountCurrencies,
             accountNames: delegate.accountNames,
-            reportDate: delegate.reportDate
+            reportDate: delegate.reportDate,
+            positionAccountIDs: delegate.positionAccountIDs.subtracting(
+                delegate.lotAccounts.subtracting(delegate.summaryAccounts))
         )
+        // An explicitly empty OpenPositions section is authoritative. A
+        // statement with no positions section says nothing about holdings.
+        guard !snapshot.syncedPositionAccountIDs.isEmpty else { throw IBKRFlexError.noPositions }
+        return snapshot
     }
 }
 
@@ -330,11 +345,21 @@ private final class FlexStatementParser: NSObject, XMLParserDelegate {
     var accountCurrencies: [String: String] = [:]
     var accountNames: [String: String] = [:]
     var reportDate: String?
+    var positionAccountIDs: Set<String> = []
+    var lotAccounts: Set<String> = []
+    var summaryAccounts: Set<String> = []
+    private var currentAccountID = ""
 
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String: String] = [:]) {
         let attributes = Dictionary(uniqueKeysWithValues: attributeDict.map { ($0.key.lowercased(), $0.value) })
         if elementName.caseInsensitiveCompare("FlexStatement") == .orderedSame {
+            currentAccountID = attributes["accountid"] ?? attributes["acctid"] ?? ""
             reportDate = attributes["todate"] ?? attributes["fromdate"] ?? reportDate
+            return
+        }
+        if elementName.caseInsensitiveCompare("OpenPositions") == .orderedSame {
+            let id = attributes["accountid"] ?? currentAccountID
+            if !id.isEmpty { positionAccountIDs.insert(id) }
             return
         }
         if elementName.caseInsensitiveCompare("AccountInformation") == .orderedSame {
@@ -362,7 +387,12 @@ private final class FlexStatementParser: NSObject, XMLParserDelegate {
             return
         }
         guard elementName.caseInsensitiveCompare("OpenPosition") == .orderedSame else { return }
-        guard attributes["levelofdetail"]?.uppercased() != "LOT" else { return }
+        let positionAccountID = attributes["accountid"] ?? currentAccountID
+        if attributes["levelofdetail"]?.uppercased() == "LOT" {
+            lotAccounts.insert(positionAccountID)
+            return
+        }
+        summaryAccounts.insert(positionAccountID)
         let symbol = (attributes["symbol"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let quantity = number(attributes["position"] ?? attributes["quantity"]) ?? 0
         guard !symbol.isEmpty, quantity != 0 else { return }
@@ -371,7 +401,7 @@ private final class FlexStatementParser: NSObject, XMLParserDelegate {
             ?? number(attributes["openprice"])
             ?? costBasis.flatMap { quantity == 0 ? nil : abs($0 / quantity) }
         positions.append(IBKRFlexPosition(
-            accountID: attributes["accountid"] ?? "IBKR",
+            accountID: positionAccountID.isEmpty ? "IBKR" : positionAccountID,
             symbol: symbol,
             name: attributes["description"] ?? symbol,
             currency: (attributes["currency"] ?? "USD").uppercased(),

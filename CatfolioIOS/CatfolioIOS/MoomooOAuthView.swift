@@ -290,10 +290,10 @@ struct MoomooOAuthView: View {
                 reportingCurrency: DisplayCurrency.current.rawValue
             )
             let result = snapshotForContext(fetched)
-            guard !result.positions.isEmpty else {
+            guard !result.accounts.isEmpty else {
                 status = .failure(context.isCreating
                     ? L10n.text("当前授权中没有可新建的 Moomoo 账户。")
-                    : L10n.text("当前账户没有可导入持仓。"))
+                    : L10n.text("返回数据未包含当前账户，请检查授权或报表范围。"))
                 return
             }
             try persistCredentials(for: result.accounts.map(\.accountID))
@@ -319,10 +319,10 @@ struct MoomooOAuthView: View {
                 reportingCurrency: DisplayCurrency.current.rawValue
             )
             let currentSnapshot = snapshotForContext(fetched)
-            guard !currentSnapshot.positions.isEmpty else {
+            guard !currentSnapshot.accounts.isEmpty else {
                 status = .failure(context.isCreating
                     ? L10n.text("当前授权中没有可新建的 Moomoo 账户。")
-                    : L10n.text("当前账户没有可导入持仓。"))
+                    : L10n.text("返回数据未包含当前账户，请检查授权或报表范围。"))
                 return
             }
             try persistCredentials(for: currentSnapshot.accounts.map(\.accountID))

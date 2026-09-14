@@ -3,6 +3,85 @@ import XCTest
 @testable import CatfolioIOS
 
 final class HomeScrollInteractionTests: XCTestCase {
+    func testGlassSweepOnlyRespondsToUpwardGlassTravel() {
+        for (from, to): (CGFloat, CGFloat) in [(100, 90), (100, 100), (-20, 0), (262, 263), (400, 420)] {
+            XCTAssertEqual(PortfolioGlassSweep.strength(from: from, to: to, elapsed: 1 / 60, travel: 263), 0)
+        }
+        XCTAssertEqual(PortfolioGlassSweep.strength(from: 0, to: 120, elapsed: 2, travel: 263), 0,
+                       "A layout jump after inactivity is not a flick")
+    }
+
+    func testGlassSweepSpeedIncreasesLightWithCappedIntensity() {
+        let slow = PortfolioGlassSweep.strength(from: 118, to: 130, elapsed: 0.08, travel: 263)
+        let fast = PortfolioGlassSweep.strength(from: 118, to: 130, elapsed: 0.01, travel: 263)
+        let extreme = PortfolioGlassSweep.strength(from: 0, to: 130, elapsed: 0.001, travel: 263)
+        XCTAssertGreaterThan(slow, 0)
+        XCTAssertGreaterThan(fast, slow * 2)
+        XCTAssertLessThanOrEqual(extreme, 0.9)
+    }
+
+    func testGlassSweepFadesAtBothEndsOfCardExpansion() {
+        let middle = PortfolioGlassSweep.strength(from: 125, to: 130, elapsed: 1 / 60, travel: 263)
+        for offset: CGFloat in [5, 258] {
+            let edge = PortfolioGlassSweep.strength(from: offset - 5, to: offset, elapsed: 1 / 60, travel: 263)
+            XCTAssertLessThan(edge, middle * 0.2)
+        }
+    }
+
+    @MainActor
+    func testCaptureHomeGlassSweepAndFade() async throws {
+        let suite = "GlassSweepTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(false, forKey: PublicInvestorPreferences.enabledKey)
+        let document = FakePortfolioGenerator.make()
+        let model = AppModel(defaults: defaults, personalDocumentLoader: { document })
+        await model.refreshPortfolio(refreshMarketData: false)
+        XCTAssertFalse(model.holdings.isEmpty)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let host = UIHostingController(rootView: PortfolioView().environment(model).preferredColorScheme(.light))
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previous?.makeKeyAndVisible() }
+        try await Task.sleep(for: .milliseconds(600))
+        func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap(descendants) }
+        let scroll = try XCTUnwrap(descendants(host.view).compactMap { $0 as? UIScrollView }
+            .max(by: { $0.contentSize.height < $1.contentSize.height }))
+        let directory = URL(fileURLWithPath: "/tmp/catfolio-glass-evidence", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        func capture(_ name: String) throws {
+            let image = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
+                host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+            }
+            let attachment = XCTAttachment(image: image)
+            attachment.name = name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            try image.pngData()?.write(to: directory.appendingPathComponent("\(name).png"))
+        }
+        try capture("glass-rest")
+        for (name, step, delay, scheme) in [
+            ("glass-slow", 4, 24, ColorScheme.light),
+            ("glass-fast", 16, 16, ColorScheme.light),
+            ("glass-dark", 16, 16, ColorScheme.dark),
+        ] {
+            host.rootView = PortfolioView().environment(model).preferredColorScheme(scheme)
+            scroll.contentOffset.y = -scroll.adjustedContentInset.top
+            try await Task.sleep(for: .milliseconds(450))
+            for offset in stride(from: step, through: 128, by: step) {
+                scroll.contentOffset.y = CGFloat(offset) - scroll.adjustedContentInset.top
+                try await Task.sleep(for: .milliseconds(delay))
+            }
+            try capture(name)
+            try await Task.sleep(for: .milliseconds(500))
+            try capture("\(name)-settled")
+            XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, 128, accuracy: 1,
+                           "The optical effect must not move the scroll view")
+        }
+    }
+
     @MainActor
     func testModeOffAndRepeatedHomeVisitsRestorePersonalHoldings() async throws {
         try await verifyModeSwitchHome(personal: FakePortfolioGenerator.make())

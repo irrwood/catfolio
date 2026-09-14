@@ -1206,12 +1206,12 @@ struct LocalMarketDataClient {
     /// result is keyed by ticker and quote currency so multiple broker
     /// accounts for the same instrument share one market request while still
     /// preserving their independent quantities and costs.
-    func latestQuotes(for positions: [LocalPositionRecord]) async -> [String: Double] {
+    func latestQuotes(for positions: [LocalPositionRecord]) async -> [String: ObservedMarketQuote] {
         guard !positions.isEmpty else { return [:] }
         let symbols = positions.map {
             Self.yahooSymbol(ticker: $0.ticker, currency: $0.quoteCurrency)
         }.uniqued()
-        let rawPrices = await withTaskGroup(of: (String, Double?).self) { group in
+        let rawPrices = await withTaskGroup(of: (String, ObservedMarketQuote?).self) { group in
             var iterator = symbols.makeIterator()
             let concurrencyLimit = min(8, symbols.count)
             for _ in 0..<concurrencyLimit {
@@ -1219,9 +1219,9 @@ struct LocalMarketDataClient {
                 group.addTask { (symbol, await latestRawPrice(for: symbol)) }
             }
 
-            var result: [String: Double] = [:]
+            var result: [String: ObservedMarketQuote] = [:]
             while let (symbol, price) = await group.next() {
-                if let price, price.isFinite, price > 0 {
+                if let price, price.price.isFinite, price.price > 0 {
                     result[symbol] = price
                 }
                 if let next = iterator.next() {
@@ -1231,45 +1231,44 @@ struct LocalMarketDataClient {
             return result
         }
 
-        return positions.reduce(into: [String: Double]()) { result, position in
+        return positions.reduce(into: [String: ObservedMarketQuote]()) { result, position in
             let symbol = Self.yahooSymbol(
                 ticker: position.ticker,
                 currency: position.quoteCurrency
             )
             guard let rawPrice = rawPrices[symbol] else { return }
-            let adjusted = rawPrice * Self.priceScale(
+            let adjusted = rawPrice.price * Self.priceScale(
                 ticker: position.ticker, currency: position.quoteCurrency,
                 referencePrice: position.quotePrice,
-                marketPrice: rawPrice
+                marketPrice: rawPrice.price
             )
             guard adjusted.isFinite, adjusted > 0 else { return }
             result[LocalMarketQuoteKey.make(
                 ticker: position.ticker,
                 currency: position.quoteCurrency
-            )] = adjusted
+            )] = ObservedMarketQuote(price: adjusted, observedAt: rawPrice.observedAt)
         }
     }
 
-    private func latestRawPrice(for symbol: String) async -> Double? {
-        if let bars = try? await intradayBars(symbol: symbol),
-           let price = bars.last?.close,
-           price.isFinite,
-           price > 0 {
-            return price
+    private func latestRawPrice(for symbol: String) async -> ObservedMarketQuote? {
+        // Display charts may retain stale bars; a failed live refresh must
+        // never turn those bars into a newly observed portfolio quote.
+        if let bars = try? await intradayBars(symbol: symbol, allowsStaleFallback: false),
+           let bar = bars.max(by: { $0.timestamp < $1.timestamp }),
+           bar.close.isFinite, bar.close > 0 {
+            return ObservedMarketQuote(price: bar.close, observedAt: bar.timestamp)
         }
-
-        let endDate = Date()
-        let startDate = Calendar(identifier: .gregorian).date(
-            byAdding: .day,
-            value: -14,
-            to: endDate
-        ) ?? endDate
-        let history = try? await historicalCloses(
-            symbol: symbol,
-            from: DayDateCodec.string(from: startDate),
-            to: DayDateCodec.string(from: endDate)
-        )
-        return history?.max(by: { $0.key < $1.key })?.value
+        guard !Task.isCancelled else { return nil }
+        // Some listings have daily data only. Keep its actual trading date,
+        // conservatively using midnight because this feed omits the close time.
+        // The store rejects this if a newer broker/live quote already exists.
+        let now = Date()
+        guard let closes = try? await historicalCloses(symbol: symbol,
+                from: DayDateCodec.string(from: now.addingTimeInterval(-7 * 86400)),
+                to: DayDateCodec.string(from: now), dividendAdjusted: false),
+              let day = closes.keys.max(), let observedAt = DayDateCodec.date(from: day),
+              let price = closes[day], price.isFinite, price > 0 else { return nil }
+        return ObservedMarketQuote(price: price, observedAt: observedAt)
     }
 
     /// Mirrors the desktop/Web chart rule: backcast the currently open broker
@@ -1718,7 +1717,7 @@ struct LocalMarketDataClient {
         )
     }
 
-    private func intradayBars(symbol: String, forceRefresh: Bool = false) async throws -> [MarketIntradayBar] {
+    private func intradayBars(symbol: String, forceRefresh: Bool = false, allowsStaleFallback: Bool = true) async throws -> [MarketIntradayBar] {
         let cached = await LocalIntradayPriceCache.shared.lookup(symbol: symbol)
         if !forceRefresh, let cached, cached.isFresh { return cached.bars }
 
@@ -1742,7 +1741,7 @@ struct LocalMarketDataClient {
             latestError = error
         }
 
-        if let cached { return cached.bars }
+        if allowsStaleFallback, let cached { return cached.bars }
         throw latestError ?? LocalServiceError.noMarketData
     }
 
@@ -2361,19 +2360,36 @@ struct LocalMarketDataClient {
         var prices: [String: LedgerPriceHistory] = [:]
         var splits: [T.Split] = []
         var unpricedSymbols: [String] = []
-        for symbol in symbols.sorted() {
-            try Task.checkCancellation()
-            do {
-                let history = try await ledgerPriceHistory(symbol: symbol, from: start, to: end, cachedOnly: cachedOnly)
+        let histories = try await withThrowingTaskGroup(of: (String, LedgerPriceHistory?).self) { group in
+            var iterator = symbols.sorted().makeIterator()
+            func enqueue(_ symbol: String) {
+                group.addTask {
+                    do {
+                        try Task.checkCancellation()
+                        return (symbol, try await ledgerPriceHistory(symbol: symbol, from: start, to: end, cachedOnly: cachedOnly))
+                    } catch {
+                        if cachedOnly || error is CancellationError { throw error }
+                        return (symbol, nil)
+                    }
+                }
+            }
+            for _ in 0..<min(4, symbols.count) {
+                if let symbol = iterator.next() { enqueue(symbol) }
+            }
+            var results: [(String, LedgerPriceHistory?)] = []
+            while let result = try await group.next() {
+                results.append(result)
+                if let symbol = iterator.next() { enqueue(symbol) }
+            }
+            return results.sorted { $0.0 < $1.0 }
+        }
+        try Task.checkCancellation()
+        for (symbol, history) in histories {
+            if let history {
                 prices[symbol] = history
                 currencies.insert(history.currency)
                 splits += history.splits
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                if cachedOnly { throw error }
-                unpricedSymbols.append(symbol)
-            }
+            } else { unpricedSymbols.append(symbol) }
         }
         // A security with no price history cannot be valued on any day. It
         // is left out of the history altogether, trades and all, and the
@@ -2491,15 +2507,10 @@ struct LocalMarketDataClient {
             }
         }
         let result = try T.calculate(events: events, days: days, splits: splits,
-                                     implausibleGrowth: inferredAccounts.isEmpty ? nil : Decimal(string: "1.5"))
-        if !result.neutralized.isEmpty {
-            let listed = result.neutralized.prefix(5).map { day -> String in
-                let growth = NSDecimalNumber(decimal: day.growth).doubleValue
-                let change = (growth - 1) * 100
-                return "\(day.date)（\(change >= 0 ? "+" : "")\(change.formatted(.number.precision(.fractionLength(0))))%）"
-            }.joined(separator: "、")
-            let more = result.neutralized.count > 5 ? L10n.text(" 等 \(result.neutralized.count) 天") : ""
-            assumptions.append(L10n.text("\(listed)\(more) 账户单日涨跌远超行情能解释的幅度，多半是推算的入金或持仓有误，这些天按未记录的转入转出处理、不计收益。"))
+                                     inferUnfundedShareTransfers: !inferredAccounts.isEmpty)
+        if !result.inferredShareTransfers.isEmpty {
+            let dates = result.inferredShareTransfers.map(\.date).joined(separator: L10n.listSeparator)
+            assumptions.append(L10n.text("\(dates) 的无现金证券变动按当日价格计为转入或转出；价格和汇率涨跌仍计入收益。"))
         }
         for account in Set(expected.keys).union(result.holdings.keys) {
             for symbol in Set(expected[account]?.keys.map { $0 } ?? []).union(result.holdings[account]?.keys.map { $0 } ?? []) {
@@ -3035,12 +3046,13 @@ struct LocalMarketDataClient {
         let normalized = ticker.uppercased()
         let overrides = [
             "BRK.B": "BRK-B",
-            "ENR": "ENR.DE",
-            "RWE": "RWE.DE",
             "VUAG": "VUAG.L",
             "VUSA": "VUSA.L",
             "BARC": "BARC.L",
         ]
+        if currency.uppercased() == "EUR", ["ENR", "RWE"].contains(normalized) {
+            return "\(normalized).DE"
+        }
         if let override = overrides[normalized] { return override }
         if let londonSymbol = InstrumentCurrencyRules.marketDataSymbol(for: normalized) {
             return londonSymbol

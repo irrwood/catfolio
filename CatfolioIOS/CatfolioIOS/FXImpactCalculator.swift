@@ -13,9 +13,10 @@ enum FXImpactCalculator {
 
     /// What the currency did to the money that is still invested.
     struct Result: Sendable {
-        /// Signed, in the position's own quote currency.
+        /// Signed sterling amount: a quote-currency cost divided by GBP_TO_QUOTE.
         let amount: Double
-        /// The cost the figure is computed against, same currency.
+        let currency = "GBP"
+        /// Remaining cost in the position's quote currency (not sterling).
         let cost: Double
         /// True when every open lot matched a rate published on its own trade
         /// date. False when at least one had to carry a rate back from an
@@ -64,13 +65,12 @@ enum FXImpactCalculator {
         }
 
         let today = DayDateFormatter.shared.string(from: asOf)
-        guard let latest = rates.latestDate(currency: currency),
-              let now = rates.quote(currency: currency, on: min(today, latest)),
+        guard let now = rates.quote(currency: currency, on: today),
               now.rate > 0 else { return nil }
 
         var amount = 0.0
         var cost = 0.0
-        var isExact = true
+        var isExact = now.match == .exact
         for lot in lots {
             guard let then = rates.quote(currency: lot.currency, on: lot.date), then.rate > 0 else {
                 // One unpriceable lot makes the total wrong by an unknown
@@ -96,12 +96,13 @@ enum FXImpactCalculator {
         splits: StockSplitCatalog?
     ) -> [OpenLot] {
         let symbol = ticker.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        let ordered = transactions
-            .filter { $0.ticker.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == symbol }
-            .sorted { $0.date < $1.date }
+        let ordered = LocalTransactionRecord.orderedForLotMatching(transactions
+            .filter { $0.ticker.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == symbol })
 
-        var open: [OpenLot] = []
+        var byAccount: [String: [OpenLot]] = [:]
         for transaction in ordered {
+            let key = "\(transaction.accountKey)|\(transaction.currency.uppercased())"
+            var open = byAccount[key] ?? []
             let split = splits?.adjustment(ticker: transaction.ticker, from: transaction.date) ?? 1
             guard split > 0 else { continue }
             let quantity = abs(transaction.quantity) * split
@@ -135,7 +136,8 @@ enum FXImpactCalculator {
             default:
                 continue
             }
+            byAccount[key] = open
         }
-        return open
+        return byAccount.keys.sorted().flatMap { byAccount[$0] ?? [] }
     }
 }

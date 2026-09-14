@@ -43,24 +43,34 @@ class HomeLoadingTests(unittest.TestCase):
             self.assertNotIn("CatfolioLoadingShimmer", source)
 
     @unittest.skipUnless(shutil.which("swiftc"), "Requires Swift")
-    def test_refresh_publishes_cache_before_network_and_retains_it_on_failure(self):
+    def test_refresh_publishes_quotes_before_history_and_retains_cache_on_failure(self):
         source = (ROOT / "APIClient.swift").read_text()
-        method = source[source.index("    func refreshPortfolio() async {"):
+        method = source[source.index("    func refreshPortfolio("):
                         source.index("    private func mergeCachedTrading212History(")]
+        helper = source[source.index("    private func refreshHistoricalChart("):
+                        source.index("    private func enrichPortfolioChart(")]
         harness = r'''
 import Foundation
-struct Document { var positions = ["NVDA"] }
+struct LocalPortfolioDocument { var positions = ["NVDA"]; var fresh = false }
 enum Failure: Error { case unavailable }
+enum PublicInvestorCatalog { static let loaded: Result<Int, Failure> = .success(0) }
+struct PublicStore {
+    func refreshIfNeeded(catalog: Int, selection: String) async throws -> LocalPortfolioDocument? { nil }
+}
 @MainActor enum Probe {
     static var mode = 0
     static var published = false
     static var visitedNetwork = false
+    static var quotePublished = false
+    static var historyCalls = 0
+    static var historyFinished = false
+    static var releaseHistory = false
 }
 @MainActor struct LocalMarketDataClient {
     func latestQuotes(for positions: [String]) async -> [String: Double] {
         precondition(Probe.published, "Network ran before local presentation")
         Probe.visitedNetwork = true
-        try? await Task.sleep(for: .milliseconds(40))
+        try? await Task.sleep(for: .milliseconds(20))
         return Probe.mode == 0 ? [:] : ["NVDA": 123]
     }
 }
@@ -70,9 +80,9 @@ enum Failure: Error { case unavailable }
 }
 @MainActor final class LocalPortfolioStore {
     static let shared = LocalPortfolioStore()
-    func updateMarketQuotes(_ quotes: [String: Double]) async throws -> Document {
+    func updateMarketQuotes(_ quotes: [String: Double]) async throws -> LocalPortfolioDocument {
         if Probe.mode == 1 { throw Failure.unavailable }
-        return Document()
+        return LocalPortfolioDocument(fresh: true)
     }
 }
 @MainActor final class Model {
@@ -82,40 +92,70 @@ enum Failure: Error { case unavailable }
     var portfolioError: String?
     var isFakeDataMode = false
     var isPublicInvestorMode = false
+    var publicInvestorStore = PublicStore()
+    var publicInvestorSelection = ""
     var isHoldingDailyChangesLoading = false
     var holdings: [String] = []
-    var document = Document()
-    func loadActiveDocument() async throws -> Document {
+    var document = LocalPortfolioDocument()
+    func loadActiveDocument() async throws -> LocalPortfolioDocument {
         if Probe.mode == 2 { throw Failure.unavailable }
-        return Document()
+        return LocalPortfolioDocument()
     }
-    func mergeCachedTrading212History(into value: Document) async throws -> Document { value }
-    func apply(_ value: Document, invalidatesDailyChanges: Bool = true) throws {
+    func mergeCachedTrading212History(into value: LocalPortfolioDocument) async throws -> LocalPortfolioDocument { value }
+    func apply(_ value: LocalPortfolioDocument, invalidatesDailyChanges: Bool = true,
+               loadsCachedChart: Bool = true, preservesChart: Bool = false) async throws {
+        precondition(!loadsCachedChart, "Refresh rebuilt the complete cached curve")
         document = value
         holdings = value.positions
         Probe.published = true
+        if value.fresh {
+            precondition(preservesChart, "Quote publication erased the prepared history")
+            Probe.quotePublished = true
+        }
         if invalidatesDailyChanges { isHoldingDailyChangesLoading = true }
     }
     func refreshHoldingDailyChanges() async { isHoldingDailyChangesLoading = false }
-    func enrichPortfolioChart(from value: Document, generation: Int) async {}
-''' + method + r'''
+    func enrichPortfolioChart(from value: LocalPortfolioDocument, generation: Int) async {
+        Probe.historyCalls += 1
+        while Probe.mode == 3 && !Probe.releaseHistory && !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        Probe.historyFinished = true
+        isPortfolioChartLoading = false
+    }
+''' + method + helper + r'''
 }
 @main struct Tests {
     @MainActor static func main() async {
-        for mode in 0...2 {
+        for mode in 0...4 {
             Probe.mode = mode
             Probe.published = false
             Probe.visitedNetwork = false
+            Probe.quotePublished = false
+            Probe.historyCalls = 0
+            Probe.historyFinished = false
+            Probe.releaseHistory = false
             let model = Model()
             model.holdings = ["NVDA"]
-            await model.refreshPortfolio()
+            let refresh = Task { await model.refreshPortfolio(refreshMarketData: mode != 4) }
+            if mode == 3 {
+                let deadline = Date().addingTimeInterval(2)
+                while !Probe.quotePublished && Date() < deadline {
+                    try? await Task.sleep(for: .milliseconds(5))
+                }
+                precondition(Probe.quotePublished, "Quotes were blocked behind history")
+                precondition(!Probe.historyFinished, "The gate did not hold history")
+                Probe.releaseHistory = true
+            }
+            await refresh.value
             precondition(model.holdings == ["NVDA"], "Refresh erased cached holdings")
             precondition(!model.isPortfolioLoading, "Loading did not settle")
             precondition(!model.isHoldingDailyChangesLoading, "Daily loading did not settle")
-            precondition((model.portfolioError != nil) == (mode != 0))
-            precondition(Probe.visitedNetwork == (mode != 2))
+            precondition((model.portfolioError != nil) == (mode == 1 || mode == 2))
+            precondition(Probe.visitedNetwork == (mode != 2 && mode != 4))
+            precondition(Probe.historyCalls == (mode == 2 || mode == 4 ? 0 : 1), "History was rebuilt more than once")
         }
-        print("Offline quotes, quote-save failure, and disk-load failure passed")
+        print("Slow history, offline quotes, quote-save failure, disk-load failure, and cache-only load passed")
     }
 }
 '''
@@ -125,11 +165,11 @@ enum Failure: Error { case unavailable }
             executable = Path(folder) / "checks"
             compiled = subprocess.run(
                 ["swiftc", "-parse-as-library", str(fixture), "-o", str(executable)],
-                capture_output=True,
-                text=True,
+                capture_output=True, text=True, timeout=60,
             )
             self.assertEqual(compiled.returncode, 0, compiled.stderr)
-            subprocess.run([str(executable)], check=True, capture_output=True, text=True)
+            run = subprocess.run([str(executable)], capture_output=True, text=True, timeout=10)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
 
     def test_skeleton_is_neutral_and_has_five_equal_bars(self):
         source = (ROOT / "PortfolioView.swift").read_text()
@@ -140,7 +180,7 @@ enum Failure: Error { case unavailable }
         self.assertIn(".frame(width: 30, height: 30)", bars)
         self.assertNotIn("contributionGreen", bars)
         self.assertIn("HomeSkeletonStyle.color", bars)
-        self.assertIn("PortfolioLoadingView(isAnimating: model.isPortfolioLoading)", source)
+        self.assertIn("PortfolioLoadingView(isAnimating: model.isPortfolioLoading, scrollOffset: homeScrollOffset)", source)
 
     def test_all_contribution_bars_share_one_non_bouncy_reveal(self):
         source = (ROOT / "PortfolioView.swift").read_text()
@@ -175,20 +215,12 @@ enum Failure: Error { case unavailable }
         self.assertIn(".frame(maxWidth: .infinity, maxHeight: .infinity)", backdrop)
         self.assertLess(body.index("PortfolioHomePageBackdrop"), body.index("ScrollView {"))
 
-    def test_chart_uses_complete_disk_history_before_network_enrichment(self):
-        model = (ROOT / "APIClient.swift").read_text()
+    def test_ledger_history_downloads_have_bounded_concurrency(self):
         services = (ROOT / "LocalServices.swift").read_text()
-        refresh = model.split("func refreshPortfolio() async", 1)[1].split(
-            "private func mergeCachedTrading212History", 1
-        )[0]
-
-        self.assertIn("cachedOnly: true", model)
-        self.assertLess(
-            refresh.index("await enrichPortfolioChart(from: document"),
-            refresh.index("let quotes = await LocalMarketDataClient().latestQuotes"),
-        )
-        self.assertIn("if cachedOnly, histories.count != symbols.count", services)
-        self.assertIn("if cachedOnly {", services)
+        ledger = services.split("withThrowingTaskGroup(of: (String, LedgerPriceHistory?).self)", 1)[1]
+        self.assertIn("min(4, symbols.count)", ledger)
+        self.assertIn("group.addTask", ledger)
+        self.assertIn("while let result = try await group.next()", ledger)
 
 
 if __name__ == "__main__":

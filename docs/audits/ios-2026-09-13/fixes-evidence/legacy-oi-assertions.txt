@@ -1,0 +1,6 @@
+These existing string assertions also fail against git HEAD before the audit fixes:
+assert 'let shouldRefresh = refreshID != handledRefreshID' in source
+assert 'guard shouldRefresh else { return }' in source
+assert 'PriceDistributionSection(title: L10n.text("期权持仓墙")' in source
+assert 'range: plotRange, currentPrice: price' in source
+assert '.frame(height: 400)' in source

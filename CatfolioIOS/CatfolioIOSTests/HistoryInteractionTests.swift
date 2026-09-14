@@ -4,9 +4,10 @@ import XCTest
 
 final class HistoryInteractionTests: XCTestCase {
     private func entry(_ action: String, date: String = "2026-04-06", account: String = "one",
-                       id: String = UUID().uuidString, price: Double = 100) -> LocalTransactionRecord {
-        LocalTransactionRecord(date: date, action: action, ticker: "TEST", quantity: 1, price: price,
-                               currency: "USD", source: "CSV", accountID: account, accountName: account,
+                       id: String = UUID().uuidString, price: Double = 100,
+                       ticker: String = "TEST", currency: String = "USD") -> LocalTransactionRecord {
+        LocalTransactionRecord(date: date, action: action, ticker: ticker, quantity: 1, price: price,
+                               currency: currency, source: "CSV", accountID: account, accountName: account,
                                tradeID: id)
     }
 
@@ -41,6 +42,63 @@ final class HistoryInteractionTests: XCTestCase {
         XCTAssertEqual(prepared.page(category: .dividends, basis: .calendar, year: nil).totalUSD, 2)
         XCTAssertEqual(prepared.page(category: .interest, basis: .calendar, year: nil).totalUSD, 3)
         XCTAssertTrue(prepared.page(category: .fees, basis: .calendar, year: nil).activities.isEmpty)
+    }
+
+    func testDividendContributionsAggregateAndRespectAccountAndYearFilters() throws {
+        let input = ledger([
+            entry("DIVIDEND", price: 10, ticker: "aaa"),
+            entry("DIVIDEND", price: 20, ticker: "AAA"),
+            entry("DIVIDEND", price: 70, ticker: "BBB"),
+            entry("DIVIDEND", account: "two", price: 100, ticker: "AAA"),
+            entry("DIVIDEND", date: "2025-03-01", price: 50, ticker: "AAA"),
+            entry("INTEREST", price: 900, ticker: "AAA")
+        ])
+        let scoped = try prepare(input, accounts: [input.transactions[0].accountKey])
+        let page = scoped.page(category: .dividends, basis: .calendar, year: "2026")
+        let chart = page.dividendBreakdown
+        XCTAssertEqual(chart.rows.map(\.ticker), ["BBB", "AAA"])
+        XCTAssertEqual(chart.rows.compactMap(\.amountUSD), [70, 30])
+        XCTAssertEqual(chart.positiveTotalUSD, page.totalUSD)
+        XCTAssertEqual(try XCTUnwrap(chart.share(for: chart.rows[0])), 0.7, accuracy: 1e-9)
+        XCTAssertEqual(chart.rows.compactMap { chart.share(for: $0) }.reduce(0, +), 1, accuracy: 1e-9)
+        let all = try prepare(input).page(category: .dividends, basis: .calendar, year: "2026").dividendBreakdown
+        XCTAssertEqual(all.rows.compactMap(\.amountUSD), [130, 70])
+        XCTAssertEqual(try XCTUnwrap(all.share(for: all.rows[0])), 0.65, accuracy: 1e-9)
+        XCTAssertTrue(scoped.page(category: .interest, basis: .calendar, year: nil).dividendBreakdown.rows.isEmpty)
+    }
+
+    func testDividendContributionsConvertCurrenciesAndDoNotInventMissingShares() throws {
+        let entries = [entry("DIVIDEND", price: 10, ticker: "AAA", currency: "GBP"),
+                       entry("DIVIDEND", price: 20, ticker: "BBB")]
+        let activities = entries.map { PortfolioActivity(transaction: $0, securityName: $0.ticker) }
+        let chart = HistoryDividendBreakdown.build(activities)
+        let total = activities.reduce(0) { $0 + $1.amountUSD }
+        XCTAssertTrue(chart.isComplete)
+        XCTAssertEqual(chart.positiveTotalUSD, total, accuracy: 1e-9)
+        for row in chart.rows {
+            XCTAssertEqual(try XCTUnwrap(chart.share(for: row)), try XCTUnwrap(row.amountUSD) / total, accuracy: 1e-9)
+        }
+        let missing = PortfolioActivity(transaction: entry("DIVIDEND", ticker: "UNKNOWN", currency: "ZZZ"), securityName: "Unknown")
+        let incomplete = HistoryDividendBreakdown.build(activities + [missing])
+        XCTAssertFalse(incomplete.isComplete)
+        XCTAssertTrue(incomplete.rows.allSatisfy { incomplete.share(for: $0) == nil })
+        XCTAssertNil(incomplete.rows.first { $0.ticker == "UNKNOWN" }?.amountUSD)
+    }
+
+    func testDividendContributionsHandleReversalsAndZeroWithoutInflatingBars() throws {
+        let transactions = [entry("DIVIDEND", price: 60, ticker: "AAA"),
+                            entry("DIVIDEND", price: -10, ticker: "AAA"),
+                            entry("DIVIDEND", price: 50, ticker: "BBB"),
+                            entry("DIVIDEND", price: -10, ticker: "CCC")]
+        let chart = HistoryDividendBreakdown.build(transactions.map { PortfolioActivity(transaction: $0, securityName: $0.ticker) })
+        XCTAssertEqual(chart.rows.compactMap(\.amountUSD), [50, 50, -10])
+        XCTAssertTrue(chart.hasNegativeTotals)
+        XCTAssertEqual(chart.positiveTotalUSD, 100)
+        XCTAssertEqual(chart.share(for: chart.rows[0]), 0.5)
+        XCTAssertNil(chart.share(for: chart.rows[2]))
+        let zero = HistoryDividendBreakdown.build([PortfolioActivity(transaction: entry("DIVIDEND", price: 0), securityName: "Test")])
+        XCTAssertNil(zero.share(for: zero.rows[0]))
+        XCTAssertTrue(HistoryDividendBreakdown.build([]).rows.isEmpty)
     }
 
     func testYearFiltersDoNotDropEarlierAcquisitionCosts() throws {

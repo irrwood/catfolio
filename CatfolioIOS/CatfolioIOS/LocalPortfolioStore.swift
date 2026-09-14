@@ -162,8 +162,14 @@ enum InstrumentCurrencyRules {
     }
 }
 
+struct ObservedMarketQuote: Sendable {
+    let price: Double
+    let observedAt: Date
+}
+
 struct LocalPositionRecord: Codable, Equatable {
     var publicDisclosure: PublicAccountDisclosure? = nil
+    var quoteObservedAt: Date? = nil
     let ticker: String
     let name: String
     let shares: Double
@@ -205,7 +211,8 @@ struct LocalPositionRecord: Codable, Equatable {
         fxPnl: Double? = nil,
         fxPnlCurrency: String? = nil,
         fxPnlStatus: String? = nil,
-        fxPnlSource: String? = nil
+        fxPnlSource: String? = nil,
+        quoteObservedAt: Date? = nil
     ) {
         self.ticker = ticker
         self.name = name
@@ -227,6 +234,7 @@ struct LocalPositionRecord: Codable, Equatable {
         self.fxPnlCurrency = fxPnlCurrency
         self.fxPnlStatus = fxPnlStatus
         self.fxPnlSource = fxPnlSource
+        self.quoteObservedAt = quoteObservedAt
     }
 
     var accountKey: String {
@@ -260,11 +268,12 @@ struct LocalPositionRecord: Codable, Equatable {
             fxPnl: fxPnl,
             fxPnlCurrency: fxPnlCurrency,
             fxPnlStatus: fxPnlStatus,
-            fxPnlSource: fxPnlSource
+            fxPnlSource: fxPnlSource,
+            quoteObservedAt: quoteObservedAt
         )
     }
 
-    func withQuotePrice(_ price: Double) -> LocalPositionRecord {
+    func withQuotePrice(_ price: Double, observedAt: Date? = nil) -> LocalPositionRecord {
         LocalPositionRecord(
             ticker: ticker,
             name: name,
@@ -285,7 +294,8 @@ struct LocalPositionRecord: Codable, Equatable {
             fxPnl: fxPnl,
             fxPnlCurrency: fxPnlCurrency,
             fxPnlStatus: fxPnlStatus,
-            fxPnlSource: fxPnlSource
+            fxPnlSource: fxPnlSource,
+            quoteObservedAt: observedAt ?? quoteObservedAt
         )
     }
 
@@ -310,7 +320,8 @@ struct LocalPositionRecord: Codable, Equatable {
             fxPnl: fxPnl,
             fxPnlCurrency: fxPnlCurrency,
             fxPnlStatus: fxPnlStatus,
-            fxPnlSource: fxPnlSource
+            fxPnlSource: fxPnlSource,
+            quoteObservedAt: quoteObservedAt
         )
     }
 
@@ -340,7 +351,8 @@ struct LocalPositionRecord: Codable, Equatable {
             fxPnl: value,
             fxPnlCurrency: currency,
             fxPnlStatus: status,
-            fxPnlSource: source
+            fxPnlSource: source,
+            quoteObservedAt: quoteObservedAt
         )
     }
 }
@@ -453,6 +465,26 @@ struct LocalTransactionRecord: Codable, Equatable, Identifiable {
     var accountKey: String {
         let identifier = accountID.flatMap { $0.isEmpty ? nil : $0 } ?? "default"
         return "\(source)|\(identifier)"
+    }
+
+    /// Exact timestamps win over the date-only fallback. Untimed buys precede
+    /// timed fills, untimed sells follow them. Equal times retain the legacy
+    /// buy-first estimate: date-only CSVs were persisted at midnight too.
+    static func orderedForLotMatching(_ rows: [Self]) -> [Self] {
+        let fractional = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+        let whole = Date.ISO8601FormatStyle()
+        return rows.map { row -> (row: Self, time: TimeInterval, isBuy: Bool) in
+            let isBuy = ["BUY", "BUY_BACK"].contains(row.action.trimmingCharacters(in: .whitespacesAndNewlines).uppercased())
+            let time = row.executedAt.flatMap { text in
+                (try? fractional.parse(text)) ?? (try? whole.parse(text))
+            }?.timeIntervalSince1970
+            return (row, time ?? (isBuy ? -.infinity : .infinity), isBuy)
+        }.sorted {
+            if $0.row.date != $1.row.date { return $0.row.date < $1.row.date }
+            if $0.time != $1.time { return $0.time < $1.time }
+            if $0.isBuy != $1.isBuy { return $0.isBuy }
+            return $0.row.id < $1.row.id
+        }.map(\.row)
     }
 
     /// Stable across decoding and broker refreshes, while matching the
@@ -1386,16 +1418,25 @@ actor LocalPortfolioStore {
         source: String,
         transactions: [LocalTransactionRecord]? = nil,
         replacingAccountsOnly: Bool = false,
-        syncedAccounts: [PortfolioAccount] = []
+        syncedAccounts: [PortfolioAccount] = [],
+        mergesTransactionHistory: Bool = false
     ) throws -> LocalPortfolioDocument {
         let previous = try load()
         let incomingAccountKeys = Set(positions.map(\.accountKey)).union(syncedAccounts.map(\.id)).union((transactions ?? []).map(\.accountKey))
+        let positionAccountKeys = syncedAccounts.isEmpty ? incomingAccountKeys
+            : Set(positions.map(\.accountKey)).union(syncedAccounts.map(\.id))
         guard !replacingAccountsOnly || !incomingAccountKeys.isEmpty else { throw LocalPortfolioError.noPortfolio }
         let combinedPositions = previous.positions.filter { position in
             replacingAccountsOnly
-                ? !incomingAccountKeys.contains(position.accountKey)
+                ? !positionAccountKeys.contains(position.accountKey)
                 : position.source != source
-        } + positions
+        } + positions.map { position in
+            var observed = position
+            if source != "CSV", source != "IBKR Flex", observed.quoteObservedAt == nil {
+                observed.quoteObservedAt = Date()
+            }
+            return observed
+        }
         let now = Date()
         let date = DayDateFormatter.shared.string(from: now)
         let totals = try LocalPortfolioEngine.totals(for: combinedPositions)
@@ -1423,11 +1464,23 @@ actor LocalPortfolioStore {
         let combinedTransactions: [LocalTransactionRecord]
         if let transactions {
             let previousByID = Dictionary((previous.transactions ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
-            combinedTransactions = (previous.transactions ?? []).filter { transaction in
-                replacingAccountsOnly
-                    ? !incomingAccountKeys.contains(transaction.accountKey)
-                    : transaction.source != source
-            } + transactions.map { $0.preservingBrokerResult(from: previousByID[$0.id]) }
+            if mergesTransactionHistory {
+                // Broker history can be partial or bounded. Absence from a
+                // response is not evidence that a previously imported fill vanished.
+                var merged = previousByID
+                for row in transactions {
+                    merged[row.id] = row.preservingBrokerResult(from: previousByID[row.id])
+                }
+                combinedTransactions = merged.values.sorted {
+                    $0.date == $1.date ? $0.id < $1.id : $0.date < $1.date
+                }
+            } else {
+                combinedTransactions = (previous.transactions ?? []).filter { transaction in
+                    replacingAccountsOnly
+                        ? !incomingAccountKeys.contains(transaction.accountKey)
+                        : transaction.source != source
+                } + transactions.map { $0.preservingBrokerResult(from: previousByID[$0.id]) }
+            }
         } else {
             combinedTransactions = previous.transactions ?? []
         }
@@ -1435,7 +1488,8 @@ actor LocalPortfolioStore {
             schemaVersion: 4,
             source: sources.joined(separator: " + "),
             updatedAt: now,
-            marketDataUpdatedAt: now,
+            marketDataUpdatedAt: combinedPositions.allSatisfy { $0.quoteObservedAt != nil }
+                ? combinedPositions.compactMap(\.quoteObservedAt).min() : nil,
             positions: combinedPositions,
             snapshots: snapshots,
             transactions: combinedTransactions,
@@ -1446,7 +1500,7 @@ actor LocalPortfolioStore {
     }
 
     func updateMarketQuotes(
-        _ prices: [String: Double],
+        _ prices: [String: ObservedMarketQuote],
         refreshedAt: Date = Date()
     ) throws -> LocalPortfolioDocument {
         guard !prices.isEmpty else { return try load() }
@@ -1457,9 +1511,14 @@ actor LocalPortfolioStore {
                 ticker: position.ticker,
                 currency: position.quoteCurrency
             )
-            guard let price = prices[key], price.isFinite, price > 0 else { return position }
+            guard let quote = prices[key], quote.price.isFinite, quote.price > 0,
+                  quote.observedAt <= refreshedAt.addingTimeInterval(60),
+                  quote.observedAt >= refreshedAt.addingTimeInterval(-7 * 86_400),
+                  quote.observedAt > (position.quoteObservedAt
+                    ?? (position.source == "CSV" ? nil : document.marketDataUpdatedAt)
+                    ?? .distantPast) else { return position }
             matchedQuote = true
-            return position.withQuotePrice(price)
+            return position.withQuotePrice(quote.price, observedAt: quote.observedAt)
         }
         guard matchedQuote else { return document }
 
@@ -1486,7 +1545,9 @@ actor LocalPortfolioStore {
             document.snapshots.removeFirst(document.snapshots.count - 730)
         }
         document.updatedAt = refreshedAt
-        document.marketDataUpdatedAt = refreshedAt
+        // The aggregate timestamp must not claim that older holdings were refreshed.
+        document.marketDataUpdatedAt = document.positions.allSatisfy { $0.quoteObservedAt != nil }
+            ? document.positions.compactMap(\.quoteObservedAt).min() : nil
         try save(document)
         return document
     }
@@ -1669,7 +1730,8 @@ actor LocalPortfolioStore {
                 fxPnl: position.fxPnl,
                 fxPnlCurrency: position.fxPnlCurrency,
                 fxPnlStatus: position.fxPnlStatus,
-                fxPnlSource: position.fxPnlSource
+                fxPnlSource: position.fxPnlSource,
+                quoteObservedAt: position.quoteObservedAt
             )
         }
         let transactions = source.transactions?.map { transaction -> LocalTransactionRecord in
@@ -1893,7 +1955,7 @@ enum LocalPortfolioEngine {
                 // No broker in this ledger reports an FX component, so
                 // without this every position showed "—". Rebuilt from the
                 // trade dates already on file and ECB's published rates.
-                fxPnlUSD = try usd(reconstructed.amount, currency: position.currency)
+                fxPnlUSD = try usd(reconstructed.amount, currency: reconstructed.currency)
                 fxPnlStatus = reconstructed.isExact ? "reconstructed" : "estimated"
                 fxPnlSource = reconstructed.isExact
                     ? "ecb_daily_on_trade_dates"
@@ -2253,7 +2315,10 @@ enum LocalCSVImporter {
         return requiredColumnKeys.filter { resolved[$0] == nil }
     }
 
-    static func parse(_ data: Data) throws -> ([LocalPositionRecord], [LocalTransactionRecord], CSVImportResult) {
+    static func parse(
+        _ data: Data,
+        splitCatalog: StockSplitCatalog? = try? StockSplitCatalog.bundled.get()
+    ) throws -> ([LocalPositionRecord], [LocalTransactionRecord], CSVImportResult) {
         guard var text = decodedText(from: data) else {
             throw LocalPortfolioError.invalidCSV(L10n.text("文件编码无法识别，请使用 UTF-8 或 UTF-16"))
         }
@@ -2264,6 +2329,20 @@ enum LocalCSVImporter {
             throw LocalPortfolioError.invalidCSV(L10n.text("没有找到可识别的表头"))
         }
         let header = records[headerIndex]
+        // One import is assigned to one selected account. Refuse combined
+        // statements instead of silently netting different accounts' trades.
+        if let accountColumn = header.firstIndex(where: {
+            ["account", "account id", "account number", "账户", "账户编号"].contains(normalizeHeader($0))
+        }) {
+            let accounts = Set(records.dropFirst(headerIndex + 1).compactMap { row -> String? in
+                guard row.indices.contains(accountColumn) else { return nil }
+                let value = row[accountColumn].trimmingCharacters(in: .whitespacesAndNewlines)
+                return value.isEmpty ? nil : value
+            })
+            guard accounts.count <= 1 else {
+                throw LocalPortfolioError.invalidCSV(L10n.text("CSV 包含多个账户，请按账户拆分后分别导入。"))
+            }
+        }
         let columns = columns(in: header)
         let missing = missingRequiredColumns(in: header)
         guard missing.isEmpty else {
@@ -2353,27 +2432,39 @@ enum LocalCSVImporter {
         var states: [String: PositionState] = [:]
         for transaction in transactions.sorted(by: { $0.date < $1.date }) {
             guard transaction.action == "BUY" || transaction.action == "SELL" else { continue }
-            var state = states[transaction.ticker] ?? PositionState()
+            let key = "\(transaction.ticker)|\(transaction.currency)"
+            let adjustment = splitCatalog.map { $0.adjustment(ticker: transaction.ticker,
+                    from: DayDateCodec.string(from: transaction.date)) } ?? 1
+            guard let factor = adjustment, factor.isFinite, factor > 0 else {
+                throw LocalPortfolioError.invalidCSV(transaction.ticker)
+            }
+            let quantity = transaction.quantity * factor
+            let price = transaction.price / factor
+            var state = states[key] ?? PositionState()
             state.currency = transaction.currency
             if !transaction.name.isEmpty { state.name = transaction.name }
             if transaction.action == "BUY" {
                 if state.shares <= 0.001 {
                     state.openedDate = transaction.date
                 }
-                let newShares = state.shares + transaction.quantity
+                let newShares = state.shares + quantity
                 if newShares > 0 {
-                    state.average = (state.average * state.shares + transaction.price * transaction.quantity) / newShares
+                    state.average = (state.average * state.shares + price * quantity) / newShares
                 }
                 state.shares = newShares
             } else {
-                state.shares = max(0, state.shares - transaction.quantity)
+                guard quantity <= state.shares + max(1e-8, state.shares * 1e-8) else {
+                    throw LocalPortfolioError.invalidCSV(L10n.text("\(transaction.ticker) 卖出数量超过可重建持仓，请补齐历史或拆股记录。"))
+                }
+                state.shares = max(0, state.shares - quantity)
                 if state.shares <= 0.001 {
                     state.openedDate = nil
                 }
             }
-            states[transaction.ticker] = state
+            states[key] = state
         }
-        let positions = states.compactMap { ticker, state -> LocalPositionRecord? in
+        let positions = states.compactMap { key, state -> LocalPositionRecord? in
+            let ticker = String(key.split(separator: "|", maxSplits: 1)[0])
             guard state.shares > 0.001 else { return nil }
             return LocalPositionRecord(
                 ticker: ticker,
@@ -2510,7 +2601,7 @@ enum LocalCSVImporter {
     /// RFC 4180-style records shared by the manual importer and broker CSV
     /// downloads. Keeping the parser local means downloaded statements never
     /// need to leave the iPhone for conversion.
-    static func parseRecords(_ text: String) -> [[String]] {
+    static func parseRecords(_ text: String, maximumRecords: Int? = nil) -> [[String]] {
         let delimiter = detectedDelimiter(in: text)
         var records: [[String]] = []
         var record: [String] = []
@@ -2530,12 +2621,13 @@ enum LocalCSVImporter {
             } else if character == delimiter, !insideQuotes {
                 record.append(field)
                 field = ""
-            } else if (character == "\n" || character == "\r"), !insideQuotes {
+            } else if (character == "\n" || character == "\r" || character == "\r\n"), !insideQuotes {
                 if character == "\n" || !record.isEmpty || !field.isEmpty {
                     record.append(field)
                     if record.contains(where: { !$0.isEmpty }) { records.append(record) }
                     record = []
                     field = ""
+                    if let maximumRecords, records.count >= maximumRecords { break }
                 }
             } else {
                 field.append(character)
@@ -2571,7 +2663,7 @@ enum LocalCSVImporter {
 
     private static func detectedDelimiter(in text: String) -> Character {
         let candidates: [Character] = [",", ";", "\t"]
-        let lines = text
+        let lines = String(text.prefix(65_536))
             .replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
             .split(separator: "\n", omittingEmptySubsequences: true)

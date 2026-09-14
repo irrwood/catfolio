@@ -10,7 +10,7 @@ import Foundation
 /// backwards is the kind of mistake that produces plausible numbers.
 struct GBPFXRates: Decodable, Sendable {
     /// How close the rate is to the day that was asked for.
-    enum Match: Sendable {
+    enum Match: Sendable, Equatable {
         /// The ECB published a rate on exactly that date.
         case exact
         /// The date had no observation — a weekend, a holiday — and this is
@@ -102,16 +102,16 @@ struct GBPFXRates: Decodable, Sendable {
 
         // Otherwise find where the date would sit and step back from there.
         var position = dates.firstIndex { $0 > date } ?? dates.count
-        var stepped = 0
-        while position > 0, stepped <= limit {
+        guard limit >= 0, let requested = DayDateCodec.date(from: date) else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        while position > 0 {
             position -= 1
-            stepped += 1
+            guard let observed = DayDateCodec.date(from: dates[position]),
+                  let days = calendar.dateComponents([.day], from: observed, to: requested).day,
+                  days >= 0, days <= limit else { break }
             if let rate = series[position] {
-                return Quote(
-                    rate: rate,
-                    match: .carriedForward(daysBack: stepped),
-                    date: dates[position]
-                )
+                return Quote(rate: rate, match: .carriedForward(daysBack: days), date: dates[position])
             }
         }
         return nil

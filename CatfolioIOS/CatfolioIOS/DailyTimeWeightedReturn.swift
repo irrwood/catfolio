@@ -50,9 +50,8 @@ enum DailyTimeWeightedReturn {
         var points: [Point]
         var cash: [String: [String: Decimal]]
         var holdings: [String: [String: Decimal]]
-        /// Days whose move the prices could not explain, with the growth the
-        /// day would otherwise have had. Only with `implausibleGrowth`.
-        var neutralized: [(date: String, growth: Decimal)] = []
+        /// Explicit security movements without a cash leg, valued as transfers.
+        var inferredShareTransfers: [(date: String, amount: Decimal)] = []
     }
 
     struct Failure: LocalizedError {
@@ -63,14 +62,9 @@ enum DailyTimeWeightedReturn {
     /// Opening balances are zero; a truncated ledger must supply an explicit
     /// opening funding/position event, never inferred from today's positions.
     ///
-    /// - Parameter implausibleGrowth: for ledgers rebuilt on assumptions. A
-    ///   day on which the whole account grows by more than this factor, or
-    ///   shrinks by more than its inverse, is a gap in the data rather than a
-    ///   return: the difference is taken as an unrecorded transfer, the day
-    ///   counts as flat, and it is listed in `neutralized`. Early in an
-    ///   account, when a few hundred dollars are the base, one such gap
-    ///   would otherwise multiply every return after it.
-    static func calculate(events: [Event], days: [Day], splits: [Split] = [], implausibleGrowth: Decimal? = nil) throws -> Result {
+    /// Unfunded security movements may be inferred as in-kind transfers for
+    /// incomplete ledgers. Price/FX changes never create synthetic cash flows.
+    static func calculate(events: [Event], days: [Day], splits: [Split] = [], inferUnfundedShareTransfers: Bool = false) throws -> Result {
         func fail(_ message: String) -> Failure { Failure(message: message) }
         guard !events.isEmpty, !days.isEmpty else { throw fail("TWR：缺少完整资金流水或估值日期。") }
         guard Set(events.map(\.id)).count == events.count else { throw fail("TWR：存在重复流水。") }
@@ -86,7 +80,7 @@ enum DailyTimeWeightedReturn {
         var previous: Decimal = 0
         var nav: Decimal = 1
         var started = false
-        var neutralized: [(date: String, growth: Decimal)] = []
+        var inferredShareTransfers: [(date: String, amount: Decimal)] = []
         for day in sortedDays {
             func usd(_ amount: Decimal, _ currency: String) throws -> Decimal {
                 if currency == "USD" { return amount }
@@ -106,6 +100,7 @@ enum DailyTimeWeightedReturn {
             var inflow: Decimal = 0
             var outflow: Decimal = 0
             let eventsToday = byDate[day.date] ?? []
+            var securityTransfer: Decimal = 0
             let transfers = Dictionary(grouping: eventsToday.filter { $0.transferID != nil }, by: { $0.transferID! })
             var internalTransfers = Set<String>()
             for (id, legs) in transfers where legs.count > 1 {
@@ -125,6 +120,14 @@ enum DailyTimeWeightedReturn {
                 }
                 if let symbol = event.symbol {
                     holdings[event.account, default: [:]][symbol, default: 0] += event.quantity
+                    if inferUnfundedShareTransfers, !event.external, event.cash.isEmpty, event.quantity != 0 {
+                        guard let quote = day.quotes[symbol], !quote.price.isNaN, quote.price > 0 else {
+                            throw fail("TWR：\(day.date) 缺少 \(symbol) 价格。")
+                        }
+                        let amount = try usd(event.quantity * quote.price, quote.currency)
+                        if amount >= 0 { inflow += amount } else { outflow -= amount }
+                        securityTransfer += amount
+                    }
                 }
                 for posting in event.cash {
                     cash[event.account, default: [:]][posting.currency, default: 0] += posting.amount
@@ -155,22 +158,17 @@ enum DailyTimeWeightedReturn {
             let capital = previous + inflow
             if capital > 0 {
                 let growth = (value + outflow) / capital
-                if let limit = implausibleGrowth, previous > 0, growth > limit || growth < 1 / limit {
-                    let gap = value + outflow - capital
-                    if gap > 0 { inflow += gap } else { outflow -= gap }
-                    neutralized.append((day.date, growth))
-                } else {
-                    nav *= growth
-                }
+                nav *= growth
                 started = true
             } else if value != 0 || outflow != 0 {
                 throw fail("TWR：缺少期初资金，无法确定收益分母。")
             }
             guard !nav.isNaN, nav >= 0 else { throw fail("TWR：净值无效。") }
             if started { points.append(Point(date: day.date, value: value, cashUSD: cashValue, inflow: inflow, outflow: outflow, nav: nav)) }
+            if securityTransfer != 0 { inferredShareTransfers.append((day.date, securityTransfer)) }
             previous = value
         }
         guard !points.isEmpty else { throw fail("TWR：没有可计算的已注资区间。") }
-        return Result(points: points, cash: cash, holdings: holdings, neutralized: neutralized)
+        return Result(points: points, cash: cash, holdings: holdings, inferredShareTransfers: inferredShareTransfers)
     }
 }

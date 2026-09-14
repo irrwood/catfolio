@@ -145,8 +145,9 @@ class HomeContentSheetTests(unittest.TestCase):
         self.assertIn("homeScrollOffset = offset", home)
         self.assertIn("homePullDistance = pull", home)
         self.assertIn("PortfolioHeroChartLayout.sectionHeight - PortfolioHeroChartLayout.plotTop", source)
-        self.assertIn("CAMediaTimingFunction(controlPoints: 0.37, 1.38, 0.81, 0.93)", interaction)
-        self.assertIn("static let duration: TimeInterval = 0.300", interaction)
+        self.assertIn("static let response: Double = 0.42", interaction)
+        self.assertIn("static let dampingRatio: Double = 0.82", interaction)
+        self.assertIn("PortfolioHomeSnapMotion.Spring(start: offset, end: target, velocity: velocity", interaction)
         self.assertNotIn("DragGesture", home)
         self.assertNotIn(".spring(", interaction)
 

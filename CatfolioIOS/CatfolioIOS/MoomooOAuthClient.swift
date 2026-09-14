@@ -10,12 +10,29 @@ struct MoomooAccount: Decodable, Identifiable, Equatable {
     let accountCardNumber: String
 
     var id: String { accountID }
+    var enabledMarkets: [Int] = []
+
+    // REST enable_market values; unrelated to OpenD's enum numbers.
+    var historyMarkets: Set<String> {
+        let supported = [1: "HK", 2: "US", 4: "HKCC", 6: "SG", 12: "CA", 15: "JP", 18: "KR"]
+        return Set(enabledMarkets.compactMap { supported[$0] })
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        accountID = try values.decode(String.self, forKey: .accountID)
+        securityFirm = try values.decode(String.self, forKey: .securityFirm)
+        accountType = try values.decode(String.self, forKey: .accountType)
+        accountCardNumber = try values.decode(String.self, forKey: .accountCardNumber)
+        enabledMarkets = try values.decodeIfPresent([Int].self, forKey: .enabledMarkets) ?? []
+    }
 
     enum CodingKeys: String, CodingKey {
         case accountID = "account_id"
         case securityFirm = "security_firm"
         case accountType = "acc_type"
         case accountCardNumber = "account_card_number"
+        case enabledMarkets = "enable_market"
     }
 }
 
@@ -153,6 +170,16 @@ struct MoomooFill: Decodable, Identifiable, Equatable {
     let price: Double
     let executedAtMicroseconds: Int64
     let accountID: String
+    let orderID: String
+    var currency: String?
+
+    // US equity fills have a unique quote currency. Other markets can have
+    // foreign-currency counters, so obtain the currency from the order.
+    var quoteCurrency: String? {
+        if let currency, !currency.isEmpty, currency != "NONE" { return currency.uppercased() }
+        let market = code.split(separator: ".").first?.uppercased() ?? ""
+        return ["US", "NYSE", "NASDAQ", "ARCA", "AMEX", "BATS"].contains(market) ? "USD" : nil
+    }
 
     var id: String { "\(accountID):\(tradeID)" }
     var date: String {
@@ -162,6 +189,8 @@ struct MoomooFill: Decodable, Identifiable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case tradeID = "deal_id"
+        case orderID = "order_id"
+        case currency
         case side = "trd_side"
         case code
         case stockName = "stock_name"
@@ -173,6 +202,8 @@ struct MoomooFill: Decodable, Identifiable, Equatable {
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         tradeID = try values.decode(String.self, forKey: .tradeID)
+        orderID = try values.decodeIfPresent(String.self, forKey: .orderID) ?? ""
+        currency = try values.decodeIfPresent(String.self, forKey: .currency)?.uppercased()
         side = try values.decodeIfPresent(String.self, forKey: .side) ?? ""
         code = try values.decode(String.self, forKey: .code)
         stockName = try values.decodeIfPresent(String.self, forKey: .stockName) ?? code
@@ -184,6 +215,8 @@ struct MoomooFill: Decodable, Identifiable, Equatable {
 
     private init(accountID: String, fill: MoomooFill) {
         tradeID = fill.tradeID
+        orderID = fill.orderID
+        currency = fill.currency
         side = fill.side
         code = fill.code
         stockName = fill.stockName
@@ -450,7 +483,8 @@ struct MoomooOpenAPIClient {
                 decode: { data in
                     let envelope = try JSONDecoder().decode(MoomooPositionsEnvelope.self, from: data)
                     try Self.validate(envelope.status, code: envelope.errorCode, message: envelope.errorMessage)
-                    return envelope.data ?? []
+                    guard let positions = envelope.data else { throw MoomooOpenAPIError.invalidResponse }
+                    return positions
                 }
             )
             let assignedPositions = positions.map {
@@ -460,9 +494,13 @@ struct MoomooOpenAPIClient {
 
             accountCurrencies[account.accountID] = reportingCurrency
 
-            let markets = Set(assignedPositions.compactMap {
+            // Account entitlements include markets that have been fully exited.
+            let markets = account.historyMarkets.union(assignedPositions.compactMap {
                 Self.tradeMarket(forCode: $0.code)
             })
+            if markets.isEmpty {
+                historyWarnings.append(L10n.text("\(account.accountCardNumber)：账户未提供可读取的历史市场，已保留原有历史。"))
+            }
             for market in markets.sorted() {
                 do {
                     let fills = try await fetchHistoricalFills(
@@ -470,13 +508,14 @@ struct MoomooOpenAPIClient {
                         market: market,
                         accessToken: token.accessToken
                     )
-                    allFills.append(contentsOf: fills.map { $0.assigned(to: account.accountID) })
+                    let resolved = await resolvingFillCurrencies(fills,
+                        encodedAccountID: encodedID, accessToken: token.accessToken)
+                    allFills.append(contentsOf: resolved.map { $0.assigned(to: account.accountID) })
                 } catch {
                     historyWarnings.append(L10n.text("\(account.accountCardNumber) · \(market)：历史成交未完整同步"))
                 }
             }
         }
-        guard !allPositions.isEmpty else { throw MoomooOpenAPIError.noPositions }
         return MoomooSnapshot(
             accounts: accounts,
             positions: allPositions,
@@ -497,6 +536,47 @@ struct MoomooOpenAPIClient {
         case "KR", "KRX": return "KR"
         case "SH", "SZ", "HKCC": return "HKCC"
         default: return nil
+        }
+    }
+
+    /// Order details carry currency even after the position has been closed.
+    /// Read-only POST endpoint, batched by exchange (fewer than 50 order IDs).
+    private func resolvingFillCurrencies(
+        _ fills: [MoomooFill], encodedAccountID: String, accessToken: String
+    ) async -> [MoomooFill] {
+        let exchanges = ["HK": "SEHK", "SEHK": "SEHK", "SG": "SGX", "SGX": "SGX",
+            "SH": "SSE", "SZ": "SZSE", "CA": "CA", "JP": "JP", "JA": "JP", "KR": "KR"]
+        let missing = fills.filter { $0.quoteCurrency == nil && !$0.orderID.isEmpty }
+        let grouped = Dictionary(grouping: missing) { fill in
+            exchanges[fill.code.split(separator: ".").first?.uppercased() ?? ""] ?? ""
+        }
+        var currencies: [String: String] = [:]
+        for exchange in grouped.keys.sorted() where !exchange.isEmpty {
+            let ids = Array(Set((grouped[exchange] ?? []).map(\.orderID))).sorted()
+            for start in stride(from: 0, to: ids.count, by: 49) {
+                if Task.isCancelled { return fills }
+                do {
+                    var request = request(path: "/api/v1.0/accounts/\(encodedAccountID)/orders/detail", method: "POST")
+                    request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    request.httpBody = try JSONSerialization.data(withJSONObject: [
+                        "exchange": exchange, "order_ids": Array(ids[start..<min(start + 49, ids.count)])
+                    ])
+                    let (data, http) = try await response(for: request)
+                    guard (200..<300).contains(http.statusCode),
+                          let envelope = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                          envelope["s"] as? String == "ok", let orders = envelope["d"] as? [[String: Any]] else { continue }
+                    for order in orders {
+                        if let id = order["order_id"] as? String, let currency = order["currency"] as? String,
+                           !currency.isEmpty, currency != "NONE" { currencies[id] = currency.uppercased() }
+                    }
+                } catch { continue } // Import emits a per-security warning; stored history remains intact.
+            }
+        }
+        return fills.map { fill in
+            var resolved = fill
+            if resolved.quoteCurrency == nil { resolved.currency = currencies[fill.orderID] }
+            return resolved
         }
     }
 

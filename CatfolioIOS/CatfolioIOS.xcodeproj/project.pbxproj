@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A1990000000000000000ADA1 /* AuditRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1990000000000000000ADA1 /* AuditRegressionTests.swift */; };
 		AE1100000000000000000041 /* catfolio-daily-brief in Resources */ = {isa = PBXBuildFile; fileRef = BE1100000000000000000041; };
 		A5EC7000000000000000000B /* StockChartsRotationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC7000000000000000000B; };
 		A5EC7000000000000000000A /* stockcharts_rrg_reference.json in Resources */ = {isa = PBXBuildFile; fileRef = B5EC7000000000000000000A; };
@@ -180,6 +181,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		B1990000000000000000ADA1 /* AuditRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuditRegressionTests.swift; sourceTree = "<group>"; };
 		BE1100000000000000000041 /* catfolio-daily-brief */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "catfolio-daily-brief"; sourceTree = "<group>"; };
 		B5EC7000000000000000000B /* StockChartsRotationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockChartsRotationTests.swift; sourceTree = "<group>"; };
 		B5EC7000000000000000000A /* stockcharts_rrg_reference.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = stockcharts_rrg_reference.json; sourceTree = "<group>"; };
@@ -354,6 +356,7 @@
 		B6D311000000000000000003 /* ManagementDeliveryAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagementDeliveryAnalyzer.swift; sourceTree = "<group>"; };
 		B6D311000000000000000004 /* ManagementDeliveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagementDeliveryView.swift; sourceTree = "<group>"; };
 		B6D311000000000000000005 /* ManagementDeliveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagementDeliveryTests.swift; sourceTree = "<group>"; };
+		B1C10D202609140000000001 /* CatfolioIOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CatfolioIOS.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -390,6 +393,7 @@
 				B19800000000000000000003 /* CompanyReferenceCatalog.swift */,
 				B199000000000000000000E2 /* PublicInvestorView.swift */,
 				B199000000000000000000E1 /* PublicInvestorCatalog.swift */,
+				B1C10D202609140000000001 /* CatfolioIOS.entitlements */,
 				B10000000000000000000001 /* CatfolioIOSApp.swift */,
 				B10000000000000000000002 /* Models.swift */,
 				B10000000000000000000003 /* APIClient.swift */,
@@ -579,6 +583,7 @@
 				B199000000000000000000C1 /* SectorAttributionTests.swift */,
 				B19900000000000000FFB0 /* NumericAlternatesTests.swift */,
 				B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */,
+				B1990000000000000000ADA1 /* AuditRegressionTests.swift */,
 				B19900000000000000FF91 /* PortfolioDocumentMergeTests.swift */,
 				B19900000000000000FF81 /* CloudPreferencesTests.swift */,
 				B19900000000000000FF71 /* LedgerReconciliationTests.swift */,
@@ -668,6 +673,9 @@
 				TargetAttributes = {
 					E10000000000000000000001 = {
 						CreatedOnToolsVersion = 26.5;
+						SystemCapabilities = {
+							com.apple.iCloud = { enabled = 1; };
+						};
 					};
 					E199000000000000000000E0 = {
 						CreatedOnToolsVersion = 26.5;
@@ -878,6 +886,7 @@
 				A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */,
 				A19900000000000000FFB0 /* NumericAlternatesTests.swift in Sources */,
 				A19900000000000000FFA0 /* PublicInvestorSelectionTests.swift in Sources */,
+				A1990000000000000000ADA1 /* AuditRegressionTests.swift in Sources */,
 				A19900000000000000FF91 /* PortfolioDocumentMergeTests.swift in Sources */,
 				A19900000000000000FF81 /* CloudPreferencesTests.swift in Sources */,
 				A19900000000000000FF71 /* LedgerReconciliationTests.swift in Sources */,
@@ -934,6 +943,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = CatfolioIOS/CatfolioIOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_ASSET_PATHS = "";
@@ -961,6 +971,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = CatfolioIOS/CatfolioIOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_TEAM = 2G5PCQU652;

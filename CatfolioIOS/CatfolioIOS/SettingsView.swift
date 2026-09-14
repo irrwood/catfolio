@@ -1,6 +1,64 @@
 import SwiftUI
 import UIKit
 
+struct CloudPreferencesSettingsSection: View {
+    @Environment(\.locale) private var locale
+    let sync: CloudPreferenceSync
+
+    var body: some View {
+        SettingsSection("iCloud") {
+            SettingsToggleRow(
+                icon: .symbol("icloud"),
+                title: L10n.text("同步偏好设置"),
+                isOn: Binding(get: { sync.isEnabled }, set: { sync.setEnabled($0) })
+            )
+            .accessibilityIdentifier("settings.icloud.enabled")
+            SettingsValueRow(title: L10n.text("同步状态"), value: statusText, valueIsNumeric: false)
+                .accessibilityIdentifier("settings.icloud.status")
+            if let received = sync.lastReceivedAt {
+                SettingsValueRow(title: L10n.text("最近接收更新"),
+                    value: received.formatted(.dateTime.month().day().hour().minute().locale(locale)),
+                    valueIsNumeric: false)
+            }
+            if sync.status == .unavailable || sync.status == .quotaExceeded {
+                SettingsButtonRow(icon: .symbol("arrow.clockwise"), title: L10n.text("重试同步")) {
+                    sync.refresh()
+                }
+                .accessibilityIdentifier("settings.icloud.retry")
+            }
+        }
+        SettingsFootnote([
+            L10n.text("同步显示货币、外观、公司名称、触控反馈、税年、持仓排序和筛选偏好。账户、持仓、交易记录和密钥仅保留在本机。"),
+            detailText
+        ])
+    }
+
+    private var statusText: String {
+        switch sync.status {
+        case .off: L10n.text("未开启")
+        case .automatic: L10n.text("由系统自动同步")
+        case .unavailable: L10n.text("暂时无法同步")
+        case .quotaExceeded: L10n.text("同步存储已满")
+        case .valueTooLarge: L10n.text("部分设置过大")
+        }
+    }
+
+    private var detailText: String {
+        switch sync.status {
+        case .off:
+            L10n.text("在每台设备上分别开启。开启时采用云端已有偏好，云端没有的项目保留本机设置。关闭不会删除本机或云端已有设置。")
+        case .automatic:
+            L10n.text("请在设备上登录同一 Apple 账户，并允许 Catfolio 使用 iCloud。更新由系统安排，可能延迟；此状态不表示其他设备已经收到。")
+        case .unavailable:
+            L10n.text("请检查系统设置中的 Apple 账户、Catfolio 的 iCloud 权限及网络连接。本机设置仍可使用。")
+        case .quotaExceeded:
+            L10n.text("iCloud 偏好存储已达到限额。请缩短筛选规则或提示词后重试，本机设置仍会保留。")
+        case .valueTooLarge:
+            L10n.text("部分筛选规则或提示词过长，仅保留在本机。缩短内容后会继续同步。")
+        }
+    }
+}
+
 struct AccountNicknameField: View {
     @Environment(AppModel.self) private var model
     @Binding var nickname: String
@@ -196,6 +254,8 @@ struct SettingsView: View {
                 }
             }
             SettingsFootnote(LocalPortfolioEngine.fxStatus)
+
+            CloudPreferencesSettingsSection(sync: CloudPreferences.shared)
 
             SettingsSection(L10n.text("本机数据")) {
                 SettingsValueRow(

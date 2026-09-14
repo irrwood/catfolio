@@ -408,16 +408,15 @@ struct CycleComparisonView: View {
         let unit = height / 2 * Self.labelledShare / 4
         return ZStack {
             ForEach(-4...4, id: \.self) { index in
-                Text(Self.axisText(abs(Double(index)) * step))
-                    .font(.system(size: 14, weight: .medium))
+                Text(Self.axisText(Double(index) * step))
+                    .font(Typography.number(size: 14, weight: .medium))
                     .tracking(0.7)
-                    .foregroundStyle(Color.primary.opacity(0.4))
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .fixedSize()
                     .position(x: 11.5, y: height / 2 - CGFloat(index) * unit)
             }
         }
-        .opacity(0.4)
         .allowsHitTesting(false)
     }
 
@@ -426,13 +425,12 @@ struct CycleComparisonView: View {
         HStack(spacing: 0) {
             ForEach(1...12, id: \.self) { month in
                 Text("\(month)")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(Typography.number(size: 14, weight: .medium))
                     .tracking(0.7)
-                    .foregroundStyle(Color.primary.opacity(0.4))
+                    .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
             }
         }
-        .opacity(0.4)
         .allowsHitTesting(false)
     }
 
@@ -558,7 +556,7 @@ struct CycleComparisonView: View {
         return day.formatted(style)
     }
 
-    private static func axisText(_ value: Double) -> String {
+    static func axisText(_ value: Double) -> String {
         value.rounded() == value ? String(Int(value)) : value.formatted(.number.precision(.fractionLength(1)))
     }
 

@@ -14,6 +14,8 @@ struct CSVImportView: View {
     @State private var importResult: CSVImportResult?
     @State private var statusMessage: String?
     @State private var isImporting = false
+    @State private var isReadingFile = false
+    @State private var fileSelectionGeneration = UUID()
     @State private var nickname = ""
     @State private var newAccountID = UUID().uuidString.lowercased()
 
@@ -44,10 +46,11 @@ struct CSVImportView: View {
                         showsFileImporter = true
                     }
 
+                    if isReadingFile { ProgressView().padding() }
                     if let selectedFile {
                         SettingsValueRow(title: L10n.text("文件"), value: selectedFile.filename, valueIsNumeric: false)
                         SettingsValueRow(title: L10n.text("大小"), value: selectedFile.formattedSize)
-                        SettingsValueRow(title: L10n.text("数据行"), value: "\(selectedFile.dataRowCount)")
+                        SettingsValueRow(title: L10n.text("数据行"), value: selectedFile.dataRowCount.map(String.init) ?? L10n.text("导入时统计"))
                         SettingsValueRow(title: L10n.text("识别列"), value: selectedFile.headers.joined(separator: " · "), valueIsNumeric: false)
                     }
                 }
@@ -198,31 +201,39 @@ struct CSVImportView: View {
     }
 
     private func handleFileSelection(_ result: Result<[URL], Error>) {
-        do {
-            guard let url = try result.get().first else { return }
-            let hasAccess = url.startAccessingSecurityScopedResource()
-            defer {
-                if hasAccess { url.stopAccessingSecurityScopedResource() }
+        let generation = UUID()
+        fileSelectionGeneration = generation
+        isReadingFile = true
+        selectedFile = nil
+        importResult = nil
+        statusMessage = nil
+        Task {
+            defer { if fileSelectionGeneration == generation { isReadingFile = false } }
+            do {
+                guard let url = try result.get().first else { return }
+                let file = try await Task.detached(priority: .userInitiated) {
+                    let hasAccess = url.startAccessingSecurityScopedResource()
+                    defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
+                    let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize
+                    if let size, size > SelectedCSVFile.maximumBytes { throw CSVSelectionError.fileTooLarge }
+                    let data = try Data(contentsOf: url, options: .mappedIfSafe)
+                    return try SelectedCSVFile(url: url, data: data)
+                }.value
+                guard fileSelectionGeneration == generation, !Task.isCancelled else { return }
+                selectedFile = file
+                if context.isCreating, AccountNaming.generatedNicknames.contains(nickname),
+                   let detectedName = file.detectedAccountNickname {
+                    nickname = model.suggestedAccountNickname(detectedName: detectedName)
+                }
+            } catch {
+                guard fileSelectionGeneration == generation else { return }
+                statusMessage = error.localizedDescription
             }
-            let data = try Data(contentsOf: url, options: .mappedIfSafe)
-            let file = try SelectedCSVFile(url: url, data: data)
-            selectedFile = file
-            if context.isCreating,
-               AccountNaming.generatedNicknames.contains(nickname),
-               let detectedName = file.detectedAccountNickname {
-                nickname = model.suggestedAccountNickname(detectedName: detectedName)
-            }
-            importResult = nil
-            statusMessage = nil
-        } catch {
-            selectedFile = nil
-            importResult = nil
-            statusMessage = error.localizedDescription
         }
     }
 
     private func importSelectedFile() async {
-        guard let selectedFile, selectedFile.dataRowCount > 0 else { return }
+        guard let selectedFile, selectedFile.hasDataRows else { return }
         isImporting = true
         statusMessage = nil
         importResult = nil
@@ -247,12 +258,13 @@ struct CSVImportView: View {
     }
 }
 
-private struct SelectedCSVFile {
+struct SelectedCSVFile: Sendable {
     static let maximumBytes = 50 * 1024 * 1024
 
     let filename: String
     let data: Data
-    let dataRowCount: Int
+    let dataRowCount: Int?
+    let hasDataRows: Bool
     let headers: [String]
 
     var detectedAccountNickname: String? {
@@ -281,7 +293,8 @@ private struct SelectedCSVFile {
             throw CSVSelectionError.invalidEncoding
         }
         text = text.replacingOccurrences(of: "\u{feff}", with: "")
-        let records = LocalCSVImporter.parseRecords(text)
+        // Preview at most 27 records; full parsing happens once, on import.
+        let records = LocalCSVImporter.parseRecords(text, maximumRecords: 27)
         guard !records.isEmpty else {
             throw CSVSelectionError.emptyFile
         }
@@ -292,7 +305,9 @@ private struct SelectedCSVFile {
         try Self.validate(headers: headers)
         filename = url.lastPathComponent
         self.data = data
-        dataRowCount = max(0, records.count - headerIndex - 1)
+        let previewRows = max(0, records.count - headerIndex - 1)
+        hasDataRows = previewRows > 0
+        dataRowCount = records.count < 27 ? previewRows : nil
         self.headers = Array(headers.prefix(8))
     }
 

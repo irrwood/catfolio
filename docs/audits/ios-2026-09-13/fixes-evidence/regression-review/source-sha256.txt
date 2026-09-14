@@ -1,0 +1,2 @@
+af3f3810999e20ed06074d6ebc1345413f442b252c2cdad829e83cb546942f81  CatfolioIOS/CatfolioIOS/LocalPortfolioStore.swift
+5b53e1bb85433f52737511edc3d3134278e8f7d2d2d25df9d296f6a4f8aa3818  CatfolioIOS/CatfolioIOSTests/AuditRegressionTests.swift

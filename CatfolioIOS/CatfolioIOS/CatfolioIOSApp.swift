@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct CatfolioIOSApp: App {
     @State private var model = AppModel()
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppLanguage.preferenceKey) private var languageRawValue = AppLanguage.system.rawValue
     @AppStorage(AppAppearance.preferenceKey) private var appearanceRawValue = AppAppearance.system.rawValue
 
@@ -35,6 +36,9 @@ struct CatfolioIOSApp: App {
                 .fontDesign(.rounded)
                 .task { ReferenceCatalogs.warm() }
                 .task { CloudPreferences.start() }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active { CloudPreferences.shared.refresh() }
+                }
                 .task { PublicInvestorPreferences.migrateDemoSelectionIfNeeded() }
                 .environment(model)
                 .environment(\.locale, Locale(identifier: AppLanguage.resolvedIdentifier(languageRawValue)))

@@ -110,40 +110,34 @@ enum UKShareMatching {
         var acquisitions = entries.filter(\.isBuy)
             .map { (id: $0.id, date: $0.date, remaining: $0.quantity) }
 
-        var results: [Disposal] = []
-        for entry in entries where !entry.isBuy {
-            var outstanding = entry.quantity
-            var matches: [Match] = []
-            guard let windowEnd = Self.windowEnd(after: entry.date) else { continue }
-
-            // Same day first, then the following 30 days in date order. An
-            // acquisition outside the window is never reached, however close.
-            func consume(where predicate: (String) -> Bool, rule: (String) -> Rule) {
-                for index in acquisitions.indices where outstanding > 0 {
-                    guard acquisitions[index].remaining > 0,
-                          predicate(acquisitions[index].date) else { continue }
-                    let taken = min(outstanding, acquisitions[index].remaining)
-                    acquisitions[index].remaining -= taken
-                    outstanding -= taken
-                    matches.append(Match(
-                        rule: rule(acquisitions[index].date),
-                        quantity: taken,
-                        acquisitionID: acquisitions[index].id
-                    ))
-                }
-            }
-            consume(where: { $0 == entry.date }, rule: { _ in .sameDay })
-            consume(where: { $0 > entry.date && $0 <= windowEnd }, rule: { .thirtyDay(acquired: $0) })
-
-            if outstanding > 0 {
-                matches.append(Match(rule: .section104, quantity: outstanding))
-            }
-            results.append(Disposal(
-                sourceID: entry.id, date: entry.date,
-                quantity: entry.quantity, matches: matches
-            ))
+        let sales = entries.filter { !$0.isBuy }.sorted {
+            $0.date == $1.date ? $0.id < $1.id : $0.date < $1.date
         }
-        return results
+        var outstanding = sales.map(\.quantity)
+        var matches = Array(repeating: [Match](), count: sales.count)
+        func consume(_ sale: Int, sameDay: Bool) {
+            guard let windowEnd = Self.windowEnd(after: sales[sale].date) else { return }
+            for index in acquisitions.indices where outstanding[sale] > 0 {
+                let date = acquisitions[index].date
+                let eligible = sameDay ? date == sales[sale].date
+                    : date > sales[sale].date && date <= windowEnd
+                guard eligible, acquisitions[index].remaining > 0 else { continue }
+                let taken = min(outstanding[sale], acquisitions[index].remaining)
+                acquisitions[index].remaining -= taken
+                outstanding[sale] -= taken
+                matches[sale].append(Match(rule: sameDay ? .sameDay : .thirtyDay(acquired: date),
+                    quantity: taken, acquisitionID: acquisitions[index].id))
+            }
+        }
+        for index in sales.indices { consume(index, sameDay: true) }
+        for index in sales.indices { consume(index, sameDay: false) }
+        return sales.indices.map { index in
+            if outstanding[index] > 0 {
+                matches[index].append(Match(rule: .section104, quantity: outstanding[index]))
+            }
+            return Disposal(sourceID: sales[index].id, date: sales[index].date,
+                quantity: sales[index].quantity, matches: matches[index])
+        }
     }
 
     // MARK: - Dates

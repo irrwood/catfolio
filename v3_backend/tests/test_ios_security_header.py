@@ -4,16 +4,28 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2] / "CatfolioIOS" / "CatfolioIOS"
 
 
-def test_header_keeps_native_close_currency_font_and_shared_time_picker():
+def test_header_keeps_currency_font_and_shared_time_picker():
     source = (ROOT / "VolumeProfileView.swift").read_text()
     header = source[source.index("struct HoldingDetailHeader: View"):source.index("private struct HoldingPositionDetails")]
     assert 'size: 44' in header
-    assert 'holding-detail-close' in header
+    assert 'holding-detail-close' not in header
     assert 'Typography.number(size: priceSize' in header
     assert 'VStack(alignment: .leading, spacing: 12)' in header
     assert 'ChartTimeRangePicker(selection: $range' in source
     assert 'HoldingDetailHeaderBackdrop()' in source
     assert 'HoldingDetailModalHandle()' not in source
+
+
+def test_close_button_is_fixed_outside_the_detail_scroll_content():
+    source = (ROOT / "VolumeProfileView.swift").read_text()
+    detail = source[source.index("struct HoldingDetailView: View"):source.index("private func loadVolumeProfile")]
+    scroll_content, viewport = detail.split('.accessibilityIdentifier("holding-detail-scroll")', 1)
+    assert 'holding-detail-close' not in scroll_content
+    assert '.overlay(alignment: .topTrailing)' in viewport
+    assert 'Button { dismiss() }' in viewport
+    assert '.accessibilityIdentifier("holding-detail-close")' in viewport
+    assert '.modifier(HoldingHeaderButtonStyle())' in viewport
+    assert source.count('.accessibilityIdentifier("holding-detail-close")') == 1
 
 
 def test_analysis_is_only_presented_by_a_tap_and_freezes_the_price_window():

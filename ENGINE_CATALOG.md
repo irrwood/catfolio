@@ -2,6 +2,8 @@
 
 最后核对：2026-09-08。面向产品、iOS、Core 和后续共享引擎开发者。
 
+2026-09-14 iOS 专项更新：已修复同步历史覆盖、CSV 拆股重建、TWR 涨跌误归入资金、FX 单位/账户/日期边界、FIFO 成交时间及英国同日匹配优先级。实现与验证见 [iOS 审查修复记录](docs/audits/ios-2026-09-13/FIXES.md)；其余清单未重新全量核对。
+
 **开始新增计算能力前，先查本清单，避免重复实现。** 本文件是能力导航，不是上线验收报告。
 本次核对范围为 iOS 实现、主要调用点及 Core 已完成的数据工作；尚未逐项审计 Web/Desktop。
 有测试文件表示存在测试，不代表每次编辑本文都重新运行了整套测试。
@@ -22,12 +24,13 @@
 
 | 能力 | 实现入口 | 调用/消费位置 | 测试与边界 |
 |---|---|---|---|
+| iCloud 偏好同步 | `CloudPreferences.swift` → `CloudPreferenceSync`、`CatfolioIOS.entitlements` | 设置页 iCloud 开关/状态；App 启动与前台生命周期 | `CloudPreferencesTests.swift`、`SettingsInteractionTests.swift`；每台设备默认关闭，只同步允许列表内偏好；真实双设备传递尚未验收。[范围与状态](docs/ios-icloud-preferences.md)，2026-09-14 补全 |
 | 管理层兑现核对 | `ManagementDelivery.swift`、`ManagementDeliveryClient.swift`、`ManagementDeliveryAnalyzer.swift` | 个股研究区 `ManagementDeliveryCard`；iPhone 直接下载 FMP 文字稿与标准化财报，设备端 AI 提取/匹配，数字由规则判定 | `ManagementDeliveryTests.swift`；最近 4/6/8 季度、至少四个连续财季，最多核对 40 项承诺。资料不上传；需 iOS 26 Apple Intelligence 与 FMP 权限，证据不足为待验证。[边界与验收](docs/ios-management-delivery.md)，2026-09-13 新增；真机端到端尚未验收 |
 | 组合估值、成本和持仓汇总 | [LocalPortfolioStore.swift](CatfolioIOS/CatfolioIOS/LocalPortfolioStore.swift) → `LocalPortfolioEngine` | 本地组合 presentation、概览和持仓 | `LocalPortfolioEngineTests.swift`；当前估值 FX 有缓存及固定值兜底，不用于历史成交对账 |
 | 券商读取及导入 | [Trading212Client.swift](CatfolioIOS/CatfolioIOS/Trading212Client.swift)、[IBKRFlexClient.swift](CatfolioIOS/CatfolioIOS/IBKRFlexClient.swift)、[MoomooOAuthClient.swift](CatfolioIOS/CatfolioIOS/MoomooOAuthClient.swift)、[CSVImportView.swift](CatfolioIOS/CatfolioIOS/CSVImportView.swift) | 各券商连接页、CSV 导入、本地组合存储 | `Trading212FillDecodingTests.swift`、`BrokerResultPreservationTests.swift`；仍是多处适配代码，未统一成跨端账本引擎 |
 | 账本对账 | [LedgerReconciliation.swift](CatfolioIOS/CatfolioIOS/LedgerReconciliation.swift) | `SettingsView` 中生成和显示 report | `LedgerReconciliationTests.swift`；对账报告不等于自动修复原账本 |
 | 已实现盈亏、FIFO | [RealisedProfitCalculator.swift](CatfolioIOS/CatfolioIOS/RealisedProfitCalculator.swift) | `HistoryView` 收益汇总 | `RealisedProfitCalculatorTests.swift`、`BrokerResultPreservationTests.swift`；保留可用券商结果，缺失时尝试本地重建，成本不足须显式保留 |
-| 拆股调整 | [StockSplitCatalog.swift](CatfolioIOS/CatfolioIOS/StockSplitCatalog.swift) | 已实现盈亏、历史匹配、FX 影响计算 | `StockSplitTests.swift`；美股资源为主，不是完整公司行动引擎 |
+| 拆股调整 | [StockSplitCatalog.swift](CatfolioIOS/CatfolioIOS/StockSplitCatalog.swift) | CSV 持仓重建、已实现盈亏、历史匹配、FX 影响计算 | `StockSplitTests.swift`、`AuditRegressionTests.swift`；美股资源为主，不是完整公司行动引擎 |
 | 英国股票匹配与成本池 | [UKShareMatching.swift](CatfolioIOS/CatfolioIOS/UKShareMatching.swift)、[UKSection104Pool.swift](CatfolioIOS/CatfolioIOS/UKSection104Pool.swift) | 历史处置匹配/成本池链路 | `UKShareMatchingTests.swift`、`UKSection104PoolTests.swift`；同日、30 天和 Section 104 已有代码，不是完整报税系统 |
 | GBP 历史换算 | [GBPFXRates.swift](CatfolioIOS/CatfolioIOS/GBPFXRates.swift) | 本地历史换算及 FX 影响链路 | 返回匹配类别，查询允许有限前值回退；不能把回退当作当日真实观测 |
 | 汇率影响 | [FXImpactCalculator.swift](CatfolioIOS/CatfolioIOS/FXImpactCalculator.swift)、[LocalServices.swift](CatfolioIOS/CatfolioIOS/LocalServices.swift) 中 `LocalFXImpactCalculator` | `LocalPortfolioEngine` 等展示链路 | `FXImpactTests.swift`；存在不同层级实现，抽取时先比较口径和调用方 |
@@ -78,4 +81,4 @@ Core 源码和部分文档属于当前工作区的可选私有目录。其他 ch
 5. 数据覆盖不足必须返回缺失状态；已生成、已接入、已验证全覆盖是三个不同状态。
 6. 公共资料及图表仅有研究样本时保留“试采”标记；不要用展示效果推断已完成数据链路。
 
-本次文档整理没有修改任何计算或账户逻辑，也没有重新执行整套 iOS 测试。
+2026-09-08 的清单整理没有修改计算或账户逻辑；2026-09-14 的 iOS 专项修复已执行全套测试，结果及边界见上方修复记录。

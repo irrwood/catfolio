@@ -5,6 +5,7 @@ private typealias HoldingDetailTypography = LegacyType
 
 struct HoldingDetailView: View {
     @Environment(\.locale) private var appLocale
+    @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
 
@@ -175,6 +176,16 @@ struct HoldingDetailView: View {
                 .background(HoldingDetailScrollBoundary())
             }
             .accessibilityIdentifier("holding-detail-scroll")
+            .overlay(alignment: .topTrailing) {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark").font(.system(size: 17, weight: .medium))
+                        .frame(width: 48, height: 48)
+                }
+                .modifier(HoldingHeaderButtonStyle())
+                .accessibilityLabel(L10n.text("关闭"))
+                .accessibilityIdentifier("holding-detail-close")
+                .padding(20)
+            }
             // Transparent: the ground is the presentation's, so the one
             // background there is is the one the system rounds.
             .background {
@@ -418,7 +429,7 @@ struct HoldingDetailPriceSection: View {
                     .accessibilityHidden(true)
             }
 
-            if accountOptions.count > 1 {
+            if !accountOptions.isEmpty {
                 HoldingDetailAccountSelector(options: accountOptions, selectedAccountKeys: selectedAccountKeys,
                     onSelectAll: onSelectAll, onToggleAccount: onToggleAccount)
             }
@@ -1291,7 +1302,7 @@ private struct SecurityPricePlot: View {
                 StandardLineChartPoint(id: $0.id, date: $0.date, value: $0.price)
             },
             color: CatfolioPalette.securityPriceLine,
-            lineWidth: 3,
+            lineWidth: 2.5,
             selectionRadius: 4,
             latestPointRadius: 5,
             latestPointColor: colorScheme == .dark ? .white : Color(red: 10 / 255, green: 11 / 255, blue: 12 / 255),
@@ -1579,7 +1590,6 @@ private struct SecurityPricePlotPoint: Identifiable {
 
 struct HoldingDetailHeader: View {
     @Environment(\.locale) private var appLocale
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .title2) private var priceSize = 22.0
     @ScaledMetric(relativeTo: .headline) private var nameSize = 18.0
@@ -1635,13 +1645,9 @@ struct HoldingDetailHeader: View {
                     .lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark").font(.system(size: 17, weight: .medium))
-                        .frame(width: 48, height: 48)
-                }
-                .modifier(HoldingHeaderButtonStyle())
-                .accessibilityLabel(L10n.text("关闭"))
-                .accessibilityIdentifier("holding-detail-close")
+                // Reserve the fixed close button's space at the top of the report.
+                Color.clear.frame(width: 48, height: 48)
+                    .accessibilityHidden(true)
             }
             if let onRefresh {
                 Button {
@@ -2155,7 +2161,6 @@ private struct HoldingFinancialCard: View {
     var onAvailability: (HoldingResearchAvailability) -> Void = { _ in }
     @State private var showsFinancials = false
     @State private var availability: HoldingResearchAvailability = .unknown
-    @Namespace private var zoom
 
     var body: some View {
         Button {
@@ -2167,13 +2172,13 @@ private struct HoldingFinancialCard: View {
             )
         }
         .buttonStyle(.plain)
-        .matchedTransitionSource(id: holding.ticker, in: zoom)
         .accessibilityHint("Open reported company financials")
         .sheet(isPresented: $showsFinancials, onDismiss: { onAvailability(availability) }) {
             NavigationStack {
                 CompanyFinancialsView(holding: holding, onAvailability: { availability = $0 })
             }
-            .navigationTransition(.zoom(sourceID: holding.ticker, in: zoom))
+            // Keep report scrolling separate from interactive zoom dismissal,
+            // which lets a drag on the statement move the entire sheet.
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }

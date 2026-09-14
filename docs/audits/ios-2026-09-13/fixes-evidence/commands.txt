@@ -1,0 +1,15 @@
+All commands run from /Users/qian/Documents/股票分析.
+Dedicated simulator: Catfolio Audit Fixes QA, iPhone 17 Pro, iOS 26.5.
+Simulator was removed after verification; no existing simulator was reset.
+
+xcodebuild test -project CatfolioIOS/CatfolioIOS.xcodeproj -scheme CatfolioIOS -destination 'platform=iOS Simulator,id=1E6703ED-C383-46F8-B781-8027EE41261C' -derivedDataPath /tmp/catfolio-ios-fixes-20260914/build -resultBundlePath /tmp/catfolio-ios-fixes-20260914/verified-full-zh.xcresult -parallel-testing-enabled NO -testLanguage zh-Hans -testRegion CN -skip-testing:CatfolioIOSTests/PublicInvestorCatalogTests/testLiveInvestorAccountTodayHistoryAndPerformance -skip-testing:CatfolioIOSTests/EarningsHistoryTests/testLiveDeviceNasdaqRead CODE_SIGNING_ALLOWED=NO
+
+The English regression run used -testLanguage en -testRegion GB and these test classes:
+AuditRegressionTests, PortfolioDocumentMergeTests, BrokerResultPreservationTests, FXImpactTests, UKShareMatchingTests, UKSection104PoolTests, RealisedProfitCalculatorTests, StockSplitTests, ImpliedFundingTests, CloudPreferencesTests.
+Result: /tmp/catfolio-ios-fixes-20260914/final-regressions-en.xcresult
+
+v3_backend/.venv/bin/python -m pytest -q v3_backend/tests/test_ios_empty_broker_sync.py v3_backend/tests/test_ios_ai_request_isolation.py v3_backend/tests/test_ios_home_loading.py v3_backend/tests/test_ios_options_oi.py::test_oi_distribution v3_backend/tests/test_ios_options_oi.py::test_yahoo_transport_and_cache
+python3 scripts/check_ios_localizations.py
+git diff --check
+
+xcodebuild build -project CatfolioIOS/CatfolioIOS.xcodeproj -scheme CatfolioIOS -configuration Release -destination 'generic/platform=iOS' -derivedDataPath /tmp/catfolio-ios-fixes-20260914/device-build CODE_SIGNING_ALLOWED=NO

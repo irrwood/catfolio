@@ -20,17 +20,21 @@ actor FMPRequestLimiter {
         self.spacing = spacing
     }
 
+    private var blockedUntil = Date.distantPast
+
     func waitForTurn() async throws {
-        let now = Date()
-        let slot = nextAllowedAt > now ? nextAllowedAt : now
-        // Reserve this request's unique slot before suspending. Actors are
-        // re-entrant across `await`, so updating afterwards can release a burst.
-        nextAllowedAt = slot.addingTimeInterval(spacing)
-        let delay = slot.timeIntervalSince(now)
-        if delay > 0 {
-            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+        // Recheck after every suspension. A 429 received while this request
+        // sleeps must postpone it too, and released waiters must stay spaced.
+        while true {
+            try Task.checkCancellation()
+            let now = Date()
+            let ready = max(nextAllowedAt, blockedUntil)
+            if ready <= now {
+                nextAllowedAt = now.addingTimeInterval(spacing)
+                return
+            }
+            try await Task.sleep(nanoseconds: UInt64(ready.timeIntervalSince(now) * 1_000_000_000))
         }
-        try Task.checkCancellation()
     }
 
     /// Honour `Retry-After` when the server sends one; otherwise wait long
@@ -38,12 +42,12 @@ actor FMPRequestLimiter {
     func backOff(retryAfter: String?) {
         let seconds = min(60, max(1, retryAfter.flatMap(Double.init) ?? 5))
         let resume = Date().addingTimeInterval(seconds)
-        nextAllowedAt = max(nextAllowedAt, resume)
+        blockedUntil = max(blockedUntil, resume)
     }
 
     /// How long the next caller would wait, so a message can say so.
     var secondsUntilFreeSlot: TimeInterval {
-        max(0, nextAllowedAt.timeIntervalSinceNow)
+        max(0, max(nextAllowedAt, blockedUntil).timeIntervalSinceNow)
     }
 }
 

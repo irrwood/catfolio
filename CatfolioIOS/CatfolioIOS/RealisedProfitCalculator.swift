@@ -164,14 +164,9 @@ enum RealisedProfitCalculator {
         var sales: [RealisedSale] = []
         var lotsByPosition: [String: [Lot]] = [:]
 
-        let ordered = transactions
-            .filter { isBuy($0.action) || isSell($0.action) }
-            .sorted {
-                if $0.date != $1.date { return $0.date < $1.date }
-                let leftIsBuy = isBuy($0.action)
-                if leftIsBuy != isBuy($1.action) { return leftIsBuy }
-                return ($0.tradeID ?? "") < ($1.tradeID ?? "")
-            }
+        let ordered = LocalTransactionRecord.orderedForLotMatching(
+            transactions.filter { isBuy($0.action) || isSell($0.action) }
+        )
 
         let catalog = try? StockSplitCatalog.bundled.get()
 

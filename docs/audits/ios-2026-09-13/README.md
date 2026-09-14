@@ -1,12 +1,20 @@
 **Catfolio iOS 全面审查 · 2026-09-13**
 
-发现 21 项有明确证据的问题：8 项 P1、13 项 P2。优先处理同步丢失历史、持仓重建、收益计算和证券识别；这些问题会改变用户看到的资产或收益，而不只是影响外观。本轮未修改 App 实现。
+**2026-09-14 修复更新：01–20 已完成代码修复，验证结果和限制见 [修复记录](FIXES.md)。下文保留修复前发现，不再代表这些问题仍存在于当前代码。第 21 项本次全套测试通过，未单独实施修复。**
+
+截至 2026-09-14，保留 21 条审查记录：19 项代码/行为问题、1 项设计表达问题、1 项待交叉复现。前 20 项合计 8 项 P1、12 项 P2；第 21 项暂不计入已确认缺陷。优先处理同步丢失历史、持仓重建、收益计算和证券识别。本轮审查及复核补充未修改 App 实现。
 
 P1 表示应在下一次发布前优先修复；P2 表示需要排期修复的功能、数据、交互或性能问题。下文分别标明独立复现、代码链路分析和模拟器回归结果，未把所有失败测试直接视为产品缺陷。
 
 审查覆盖 101 个 App Swift 源文件所在的主要模块：账户与券商同步、CSV、本地存储、持仓与收益引擎、历史交易、行情与缓存、ETF/研究/期权图表、AI 会话、设置及云偏好。执行了 iOS 26.5 模拟器测试，并检查 iOS 18 的 iPhone SE 3 首页、收益页和设置页。未使用真实券商授权完成在线端到端验收，未在物理设备上测量耗电、温升或长时间内存增长。
 
 工作区原有未提交改动，审查期间也有其他改动进入工作区。代码链接对应报告生成时的位置；测试使用本轮构建的快照，源码哈希和独立复现脚本已保存在 [证据说明](/Users/qian/Documents/股票分析/docs/audits/ios-2026-09-13/evidence/README.md)。
+
+**2026-09-14 复核补充**
+
+根据本次收到的逐项复核反馈：01–05、07–18、20 与复核方的当前代码核查一致，06 的真实涨跌被抹平问题也得到认可；19 据反馈遵循 Figma 原稿，但负号与可读性问题仍保留为设计表达问题，是否调整由产品决定。第 21 项在另一环境未复现，现降为待交叉复现。本轮只重新查看了 06、16、19、21 的相关函数，没有把反馈冒充为又一次全量独立验收。
+
+本轮额外核对确认：普通真实账户刷新路径在最新报价前后各调用一次完整历史曲线计算。逐只串行读取历史已在原 16 条列出；二次计算补充到同一条，避免按不同描述重复计数。底层有行情缓存，因此两次计算不意味着必然下载两遍。
 
 **01 · P1 · Moomoo 历史请求失败仍会覆盖本地完整交易历史**
 
@@ -43,6 +51,8 @@ CSV 用原始买卖股数累加，卖出后负数直接截成零，没有应用�
 不完整账本会启用 1.5 倍阈值。只要当日组合增长超过 50%，或下跌超过约 33.3%，引擎就把差额当成未记录的转账，当日净值不变化。判断没有核对价格是否真实变化。复现：投入 100 买一股，次日价格从 100 涨到 160，无任何资金流；实际 NAV 仍是 1，并虚构 60 入金，正确 NAV 应为 1.6。这也会扭曲后续累计收益及回撤。
 
 位置：[DailyTimeWeightedReturn.swift](/Users/qian/Documents/股票分析/CatfolioIOS/CatfolioIOS/DailyTimeWeightedReturn.swift:158)，调用处 [LocalServices.swift](/Users/qian/Documents/股票分析/CatfolioIOS/CatfolioIOS/LocalServices.swift:2494)。应根据明确资金事件/可验证的数据缺口补流水，不能仅凭涨跌幅改写收益；无法确认的区间应显示质量状态。
+
+复核建议先扣除价格可以解释的变动，这有助于保护真实涨跌；但剩余差额仍不能自动认定为资金流，还应核对汇率变化、公司行动、费用与已知交易/现金流水。无法解释的余额应保留为数据缺口，而不是生成看似精确的入出金。
 
 **07 · P1 · ECB 汇率损益回退路径把 GBP 金额当作证券报价币种**
 
@@ -102,6 +112,8 @@ start 每次都先全量 pull 再 push；pull 遇到云端缺键就删除 UserDe
 
 refreshPortfolio 先 await enrichPortfolioChart，之后才启动 daily changes 和 latest quotes。账本历史又逐只证券串行 await，包含历史上已清仓的股票。因此冷缓存、多标的或一个慢数据源就能拖延整个首页新报价更新；本地首屏虽已展示，但其内容持续陈旧。此项由调用顺序确认，未将模拟网络测试的耗时当作真实券商延迟。
 
+2026-09-14 补充：在有持仓且刷新正常完成的普通真实账户路径，报价更新前后分别调用 enrichPortfolioChart，都会进入 portfolioChart 的账本重建路径。第二次可能复用 12 小时内的历史行情缓存，但仍会重复计算、组装曲线。修复时应复用已计算的历史，明确哪些变更只需更新末点，哪些必须重建历史。
+
 位置：[APIClient.swift](/Users/qian/Documents/股票分析/CatfolioIOS/CatfolioIOS/APIClient.swift:139)、[LocalServices.swift](/Users/qian/Documents/股票分析/CatfolioIOS/CatfolioIOS/LocalServices.swift:2364)。应让报价、Today 和完整历史独立启动，保留 generation/cancellation 防止旧请求覆盖，并对历史下载采用有上限的并发与缓存。
 
 **17 · P2 · CSV 文件预览在主线程完整解析，合法大文件会卡住交互**
@@ -118,7 +130,7 @@ waitForTurn 预留一个时间点后直接 sleep；backOff 只改 nextAllowedAt�
 
 **19 · P2 · 周期对比图的负轴刻度丢失负号**
 
-Y 轴从 -4 到 4 排列，却把 index 取绝对值后生成文字。低于零的 -10、-20 会显示成 10、20，使亏损侧与上涨侧数值相同。位置：[CycleComparison.swift](/Users/qian/Documents/股票分析/CatfolioIOS/CatfolioIOS/CycleComparison.swift:396)。应保留符号，并明确涨跌幅单位；同时该组文字内外各设一次 0.4 opacity，最终约 16%，可读性也偏低。该文件属于审查时工作区中的新增功能。
+Y 轴从 -4 到 4 排列，却把 index 取绝对值后生成文字。低于零的 -10、-20 会显示成 10、20，使亏损侧与上涨侧数值相同。位置：[CycleComparison.swift](/Users/qian/Documents/股票分析/CatfolioIOS/CatfolioIOS/CycleComparison.swift:396)。应保留符号，并明确涨跌幅单位；同时该组文字内外各设一次 0.4 opacity，最终约 16%，可读性也偏低。该文件属于审查时工作区中的新增功能。2026-09-14 收到的复核反馈说明这是按 Figma 原稿实现，本轮未另行获取 Figma 对照；因此本项评价的是数值表达，不认定为实现偏离设计。建议保留布局并补负号，提高必要刻度的可读性。
 
 **20 · P2 · 期权 OI 的行权价全部取整，不同合约显示同一个价格**
 
@@ -126,13 +138,15 @@ OIPriceLabel 对所有价格先 rounded，再以零位小数显示；该函数�
 
 位置：[OptionsOIView.swift](/Users/qian/Documents/股票分析/CatfolioIOS/CatfolioIOS/OptionsOIView.swift:80)、[OptionsOIView.swift](/Users/qian/Documents/股票分析/CatfolioIOS/CatfolioIOS/OptionsOIView.swift:995)。轴刻度可以按密度简化，但交互提示必须保留合约真实价格精度，按实际 tick/小数位格式化。
 
-**21 · P2 · 嵌套弹层会重新给个股详情挂上继承的刷新控件**
+**21 · 待交叉复现（原 P2）· 嵌套弹层的刷新控件隔离**
 
-HoldingDetailScrollBoundary 在更新/布局时移除祖先刷新控件，但打开并刷新下一级弹层后，SwiftUI 会重新安装详情的继承控件，现有回调没有持续维持隔离。现有测试在全量与单独重跑中均于第 232 行失败：预期详情 refreshControl 为 nil，实际重新出现 UIKitRefreshControl。确认的是刷新边界回归；未将其扩大为已测得的误刷新次数或崩溃。
+2026-09-13 本轮 iOS 26.5 模拟器记录中，打开并刷新下一级弹层后，详情的继承刷新控件重新出现；该测试在全量与单独重跑中均于当时第 232 行失败：预期 refreshControl 为 nil，实际存在 UIKitRefreshControl。原始日志保留，说明当时观察到的行为，但不能据此断言所有环境都失败。
 
-位置：[VolumeProfileView.swift](/Users/qian/Documents/股票分析/CatfolioIOS/CatfolioIOS/VolumeProfileView.swift:314)；回归证据 [HoldingDetailInteractionTests.swift](/Users/qian/Documents/股票分析/CatfolioIOS/CatfolioIOSTests/HoldingDetailInteractionTests.swift:232)。修复时需覆盖弹层呈现/关闭后的生命周期，同时保留父页和子页各自刷新能力。
+2026-09-14 收到的复核反馈显示该测试在另一环境的多次全套运行均通过。因此降为待交叉复现，需要对齐源码版本、iOS runtime、语言、模拟器状态和测试顺序后比较；尚未确定差异来自环境、时序还是代码版本。本轮未重跑该测试，也未确认新的用户可见误刷新或崩溃。
 
-**测试与设计检查结果**
+位置：[VolumeProfileView.swift](/Users/qian/Documents/股票分析/CatfolioIOS/CatfolioIOS/VolumeProfileView.swift:314)；回归证据 [HoldingDetailInteractionTests.swift](/Users/qian/Documents/股票分析/CatfolioIOS/CatfolioIOSTests/HoldingDetailInteractionTests.swift:232)。进一步定位时需覆盖弹层呈现/关闭后的生命周期，同时核对父页和子页各自刷新能力；明确触发条件后再决定实现修复。
+
+**原审查测试与设计检查结果（2026-09-13，保留原始记录）**
 
 | 检查 | 结果 | 解释 |
 | --- | --- | --- |
@@ -144,11 +158,11 @@ HoldingDetailScrollBoundary 在更新/布局时移除祖先刷新控件，但打
 | 设计规则检查 | 失败 | 存在绕过 Typography 的字体、直接颜色值；也有数值缩放规则误报 |
 | iOS 18 / SE 3 | 启动及三个主页面可渲染 | 使用演示数据；未完成每条入口的触控与 VoiceOver 验收 |
 
-6 个 XCTest 失败中，4 个是固定中文预期与英语运行环境不一致（3 个 PolicyShortcut、1 个 LocalPortfolioEngine）；1 个是已重复确认的刷新边界问题；1 个是图表测试进程被 kill，单独重跑通过，暂不列作 App 崩溃缺陷。应使语言相关测试显式固定语言，或断言稳定语义。
+6 个 XCTest 失败中，4 个是固定中文预期与英语运行环境不一致（3 个 PolicyShortcut、1 个 LocalPortfolioEngine）；1 个是本轮环境两次出现、另一环境未复现的刷新边界问题；1 个是图表测试进程被 kill，单独重跑通过，暂不列作 App 崩溃缺陷。复核反馈中的这 4 项均通过，符合其环境敏感的判断，不能计作 4 个业务缺陷。应使语言相关测试显式固定语言，或断言稳定语义。
 
 Python 失败中，例如旧 Montserrat 字体、旧页面结构、旧字符串片段已与当前代码不同；这些断言需要和现行设计契约对齐。不能把 60 次检查失败全部算作 60 个 bug，也不能在检查长期红灯时认为回归保护有效。设计检查中，把周期图的时间轴换算识别成金额缩放，是一个需要修正的误报。
 
-除 19、20、21 外，界面还有值得改进的可读性：iOS 18 首页图表的浅色轴文字在浅蓝背景上很难辨认；收益页空状态使用旋转、模糊并被边缘截断的装饰文字，用户不容易读到明确的状态与下一步。这两点有截图证据，属于设计建议，未额外计入 21 项缺陷，也未声称已测得具体对比度或全量无障碍合规性。
+除 19、20、21 外，界面还有值得改进的可读性：iOS 18 首页图表的浅色轴文字在浅蓝背景上很难辨认；收益页空状态使用旋转、模糊并被边缘截断的装饰文字，用户不容易读到明确的状态与下一步。这两点有截图证据，属于设计建议，未额外计入上述审查记录，也未声称已测得具体对比度或全量无障碍合规性。
 
 截图：[首页](/Users/qian/Documents/股票分析/docs/audits/ios-2026-09-13/evidence/ios18-home.png)、[收益页](/Users/qian/Documents/股票分析/docs/audits/ios-2026-09-13/evidence/ios18-returns.png)、[设置页](/Users/qian/Documents/股票分析/docs/audits/ios-2026-09-13/evidence/ios18-settings.png)。
 

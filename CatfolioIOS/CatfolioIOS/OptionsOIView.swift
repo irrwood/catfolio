@@ -77,7 +77,7 @@ enum OIPlotRange: String, CaseIterable { case main, all }
 enum OIPriceLabel {
     static func text(_ value: Double, locale: Locale) -> String {
         guard value.isFinite else { return "—" }
-        return "$" + value.rounded().formatted(.number.precision(.fractionLength(0)).locale(locale))
+        return "$" + value.formatted(.number.precision(.fractionLength(0...4)).locale(locale))
     }
 }
 
@@ -479,7 +479,7 @@ struct OptionsOIView: View {
         .alert(L10n.text("OI 计算口径"), isPresented: $showsInfo) {
             Button(L10n.text("知道了"), role: .cancel) {}
         } message: {
-            Text(L10n.text("按所选到期范围汇总 Yahoo 返回合约的未平仓张数。Put／Call 墙为各自 OI 最大价位，并列峰值全部保留。主要分布显示累计 OI 的 5%–95% 区间及墙位，留有边距；切换全部可查看尾部。远离分布的现价与成本列在摘要，不扩展价格轴。集中区仍为累计 OI 的 15%–85% 等尾区间，覆盖至少 70% 已读取 OI。价格显示四舍五入整数，坐标与选中值保留原始行权价。仅纳入 REGULAR 且代码可核对的合约。Yahoo 覆盖不等于交易所全部合约；缺数时保留旧缓存。获取时间不是 OI 数据日期。OI 不代表成交量、买卖方向或必然支撑阻力。") + infoDetails)
+            Text(L10n.text("按所选到期范围汇总 Yahoo 返回合约的未平仓张数。Put／Call 墙为各自 OI 最大价位，并列峰值全部保留。主要分布显示累计 OI 的 5%–95% 区间及墙位，留有边距；切换全部可查看尾部。远离分布的现价与成本列在摘要，不扩展价格轴。集中区仍为累计 OI 的 15%–85% 等尾区间，覆盖至少 70% 已读取 OI。价格最多显示四位小数，省略末尾的零；坐标与选中值保留原始行权价。仅纳入 REGULAR 且代码可核对的合约。Yahoo 覆盖不等于交易所全部合约；缺数时保留旧缓存。获取时间不是 OI 数据日期。OI 不代表成交量、买卖方向或必然支撑阻力。") + infoDetails)
         }
         .task(id: "\(symbol)|\(days)|\(refreshID)") {
             // A tap forces ONE request. Without one, the wall still shows by

@@ -79,6 +79,9 @@ private struct PortfolioContentSheet<Content: View>: View {
     let scrollOffset: CGFloat
     let content: Content
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var sweepStrength: CGFloat = 0
+    @State private var lastSweepSampleTime: TimeInterval?
 
     init(scrollOffset: CGFloat, @ViewBuilder content: () -> Content) {
         self.scrollOffset = scrollOffset
@@ -109,16 +112,143 @@ private struct PortfolioContentSheet<Content: View>: View {
 
     var body: some View {
         content
+            .environment(\.portfolioGlassSweep, .init(
+                progress: settlingProgress, strength: reduceMotion ? 0 : sweepStrength
+            ))
             .background {
                 PortfolioContentSheetBackground(
                     colorScheme: colorScheme,
-                    settlingProgress: settlingProgress
+                    settlingProgress: settlingProgress,
+                    sweepStrength: reduceMotion ? 0 : sweepStrength
                 )
                 .allowsHitTesting(false)
             }
             .clipShape(sheetShape)
             .padding(.horizontal, horizontalInset)
             .accessibilityElement(children: .contain)
+            .onChange(of: scrollOffset) { oldOffset, newOffset in
+                let now = ProcessInfo.processInfo.systemUptime
+                let elapsed = now - (lastSweepSampleTime ?? (now - 1 / 60))
+                lastSweepSampleTime = now
+                let strength = PortfolioGlassSweep.strength(
+                    from: oldOffset, to: newOffset, elapsed: elapsed,
+                    travel: PortfolioContentSheetLayout.widthExpansionDistance
+                )
+                withAnimation(.easeOut(duration: strength > sweepStrength ? 0.08 : 0.18)) {
+                    sweepStrength = reduceMotion ? 0 : strength
+                }
+            }
+            .task(id: scrollOffset) {
+                // Cancelled by the next scroll sample. A held finger or a
+                // stopped scroll must never leave a coloured stripe behind.
+                do { try await Task.sleep(for: .milliseconds(90)) }
+                catch { return }
+                withAnimation(.easeOut(duration: 0.30)) { sweepStrength = 0 }
+            }
+    }
+}
+
+/// A local optical accent, driven only by upward sheet travel. Neither the
+/// scroll controller nor the foreground financial content is transformed.
+enum PortfolioGlassSweep: EnvironmentKey {
+    struct Appearance {
+        var progress: CGFloat = 0
+        var strength: CGFloat = 0
+    }
+    static let defaultValue = Appearance()
+
+    static func strength(from oldOffset: CGFloat, to offset: CGFloat,
+                         elapsed: TimeInterval, travel: CGFloat) -> CGFloat {
+        guard elapsed > 0, elapsed < 0.20, travel > 0,
+              oldOffset >= 0, offset > oldOffset, offset < travel else { return 0 }
+        let progress = offset / travel
+        let envelope = pow(sin(.pi * progress), 0.8)
+        let speed = min((offset - oldOffset) / max(elapsed, 1 / 120) / 1500, 1)
+        return envelope * (0.18 + 0.72 * speed)
+    }
+}
+
+private extension EnvironmentValues {
+    var portfolioGlassSweep: PortfolioGlassSweep.Appearance {
+        get { self[PortfolioGlassSweep.self] }
+        set { self[PortfolioGlassSweep.self] = newValue }
+    }
+}
+
+private struct PortfolioGlassSweepContour: Shape {
+    var inset: CGFloat = 0
+    var depth: CGFloat = 0
+
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(inset, depth) }
+        set { inset = newValue.first; depth = newValue.second }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let left = rect.minX + inset
+        let right = rect.maxX - inset
+        let top = rect.minY + depth
+        let radius = min(PortfolioContentSheetLayout.topRadius, (right - left) / 2)
+        let shoulder = radius * 0.45
+        // Open at the bottom: this is the sheet's rounded top contour, not
+        // an ellipse or a closed glowing rectangle around the entire card.
+        return Path { path in
+            path.move(to: CGPoint(x: left, y: top + radius + 46))
+            path.addLine(to: CGPoint(x: left, y: top + radius))
+            path.addCurve(to: CGPoint(x: left + radius, y: top),
+                          control1: CGPoint(x: left, y: top + shoulder),
+                          control2: CGPoint(x: left + shoulder, y: top))
+            path.addLine(to: CGPoint(x: right - radius, y: top))
+            path.addCurve(to: CGPoint(x: right, y: top + radius),
+                          control1: CGPoint(x: right - shoulder, y: top),
+                          control2: CGPoint(x: right, y: top + shoulder))
+            path.addLine(to: CGPoint(x: right, y: top + radius + 46))
+        }
+    }
+}
+
+private struct PortfolioGlassSweepLight: View {
+    let progress: CGFloat
+    let strength: CGFloat
+    let colorScheme: ColorScheme
+
+    private let cyan = Color(red: 0.05, green: 0.86, blue: 1)
+    private let blue = Color(red: 0.16, green: 0.25, blue: 1)
+
+    private var contour: PortfolioGlassSweepContour {
+        PortfolioGlassSweepContour(inset: 16 * (1 - progress), depth: 3 + 42 * progress)
+    }
+
+    var body: some View {
+        ZStack {
+            // Separate blue and cyan lobes give the rim a refracted colour
+            // edge; the unfilled centre keeps the card and text neutral.
+            contour
+                .stroke(blue.opacity(0.65), lineWidth: 12 + 12 * progress)
+                .blur(radius: 9)
+                .offset(y: 7)
+            contour
+                .stroke(cyan, lineWidth: 4 + 6 * progress)
+                .blur(radius: 4)
+            contour
+                .stroke(Color.white.opacity(0.86), lineWidth: 1.5)
+                .blur(radius: 0.7)
+                .offset(y: -3)
+
+            PortfolioGlassSweepContour()
+                .stroke(cyan.opacity(0.65), lineWidth: 1)
+        }
+        // Fade the side tails without drawing a hard end to the light band.
+        .mask {
+            LinearGradient(stops: [
+                .init(color: .white, location: 0),
+                .init(color: .white, location: 0.18),
+                .init(color: .clear, location: 0.48),
+            ], startPoint: .top, endPoint: .bottom)
+        }
+        .opacity(strength * (colorScheme == .dark ? 0.72 : 1))
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
@@ -126,6 +256,7 @@ private struct PortfolioContentSheetBackground: View {
     @Environment(\.locale) private var appLocale
     let colorScheme: ColorScheme
     let settlingProgress: CGFloat
+    let sweepStrength: CGFloat
 
     private var terminalColor: Color {
         colorScheme == .light ? .white : .black
@@ -175,6 +306,12 @@ private struct PortfolioContentSheetBackground: View {
                 // surface. Instead, scrolling continuously settles the glass
                 // into the terminal page colour in step with width expansion.
                 terminalColor.opacity(settlingProgress)
+
+                PortfolioGlassSweepLight(
+                    progress: settlingProgress,
+                    strength: sweepStrength,
+                    colorScheme: colorScheme
+                )
             }
             .frame(height: PortfolioContentSheetLayout.transitionHeight)
 
@@ -435,6 +572,7 @@ private struct PortfolioRefreshTimestamp: View {
 }
 
 private struct TodayContributionCard: View {
+    @Environment(\.portfolioGlassSweep) private var glassSweep
     @Environment(\.locale) private var appLocale
     private enum Direction: Hashable {
         case gains
@@ -554,6 +692,15 @@ private struct TodayContributionCard: View {
         ZStack(alignment: .topLeading) {
             todayBackground
                 .allowsHitTesting(false)
+
+            // The dark gains/losses surface is opaque. Put its optical rim
+            // above that surface while keeping all labels and controls above it.
+            if colorScheme == .dark {
+                PortfolioGlassSweepLight(progress: glassSweep.progress,
+                                        strength: glassSweep.strength,
+                                        colorScheme: colorScheme)
+                    .frame(height: PortfolioContentSheetLayout.transitionHeight)
+            }
 
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -1637,7 +1784,7 @@ private struct FastCostMarketPlot: View {
             color: colorScheme == .light
                 ? Color.white
                 : CatfolioTheme.gain(for: .dark),
-            lineWidth: 3,
+            lineWidth: 2.5,
             latestPointRadius: showsLatestPoint ? 5 : 0,
             latestPointColor: colorScheme == .light ? .black : nil,
             latestPointUsesGlass: false
@@ -1648,7 +1795,7 @@ private struct FastCostMarketPlot: View {
                 StandardLineChartPoint(id: "cost|\($0.id)", date: $0.date, value: $0.cost)
             },
             color: Color(red: 0.204, green: 0.459, blue: 1),
-            lineWidth: 3,
+            lineWidth: 2.5,
             latestPointRadius: showsLatestPoint ? 5 : 0,
             latestPointUsesGlass: false
         )

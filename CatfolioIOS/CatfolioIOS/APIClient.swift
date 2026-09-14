@@ -107,7 +107,7 @@ final class AppModel {
             guard generation == portfolioRequestGeneration else { return }
             // Publish disk data before any network work. Slow/offline quote
             // providers must never hold the entire home screen in a skeleton.
-            try await apply(loaded)
+            try await apply(loaded, loadsCachedChart: false)
             guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
             // Loading the selected source is finished. Public data can update
             // behind the usable cached presentation without locking controls.
@@ -133,19 +133,17 @@ final class AppModel {
             if !isFakeDataMode {
                 loaded = try await mergeCachedTrading212History(into: loaded)
                 guard generation == portfolioRequestGeneration else { return }
-                try await apply(loaded)
+                try await apply(loaded, loadsCachedChart: false)
                 guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
             }
-            // Start history before quote and daily-change refreshes. Those
-            // independent vendor calls used to make the correct line wait
-            // behind unrelated home-screen data.
-            if !isFakeDataMode {
-                await enrichPortfolioChart(from: document, generation: generation)
-                guard generation == portfolioRequestGeneration else { return }
-            }
+            // Independent work starts together. Capture the ledger before
+            // quote updates mutate the presentation; rebuild the history once.
+            let historyDocument = document
+            async let historyRefresh: Void = refreshHistoricalChart(
+                from: historyDocument, generation: generation)
             guard !loaded.positions.isEmpty else {
                 isHoldingDailyChangesLoading = false
-                isPortfolioChartLoading = false
+                await historyRefresh
                 return
             }
             async let dailyRefresh: Void = refreshHoldingDailyChanges()
@@ -160,11 +158,9 @@ final class AppModel {
             }
             await dailyRefresh
             guard generation == portfolioRequestGeneration else { return }
-            try await apply(loaded, invalidatesDailyChanges: false)
+            try await apply(loaded, invalidatesDailyChanges: false, loadsCachedChart: false, preservesChart: true)
             guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
-            // Historical chart enrichment is independent of the already
-            // published positions and daily contributions.
-            await enrichPortfolioChart(from: document, generation: generation)
+            await historyRefresh
         } catch {
             guard generation == portfolioRequestGeneration else { return }
             // Retain the last usable local presentation on refresh failure.
@@ -951,7 +947,9 @@ final class AppModel {
             } else {
                 return nil
             }
-            guard let currency = positionCurrencies["\(fill.accountID)|\(fill.code.uppercased())"] else {
+            guard let currency = positionCurrencies["\(fill.accountID)|\(fill.code.uppercased())"]
+                    ?? fill.quoteCurrency else {
+                warnings.append(L10n.text("\(fill.code) 缺少可核实的成交币种，已保留原有历史。"))
                 return nil
             }
             return LocalTransactionRecord(
@@ -964,7 +962,9 @@ final class AppModel {
                 source: "Moomoo",
                 accountID: fill.accountID,
                 accountName: accountNames[fill.accountID],
-                tradeID: fill.tradeID
+                tradeID: fill.tradeID,
+                executedAt: ISO8601DateFormatter().string(from: Date(
+                    timeIntervalSince1970: TimeInterval(fill.executedAtMicroseconds) / 1_000_000))
             )
         }
         let enriched = await LocalFXImpactCalculator().enrich(
@@ -980,7 +980,17 @@ final class AppModel {
             source: "Moomoo",
             warnings: warnings,
             transactions: transactions,
-            replacingAccountsOnly: replacingAccountsOnly
+            replacingAccountsOnly: replacingAccountsOnly,
+            syncedAccounts: snapshot.accounts.map { account in
+                PortfolioAccount(
+                    id: "Moomoo|\(account.accountID)", accountID: account.accountID, source: "Moomoo",
+                    name: accountNames[account.accountID] ?? account.accountCardNumber,
+                    baseCurrency: snapshot.accountCurrencies[account.accountID] ?? "USD",
+                    positionCount: 0, transactionCount: 0, manualTransactionCount: 0,
+                    hasCSVImport: false, marketValueUSD: 0
+                )
+            },
+            mergesTransactionHistory: true
         )
     }
 
@@ -1010,7 +1020,8 @@ final class AppModel {
                 openedDate: position.openDate,
                 accountID: position.accountID,
                 accountName: accountNames[position.accountID] ?? "IBKR · Individual",
-                accountCurrency: snapshot.accountCurrencies[position.accountID]
+                accountCurrency: snapshot.accountCurrencies[position.accountID],
+                quoteObservedAt: snapshot.quoteObservedAt
             )
         }
         let transactions = snapshot.transactions.map { transaction in
@@ -1053,7 +1064,18 @@ final class AppModel {
             source: "IBKR Flex",
             warnings: warnings,
             transactions: transactions,
-            replacingAccountsOnly: replacingAccountsOnly
+            replacingAccountsOnly: replacingAccountsOnly,
+            syncedAccounts: snapshot.syncedPositionAccountIDs.sorted().map { id in
+                PortfolioAccount(
+                    id: "IBKR Flex|\(id)", accountID: id, source: "IBKR Flex",
+                    name: accountNames[id] ?? snapshot.accountNames[id]
+                        ?? Self.maskedAccountName(provider: "IBKR", accountID: id),
+                    baseCurrency: snapshot.accountCurrencies[id] ?? "USD",
+                    positionCount: 0, transactionCount: 0, manualTransactionCount: 0,
+                    hasCSVImport: false, marketValueUSD: 0
+                )
+            },
+            mergesTransactionHistory: true
         )
     }
 
@@ -1063,7 +1085,8 @@ final class AppModel {
         warnings: [String],
         transactions: [LocalTransactionRecord]? = nil,
         replacingAccountsOnly: Bool = false,
-        syncedAccounts: [PortfolioAccount] = []
+        syncedAccounts: [PortfolioAccount] = [],
+        mergesTransactionHistory: Bool = false
     ) async throws -> CSVImportResult {
         invalidateInFlightRequests()
         let generation = portfolioRequestGeneration
@@ -1073,7 +1096,8 @@ final class AppModel {
             source: source,
             transactions: transactions,
             replacingAccountsOnly: replacingAccountsOnly,
-            syncedAccounts: syncedAccounts
+            syncedAccounts: syncedAccounts,
+            mergesTransactionHistory: mergesTransactionHistory
         )
         try await apply(activeDocument(from: saved))
         await enrichPortfolioChart(from: document, generation: generation)
@@ -1086,7 +1110,8 @@ final class AppModel {
         )
     }
 
-    private func apply(_ loaded: LocalPortfolioDocument, invalidatesDailyChanges: Bool = true) async throws {
+    private func apply(_ loaded: LocalPortfolioDocument, invalidatesDailyChanges: Bool = true,
+                       loadsCachedChart: Bool = true, preservesChart: Bool = false) async throws {
         let generation = portfolioRequestGeneration
         let previousDailyChanges = holdingDailyChanges
         let scoped = selectedDocument(from: loaded)
@@ -1094,7 +1119,7 @@ final class AppModel {
             try LocalPortfolioEngine.presentation(for: scoped)
         }.value
         let cachedChart: PortfolioChartResponse?
-        if !isFakeDataMode && !isPublicInvestorMode && (!scoped.positions.isEmpty || !(scoped.transactions ?? []).isEmpty) {
+        if loadsCachedChart && !preservesChart && !isFakeDataMode && !isPublicInvestorMode && (!scoped.positions.isEmpty || !(scoped.transactions ?? []).isEmpty) {
             cachedChart = try? await LocalMarketDataClient().portfolioChart(
                 document: scoped,
                 cachedOnly: true
@@ -1106,12 +1131,14 @@ final class AppModel {
         document = scoped
         presentedSource = portfolioSource
         overview = presentation.0
-        portfolioChart = cachedChart ?? presentation.1
-        isPortfolioChartLoading = cachedChart == nil
-            && !isFakeDataMode
-            && !isPublicInvestorMode
-            && (!scoped.positions.isEmpty || !(scoped.transactions ?? []).isEmpty)
-        portfolioChartRevision &+= 1
+        if !preservesChart {
+            portfolioChart = cachedChart ?? presentation.1
+            isPortfolioChartLoading = cachedChart == nil
+                && !isFakeDataMode
+                && !isPublicInvestorMode
+                && (!scoped.positions.isEmpty || !(scoped.transactions ?? []).isEmpty)
+            portfolioChartRevision &+= 1
+        }
         holdings = presentation.2
         if invalidatesDailyChanges {
             dailyChangesRequestGeneration &+= 1
@@ -1130,7 +1157,7 @@ final class AppModel {
             isHoldingDailyChangesLoading = !presentation.2.isEmpty
         }
         localSource = isPublicInvestorMode ? scoped.accounts.map(\.displayName).joined(separator: "、") : scoped.source
-        localUpdatedAt = loaded.marketDataUpdatedAt ?? loaded.updatedAt
+        localUpdatedAt = loaded.marketDataUpdatedAt
         comparison = nil
         returnsAnalytics = nil
         returnsAnalyticsPendingParts = []
@@ -1339,6 +1366,11 @@ final class AppModel {
             index += 1
         }
         return "橘子 \(index)"
+    }
+
+    private func refreshHistoricalChart(from loaded: LocalPortfolioDocument, generation: Int) async {
+        guard !isFakeDataMode else { return }
+        await enrichPortfolioChart(from: loaded, generation: generation)
     }
 
     private func enrichPortfolioChart(from loaded: LocalPortfolioDocument, generation: Int) async {

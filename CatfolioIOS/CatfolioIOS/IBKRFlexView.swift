@@ -401,10 +401,10 @@ struct IBKRFlexView: View {
                     }
                 )
             let result = snapshotForContext(fetched)
-            guard !result.positions.isEmpty else {
+            guard !result.syncedPositionAccountIDs.isEmpty else {
                 status = .failure(context.isCreating
                     ? L10n.text("Flex 报表中没有可新建的 IBKR 账户。")
-                    : L10n.text("当前账户没有可导入持仓。"))
+                    : L10n.text("返回数据未包含当前账户，请检查授权或报表范围。"))
                 return
             }
             if context.isCreating,
@@ -442,10 +442,10 @@ struct IBKRFlexView: View {
                 snapshot = currentSnapshot
                 snapshotCredentials = credentials
             }
-            guard !currentSnapshot.positions.isEmpty else {
+            guard !currentSnapshot.syncedPositionAccountIDs.isEmpty else {
                 status = .failure(context.isCreating
                     ? L10n.text("Flex 报表中没有可新建的 IBKR 账户。")
-                    : L10n.text("当前账户没有可导入持仓。"))
+                    : L10n.text("返回数据未包含当前账户，请检查授权或报表范围。"))
                 return
             }
             try saveCredentials(credentials, accountIDs: resultAccountIDs(currentSnapshot))
@@ -495,12 +495,12 @@ struct IBKRFlexView: View {
     }
 
     private func resultAccountIDs(_ snapshot: IBKRFlexSnapshot) -> Set<String> {
-        Set(snapshot.positions.map(\.accountID))
+        snapshot.syncedPositionAccountIDs
             .union(snapshot.transactions.map(\.accountID))
     }
 
     private func snapshotForContext(_ snapshot: IBKRFlexSnapshot) -> IBKRFlexSnapshot {
-        let availableIDs = Set(snapshot.positions.map(\.accountID))
+        let availableIDs = snapshot.syncedPositionAccountIDs
             .union(snapshot.transactions.map(\.accountID))
         let allowedIDs: Set<String>
         if let accountID = context.account?.accountID {
@@ -518,7 +518,8 @@ struct IBKRFlexView: View {
             transactions: snapshot.transactions.filter { allowedIDs.contains($0.accountID) },
             accountCurrencies: snapshot.accountCurrencies.filter { allowedIDs.contains($0.key) },
             accountNames: snapshot.accountNames.filter { allowedIDs.contains($0.key) },
-            reportDate: snapshot.reportDate
+            reportDate: snapshot.reportDate,
+            positionAccountIDs: snapshot.positionAccountIDs.intersection(allowedIDs)
         )
     }
 }

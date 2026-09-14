@@ -22,19 +22,16 @@ class FinancialModalPresentationTests(unittest.TestCase):
         self.assertIn(".presentationDragIndicator(.visible)", card)
         self.assertNotIn("NavigationLink {", card)
 
-    def test_financial_sheet_uses_the_official_interactive_zoom_transition(self):
+    def test_financial_sheet_does_not_turn_content_drags_into_zoom_dismissal(self):
         source = HOLDING_DETAIL.read_text()
         card = source[
             source.index("private struct HoldingFinancialCard: View"):
             source.index("private struct HoldingPredictionMarketsCard: View")
         ]
 
-        self.assertIn("@Namespace private var zoom", card)
-        self.assertIn(".matchedTransitionSource(id: holding.ticker, in: zoom)", card)
-        self.assertIn(
-            ".navigationTransition(.zoom(sourceID: holding.ticker, in: zoom))",
-            card,
-        )
+        self.assertNotIn(".navigationTransition(.zoom", card)
+        self.assertNotIn(".matchedTransitionSource", card)
+        self.assertNotIn(".interactiveDismissDisabled", card)
 
     def test_financial_sheet_has_a_native_close_action(self):
         source = FINANCIALS.read_text()

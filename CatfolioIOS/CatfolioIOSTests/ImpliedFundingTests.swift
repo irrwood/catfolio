@@ -107,9 +107,9 @@ final class ImpliedFundingTests: XCTestCase {
         events += T.fundingShortfalls(events: events, accounts: ["A"])
         events.append(T.Event(id: "gap", date: "2026-01-03", account: "A", symbol: "AAA", quantity: 14, cash: []))
         let days = [day("2026-01-02", 100), day("2026-01-03", 100), day("2026-01-05", 110)]
-        let result = try T.calculate(events: events, days: days, implausibleGrowth: Decimal(string: "1.5"))
+        let result = try T.calculate(events: events, days: days, inferUnfundedShareTransfers: true)
         XCTAssertEqual(result.points.map(\.nav), [1, 1, Decimal(string: "1.1")!])
-        XCTAssertEqual(result.neutralized.map(\.date), ["2026-01-03"])
+        XCTAssertEqual(result.inferredShareTransfers.map(\.date), ["2026-01-03"])
         XCTAssertEqual(result.points[1].inflow, 1400, "the unexplained value came in as a transfer")
         XCTAssertEqual(try T.calculate(events: events, days: days).points[1].nav, 15, "without the limit, a ledger is taken as it stands")
     }

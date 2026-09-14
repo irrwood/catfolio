@@ -348,6 +348,10 @@ struct HistoryView: View {
                     }
                 }
 
+                if pageCategory == .dividends, !page.dividendBreakdown.rows.isEmpty {
+                    dividendContributionSection(page.dividendBreakdown)
+                }
+
                 if page.activities.isEmpty {
                     Section {
                         ContentUnavailableView(
@@ -670,6 +674,54 @@ struct HistoryView: View {
         .accessibilityLabel(L10n.text("Account filter"))
         .accessibilityValue(accountFilterTitle)
         .accessibilityIdentifier("history-accounts")
+    }
+
+    private func dividendContributionSection(_ breakdown: HistoryDividendBreakdown) -> some View {
+        Section {
+            ForEach(breakdown.rows) { row in
+                let share = breakdown.share(for: row)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 10) {
+                        AssetLogo(ticker: row.ticker, logoSymbol: nil, size: 30)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.name).appText(.subheading, weight: .semibold).lineLimit(1)
+                            Text(row.ticker).appText(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 8)
+                        Text(row.amountUSD.map { DisplayFormat.money($0) } ?? "—")
+                            .appNumber(.subheading).lineLimit(1)
+                    }
+                    HStack(spacing: 12) {
+                        GeometryReader { geometry in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(CatfolioTheme.subtleFill)
+                                Capsule().fill(CatfolioTheme.gain(for: colorScheme))
+                                    .frame(width: geometry.size.width * CGFloat(share ?? 0))
+                            }
+                        }
+                        .frame(height: 6)
+                        .accessibilityHidden(true)
+                        Text(share.map { DisplayFormat.percent($0 * 100, signed: false) } ?? "—")
+                            .appNumber(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(minWidth: 52, alignment: .trailing)
+                    }
+                }
+                .padding(.vertical, 6)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("dividend-contribution-\(row.id)")
+            }
+        } header: {
+            Text(L10n.text("分红来源占比")).textCase(nil)
+        } footer: {
+            if !breakdown.isComplete {
+                Text(L10n.text("部分分红金额或汇率缺失，暂不显示占比。"))
+            } else if breakdown.hasNegativeTotals {
+                Text(L10n.text("冲正已按标的抵扣；占比按净分红为正的标的合计计算，净扣款不计入占比。"))
+            } else {
+                Text(L10n.text("按所选账户与期间汇总股票及 ETF 的分红金额，显示其占分红总额的比例，不是股息率。"))
+            }
+        }
     }
 
     private func activityRow(_ activity: PortfolioActivity) -> some View {
@@ -1097,6 +1149,51 @@ struct HistoryActivityPage {
     var activities: [PortfolioActivity] = []
     var groups: [ActivityDateGroup] = []
     var totalUSD: Double = 0
+    var dividendBreakdown = HistoryDividendBreakdown()
+}
+
+/// Uses the same account/year scope and USD conversion as the ledger total.
+/// Built with the page indexes, never while scrolling or swiping categories.
+struct HistoryDividendBreakdown {
+    struct Row: Identifiable {
+        let ticker: String
+        let name: String
+        let amountUSD: Double?
+        var id: String { ticker }
+    }
+
+    var rows: [Row] = []
+    var positiveTotalUSD: Double = 0
+    var isComplete = true
+    var hasNegativeTotals: Bool { rows.contains { ($0.amountUSD ?? 0) < 0 } }
+
+    func share(for row: Row) -> Double? {
+        guard isComplete, positiveTotalUSD.isFinite, positiveTotalUSD > 0,
+              let amount = row.amountUSD, amount >= 0 else { return nil }
+        return min(1, max(0, amount / positiveTotalUSD))
+    }
+
+    static func build(_ activities: [PortfolioActivity]) -> Self {
+        let grouped = Dictionary(grouping: activities.filter { $0.kind == .dividend }) {
+            let ticker = $0.transaction.ticker.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            return ticker.isEmpty ? "CASH" : ticker
+        }
+        let rows = grouped.map { ticker, entries in
+            let amounts = entries.map(\.amountUSD)
+            let sum = amounts.reduce(0, +)
+            let amount = amounts.allSatisfy(\.isFinite) && sum.isFinite ? sum : nil
+            let name = ticker == "CASH" ? L10n.text("未识别标的") : (entries.first?.title ?? ticker)
+            return Row(ticker: ticker, name: name, amountUSD: amount)
+        }.sorted {
+            if $0.amountUSD != $1.amountUSD {
+                return ($0.amountUSD ?? -.infinity) > ($1.amountUSD ?? -.infinity)
+            }
+            return $0.ticker < $1.ticker
+        }
+        let total = rows.reduce(0) { $0 + max(0, $1.amountUSD ?? 0) }
+        return Self(rows: rows, positiveTotalUSD: total,
+                    isComplete: rows.allSatisfy { $0.amountUSD != nil } && total.isFinite)
+    }
 }
 
 /// Immutable UI indexes, rebuilt off the main actor only when the ledger or
@@ -1182,7 +1279,8 @@ struct HistoryPreparedLedger {
             return (category, HistoryActivityPage(
                 activities: filtered, groups: groups,
                 // Sum in the original ledger order, as the previous display did.
-                totalUSD: activities.filter { category.includes($0.kind) }.reduce(0) { $0 + $1.amountUSD }
+                totalUSD: activities.filter { category.includes($0.kind) }.reduce(0) { $0 + $1.amountUSD },
+                dividendBreakdown: category == .dividends ? HistoryDividendBreakdown.build(filtered) : .init()
             ))
         })
     }

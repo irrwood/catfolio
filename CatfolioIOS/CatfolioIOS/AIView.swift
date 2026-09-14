@@ -19,6 +19,8 @@ struct AIView: View {
     @State private var lastAttentionContext: String?
     @State private var question = ""
     @State private var isSending = false
+    @State private var answerTask: Task<Void, Never>?
+    @State private var answerGeneration = UUID()
     @State private var isRestoringHistory = true
     @State private var didRestoreHistory = false
     @State private var errorMessage: String?
@@ -451,11 +453,21 @@ struct AIView: View {
         messages.append(ChatMessage(role: .user, text: cleanQuestion))
         isSending = true
 
-        Task {
-            defer { isSending = false }
+        let origin = activeConversationID
+        let context = lastAttentionContext
+        let generation = UUID()
+        answerGeneration = generation
+        answerTask = Task { @MainActor in
+            @MainActor func isCurrent() -> Bool {
+                !Task.isCancelled && answerGeneration == generation && activeConversationID == origin
+            }
+            defer {
+                if answerGeneration == generation { isSending = false; answerTask = nil }
+            }
 
             if model.isFakeDataMode && !model.isPublicInvestorMode {
                 try? await Task.sleep(for: .milliseconds(320))
+                guard isCurrent() else { return }
                 if Self.isAttentionPreset(cleanQuestion) {
                     let report = FakeAIContent.attentionReport
                     let message = ChatMessage(role: .assistant, text: report.markdownFallback)
@@ -472,22 +484,33 @@ struct AIView: View {
             }
 
             await persistMessages()
+            guard isCurrent() else { return }
             do {
                 if Self.isAttentionPreset(cleanQuestion) {
                     let report = try await model.portfolioAttention()
+                    guard isCurrent() else { return }
                     let message = ChatMessage(role: .assistant, text: report.markdownFallback)
                     messages.append(message)
                     attentionReports[message.id] = report
                     lastAttentionContext = report.contextSummary
                 } else {
-                    let answer = try await model.askAI(cleanQuestion, attentionContext: lastAttentionContext)
+                    let answer = try await model.askAI(cleanQuestion, attentionContext: context)
+                    guard isCurrent() else { return }
                     messages.append(ChatMessage(role: .assistant, text: answer))
                 }
                 await persistMessages()
             } catch {
+                guard isCurrent() else { return }
                 errorMessage = error.localizedDescription
             }
         }
+    }
+
+    private func cancelPendingAnswer() {
+        answerGeneration = UUID()
+        answerTask?.cancel()
+        answerTask = nil
+        isSending = false
     }
 
     private static func isAttentionPreset(_ question: String) -> Bool {
@@ -538,6 +561,7 @@ struct AIView: View {
 
     /// Opens an empty conversation. The current one is kept.
     private func startNewConversation() {
+        cancelPendingAnswer()
         foldActiveConversationIntoLibrary()
         let conversation = AIConversation()
         activeConversationID = conversation.id
@@ -550,6 +574,7 @@ struct AIView: View {
 
     private func openConversation(_ id: UUID) {
         guard id != activeConversationID else { return }
+        cancelPendingAnswer()
         foldActiveConversationIntoLibrary()
         guard let conversation = conversations.first(where: { $0.id == id }) else { return }
         activeConversationID = id
@@ -565,6 +590,7 @@ struct AIView: View {
     private func deleteConversation(_ id: UUID) {
         conversations.removeAll { $0.id == id }
         if id == activeConversationID {
+            cancelPendingAnswer()
             // Land on the next most recent rather than an empty screen, which
             // is what deleting from a list usually does.
             let next = LocalChatLibrary(conversations: conversations, activeID: nil)
@@ -589,6 +615,7 @@ struct AIView: View {
     }
 
     private func clearConversation() {
+        cancelPendingAnswer()
         if model.isFakeDataMode || model.isPublicInvestorMode {
             messages = []
             attentionReports = [:]
