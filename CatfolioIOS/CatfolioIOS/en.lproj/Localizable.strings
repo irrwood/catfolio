@@ -2382,3 +2382,15 @@
 "请检查系统设置中的 Apple 账户、Catfolio 的 iCloud 权限及网络连接。本机设置仍可使用。" = "Check your Apple Account, iCloud access for Catfolio in system settings, and your network connection. Local settings remain available.";
 "iCloud 偏好存储已达到限额。请缩短筛选规则或提示词后重试，本机设置仍会保留。" = "iCloud preference storage has reached its limit. Shorten screening rules or prompts and retry. Local settings are kept.";
 "部分筛选规则或提示词过长，仅保留在本机。缩短内容后会继续同步。" = "Some screening rules or prompts are too long and stay on this device. Shorten them to resume syncing.";
+
+"思考中" = "Thinking";
+
+"%@ 秒" = "%@s";
+
+"已思考 %@ 秒" = "Thought for %@s";
+
+"思考过程" = "Reasoning";
+
+"先看问题问的是什么，再对照组合里权重最高的几只持仓。示例组合集中在科技和半导体，前五大持仓占了一半以上，所以回答要先说集中度，再说近期表现。" = "First, what the question asks, then the heaviest holdings. The sample portfolio leans on tech and semiconductors, with the top five above half, so the answer starts with concentration and then recent performance.";
+
+"数字都来自 Catfolio 的组合摘要，这里只负责解释，不重新计算，最后提醒这不是投资建议。" = "Every figure comes from Catfolio's portfolio summary; the answer explains them without recalculating, and ends by noting it is not investment advice.";

@@ -228,6 +228,88 @@ struct CodexOAuthClient: Sendable {
         try await completion(prompt: prompt, webSearch: webSearch).text
     }
 
+    /// The same request as `complete`, delivered as it is written: the
+    /// answer, and a summary of the model's thinking before it.
+    func streamCompletion(prompt: String, emit: @escaping @Sendable (AIStreamEvent) -> Void) async throws {
+        guard var credentials = try Self.load(CodexCredentials.self, key: Self.credentialsKey) else {
+            Self.cache(Self.disconnectedStatus)
+            throw LocalServiceError.missingCodexConnection
+        }
+        if credentials.expiresAt.timeIntervalSinceNow < 5 * 60 {
+            credentials = try await refresh(credentials)
+        }
+        do {
+            try await requestStream(prompt: prompt, credentials: credentials, summarizesReasoning: true, emit: emit)
+        } catch CodexRequestError.unauthorized {
+            let refreshed = try await refresh(credentials, force: true)
+            try await requestStream(prompt: prompt, credentials: refreshed, summarizesReasoning: true, emit: emit)
+        } catch is ReasoningSummaryRejected {
+            // The backend is not the documented API; if it will not summarise
+            // the reasoning, the answer still streams without it.
+            try await requestStream(prompt: prompt, credentials: credentials, summarizesReasoning: false, emit: emit)
+        }
+    }
+
+    private struct ReasoningSummaryRejected: Error {}
+
+    private func requestStream(
+        prompt: String,
+        credentials: CodexCredentials,
+        summarizesReasoning: Bool,
+        emit: @escaping @Sendable (AIStreamEvent) -> Void
+    ) async throws {
+        var body: [String: Any] = [
+            "model": Self.model,
+            "instructions": "你是 Catfolio 的投资组合分析助手。用简洁、可验证的语言回答；明确区分数据与推断，不承诺收益。" + L10n.responseLanguageInstruction,
+            "input": [[
+                "type": "message",
+                "role": "user",
+                "content": [["type": "input_text", "text": prompt]],
+            ]],
+            "tools": [],
+            "tool_choice": "none",
+            "parallel_tool_calls": false,
+            "store": false,
+            "stream": true,
+            "include": [],
+        ]
+        if summarizesReasoning {
+            body["reasoning"] = ["effort": "medium", "summary": "auto"]
+        }
+        var request = URLRequest(url: Self.codexResponsesURL)
+        request.httpMethod = "POST"
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.timeoutInterval = 130
+        request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(credentials.accountID, forHTTPHeaderField: "chatgpt-account-id")
+        request.setValue("catfolio_ios", forHTTPHeaderField: "originator")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        let (bytes, response) = try await Self.session.bytes(for: request)
+        guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
+        if http.statusCode == 401 { throw CodexRequestError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else {
+            var data = Data()
+            for try await byte in bytes {
+                data.append(byte)
+                if data.count > 64_000 { break }
+            }
+            if summarizesReasoning, http.statusCode == 400 { throw ReasoningSummaryRejected() }
+            try Self.requireSuccess(http, data: data, fallback: L10n.text("Codex 分析请求失败"))
+            throw LocalServiceError.invalidResponse
+        }
+        var summaryIndex: Int?
+        var wroteAnswer = false
+        for try await line in bytes.lines {
+            try Task.checkCancellation()
+            for event in try AIStreamParsing.codexEvents(line, summaryIndex: &summaryIndex) {
+                if case .text = event { wroteAnswer = true }
+                emit(event)
+            }
+        }
+        guard wroteAnswer else { throw LocalServiceError.invalidResponse }
+    }
+
     /// - Returns: the answer, and whether the model was actually allowed to
     ///   search. Callers that tell the reader "this used live search" need to
     ///   know the difference, and the fallback below means asking is not the
@@ -3786,13 +3868,16 @@ struct LocalAIClient {
         document: LocalPortfolioDocument,
         additionalContext: String? = nil
     ) async throws -> String {
+        try await researchAnswer(question, context: answerContext(document: document, additionalContext: additionalContext))
+    }
+
+    private func answerContext(document: LocalPortfolioDocument, additionalContext: String?) throws -> String {
         guard !document.positions.isEmpty else { throw LocalPortfolioError.noPortfolio }
         var context = try portfolioContext(document: document)
         if let additionalContext, !additionalContext.isEmpty {
             context += "\n\n上一次 Portfolio Attention 的结果：\n\(additionalContext)\n追问必须沿用上述信号、thesis 和 confidence，不要重算指标。"
         }
-
-        return try await researchAnswer(question, context: context)
+        return context
     }
 
     /// Public research only. Unlike portfolio chat this does not load or send
@@ -3896,22 +3981,7 @@ struct LocalAIClient {
 
     @available(iOS 26.0, *)
     private func completeWithApple(question: String, context: String, structured: Bool = false) async throws -> String {
-        let model = SystemLanguageModel.default
-        guard model.availability == .available else {
-            throw LocalServiceError.appleModelUnavailable(Self.appleModelStatus.message)
-        }
-        let responseLocale = Locale(identifier: ContentLanguage.current)
-        guard model.supportsLocale(responseLocale) else {
-            throw LocalServiceError.appleModelUnavailable(L10n.text("当前系统模型暂不支持所选语言"))
-        }
-
-        let session = LanguageModelSession(
-            model: model,
-            instructions: structured ? "严格按当前请求提供的 JSON schema 输出单个 JSON 对象，不附加解释或 Markdown。仅使用提供的证据，证据不足时遵循请求中的空结果规则，不要编造内容。若请求是筛选条件解析，不支持的条件放入 unsupported，不可忽略。" : """
-            你是 Catfolio 的投资组合分析助手。只根据用户设备提供的组合摘要回答，使用简洁语言；不要虚构实时新闻、行情或组合中未提供的数据。金融数字由 Catfolio 计算，你只负责解释，不要重新推算或改写。回答末尾简短说明这不是投资建议。
-            \(L10n.responseLanguageInstruction)
-            """
-        )
+        let session = try appleSession(structured: structured)
         let response: LanguageModelSession.Response<String>
         do {
             response = try await session.respond(
@@ -3928,6 +3998,26 @@ struct LocalAIClient {
         let content = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { throw LocalServiceError.invalidResponse }
         return content
+    }
+
+    @available(iOS 26.0, *)
+    private func appleSession(structured: Bool) throws -> LanguageModelSession {
+        let model = SystemLanguageModel.default
+        guard model.availability == .available else {
+            throw LocalServiceError.appleModelUnavailable(Self.appleModelStatus.message)
+        }
+        let responseLocale = Locale(identifier: ContentLanguage.current)
+        guard model.supportsLocale(responseLocale) else {
+            throw LocalServiceError.appleModelUnavailable(L10n.text("当前系统模型暂不支持所选语言"))
+        }
+
+        return LanguageModelSession(
+            model: model,
+            instructions: structured ? "严格按当前请求提供的 JSON schema 输出单个 JSON 对象，不附加解释或 Markdown。仅使用提供的证据，证据不足时遵循请求中的空结果规则，不要编造内容。若请求是筛选条件解析，不支持的条件放入 unsupported，不可忽略。" : """
+            你是 Catfolio 的投资组合分析助手。只根据用户设备提供的组合摘要回答，使用简洁语言；不要虚构实时新闻、行情或组合中未提供的数据。金融数字由 Catfolio 计算，你只负责解释，不要重新推算或改写。回答末尾简短说明这不是投资建议。
+            \(L10n.responseLanguageInstruction)
+            """
+        )
     }
 
     @available(iOS 26.0, *)
@@ -3999,6 +4089,151 @@ struct LocalAIClient {
         return try await CodexOAuthClient().complete(
             prompt: "\(context)\n\n问题：\(question)"
         )
+    }
+
+    // MARK: Streaming
+
+    /// The portfolio answer as it is written, with the model's thinking where
+    /// it shares it. The same providers, order and context as `answer`.
+    func streamAnswer(
+        _ question: String,
+        document: LocalPortfolioDocument,
+        additionalContext: String? = nil
+    ) -> AsyncThrowingStream<AIStreamEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let context = try answerContext(document: document, additionalContext: additionalContext)
+                    try await streamResearch(question, context: context) { continuation.yield($0) }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private func streamResearch(
+        _ question: String,
+        context: String,
+        emit: @escaping @Sendable (AIStreamEvent) -> Void
+    ) async throws {
+        let prompt = "\(context)\n\n问题：\(question)"
+        switch AIProviderPreference.current {
+        case .apple:
+            if #available(iOS 26.0, *) {
+                return try await streamWithApple(prompt: prompt, emit: emit)
+            }
+            throw LocalServiceError.appleModelUnavailable(Self.appleModelStatus.message)
+        case .deepSeek:
+            try await streamWithDeepSeek(prompt: prompt, emit: emit)
+        case .codex:
+            guard CodexOAuthClient.cachedConnected else { throw LocalServiceError.missingCodexConnection }
+            try await CodexOAuthClient().streamCompletion(prompt: prompt, emit: emit)
+        case .automatic:
+            // The next provider is tried only while nothing has reached the
+            // screen; a stream that fails part-way through fails as it is.
+            let started = StreamStartFlag()
+            let tracked: @Sendable (AIStreamEvent) -> Void = { event in
+                started.set()
+                emit(event)
+            }
+            func canFallBack(_ error: Error) -> Bool { !started.value && !(error is CancellationError) }
+            var appleFailure = Self.appleModelStatus.message
+            if #available(iOS 26.0, *), Self.appleModelStatus.isAvailable {
+                do {
+                    return try await streamWithApple(prompt: prompt, emit: tracked)
+                } catch where canFallBack(error) {
+                    appleFailure = error.localizedDescription
+                }
+            }
+            var codexFailure = L10n.text("Codex 尚未连接")
+            if CodexOAuthClient.cachedConnected {
+                do {
+                    return try await CodexOAuthClient().streamCompletion(prompt: prompt, emit: tracked)
+                } catch where canFallBack(error) {
+                    codexFailure = error.localizedDescription
+                }
+            }
+            do {
+                try await streamWithDeepSeek(prompt: prompt, emit: tracked)
+            } catch where canFallBack(error) {
+                throw LocalServiceError.noAvailableAIProvider(
+                    "Apple：\(appleFailure)；Codex：\(codexFailure)；DeepSeek：\(error.localizedDescription)"
+                )
+            }
+        }
+    }
+
+    /// Apple's model streams the whole response so far each time; the delta
+    /// is what it adds.
+    @available(iOS 26.0, *)
+    private func streamWithApple(prompt: String, emit: @escaping @Sendable (AIStreamEvent) -> Void) async throws {
+        let session = try appleSession(structured: false)
+        var written = ""
+        do {
+            let stream = session.streamResponse(
+                to: prompt,
+                options: GenerationOptions(temperature: 0.2, maximumResponseTokens: 1_800)
+            )
+            for try await snapshot in stream {
+                let content = snapshot.content
+                if content.hasPrefix(written), content.count > written.count {
+                    emit(.text(String(content.dropFirst(written.count))))
+                    written = content
+                }
+            }
+        } catch let error as LanguageModelSession.GenerationError {
+            throw LocalServiceError.appleModelUnavailable(Self.appleGenerationErrorMessage(error))
+        }
+        guard !written.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw LocalServiceError.invalidResponse
+        }
+    }
+
+    private func streamWithDeepSeek(prompt: String, emit: @escaping @Sendable (AIStreamEvent) -> Void) async throws {
+        guard let key = KeychainStore.string(for: LocalServiceKeys.deepSeek), !key.isEmpty else {
+            throw LocalServiceError.missingAIKey
+        }
+        let payload: [String: Any] = [
+            "model": "deepseek-chat",
+            "temperature": 0.2,
+            "stream": true,
+            "messages": [
+                ["role": "system", "content": "你是 Catfolio 的投资组合分析助手。只根据用户手机提供的组合摘要回答，不虚构实时新闻或行情；明确说明这不是投资建议。" + L10n.responseLanguageInstruction],
+                ["role": "user", "content": prompt],
+            ],
+        ]
+        var request = URLRequest(url: URL(string: "https://api.deepseek.com/chat/completions")!)
+        request.httpMethod = "POST"
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        request.timeoutInterval = 90
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        let (bytes, response) = try await LocalRequestSessions.ephemeral.bytes(for: request)
+        guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            var data = Data()
+            for try await byte in bytes {
+                data.append(byte)
+                if data.count > 64_000 { break }
+            }
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            throw LocalServiceError.remote(((object?["error"] as? [String: Any])?["message"] as? String)
+                ?? "AI 请求失败（\(http.statusCode)）")
+        }
+        var wroteAnswer = false
+        for try await line in bytes.lines {
+            try Task.checkCancellation()
+            if AIStreamParsing.isDone(line) { break }
+            for event in AIStreamParsing.chatCompletionEvents(line) {
+                if case .text = event { wroteAnswer = true }
+                emit(event)
+            }
+        }
+        guard wroteAnswer else { throw LocalServiceError.invalidResponse }
     }
 
     private static func cleanJSON(_ text: String) -> String {

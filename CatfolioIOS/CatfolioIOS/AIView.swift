@@ -19,6 +19,9 @@ struct AIView: View {
     @State private var lastAttentionContext: String?
     @State private var question = ""
     @State private var isSending = false
+    /// The answer being written, while it is.
+    @State private var streamingAnswer: StreamingAnswer?
+    @State private var sendStartedAt: Date?
     @State private var answerTask: Task<Void, Never>?
     @State private var answerGeneration = UUID()
     @State private var isRestoringHistory = true
@@ -26,7 +29,11 @@ struct AIView: View {
     @State private var errorMessage: String?
     @State private var showsClearConfirmation = false
     @State private var isNearConversationBottom = true
-    @State private var conversationScrollTarget: String? = "ai-conversation-bottom"
+    /// Where the conversation sits. An edge, not a message id: setting the
+    /// bottom id again when it was already the target changed nothing, so a
+    /// new reply or error was often left under the composer; and a lazy
+    /// list's unmeasured rows put id-based positions off by their estimates.
+    @State private var conversationPosition = ScrollPosition(edge: .bottom)
     @FocusState private var isComposerFocused: Bool
 
     private static let conversationBottomID = "ai-conversation-bottom"
@@ -103,15 +110,7 @@ struct AIView: View {
                             .id(message.id.uuidString)
                     }
 
-                    if isSending {
-                        HStack(spacing: 8) {
-                            ProgressView()
-                            Text(loadingMessage)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                        }
-                        .padding(14)
-                    }
+                    pendingAnswer
 
                     if let errorMessage {
                         StatusNotice(text: errorMessage)
@@ -128,7 +127,7 @@ struct AIView: View {
             }
             .background(isEmbedded ? Color.clear : Color(uiColor: .systemGroupedBackground))
             .defaultScrollAnchor(.bottom)
-            .scrollPosition(id: $conversationScrollTarget, anchor: .bottom)
+            .scrollPosition($conversationPosition)
             .scrollDismissesKeyboard(.interactively)
             .onTapGesture(perform: dismissKeyboard)
             .onScrollGeometryChange(for: Bool.self) { geometry in
@@ -144,6 +143,24 @@ struct AIView: View {
             }
             .onChange(of: isSending) { _, isNowSending in
                 guard isNowSending, isNearConversationBottom else { return }
+                scrollToConversationBottom()
+            }
+            // A failure is the last thing in the conversation; show it whole
+            // rather than half under the composer.
+            .onChange(of: errorMessage) { _, message in
+                guard message != nil, isNearConversationBottom else { return }
+                scrollToConversationBottom()
+            }
+            // The keyboard shrinks the view from below; a reader at the end
+            // stays at the end.
+            .onChange(of: isComposerFocused) { _, isFocused in
+                guard isFocused, isNearConversationBottom else { return }
+                scrollToConversationBottom()
+            }
+            // An answer being written grows the page; a reader at the end
+            // follows it, one who scrolled up to read is left where they are.
+            .onChange(of: streamingProgress) { _, _ in
+                guard isNearConversationBottom else { return }
                 scrollToConversationBottom()
             }
 
@@ -360,11 +377,40 @@ struct AIView: View {
         }
     }
 
+    /// The answer while it is awaited or being written.
+    @ViewBuilder
+    private var pendingAnswer: some View {
+        if let streamingAnswer {
+            VStack(alignment: .leading, spacing: 6) {
+                StreamingAnswerView(answer: streamingAnswer)
+                if streamingAnswer.isThinking, streamingAnswer.reasoning.isEmpty {
+                    Text(loadingMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        } else if isSending {
+            VStack(alignment: .leading, spacing: 6) {
+                ReasoningDisclosure(reasoning: "", seconds: nil, thinkingSince: sendStartedAt ?? Date())
+                Text(loadingMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// Grows as an answer is written; the page follows it.
+    private var streamingProgress: Int {
+        guard let streamingAnswer else { return 0 }
+        return streamingAnswer.shown + streamingAnswer.reasoning.count
+    }
+
     private func scrollToConversationBottom() {
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) {
-            conversationScrollTarget = Self.conversationBottomID
+            conversationPosition.scrollTo(edge: .bottom)
         }
     }
 
@@ -452,6 +498,7 @@ struct AIView: View {
         errorMessage = nil
         messages.append(ChatMessage(role: .user, text: cleanQuestion))
         isSending = true
+        sendStartedAt = Date()
 
         let origin = activeConversationID
         let context = lastAttentionContext
@@ -462,10 +509,37 @@ struct AIView: View {
                 !Task.isCancelled && answerGeneration == generation && activeConversationID == origin
             }
             defer {
-                if answerGeneration == generation { isSending = false; answerTask = nil }
+                if answerGeneration == generation {
+                    isSending = false
+                    answerTask = nil
+                    streamingAnswer = nil
+                }
             }
 
             if model.isFakeDataMode && !model.isPublicInvestorMode {
+                if !Self.isAttentionPreset(cleanQuestion) {
+                    // The sample portfolio streams too, so the page shows what
+                    // a real answer looks like without a model connected.
+                    let live = StreamingAnswer()
+                    streamingAnswer = live
+                    try? await Task.sleep(for: .milliseconds(700))
+                    for piece in FakeAIContent.pieces(of: FakeAIContent.reasoning(for: cleanQuestion)) {
+                        guard isCurrent() else { live.cancel(); return }
+                        live.receive(.reasoning(piece))
+                        try? await Task.sleep(for: .milliseconds(28))
+                    }
+                    try? await Task.sleep(for: .milliseconds(350))
+                    for piece in FakeAIContent.pieces(of: FakeAIContent.answer(to: cleanQuestion)) {
+                        guard isCurrent() else { live.cancel(); return }
+                        live.receive(.text(piece))
+                        try? await Task.sleep(for: .milliseconds(24))
+                    }
+                    await live.finish()
+                    guard isCurrent() else { return }
+                    messages.append(ChatMessage(role: .assistant, text: live.text, reasoning: live.reasoning,
+                                                thinkingSeconds: live.thinkingSeconds))
+                    return
+                }
                 try? await Task.sleep(for: .milliseconds(320))
                 guard isCurrent() else { return }
                 if Self.isAttentionPreset(cleanQuestion) {
@@ -494,9 +568,31 @@ struct AIView: View {
                     attentionReports[message.id] = report
                     lastAttentionContext = report.contextSummary
                 } else {
-                    let answer = try await model.askAI(cleanQuestion, attentionContext: context)
+                    let live = StreamingAnswer()
+                    streamingAnswer = live
+                    do {
+                        for try await event in try await model.streamAI(cleanQuestion, attentionContext: context) {
+                            guard isCurrent() else { live.cancel(); return }
+                            live.receive(event)
+                        }
+                    } catch {
+                        // Whatever arrived before the failure is kept, and the
+                        // failure is said below it.
+                        guard isCurrent() else { live.cancel(); return }
+                        await live.finish()
+                        if !live.text.isEmpty {
+                            messages.append(ChatMessage(role: .assistant, text: live.text,
+                                reasoning: live.reasoning.isEmpty ? nil : live.reasoning,
+                                thinkingSeconds: live.thinkingSeconds))
+                            await persistMessages()
+                        }
+                        throw error
+                    }
+                    await live.finish()
                     guard isCurrent() else { return }
-                    messages.append(ChatMessage(role: .assistant, text: answer))
+                    messages.append(ChatMessage(role: .assistant, text: live.text,
+                        reasoning: live.reasoning.isEmpty ? nil : live.reasoning,
+                        thinkingSeconds: live.thinkingSeconds))
                 }
                 await persistMessages()
             } catch {
@@ -510,6 +606,8 @@ struct AIView: View {
         answerGeneration = UUID()
         answerTask?.cancel()
         answerTask = nil
+        streamingAnswer?.cancel()
+        streamingAnswer = nil
         isSending = false
     }
 
@@ -760,6 +858,26 @@ private enum FakeAIContent {
         )
     }
 
+    /// What the sample model "thinks" before it answers.
+    static func reasoning(for question: String) -> String {
+        L10n.text("先看问题问的是什么，再对照组合里权重最高的几只持仓。示例组合集中在科技和半导体，前五大持仓占了一半以上，所以回答要先说集中度，再说近期表现。")
+            + "\n\n" + L10n.text("数字都来自 Catfolio 的组合摘要，这里只负责解释，不重新计算，最后提醒这不是投资建议。")
+    }
+
+    /// Text cut into the uneven pieces a model streams in.
+    static func pieces(of text: String) -> [String] {
+        var pieces: [String] = []
+        var rest = Substring(text)
+        var size = 2
+        while !rest.isEmpty {
+            let piece = rest.prefix(size)
+            pieces.append(String(piece))
+            rest = rest.dropFirst(piece.count)
+            size = size % 5 + 2
+        }
+        return pieces
+    }
+
     static func answer(to question: String) -> String {
         let normalized = question.lowercased()
         if normalized.contains("集中") || normalized.contains("风险") || normalized.contains("concentration") || normalized.contains("risk") {
@@ -821,7 +939,12 @@ private struct ChatBubble: View {
         if let attentionReport, message.role == .assistant {
             PortfolioAttentionReportView(report: attentionReport)
         } else if message.role == .assistant {
-            MarkdownMessageText(markdown: message.text)
+            VStack(alignment: .leading, spacing: 12) {
+                if let reasoning = message.reasoning, !reasoning.isEmpty {
+                    ReasoningDisclosure(reasoning: reasoning, seconds: message.thinkingSeconds, thinkingSince: nil)
+                }
+                MarkdownMessageText(markdown: message.text)
+            }
         } else {
             Text(message.text)
                 .currencyFont(.body)
@@ -1510,8 +1633,10 @@ private struct AIComposer: View {
     @ViewBuilder
     private var standardComposerSurface: some View {
         if #available(iOS 26.0, *) {
+            // Not interactive: interactive glass takes the touch for its own
+            // press effect, and the text field inside waited seconds for it.
             standardComposer
-                .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         } else {
             standardComposer
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
@@ -1634,10 +1759,13 @@ private struct AIComposer: View {
         .frame(minHeight: 48)
     }
 
+    /// Glass that is only a surface. Interactive glass claims the touch for
+    /// its press effect, and the text field inside it took about six seconds
+    /// to become focused — the delay was the glass, not the keyboard.
     @ViewBuilder
     private var floatingTextFieldSurface: some View {
         floatingTextField
-            .floatingGlassSurface(in: Capsule())
+            .floatingGlassSurface(in: Capsule(), isInteractive: false)
     }
 
     private var canSend: Bool {
@@ -1699,12 +1827,12 @@ struct AIAssistantPage: View {
 }
 private extension View {
     @ViewBuilder
-    func floatingGlassSurface<S: Shape>(in shape: S, tint: Color? = nil) -> some View {
+    func floatingGlassSurface<S: Shape>(in shape: S, tint: Color? = nil, isInteractive: Bool = true) -> some View {
         if #available(iOS 26.0, *) {
             if let tint {
-                glassEffect(.regular.tint(tint).interactive(), in: shape)
+                glassEffect(.regular.tint(tint).interactive(isInteractive), in: shape)
             } else {
-                glassEffect(.regular.interactive(), in: shape)
+                glassEffect(.regular.interactive(isInteractive), in: shape)
             }
         } else {
             background(.ultraThinMaterial, in: shape)
@@ -1712,5 +1840,204 @@ private extension View {
                     shape.stroke(Color.white.opacity(0.22), lineWidth: 0.75)
                 }
         }
+    }
+}
+
+// MARK: - Streaming answer
+
+/// The answer being written: the model's thinking, the text received, and
+/// how much of that text is on screen. Text is revealed at `SmoothReveal`'s
+/// pace rather than as it lands, so a burst of tokens reads as typing.
+@MainActor @Observable
+private final class StreamingAnswer {
+    let startedAt = Date()
+    private(set) var reasoning = ""
+    private(set) var text = ""
+    private(set) var answerStartedAt: Date?
+    /// Characters of `text` revealed so far.
+    private(set) var shown = 0
+    private(set) var isComplete = false
+    @ObservationIgnored private var revealTask: Task<Void, Never>?
+
+    /// Still thinking: nothing of the answer has arrived.
+    var isThinking: Bool { answerStartedAt == nil }
+    var visibleText: String { String(text.prefix(shown)) }
+    var isRevealing: Bool { !isComplete || shown < text.count }
+    var thinkingSeconds: Double { (answerStartedAt ?? Date()).timeIntervalSince(startedAt) }
+
+    func receive(_ event: AIStreamEvent) {
+        switch event {
+        case let .reasoning(delta):
+            reasoning += delta
+        case let .text(delta):
+            if answerStartedAt == nil { answerStartedAt = Date() }
+            text += delta
+            startRevealing()
+        }
+    }
+
+    /// Marks the stream finished and waits for the typewriter to catch up.
+    func finish() async {
+        isComplete = true
+        startRevealing()
+        await revealTask?.value
+    }
+
+    func cancel() {
+        revealTask?.cancel()
+        revealTask = nil
+    }
+
+    private func startRevealing() {
+        guard revealTask == nil else { return }
+        revealTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                let total = self.text.count
+                if self.shown < total {
+                    self.shown += SmoothReveal.step(backlog: total - self.shown)
+                } else if self.isComplete {
+                    return
+                }
+                try? await Task.sleep(for: SmoothReveal.frame)
+            }
+        }
+    }
+}
+
+/// The answer as it is written: the thinking above, the text below it
+/// appearing with a caret at its end.
+private struct StreamingAnswerView: View {
+    let answer: StreamingAnswer
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if answer.isThinking || !answer.reasoning.isEmpty {
+                ReasoningDisclosure(
+                    reasoning: answer.reasoning,
+                    seconds: answer.isThinking ? nil : answer.thinkingSeconds,
+                    thinkingSince: answer.isThinking ? answer.startedAt : nil
+                )
+            }
+            if !answer.visibleText.isEmpty {
+                MarkdownMessageText(
+                    markdown: StreamingMarkdown.displayable(answer.visibleText) + (answer.isRevealing ? " ▍" : "")
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .foregroundStyle(Color.primary)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// The model's thinking, collapsible. While it is thinking the header
+/// shimmers and counts the seconds, and the thinking shows as it arrives;
+/// once the answer starts it folds away to "Thought for N seconds", a tap
+/// from being read again — the pattern of the AI Elements reasoning block.
+private struct ReasoningDisclosure: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let reasoning: String
+    /// How long it thought, once it has finished.
+    let seconds: Double?
+    /// When the thinking began, while it has not finished.
+    let thinkingSince: Date?
+    @State private var isExpanded: Bool
+
+    init(reasoning: String, seconds: Double?, thinkingSince: Date?) {
+        self.reasoning = reasoning
+        self.seconds = seconds
+        self.thinkingSince = thinkingSince
+        _isExpanded = State(initialValue: thinkingSince != nil)
+    }
+
+    private var isThinking: Bool { thinkingSince != nil }
+    private var hasReasoning: Bool { !reasoning.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { isExpanded.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .symbolEffect(.pulse, options: .repeating, isActive: isThinking && !reduceMotion)
+                    if let thinkingSince {
+                        ShimmerText(text: L10n.text("思考中"))
+                        TimelineView(.periodic(from: thinkingSince, by: 1)) { context in
+                            Text(L10n.text("\(max(0, Int(context.date.timeIntervalSince(thinkingSince)))) 秒"))
+                                .monospacedDigit()
+                        }
+                        .foregroundStyle(.tertiary)
+                    } else {
+                        Text(L10n.text("已思考 \(max(1, Int((seconds ?? 0).rounded()))) 秒"))
+                    }
+                    if hasReasoning {
+                        Image(systemName: "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                    }
+                }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!hasReasoning)
+            .accessibilityLabel(isThinking ? L10n.text("思考中") : L10n.text("思考过程"))
+            .accessibilityValue(isExpanded ? L10n.text("已展开") : L10n.text("已收起"))
+
+            if isExpanded, hasReasoning {
+                Text(reasoning.trimmingCharacters(in: .whitespacesAndNewlines))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 12)
+                    .overlay(alignment: .leading) {
+                        Capsule().fill(Color.secondary.opacity(0.35)).frame(width: 2)
+                    }
+                    .textSelection(.enabled)
+                    .transition(.opacity)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // The thinking folds away as the answer begins — at once, not with a
+        // fade: fading, it lay under the answer's first lines as they arrived.
+        .onChange(of: isThinking) { _, thinking in
+            guard !thinking else { return }
+            var transaction = Transaction(animation: nil)
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { isExpanded = false }
+        }
+    }
+}
+
+/// A label with light passing across it: the working state's shimmer.
+private struct ShimmerText: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let text: String
+    @State private var phase: CGFloat = -1
+
+    var body: some View {
+        Text(text)
+            .overlay {
+                if !reduceMotion {
+                    GeometryReader { geometry in
+                        LinearGradient(
+                            colors: [.clear, .white.opacity(0.85), .clear],
+                            startPoint: .leading, endPoint: .trailing
+                        )
+                        .frame(width: geometry.size.width * 0.7)
+                        .offset(x: phase * geometry.size.width * 1.5)
+                    }
+                    .mask(Text(text))
+                    .allowsHitTesting(false)
+                }
+            }
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.linear(duration: 1.3).repeatForever(autoreverses: false)) { phase = 1 }
+            }
     }
 }

@@ -2468,9 +2468,10 @@ struct HoldingDetailGlassCardModifier: ViewModifier {
             : .white.opacity(0.78)
     }
 
-    /// Lit from above, as the Home Screen widgets are: brighter along the top
-    /// edge, settling towards the bottom. On a plain page there is no
-    /// wallpaper for the glass to bend, so this is what gives it its lift.
+    /// A near-even fill under the glass, which on a plain page has no
+    /// wallpaper to bend. It used to be lit from above — bright along the top
+    /// edge, fading down the card — and read as a gradient; now only a trace
+    /// of that is left.
     private var sheen: LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark

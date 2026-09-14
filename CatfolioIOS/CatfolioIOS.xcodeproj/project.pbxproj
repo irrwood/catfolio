@@ -32,6 +32,7 @@
 		AF1000000000000000000025 /* UnderwaterAnalysisChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000025; };
 		AF1000000000000000000026 /* ImpliedFunding.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000026; };
 		AF1000000000000000000027 /* CycleComparison.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000027; };
+		AF1000000000000000000028 /* AIStreaming.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000028; };
 		AF1000000000000000000001 /* PolicyWorkspaceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000001; };
 		AF1000000000000000000003 /* PolicyContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000003; };
 		AF1000000000000000000004 /* PolicyTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000004; };
@@ -153,6 +154,7 @@
 		E101000000000000000000F5 /* UnderwaterAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F5 /* UnderwaterAnalysisTests.swift */; };
 		E101000000000000000000F6 /* ImpliedFundingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F6 /* ImpliedFundingTests.swift */; };
 		E101000000000000000000F7 /* CycleComparisonTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F7 /* CycleComparisonTests.swift */; };
+		E101000000000000000000F8 /* AIStreamingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F8 /* AIStreamingTests.swift */; };
 		E101000000000000000000F3 /* HoldingContributionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F3 /* HoldingContributionTests.swift */; };
 		A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000C1 /* SectorAttributionTests.swift */; };
 		A19900000000000000FFB0 /* NumericAlternatesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FFB0 /* NumericAlternatesTests.swift */; };
@@ -206,6 +208,7 @@
 		BF1000000000000000000025 /* UnderwaterAnalysisChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnderwaterAnalysisChart.swift; sourceTree = "<group>"; };
 		BF1000000000000000000026 /* ImpliedFunding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImpliedFunding.swift; sourceTree = "<group>"; };
 		BF1000000000000000000027 /* CycleComparison.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleComparison.swift; sourceTree = "<group>"; };
+		BF1000000000000000000028 /* AIStreaming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIStreaming.swift; sourceTree = "<group>"; };
 		BF1000000000000000000001 /* PolicyWorkspaceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyWorkspaceStore.swift; sourceTree = "<group>"; };
 		BF1000000000000000000003 /* PolicyContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyContract.swift; sourceTree = "<group>"; };
 		BF1000000000000000000004 /* PolicyTemplates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyTemplates.swift; sourceTree = "<group>"; };
@@ -331,6 +334,7 @@
 		F101000000000000000000F5 /* UnderwaterAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnderwaterAnalysisTests.swift; sourceTree = "<group>"; };
 		F101000000000000000000F6 /* ImpliedFundingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImpliedFundingTests.swift; sourceTree = "<group>"; };
 		F101000000000000000000F7 /* CycleComparisonTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleComparisonTests.swift; sourceTree = "<group>"; };
+		F101000000000000000000F8 /* AIStreamingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIStreamingTests.swift; sourceTree = "<group>"; };
 		F101000000000000000000F3 /* HoldingContributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingContributionTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000C1 /* SectorAttributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttributionTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FFB0 /* NumericAlternatesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericAlternatesTests.swift; sourceTree = "<group>"; };
@@ -418,6 +422,7 @@
 				BF1000000000000000000025 /* UnderwaterAnalysisChart.swift */,
 				BF1000000000000000000026 /* ImpliedFunding.swift */,
 				BF1000000000000000000027 /* CycleComparison.swift */,
+				BF1000000000000000000028 /* AIStreaming.swift */,
 				BF1000000000000000000001 /* PolicyWorkspaceStore.swift */,
 				BF1000000000000000000003 /* PolicyContract.swift */,
 				BF1000000000000000000004 /* PolicyTemplates.swift */,
@@ -579,6 +584,7 @@
 				F101000000000000000000F5 /* UnderwaterAnalysisTests.swift */,
 				F101000000000000000000F6 /* ImpliedFundingTests.swift */,
 				F101000000000000000000F7 /* CycleComparisonTests.swift */,
+				F101000000000000000000F8 /* AIStreamingTests.swift */,
 				F101000000000000000000F3 /* HoldingContributionTests.swift */,
 				B199000000000000000000C1 /* SectorAttributionTests.swift */,
 				B19900000000000000FFB0 /* NumericAlternatesTests.swift */,
@@ -774,6 +780,7 @@
 				AF1000000000000000000025 /* UnderwaterAnalysisChart.swift in Sources */,
 				AF1000000000000000000026 /* ImpliedFunding.swift in Sources */,
 				AF1000000000000000000027 /* CycleComparison.swift in Sources */,
+				AF1000000000000000000028 /* AIStreaming.swift in Sources */,
 				AF1000000000000000000001 /* PolicyWorkspaceStore.swift in Sources */,
 				AF1000000000000000000003 /* PolicyContract.swift in Sources */,
 				AF1000000000000000000004 /* PolicyTemplates.swift in Sources */,
@@ -882,6 +889,7 @@
 				E101000000000000000000F5 /* UnderwaterAnalysisTests.swift in Sources */,
 				E101000000000000000000F6 /* ImpliedFundingTests.swift in Sources */,
 				E101000000000000000000F7 /* CycleComparisonTests.swift in Sources */,
+				E101000000000000000000F8 /* AIStreamingTests.swift in Sources */,
 				E101000000000000000000F3 /* HoldingContributionTests.swift in Sources */,
 				A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */,
 				A19900000000000000FFB0 /* NumericAlternatesTests.swift in Sources */,

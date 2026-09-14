@@ -124,10 +124,14 @@ extension UIScrollView {
 /// the page is not under that clip the whole time, and every square corner
 /// that showed during a drag or a morph was one of those.
 enum SecurityDetailPresentation {
-    /// The sheet's top corners in the design. Also the corner every zoom
-    /// source is clipped to, so the morph keeps one radius from the row to the
-    /// sheet instead of passing through a square corner on the way.
-    static let cornerRadius: CGFloat = 38
+    /// The sheet's top corners. The design drew 38, but the moment a back or
+    /// dismiss swipe begins, the zoom transition takes the card over at its
+    /// own radius of about 50pt, measured on an iPhone 17 Pro recording — so
+    /// at 38 the corners jumped outward under the finger. At rest the sheet
+    /// now matches what the swipe will use.
+    static let cornerRadius: CGFloat = 50
+
+    static let backdropColor = UIColor.black.withAlphaComponent(0.28)
 
     /// The top of the designed ground. Figma paints `rgba(45,50,57,0.5)` over a
     /// black frame; composited, that is this colour, drawn opaque so the dimmed
@@ -760,6 +764,9 @@ struct ChartLegendItem: View {
 enum ChartInteractionStyle {
     static let activationDuration: TimeInterval = 0.23
     static let preActivationMovementTolerance: CGFloat = 10
+    /// The strip along the leading edge that belongs to the system's back
+    /// and dismiss swipes; a chart never starts an inspection there.
+    static let systemEdgeWidth: CGFloat = 20
     static let dimmedSeriesOpacity = 0.30
     static let selectionHapticMinimumInterval: TimeInterval = 0.035
     static let hapticsPreferenceKey = "catfolio.haptics"
@@ -909,6 +916,16 @@ struct ChartInteractionOverlay: UIViewRepresentable {
             }
 
             if primaryTouch == nil, let firstTouch = trackedTouches.first, let view {
+                // A touch that lands on the screen's leading edge is the
+                // system's back or dismiss swipe. A slow one stayed inside
+                // the hold tolerance long enough for the chart to take it,
+                // and the page stuck half-way instead of going back.
+                if let window = view.window,
+                   firstTouch.location(in: window).x < ChartInteractionStyle.systemEdgeWidth {
+                    trackedTouches.removeAll()
+                    state = .failed
+                    return
+                }
                 primaryTouch = firstTouch
                 primaryStartLocation = firstTouch.location(in: view)
                 scheduleActivation()

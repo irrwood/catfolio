@@ -548,6 +548,16 @@ final class AppModel {
         )
     }
 
+    /// `askAI`, delivered as the model writes it.
+    func streamAI(_ question: String, attentionContext: String? = nil) async throws -> AsyncThrowingStream<AIStreamEvent, Error> {
+        let loaded = try await loadActiveDocument()
+        return LocalAIClient().streamAnswer(
+            question,
+            document: selectedDocument(from: loaded),
+            additionalContext: attentionContext
+        )
+    }
+
     func portfolioAttention() async throws -> PortfolioAttentionReport {
         let loaded = try await loadActiveDocument()
         return try await LocalAIClient().portfolioAttention(document: selectedDocument(from: loaded))

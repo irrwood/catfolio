@@ -903,17 +903,26 @@ struct ChatMessage: Identifiable, Equatable, Codable, Sendable {
     let role: Role
     let text: String
     let createdAt: Date
+    /// What the model shared of its thinking before it answered. Absent in
+    /// messages saved before it was kept, and from models that share none.
+    var reasoning: String? = nil
+    /// From the question to the first word of the answer.
+    var thinkingSeconds: Double? = nil
 
     init(
         id: UUID = UUID(),
         role: Role,
         text: String,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        reasoning: String? = nil,
+        thinkingSeconds: Double? = nil
     ) {
         self.id = id
         self.role = role
         self.text = text
         self.createdAt = createdAt
+        self.reasoning = reasoning
+        self.thinkingSeconds = thinkingSeconds
     }
 }
 

@@ -1368,7 +1368,10 @@ extension View {
     @ViewBuilder
     func policyGlass<S: Shape>(in shape: S) -> some View {
         if #available(iOS 26.0, *) {
-            glassEffect(.regular.interactive(), in: shape)
+            // Not interactive: it holds the composer's text field, and
+            // interactive glass takes the touch for its press effect first —
+            // the AI page's field took about six seconds to focus that way.
+            glassEffect(.regular, in: shape)
         } else {
             background(.ultraThinMaterial, in: shape)
         }
