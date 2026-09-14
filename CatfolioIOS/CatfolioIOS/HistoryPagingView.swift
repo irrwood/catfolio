@@ -48,6 +48,12 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
     var onSelection: ((HistoryCategory) -> Void)?
     var reduceMotion = false
     private var hosts: [UIHostingController<AnyView>] = []
+    /// The latest content for every page, and the pages showing it. The rest
+    /// hold an empty placeholder until they are near: building all five
+    /// lists at once is what caught the push animation.
+    private var pages: [AnyView] = []
+    private var livePages: Set<Int> = []
+    private var wakeTask: Task<Void, Never>?
     private var lists: [Int: UIScrollView] = [:]
     private var observations: [Int: NSKeyValueObservation] = [:]
     private var laidOutSize = CGSize.zero
@@ -100,11 +106,15 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
 
     func updatePages(_ pages: [AnyView]) {
         loadViewIfNeeded()
+        self.pages = pages
+        // Only the page being opened is built during the push; its
+        // neighbours follow as soon as it has landed.
+        livePages.insert(selectedIndex)
         for (index, page) in pages.enumerated() {
             if hosts.indices.contains(index) {
-                hosts[index].rootView = page
+                if livePages.contains(index) { hosts[index].rootView = page }
             } else {
-                let host = UIHostingController(rootView: page)
+                let host = UIHostingController(rootView: livePages.contains(index) ? page : AnyView(Color.clear))
                 host.view.backgroundColor = .clear
                 addChild(host)
                 pager.addSubview(host.view)
@@ -177,6 +187,38 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
             pager.panGestureRecognizer.require(toFail: back)
         }
         observeSelectedList()
+        // With the push finished, bring the remaining pages up one at a
+        // time, so none of them costs a frame and a jump across the bar
+        // lands on content.
+        wakeTask?.cancel()
+        wakeTask = Task { @MainActor [weak self] in
+            guard let first = self?.selectedIndex else { return }
+            // Nearest first, so a swipe straight after the push lands on content.
+            let order = HistoryCategory.allCases.indices.sorted { abs($0 - first) < abs($1 - first) }
+            for index in order {
+                try? await Task.sleep(for: .milliseconds(80))
+                guard let self, !Task.isCancelled else { return }
+                self.wake([index])
+            }
+        }
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        wakeTask?.cancel()
+    }
+
+    private func neighbourhood(of index: Int) -> Set<Int> {
+        Set([index - 1, index, index + 1].filter { HistoryCategory.allCases.indices.contains($0) })
+    }
+
+    /// Gives placeholder pages their content.
+    private func wake(_ indices: Set<Int>) {
+        let asleep = indices.subtracting(livePages).filter { pages.indices.contains($0) && hosts.indices.contains($0) }
+        guard !asleep.isEmpty else { return }
+        for index in asleep { hosts[index].rootView = pages[index] }
+        livePages.formUnion(asleep)
+        view.setNeedsLayout()
     }
 
     private var selectedIndex: Int { HistoryCategory.allCases.firstIndex(of: selection) ?? 0 }
@@ -187,6 +229,7 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
 
     func select(_ category: HistoryCategory, animated: Bool) {
         let index = HistoryCategory.allCases.firstIndex(of: category) ?? 0
+        wake(neighbourhood(of: index))
         let target = CGPoint(x: CGFloat(index) * pager.bounds.width, y: 0)
         // Tapping the current tab during deceleration should return to it,
         // even though the swipe has not committed a different selection yet.
@@ -209,6 +252,9 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard !isLayingOutPages else { return }
         categoryBar.setProgress(pageProgress)
+        if scrollView.isDragging || scrollView.isDecelerating {
+            wake(neighbourhood(of: Int(pageProgress.rounded())))
+        }
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {

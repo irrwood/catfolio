@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct PortfolioActivityLedger {
+struct PortfolioActivityLedger: Equatable {
     let accounts: [PortfolioAccount]
     let transactions: [LocalTransactionRecord]
     let securityNames: [String: String]
@@ -192,6 +192,8 @@ struct HistoryView: View {
     @State private var scopedHoldings: [Holding] = []
     @State private var feeCharges: [HistoryFeeCharge] = []
     @State private var isLoading = true
+    /// When the page appeared, so the first lists wait for the push to end.
+    @State private var appearedAt = ContinuousClock.Instant.now
     @State private var isSyncing = false
     @State private var errorMessage: String?
     @State private var exportDocument = HistoryCSVDocument(data: Data())
@@ -202,6 +204,7 @@ struct HistoryView: View {
         self.initialAccountIDs = initialAccountIDs
         _selectedAccountIDs = State(initialValue: initialAccountIDs)
         _category = State(initialValue: initialCategory)
+
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--verify-history-orders") {
             _category = State(initialValue: .orders)
@@ -311,6 +314,7 @@ struct HistoryView: View {
             #if DEBUG
             if usesPreviewLedger { return }
             #endif
+            appearedAt = .now
             await loadLedger()
             await synchronizeTrading212History()
             // Trading 212 builds activity reports asynchronously and allows
@@ -930,6 +934,12 @@ struct HistoryView: View {
         do {
             let loaded = try await model.activityLedger()
             guard !Task.isCancelled else { return }
+            // Unchanged since the page opened on it: nothing to rebuild, and
+            // rebuilding would re-render every list for the same rows.
+            if !isLoading, ledgerRevision > 0, loaded == ledger {
+                errorMessage = nil
+                return
+            }
             ledger = loaded
             ledgerRevision += 1
             errorMessage = nil
@@ -966,9 +976,16 @@ struct HistoryView: View {
             }.value
             try Task.checkCancellation()
             preparedLedger = prepared
+            if isLoading {
+                // The lists are built once the push has landed, and fade in:
+                // swapped in part-way through, they caught the animation.
+                let settle = Duration.milliseconds(450) - appearedAt.duration(to: .now)
+                if settle > .zero { try await Task.sleep(for: settle) }
+                try Task.checkCancellation()
+            }
             scopedHoldings = holdings
             feeCharges = charges
-            isLoading = false
+            withAnimation(.easeOut(duration: 0.2)) { isLoading = false }
         } catch {
             // Superseded scopes and a popped page must not publish old results.
         }

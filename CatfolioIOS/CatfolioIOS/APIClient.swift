@@ -406,8 +406,9 @@ final class AppModel {
     /// are properties of the scope they are computed in.
     func holdings(forAccounts accountIDs: Set<String>) async throws -> [Holding] {
         let document = try await loadActiveDocument()
-        let scoped = document.scoped(to: accountIDs)
-        return try LocalPortfolioEngine.presentation(for: scoped).2
+        return try await Task.detached(priority: .userInitiated) {
+            try LocalPortfolioEngine.presentation(for: document.scoped(to: accountIDs)).2
+        }.value
     }
 
     func holdingDetailAccountContext(for ticker: String) async throws -> HoldingDetailAccountContext {
@@ -604,22 +605,26 @@ final class AppModel {
 
     func activityLedger() async throws -> PortfolioActivityLedger {
         let loaded = try await loadActiveDocument()
-        let names = loaded.positions.reduce(into: [String: String]()) { result, position in
-            let key = position.ticker.uppercased()
-            if result[key] == nil || result[key] == key {
-                result[key] = position.name.isEmpty ? key : position.name
-            }
-        }
-        return PortfolioActivityLedger(
-            accounts: loaded.accounts,
-            transactions: (loaded.transactions ?? []).sorted { lhs, rhs in
-                if lhs.date == rhs.date {
-                    return (lhs.tradeID ?? lhs.ticker) > (rhs.tradeID ?? rhs.ticker)
+        // Off the main actor: sorting a long history there held up the push
+        // of the page that asked for it.
+        return await Task.detached(priority: .userInitiated) {
+            let names = loaded.positions.reduce(into: [String: String]()) { result, position in
+                let key = position.ticker.uppercased()
+                if result[key] == nil || result[key] == key {
+                    result[key] = position.name.isEmpty ? key : position.name
                 }
-                return lhs.date > rhs.date
-            },
-            securityNames: names
-        )
+            }
+            return PortfolioActivityLedger(
+                accounts: loaded.accounts,
+                transactions: (loaded.transactions ?? []).sorted { lhs, rhs in
+                    if lhs.date == rhs.date {
+                        return (lhs.tradeID ?? lhs.ticker) > (rhs.tradeID ?? rhs.ticker)
+                    }
+                    return lhs.date > rhs.date
+                },
+                securityNames: names
+            )
+        }.value
     }
 
     /// Creates the account up front so a broker connection is visible and
