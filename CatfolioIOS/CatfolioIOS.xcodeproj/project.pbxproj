@@ -63,6 +63,7 @@
 		A10000000000000000000001 /* CatfolioIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* CatfolioIOSApp.swift */; };
 		A10000000000000000000002 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* Models.swift */; };
 		A10000000000000000000003 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003 /* APIClient.swift */; };
+		ACACE0000000000000000001 /* PortfolioPresentationCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCACE0000000000000000001 /* PortfolioPresentationCache.swift */; };
 		A10000000000000000000004 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000004 /* DesignSystem.swift */; };
 		A10000000000000000000005 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000005 /* RootTabView.swift */; };
 		A10000000000000000000006 /* PortfolioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000006 /* PortfolioView.swift */; };
@@ -166,6 +167,7 @@
 		A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000C1 /* SectorAttributionTests.swift */; };
 		A19900000000000000FFB0 /* NumericAlternatesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FFB0 /* NumericAlternatesTests.swift */; };
 		A19900000000000000FFA0 /* PublicInvestorSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */; };
+		ACACE0000000000000000002 /* PortfolioPresentationCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCACE0000000000000000002 /* PortfolioPresentationCacheTests.swift */; };
 		A19900000000000000FF91 /* PortfolioDocumentMergeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF91 /* PortfolioDocumentMergeTests.swift */; };
 		A19900000000000000FF81 /* CloudPreferencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF81 /* CloudPreferencesTests.swift */; };
 		A19900000000000000FF71 /* LedgerReconciliationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF71 /* LedgerReconciliationTests.swift */; };
@@ -261,6 +263,7 @@
 		B10000000000000000000001 /* CatfolioIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatfolioIOSApp.swift; sourceTree = "<group>"; };
 		B10000000000000000000002 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		B10000000000000000000003 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		BCACE0000000000000000001 /* PortfolioPresentationCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioPresentationCache.swift; sourceTree = "<group>"; };
 		B10000000000000000000004 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		B10000000000000000000005 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
 		B10000000000000000000006 /* PortfolioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioView.swift; sourceTree = "<group>"; };
@@ -353,6 +356,7 @@
 		B199000000000000000000C1 /* SectorAttributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttributionTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FFB0 /* NumericAlternatesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericAlternatesTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicInvestorSelectionTests.swift; sourceTree = "<group>"; };
+		BCACE0000000000000000002 /* PortfolioPresentationCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioPresentationCacheTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF91 /* PortfolioDocumentMergeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioDocumentMergeTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF81 /* CloudPreferencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPreferencesTests.swift; sourceTree = "<group>"; };
 		B19900000000000000FF71 /* LedgerReconciliationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerReconciliationTests.swift; sourceTree = "<group>"; };
@@ -415,6 +419,7 @@
 				B10000000000000000000001 /* CatfolioIOSApp.swift */,
 				B10000000000000000000002 /* Models.swift */,
 				B10000000000000000000003 /* APIClient.swift */,
+				BCACE0000000000000000001 /* PortfolioPresentationCache.swift */,
 				B10000000000000000000004 /* DesignSystem.swift */,
                 B1D000000000000000000001 /* Localization.swift */,
                 D1D000000000000000000001 /* Localizable.strings */,
@@ -610,6 +615,7 @@
 				B199000000000000000000C1 /* SectorAttributionTests.swift */,
 				B19900000000000000FFB0 /* NumericAlternatesTests.swift */,
 				B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */,
+				BCACE0000000000000000002 /* PortfolioPresentationCacheTests.swift */,
 				B1990000000000000000ADA1 /* AuditRegressionTests.swift */,
 				B19900000000000000FF91 /* PortfolioDocumentMergeTests.swift */,
 				B19900000000000000FF81 /* CloudPreferencesTests.swift */,
@@ -781,6 +787,7 @@
 				A10000000000000000000001 /* CatfolioIOSApp.swift in Sources */,
 				A10000000000000000000002 /* Models.swift in Sources */,
 				A10000000000000000000003 /* APIClient.swift in Sources */,
+				ACACE0000000000000000001 /* PortfolioPresentationCache.swift in Sources */,
 				A10000000000000000000004 /* DesignSystem.swift in Sources */,
                 A1D000000000000000000001 /* Localization.swift in Sources */,
 				A10000000000000000000005 /* RootTabView.swift in Sources */,
@@ -922,6 +929,7 @@
 				A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */,
 				A19900000000000000FFB0 /* NumericAlternatesTests.swift in Sources */,
 				A19900000000000000FFA0 /* PublicInvestorSelectionTests.swift in Sources */,
+				ACACE0000000000000000002 /* PortfolioPresentationCacheTests.swift in Sources */,
 				A1990000000000000000ADA1 /* AuditRegressionTests.swift in Sources */,
 				A19900000000000000FF91 /* PortfolioDocumentMergeTests.swift in Sources */,
 				A19900000000000000FF81 /* CloudPreferencesTests.swift in Sources */,

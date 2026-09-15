@@ -1,6 +1,6 @@
 import Foundation
 
-struct PortfolioSummary: Decodable, Equatable {
+struct PortfolioSummary: Codable, Equatable {
     let totalCost: Double
     let openPositions: Int
     let asOf: String?
@@ -16,7 +16,7 @@ struct PortfolioSummary: Decodable, Equatable {
     }
 }
 
-struct PortfolioOverview: Decodable {
+struct PortfolioOverview: Codable {
     let summary: PortfolioSummary
     let todayPnl: Double
     let breadth: Breadth
@@ -28,13 +28,13 @@ struct PortfolioOverview: Decodable {
     }
 }
 
-struct Breadth: Decodable {
+struct Breadth: Codable {
     let up: Int
     let down: Int
     let flat: Int
 }
 
-struct PortfolioChartResponse: Decodable {
+struct PortfolioChartResponse: Codable {
     let positionCount: Int
     let positionHistory: PositionHistory
     let currentPoint: ChartPoint
@@ -52,6 +52,7 @@ struct PortfolioChartResponse: Decodable {
         case positionHistory = "position_history"
         case currentPoint = "current_point"
         case accountNAV = "account_nav"
+        case dataIssues = "data_issues"
     }
 
     static func unavailableAccountHistory(positionCount: Int, reason: String) -> Self {
@@ -92,12 +93,12 @@ struct PortfolioChartResponse: Decodable {
     }
 }
 
-struct PositionHistory: Decodable {
+struct PositionHistory: Codable {
     let available: Bool
     let rows: [ChartPoint]
 }
 
-struct ChartPoint: Decodable, Identifiable, Equatable {
+struct ChartPoint: Codable, Identifiable, Equatable {
     let dateText: String
     let marketValue: Double
     let cost: Double
@@ -117,7 +118,7 @@ struct HoldingsResponse: Decodable {
     let rows: [Holding]
 }
 
-struct Holding: Decodable, Identifiable, Equatable {
+struct Holding: Codable, Identifiable, Equatable {
     var publicDisclosure: PublicAccountDisclosure? = nil
     var displayedMarketValue: String {
         if let publicDisclosure { return publicDisclosure.amountLabel }

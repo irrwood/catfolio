@@ -120,6 +120,18 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
     private var refreshTask: Task<Void, Never>?
     private var generation = 0
     private var isChangingAttachment = false
+    /// When the latest touch came down on a list that was still moving.
+    private var motionCaughtAt: CFTimeInterval?
+
+    /// Whether the touch now ending came down on a moving list — a flick
+    /// still decelerating, or the snap to a stop, which runs on its own clock
+    /// and does not stop for a touch the way UIKit's deceleration does. That
+    /// touch catches the list; it is not a tap on whichever row slid under
+    /// the finger, which is how a tap used to open the row above or below.
+    var touchCaughtMotion: Bool {
+        guard let motionCaughtAt else { return false }
+        return clock() - motionCaughtAt < 1
+    }
 
     override init() {
         super.init()
@@ -211,6 +223,7 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
         guard !hasTouch, let scroll = scrollView else { return }
         hasTouch = true
         gestureStart = offset
+        motionCaughtAt = isSettling || isMoving || scroll.isDecelerating ? clock() : nil
         gate.beginTouch(offset: offset, isSettling: isSettling,
                         isMoving: isMoving || scroll.isDecelerating)
         // Removing the control for a locked gesture prevents even a partial

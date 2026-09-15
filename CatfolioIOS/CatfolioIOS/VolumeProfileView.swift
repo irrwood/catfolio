@@ -76,6 +76,7 @@ private struct HoldingDetailContentView: View {
         nonmutating set { cachedContent.realisedProfit = newValue }
     }
     @State private var presentationReady = false
+    @State private var lowerSectionsRevealed = false
     @State private var marketDataRevision = 0
     @State private var completedMarketDataRevision: Int?
     @State private var isLoadingMarketData = false
@@ -99,6 +100,11 @@ private struct HoldingDetailContentView: View {
 
     private var showsPosition: Bool {
         hasSelectedDetailAccounts && hasPosition
+    }
+
+    /// A preview has no presentation to wait for.
+    private var showsLowerSections: Bool {
+        lowerSectionsRevealed || isPreview || showsVolumeFocusedPreview
     }
 
     private var showsInitialLoadingPlaceholder: Bool {
@@ -161,68 +167,78 @@ private struct HoldingDetailContentView: View {
                         }
                     }
 
-                    LazyVStack(spacing: HoldingDetailCardStyle.spacing) {
-                        if let profile {
-                            VolumePriceChart(
-                                profile: profile,
-                                holding: displayedHolding,
-                                showsHoldingCost: showsPosition
-                            )
-                            .onAppear { ChartAppearanceHistory.record("volume-profile|\(holding.ticker)") }
+                    // Everything below the price section waits for the zoom
+                    // to land, then fades in. Built in the same update as the
+                    // sheet, these cards were most of the half second between
+                    // the tap and the zoom starting, and the frames it dropped
+                    // on the way.
+                    if showsLowerSections {
+                        VStack(spacing: 0) {
+                            LazyVStack(spacing: HoldingDetailCardStyle.spacing) {
+                                if let profile {
+                                    VolumePriceChart(
+                                        profile: profile,
+                                        holding: displayedHolding,
+                                        showsHoldingCost: showsPosition
+                                    )
+                                    .onAppear { ChartAppearanceHistory.record("volume-profile|\(holding.ticker)") }
 
-                            if let high = profile.fiftyTwoWeekHigh,
-                               let low = profile.fiftyTwoWeekLow,
-                               high > low {
-                                FiftyTwoWeekRange(
-                                    low: low,
-                                    high: high,
-                                    current: priceHistory?.latestAvailablePrice ?? displayedHolding.quotePrice,
-                                    periodStart: profile.fiftyTwoWeekStartPrice,
-                                    currency: profile.currency
-                                )
+                                    if let high = profile.fiftyTwoWeekHigh,
+                                       let low = profile.fiftyTwoWeekLow,
+                                       high > low {
+                                        FiftyTwoWeekRange(
+                                            low: low,
+                                            high: high,
+                                            current: priceHistory?.latestAvailablePrice ?? displayedHolding.quotePrice,
+                                            periodStart: profile.fiftyTwoWeekStartPrice,
+                                            currency: profile.currency
+                                        )
+                                    }
+                                } else if let errorMessage {
+                                    HoldingDetailSectionCard(title: L10n.text("Volume Profile")) {
+                                        StatusNotice(text: errorMessage, kind: .info)
+                                    }
+                                } else if presentationReady {
+                                    VStack(alignment: .leading, spacing: 16) {
+                                        ChartSkeletonShape(width: 140, height: 19)
+                                        ChartShapeSkeleton(layout: .horizontalBars, appearanceID: "volume-profile|\(holding.ticker)")
+                                            .frame(height: 184)
+                                        ChartSkeletonShape(height: 12)
+                                    }
+                                    .padding(HoldingDetailCardStyle.contentInset)
+                                    .holdingDetailGlassCard()
+                                } else {
+                                    Color.clear
+                                        .frame(height: 72)
+                                        .accessibilityHidden(true)
+                                }
+
+                                OptionsOIView(symbol: holding.ticker, currency: holding.quoteCurrency,
+                                    price: priceHistory?.latestAvailablePrice ?? holding.quotePrice,
+                                    costUSD: showsPosition ? VolumeProfileInterpretation.convertedPrice(
+                                        displayedHolding.averageCost, from: displayedHolding.costCurrency, to: "USD",
+                                        usdRate: LocalPortfolioEngine.usdRate(for:)) : nil,
+                                    refreshRevision: marketDataRevision,
+                                    initialSnapshots: cachedContent.optionsSnapshots,
+                                    onSnapshot: { days, snapshot in cachedContent.optionsSnapshots[days] = snapshot })
+
+                                if showsPosition {
+                                    HoldingPositionDetails(holding: displayedHolding, realisedProfit: realisedProfit)
+                                }
                             }
-                        } else if let errorMessage {
-                            HoldingDetailSectionCard(title: L10n.text("Volume Profile")) {
-                                StatusNotice(text: errorMessage, kind: .info)
-                            }
-                        } else if presentationReady {
-                            VStack(alignment: .leading, spacing: 16) {
-                                ChartSkeletonShape(width: 140, height: 19)
-                                ChartShapeSkeleton(layout: .horizontalBars, appearanceID: "volume-profile|\(holding.ticker)")
-                                    .frame(height: 184)
-                                ChartSkeletonShape(height: 12)
-                            }
-                            .padding(HoldingDetailCardStyle.contentInset)
-                            .holdingDetailGlassCard()
-                        } else {
-                            Color.clear
-                                .frame(height: 72)
-                                .accessibilityHidden(true)
+                            // One 16pt page margin below the price chart, the same as
+                            // the research cards; only the header chart keeps its own.
+                            .padding(.horizontal, HoldingDetailCardStyle.pageInset)
+                            .padding(.top, showsVolumeFocusedPreview ? 28 : 24)
+
+                            HoldingResearchSection(holding: holding,
+                                price: priceHistory?.latestAvailablePrice ?? holding.quotePrice,
+                                cachedContent: cachedContent)
+                            .id("\(holding.ticker)|\(appLocale.identifier)")
+                            .padding(.bottom, 72)
                         }
-
-                        OptionsOIView(symbol: holding.ticker, currency: holding.quoteCurrency,
-                            price: priceHistory?.latestAvailablePrice ?? holding.quotePrice,
-                            costUSD: showsPosition ? VolumeProfileInterpretation.convertedPrice(
-                                displayedHolding.averageCost, from: displayedHolding.costCurrency, to: "USD",
-                                usdRate: LocalPortfolioEngine.usdRate(for:)) : nil,
-                            refreshRevision: marketDataRevision,
-                            initialSnapshots: cachedContent.optionsSnapshots,
-                            onSnapshot: { days, snapshot in cachedContent.optionsSnapshots[days] = snapshot })
-
-                        if showsPosition {
-                            HoldingPositionDetails(holding: displayedHolding, realisedProfit: realisedProfit)
-                        }
+                        .transition(.opacity)
                     }
-                    // One 16pt page margin below the price chart, the same as
-                    // the research cards; only the header chart keeps its own.
-                    .padding(.horizontal, HoldingDetailCardStyle.pageInset)
-                    .padding(.top, showsVolumeFocusedPreview ? 28 : 24)
-
-                    HoldingResearchSection(holding: holding,
-                        price: priceHistory?.latestAvailablePrice ?? holding.quotePrice,
-                        cachedContent: cachedContent)
-                    .id("\(holding.ticker)|\(appLocale.identifier)")
-                    .padding(.bottom, 72)
                     }
                 }
                 }
@@ -245,6 +261,7 @@ private struct HoldingDetailContentView: View {
                     var transaction = Transaction(animation: nil)
                     transaction.disablesAnimations = true
                     withTransaction(transaction) { presentationReady = true }
+                    withAnimation(.easeOut(duration: 0.25)) { lowerSectionsRevealed = true }
                 }
             }
             // Start cache-backed work as soon as SwiftUI inserts the sheet,

@@ -23,6 +23,7 @@ final class AppModel {
     var activeBroker: BrokerProvider?
     var localSource = "尚未导入"
     var localUpdatedAt: Date?
+    private(set) var portfolioCachedAt: Date?
     var accounts: [PortfolioAccount] = []
     var selectedAccountKeys: Set<String> = []
     private(set) var portfolioChartRevision = 0
@@ -65,6 +66,7 @@ final class AppModel {
     @ObservationIgnored private let modeDefaults: UserDefaults
     @ObservationIgnored private let publicInvestorStore: PublicInvestorSimulationStore
     @ObservationIgnored private let personalDocumentLoader: @Sendable () async throws -> LocalPortfolioDocument
+    @ObservationIgnored private let presentationCache: PortfolioPresentationCache
     private static let brokerKey = "catfolio.activeBroker"
     private static let selectedAccountsKey = "catfolio.selectedAccounts"
     private static let selectsAllAccountsKey = "catfolio.selectsAllAccounts"
@@ -77,11 +79,13 @@ final class AppModel {
         publicInvestorStore: PublicInvestorSimulationStore = .shared,
         personalDocumentLoader: @escaping @Sendable () async throws -> LocalPortfolioDocument = {
             try await LocalPortfolioStore.shared.load()
-        }
+        },
+        presentationCache: PortfolioPresentationCache = .shared
     ) {
         modeDefaults = defaults
         self.publicInvestorStore = publicInvestorStore
         self.personalDocumentLoader = personalDocumentLoader
+        self.presentationCache = presentationCache
         publicInvestorSelection = defaults.string(forKey: PublicInvestorPreferences.selectionKey) ?? PublicInvestorPreferences.defaultSelection
         isFakeDataMode = defaults.bool(forKey: Self.fakeDataModeKey)
         isPublicInvestorMode = defaults.bool(forKey: PublicInvestorPreferences.enabledKey)
@@ -99,7 +103,7 @@ final class AppModel {
         portfolioRequestGeneration &+= 1
         let generation = portfolioRequestGeneration
         isPortfolioLoading = true
-        isPortfolioChartLoading = true
+        isPortfolioChartLoading = !hasUsableHomeChart
         portfolioError = nil
         defer {
             if generation == portfolioRequestGeneration {
@@ -111,7 +115,13 @@ final class AppModel {
             guard generation == portfolioRequestGeneration else { return }
             // Publish disk data before any network work. Slow/offline quote
             // providers must never hold the entire home screen in a skeleton.
-            try await apply(loaded, loadsCachedChart: false)
+            let restored = await restoreHomePresentation(from: loaded, generation: generation)
+            guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+            if !restored {
+                let preservesChart = await canPreserveHomeChart(for: loaded)
+                guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+                try await apply(loaded, loadsCachedChart: false, preservesChart: preservesChart)
+            }
             guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
             // Loading the selected source is finished. Public data can update
             // behind the usable cached presentation without locking controls.
@@ -119,6 +129,7 @@ final class AppModel {
             guard refreshMarketData else {
                 isPortfolioChartLoading = false
                 isHoldingDailyChangesLoading = false
+                if !restored { await saveHomePresentation(generation: generation) }
                 return
             }
             if isPublicInvestorMode {
@@ -132,12 +143,17 @@ final class AppModel {
                 await enrichPortfolioChart(from: document, generation: generation)
                 guard generation == portfolioRequestGeneration else { return }
                 await refreshHoldingDailyChanges()
+                await saveHomePresentation(generation: generation)
                 return
             }
             if !isFakeDataMode {
                 loaded = try await mergeCachedTrading212History(into: loaded)
                 guard generation == portfolioRequestGeneration else { return }
-                try await apply(loaded, loadsCachedChart: false)
+                if loaded != fullDocument {
+                    let preservesChart = await canPreserveHomeChart(for: loaded)
+                    guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+                    try await apply(loaded, loadsCachedChart: false, preservesChart: preservesChart)
+                }
                 guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
             }
             // Independent work starts together. Capture the ledger before
@@ -148,6 +164,7 @@ final class AppModel {
             guard !loaded.positions.isEmpty else {
                 isHoldingDailyChangesLoading = false
                 await historyRefresh
+                await saveHomePresentation(generation: generation)
                 return
             }
             async let dailyRefresh: Void = refreshHoldingDailyChanges()
@@ -165,6 +182,7 @@ final class AppModel {
             try await apply(loaded, invalidatesDailyChanges: false, loadsCachedChart: false, preservesChart: true)
             guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
             await historyRefresh
+            await saveHomePresentation(generation: generation)
         } catch {
             guard generation == portfolioRequestGeneration else { return }
             // Retain the last usable local presentation on refresh failure.
@@ -593,6 +611,7 @@ final class AppModel {
     }
 
     func refreshHoldingDailyChanges() async {
+        let portfolioGeneration = portfolioRequestGeneration
         let snapshot = holdings
         guard !snapshot.isEmpty else {
             holdingDailyChanges = [:]
@@ -645,6 +664,7 @@ final class AppModel {
             benchmarkDailyChange = benchmark
         }
         holdingDailyChangesSignature = signature
+        await saveHomePresentation(generation: portfolioGeneration)
     }
 
     func loadBriefing() async throws -> String {
@@ -810,7 +830,10 @@ final class AppModel {
 
     func deleteAccount(_ accountID: String) async throws {
         guard !isFakeDataMode && !isPublicInvestorMode else { return }
+        invalidateInFlightRequests()
         _ = try await LocalPortfolioStore.shared.removeAccount(accountID)
+        await presentationCache.removePersonal()
+        sourcePresentations.removeValue(forKey: .personal)
         await refreshPortfolio()
         if !accounts.isEmpty {
             await refreshReturnsPage()
@@ -825,6 +848,7 @@ final class AppModel {
         returnsPageTask?.cancel()
         returnsPageRequestGeneration &+= 1
         let backup = try await LocalPortfolioStore.shared.resetPortfolio()
+        await presentationCache.removePersonal()
         // The explicit reset action must not restore an old personal screen.
         // Shared public-data caches and built-in account snapshots stay intact.
         sourcePresentations.removeValue(forKey: .personal)
@@ -853,6 +877,7 @@ final class AppModel {
         returnsError = nil
         localSource = "尚未导入"
         localUpdatedAt = nil
+        portfolioCachedAt = nil
         portfolioChartRevision &+= 1
         comparisonRevision &+= 1
         returnsAnalyticsRevision &+= 1
@@ -1287,6 +1312,7 @@ final class AppModel {
         selectedAccountKeys = accountKeys
         overview = presentation.0
         if !preservesChart {
+            portfolioCachedAt = nil
             portfolioChart = cachedChart ?? presentation.1
             if localSelectionOnly, portfolioChart?.currentPoint.marketValue.isFinite != true {
                 // Account NAV needs historical cash flows. Without that cache,
@@ -1401,13 +1427,15 @@ final class AppModel {
         let analytics: ReturnsAnalyticsResponse?
         let source: String
         let updatedAt: Date?
+        var cachedAt: Date? = nil
     }
 
     private func captureSourcePresentation() -> SourcePresentation {
         SourcePresentation(document: document, fullDocument: fullDocument, overview: overview, chart: portfolioChart,
             holdings: holdings, accounts: accounts, accountKeys: selectedAccountKeys,
             dailyChanges: holdingDailyChanges, benchmark: benchmarkDailyChange,
-            comparison: comparison, analytics: returnsAnalytics, source: localSource, updatedAt: localUpdatedAt)
+            comparison: comparison, analytics: returnsAnalytics, source: localSource, updatedAt: localUpdatedAt,
+            cachedAt: portfolioCachedAt)
     }
 
     private func restoreSourcePresentation(_ cached: SourcePresentation) {
@@ -1424,6 +1452,7 @@ final class AppModel {
         returnsAnalytics = cached.analytics
         localSource = cached.source
         localUpdatedAt = cached.updatedAt
+        portfolioCachedAt = cached.cachedAt
         presentedSource = portfolioSource
         portfolioChartRevision &+= 1
         comparisonRevision &+= 1
@@ -1444,10 +1473,55 @@ final class AppModel {
         selectedAccountKeys = []
         holdingDailyChanges = [:]
         localUpdatedAt = nil
+        portfolioCachedAt = nil
         localSource = "尚未导入"
         portfolioChartRevision &+= 1
         comparisonRevision &+= 1
         returnsAnalyticsRevision &+= 1
+    }
+
+    private var hasUsableHomeChart: Bool {
+        presentedSource == portfolioSource && portfolioChart?.currentPoint.marketValue.isFinite == true
+    }
+
+    private func homeCacheContext(for loaded: LocalPortfolioDocument) -> PortfolioPresentationCache.Context {
+        .init(source: portfolioSource, accountKeys: resolvedAccountKeys(in: loaded), language: ContentLanguage.current)
+    }
+
+    private func canPreserveHomeChart(for loaded: LocalPortfolioDocument) async -> Bool {
+        guard hasUsableHomeChart, selectedAccountKeys == resolvedAccountKeys(in: loaded) else { return false }
+        return await presentationCache.sameLedger(fullDocument, loaded)
+    }
+
+    private func restoreHomePresentation(from loaded: LocalPortfolioDocument, generation: Int) async -> Bool {
+        // An already visible presentation can contain newer detail-page quotes.
+        guard overview == nil || presentedSource != portfolioSource,
+              detailMarketObservations[portfolioSource]?.isEmpty != false else { return false }
+        let context = homeCacheContext(for: loaded)
+        guard let cached = await presentationCache.load(document: loaded, context: context),
+              generation == portfolioRequestGeneration, !Task.isCancelled else { return false }
+        let scoped = selectedDocument(from: loaded)
+        restoreSourcePresentation(SourcePresentation(
+            document: scoped, fullDocument: loaded, overview: cached.overview, chart: cached.chart,
+            holdings: cached.holdings, accounts: loaded.accounts, accountKeys: resolvedAccountKeys(in: loaded),
+            dailyChanges: cached.dailyChanges, benchmark: cached.benchmark, comparison: nil, analytics: nil,
+            source: isPublicInvestorMode ? scoped.accounts.map(\.displayName).joined(separator: "、") : scoped.source,
+            updatedAt: cached.updatedAt, cachedAt: cached.savedAt))
+        isPortfolioChartLoading = !hasUsableHomeChart
+        isHoldingDailyChangesLoading = false
+        // Keep refreshing in the background; restoration is not a fresh quote.
+        holdingDailyChangesSignature = ""
+        return true
+    }
+
+    func saveHomePresentation(generation: Int? = nil) async {
+        guard !Task.isCancelled, generation == nil || generation == portfolioRequestGeneration,
+              presentedSource == portfolioSource, let overview, let chart = portfolioChart else { return }
+        let snapshot = PortfolioPresentationSnapshot(overview: overview, chart: chart, holdings: holdings,
+            dailyChanges: holdingDailyChanges, benchmark: benchmarkDailyChange,
+            updatedAt: localUpdatedAt, savedAt: Date())
+        // Failure to write a disposable result cache must not fail a refresh.
+        try? await presentationCache.save(snapshot, document: fullDocument, context: homeCacheContext(for: fullDocument))
     }
 
     private func loadActiveDocument() async throws -> LocalPortfolioDocument {
@@ -1504,6 +1578,7 @@ final class AppModel {
             // Re-scope the complete in-memory ledger, reusing quote and history
             // caches. Account visibility never triggers a broker or market refresh.
             try await apply(fullDocument, invalidatesDailyChanges: false, localSelectionOnly: true)
+            await saveHomePresentation(generation: generation)
         } catch {
             guard generation == portfolioRequestGeneration else { return }
             portfolioError = error.localizedDescription
@@ -1550,6 +1625,18 @@ final class AppModel {
 
     private func refreshHistoricalChart(from loaded: LocalPortfolioDocument, generation: Int) async {
         guard !isFakeDataMode else { return }
+        // A new/invalid result cache should still try existing price history
+        // locally before entering the slow provider refresh/fallback pipeline.
+        if !hasUsableHomeChart,
+           let cached = try? await LocalMarketDataClient().portfolioChart(document: loaded, cachedOnly: true),
+           cached.currentPoint.marketValue.isFinite {
+            guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+            portfolioChart = cached
+            isPortfolioChartLoading = false
+            portfolioChartRevision &+= 1
+            await saveHomePresentation(generation: generation)
+        }
+        guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
         await enrichPortfolioChart(from: loaded, generation: generation)
     }
 
@@ -1561,8 +1648,13 @@ final class AppModel {
         }
         if let enriched = try? await LocalMarketDataClient().portfolioChart(document: loaded) {
             guard generation == portfolioRequestGeneration else { return }
+            // A failed/offline rebuild can return an unavailable response.
+            // Keep the last valid cached curve and its timestamp in that case.
+            guard enriched.currentPoint.marketValue.isFinite || !hasUsableHomeChart else { return }
             portfolioChart = enriched
+            if enriched.currentPoint.marketValue.isFinite { portfolioCachedAt = nil }
             portfolioChartRevision &+= 1
+            await saveHomePresentation(generation: generation)
         }
     }
 

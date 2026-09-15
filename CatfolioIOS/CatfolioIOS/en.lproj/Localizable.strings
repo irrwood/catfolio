@@ -2491,3 +2491,5 @@
 "请解读 %@ 最近一期财报：收入、利润、现金流、业务变化和管理层指引。区分同比、环比与市场预期；没有一致预期数据时不要判断是否超预期。" = "Review the latest earnings report for %@: revenue, profit, cash flow, business developments and management guidance. Distinguish year-over-year and sequential comparisons from market expectations. Do not claim an earnings beat without consensus data.";
 "请从业务模式、财务质量、估值、近期催化和主要风险五个方面介绍 %@，最后总结最值得继续研究的三个问题。" = "Introduce %@ through its business model, financial quality, valuation, recent catalysts and main risks. Finish with three questions worth researching further.";
 "请总结最近一个交易日的美股市场：主要指数、板块轮动、波动率、利率与宏观事件。说明市场关注点，注明交易日和数据来源。" = "Summarize the US equity market’s most recent trading day: major indices, sector rotation, volatility, interest rates and macro events. Explain the key market themes and specify the trading date and data sources.";
+
+"上次显示于 %@" = "Last shown %@";

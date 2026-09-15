@@ -132,7 +132,12 @@ enum SecurityDetailPresentation {
     /// now matches what the swipe will use.
     static let cornerRadius: CGFloat = 50
 
-    static let backdropColor = UIColor.black.withAlphaComponent(0.28)
+    /// The shade behind an open security page. A 28% black over the white
+    /// home page turned it a dirty grey; in light mode it is kept light enough
+    /// to read as depth rather than a stain.
+    static let backdropColor = UIColor { trait in
+        UIColor.black.withAlphaComponent(trait.userInterfaceStyle == .dark ? 0.28 : 0.10)
+    }
 
     /// The top of the designed ground. Figma paints `rgba(45,50,57,0.5)` over a
     /// black frame; composited, that is this colour, drawn opaque so the dimmed
@@ -246,7 +251,6 @@ private struct SecurityDetailBackdrop: UIViewControllerRepresentable {
             // private dimming-view names or UIKit's transition delegate.
             while let parent = surface.superview, parent !== container { surface = parent }
             guard surface.superview === container else { return }
-
             sheetController = owner
             hitBarrier.frame = container.bounds
             shade.frame = hitBarrier.bounds
@@ -266,6 +270,30 @@ private struct SecurityDetailBackdrop: UIViewControllerRepresentable {
 
         private func animateBackdrop(presenting: Bool, animated: Bool) {
             let target: CGFloat = presenting ? 1 : 0
+            // Opening, the shade fades on its own Core Animation clock. Run
+            // alongside the zoom it was stepped by the main thread, which is
+            // busiest building the page in exactly those frames — it came in
+            // in two or three visible jumps. Closing stays with the coordinator
+            // so an interactive swipe drives it and a cancelled one restores it.
+            // An explicit layer animation: UIKit calls this from inside the
+            // transition's setup, where `UIView.animate` is suppressed and the
+            // shade simply appeared.
+            if presenting, animated {
+                transitionInFlight = true
+                CATransaction.begin()
+                CATransaction.setCompletionBlock { [weak self] in
+                    self?.finishTransition(presenting: true, cancelled: false)
+                }
+                let fade = CABasicAnimation(keyPath: "opacity")
+                fade.fromValue = shade.layer.presentation()?.opacity ?? Float(shade.alpha)
+                fade.toValue = 1
+                fade.duration = 0.35
+                fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                shade.alpha = target
+                shade.layer.add(fade, forKey: "catfolio.backdrop.fade")
+                CATransaction.commit()
+                return
+            }
             if let coordinator = sheetController?.transitionCoordinator ?? transitionCoordinator,
                coordinator.isAnimated {
                 transitionInFlight = true
@@ -335,80 +363,35 @@ struct HoldingPressButtonStyle: ButtonStyle {
     }
 }
 
-/// The return target is a frozen copy in the presenter's overlay. It does not
-/// depend on a lazy row, a pressed label, or a context-menu lift staying alive.
+/// Which row a security page grows out of, and back into.
+///
+/// The zoom is tied to the live row with `matchedTransitionSource`, so the
+/// system reads the row's real frame when the page opens and again when it
+/// closes. It replaced a copy of the row drawn over the list from a recorded
+/// frame, which added an overlay, an extra run-loop hop before presenting,
+/// and a second image of the row to cross-fade on the way back.
 @MainActor @Observable
 final class SecurityDetailZoomState {
     struct Source {
-        let id = UUID()
-        let frame: CGRect
-        let content: AnyView
-    }
-
-    private struct Key: Hashable {
         let id: AnyHashable
         let namespace: Namespace.ID
     }
 
-    let coordinateSpace = UUID()
     private(set) var activeSource: Source?
-    @ObservationIgnored private var candidates: [Key: Source] = [:]
-    @ObservationIgnored private var pendingPresentation: (() -> Void)?
-    @ObservationIgnored var viewport: CGRect = .zero
 
-    func register(id: AnyHashable, namespace: Namespace.ID, frame: CGRect, content: AnyView) {
-        guard activeSource == nil, Self.isUsable(frame) else { return }
-        candidates[Key(id: id, namespace: namespace)] = Source(frame: frame, content: content)
-    }
-
+    /// Records where the page comes from, then presents it — in the same
+    /// update, so the tap is answered at once.
     func prepare(id: AnyHashable, namespace: Namespace.ID, present: @escaping () -> Void) {
         guard activeSource == nil else { return }
-        guard let candidate = candidates[Key(id: id, namespace: namespace)],
-              Self.isUsable(viewport) else {
-            present()
-            return
-        }
-        let visibleFrame = candidate.frame.intersection(viewport)
-        // An absent/offscreen source gets the ordinary sheet transition,
-        // never a zoom to an empty frame at the coordinate-space origin.
-        guard Self.isUsable(visibleFrame) else {
-            present()
-            return
-        }
-        pendingPresentation = present
-        activeSource = Source(frame: candidate.frame, content: candidate.content)
-    }
-
-    func sourceDidAppear(_ id: UUID) {
-        guard activeSource?.id == id, let present = pendingPresentation else { return }
-        pendingPresentation = nil
-        // Register the stable source with SwiftUI before asking UIKit to start
-        // the sheet. A source and destination created in one update can race.
-        DispatchQueue.main.async { [weak self] in
-            guard self?.activeSource?.id == id else { return }
-            present()
-        }
+        activeSource = Source(id: id, namespace: namespace)
+        present()
     }
 
     func didDismiss() {
         // Called by sheet onDismiss, not by the selection becoming nil or a
         // view disappearing at the start of an interactive dismissal.
         activeSource = nil
-        pendingPresentation = nil
     }
-
-    func unregister(id: AnyHashable, namespace: Namespace.ID) {
-        candidates.removeValue(forKey: Key(id: id, namespace: namespace))
-    }
-
-    private static func isUsable(_ frame: CGRect) -> Bool {
-        !frame.isNull && !frame.isInfinite && frame.width > 1 && frame.height > 1
-            && [frame.minX, frame.minY, frame.width, frame.height].allSatisfy(\.isFinite)
-    }
-}
-
-private struct SecurityDetailZoomStateKey: EnvironmentKey {
-    static let defaultValue: SecurityDetailZoomState? = nil
 }
 
 private struct SecurityDetailZoomOriginKey: EnvironmentKey {
@@ -416,74 +399,23 @@ private struct SecurityDetailZoomOriginKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    var securityDetailZoomState: SecurityDetailZoomState? {
-        get { self[SecurityDetailZoomStateKey.self] }
-        set { self[SecurityDetailZoomStateKey.self] = newValue }
-    }
-
     var securityDetailZoomOrigin: Namespace.ID? {
         get { self[SecurityDetailZoomOriginKey.self] }
         set { self[SecurityDetailZoomOriginKey.self] = newValue }
     }
 }
 
-private struct SecurityDetailZoomSource<Content: View>: View {
-    private final class GeometryStorage {
-        var frame: CGRect = .zero
-    }
-
-    @Environment(\.securityDetailZoomState) private var state
-    @State private var geometryStorage = GeometryStorage()
-    let content: Content
-    let id: AnyHashable
-    let namespace: Namespace.ID
-
-    @ViewBuilder
-    var body: some View {
-        if let state {
-            content
-                .geometryGroup()
-                .onGeometryChange(for: CGRect.self) { geometry in
-                    geometry.frame(in: .named(state.coordinateSpace))
-                } action: { frame in
-                    geometryStorage.frame = frame
-                    state.register(id: id, namespace: namespace, frame: frame, content: AnyView(content))
-                }
-                .onAppear {
-                    state.register(id: id, namespace: namespace, frame: geometryStorage.frame, content: AnyView(content))
-                }
-                .onDisappear { state.unregister(id: id, namespace: namespace) }
-        } else {
-            content.matchedTransitionSource(id: id, in: namespace)
-        }
-    }
-}
-
 extension View {
+    /// Kept so presenters read the same; the zoom needs nothing from the host
+    /// now that sources are the rows themselves.
     func securityDetailZoomHost(_ state: SecurityDetailZoomState, in namespace: Namespace.ID) -> some View {
-        coordinateSpace(name: state.coordinateSpace)
-            .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
-                state.viewport = CGRect(origin: .zero, size: size)
-            }
-            .overlay(alignment: .topLeading) {
-                if let source = state.activeSource {
-                    source.content
-                        .frame(width: source.frame.width, height: source.frame.height)
-                        .matchedTransitionSource(id: source.id, in: namespace)
-                        .offset(x: source.frame.minX, y: source.frame.minY)
-                        .transaction { $0.animation = nil }
-                        .onAppear { state.sourceDidAppear(source.id) }
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
-            }
-            .environment(\.securityDetailZoomState, state)
+        self
     }
 
     @ViewBuilder
     func securityDetailZoomTransition(_ source: SecurityDetailZoomState.Source?, in namespace: Namespace.ID) -> some View {
         if let source {
-            navigationTransition(.zoom(sourceID: source.id, in: namespace))
+            navigationTransition(.zoom(sourceID: source.id, in: source.namespace))
         } else {
             self
         }
@@ -560,7 +492,7 @@ extension View {
     /// the page's own backgrounds, which the sheet's single ground now
     /// replaces; the sources did not need reshaping.
     func catfolioZoomSource(_ id: some Hashable, in namespace: Namespace.ID) -> some View {
-        SecurityDetailZoomSource(content: self, id: AnyHashable(id), namespace: namespace)
+        matchedTransitionSource(id: AnyHashable(id), in: namespace)
     }
 
     /// Clicks when a security page is asked for — in the same run-loop turn

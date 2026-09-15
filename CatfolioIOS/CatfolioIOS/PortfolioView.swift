@@ -61,11 +61,6 @@ private enum PortfolioContentSheetLayout {
     // summary remains visible while the chart is covered by Today.
     static let firstScrollDetent = PortfolioHeroChartLayout.sectionHeight - PortfolioHeroChartLayout.plotTop
     static let topRadius: CGFloat = 38
-    static let blurLeadDistance: CGFloat = 64
-    static let blurActivationDistance: CGFloat = 48
-    // Fade out underneath the rounded corners, where the sheet's own glass
-    // takes over. This keeps both ends of the small sampling band seamless.
-    static let blurBandHeight = blurLeadDistance + topRadius + 40
 
     static var shape: UnevenRoundedRectangle {
         UnevenRoundedRectangle(
@@ -167,7 +162,6 @@ private struct PortfolioContentSheet<Content: View>: View {
     let scrollState: PortfolioHomeScrollState
     let content: Content
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     init(scrollState: PortfolioHomeScrollState, @ViewBuilder content: () -> Content) {
         self.scrollState = scrollState
@@ -200,142 +194,8 @@ private struct PortfolioContentSheet<Content: View>: View {
                 .allowsHitTesting(false)
             }
             .clipShape(sheetShape)
-            .background(alignment: .top) {
-                if !reduceTransparency, settlingProgress > 0 {
-                    // Outside the foreground's SwiftUI clip: UIKit backdrop
-                    // blur needs its mask on the effect view itself. Lead the
-                    // sheet so the still-visible hero softens before coverage;
-                    // keep this band when the sheet itself becomes opaque.
-                    PortfolioSheetBackdropBlur(progress: settlingProgress)
-                        .frame(height: PortfolioContentSheetLayout.blurBandHeight)
-                        .offset(y: -PortfolioContentSheetLayout.blurLeadDistance)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
-            }
             .padding(.horizontal, horizontalInset)
             .accessibilityElement(children: .contain)
-    }
-}
-
-/// A feathered backdrop band travels ahead of the sheet. The hero remains
-/// sharp beyond the band and progressively blurs as the edge approaches it.
-private struct PortfolioSheetBackdropBlur: UIViewRepresentable {
-    let progress: CGFloat
-
-    func makeUIView(context: Context) -> BlurView { BlurView() }
-    func updateUIView(_ view: BlurView, context: Context) { view.setProgress(progress) }
-    static func dismantleUIView(_ view: BlurView, coordinator: ()) { view.tearDown() }
-
-    final class BlurView: UIVisualEffectView {
-        private let depthMask = UIView()
-        private let gradient = CAGradientLayer()
-        private let sideFade = CAGradientLayer()
-        private var animator: UIViewPropertyAnimator?
-        private var requestedAmount: CGFloat = 0
-        private var appliedAmount: CGFloat?
-        private var maskBounds = CGRect.null
-
-        init() {
-            super.init(effect: nil)
-            isUserInteractionEnabled = false
-            let edge = PortfolioContentSheetLayout.blurLeadDistance / PortfolioContentSheetLayout.blurBandHeight
-            let corner = (PortfolioContentSheetLayout.blurLeadDistance + PortfolioContentSheetLayout.topRadius)
-                / PortfolioContentSheetLayout.blurBandHeight
-            gradient.colors = [
-                UIColor.clear.cgColor,
-                UIColor.black.withAlphaComponent(0.14).cgColor,
-                UIColor.black.withAlphaComponent(0.70).cgColor,
-                UIColor.black.cgColor,
-                UIColor.black.cgColor,
-                UIColor.clear.cgColor,
-            ]
-            gradient.locations = [0, edge * 0.25, edge * 0.75, edge, corner, 1]
-                .map { NSNumber(value: Double($0)) }
-            gradient.startPoint = CGPoint(x: 0.5, y: 0)
-            gradient.endPoint = CGPoint(x: 0.5, y: 1)
-            sideFade.colors = [
-                UIColor.clear.cgColor,
-                UIColor.black.cgColor,
-                UIColor.black.cgColor,
-                UIColor.clear.cgColor,
-            ]
-            sideFade.startPoint = CGPoint(x: 0, y: 0.5)
-            sideFade.endPoint = CGPoint(x: 1, y: 0.5)
-            depthMask.layer.addSublayer(gradient)
-            depthMask.layer.mask = sideFade
-        }
-
-        @available(*, unavailable)
-        required init?(coder: NSCoder) { nil }
-
-        override func layoutSubviews() {
-            super.layoutSubviews()
-            guard bounds != maskBounds else { return }
-            maskBounds = bounds
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            depthMask.frame = bounds
-            gradient.frame = depthMask.bounds
-            sideFade.frame = depthMask.bounds
-            let feather = min(0.5, PortfolioContentSheetLayout.topRadius / max(1, bounds.width))
-            sideFade.locations = [0, feather, 1 - feather, 1]
-                .map { NSNumber(value: Double($0)) }
-            // UIKit copies a visual-effect mask internally. Reassign after a
-            // resize so the soft side edges follow the sheet's changing width.
-            mask = depthMask
-            CATransaction.commit()
-        }
-
-        func setProgress(_ progress: CGFloat) {
-            let travel = progress * PortfolioContentSheetLayout.widthExpansionDistance
-            let t = min(1, max(0, travel / PortfolioContentSheetLayout.blurActivationDistance))
-            requestedAmount = t * t * (3 - 2 * t)
-            applyAmountIfVisible()
-        }
-
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            if window == nil { tearDown() }
-            else { applyAmountIfVisible() }
-        }
-
-        private func applyAmountIfVisible() {
-            guard window != nil, appliedAmount != requestedAmount else { return }
-            let amount = requestedAmount
-            appliedAmount = amount
-            if amount == 0 || amount == 1 {
-                stopAnimator()
-                UIView.performWithoutAnimation {
-                    effect = amount == 0 ? nil : UIBlurEffect(style: .systemUltraThinMaterial)
-                }
-                return
-            }
-            if animator == nil {
-                UIView.performWithoutAnimation { effect = nil }
-                let animation = UIViewPropertyAnimator(duration: 1, curve: .linear) { [weak self] in
-                    self?.effect = UIBlurEffect(style: .systemUltraThinMaterial)
-                }
-                animation.startAnimation()
-                animation.pauseAnimation()
-                animator = animation
-            }
-            animator?.fractionComplete = amount
-        }
-
-        private func stopAnimator() {
-            animator?.stopAnimation(true)
-            animator = nil
-        }
-
-        func tearDown() {
-            stopAnimator()
-            effect = nil
-            appliedAmount = nil
-            layer.removeAllAnimations()
-        }
-
-        deinit { animator?.stopAnimation(true) }
     }
 }
 
@@ -357,10 +217,7 @@ private struct PortfolioContentSheetBackground: View {
     private var liquidGlassLayer: some View {
         if #available(iOS 26.0, *) {
             Color.clear
-                .glassEffect(
-                    .clear,
-                    in: sheetShape
-                )
+                .glassEffect(.clear, in: sheetShape)
         } else {
             Rectangle()
                 .fill(.ultraThinMaterial)
@@ -370,7 +227,8 @@ private struct PortfolioContentSheetBackground: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
-                // Once opaque, the sheet no longer needs backdrop sampling.
+                // The card retains its own glass surface. No separate blur
+                // band extends beyond its rounded edge.
                 if !reduceTransparency, settlingProgress < 1 {
                     liquidGlassLayer
                 }
@@ -385,10 +243,8 @@ private struct PortfolioContentSheetBackground: View {
                     endPoint: .bottom
                 )
 
-                // The passive sheet must not use Glass.interactive(): its
-                // system press highlight flashes white across this large
-                // surface. Let the covered chart blur before the sheet settles
-                // into its opaque page colour at the end of width expansion.
+                // Passive glass avoids a full-card press highlight. Fade to
+                // the opaque page colour as the card finishes expanding.
                 terminalColor.opacity(reduceTransparency ? 1 : pow(settlingProgress, 3))
             }
             .frame(height: PortfolioContentSheetLayout.transitionHeight)
@@ -453,6 +309,7 @@ struct PortfolioView: View {
                         VStack(spacing: 0) {
                             PortfolioRefreshTimestamp(
                                 date: model.localUpdatedAt,
+                                cachedAt: model.portfolioCachedAt,
                                 isRefreshing: model.isPortfolioLoading
                             )
 
@@ -613,7 +470,8 @@ struct PortfolioView: View {
     }
 
     private func openHolding(_ holding: Holding, from namespace: Namespace.ID) {
-        guard selectedHolding == nil, holdingZoomState.activeSource == nil else { return }
+        guard selectedHolding == nil, holdingZoomState.activeSource == nil,
+              !homeScrollController.touchCaughtMotion else { return }
         holdingZoomState.prepare(id: holding.ticker, namespace: namespace) {
             selectedHolding = holding
         }
@@ -624,11 +482,17 @@ struct PortfolioView: View {
 private struct PortfolioRefreshTimestamp: View {
     @Environment(\.locale) private var appLocale
     let date: Date?
+    let cachedAt: Date?
     let isRefreshing: Bool
 
     var body: some View {
         Group {
-            if let date {
+            if let cachedAt {
+                Text(L10n.text("上次显示于 \(cachedAt.formatted(.dateTime.month().day().hour().minute().locale(appLocale)))"))
+                    .appNumber(.micro)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            } else if let date {
                 Text(L10n.text("更新于 \(date.formatted(.dateTime.hour().minute()))"))
                     .appNumber(.micro)
                     .foregroundStyle(Color.primary.opacity(0.44))
@@ -636,12 +500,13 @@ private struct PortfolioRefreshTimestamp: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 0)
-        .offset(y: -16)
-        .opacity(isRefreshing ? 1 : 0)
+        .frame(height: cachedAt != nil ? 20 : 0)
+        .offset(y: cachedAt != nil ? 0 : -16)
+        .opacity(isRefreshing || cachedAt != nil ? 1 : 0)
         .animation(.easeOut(duration: 0.18), value: isRefreshing)
-        .accessibilityHidden(!isRefreshing)
-        .accessibilityLabel(date.map { L10n.text("数据更新于 \($0.formatted(.dateTime.hour().minute()))") } ?? "")
+        .accessibilityHidden(!isRefreshing && cachedAt == nil)
+        .accessibilityLabel(cachedAt.map { L10n.text("上次显示于 \($0.formatted(.dateTime.month().day().hour().minute().locale(appLocale)))") }
+            ?? date.map { L10n.text("数据更新于 \($0.formatted(.dateTime.hour().minute()))") } ?? "")
     }
 }
 
@@ -943,7 +808,8 @@ private struct TodayContributionCard: View {
                             amount: contribution.amount,
                             relativeHeight: rankHeights[index],
                             isGain: direction == .gains,
-                            growth: barRevealProgress
+                            growth: barRevealProgress,
+                            zoomNamespace: zoomNamespace
                         ) {
                             onSelect(contribution.holding)
                         }
@@ -952,7 +818,6 @@ private struct TodayContributionCard: View {
                         // a newly ranked company cannot retain the previous
                         // slot's logo or other view-local state.
                         .id(contribution.id)
-                        .holdingZoomSource(contribution.holding.ticker, in: zoomNamespace)
                     } else {
                         Color.clear
                             .frame(height: 167)
@@ -1027,6 +892,7 @@ private struct TodayContributionBar: View {
     let relativeHeight: Double
     let isGain: Bool
     let growth: CGFloat
+    var zoomNamespace: Namespace.ID?
     let action: () -> Void
     @Environment(\.colorScheme) private var colorScheme
     @State private var resolvedBrandColor: Color?
@@ -1112,6 +978,11 @@ private struct TodayContributionBar: View {
                     }
                     .frame(height: renderedBarHeight)
                     .clipShape(fillShape, style: FillStyle(antialiased: true))
+                    // The page grows out of the green bar itself, not the
+                    // 167pt slot around it: landing on the slot, the zoom
+                    // ended on a tall green card and then dropped to the
+                    // shorter bar under it.
+                    .holdingZoomSource(holding.ticker, in: zoomNamespace)
                 }
                 .frame(maxWidth: .infinity, minHeight: 146, maxHeight: 146, alignment: .bottom)
 

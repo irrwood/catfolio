@@ -41,6 +41,7 @@ IBKR 的 Activity Flex Query 应输出 XML，时间范围覆盖完整成交历�
 ## 本机数据与第三方服务
 
 - 持仓账本写入 App 的 Application Support，使用 iOS 文件保护；每天同步时保留一份市值/成本快照。
+- 首页已计算的资产曲线、持仓数字和今日涨跌保存在 `Application Support/Catfolio/HomePresentation/`。冷启动先校验本地账本、所选账户、数据模式和语言并恢复结果，显示上次显示时间，再后台刷新；报价、报价时间和派生快照变化不会使已有结果失效，未完成的加载结果不能覆盖有效缓存；刷新失败保留已有曲线。缓存使用文件保护并排除备份，删除账户或重置组合会清除个人首页缓存。首次使用或账本变更后仍需生成新结果。
 - CSV 不上传，导入会替换手机上的当前持仓。
 - ETF 穿透使用 App 内置的 Vanguard S&P 500 与 Invesco EQQQ 官方持仓快照；支持 VUAG、VUSA、SPY、VOO、IVV、EQQQ 和 XS2D（含同基金常见欧洲上市代码）。XS2D 的净持仓金额只分配一次，2x 日杠杆不会再次乘到市值或成本上。
 - 成交量与历史日线支持直连 Massive 和 Financial Modeling Prep，并保留 Yahoo 自动回退；API Key 只保存在设备 Keychain。
