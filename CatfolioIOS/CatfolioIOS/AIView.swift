@@ -39,6 +39,11 @@ struct AIView: View {
     @FocusState private var isComposerFocused: Bool
 
     private static let conversationBottomID = "ai-conversation-bottom"
+    /// Messages built at a time; earlier ones wait behind a button.
+    private static let messagePage = 40
+    @State private var visibleMessageLimit = AIView.messagePage
+
+    private var hiddenMessageCount: Int { max(0, messages.count - visibleMessageLimit) }
 
     init(
         isEmbedded: Bool = false,
@@ -102,8 +107,11 @@ struct AIView: View {
     private var conversation: some View {
         ZStack(alignment: .bottomTrailing) {
             if isRestoringHistory {
-                ProgressView(L10n.text("正在读取本机对话…"))
+                // Usually a single frame now that the library is in memory;
+                // a spinner there only flickered.
+                Color.clear
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityLabel(L10n.text("正在读取本机对话…"))
             } else {
                 conversationScrollView
                     .id(activeConversationID)
@@ -162,12 +170,17 @@ struct AIView: View {
         }
     }
 
-    /// Mount with the restored messages already present. Reusing the loading
-    /// placeholder's lazy layout leaves its estimated bottom offset in place
-    /// until a drag forces the message rows to be laid out again.
+    /// Mount with the restored messages already present.
+    ///
+    /// A plain stack, not a lazy one. Anchored to the bottom, a lazy stack
+    /// placed its rows by estimated heights and often drew nothing until a
+    /// drag made it measure them — the conversation "appeared" on the first
+    /// scroll. Every row here is measured, so the bottom is exact at once; to
+    /// keep a long history cheap, only the latest messages are built until
+    /// the reader asks for earlier ones.
     private var conversationScrollView: some View {
         ScrollView {
-            LazyVStack(spacing: 12) {
+            VStack(spacing: 12) {
                 // The page margin goes on each row, not on the stack. The
                 // scroll position is kept by row, and a row that began 16pt
                 // in was brought to the viewport's leading edge when the
@@ -189,7 +202,20 @@ struct AIView: View {
                     // which also leaves the chat document's schema alone.
                     SecurityDebateInbox()
 
-                    ForEach(messages) { message in
+                    if hiddenMessageCount > 0 {
+                        Button {
+                            visibleMessageLimit += Self.messagePage
+                        } label: {
+                            Text(L10n.text("显示更早的 \(hiddenMessageCount) 条消息"))
+                                .appText(.footnote, weight: .medium)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    ForEach(messages.suffix(visibleMessageLimit)) { message in
                         ChatBubble(
                             message: message,
                             attentionReport: attentionReports[message.id]
@@ -448,6 +474,7 @@ struct AIView: View {
         withTransaction(transaction) {
             // Discard any offset or user-scroll state from another conversation.
             conversationPosition = ScrollPosition(edge: .bottom)
+            visibleMessageLimit = Self.messagePage
             isNearConversationBottom = true
         }
     }
@@ -512,7 +539,13 @@ struct AIView: View {
         }
 
         do {
-            let library = try await LocalChatStore.shared.loadLibrary()
+            let library: LocalChatLibrary
+            if let cached = LocalChatLibraryCache.library {
+                library = cached
+            } else {
+                library = try await LocalChatStore.shared.loadLibrary()
+                LocalChatLibraryCache.library = library
+            }
             conversations = library.conversations
             let opened = library.active ?? library.sortedByRecency.first
             // A device with no history still needs somewhere to put the first
@@ -709,9 +742,9 @@ struct AIView: View {
         guard !model.isFakeDataMode && !model.isPublicInvestorMode else { return }
         foldActiveConversationIntoLibrary()
         do {
-            try await LocalChatStore.shared.save(
-                LocalChatLibrary(conversations: conversations, activeID: activeConversationID)
-            )
+            let library = LocalChatLibrary(conversations: conversations, activeID: activeConversationID)
+            LocalChatLibraryCache.library = library
+            try await LocalChatStore.shared.save(library)
         } catch {
             errorMessage = L10n.text("无法保存本机对话：\(error.localizedDescription)")
         }
@@ -767,9 +800,9 @@ struct AIView: View {
     private func persistLibrary() async {
         guard !model.isFakeDataMode && !model.isPublicInvestorMode else { return }
         do {
-            try await LocalChatStore.shared.save(
-                LocalChatLibrary(conversations: conversations, activeID: activeConversationID)
-            )
+            let library = LocalChatLibrary(conversations: conversations, activeID: activeConversationID)
+            LocalChatLibraryCache.library = library
+            try await LocalChatStore.shared.save(library)
         } catch {
             errorMessage = L10n.text("无法保存本机对话：\(error.localizedDescription)")
         }
@@ -991,8 +1024,10 @@ private struct ChatBubble: View {
                     .textSelection(.enabled)
                     .padding(.horizontal, 15)
                     .padding(.vertical, 12)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
-                    .foregroundStyle(Color.black.opacity(0.88))
+                    // Inverted from the page: white on the dark page, near-black
+                    // on the light one.
+                    .background(Color.primary, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+                    .foregroundStyle(Color(uiColor: .systemBackground))
             }
             .frame(maxWidth: .infinity)
         }
@@ -1917,7 +1952,7 @@ private struct AIComposer: View {
         }
         // The menu's symbols take the tint, which otherwise resolves to the
         // page's accent and prints them blue against a dark sheet.
-        .tint(isFloating ? .white : .primary)
+        .tint(.primary)
         .buttonStyle(.plain)
         .disabled(isSending)
         .accessibilityLabel(L10n.text("AI 快捷操作"))
@@ -1928,11 +1963,11 @@ private struct AIComposer: View {
             TextField(
                 L10n.text("Ask AI"),
                 text: $question,
-                prompt: Text(L10n.text("Ask AI")).foregroundStyle(.white.opacity(0.82)),
+                prompt: Text(L10n.text("Ask AI")).foregroundStyle(Color.primary.opacity(0.62)),
                 axis: .vertical
             )
                 .font(.body)
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .lineLimit(1...3)
                 .focused(focus)
                 .submitLabel(.send)
@@ -1941,15 +1976,15 @@ private struct AIComposer: View {
             if isSending {
                 ProgressView()
                     .controlSize(.small)
-                    .tint(.white)
+                    .tint(.primary)
             } else {
                 Button(action: onSend) {
                     Image(systemName: "arrow.up")
                         .font(.subheadline.weight(.bold))
-                        .foregroundStyle(canSend ? .black : .white.opacity(0.42))
+                        .foregroundStyle(canSend ? Color(uiColor: .systemBackground) : Color.primary.opacity(0.42))
                         .frame(width: 32, height: 32)
                         .background(
-                            canSend ? Color.white : Color.white.opacity(0.10),
+                            canSend ? Color.primary : Color.primary.opacity(0.10),
                             in: Circle()
                         )
                 }
@@ -1989,14 +2024,25 @@ struct AIAssistantPage: View {
                 AIConversationGlowBackground()
                     .ignoresSafeArea()
             }
-            .preferredColorScheme(.dark)
     }
 }
 
-/// A stationary blue light below the conversation. Keep the dark base opaque
-/// and size the glow to the screen, including the area behind the keyboard.
+/// The assistant's ground: opaque, so nothing of the page behind the zoom
+/// shows through, in the reader's appearance.
+private enum AIConversationGround {
+    static func base(for scheme: ColorScheme) -> Color {
+        scheme == .dark ? .black : Color(red: 0.955, green: 0.962, blue: 0.975)
+    }
+}
+
+/// A stationary blue light below the conversation. Keep the base opaque and
+/// size the glow to the screen, including the area behind the keyboard. On
+/// the light page the same light, weaker: a wash rather than a lamp.
 private struct AIConversationGlowBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
+        let strength = colorScheme == .dark ? 1.0 : 0.34
         GeometryReader { geometry in
             let diameter = min(geometry.size.width * 1.25, 560)
 
@@ -2004,9 +2050,9 @@ private struct AIConversationGlowBackground: View {
                 .fill(
                     RadialGradient(
                         stops: [
-                            .init(color: Color(red: 0.08, green: 0.56, blue: 1).opacity(0.90), location: 0),
-                            .init(color: Color(red: 0.035, green: 0.38, blue: 0.92).opacity(0.70), location: 0.3),
-                            .init(color: Color(red: 0.02, green: 0.20, blue: 0.65).opacity(0.30), location: 0.6),
+                            .init(color: Color(red: 0.08, green: 0.56, blue: 1).opacity(0.90 * strength), location: 0),
+                            .init(color: Color(red: 0.035, green: 0.38, blue: 0.92).opacity(0.70 * strength), location: 0.3),
+                            .init(color: Color(red: 0.02, green: 0.20, blue: 0.65).opacity(0.30 * strength), location: 0.6),
                             .init(color: .clear, location: 1),
                         ],
                         center: .center,
@@ -2021,7 +2067,7 @@ private struct AIConversationGlowBackground: View {
                     y: geometry.size.height - diameter * 0.3
                 )
         }
-        .background(.black)
+        .background(AIConversationGround.base(for: colorScheme))
         .clipped()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -2069,7 +2115,7 @@ private struct AIConversationHeader: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 18, weight: .regular))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .scaleEffect(isKeyboardVisible ? 1.1 : 1)
                 .frame(width: diameter, height: diameter)
                 .contentShape(Circle())
@@ -2088,7 +2134,7 @@ private struct AIHeaderGlass: ViewModifier {
             content
                 .background(.ultraThinMaterial, in: Circle())
                 .overlay {
-                    Circle().strokeBorder(.white.opacity(0.22), lineWidth: 0.75)
+                    Circle().strokeBorder(Color.primary.opacity(0.16), lineWidth: 0.75)
                 }
         }
     }
@@ -2098,6 +2144,7 @@ private struct AIHeaderGlass: ViewModifier {
 /// Anchor it to the physical top, independently of the keyboard's bottom inset.
 private struct AIConversationTopFade: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         GeometryReader { geometry in
@@ -2106,7 +2153,7 @@ private struct AIConversationTopFade: View {
                     AIStatusBackdropBlur()
                 }
                 LinearGradient(
-                    colors: [.black, .clear],
+                    colors: [AIConversationGround.base(for: colorScheme), .clear],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -2129,7 +2176,7 @@ private struct AIStatusBackdropBlur: UIViewRepresentable {
         private var maskBounds = CGRect.null
 
         init() {
-            super.init(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+            super.init(effect: UIBlurEffect(style: .systemUltraThinMaterial))
             isUserInteractionEnabled = false
             gradient.colors = [UIColor.black.cgColor, UIColor.clear.cgColor]
             gradient.locations = [0, 1]
@@ -2169,7 +2216,7 @@ private extension View {
         } else {
             background(.ultraThinMaterial, in: shape)
                 .overlay {
-                    shape.stroke(Color.white.opacity(0.22), lineWidth: 0.75)
+                    shape.stroke(Color.primary.opacity(0.16), lineWidth: 0.75)
                 }
         }
     }

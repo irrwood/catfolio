@@ -144,7 +144,7 @@ private struct HoldingDetailContentView: View {
                     // they cross the scroll viewport boundary. Recycling this
                     // outer container rebuilt every prepared chart range and
                     // caused a hitch as the picker appeared or disappeared.
-                    // The lower, genuinely long section remains a LazyVStack.
+                    // The lower cards are eager too; see below.
                     VStack(spacing: 0) {
                     if !showsVolumeFocusedPreview {
                         VStack(spacing: 0) {
@@ -174,7 +174,11 @@ private struct HoldingDetailContentView: View {
                     // on the way.
                     if showsLowerSections {
                         VStack(spacing: 0) {
-                            LazyVStack(spacing: HoldingDetailCardStyle.spacing) {
+                            // A plain stack: built once when the page lands. Lazily,
+                            // the options wall was created as it scrolled in and
+                            // the volume chart torn down as it scrolled out, and
+                            // each was a hitch under the reader's finger.
+                            VStack(spacing: HoldingDetailCardStyle.spacing) {
                                 if let profile {
                                     VolumePriceChart(
                                         profile: profile,
@@ -250,7 +254,9 @@ private struct HoldingDetailContentView: View {
             .accessibilityIdentifier("holding-detail-scroll")
             .overlay(alignment: .topTrailing) {
                 if !isPreview {
-                    HoldingDetailCloseButton(action: onClose)
+                    HoldingDetailCloseButton(action: {
+                        SecurityDetailSnapshotTransition.shared.close(perform: onClose)
+                    })
                         .padding(20)
                 }
             }
@@ -261,7 +267,10 @@ private struct HoldingDetailContentView: View {
                     var transaction = Transaction(animation: nil)
                     transaction.disablesAnimations = true
                     withTransaction(transaction) { presentationReady = true }
-                    withAnimation(.easeOut(duration: 0.25)) { lowerSectionsRevealed = true }
+                    // Opened from a row, wait for the card to land as well.
+                    SecurityDetailSnapshotTransition.shared.whenOpenSettles {
+                        withAnimation(.easeOut(duration: 0.25)) { lowerSectionsRevealed = true }
+                    }
                 }
             }
             // Start cache-backed work as soon as SwiftUI inserts the sheet,

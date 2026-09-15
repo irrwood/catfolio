@@ -436,6 +436,22 @@ struct PortfolioView: View {
                             try? await Task.sleep(for: .milliseconds(250))
                             scrollProxy.scrollTo("today-contribution", anchor: .top)
                         }
+                        #if DEBUG
+                        // Opens and closes a security page through the same
+                        // calls as a tap and ✕, for recording the transition.
+                        if arguments.contains("--demo-security-transition") {
+                            try? await Task.sleep(for: .seconds(4))
+                            for _ in 0..<2 {
+                                guard let holding = model.holdings.first(where: {
+                                    SecurityDetailSnapshotTransition.shared.hasLiveSource(id: $0.ticker, namespace: todayBarZoom)
+                                }) else { break }
+                                openHolding(holding, from: todayBarZoom)
+                                try? await Task.sleep(for: .seconds(2.5))
+                                SecurityDetailSnapshotTransition.shared.close { selectedHolding = nil }
+                                try? await Task.sleep(for: .seconds(2.5))
+                            }
+                        }
+                        #endif
                     }
                 }
                 .modifier(PortfolioLoadRipple(

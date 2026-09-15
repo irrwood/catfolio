@@ -71,6 +71,21 @@ struct LocalChatHistory: Sendable {
     let attentionReports: [UUID: PortfolioAttentionReport]
 }
 
+/// The library as it was last read or written, so the assistant opens on
+/// its conversation at once instead of waiting on the file each time. Only
+/// the assistant writes the library, and it updates this as it saves.
+@MainActor
+enum LocalChatLibraryCache {
+    static var library: LocalChatLibrary?
+
+    /// Reads the library ahead of the first open. Off the main thread: the
+    /// store is an actor.
+    static func warm() async {
+        guard library == nil, let loaded = try? await LocalChatStore.shared.loadLibrary() else { return }
+        if library == nil { library = loaded }
+    }
+}
+
 actor LocalChatStore {
     private struct StoredAttentionReport: Codable {
         let messageID: UUID

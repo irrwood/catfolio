@@ -61,6 +61,16 @@ struct RootTabView: View {
             // disappear/appear during a switch and can miss the triggering
             // change; this single owner stays mounted throughout navigation.
             .sensoryFeedback(.selection, trigger: selection) { _, _ in hapticsEnabled }
+            // Have the assistant's conversations in memory before it is opened.
+            .task { await LocalChatLibraryCache.warm() }
+            #if DEBUG
+            // Opens the assistant as the AI button does, for recording it.
+            .task {
+                guard ProcessInfo.processInfo.arguments.contains("--demo-ai-open") else { return }
+                try? await Task.sleep(for: .seconds(4))
+                presentAI()
+            }
+            #endif
     }
 
     private var rootTabs: some View {

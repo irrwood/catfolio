@@ -68,6 +68,7 @@
 		A10000000000000000000005 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000005 /* RootTabView.swift */; };
 		A10000000000000000000006 /* PortfolioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000006 /* PortfolioView.swift */; };
 		A7C0F0110000000000000001 /* PortfolioLoadRipple.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0110000000000000001 /* PortfolioLoadRipple.swift */; };
+		A7C0F0120000000000000001 /* SecurityDetailTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0120000000000000001 /* SecurityDetailTransition.swift */; };
 		A7C0F0110000000000000002 /* PortfolioLoadRipple.metal in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0110000000000000002 /* PortfolioLoadRipple.metal */; };
 		A10000000000000000000007 /* VolumeProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000007 /* VolumeProfileView.swift */; };
 		A10000000000000000000008 /* ReturnsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* ReturnsView.swift */; };
@@ -268,6 +269,7 @@
 		B10000000000000000000005 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
 		B10000000000000000000006 /* PortfolioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioView.swift; sourceTree = "<group>"; };
 		B7C0F0110000000000000001 /* PortfolioLoadRipple.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioLoadRipple.swift; sourceTree = "<group>"; };
+		B7C0F0120000000000000001 /* SecurityDetailTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDetailTransition.swift; sourceTree = "<group>"; };
 		B7C0F0110000000000000002 /* PortfolioLoadRipple.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = PortfolioLoadRipple.metal; sourceTree = "<group>"; };
 		B10000000000000000000007 /* VolumeProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeProfileView.swift; sourceTree = "<group>"; };
 		B10000000000000000000008 /* ReturnsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReturnsView.swift; sourceTree = "<group>"; };
@@ -426,6 +428,7 @@
 				B10000000000000000000005 /* RootTabView.swift */,
 				B10000000000000000000006 /* PortfolioView.swift */,
 				B7C0F0110000000000000001 /* PortfolioLoadRipple.swift */,
+				B7C0F0120000000000000001 /* SecurityDetailTransition.swift */,
 				B7C0F0110000000000000002 /* PortfolioLoadRipple.metal */,
 				B10000000000000000000007 /* VolumeProfileView.swift */,
 				B10000000000000000000008 /* ReturnsView.swift */,
@@ -793,6 +796,7 @@
 				A10000000000000000000005 /* RootTabView.swift in Sources */,
 				A10000000000000000000006 /* PortfolioView.swift in Sources */,
 				A7C0F0110000000000000001 /* PortfolioLoadRipple.swift in Sources */,
+				A7C0F0120000000000000001 /* SecurityDetailTransition.swift in Sources */,
 				A7C0F0110000000000000002 /* PortfolioLoadRipple.metal in Sources */,
 				A10000000000000000000007 /* VolumeProfileView.swift in Sources */,
 				A10000000000000000000008 /* ReturnsView.swift in Sources */,

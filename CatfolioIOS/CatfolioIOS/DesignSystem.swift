@@ -227,7 +227,8 @@ private struct SecurityDetailBackdrop: UIViewControllerRepresentable {
 
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
-            guard hasPresented, !isDismissing else { return }
+            guard hasPresented, !isDismissing,
+                  !SecurityDetailSnapshotTransition.shared.owns(shade: shade) else { return }
             transitionInFlight = false
             shade.alpha = 1
         }
@@ -246,7 +247,8 @@ private struct SecurityDetailBackdrop: UIViewControllerRepresentable {
             guard owner.presentingViewController != nil,
                   let presentation = owner.presentationController,
                   let container = presentation.containerView,
-                  var surface = presentation.presentedView else { return }
+                  let presentedView = presentation.presentedView else { return }
+            var surface = presentedView
             // Use the public presentation surface and its ancestry, never
             // private dimming-view names or UIKit's transition delegate.
             while let parent = surface.superview, parent !== container { surface = parent }
@@ -256,6 +258,12 @@ private struct SecurityDetailBackdrop: UIViewControllerRepresentable {
             shade.frame = hitBarrier.bounds
             container.insertSubview(hitBarrier, belowSubview: surface)
             hasPresented = true
+            // Opened from a row, the snapshot transition brings the shade up
+            // with its card and hands it over when the card lands.
+            if SecurityDetailSnapshotTransition.shared.claimPresentation(
+                surface: surface, content: presentedView, shade: shade) {
+                return
+            }
             animateBackdrop(presenting: true, animated: animated)
         }
 
@@ -363,13 +371,9 @@ struct HoldingPressButtonStyle: ButtonStyle {
     }
 }
 
-/// Which row a security page grows out of, and back into.
-///
-/// The zoom is tied to the live row with `matchedTransitionSource`, so the
-/// system reads the row's real frame when the page opens and again when it
-/// closes. It replaced a copy of the row drawn over the list from a recorded
-/// frame, which added an overlay, an extra run-loop hop before presenting,
-/// and a second image of the row to cross-fade on the way back.
+/// Which row a security page opens from. The motion itself is
+/// `SecurityDetailSnapshotTransition`'s; this keeps the presenter's side —
+/// one open at a time, and the source it came from.
 @MainActor @Observable
 final class SecurityDetailZoomState {
     struct Source {
@@ -379,18 +383,29 @@ final class SecurityDetailZoomState {
 
     private(set) var activeSource: Source?
 
-    /// Records where the page comes from, then presents it — in the same
-    /// update, so the tap is answered at once.
+    /// Presents in the same update as the tap. With a source on screen the
+    /// sheet appears without animation and the snapshot card moves instead.
     func prepare(id: AnyHashable, namespace: Namespace.ID, present: @escaping () -> Void) {
         guard activeSource == nil else { return }
-        activeSource = Source(id: id, namespace: namespace)
-        present()
+        switch SecurityDetailSnapshotTransition.shared.beginOpen(id: id, namespace: namespace) {
+        case .busy:
+            return
+        case .plain:
+            activeSource = Source(id: id, namespace: namespace)
+            present()
+        case .snapshot:
+            activeSource = Source(id: id, namespace: namespace)
+            var transaction = Transaction(animation: nil)
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { present() }
+        }
     }
 
     func didDismiss() {
         // Called by sheet onDismiss, not by the selection becoming nil or a
         // view disappearing at the start of an interactive dismissal.
         activeSource = nil
+        SecurityDetailSnapshotTransition.shared.presentationDidEnd()
     }
 }
 
@@ -406,19 +421,17 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// Kept so presenters read the same; the zoom needs nothing from the host
-    /// now that sources are the rows themselves.
+    /// Kept so presenters read the same; the snapshot transition needs
+    /// nothing from the host.
     func securityDetailZoomHost(_ state: SecurityDetailZoomState, in namespace: Namespace.ID) -> some View {
         self
     }
 
-    @ViewBuilder
+    /// Kept so presenters read the same. The system zoom is no longer used:
+    /// on iOS 26 its geometry, timing, shadow and cross-fade were fixed and
+    /// its tail left a double image of the row.
     func securityDetailZoomTransition(_ source: SecurityDetailZoomState.Source?, in namespace: Namespace.ID) -> some View {
-        if let source {
-            navigationTransition(.zoom(sourceID: source.id, in: source.namespace))
-        } else {
-            self
-        }
+        self
     }
 }
 
@@ -433,26 +446,207 @@ private struct HoldingDetailPreviewModifier: ViewModifier {
     func body(content: Content) -> some View {
         if let holding, let model {
             content
-                .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .contextMenu {
-                    Button(action: onOpen) {
-                        Label(L10n.text("打开个股"), systemImage: "arrow.up.forward.app")
-                    }
-                } preview: {
-                    // The actual detail page shares its cache with a subsequent
-                    // open. The system owns the preview's lift and dismissal.
-                    HoldingDetailView(holding: holding, onClose: {}, isPreview: true)
-                        .environment(model)
-                        .frame(width: min(390, UIScreen.main.bounds.width - 48),
-                               height: min(640, UIScreen.main.bounds.height * 0.66))
-                        .background(SecurityDetailPresentation.ground)
-                        .clipped()
-                        .allowsHitTesting(false)
+                // UIKit's context menu rather than SwiftUI's `.contextMenu`:
+                // the moment a finger lands, the menu starts lifting the row
+                // onto a platter with a wide soft shadow — before it knows the
+                // press is a hold — and on the white list every tap flashed a
+                // dark grey band. SwiftUI has no say over that shadow; UIKit's
+                // preview parameters do.
+                .background {
+                    ShadowlessContextMenuRegion(
+                        cornerRadius: 12,
+                        actionTitle: L10n.text("打开个股"),
+                        actionImage: "arrow.up.forward.app",
+                        previewSize: {
+                            let screen = UIScreen.main.bounds.size
+                            return CGSize(width: min(390, screen.width - 48), height: min(640, screen.height * 0.66))
+                        },
+                        preview: {
+                            // The actual detail page shares its cache with a
+                            // subsequent open.
+                            AnyView(
+                                HoldingDetailView(holding: holding, onClose: {}, isPreview: true)
+                                    .environment(model)
+                                    .background(SecurityDetailPresentation.ground)
+                                    .allowsHitTesting(false)
+                            )
+                        },
+                        onOpen: onOpen
+                    )
                 }
                 .accessibilityHint(L10n.text("轻点打开个股，长按预览"))
         } else {
             content
         }
+    }
+}
+
+/// Marks the view it sits behind as a context-menu region. The menu itself is
+/// one `UIContextMenuInteraction` on the nearest scroll view (or the window),
+/// shared by every region in it, so taps and scrolling stay with SwiftUI; the
+/// interaction only starts over a region, and lifts a snapshot of it with an
+/// empty shadow path.
+private struct ShadowlessContextMenuRegion: UIViewRepresentable {
+    let cornerRadius: CGFloat
+    let actionTitle: String
+    let actionImage: String
+    let previewSize: () -> CGSize
+    let preview: () -> AnyView
+    let onOpen: () -> Void
+
+    func makeUIView(context: Context) -> RegionView { RegionView() }
+
+    func updateUIView(_ view: RegionView, context: Context) {
+        view.cornerRadius = cornerRadius
+        view.actionTitle = actionTitle
+        view.actionImage = actionImage
+        view.previewSize = previewSize
+        view.preview = preview
+        view.onOpen = onOpen
+    }
+
+    static func dismantleUIView(_ view: RegionView, coordinator: ()) {
+        view.unregister()
+    }
+
+    final class RegionView: UIView {
+        var cornerRadius: CGFloat = 12
+        var actionTitle = ""
+        var actionImage = ""
+        var previewSize: () -> CGSize = { .zero }
+        var preview: () -> AnyView = { AnyView(EmptyView()) }
+        var onOpen: () -> Void = {}
+        private weak var menuHost: ShadowlessContextMenuHost?
+
+        init() {
+            super.init(frame: .zero)
+            isUserInteractionEnabled = false
+            backgroundColor = .clear
+            isAccessibilityElement = false
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { nil }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard let window else {
+                unregister()
+                return
+            }
+            var ancestor = superview
+            var host: UIView = window
+            while let view = ancestor {
+                if view is UIScrollView {
+                    host = view
+                    break
+                }
+                ancestor = view.superview
+            }
+            let menu = ShadowlessContextMenuHost.host(for: host)
+            if menuHost !== menu {
+                unregister()
+                menu.add(self)
+                menuHost = menu
+            }
+        }
+
+        func unregister() {
+            menuHost?.remove(self)
+            menuHost = nil
+        }
+
+        var isShowing: Bool {
+            guard window != nil else { return false }
+            var view: UIView? = self
+            while let current = view {
+                if current.isHidden || current.alpha < 0.01 { return false }
+                view = current.superview
+            }
+            return true
+        }
+    }
+}
+
+@MainActor
+private final class ShadowlessContextMenuHost: NSObject, UIContextMenuInteractionDelegate {
+    private static var key: UInt8 = 0
+    typealias Region = ShadowlessContextMenuRegion.RegionView
+
+    private let regions = NSHashTable<Region>.weakObjects()
+    private weak var active: Region?
+
+    static func host(for view: UIView) -> ShadowlessContextMenuHost {
+        if let existing = objc_getAssociatedObject(view, &key) as? ShadowlessContextMenuHost {
+            return existing
+        }
+        let host = ShadowlessContextMenuHost()
+        view.addInteraction(UIContextMenuInteraction(delegate: host))
+        objc_setAssociatedObject(view, &key, host, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        return host
+    }
+
+    func add(_ region: Region) { regions.add(region) }
+    func remove(_ region: Region) { regions.remove(region) }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction,
+                                configurationForMenuAtLocation location: CGPoint) -> UIContextMenuConfiguration? {
+        guard let view = interaction.view,
+              let region = regions.allObjects.last(where: { region in
+                  region.isShowing && region.bounds.contains(region.convert(location, from: view))
+              }) else { return nil }
+        active = region
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: { [weak region] in
+            guard let region else { return nil }
+            let controller = UIHostingController(rootView: region.preview())
+            controller.preferredContentSize = region.previewSize()
+            controller.view.backgroundColor = .clear
+            return controller
+        }, actionProvider: { [weak region] _ in
+            guard let region else { return nil }
+            return UIMenu(children: [
+                UIAction(title: region.actionTitle, image: UIImage(systemName: region.actionImage)) { [weak region] _ in
+                    region?.onOpen()
+                }
+            ])
+        })
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction,
+                                configuration: UIContextMenuConfiguration,
+                                highlightPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
+        active.flatMap(targetedPreview)
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction,
+                                configuration: UIContextMenuConfiguration,
+                                dismissalPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
+        active.flatMap(targetedPreview)
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction,
+                                willPerformPreviewActionForMenuWith configuration: UIContextMenuConfiguration,
+                                animator: any UIContextMenuInteractionCommitAnimating) {
+        // Tapping the preview opens the page, as the menu's action does.
+        let region = active
+        animator.addCompletion { region?.onOpen() }
+    }
+
+    /// A snapshot of the region, lifted in place with no shadow. The empty
+    /// shadow path is the point of all this: a nil one means "use the visible
+    /// path", which is the dark band.
+    private func targetedPreview(for region: Region) -> UITargetedPreview? {
+        guard let window = region.window else { return nil }
+        let frame = region.convert(region.bounds, to: window)
+        guard frame.width > 1, frame.height > 1,
+              let snapshot = window.resizableSnapshotView(from: frame, afterScreenUpdates: false,
+                                                          withCapInsets: .zero) else { return nil }
+        let parameters = UIPreviewParameters()
+        parameters.backgroundColor = .clear
+        parameters.visiblePath = UIBezierPath(roundedRect: snapshot.bounds, cornerRadius: region.cornerRadius)
+        parameters.shadowPath = UIBezierPath()
+        return UITargetedPreview(view: snapshot, parameters: parameters,
+                                 target: UIPreviewTarget(container: window, center: CGPoint(x: frame.midX, y: frame.midY)))
     }
 }
 
@@ -492,7 +686,11 @@ extension View {
     /// the page's own backgrounds, which the sheet's single ground now
     /// replaces; the sources did not need reshaping.
     func catfolioZoomSource(_ id: some Hashable, in namespace: Namespace.ID) -> some View {
-        matchedTransitionSource(id: AnyHashable(id), in: namespace)
+        background {
+            SecurityDetailSourceMarker(key: .init(id: AnyHashable(id), namespace: namespace))
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
     }
 
     /// Clicks when a security page is asked for — in the same run-loop turn
