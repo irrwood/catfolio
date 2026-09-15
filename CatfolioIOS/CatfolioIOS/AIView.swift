@@ -8,6 +8,7 @@ struct AIView: View {
     let isEmbedded: Bool
     let loadsHistoryOnAppear: Bool
     let showsComposer: Bool
+    let onClose: (() -> Void)?
     @State private var messages: [ChatMessage] = []
     @State private var attentionReports: [UUID: PortfolioAttentionReport] = [:]
     /// Every conversation on the device. `messages` above is the working copy
@@ -28,6 +29,7 @@ struct AIView: View {
     @State private var didRestoreHistory = false
     @State private var errorMessage: String?
     @State private var showsClearConfirmation = false
+    @State private var pendingQuestionPreset: AIQuestionPreset?
     @State private var isNearConversationBottom = true
     /// Where the conversation sits. An edge, not a message id: setting the
     /// bottom id again when it was already the target changed nothing, so a
@@ -41,19 +43,29 @@ struct AIView: View {
     init(
         isEmbedded: Bool = false,
         loadsHistoryOnAppear: Bool = true,
-        showsComposer: Bool = true
+        showsComposer: Bool = true,
+        onClose: (() -> Void)? = nil
     ) {
         self.isEmbedded = isEmbedded
         self.loadsHistoryOnAppear = loadsHistoryOnAppear
         self.showsComposer = showsComposer
+        self.onClose = onClose
+        _isRestoringHistory = State(initialValue: loadsHistoryOnAppear)
     }
 
     var body: some View {
         Group {
             if isEmbedded {
                 conversation
-                    .overlay(alignment: .topLeading) { sidebarButton }
+                    .overlay { AIConversationTopFade() }
                     .overlay { sidebarDrawer }
+                    .overlay(alignment: .top) {
+                        AIConversationHeader(
+                            showsConversationButton: !showsSidebar,
+                            onShowConversations: showSidebar,
+                            onClose: onClose
+                        )
+                    }
             } else {
                 NavigationStack {
                     conversation
@@ -78,90 +90,23 @@ struct AIView: View {
         } message: {
             Text(L10n.text("此操作只会删除保存在这台 iPhone 上的聊天记录。"))
         }
+        .sheet(item: $pendingQuestionPreset) { preset in
+            AIQuestionSecurityPicker(preset: preset) { security in
+                pendingQuestionPreset = nil
+                guard let request = preset.request(security: security) else { return }
+                sendQuestion(request.prompt, researchRequest: request)
+            }
+        }
     }
 
     private var conversation: some View {
         ZStack(alignment: .bottomTrailing) {
-            ScrollView {
-                LazyVStack(spacing: 12) {
-                    if isRestoringHistory {
-                        ProgressView(L10n.text("正在读取本机对话…"))
-                            .frame(minHeight: isEmbedded ? 300 : 420)
-                    } else if messages.isEmpty && !isSending && errorMessage == nil {
-                        ContentUnavailableView(
-                            L10n.text("AI 投资助手"),
-                            systemImage: "sparkles",
-                            description: Text(L10n.text("询问组合风险、持仓集中度或近期表现。当前模型：\(selectedAIProvider.title)。"))
-                        )
-                        .frame(minHeight: isEmbedded ? 300 : 420)
-                    }
-
-                    // Debates started from a security sheet finish in
-                    // SecurityDebateStore, not in this conversation, so they
-                    // are listed rather than folded into the message history —
-                    // which also leaves the chat document's schema alone.
-                    SecurityDebateInbox()
-
-                    ForEach(messages) { message in
-                        ChatBubble(
-                            message: message,
-                            attentionReport: attentionReports[message.id]
-                        )
-                            .id(message.id.uuidString)
-                    }
-
-                    pendingAnswer
-
-                    if let errorMessage {
-                        StatusNotice(text: errorMessage)
-                    }
-
-                    Color.clear
-                        .frame(height: 1)
-                        .id(Self.conversationBottomID)
-                }
-                .scrollTargetLayout()
-                .padding(.horizontal, 16)
-                .padding(.top, isEmbedded ? 64 : 16)
-                .padding(.bottom, 16)
-            }
-            .background(isEmbedded ? Color.clear : Color(uiColor: .systemGroupedBackground))
-            .defaultScrollAnchor(.bottom)
-            .scrollPosition($conversationPosition)
-            .scrollDismissesKeyboard(.interactively)
-            .onTapGesture(perform: dismissKeyboard)
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentSize.height - geometry.visibleRect.maxY < 100
-            } action: { _, isNearBottom in
-                isNearConversationBottom = isNearBottom
-            }
-            .onChange(of: messages.count) { _, _ in
-                guard let lastMessage = messages.last else { return }
-                if lastMessage.role == .user || isNearConversationBottom {
-                    scrollToConversationBottom()
-                }
-            }
-            .onChange(of: isSending) { _, isNowSending in
-                guard isNowSending, isNearConversationBottom else { return }
-                scrollToConversationBottom()
-            }
-            // A failure is the last thing in the conversation; show it whole
-            // rather than half under the composer.
-            .onChange(of: errorMessage) { _, message in
-                guard message != nil, isNearConversationBottom else { return }
-                scrollToConversationBottom()
-            }
-            // The keyboard shrinks the view from below; a reader at the end
-            // stays at the end.
-            .onChange(of: isComposerFocused) { _, isFocused in
-                guard isFocused, isNearConversationBottom else { return }
-                scrollToConversationBottom()
-            }
-            // An answer being written grows the page; a reader at the end
-            // follows it, one who scrolled up to read is left where they are.
-            .onChange(of: streamingProgress) { _, _ in
-                guard isNearConversationBottom else { return }
-                scrollToConversationBottom()
+            if isRestoringHistory {
+                ProgressView(L10n.text("正在读取本机对话…"))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                conversationScrollView
+                    .id(activeConversationID)
             }
 
             Button {
@@ -188,14 +133,15 @@ struct AIView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             AIComposer(
                 question: $question,
-                isSending: isSending,
+                isSending: isSending || isRestoringHistory,
                 isFloating: isEmbedded,
                 focus: $isComposerFocused,
                 hasMessages: !messages.isEmpty,
                 onClear: { showsClearConfirmation = true },
                 onQuickSend: { preset in
                     sendQuestion(preset)
-                }
+                },
+                onSelectPreset: selectQuestionPreset
             ) {
                 sendQuestion()
             }
@@ -216,22 +162,104 @@ struct AIView: View {
         }
     }
 
-    private var sidebarButton: some View {
-        Button {
-            isComposerFocused = false
-            withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) {
-                showsSidebar = true
+    /// Mount with the restored messages already present. Reusing the loading
+    /// placeholder's lazy layout leaves its estimated bottom offset in place
+    /// until a drag forces the message rows to be laid out again.
+    private var conversationScrollView: some View {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                // The page margin goes on each row, not on the stack. The
+                // scroll position is kept by row, and a row that began 16pt
+                // in was brought to the viewport's leading edge when the
+                // position was restored — which scrolled the whole
+                // conversation 16pt sideways, flush left with a double margin
+                // on the right, until the next drag. Full-width rows leave
+                // it nothing to line up. A Group hands the padding to each.
+                Group {
+                    if messages.isEmpty && !isSending && errorMessage == nil {
+                        AIQuestionPresets(onSelect: selectQuestionPreset)
+                            .onAppear {
+                                conversationPosition = ScrollPosition(edge: .top)
+                            }
+                    }
+
+                    // Debates started from a security sheet finish in
+                    // SecurityDebateStore, not in this conversation, so they
+                    // are listed rather than folded into the message history —
+                    // which also leaves the chat document's schema alone.
+                    SecurityDebateInbox()
+
+                    ForEach(messages) { message in
+                        ChatBubble(
+                            message: message,
+                            attentionReport: attentionReports[message.id]
+                        )
+                            .id(message.id.uuidString)
+                    }
+
+                    pendingAnswer
+
+                    if let errorMessage {
+                        StatusNotice(text: errorMessage)
+                    }
+
+                    Color.clear
+                        .frame(height: 1)
+                        .id(Self.conversationBottomID)
+                }
+                .padding(.horizontal, 16)
             }
-        } label: {
-            Image(systemName: "line.3.horizontal")
-                .font(.body.weight(.medium))
-                .frame(width: 48, height: 48)
-                .contentShape(Circle())
-                .floatingGlassSurface(in: Circle())
+            .scrollTargetLayout()
+            .padding(.top, isEmbedded ? 64 : 16)
+            .padding(.bottom, 16)
         }
-        .buttonStyle(.plain)
-        .padding(14)
-        .accessibilityLabel(L10n.text("对话列表"))
+        .background(isEmbedded ? Color.clear : Color(uiColor: .systemGroupedBackground))
+        // Let messages pass beneath the fixed status-area fade.
+        .scrollClipDisabled(isEmbedded)
+        .defaultScrollAnchor(messages.isEmpty ? .top : .bottom)
+        .scrollPosition($conversationPosition)
+        .scrollDismissesKeyboard(.interactively)
+        .onTapGesture(perform: dismissKeyboard)
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            geometry.contentSize.height - geometry.visibleRect.maxY < 100
+        } action: { _, isNearBottom in
+            isNearConversationBottom = isNearBottom
+        }
+        .onChange(of: messages.count) { _, _ in
+            guard let lastMessage = messages.last else { return }
+            if lastMessage.role == .user || isNearConversationBottom {
+                scrollToConversationBottom()
+            }
+        }
+        .onChange(of: isSending) { _, isNowSending in
+            guard isNowSending, isNearConversationBottom else { return }
+            scrollToConversationBottom()
+        }
+        // A failure is the last thing in the conversation; show it whole
+        // rather than half under the composer.
+        .onChange(of: errorMessage) { _, message in
+            guard message != nil, isNearConversationBottom else { return }
+            scrollToConversationBottom()
+        }
+        // The keyboard shrinks the view from below; a reader at the end
+        // stays at the end.
+        .onChange(of: isComposerFocused) { _, isFocused in
+            guard isFocused, isNearConversationBottom else { return }
+            scrollToConversationBottom()
+        }
+        // An answer being written grows the page; a reader at the end
+        // follows it, one who scrolled up to read is left where they are.
+        .onChange(of: streamingProgress) { _, _ in
+            guard isNearConversationBottom else { return }
+            scrollToConversationBottom()
+        }
+    }
+
+    private func showSidebar() {
+        isComposerFocused = false
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) {
+            showsSidebar = true
+        }
     }
 
     @ViewBuilder
@@ -414,8 +442,18 @@ struct AIView: View {
         }
     }
 
+    private func resetConversationScrollPosition() {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            // Discard any offset or user-scroll state from another conversation.
+            conversationPosition = ScrollPosition(edge: .bottom)
+            isNearConversationBottom = true
+        }
+    }
+
     private var showsScrollToBottomButton: Bool {
-        !isNearConversationBottom && !messages.isEmpty
+        !isRestoringHistory && !isNearConversationBottom && !messages.isEmpty
     }
 
     private func dismissKeyboard() {
@@ -436,13 +474,17 @@ struct AIView: View {
         case .apple: L10n.text("正在使用 Apple 本地模型分析…")
         case .codex: L10n.text("正在使用 ChatGPT Codex 分析…")
         case .deepSeek: L10n.text("正在使用 DeepSeek 分析…")
+        case .openRouter: L10n.text("正在使用 OpenRouter 分析…")
         }
     }
 
     private func restoreHistory() async {
         guard !didRestoreHistory else { return }
         didRestoreHistory = true
-        defer { isRestoringHistory = false }
+        defer {
+            resetConversationScrollPosition()
+            isRestoringHistory = false
+        }
 
         // Demo and public-investor modes never touch the library on disk, so
         // they run entirely in memory. They still get a conversation id: the
@@ -491,10 +533,21 @@ struct AIView: View {
         // animating, which made a cold launch visibly hitch.
     }
 
-    private func sendQuestion(_ preset: String? = nil) {
+    private func selectQuestionPreset(_ preset: AIQuestionPreset) {
+        guard !isSending, !isRestoringHistory else { return }
+        dismissKeyboard()
+        if preset.requiresSecurity {
+            pendingQuestionPreset = preset
+        } else if let request = preset.request() {
+            sendQuestion(request.prompt, researchRequest: request)
+        }
+    }
+
+    private func sendQuestion(_ preset: String? = nil, researchRequest: AIResearchQuestion? = nil) {
         let cleanQuestion = (preset ?? question).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleanQuestion.isEmpty, !isSending else { return }
-        question = ""
+        guard !cleanQuestion.isEmpty, !isSending, !isRestoringHistory else { return }
+        // Quick questions do not consume the user's unsent draft.
+        if preset == nil { question = "" }
         errorMessage = nil
         messages.append(ChatMessage(role: .user, text: cleanQuestion))
         isSending = true
@@ -516,7 +569,7 @@ struct AIView: View {
                 }
             }
 
-            if model.isFakeDataMode && !model.isPublicInvestorMode {
+            if researchRequest == nil && model.isFakeDataMode && !model.isPublicInvestorMode {
                 if !Self.isAttentionPreset(cleanQuestion) {
                     // The sample portfolio streams too, so the page shows what
                     // a real answer looks like without a model connected.
@@ -571,7 +624,14 @@ struct AIView: View {
                     let live = StreamingAnswer()
                     streamingAnswer = live
                     do {
-                        for try await event in try await model.streamAI(cleanQuestion, attentionContext: context) {
+                        let events: AsyncThrowingStream<AIStreamEvent, Error>
+                        if let researchRequest {
+                            events = LocalAIClient().streamPublicResearch(
+                                cleanQuestion, context: researchRequest.context)
+                        } else {
+                            events = try await model.streamAI(cleanQuestion, attentionContext: context)
+                        }
+                        for try await event in events {
                             guard isCurrent() else { live.cancel(); return }
                             live.receive(event)
                         }
@@ -661,6 +721,7 @@ struct AIView: View {
     private func startNewConversation() {
         cancelPendingAnswer()
         foldActiveConversationIntoLibrary()
+        resetConversationScrollPosition()
         let conversation = AIConversation()
         activeConversationID = conversation.id
         messages = []
@@ -675,6 +736,7 @@ struct AIView: View {
         cancelPendingAnswer()
         foldActiveConversationIntoLibrary()
         guard let conversation = conversations.first(where: { $0.id == id }) else { return }
+        resetConversationScrollPosition()
         activeConversationID = id
         messages = conversation.messages
         attentionReports = conversation.attentionReports
@@ -689,6 +751,7 @@ struct AIView: View {
         conversations.removeAll { $0.id == id }
         if id == activeConversationID {
             cancelPendingAnswer()
+            resetConversationScrollPosition()
             // Land on the next most recent rather than an empty screen, which
             // is what deleting from a list usually does.
             let next = LocalChatLibrary(conversations: conversations, activeID: nil)
@@ -714,6 +777,7 @@ struct AIView: View {
 
     private func clearConversation() {
         cancelPendingAnswer()
+        resetConversationScrollPosition()
         if model.isFakeDataMode || model.isPublicInvestorMode {
             messages = []
             attentionReports = [:]
@@ -958,7 +1022,7 @@ private struct PortfolioAttentionReportView: View {
     let report: PortfolioAttentionReport
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.text("今天"))
                     .font(.caption.weight(.semibold))
@@ -966,13 +1030,16 @@ private struct PortfolioAttentionReportView: View {
                 Text(L10n.text("\(report.holdingsCount) 只持仓中有 \(report.attentionRows.count) 只需要关注"))
                     .font(.headline)
             }
+            .padding(.horizontal, 4)
+            .padding(.bottom, 4)
 
             if report.attentionRows.isEmpty {
                 Text(L10n.text("无重大变化"))
                     .foregroundStyle(.secondary)
-                    .padding(14)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .attentionGlassCard()
             } else {
                 ForEach(report.attentionRows) { row in
                     PortfolioAttentionCard(row: row)
@@ -986,13 +1053,15 @@ private struct PortfolioAttentionReportView: View {
                     .foregroundStyle(.secondary)
             }
             .font(.subheadline)
-            .padding(12)
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .attentionGlassCard()
 
             ForEach(report.warnings, id: \.self) { warning in
                 Label(warning, systemImage: "exclamationmark.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .padding(.horizontal, 4)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1013,7 +1082,7 @@ struct PortfolioAttentionCard: View {
         Group {
             if prominent {
                 Button { showsDetail = true } label: {
-                    PortfolioAttentionCardContent(row: row, expanded: false, prominent: true)
+                    PortfolioAttentionCardContent(row: row, prominent: true)
                 }
                 .navigationDestination(isPresented: $showsDetail) {
                     PortfolioAttentionDetail(row: row)
@@ -1024,8 +1093,8 @@ struct PortfolioAttentionCard: View {
                     PortfolioAttentionDetail(row: row)
                         .navigationTransition(.zoom(sourceID: row.id, in: zoom))
                 } label: {
-                    PortfolioAttentionCardContent(row: row, expanded: false)
-                        .contentShape(RoundedRectangle(cornerRadius: 16))
+                    PortfolioAttentionCardContent(row: row)
+                        .contentShape(RoundedRectangle(cornerRadius: PortfolioAttentionCardContent.cornerRadius, style: .continuous))
                 }
             }
         }
@@ -1035,25 +1104,67 @@ struct PortfolioAttentionCard: View {
     }
 }
 
+/// A holding's analysis, set to be read rather than scanned: one column on
+/// the plain page, no card. The argument leads; what changed, the evidence
+/// either way, the risks and what to watch follow under quiet labels, and
+/// the sources close it.
 private struct PortfolioAttentionDetail: View {
     @Environment(\.locale) private var appLocale
-    let row: PortfolioAttentionHolding
     @Environment(\.dismiss) private var dismiss
+    let row: PortfolioAttentionHolding
 
     var body: some View {
         ScrollView {
-            PortfolioAttentionCardContent(row: row, expanded: true)
-                .padding()
-                .textSelection(.enabled)
+            VStack(alignment: .leading, spacing: 0) {
+                header
+
+                Rectangle()
+                    .fill(Color.primary.opacity(0.10))
+                    .frame(height: 1)
+                    .padding(.vertical, 28)
+
+                Text(row.thesis.whyItMatters)
+                    .appText(.heading, weight: .medium)
+                    .lineSpacing(8)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if !row.thesis.whatChanged.isEmpty {
+                    ReaderSection(L10n.text("发生了什么")) {
+                        ReaderParagraph(row.thesis.whatChanged)
+                    }
+                }
+                ReaderList(title: L10n.text("支持证据"), values: row.thesis.supportingEvidence)
+                ReaderList(title: L10n.text("反方证据"), values: row.thesis.counterEvidence)
+                ReaderList(title: L10n.text("风险"), values: row.thesis.risks)
+                ReaderList(title: L10n.text("接下来关注"), values: row.thesis.watchNext)
+                ReaderList(title: L10n.text("Risk Flags"), values: row.thesis.riskFlags.map(PortfolioAttentionHolding.riskFlagText))
+
+                if !row.sources.isEmpty {
+                    ReaderSection(L10n.text("来源")) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            ForEach(row.sources) { source in
+                                Link(destination: source.url) { sourceRow(source) }
+                                    .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+            }
+            .textSelection(.enabled)
+            // A reading measure: on a wide screen the column stops growing.
+            .frame(maxWidth: 600, alignment: .leading)
+            .padding(.horizontal, 24)
+            .padding(.top, 12)
+            .padding(.bottom, 64)
+            .frame(maxWidth: .infinity)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(Color(uiColor: .systemBackground))
         .softTopScrollEdge()
-        .navigationTitle(row.ticker)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
         .overlay(alignment: .trailing) {
             // Keep the additional left-swipe gesture at the right edge so the
-            // article and signal chips retain their normal scrolling gestures.
+            // article keeps its normal scrolling gestures.
             Color.clear.frame(width: 24)
                 .contentShape(Rectangle())
                 .accessibilityHidden(true)
@@ -1065,31 +1176,190 @@ private struct PortfolioAttentionDetail: View {
                 })
         }
     }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Circle().fill(row.attentionTint).frame(width: 6, height: 6)
+                Text(row.attentionText)
+            }
+            .appText(.label, weight: .semibold)
+            .foregroundStyle(row.attentionTint)
+
+            Text(row.ticker)
+                .appText(.display, weight: .semibold)
+                .padding(.top, 12)
+            Text(row.name)
+                .appText(.callout)
+                .foregroundStyle(.secondary)
+                .padding(.top, 4)
+
+            // The judgement on one line, the figures behind it on the next.
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(row.stanceText) · \(row.confidenceText)")
+                if !row.signals.isEmpty {
+                    Text(row.signals.map(\.label).joined(separator: " · "))
+                }
+            }
+            .appText(.footnote)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 16)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func sourceRow(_ source: PortfolioAttentionSource) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(source.title)
+                    .appText(.callout, weight: .medium)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text([source.publisher, source.publishedAt.map { $0.formatted(.dateTime.year().month().day().locale(appLocale)) }]
+                    .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                    .appText(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "arrow.up.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .contentShape(Rectangle())
+    }
+}
+
+/// A labelled part of the reader: a small grey label, then its text.
+private struct ReaderSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: () -> Content
+
+    init(_ title: String, @ViewBuilder content: @escaping () -> Content) {
+        self.title = title
+        self.content = content
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .appText(.label, weight: .semibold)
+                .foregroundStyle(.secondary)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 36)
+    }
+}
+
+/// Reading text: the body size with open leading, a shade off full white.
+private struct ReaderParagraph: View {
+    let text: String
+
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .appText(.subheading)
+            .lineSpacing(7)
+            .foregroundStyle(.primary.opacity(0.88))
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// A section of points, each on a hanging indent so wrapped lines align.
+private struct ReaderList: View {
+    let title: String
+    let values: [String]
+
+    var body: some View {
+        if !values.isEmpty {
+            ReaderSection(title) {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(values, id: \.self) { value in
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            Text(verbatim: "•")
+                                .appText(.subheading)
+                                .foregroundStyle(.tertiary)
+                            ReaderParagraph(value)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The words for an attention row's level, stance and confidence, shared by
+/// its card and its reader.
+private extension PortfolioAttentionHolding {
+    var attentionText: String {
+        attention == .high ? L10n.text("高关注") : L10n.text("中关注")
+    }
+
+    var attentionTint: Color {
+        attention == .high ? Color.red : CatfolioStyle.blue
+    }
+
+    var stanceText: String {
+        switch thesis.stance {
+        case .strengthening: L10n.text("投资逻辑增强")
+        case .maintaining: L10n.text("投资逻辑维持")
+        case .weakening: L10n.text("投资逻辑减弱")
+        }
+    }
+
+    var confidenceText: String {
+        switch thesis.confidence {
+        case .high: "High confidence"
+        case .medium: "Medium confidence"
+        case .none: "Low confidence"
+        }
+    }
+
+    static func riskFlagText(_ value: String) -> String {
+        switch value {
+        case "legal_regulatory": L10n.text("诉讼 / 监管")
+        case "governance": L10n.text("治理 / 审计")
+        case "dilution": L10n.text("潜在稀释")
+        case "liquidity": L10n.text("流动性 / 现金流")
+        case "leadership": L10n.text("管理层变动")
+        default: value
+        }
+    }
 }
 
 private struct PortfolioAttentionCardContent: View {
+    static let cornerRadius: CGFloat = 24
+
     @Environment(\.locale) private var appLocale
     let row: PortfolioAttentionHolding
-    let expanded: Bool
     var prominent = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: prominent ? 16 : 9) {
+        VStack(alignment: .leading, spacing: prominent ? 16 : 10) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(row.ticker).font(prominent ? .title2.bold() : .headline)
                     Text(row.name).font(prominent ? .subheadline : .caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(attentionText)
-                    .font(.caption2.weight(.bold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
-                    .overlay(Capsule().strokeBorder(attentionBorder, lineWidth: 1))
+                HStack(spacing: 10) {
+                    Text(row.attentionText)
+                        .font(.caption2.weight(.bold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
+                        .overlay(Capsule().strokeBorder(attentionBorder, lineWidth: 1))
+                    // The card opens; the chevron is all that says so.
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
             }
 
-            Text("\(stanceText) · \(confidenceText)")
+            Text("\(row.stanceText) · \(row.confidenceText)")
                 .font(.caption.weight(.semibold))
 
             ScrollView(.horizontal) {
@@ -1115,121 +1385,40 @@ private struct PortfolioAttentionCardContent: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-
-            if expanded {
-                VStack(alignment: .leading, spacing: 10) {
-                    AttentionTextSection(title: L10n.text("发生了什么"), text: row.thesis.whatChanged)
-                    AttentionTextSection(title: L10n.text("为什么值得关注"), text: row.thesis.whyItMatters)
-                    AttentionListSection(title: L10n.text("支持证据"), values: row.thesis.supportingEvidence)
-                    AttentionListSection(title: L10n.text("反方证据"), values: row.thesis.counterEvidence)
-                    AttentionListSection(title: L10n.text("风险"), values: row.thesis.risks)
-                    AttentionListSection(title: L10n.text("接下来关注"), values: row.thesis.watchNext)
-                    if !row.thesis.riskFlags.isEmpty {
-                        AttentionListSection(title: L10n.text("Risk Flags"), values: row.thesis.riskFlags.map(Self.riskFlagText))
-                    }
-                    if !row.sources.isEmpty {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(L10n.text("来源")).font(.caption.weight(.semibold))
-                            ForEach(row.sources) { source in
-                                Link(destination: source.url) {
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(source.title).multilineTextAlignment(.leading)
-                                        Text(source.publisher).font(.caption2).foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                .padding(.top, 8)
-            } else {
-                Label(L10n.text("查看详情"), systemImage: "arrow.up.left.and.arrow.down.right")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(prominent ? 20 : 15)
-        .background {
-            if !prominent {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(uiColor: .systemBackground))
-            }
-        }
-        .overlay {
-            if !prominent {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color(uiColor: .separator).opacity(0.35), lineWidth: 1)
-            }
-        }
-    }
-
-    private var attentionText: String {
-        row.attention == .high ? L10n.text("高关注") : L10n.text("中关注")
+        .padding(20)
+        .modifier(AttentionCardSurface(isVisible: !prominent))
     }
 
     private var attentionBorder: Color {
         row.attention == .high ? Color.red.opacity(0.28) : CatfolioStyle.blue.opacity(0.38)
     }
+}
 
-    private var stanceText: String {
-        switch row.thesis.stance {
-        case .strengthening: L10n.text("投资逻辑增强")
-        case .maintaining: L10n.text("投资逻辑维持")
-        case .weakening: L10n.text("投资逻辑减弱")
-        }
-    }
+/// The attention report's cards are Liquid Glass, like the composer below
+/// them — not an opaque black slab with a hairline. Research sets the card
+/// on its own page with no surface at all.
+private struct AttentionCardSurface: ViewModifier {
+    let isVisible: Bool
 
-    private var confidenceText: String {
-        switch row.thesis.confidence {
-        case .high: "High confidence"
-        case .medium: "Medium confidence"
-        case .none: "Low confidence"
-        }
-    }
-
-    private static func riskFlagText(_ value: String) -> String {
-        switch value {
-        case "legal_regulatory": L10n.text("诉讼 / 监管")
-        case "governance": L10n.text("治理 / 审计")
-        case "dilution": L10n.text("潜在稀释")
-        case "liquidity": L10n.text("流动性 / 现金流")
-        case "leadership": L10n.text("管理层变动")
-        default: value
+    func body(content: Content) -> some View {
+        if isVisible {
+            content.attentionGlassCard()
+        } else {
+            content
         }
     }
 }
 
-private struct AttentionTextSection: View {
-    @Environment(\.locale) private var appLocale
-    let title: String
-    let text: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title).fontWeight(.semibold)
-            Text(text).fontWeight(.regular).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct AttentionListSection: View {
-    @Environment(\.locale) private var appLocale
-    let title: String
-    let values: [String]
-
-    var body: some View {
-        if !values.isEmpty {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).fontWeight(.semibold)
-                ForEach(values, id: \.self) { value in
-                    Text("• \(value)")
-                        .fontWeight(.regular)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
+private extension View {
+    /// Glass that only shows: never interactive, which would take the touches
+    /// meant for the card's link and its chips.
+    func attentionGlassCard() -> some View {
+        floatingGlassSurface(
+            in: RoundedRectangle(cornerRadius: PortfolioAttentionCardContent.cornerRadius, style: .continuous),
+            isInteractive: false
+        )
     }
 }
 
@@ -1618,6 +1807,7 @@ private struct AIComposer: View {
     let hasMessages: Bool
     let onClear: () -> Void
     let onQuickSend: (String) -> Void
+    let onSelectPreset: (AIQuestionPreset) -> Void
     let onSend: () -> Void
 
     var body: some View {
@@ -1645,6 +1835,7 @@ private struct AIComposer: View {
 
     private var standardComposer: some View {
         HStack(alignment: .bottom, spacing: 8) {
+            quickActionsMenu
             TextField(L10n.text("询问你的投资组合"), text: $question, axis: .vertical)
                 .lineLimit(1...4)
                 .focused(focus)
@@ -1683,22 +1874,34 @@ private struct AIComposer: View {
 
     private var quickActionsMenu: some View {
         Menu {
-            Button(L10n.text("今天哪些持仓值得我关注？"), systemImage: "eye") {
-                onQuickSend(L10n.text("今天哪些持仓值得我关注？"))
+            Section(L10n.text("个股分析")) {
+                ForEach(AIQuestionPreset.allCases.filter(\.requiresSecurity)) { preset in
+                    Button(preset.title, systemImage: preset.symbol) { onSelectPreset(preset) }
+                }
             }
+            Section(L10n.text("市场分析")) {
+                Button(AIQuestionPreset.market.title, systemImage: AIQuestionPreset.market.symbol) {
+                    onSelectPreset(.market)
+                }
+            }
+            Section(L10n.text("我的组合")) {
+                Button(L10n.text("今天哪些持仓值得我关注？"), systemImage: "eye") {
+                    onQuickSend(L10n.text("今天哪些持仓值得我关注？"))
+                }
 
-            Divider()
-            Button(L10n.text("组合风险摘要"), systemImage: "shield.lefthalf.filled") {
-                question = L10n.text("请总结我当前组合最重要的三个风险。")
-                focus.wrappedValue = true
-            }
-            Button(L10n.text("持仓集中度"), systemImage: "chart.pie") {
-                question = L10n.text("请分析我的持仓集中度，并指出最需要关注的风险。")
-                focus.wrappedValue = true
-            }
-            Button(L10n.text("近期表现"), systemImage: "chart.line.uptrend.xyaxis") {
-                question = L10n.text("请解读我的组合近期表现，以及主要的收益和拖累来源。")
-                focus.wrappedValue = true
+                Divider()
+                Button(L10n.text("组合风险摘要"), systemImage: "shield.lefthalf.filled") {
+                    question = L10n.text("请总结我当前组合最重要的三个风险。")
+                    focus.wrappedValue = true
+                }
+                Button(L10n.text("持仓集中度"), systemImage: "chart.pie") {
+                    question = L10n.text("请分析我的持仓集中度，并指出最需要关注的风险。")
+                    focus.wrappedValue = true
+                }
+                Button(L10n.text("近期表现"), systemImage: "chart.line.uptrend.xyaxis") {
+                    question = L10n.text("请解读我的组合近期表现，以及主要的收益和拖累来源。")
+                    focus.wrappedValue = true
+                }
             }
 
             if hasMessages {
@@ -1714,8 +1917,9 @@ private struct AIComposer: View {
         }
         // The menu's symbols take the tint, which otherwise resolves to the
         // page's accent and prints them blue against a dark sheet.
-        .tint(.white)
+        .tint(isFloating ? .white : .primary)
         .buttonStyle(.plain)
+        .disabled(isSending)
         .accessibilityLabel(L10n.text("AI 快捷操作"))
     }
 
@@ -1779,52 +1983,180 @@ struct AIAssistantPage: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        AIView(isEmbedded: true)
+        AIView(isEmbedded: true, onClose: { dismiss() })
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .overlay(alignment: .topTrailing) {
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.body.weight(.medium))
-                        .frame(width: 48, height: 48)
-                        .contentShape(Circle())
-                        .floatingGlassSurface(in: Circle())
-                }
-                .buttonStyle(.plain)
-                .keyboardShortcut(.cancelAction)
-                .accessibilityLabel(L10n.text("关闭 AI 投资助手"))
-                .padding(14)
-            }
             .background {
-                LinearGradient(
-                    stops: [
-                        .init(color: .black, location: 0.25828),
-                        .init(
-                            color: Color(red: 9.0 / 255.0, green: 117.0 / 255.0, blue: 224.0 / 255.0),
-                            location: 0.83985
-                        ),
-                        .init(
-                            color: Color(red: 131.0 / 255.0, green: 193.0 / 255.0, blue: 1)
-                                .opacity(0.20),
-                            location: 1
-                        ),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                // Composited over black, not white. The last stop is 20%
-                // opacity, so over white it resolved to rgb(230, 243, 255) —
-                // a near-white band across the bottom of a page that forces
-                // `.preferredColorScheme(.dark)` and so draws every label in
-                // a light colour. The composer and the disclaimer sit in that
-                // band and were close to invisible.
-                .background(.black)
-                .ignoresSafeArea()
+                AIConversationGlowBackground()
+                    .ignoresSafeArea()
             }
             .preferredColorScheme(.dark)
     }
 }
+
+/// A stationary blue light below the conversation. Keep the dark base opaque
+/// and size the glow to the screen, including the area behind the keyboard.
+private struct AIConversationGlowBackground: View {
+    var body: some View {
+        GeometryReader { geometry in
+            let diameter = min(geometry.size.width * 1.25, 560)
+
+            Circle()
+                .fill(
+                    RadialGradient(
+                        stops: [
+                            .init(color: Color(red: 0.08, green: 0.56, blue: 1).opacity(0.90), location: 0),
+                            .init(color: Color(red: 0.035, green: 0.38, blue: 0.92).opacity(0.70), location: 0.3),
+                            .init(color: Color(red: 0.02, green: 0.20, blue: 0.65).opacity(0.30), location: 0.6),
+                            .init(color: .clear, location: 1),
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: diameter / 2
+                    )
+                )
+                .frame(width: diameter, height: diameter)
+                .blur(radius: diameter * 0.08)
+                .position(
+                    x: geometry.size.width / 2,
+                    y: geometry.size.height - diameter * 0.3
+                )
+        }
+        .background(.black)
+        .clipped()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Both controls share keyboard state and fixed centres, so changing their
+/// glass diameter never shifts either button or the conversation underneath.
+private struct AIConversationHeader: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isKeyboardVisible = false
+    let showsConversationButton: Bool
+    let onShowConversations: () -> Void
+    let onClose: (() -> Void)?
+
+    private var diameter: CGFloat { isKeyboardVisible ? 56 : 48 }
+
+    var body: some View {
+        HStack {
+            control("line.3.horizontal", action: onShowConversations)
+                .accessibilityLabel(L10n.text("对话列表"))
+                .opacity(showsConversationButton ? 1 : 0)
+                .allowsHitTesting(showsConversationButton)
+                .accessibilityHidden(!showsConversationButton)
+            Spacer(minLength: 0)
+            if let onClose {
+                control("xmark", action: onClose)
+                    .keyboardShortcut(.cancelAction)
+                    .accessibilityLabel(L10n.text("关闭 AI 投资助手"))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: isKeyboardVisible)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            isKeyboardVisible = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            isKeyboardVisible = false
+        }
+        .onDisappear { isKeyboardVisible = false }
+    }
+
+    private func control(_ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(.white)
+                .scaleEffect(isKeyboardVisible ? 1.1 : 1)
+                .frame(width: diameter, height: diameter)
+                .contentShape(Circle())
+                .modifier(AIHeaderGlass())
+        }
+        .buttonStyle(.plain)
+        .frame(width: 56, height: 56)
+    }
+}
+
+private struct AIHeaderGlass: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.clear.interactive(), in: Circle())
+        } else {
+            content
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay {
+                    Circle().strokeBorder(.white.opacity(0.22), lineWidth: 0.75)
+                }
+        }
+    }
+}
+
+/// The Figma fade occupies the status area (62 pt on its reference device).
+/// Anchor it to the physical top, independently of the keyboard's bottom inset.
+private struct AIConversationTopFade: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                if !reduceTransparency {
+                    AIStatusBackdropBlur()
+                }
+                LinearGradient(
+                    colors: [.black, .clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+            .frame(height: max(62, geometry.safeAreaInsets.top))
+            .offset(y: -geometry.safeAreaInsets.top)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct AIStatusBackdropBlur: UIViewRepresentable {
+    func makeUIView(context: Context) -> BlurView { BlurView() }
+    func updateUIView(_ view: BlurView, context: Context) {}
+
+    final class BlurView: UIVisualEffectView {
+        private let fadeMask = UIView()
+        private let gradient = CAGradientLayer()
+        private var maskBounds = CGRect.null
+
+        init() {
+            super.init(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+            isUserInteractionEnabled = false
+            gradient.colors = [UIColor.black.cgColor, UIColor.clear.cgColor]
+            gradient.locations = [0, 1]
+            gradient.startPoint = CGPoint(x: 0.5, y: 0)
+            gradient.endPoint = CGPoint(x: 0.5, y: 1)
+            fadeMask.layer.addSublayer(gradient)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { nil }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            guard bounds != maskBounds else { return }
+            maskBounds = bounds
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            fadeMask.frame = bounds
+            gradient.frame = fadeMask.bounds
+            // Mask the effect view itself; masking an ancestor breaks UIKit's
+            // sampling of the messages scrolling behind this layer.
+            mask = fadeMask
+            CATransaction.commit()
+        }
+    }
+}
+
 private extension View {
     @ViewBuilder
     func floatingGlassSurface<S: Shape>(in shape: S, tint: Color? = nil, isInteractive: Bool = true) -> some View {

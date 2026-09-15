@@ -245,7 +245,7 @@ struct HistoryView: View {
         .background { SettingsTemplate.pageBackground.ignoresSafeArea() }
         .softTopScrollEdge()
         .navigationTitle(L10n.text("History"))
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
         .toolbarVisibility(.hidden, for: .tabBar)
         // The pager supplies one continuous material behind the native title
@@ -338,18 +338,18 @@ struct HistoryView: View {
             if pageCategory == .fees {
                 feeSections
             } else {
-                Section {
-                    ForEach(summaryMetrics(for: pageCategory)) { metric in
-                        summaryRow(metric)
-                    }
-                } footer: {
-                    if let explanation = realisedExplanation(for: pageCategory) {
-                        Text(explanation)
-                    }
-                }
-
                 if pageCategory == .dividends, !page.dividendBreakdown.rows.isEmpty {
-                    dividendContributionSection(page.dividendBreakdown)
+                    dividendContributionSection(page)
+                } else {
+                    Section {
+                        ForEach(summaryMetrics(for: pageCategory)) { metric in
+                            summaryRow(metric)
+                        }
+                    } footer: {
+                        if let explanation = realisedExplanation(for: pageCategory) {
+                            Text(explanation)
+                        }
+                    }
                 }
 
                 if page.activities.isEmpty {
@@ -676,50 +676,18 @@ struct HistoryView: View {
         .accessibilityIdentifier("history-accounts")
     }
 
-    private func dividendContributionSection(_ breakdown: HistoryDividendBreakdown) -> some View {
-        Section {
-            ForEach(breakdown.rows) { row in
-                let share = breakdown.share(for: row)
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 10) {
-                        AssetLogo(ticker: row.ticker, logoSymbol: nil, size: 30)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(row.name).appText(.subheading, weight: .semibold).lineLimit(1)
-                            Text(row.ticker).appText(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 8)
-                        Text(row.amountUSD.map { DisplayFormat.money($0) } ?? "—")
-                            .appNumber(.subheading).lineLimit(1)
-                    }
-                    HStack(spacing: 12) {
-                        GeometryReader { geometry in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(CatfolioTheme.subtleFill)
-                                Capsule().fill(CatfolioTheme.gain(for: colorScheme))
-                                    .frame(width: geometry.size.width * CGFloat(share ?? 0))
-                            }
-                        }
-                        .frame(height: 6)
-                        .accessibilityHidden(true)
-                        Text(share.map { DisplayFormat.percent($0 * 100, signed: false) } ?? "—")
-                            .appNumber(.caption)
-                            .foregroundStyle(.secondary)
-                            .frame(minWidth: 52, alignment: .trailing)
-                    }
-                }
-                .padding(.vertical, 6)
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("dividend-contribution-\(row.id)")
-            }
-        } header: {
-            Text(L10n.text("分红来源占比")).textCase(nil)
+    private func dividendContributionSection(_ page: HistoryActivityPage) -> some View {
+        let breakdown = page.dividendBreakdown
+        return Section {
+            HistoryDividendCard(breakdown: breakdown, totalUSD: page.totalUSD)
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
         } footer: {
             if !breakdown.isComplete {
-                Text(L10n.text("部分分红金额或汇率缺失，暂不显示占比。"))
+                Text(L10n.text("部分股息金额或汇率缺失，暂不显示占比。"))
             } else if breakdown.hasNegativeTotals {
-                Text(L10n.text("冲正已按标的抵扣；占比按净分红为正的标的合计计算，净扣款不计入占比。"))
-            } else {
-                Text(L10n.text("按所选账户与期间汇总股票及 ETF 的分红金额，显示其占分红总额的比例，不是股息率。"))
+                Text(L10n.text("冲正已按标的抵扣；占比按净股息为正的标的合计计算，净扣款不计入占比。"))
             }
         }
     }
@@ -729,7 +697,9 @@ struct HistoryView: View {
             activityIcon(activity)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(activity.title)
+                Text(activity.usesAssetLogo
+                     ? CompanyNameCatalog.displayName(ticker: activity.transaction.ticker, fallback: activity.title)
+                     : activity.title)
                     .font(.body.weight(.semibold))
                     .lineLimit(1)
 
@@ -1152,6 +1122,114 @@ struct HistoryActivityPage {
     var dividendBreakdown = HistoryDividendBreakdown()
 }
 
+/// Figma 322:2262: one summary card, with an interactive stacked contribution bar.
+struct HistoryDividendCard: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var selectedTicker: String?
+    let breakdown: HistoryDividendBreakdown
+    let totalUSD: Double
+
+    private var selectedRow: HistoryDividendBreakdown.Row? {
+        breakdown.rows.first { $0.id == selectedTicker } ?? breakdown.rows.first
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(L10n.text("股息总计")).appText(.subheading, weight: .medium)
+                Spacer(minLength: 12)
+                Text(breakdown.isComplete ? DisplayFormat.money(totalUSD) : "—")
+                    .appNumber(.subheading)
+                    .foregroundStyle(totalUSD < 0
+                                     ? CatfolioTheme.loss(for: colorScheme)
+                                     : CatfolioTheme.gain(for: colorScheme))
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            Divider()
+            VStack(spacing: 13) {
+                HStack(spacing: 12) {
+                    Text(L10n.text("比例")).appText(.subheading, weight: .medium)
+                    Spacer(minLength: 0)
+                    Menu {
+                        ForEach(breakdown.rows) { row in
+                            Button {
+                                selectedTicker = row.id
+                            } label: {
+                                Label(selectionDescription(row), systemImage: row.id == selectedRow?.id ? "checkmark" : "circle")
+                            }
+                        }
+                    } label: {
+                        if let row = selectedRow {
+                            HStack(spacing: 4) {
+                                Text(CompanyNameCatalog.displayName(ticker: row.ticker, fallback: row.name))
+                                    .appText(.subheading).lineLimit(1)
+                                Text(percentage(row)).appNumber(.subheading, weight: .regular)
+                                    .opacity(0.5).fixedSize()
+                            }
+                            .foregroundStyle(CatfolioPalette.dividendSelection)
+                        }
+                    }
+                    .accessibilityLabel(L10n.text("股息来源占比"))
+                    .accessibilityIdentifier("dividend-contribution-selection")
+                }
+                GeometryReader { geometry in
+                    HStack(spacing: 0) {
+                        ForEach(Array(breakdown.rows.enumerated().reversed()), id: \.element.id) { index, row in
+                            Rectangle()
+                                .fill(CatfolioPalette.dividendSeries[index % CatfolioPalette.dividendSeries.count])
+                                .frame(width: geometry.size.width * CGFloat(breakdown.share(for: row) ?? 0))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(CatfolioTheme.subtleFill)
+                    .overlay {
+                        if breakdown.isComplete, breakdown.positiveTotalUSD > 0 {
+                            ContributionStripePattern(color: .white)
+                                .scaleEffect(x: -1, y: 1)
+                                .blendMode(.overlay)
+                                .opacity(0.3)
+                        }
+                    }
+                    .compositingGroup()
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .contentShape(Rectangle())
+                    .onTapGesture { location in
+                        if let row = breakdown.row(at: Double(location.x / max(1, geometry.size.width))) {
+                            selectedTicker = row.id
+                        }
+                    }
+                }
+                .frame(height: 40)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(L10n.text("股息来源占比"))
+                .accessibilityValue(selectedRow.map(selectionDescription) ?? "—")
+                .accessibilityAdjustableAction { direction in
+                    guard let row = selectedRow,
+                          let index = breakdown.rows.firstIndex(where: { $0.id == row.id }) else { return }
+                    switch direction {
+                    case .increment: selectedTicker = breakdown.rows[min(index + 1, breakdown.rows.count - 1)].id
+                    case .decrement: selectedTicker = breakdown.rows[max(index - 1, 0)].id
+                    @unknown default: break
+                    }
+                }
+                .accessibilityIdentifier("dividend-contribution-bar")
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+        }
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 24))
+    }
+
+    private func percentage(_ row: HistoryDividendBreakdown.Row) -> String {
+        breakdown.share(for: row).map { DisplayFormat.percent($0 * 100, signed: false) } ?? "—"
+    }
+
+    private func selectionDescription(_ row: HistoryDividendBreakdown.Row) -> String {
+        "\(CompanyNameCatalog.displayName(ticker: row.ticker, fallback: row.name)) · \(row.ticker) · \(percentage(row)) · \(row.amountUSD.map { DisplayFormat.money($0) } ?? "—")"
+    }
+}
+
 /// Uses the same account/year scope and USD conversion as the ledger total.
 /// Built with the page indexes, never while scrolling or swiping categories.
 struct HistoryDividendBreakdown {
@@ -1171,6 +1249,19 @@ struct HistoryDividendBreakdown {
         guard isComplete, positiveTotalUSD.isFinite, positiveTotalUSD > 0,
               let amount = row.amountUSD, amount >= 0 else { return nil }
         return min(1, max(0, amount / positiveTotalUSD))
+    }
+
+    /// Hit testing follows the exact displayed (reversed) order; zero and
+    /// unavailable values occupy no width and cannot steal a neighbouring tap.
+    func row(at fraction: Double) -> Row? {
+        guard fraction.isFinite, (0...1).contains(fraction) else { return nil }
+        let visible = rows.reversed().filter { (share(for: $0) ?? 0) > 0 }
+        var edge = 0.0
+        for row in visible {
+            edge += share(for: row) ?? 0
+            if fraction < edge { return row }
+        }
+        return visible.last
     }
 
     static func build(_ activities: [PortfolioActivity]) -> Self {

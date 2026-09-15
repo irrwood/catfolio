@@ -14,6 +14,7 @@ _here = os.path.dirname(os.path.abspath(SPEC))  # repo root
 a = Analysis(
     [os.path.join(_here, "v3_backend", "desktop.py")],
     pathex=[
+        _here,                            # shared core.volatility engine
         os.path.join(_here, "v3_backend"),   # makes `app` package importable
         os.path.join(_here, "scripts"),      # makes build_trading212_v2 etc. importable
     ],

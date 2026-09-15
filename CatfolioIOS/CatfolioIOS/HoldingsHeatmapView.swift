@@ -17,6 +17,9 @@ struct HoldingsHeatmapView: View {
     /// The inset the heatmap's container already has from the screen edge.
     /// The grouped layout bleeds out to `groupedScreenInset` from there.
     var screenInset: CGFloat = CatfolioStyle.pageHorizontalInset
+    /// Texture rendering has no app environment and must not construct live
+    /// context menus, stock previews or sector navigation controls.
+    var isInteractive = true
     let onSelect: (Holding) -> Void
 
     private let maximumHoldingTiles = 20
@@ -40,10 +43,11 @@ struct HoldingsHeatmapView: View {
                 Group {
                     if groupsBySector {
                         GroupedHoldingsHeatmap(
-                            groups: sectorGroups
+                            groups: sectorGroups,
+                            isInteractive: isInteractive
                         )
                     } else {
-                        HoldingsHeatmapTileCloud(models: models, onSelect: select)
+                        HoldingsHeatmapTileCloud(models: models, isInteractive: isInteractive, onSelect: select)
                     }
                 }
                 .frame(height: heatmapHeight)
@@ -291,8 +295,8 @@ struct HoldingsHeatmapView: View {
     private func changePercent(for holding: Holding) -> Double? {
         switch performancePeriod {
         case .today:
-            return holding.todayChangePercent
-                ?? dailyChanges[holding.ticker.uppercased()]
+            return dailyChanges[holding.ticker.uppercased()]
+                ?? holding.todayChangePercent
         case .holdingPeriod:
             return holding.unrealizedPercent.isFinite ? holding.unrealizedPercent : nil
         }
@@ -304,8 +308,8 @@ struct HoldingsHeatmapView: View {
     ) -> Double? {
         switch performancePeriod {
         case .today:
-            return directHolding?.todayChangePercent
-                ?? dailyChanges[row.ticker.uppercased()]
+            return dailyChanges[row.ticker.uppercased()]
+                ?? directHolding?.todayChangePercent
                 ?? lookThroughDailyChanges[row.ticker.uppercased()]
         case .holdingPeriod:
             if row.fromETFUSD > 0 {
@@ -394,6 +398,7 @@ private struct HoldingsHeatmapTileCloud: View {
 private struct GroupedHoldingsHeatmap: View {
     @Environment(\.locale) private var appLocale
     let groups: [HoldingsHeatmapSectorGroup]
+    var isInteractive = true
     @State private var expandedGroup: HoldingsHeatmapSectorGroup?
 
     var body: some View {
@@ -410,7 +415,7 @@ private struct GroupedHoldingsHeatmap: View {
 
                     HoldingsHeatmapSectorView(
                         group: group,
-                        onExpand: { expandedGroup = $0 }
+                        onExpand: isInteractive ? { expandedGroup = $0 } : nil
                     )
                     .frame(width: max(0, frame.width), height: max(0, frame.height))
                     .position(x: frame.midX, y: frame.midY)
@@ -425,7 +430,7 @@ private struct GroupedHoldingsHeatmap: View {
         }
         #if DEBUG
         .task {
-            if ProcessInfo.processInfo.arguments.contains("--expand-first-heatmap-sector") {
+            if isInteractive, ProcessInfo.processInfo.arguments.contains("--expand-first-heatmap-sector") {
                 expandedGroup = groups.first
             }
         }
@@ -436,52 +441,55 @@ private struct GroupedHoldingsHeatmap: View {
 private struct HoldingsHeatmapSectorView: View {
     @Environment(\.locale) private var appLocale
     let group: HoldingsHeatmapSectorGroup
-    let onExpand: (HoldingsHeatmapSectorGroup) -> Void
+    let onExpand: ((HoldingsHeatmapSectorGroup) -> Void)?
 
     var body: some View {
         GeometryReader { geometry in
-            let showsHeader = geometry.size.width >= 54 && geometry.size.height >= 42
-            let headerHeight: CGFloat = geometry.size.height < 64 ? 20 : 24
-
-            Button {
-                onExpand(group)
-            } label: {
-                VStack(spacing: 0) {
-                    if showsHeader {
-                        // The sector names itself; the tally beside it was one
-                        // more figure competing with the ones inside the block,
-                        // and "其他 34" read as a holding called 其他 rather
-                        // than a count. It stays in the accessibility value,
-                        // where it costs no room.
-                        HStack(spacing: 4) {
-                            Text(group.title)
-                                .lineLimit(1)
-                            Spacer(minLength: 0)
-                        }
-                        .appText(.micro, weight: .semibold)
-                        .foregroundStyle(.secondary)
-                        .minimumScaleFactor(0.7)
-                        .padding(.horizontal, 7)
-                        .frame(height: headerHeight)
-                    }
-
-                    // The sector is one tap target, including its company and
-                    // remainder tiles. Stock selection belongs to its sheet.
-                    HoldingsHeatmapTileCloud(
-                        models: group.models,
-                        tileInset: 2,
-                        isInteractive: false,
-                        onSelect: { _ in }
-                    )
-                    .allowsHitTesting(false)
-                }
-                .contentShape(Rectangle())
+            if let onExpand {
+                Button { onExpand(group) } label: { sectorContent(size: geometry.size) }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(L10n.text("查看\(group.title)行业"))
+                    .accessibilityValue(Text("\(group.constituentCount)"))
+            } else {
+                sectorContent(size: geometry.size)
             }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(L10n.text("查看\(group.title)行业"))
-            .accessibilityValue(Text("\(group.constituentCount)"))
         }
+    }
+
+    private func sectorContent(size: CGSize) -> some View {
+        let showsHeader = size.width >= 54 && size.height >= 42
+        let headerHeight: CGFloat = size.height < 64 ? 20 : 24
+        return VStack(spacing: 0) {
+            if showsHeader {
+                // The sector names itself; the tally beside it was one
+                // more figure competing with the ones inside the block,
+                // and "其他 34" read as a holding called 其他 rather
+                // than a count. It stays in the accessibility value,
+                // where it costs no room.
+                HStack(spacing: 4) {
+                    Text(group.title)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .appText(.micro, weight: .semibold)
+                .foregroundStyle(.secondary)
+                .minimumScaleFactor(0.7)
+                .padding(.horizontal, 7)
+                .frame(height: headerHeight)
+            }
+
+            // The sector is one tap target, including its company and
+            // remainder tiles. Stock selection belongs to its sheet.
+            HoldingsHeatmapTileCloud(
+                models: group.models,
+                tileInset: 2,
+                isInteractive: false,
+                onSelect: { _ in }
+            )
+            .allowsHitTesting(false)
+        }
+        .contentShape(Rectangle())
     }
 }
 
@@ -556,6 +564,8 @@ private struct HoldingsHeatmapRemainderDetail: View {
     @State private var loadingQuotes = false
     @State private var selectedHolding: Holding?
     @Namespace private var holdingZoom
+    @Namespace private var holdingPresentationZoom
+    @State private var holdingZoomState = SecurityDetailZoomState()
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
@@ -599,8 +609,9 @@ private struct HoldingsHeatmapRemainderDetail: View {
                     // which rows responded looked arbitrary.
                     ForEach(items) { item in
                         if let holding = item.detailHolding {
-                            Button { selectedHolding = holding } label: { detailRow(item) }
-                                .buttonStyle(.plain)
+                            Button { openHolding(holding) } label: { detailRow(item) }
+                                .buttonStyle(HoldingPressButtonStyle())
+                                .holdingDetailPreview(holding) { openHolding(holding) }
                                 .catfolioZoomSource(holding.ticker, in: holdingZoom)
                         } else {
                             detailRow(item)
@@ -624,12 +635,20 @@ private struct HoldingsHeatmapRemainderDetail: View {
         // Present from the list sheet itself so UIKit keeps the first sheet
         // underneath, including its scroll position, and owns the stacked
         // presentation and interactive dismissal animations.
-        .sheet(item: $selectedHolding) { holding in
-            HoldingDetailView(holding: holding)
+        .securityDetailZoomHost(holdingZoomState, in: holdingPresentationZoom)
+        .sheet(item: $selectedHolding, onDismiss: { holdingZoomState.didDismiss() }) { holding in
+            HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
                 .securityDetailSheet()
-                .navigationTransition(.zoom(sourceID: holding.ticker, in: holdingZoom))
+                .securityDetailZoomTransition(holdingZoomState.activeSource, in: holdingPresentationZoom)
         }
         .securityDetailOpenFeedback(trigger: selectedHolding?.ticker, enabled: hapticsEnabled)
+    }
+
+    private func openHolding(_ holding: Holding) {
+        guard selectedHolding == nil, holdingZoomState.activeSource == nil else { return }
+        holdingZoomState.prepare(id: holding.ticker, namespace: holdingZoom) {
+            selectedHolding = holding
+        }
     }
 
     private func detailRow(_ item: HoldingsHeatmapTile.Model) -> some View {

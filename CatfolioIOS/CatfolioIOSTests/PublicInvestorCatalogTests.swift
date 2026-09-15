@@ -2,6 +2,39 @@ import XCTest
 @testable import CatfolioIOS
 
 final class PublicInvestorCatalogTests: XCTestCase {
+    func testDisclosureNamesRemoveRedundantCodesWithoutAddingTypeLabels() {
+        let cases = [
+            ("AAPL", "Apple Inc. (AAPL) [ST]", "Apple"),
+            ("AAPL", "Apple Inc. - Common Stock (AAPL) [OP]", "Apple"),
+            ("MORN", "Morningstar, Inc. (MORN) [ST]", "Morningstar"),
+            ("XYZ", "Example Corporation (XYZ) [ST]", "Example"),
+            ("NVDA", "Nine Forty Five Battery LLC [OL]", "Nine Forty Five Battery LLC"),
+            ("XYZ", "Example [Unknown]", "Example [Unknown]")
+        ]
+        for (ticker, source, expected) in cases {
+            XCTAssertEqual(PublicDisclosureFormat.securityName(ticker: ticker, name: source, mode: .original), expected)
+        }
+        XCTAssertEqual(PublicDisclosureFormat.securityName(ticker: "AAPL", name: "Apple Inc. (AAPL) [ST]", mode: .chineseShort), "苹果")
+    }
+
+    func testPelosiHoldingNamesCleanDisplayAndKeepSourceAndOptionIdentity() throws {
+        let catalog = try PublicInvestorCatalog.loaded.get()
+        let document = PublicInvestorAccountAdapter.document(catalog: catalog, selection: "pelosi")
+        let holdings = try PublicInvestorAccountAdapter.presentation(for: document).2
+        XCTAssertFalse(holdings.isEmpty)
+        for holding in holdings {
+            XCTAssertFalse(holding.shortName.contains("[ST]"))
+            XCTAssertFalse(holding.shortName.contains("[OP]"))
+            XCTAssertFalse(holding.shortName.contains("[OL]"))
+            if let ticker = holding.publicDisclosure?.underlyingTicker {
+                XCTAssertFalse(holding.shortName.contains("(\(ticker))"))
+            }
+        }
+        XCTAssertTrue(holdings.contains { $0.displayName.contains("[ST]") })
+        XCTAssertTrue(holdings.contains { $0.ticker.contains("[CALL") && $0.publicDisclosure?.instrumentLabel != nil })
+        XCTAssertTrue(holdings.contains { $0.ticker == "AAPL" })
+    }
+
     func testBundledCoreReleasePreservesDisclosureBoundaries() throws {
         let catalog = try PublicInvestorCatalog.loaded.get()
         XCTAssertEqual(catalog.investors.count, 6)

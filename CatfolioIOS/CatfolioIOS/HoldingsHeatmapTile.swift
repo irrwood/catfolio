@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct HoldingsHeatmapTile: View {
+    @Environment(\.securityDetailZoomOrigin) private var zoomOrigin
     @Environment(\.locale) private var appLocale
     struct Model: Identifiable {
         enum Content {
@@ -215,7 +216,9 @@ struct HoldingsHeatmapTile: View {
                 Button(action: action) {
                     tileBody
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(HoldingPressButtonStyle())
+                .holdingDetailPreview(model.detailHolding, onOpen: action)
+                .holdingZoomSource(model.detailHolding?.ticker ?? model.id, in: zoomOrigin)
             } else {
                 tileBody
             }

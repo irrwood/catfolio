@@ -27,7 +27,10 @@ struct RootTabView: View {
     @State private var selection: Destination
     @State private var showsAIAssistant: Bool
     @State private var isTabBarCompact = false
-    @Namespace private var assistantZoom
+    @Namespace private var portfolioAssistantZoom
+    @Namespace private var returnsAssistantZoom
+    @Namespace private var researchAssistantZoom
+    @Namespace private var settingsAssistantZoom
 
     init() {
         let arguments = ProcessInfo.processInfo.arguments
@@ -53,21 +56,17 @@ struct RootTabView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            rootTabs
-                .navigationDestination(isPresented: $showsAIAssistant) {
-                    AIAssistantPage()
-                        .toolbarVisibility(.hidden, for: .navigationBar)
-                        .navigationTransition(.zoom(sourceID: "ai-bubble", in: assistantZoom))
-                }
-        }
+        rootTabs
+            // Observe selection above the tab pages. Their individual bars
+            // disappear/appear during a switch and can miss the triggering
+            // change; this single owner stays mounted throughout navigation.
+            .sensoryFeedback(.selection, trigger: selection) { _, _ in hapticsEnabled }
     }
 
     private var rootTabs: some View {
         TabView(selection: $selection) {
             Tab(value: .portfolio) {
-                PortfolioView()
-                    .toolbarVisibility(.hidden, for: .tabBar)
+                tabPage(.portfolio) { PortfolioView() }
             } label: {
                 tabIcon(
                     for: .portfolio,
@@ -78,8 +77,7 @@ struct RootTabView: View {
             }
 
             Tab(value: .returns) {
-                ReturnsView()
-                    .toolbarVisibility(.hidden, for: .tabBar)
+                tabPage(.returns) { ReturnsView() }
             } label: {
                 tabIcon(
                     for: .returns,
@@ -90,8 +88,7 @@ struct RootTabView: View {
             }
 
             Tab(value: .research) {
-                ResearchView()
-                    .toolbarVisibility(.hidden, for: .tabBar)
+                tabPage(.research) { ResearchView() }
             } label: {
                 tabIcon(
                     for: .research,
@@ -102,8 +99,7 @@ struct RootTabView: View {
             }
 
             Tab(value: .settings) {
-                SettingsView()
-                    .toolbarVisibility(.hidden, for: .tabBar)
+                tabPage(.settings) { SettingsView() }
             } label: {
                 tabIcon(
                     for: .settings,
@@ -116,21 +112,39 @@ struct RootTabView: View {
         }
         .id(presentationPreferencesID)
         .tint(.primary)
-        .navigationTitle(title(for: selection))
-        .navigationBarTitleDisplayMode(.large)
-        .toolbarVisibility(selection == .portfolio ? .hidden : .visible, for: .navigationBar)
         .toolbarVisibility(.hidden, for: .tabBar)
         .environment(\.rootTabBarCompact, $isTabBarCompact)
         .onChange(of: selection) { _, _ in isTabBarCompact = false }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            navigationBar
-                // Shrinking the controls must not resize the ScrollView's
-                // viewport or feed a spurious scroll delta back into the bar.
-                .frame(height: TabBarMetrics.regularControlSize, alignment: .bottom)
-        }
     }
 
-    private var navigationBar: some View {
+    /// A navigation bar observes exactly one tab's root scroll view. Keep its
+    /// title, collapsed state and pushed pages out of the other tabs' stacks.
+    private func tabPage<Content: View>(
+        _ destination: Destination, @ViewBuilder content: () -> Content
+    ) -> some View {
+        let zoom = assistantNamespace(for: destination)
+        return NavigationStack {
+            content()
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    navigationBar(in: zoom)
+                        // Compact controls must not resize the scroll viewport.
+                        .frame(height: TabBarMetrics.regularControlSize, alignment: .bottom)
+                }
+                .navigationDestination(isPresented: Binding(
+                    get: { showsAIAssistant && selection == destination },
+                    set: { presented in
+                        if selection == destination { showsAIAssistant = presented }
+                    }
+                )) {
+                    AIAssistantPage()
+                        .toolbarVisibility(.hidden, for: .navigationBar)
+                        .navigationTransition(.zoom(sourceID: "ai-bubble", in: zoom))
+                }
+        }
+        .toolbarVisibility(.hidden, for: .tabBar)
+    }
+
+    private func navigationBar(in assistantZoom: Namespace.ID) -> some View {
         HStack(spacing: isTabBarCompact ? 10 : 12) {
             HStack(spacing: 0) {
                 navigationButton(.portfolio, selected: "TabPortfolioSelected", unselected: "TabPortfolioUnselected", label: L10n.text("持仓"))
@@ -140,9 +154,6 @@ struct RootTabView: View {
             }
             .padding(isTabBarCompact ? 2 : 4)
             .navigationGlass()
-            // Fires on the change, so tapping the tab already open stays
-            // silent — there is nothing for the tap to confirm.
-            .sensoryFeedback(.selection, trigger: selection) { _, _ in hapticsEnabled }
             .accessibilityIdentifier("root-tab-bar")
 
             Button(action: presentAI) {
@@ -225,12 +236,12 @@ struct RootTabView: View {
         isTabBarCompact ? TabBarMetrics.compactControlSize : TabBarMetrics.regularControlSize
     }
 
-    private func title(for destination: Destination) -> String {
+    private func assistantNamespace(for destination: Destination) -> Namespace.ID {
         switch destination {
-        case .portfolio: ""
-        case .returns: L10n.text("Performance")
-        case .research: L10n.text("研究")
-        case .settings: L10n.text("设置")
+        case .portfolio: portfolioAssistantZoom
+        case .returns: returnsAssistantZoom
+        case .research: researchAssistantZoom
+        case .settings: settingsAssistantZoom
         }
     }
 
@@ -268,10 +279,16 @@ struct RootTabBarScrollDirection {
 
 private struct RootTabBarScrollTracking: ViewModifier {
     @Environment(\.rootTabBarCompact) private var compact
-    @State private var direction = RootTabBarScrollDirection()
-    @State private var isInteracting = false
+    // Gesture bookkeeping has no visual output. Keep it outside SwiftUI's
+    // observation graph; only an actual compact/expanded change redraws UI.
+    @State private var tracking = Tracking()
     var onOffsetChange: (CGFloat) -> Void
     var onPhaseChange: (ScrollPhase, ScrollPhase, ScrollPhaseChangeContext) -> Void
+
+    private final class Tracking {
+        var direction = RootTabBarScrollDirection()
+        var isInteracting = false
+    }
 
     func body(content: Content) -> some View {
         content
@@ -282,16 +299,16 @@ private struct RootTabBarScrollTracking: ViewModifier {
                 return min(maximum, max(0, geometry.contentOffset.y + geometry.contentInsets.top))
             } action: { oldOffset, newOffset in
                 onOffsetChange(newOffset)
-                guard isInteracting,
-                      let value = direction.update(from: oldOffset, to: newOffset),
+                guard tracking.isInteracting,
+                      let value = tracking.direction.update(from: oldOffset, to: newOffset),
                       compact.wrappedValue != value else { return }
                 compact.wrappedValue = value
             }
             .onScrollPhaseChange { oldPhase, phase, context in
                 // Inertia and rubber-band recovery must not undo the state
                 // chosen by the user's swipe, nor should programmatic scrolling.
-                isInteracting = phase == .interacting
-                if phase == .tracking || phase == .idle { direction.reset() }
+                tracking.isInteracting = phase == .interacting
+                if phase == .tracking || phase == .idle { tracking.direction.reset() }
                 onPhaseChange(oldPhase, phase, context)
             }
     }

@@ -93,7 +93,7 @@ struct SectorPerformancePanel: View {
             if let dateRange = store.dateRange {
                 Text(L10n.text("板块表现")) + Text(" · ") + Text(L10n.text("数据日期 \(dateRange)"))
             } else if store.isLoading {
-                ProgressView(L10n.text("读取市场数据…"))
+                ChartSkeletonShape(width: 140, height: 11).chartLoadingShimmer()
             }
             Text(L10n.text("行业 ETF 作为美国板块代理；数值为最近两个可用收盘价的变化，非盘中实时行情。来源：现有 Yahoo 行情服务及本机缓存。"))
         }
@@ -228,7 +228,7 @@ private struct SectorPerformanceDetailView: View {
             if let market, market.points.count > 1 {
                 Section {
                     let domain = StandardLineChartEntrancePhase.domain(market.points.map(\.value))
-                    StandardLineChartEntrance { phase in
+                    StandardLineChartEntrance(appearanceID: "sector-performance|\(definition.symbol)") { phase in
                     Chart(Array(market.points.enumerated()), id: \.element.id) { item in
                         LineMark(x: .value(L10n.text("日期"), DayDateCodec.date(from: item.element.id) ?? .distantPast),
                                  y: .value(L10n.text("收盘"), phase.value(item.element.value,

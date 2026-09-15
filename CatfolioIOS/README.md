@@ -21,6 +21,8 @@
 - Moomoo OAuth 使用官方支持的 `http://localhost:60355/callback` 本机回调；授权时只需授予 `trade:read` 权限。同步会按账户和市场分页读取持仓与历史成交。
 - 支持 iPhone 直连 IBKR Flex Web Service；Token 与 Query ID 仅保存在设备 Keychain，不需要 Gateway。
 
+- 支持 iPhone 通过 SnapTrade Personal API Key 直连：券商授权、单账户持仓预览与确认同步，凭证只存本机 Keychain。首版不导入现金或交易流水。[配置与覆盖范围](../docs/ios-snaptrade.md)。
+
 ### 汇率影响管线
 
 1. 先保留券商原始值：Trading 212 返回的 FX P/L 会作为券商口径展示。

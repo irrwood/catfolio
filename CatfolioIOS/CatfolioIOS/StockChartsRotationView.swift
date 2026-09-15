@@ -21,6 +21,7 @@ struct StockChartsRotationView: View {
                     StockChartsRRGPlot(weeks: weeks, selected: $selected)
                         .frame(height: 300)
                         .accessibilityIdentifier("stockcharts-rrg-chart")
+                        .onAppear { ChartAppearanceHistory.record("market-rotation") }
                     playback(response)
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
@@ -39,7 +40,7 @@ struct StockChartsRotationView: View {
                     VStack(alignment: .leading, spacing: 7) {
                         Text(L10n.text("来源时间：\(current.end)（纽约）"))
                         if store.isLoading {
-                            HStack(spacing: 6) { ProgressView().controlSize(.mini); Text(L10n.text("正在读取 StockCharts…")) }
+                            ChartSkeletonShape(width: 150, height: 11).chartLoadingShimmer(appearanceID: "market-rotation")
                         } else if store.failed {
                             Text(L10n.text("更新失败，保留上次来源快照。"))
                                 .foregroundStyle(CatfolioTheme.warning)
@@ -50,6 +51,10 @@ struct StockChartsRotationView: View {
                         Text(L10n.text("仅供市场观察，不构成投资建议。"))
                     }
                     .font(.system(size: 11, design: .rounded)).foregroundStyle(.secondary)
+                } else if store.isLoading {
+                    StandardLineChartSkeleton(axisWidth: 0, topInset: 0, lineWidths: [1.3], appearanceID: "rotation-benchmark")
+                        .frame(height: 70)
+                    ChartShapeSkeleton(layout: .bubbles, appearanceID: "market-rotation").frame(height: 300)
                 } else {
                     ContentUnavailableView(L10n.text("暂无 RRG 数据"), systemImage: "chart.xyaxis.line", description: Text(L10n.text("请刷新以读取 StockCharts 的公开图表。")))
                 }
@@ -118,7 +123,7 @@ struct StockChartsRotationView: View {
                     .font(.system(size: 17, weight: .semibold, design: .rounded)).monospacedDigit()
             }
             let domain = StandardLineChartEntrancePhase.domain(weeks.map(\.benchmark))
-            StandardLineChartEntrance { phase in
+            StandardLineChartEntrance(appearanceID: "rotation-benchmark") { phase in
             Chart(Array(weeks.enumerated()), id: \.element.id) { item in
                 LineMark(x: .value("Date", item.element.date), y: .value("S&P 500", phase.value(item.element.benchmark,
                     fraction: Double(item.offset) / Double(max(1, weeks.count - 1)), domain: domain)))

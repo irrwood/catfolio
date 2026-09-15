@@ -66,12 +66,17 @@ def test_history_supports_activity_categories_account_tags_and_export():
     assert 'accountFilter\n                        .listRowBackground' not in history
 
 
+def test_history_uses_inline_navigation_title():
+    history = HISTORY.read_text(encoding="utf-8")
+    assert '.navigationTitle(L10n.text("History"))' in history
+    assert '.navigationBarTitleDisplayMode(.inline)' in history
+    assert '.navigationBarTitleDisplayMode(.large)' not in history
+
+
 def test_history_uses_native_navigation_and_list_hierarchy_without_a_globe():
     history = HISTORY.read_text(encoding="utf-8")
     list_content = history.split('List {', 1)[1].split('if filteredActivities.isEmpty', 1)[0]
 
-    assert '.navigationTitle(L10n.text("History"))' in history
-    assert '.navigationBarTitleDisplayMode(.large)' in history
     assert '.navigationBarBackButtonHidden(true)' not in history
     assert 'ToolbarItem(placement: .topBarLeading)' not in history
     assert 'Button("Back", systemImage: "xmark")' not in history

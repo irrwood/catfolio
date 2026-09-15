@@ -602,7 +602,7 @@ struct Trading212Client {
                             transactions: [],
                             isComplete: false,
                             cachedCount: 0,
-                            status: L10n.text("分红记录读取失败：\(error.localizedDescription)")
+                            status: L10n.text("股息记录读取失败：\(error.localizedDescription)")
                         )
                     }
                     let interestHistory: HistoricalOrdersResult
@@ -651,7 +651,7 @@ struct Trading212Client {
                         historyStatuses.append("\(account.label)\(messages.joined(separator: L10n.clauseSeparator))")
                     } else if !accountHistoryComplete {
                         historyStatuses.append(
-                            L10n.text("\(account.label)正在补齐成交、分红和利息历史")
+                            L10n.text("\(account.label)正在补齐成交、股息和利息历史")
                         )
                     }
                 } catch {
@@ -941,7 +941,7 @@ struct Trading212Client {
                 transactions: checkpoint.dividends.map(\.transaction).sorted { $0.date < $1.date },
                 isComplete: false,
                 cachedCount: checkpoint.dividends.count,
-                status: L10n.text("分红历史稍后继续")
+                status: L10n.text("股息历史稍后继续")
             )
         }
 
@@ -1028,7 +1028,7 @@ struct Trading212Client {
                     transactions: checkpoint.dividends.map(\.transaction).sorted { $0.date < $1.date },
                     isComplete: false,
                     cachedCount: checkpoint.dividends.count,
-                    status: L10n.text("已缓存 \(checkpoint.dividends.count) 笔分红，稍后继续")
+                    status: L10n.text("已缓存 \(checkpoint.dividends.count) 笔股息，稍后继续")
                 )
             }
             checkpoint.nextPagePath = path
@@ -1042,7 +1042,7 @@ struct Trading212Client {
             transactions: checkpoint.dividends.map(\.transaction).sorted { $0.date < $1.date },
             isComplete: false,
             cachedCount: checkpoint.dividends.count,
-            status: L10n.text("已缓存 \(checkpoint.dividends.count) 笔分红，稍后继续")
+            status: L10n.text("已缓存 \(checkpoint.dividends.count) 笔股息，稍后继续")
         )
     }
 

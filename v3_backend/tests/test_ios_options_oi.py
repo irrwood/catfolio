@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[2] / "CatfolioIOS/CatfolioIOS"
 def test_oi_distribution():
     source = (ROOT / "OptionsOIView.swift").read_text()
     model = source.split("struct OIContract:", 1)[1].split("actor OptionsOIClient", 1)[0]
-    script = 'import Foundation\nenum L10n { static func text(_ value: String) -> String { value } }\nstruct OIContract:' + model + r'''
+    script = 'import Foundation\nimport CoreGraphics\nenum L10n { static func text(_ value: String) -> String { value } }\nstruct OIContract:' + model + r'''
 func contract(_ id: String, _ strike: Double, _ side: String, _ oi: Double) -> OIContract {
     OIContract(details: .init(ticker: id, contract_type: side, expiration_date: "2026-10-01",
         strike_price: strike, shares_per_contract: 100), open_interest: oi)
@@ -95,6 +95,21 @@ for ys in [[0.0, 0, 1, 2, 3], [250.0, 250, 250, 250, 250], [100, 110, 120]] {
     precondition(positions.first! >= 14 && positions.last! <= 236)
     precondition(zip(positions, positions.dropFirst()).allSatisfy { $1 - $0 >= 28 })
 }
+// Overlay strokes must avoid their own pill and neighbouring/selected pills.
+let pill = CGRect(x: 40, y: 40, width: 20, height: 20)
+let horizontal = OIPlotGeometry.uncoveredLineIntervals(from: 0, to: 100, at: 50, excluding: [pill])
+precondition(horizontal == [0...35.5, 64.5...100])
+let vertical = OIPlotGeometry.uncoveredLineIntervals(from: 100, to: 0, at: 50, vertical: true, excluding: [pill])
+precondition(vertical == horizontal)
+let grazing = OIPlotGeometry.uncoveredLineIntervals(from: 0, to: 100, at: 34, excluding: [pill], lineWidth: 5)
+precondition(grazing == [0...33.5, 66.5...100]) // stroke edge + clearance near the pill
+precondition(OIPlotGeometry.uncoveredLineIntervals(from: 0, to: 100, at: 20, excluding: [pill]) == [0...100])
+precondition(OIPlotGeometry.uncoveredLineIntervals(from: 42, to: 58, at: 50, excluding: [pill]).isEmpty)
+let neighbour = CGRect(x: 55, y: 40, width: 35, height: 20)
+let grouped = OIPlotGeometry.uncoveredLineIntervals(from: 0, to: 100, at: 50, excluding: [pill, neighbour])
+precondition(grouped == [0...35.5]) // no tiny fragment beyond overlapping labels
+precondition(grouped == OIPlotGeometry.uncoveredLineIntervals(from: 0, to: 100, at: 50, excluding: [neighbour, pill]))
+precondition(OIPlotGeometry.uncoveredLineIntervals(from: 0, to: 0, at: 50, excluding: []).isEmpty)
 print("PASS: aggregation, duplicate fills, tied walls, equal-tail range, empty/zero/missing side, invalid numbers")
 '''
     script = script.replace('\\\\.strike', '\\.strike')
@@ -134,7 +149,7 @@ def test_oi_complete_chain_and_vp_template():
 
 def test_yahoo_transport_and_cache():
     source = (ROOT / "OptionsOIView.swift").read_text().split("struct OptionsOIView: View", 1)[0]
-    source = source.replace("import SwiftUI", "import Foundation").replace("import Charts", "")
+    source = source.replace("import SwiftUI", "import Foundation\nimport CoreGraphics").replace("import Charts", "")
     script = source + '\nenum L10n { static func text(_ value: String) -> String { value } }\n' + r'''
 enum LocalServiceError: LocalizedError {
     case remote(String), invalidResponse

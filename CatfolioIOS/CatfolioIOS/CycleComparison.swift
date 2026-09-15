@@ -392,6 +392,7 @@ struct CycleComparisonView: View {
             trailingEndpointInset: 0,
             gridOpacity: 0,
             transitionKey: "\(subject.rawValue)|\(years)|\(hidden.sorted().joined(separator: ","))",
+            appearanceID: "cycle-\(subject.rawValue)",
             animatesInitialAppearance: true,
             selectedDate: selectedDate,
             selectionIndicatorLabel: selectedDate.map { dayText(for: Self.fraction(for: $0)) },
@@ -446,7 +447,8 @@ struct CycleComparisonView: View {
                 ContentUnavailableView(L10n.text("暂无周期数据"), systemImage: "chart.xyaxis.line",
                                        description: Text(L10n.text("还没有可用的组合收益历史。")))
             } else {
-                ProgressView()
+                StandardLineChartSkeleton(axisWidth: 0, topInset: 0, seriesCount: 3,
+                    lineWidths: [2.5, 2.5, 2], appearanceID: "cycle-\(subject.rawValue)")
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

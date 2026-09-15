@@ -270,6 +270,10 @@ struct SecurityPriceMoveContext: Codable, Equatable, Identifiable, Sendable {
     let endPrice: Double
     let isIntraday: Bool
     var typicalDailyMovePercent: Double? = nil
+    // Optional so saved price-move contexts from older versions still decode.
+    var fundIntroduction: Bool? = nil
+
+    var isFundIntroduction: Bool { fundIntroduction == true }
 
     var changePercent: Double { (endPrice / startPrice - 1) * 100 }
     var isValid: Bool {
@@ -279,7 +283,9 @@ struct SecurityPriceMoveContext: Codable, Equatable, Identifiable, Sendable {
     var id: String {
         "\(ticker.uppercased())|\(currency)|\(rangeLabel)|\(startDate.timeIntervalSince1970)|\(endDate.timeIntervalSince1970)|\(startPrice)|\(endPrice)|\(isIntraday)"
     }
-    func key(language: String) -> String { ContentLanguage.cacheKey(id, language: language) }
+    func key(language: String) -> String {
+        ContentLanguage.cacheKey(id + (isFundIntroduction ? "|fund-introduction-v1" : ""), language: language)
+    }
     var title: String { Self.title(changePercent: isValid ? changePercent : nil) }
 
     static func title(changePercent: Double?) -> String {
@@ -416,14 +422,15 @@ actor SecurityPriceMoveFile {
 }
 
 extension SecurityPriceMoveContext {
-    static func latestSession(history: SecurityPriceHistory, name: String) -> Self? {
+    static func latestSession(history: SecurityPriceHistory, name: String, isFund: Bool = false) -> Self? {
         let points = history.chartDailyPoints
         guard let end = points.last,
               let start = points.last(where: { $0.dateText < end.dateText }) else { return nil }
         let context = Self(ticker: history.ticker, name: name, currency: history.currency,
             rangeLabel: end.dateText, startDate: start.date, endDate: end.date,
             startPrice: start.close, endPrice: end.close, isIntraday: false,
-            typicalDailyMovePercent: SecurityDailyMoveSkill.baseline(closes: points.dropLast().map(\.close)))
+            typicalDailyMovePercent: SecurityDailyMoveSkill.baseline(closes: points.dropLast().map(\.close)),
+            fundIntroduction: isFund ? true : nil)
         return context.isValid ? context : nil
     }
 
@@ -432,11 +439,28 @@ extension SecurityPriceMoveContext {
     }
 
     var noteTitle: String {
-        noteFocus == .priceMove ? title : L10n.text("最近有什么动静？")
+        !isFundIntroduction && noteFocus == .priceMove ? title : L10n.text("最近有什么动静？")
     }
 
     var notePrompt: String {
-        """
+        if isFundIntroduction {
+            return """
+            Write a concise introduction to this specific ETF/fund for the Catfolio paper note.
+            Fund name: \(name); market-qualified ticker: \(ticker); quote currency: \(currency).
+            Identify the exact listing and share class before describing it. Prefer the issuer's official product page or factsheet.
+            Explain what it invests in and the index it tracks, or its active strategy if it does not track an index.
+            Include one useful verified feature when available: geographic/sector exposure, accumulating vs distributing,
+            fees, or leverage/inverse mechanics (including daily reset). Do not assume all ETFs track an index.
+            Do not explain daily price moves or write company news. Do not infer fund currency, hedging or share class from quote currency.
+            Do not invent holdings, yields, fees or product facts. Omit details that cannot be verified; date any time-sensitive figures.
+            If identity or facts cannot be verified, briefly say that the fund introduction is unavailable.
+            Return ONLY JSON: {"text":"...","sources":[{"title":"...","url":"https://..."}]}.
+            Use one or two sentences, at most 150 Chinese characters or 65 English words, with no headings or line breaks.
+            Cite up to three sources actually used. Do not provide investment advice.
+            \(L10n.responseLanguageInstruction)
+            """
+        }
+        return """
         Follow this task-specific Skill for the Catfolio paper note:
         \(SecurityDailyMoveSkill.instructions)
         Routing configuration: \(SecurityDailyMoveSkill.routingJSON)
@@ -512,7 +536,7 @@ final class SecurityDailyMoveStore {
     }
 
     nonisolated static func fetch(_ context: SecurityPriceMoveContext) async throws -> SecurityDailyMoveNote {
-        guard !SecurityDailyMoveSkill.instructions.isEmpty, SecurityDailyMoveSkill.routing.version != "fallback" else {
+        guard context.isFundIntroduction || (!SecurityDailyMoveSkill.instructions.isEmpty && SecurityDailyMoveSkill.routing.version != "fallback") else {
             throw LocalServiceError.invalidResponse
         }
         let ai = LocalAIClient()
@@ -522,24 +546,35 @@ final class SecurityDailyMoveStore {
         }
         // Providers without native search get dated, readable public sources.
         let research = SecurityDebateResearch()
-        let sources = await research.sources(ticker: context.ticker, name: context.name)
-        let now = Date()
-        let config = SecurityDailyMoveSkill.routing
-        let anchor = context.noteFocus == .priceMove ? context.endDate : now
-        // Allow subsequent reporting to describe an earlier event; the Skill
-        // separately enforces that causal news was public before the price observation.
-        let cutoff = context.noteFocus == .priceMove ? min(now, context.endDate.addingTimeInterval(2 * 86400)) : now
-        func candidates(days: Int) -> [PortfolioAttentionSource] {
-            sources.filter {
-                guard let date = $0.publishedAt else { return false }
-                return date >= anchor.addingTimeInterval(-Double(days) * 86400) && date <= cutoff
+        var sources = await research.sources(ticker: context.ticker, name: context.name)
+        var documents: [SecurityResearchDocument]
+        if context.isFundIntroduction {
+            if let entry = (try? CompanyReferenceCatalog.bundled.get())?.entry(brokerSymbol: context.ticker),
+               let url = entry.websiteURL {
+                sources.insert(PortfolioAttentionSource(id: "fund-product", title: context.name,
+                    publisher: url.host ?? context.name, url: url, publishedAt: nil, tier: "primary"), at: 0)
             }
-        }
-        let recent = candidates(days: config.recentDays)
-        var documents = await research.documents(sources: Array(recent.prefix(6)), ticker: context.ticker, name: context.name)
-        if documents.isEmpty && context.noteFocus != .priceMove {
-            let older = candidates(days: config.extendedDays).filter { source in !recent.contains(where: { $0.url == source.url }) }
-            documents = await research.documents(sources: Array(older.prefix(6)), ticker: context.ticker, name: context.name)
+            documents = await research.documents(sources: sources, ticker: context.ticker, name: context.name,
+                requiresRecentPublication: false)
+        } else {
+            let now = Date()
+            let config = SecurityDailyMoveSkill.routing
+            let anchor = context.noteFocus == .priceMove ? context.endDate : now
+            // Allow subsequent reporting to describe an earlier event; the Skill
+            // separately enforces that causal news was public before the price observation.
+            let cutoff = context.noteFocus == .priceMove ? min(now, context.endDate.addingTimeInterval(2 * 86400)) : now
+            func candidates(days: Int) -> [PortfolioAttentionSource] {
+                sources.filter {
+                    guard let date = $0.publishedAt else { return false }
+                    return date >= anchor.addingTimeInterval(-Double(days) * 86400) && date <= cutoff
+                }
+            }
+            let recent = candidates(days: config.recentDays)
+            documents = await research.documents(sources: Array(recent.prefix(6)), ticker: context.ticker, name: context.name)
+            if documents.isEmpty && context.noteFocus != .priceMove {
+                let older = candidates(days: config.extendedDays).filter { source in !recent.contains(where: { $0.url == source.url }) }
+                documents = await research.documents(sources: Array(older.prefix(6)), ticker: context.ticker, name: context.name)
+            }
         }
         guard !documents.isEmpty else { return noEvidenceNote(context) }
         let evidence = documents.map {
@@ -554,6 +589,9 @@ final class SecurityDailyMoveStore {
     }
 
     nonisolated static func noEvidenceNote(_ context: SecurityPriceMoveContext) -> SecurityDailyMoveNote {
+        if context.isFundIntroduction {
+            return SecurityDailyMoveNote(text: L10n.text("暂未找到可核实的基金介绍，稍后再试。"), sources: [])
+        }
         let message = context.noteFocus == .priceMove
             ? L10n.text("暂未找到这次涨跌的明确公开原因。")
             : L10n.text("近期暂无可核实的重要公司新进展。")

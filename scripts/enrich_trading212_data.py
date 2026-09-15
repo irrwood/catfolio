@@ -5,6 +5,9 @@ import ssl
 import subprocess
 import time
 import urllib.request
+import urllib.error
+import urllib.parse
+import certifi
 from pathlib import Path
 
 import os; ROOT = Path(os.environ.get("CATFOLIO_ROOT") or os.environ.get("HELM_ROOT") or str(Path(__file__).resolve().parent.parent))
@@ -14,9 +17,11 @@ PORTFOLIO_ANALYSIS = DATA_DIR / "portfolio_analysis/portfolio_analysis.json"
 
 BASE_URL = os.environ.get("TRADING212_API_BASE", "https://live.trading212.com/api/v0").rstrip("/")
 READ_ONLY_ENDPOINTS = {
+    "account_summary": "/equity/account/summary",
     "account_info": "/equity/account/info",
     "account_cash": "/equity/account/cash",
     "portfolio": "/equity/portfolio",
+    "positions": "/equity/positions",
 }
 BLOCKED_PATH_FRAGMENTS = ("/orders", "/pies")
 ACCOUNT_INFO_TTL_SECONDS = 60 * 60 * 24
@@ -158,30 +163,95 @@ def open_json(path, authorization):
         f"{BASE_URL}{path}",
         headers={
             "Authorization": authorization,
+            "Accept": "application/json",
             "User-Agent": "portfolio-analysis-readonly/1.0",
         },
     )
+    # Bundled macOS Python may not have a system CA path. Always verify TLS
+    # using the shipped CA bundle instead of retrying with verification off.
+    context = ssl.create_default_context(cafile=certifi.where())
+    with urllib.request.urlopen(req, timeout=20, context=context) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def request_error_message(exc):
+    """Safe diagnostics: never expose response bodies, credentials or query strings."""
+    if isinstance(exc, urllib.error.HTTPError):
+        path = urllib.parse.urlsplit(str(exc.url)).path.removeprefix("/api/v0")
+        endpoint = path if path in READ_ONLY_ENDPOINTS.values() else "Trading 212 API"
+        hints = {
+            400: "请求被券商拒绝，请核对正式/模拟账户环境及 API Key 与对应的 Secret。",
+            401: "认证失败，请核对 API Key 与对应的 Secret。",
+            403: "访问被拒绝，请检查账户读取权限及 API 的 IP 限制。",
+            404: "券商未提供此接口。",
+            429: "请求过于频繁，请稍后重试。",
+        }
+        return f"{endpoint}（HTTP {exc.code}）：" + hints.get(exc.code, "券商服务暂时不可用，请稍后重试。")
+    if isinstance(exc, urllib.error.URLError):
+        return "无法安全连接 Trading 212，请检查网络、代理及系统时间。"
+    return "Trading 212 返回的数据不完整或格式无法识别。"
+
+
+def fetch_account_details(authorization, cached_info=None):
+    """Translate the current summary API into the existing desktop data contract."""
     try:
-        with urllib.request.urlopen(req, timeout=20) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except Exception as exc:
-        if "CERTIFICATE_VERIFY_FAILED" not in str(exc):
+        summary = open_json(READ_ONLY_ENDPOINTS["account_summary"], authorization)
+    except urllib.error.HTTPError as exc:
+        # Only an absent endpoint warrants legacy fallback. A 400/401/403/429
+        # must retain its cause rather than triggering more broker requests.
+        if exc.code != 404:
             raise
-        with urllib.request.urlopen(req, timeout=20, context=ssl._create_unverified_context()) as response:
-            return json.loads(response.read().decode("utf-8"))
+        info = dict(cached_info) if cached_info else open_json(READ_ONLY_ENDPOINTS["account_info"], authorization)
+        cash = open_json(READ_ONLY_ENDPOINTS["account_cash"], authorization)
+        if not isinstance(info, dict) or not info.get("id") or not info.get("currencyCode") or not isinstance(cash, dict):
+            raise ValueError("Incomplete legacy account response")
+        return info, cash, bool(cached_info)
+    if not isinstance(summary, dict) or not summary.get("id") or not summary.get("currency"):
+        raise ValueError("Incomplete account summary")
+    cash = summary.get("cash")
+    investments = summary.get("investments")
+    if not isinstance(cash, dict) or not isinstance(investments, dict):
+        raise ValueError("Incomplete account summary balances")
+    info = {"id": summary["id"], "currencyCode": summary["currency"]}
+    normalized_cash = {
+        "currencyCode": summary["currency"],
+        "free": cash.get("availableToTrade"),
+        "blocked": cash.get("reservedForOrders"),
+        "pieCash": cash.get("inPies"),
+        "invested": investments.get("totalCost"),
+        "ppl": investments.get("unrealizedProfitLoss"),
+        "result": investments.get("realizedProfitLoss"),
+        "total": summary.get("totalValue"),
+    }
+    return info, normalized_cash, False
+
+
+def fetch_positions(authorization):
+    try:
+        positions = open_json(READ_ONLY_ENDPOINTS["positions"], authorization)
+    except urllib.error.HTTPError as exc:
+        if exc.code != 404:
+            raise
+        positions = open_json(READ_ONLY_ENDPOINTS["portfolio"], authorization)
+    if not isinstance(positions, list):
+        raise ValueError("Invalid positions response")
+    return positions
 
 def summarize_position(row):
     instrument = row.get("instrument") or {}
+    wallet = row.get("walletImpact") or {}
     ticker = instrument.get("ticker") or row.get("ticker")
     normalized_ticker = normalize_t212_ticker(ticker)
     currency = (
-        known_price_currency(normalized_ticker)
-        or instrument.get("currencyCode")
+        instrument.get("currencyCode")
         or instrument.get("currency")
+        or row.get("currencyCode")
+        or row.get("currency")
+        or known_price_currency(normalized_ticker)
         or infer_quote_currency(ticker, normalized_ticker)
     )
     quantity = row.get("quantity")
-    average_price = row.get("averagePrice") or row.get("averagePricePaid")
+    average_price = row.get("averagePricePaid") if row.get("averagePricePaid") is not None else row.get("averagePrice")
     current_price = row.get("currentPrice")
     cost_native = float(quantity) * float(average_price) if quantity is not None and average_price is not None else None
     market_value_native = float(quantity) * float(current_price) if quantity is not None and current_price is not None else None
@@ -200,10 +270,11 @@ def summarize_position(row):
         "cost_gbp_estimated": gbp_equivalent(cost_native, currency),
         "market_value_native": market_value_native,
         "market_value_gbp_estimated": gbp_equivalent(market_value_native, currency),
-        "ppl": row.get("ppl"),
-        "fx_ppl": row.get("fxPpl"),
+        "account_currency": wallet.get("currency"),
+        "ppl": row.get("ppl") if row.get("ppl") is not None else wallet.get("unrealizedProfitLoss"),
+        "fx_ppl": row.get("fxPpl") if row.get("fxPpl") is not None else wallet.get("fxImpact"),
         "result": row.get("result"),
-        "initial_fill_date": row.get("initialFillDate"),
+        "initial_fill_date": row.get("createdAt") or row.get("initialFillDate"),
         "invested": gbp_equivalent(cost_native, currency),
     }
 
@@ -213,32 +284,21 @@ def fetch_account(account, cached_account=None):
     account_info = dict((cached_account or {}).get("account_info") or {})
     account_cash = {}
     positions = []
-    reused_account_info = bool(account_info)
+    reused_account_info = False
 
     if not authorization:
         warnings.append(f"{account_label(account)}: TRADING212_API_KEY is not set; Trading 212 data skipped.")
     else:
-        for name, path in READ_ONLY_ENDPOINTS.items():
-            if name == "account_info" and reused_account_info:
-                continue
-            try:
-                payload = open_json(path, authorization)
-                if name == "account_info" and isinstance(payload, dict):
-                    account_info = {
-                        "id": safe_account_id(payload.get("id")),
-                        "currencyCode": payload.get("currencyCode"),
-                    }
-                elif name == "account_cash" and isinstance(payload, dict):
-                    account_cash = {
-                        key: payload.get(key)
-                        for key in ["blocked", "free", "invested", "pieCash", "ppl", "result", "total", "currencyCode"]
-                        if key in payload
-                    }
-                elif name == "portfolio" and isinstance(payload, list):
-                    positions = [{**summarize_position(row), "account": account_label(account), "account_key": account} for row in payload]
-            except Exception as exc:
-                warnings.append(f"{account_label(account)} {name} failed: {type(exc).__name__} {getattr(exc, 'code', '')} {str(exc)[:120]}")
-            time.sleep(2.1)
+        try:
+            info, account_cash, reused_account_info = fetch_account_details(authorization, account_info)
+            account_info = {"id": safe_account_id(info.get("id")), "currencyCode": info.get("currencyCode")}
+        except Exception as exc:
+            warnings.append(f"{account_label(account)} account_cash failed: {type(exc).__name__} {getattr(exc, 'code', '')} {request_error_message(exc)}")
+        try:
+            positions = [{**summarize_position(row), "account": account_label(account), "account_key": account}
+                         for row in fetch_positions(authorization)]
+        except Exception as exc:
+            warnings.append(f"{account_label(account)} portfolio failed: {type(exc).__name__} {getattr(exc, 'code', '')} {request_error_message(exc)}")
 
     total_invested = sum(float(row.get("invested") or 0) for row in positions)
     total_ppl = sum(float(row.get("ppl") or 0) for row in positions)

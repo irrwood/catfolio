@@ -29,6 +29,7 @@
 		AF1000000000000000000022 /* PolicyComposerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000022; };
 		AF1000000000000000000023 /* PolicyComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000023; };
 		AF1000000000000000000024 /* UnderwaterAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000024; };
+		AFA000000000000000000001 /* HoldingHistoryState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA000000000000000000001; };
 		AF1000000000000000000025 /* UnderwaterAnalysisChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000025; };
 		AF1000000000000000000026 /* ImpliedFunding.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000026; };
 		AF1000000000000000000027 /* CycleComparison.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000027; };
@@ -65,16 +66,21 @@
 		A10000000000000000000004 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000004 /* DesignSystem.swift */; };
 		A10000000000000000000005 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000005 /* RootTabView.swift */; };
 		A10000000000000000000006 /* PortfolioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000006 /* PortfolioView.swift */; };
+		A7C0F0110000000000000001 /* PortfolioLoadRipple.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0110000000000000001 /* PortfolioLoadRipple.swift */; };
+		A7C0F0110000000000000002 /* PortfolioLoadRipple.metal in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0110000000000000002 /* PortfolioLoadRipple.metal */; };
 		A10000000000000000000007 /* VolumeProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000007 /* VolumeProfileView.swift */; };
 		A10000000000000000000008 /* ReturnsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* ReturnsView.swift */; };
 		A10000000000000000000009 /* AIView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000009 /* AIView.swift */; };
+		ACF01A100000000000000001 /* AIQuestionPresets.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCF01A100000000000000001 /* AIQuestionPresets.swift */; };
 		A1000000000000000000000A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000A /* SettingsView.swift */; };
 		A1000000000000000000000B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000B /* Assets.xcassets */; };
 		A1000000000000000000000C /* ETFLookThroughView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000E /* ETFLookThroughView.swift */; };
 		A1000000000000000000000D /* CSVImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000F /* CSVImportView.swift */; };
 		A1000000000000000000000E /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000010 /* KeychainStore.swift */; };
 		A1000000000000000000000F /* IBKRFlexClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000011 /* IBKRFlexClient.swift */; };
+		AC5100000000000000000001 /* SnapTradeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC5100000000000000000001 /* SnapTradeClient.swift */; };
 		A10000000000000000000010 /* IBKRFlexView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000012 /* IBKRFlexView.swift */; };
+		AC5100000000000000000002 /* SnapTradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC5100000000000000000002 /* SnapTradeView.swift */; };
 		A10000000000000000000011 /* MoomooOAuthClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000013 /* MoomooOAuthClient.swift */; };
 		A10000000000000000000012 /* MoomooOAuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000014 /* MoomooOAuthView.swift */; };
 		A10000000000000000000013 /* Trading212Client.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000015 /* Trading212Client.swift */; };
@@ -143,6 +149,7 @@
 		A199000000000000000000EC /* SecurityDebateResearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EC /* SecurityDebateResearchTests.swift */; };
 		A199000000000000000000A3 /* RealisedProfitCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */; };
 		A199000000000000000000A4 /* BrokerResultPreservationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B4 /* BrokerResultPreservationTests.swift */; };
+		AC5100000000000000000003 /* SnapTradeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC5100000000000000000003 /* SnapTradeTests.swift */; };
 		A199000000000000000000A5 /* AnalystConsensusDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B5 /* AnalystConsensusDataTests.swift */; };
 		A199000000000000000000A6 /* StockScreenerRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B6 /* StockScreenerRulesTests.swift */; };
 		A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B7 /* Trading212FillDecodingTests.swift */; };
@@ -205,6 +212,7 @@
 		BF1000000000000000000022 /* PolicyComposerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyComposerStore.swift; sourceTree = "<group>"; };
 		BF1000000000000000000023 /* PolicyComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyComposerView.swift; sourceTree = "<group>"; };
 		BF1000000000000000000024 /* UnderwaterAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnderwaterAnalysis.swift; sourceTree = "<group>"; };
+		BFA000000000000000000001 /* HoldingHistoryState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingHistoryState.swift; sourceTree = "<group>"; };
 		BF1000000000000000000025 /* UnderwaterAnalysisChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnderwaterAnalysisChart.swift; sourceTree = "<group>"; };
 		BF1000000000000000000026 /* ImpliedFunding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImpliedFunding.swift; sourceTree = "<group>"; };
 		BF1000000000000000000027 /* CycleComparison.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleComparison.swift; sourceTree = "<group>"; };
@@ -256,9 +264,12 @@
 		B10000000000000000000004 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		B10000000000000000000005 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
 		B10000000000000000000006 /* PortfolioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioView.swift; sourceTree = "<group>"; };
+		B7C0F0110000000000000001 /* PortfolioLoadRipple.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioLoadRipple.swift; sourceTree = "<group>"; };
+		B7C0F0110000000000000002 /* PortfolioLoadRipple.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = PortfolioLoadRipple.metal; sourceTree = "<group>"; };
 		B10000000000000000000007 /* VolumeProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeProfileView.swift; sourceTree = "<group>"; };
 		B10000000000000000000008 /* ReturnsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReturnsView.swift; sourceTree = "<group>"; };
 		B10000000000000000000009 /* AIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIView.swift; sourceTree = "<group>"; };
+		BCF01A100000000000000001 /* AIQuestionPresets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIQuestionPresets.swift; sourceTree = "<group>"; };
 		B1000000000000000000000A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B1000000000000000000000B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B1000000000000000000000C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -267,7 +278,9 @@
 		B1000000000000000000000F /* CSVImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVImportView.swift; sourceTree = "<group>"; };
 		B10000000000000000000010 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		B10000000000000000000011 /* IBKRFlexClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IBKRFlexClient.swift; sourceTree = "<group>"; };
+		BC5100000000000000000001 /* SnapTradeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapTradeClient.swift; sourceTree = "<group>"; };
 		B10000000000000000000012 /* IBKRFlexView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IBKRFlexView.swift; sourceTree = "<group>"; };
+		BC5100000000000000000002 /* SnapTradeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapTradeView.swift; sourceTree = "<group>"; };
 		B10000000000000000000013 /* MoomooOAuthClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoomooOAuthClient.swift; sourceTree = "<group>"; };
 		B10000000000000000000014 /* MoomooOAuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoomooOAuthView.swift; sourceTree = "<group>"; };
 		B10000000000000000000015 /* Trading212Client.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212Client.swift; sourceTree = "<group>"; };
@@ -323,6 +336,7 @@
 		B199000000000000000000EC /* SecurityDebateResearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebateResearchTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealisedProfitCalculatorTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000B4 /* BrokerResultPreservationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrokerResultPreservationTests.swift; sourceTree = "<group>"; };
+		BC5100000000000000000003 /* SnapTradeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapTradeTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000B5 /* AnalystConsensusDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalystConsensusDataTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000B6 /* StockScreenerRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockScreenerRulesTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000B7 /* Trading212FillDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212FillDecodingTests.swift; sourceTree = "<group>"; };
@@ -406,9 +420,12 @@
                 D1D000000000000000000001 /* Localizable.strings */,
 				B10000000000000000000005 /* RootTabView.swift */,
 				B10000000000000000000006 /* PortfolioView.swift */,
+				B7C0F0110000000000000001 /* PortfolioLoadRipple.swift */,
+				B7C0F0110000000000000002 /* PortfolioLoadRipple.metal */,
 				B10000000000000000000007 /* VolumeProfileView.swift */,
 				B10000000000000000000008 /* ReturnsView.swift */,
 				B10000000000000000000009 /* AIView.swift */,
+				BCF01A100000000000000001 /* AIQuestionPresets.swift */,
 				B199000000000000000000EF /* SettingsTemplate.swift */,
 				BF1000000000000000000014 /* PolicyBackgroundService.swift */,
 				BF1000000000000000000010 /* PolicyExecution.swift */,
@@ -419,6 +436,7 @@
 				BF1000000000000000000022 /* PolicyComposerStore.swift */,
 				BF1000000000000000000023 /* PolicyComposerView.swift */,
 				BF1000000000000000000024 /* UnderwaterAnalysis.swift */,
+				BFA000000000000000000001 /* HoldingHistoryState.swift */,
 				BF1000000000000000000025 /* UnderwaterAnalysisChart.swift */,
 				BF1000000000000000000026 /* ImpliedFunding.swift */,
 				BF1000000000000000000027 /* CycleComparison.swift */,
@@ -431,7 +449,9 @@
 				B1000000000000000000000F /* CSVImportView.swift */,
 				B10000000000000000000010 /* KeychainStore.swift */,
 				B10000000000000000000011 /* IBKRFlexClient.swift */,
+				BC5100000000000000000001 /* SnapTradeClient.swift */,
 				B10000000000000000000012 /* IBKRFlexView.swift */,
+				BC5100000000000000000002 /* SnapTradeView.swift */,
 				B10000000000000000000013 /* MoomooOAuthClient.swift */,
 				B10000000000000000000014 /* MoomooOAuthView.swift */,
 				B10000000000000000000015 /* Trading212Client.swift */,
@@ -572,6 +592,7 @@
 				B199000000000000000000EC /* SecurityDebateResearchTests.swift */,
 				B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */,
 				B199000000000000000000B4 /* BrokerResultPreservationTests.swift */,
+				BC5100000000000000000003 /* SnapTradeTests.swift */,
 				B199000000000000000000B5 /* AnalystConsensusDataTests.swift */,
 				B199000000000000000000B6 /* StockScreenerRulesTests.swift */,
 				B199000000000000000000B7 /* Trading212FillDecodingTests.swift */,
@@ -764,9 +785,12 @@
                 A1D000000000000000000001 /* Localization.swift in Sources */,
 				A10000000000000000000005 /* RootTabView.swift in Sources */,
 				A10000000000000000000006 /* PortfolioView.swift in Sources */,
+				A7C0F0110000000000000001 /* PortfolioLoadRipple.swift in Sources */,
+				A7C0F0110000000000000002 /* PortfolioLoadRipple.metal in Sources */,
 				A10000000000000000000007 /* VolumeProfileView.swift in Sources */,
 				A10000000000000000000008 /* ReturnsView.swift in Sources */,
 				A10000000000000000000009 /* AIView.swift in Sources */,
+				ACF01A100000000000000001 /* AIQuestionPresets.swift in Sources */,
 				A199000000000000000000EF /* SettingsTemplate.swift in Sources */,
 				AF1000000000000000000014 /* PolicyBackgroundService.swift in Sources */,
 				AF1000000000000000000010 /* PolicyExecution.swift in Sources */,
@@ -777,6 +801,7 @@
 				AF1000000000000000000022 /* PolicyComposerStore.swift in Sources */,
 				AF1000000000000000000023 /* PolicyComposerView.swift in Sources */,
 				AF1000000000000000000024 /* UnderwaterAnalysis.swift in Sources */,
+				AFA000000000000000000001 /* HoldingHistoryState.swift in Sources */,
 				AF1000000000000000000025 /* UnderwaterAnalysisChart.swift in Sources */,
 				AF1000000000000000000026 /* ImpliedFunding.swift in Sources */,
 				AF1000000000000000000027 /* CycleComparison.swift in Sources */,
@@ -789,7 +814,9 @@
 				A1000000000000000000000D /* CSVImportView.swift in Sources */,
 				A1000000000000000000000E /* KeychainStore.swift in Sources */,
 				A1000000000000000000000F /* IBKRFlexClient.swift in Sources */,
+				AC5100000000000000000001 /* SnapTradeClient.swift in Sources */,
 				A10000000000000000000010 /* IBKRFlexView.swift in Sources */,
+				AC5100000000000000000002 /* SnapTradeView.swift in Sources */,
 				A10000000000000000000011 /* MoomooOAuthClient.swift in Sources */,
 				A10000000000000000000012 /* MoomooOAuthView.swift in Sources */,
 				A10000000000000000000013 /* Trading212Client.swift in Sources */,
@@ -877,6 +904,7 @@
 				A199000000000000000000EC /* SecurityDebateResearchTests.swift in Sources */,
 				A199000000000000000000A3 /* RealisedProfitCalculatorTests.swift in Sources */,
 				A199000000000000000000A4 /* BrokerResultPreservationTests.swift in Sources */,
+				AC5100000000000000000003 /* SnapTradeTests.swift in Sources */,
 				A199000000000000000000A5 /* AnalystConsensusDataTests.swift in Sources */,
 				A199000000000000000000A6 /* StockScreenerRulesTests.swift in Sources */,
 				A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */,

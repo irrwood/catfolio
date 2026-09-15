@@ -182,6 +182,32 @@ struct OIPlotGeometry {
         return result
     }
 
+    /// Clip axis-aligned overlay lines around every visible glass label. The
+    /// clearance includes the stroke radius so neither its edge nor short
+    /// fragments can show through or hug a pill when markers crowd together.
+    static func uncoveredLineIntervals(from start: CGFloat, to end: CGFloat, at cross: CGFloat,
+                                       vertical: Bool = false, excluding frames: [CGRect],
+                                       lineWidth: CGFloat = 1) -> [ClosedRange<CGFloat>] {
+        let lower = min(start, end), upper = max(start, end)
+        guard upper - lower >= 8 else { return [] }
+        let clearance = 4 + lineWidth / 2
+        var runs = [lower...upper]
+        for frame in frames {
+            let box = frame.insetBy(dx: -clearance, dy: -clearance)
+            let crossRange = vertical ? box.minX...box.maxX : box.minY...box.maxY
+            guard crossRange.contains(cross) else { continue }
+            let cut = vertical ? box.minY...box.maxY : box.minX...box.maxX
+            runs = runs.flatMap { run -> [ClosedRange<CGFloat>] in
+                guard cut.upperBound > run.lowerBound, cut.lowerBound < run.upperBound else { return [run] }
+                var parts: [ClosedRange<CGFloat>] = []
+                if cut.lowerBound - run.lowerBound >= 8 { parts.append(run.lowerBound...cut.lowerBound) }
+                if run.upperBound - cut.upperBound >= 8 { parts.append(cut.upperBound...run.upperBound) }
+                return parts
+            }
+        }
+        return runs
+    }
+
     /// Keep labels within a lane, separated by their full height. Rules stay at
     /// their actual strike and a short leader connects any displaced label.
     static func labelPositions(_ desired: [Double], height: Double, spacing: Double = 28) -> [Double] {
@@ -420,6 +446,8 @@ struct OptionsOIView: View {
     let costUSD: Double?
     /// The holding page's refresh count; each change forces one reread.
     var refreshRevision = 0
+    var initialSnapshots: [Int: OISnapshot] = [:]
+    var onSnapshot: (Int, OISnapshot) -> Void = { _, _ in }
     @State private var days = 30
     @State private var snapshot: OISnapshot?
     @State private var error: String?
@@ -431,43 +459,38 @@ struct OptionsOIView: View {
     @State private var selectedStrike: Double?
     @State private var plotRange: OIPlotRange = .main
     @State private var showsWalls = false
+
+    init(symbol: String, currency: String?, price: Double?, costUSD: Double?, refreshRevision: Int = 0,
+         initialSnapshots: [Int: OISnapshot] = [:], onSnapshot: @escaping (Int, OISnapshot) -> Void = { _, _ in }) {
+        self.symbol = symbol
+        self.currency = currency
+        self.price = price
+        self.costUSD = costUSD
+        self.refreshRevision = refreshRevision
+        self.initialSnapshots = initialSnapshots
+        self.onSnapshot = onSnapshot
+        _snapshot = State(initialValue: initialSnapshots[30])
+        _snapshotKey = State(initialValue: "\(symbol.uppercased())|30")
+    }
     private var supported: Bool {
         currency?.uppercased() == "USD" && symbol.range(of: "^[A-Za-z][A-Za-z0-9.-]{0,14}$", options: .regularExpression) != nil
             && !symbol.uppercased().hasSuffix(".L")
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(alignment: .center) {
-                Text(L10n.text("期权持仓墙 OI")).font(LegacyType.medium(19, relativeTo: .headline))
-                Spacer(minLength: 12)
-                Button { showsInfo = true } label: {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 19, weight: .regular))
-                        .frame(width: 24, height: 24)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.primary.opacity(0.20))
-                .accessibilityLabel(L10n.text("计算说明"))
-            }
-            HStack(spacing: 16) {
-                Picker(L10n.text("到期范围"), selection: $days) {
-                    Text("7D").tag(7).accessibilityLabel(L10n.text("7 天内"))
-                    Text("30D").tag(30).accessibilityLabel(L10n.text("30 天内"))
-                    Text("90D").tag(90).accessibilityLabel(L10n.text("90 天内"))
-                }
-                .pickerStyle(.segmented).labelsHidden()
-                .disabled(loading || !supported)
-                .sensoryFeedback(.selection, trigger: days) { _, _ in hapticsEnabled }
-                rangeToggle
-            }
-            VStack(alignment: .leading, spacing: 16) {
-                plotCard
-                if supported, snapshot != nil, let error {
-                    Text(error).appText(.caption).foregroundStyle(.secondary)
-                }
+        // One glass card: title and controls on the card's inset, the plot
+        // across its full width, then the walls.
+        VStack(alignment: .leading, spacing: 0) {
+            header
+                .padding([.horizontal, .top], HoldingDetailCardStyle.contentInset)
+                .padding(.bottom, 8)
+            plotCard
+            if supported, snapshot != nil, let error {
+                Text(error).appText(.caption).foregroundStyle(.secondary)
+                    .padding([.horizontal, .bottom], HoldingDetailCardStyle.contentInset)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .holdingDetailGlassCard()
         .transaction { $0.animation = nil }
         .onChange(of: plotRange) { _, _ in selectedStrike = nil }
         // The page's own refresh is this section's refresh: the design has no
@@ -490,7 +513,7 @@ struct OptionsOIView: View {
             loading = forced
             defer { if !Task.isCancelled { loading = false } }
             let key = "\(symbol.uppercased())|\(days)"
-            if snapshotKey != key { snapshot = nil }
+            if snapshotKey != key { snapshot = initialSnapshots[days] }
             snapshotKey = key
             error = nil; selectedStrike = nil
             #if DEBUG
@@ -503,7 +526,10 @@ struct OptionsOIView: View {
             guard supported else { return }
             let cached = await OptionsOIClient.shared.cached(symbol: symbol.uppercased(), days: days)
             guard !Task.isCancelled else { return }
-            snapshot = cached
+            if let cached {
+                snapshot = cached
+                onSnapshot(days, cached)
+            }
             let current = cached?.from == OptionsOIClient.day(Date())
             guard forced || !current else { return }
             loading = true
@@ -511,9 +537,39 @@ struct OptionsOIView: View {
                 let result = try await OptionsOIClient.shared.fetch(symbol: symbol.uppercased(), days: days)
                 guard !Task.isCancelled else { return }
                 snapshot = result
+                onSnapshot(days, result)
             } catch {
                 guard !Task.isCancelled else { return }
                 self.error = cached == nil ? error.localizedDescription : L10n.text("刷新失败，以下为旧缓存。\(error.localizedDescription)")
+            }
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(alignment: .center) {
+                Text(L10n.text("期权持仓墙 OI")).appText(.subheading, weight: .medium)
+                Spacer(minLength: 12)
+                Button { showsInfo = true } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 19, weight: .regular))
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.primary.opacity(0.20))
+                .accessibilityLabel(L10n.text("计算说明"))
+            }
+            HStack(spacing: 16) {
+                Picker(L10n.text("到期范围"), selection: $days) {
+                    Text("7D").tag(7).accessibilityLabel(L10n.text("7 天内"))
+                    Text("30D").tag(30).accessibilityLabel(L10n.text("30 天内"))
+                    Text("90D").tag(90).accessibilityLabel(L10n.text("90 天内"))
+                }
+                .pickerStyle(.segmented).labelsHidden()
+                .disabled(loading || !supported)
+                .sensoryFeedback(.selection, trigger: days) { _, _ in hapticsEnabled }
+                rangeToggle
             }
         }
     }
@@ -577,9 +633,9 @@ struct OptionsOIView: View {
         .accessibilityIdentifier("options-oi-range")
     }
 
-    /// One liquid-glass card, the same glass as every other card on the page:
-    /// the plot and its axis on top, a hairline, then the two walls. The plot
-    /// keeps a fixed height, so the card does not jump while the chain loads.
+    /// The plot and its axis, a hairline, then the two walls — inside the
+    /// section's one glass card. The plot keeps a fixed height, so the card
+    /// does not jump while the chain loads.
     private var plotCard: some View {
         let distribution = snapshot.map { OIDistribution(contracts: $0.contracts) }
         let showsWalls = supported && distribution?.concentration != nil
@@ -591,6 +647,7 @@ struct OptionsOIView: View {
                     if distribution.concentration != nil {
                         OptionsOIDistributionPlot(distribution: distribution, currentPrice: price, holdingCost: costUSD,
                                                   selectedStrike: $selectedStrike, range: plotRange)
+                            .onAppear { ChartAppearanceHistory.record("options-oi|\(symbol)") }
                     } else {
                         plotMessage(L10n.text("所选范围没有可用的正 OI，暂无持仓墙。"))
                     }
@@ -600,10 +657,8 @@ struct OptionsOIView: View {
                         Button(L10n.text("重试")) { refreshID += 1 }.appText(.caption, weight: .semibold)
                     }
                 } else {
-                    VStack(spacing: 10) {
-                        ProgressView()
-                        Text(L10n.text("读取完整期权链…")).appText(.caption).foregroundStyle(.secondary)
-                    }
+                    ChartShapeSkeleton(layout: .horizontalBars, appearanceID: "options-oi|\(symbol)")
+                        .padding(.horizontal, 20)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -622,8 +677,6 @@ struct OptionsOIView: View {
                 .padding(.bottom, 20)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: HoldingDetailCardStyle.cornerRadius, style: .continuous))
-        .holdingDetailGlassCard()
     }
 
     private func plotMessage(_ text: String) -> some View {
@@ -779,9 +832,13 @@ struct OptionsOIDistributionPlot: View {
                         let selectedY = y(row.strike, geometry, size.height)
                         // The readout goes to the side the finger is not on.
                         let onLeft = (touchX ?? 0) > size.width / 2
-                        let ruleWidth = max(0, size.width - axisWidth - 12)
-                        glassRule(color: selectionColor, width: ruleWidth, interactive: true)
-                            .position(x: onLeft ? axisWidth + 6 + ruleWidth / 2 : ruleWidth / 2 + 6, y: selectedY)
+                        ForEach(Array(ruleSegments(y: selectedY,
+                            from: onLeft ? axisWidth + 6 : 6,
+                            to: onLeft ? size.width - 6 : size.width - axisWidth - 6).enumerated()), id: \.offset) { _, segment in
+                            glassRule(color: selectionColor, width: segment.upperBound - segment.lowerBound, interactive: true)
+                                .position(x: (segment.lowerBound + segment.upperBound) / 2, y: selectedY)
+                                .opacity(pillFrames["selection"] == nil ? 0 : 1)
+                        }
                         pill(Text(priceText(row.strike)).appNumber(.micro, weight: .semibold)
                             .foregroundStyle(.white).lineLimit(1).padding(.horizontal, 8)
                             .frame(width: axisWidth, height: 26), tint: selectionColor, interactive: true)
@@ -883,11 +940,21 @@ struct OptionsOIDistributionPlot: View {
                 let actualY = y(marker.anchor, geometry, size.height)
                 let labelY = CGFloat(positions[index])
                 let obscuredBySelection = selectedStrike.map { abs(y($0, geometry, size.height) - labelY) < 28 } ?? false
-                if !obscuredBySelection && abs(labelY - actualY) > 1 {
+                if !obscuredBySelection && abs(labelY - actualY) > 1,
+                   let frame = pillFrames["\(call)-\(marker.id)"] {
                     Path { path in
-                        path.move(to: CGPoint(x: call ? 4 : size.width - 4, y: actualY))
-                        path.addLine(to: CGPoint(x: call ? 4 : size.width - 4, y: labelY))
-                        path.addLine(to: CGPoint(x: x, y: labelY))
+                        let edgeX = call ? CGFloat(4) : size.width - 4
+                        let frames = Array(pillFrames.values)
+                        for segment in OIPlotGeometry.uncoveredLineIntervals(from: actualY, to: labelY,
+                            at: edgeX, vertical: true, excluding: frames) {
+                            path.move(to: CGPoint(x: edgeX, y: segment.lowerBound))
+                            path.addLine(to: CGPoint(x: edgeX, y: segment.upperBound))
+                        }
+                        for segment in OIPlotGeometry.uncoveredLineIntervals(from: edgeX, to: frame.midX,
+                            at: labelY, excluding: frames) {
+                            path.move(to: CGPoint(x: segment.lowerBound, y: labelY))
+                            path.addLine(to: CGPoint(x: segment.upperBound, y: labelY))
+                        }
                     }.stroke(marker.color.opacity(0.7), lineWidth: 1)
                 }
                 pill(markerLabel(marker)
@@ -912,7 +979,7 @@ struct OptionsOIDistributionPlot: View {
         }
         return ZStack(alignment: .topLeading) {
             ForEach(rules, id: \.id) { rule in
-                ForEach(Array(ruleSegments(y: rule.y, width: size.width).enumerated()), id: \.offset) { _, segment in
+                ForEach(Array(ruleSegments(y: rule.y, from: 6, to: size.width - 6).enumerated()), id: \.offset) { _, segment in
                     glassRule(color: rule.color, width: segment.upperBound - segment.lowerBound)
                         .position(x: (segment.lowerBound + segment.upperBound) / 2, y: rule.y)
                 }
@@ -921,21 +988,10 @@ struct OptionsOIDistributionPlot: View {
         .allowsHitTesting(false)
     }
 
-    private func ruleSegments(y: CGFloat, width: CGFloat) -> [ClosedRange<CGFloat>] {
-        let gap: CGFloat = 4
-        var segments: [ClosedRange<CGFloat>] = [6...max(6, width - 6)]
-        // A 5pt rule touches a pill when its centre is within half its width.
-        for frame in pillFrames.values where y >= frame.minY - 2.5 && y <= frame.maxY + 2.5 {
-            let cut = (frame.minX - gap)...(frame.maxX + gap)
-            segments = segments.flatMap { run -> [ClosedRange<CGFloat>] in
-                guard cut.upperBound > run.lowerBound, cut.lowerBound < run.upperBound else { return [run] }
-                var parts: [ClosedRange<CGFloat>] = []
-                if cut.lowerBound - run.lowerBound >= 8 { parts.append(run.lowerBound...cut.lowerBound) }
-                if run.upperBound - cut.upperBound >= 8 { parts.append(cut.upperBound...run.upperBound) }
-                return parts
-            }
-        }
-        return segments
+    private func ruleSegments(y: CGFloat, from start: CGFloat, to end: CGFloat) -> [ClosedRange<CGFloat>] {
+        guard end > start, !pillFrames.isEmpty else { return [] }
+        return OIPlotGeometry.uncoveredLineIntervals(from: start, to: end, at: y,
+            excluding: Array(pillFrames.values), lineWidth: 5)
     }
 
     private func pillFrameReader(_ id: String) -> some View {

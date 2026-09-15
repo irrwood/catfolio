@@ -263,19 +263,29 @@ struct AnalystConsensusView: View {
         VStack(alignment: .leading, spacing: 16) {
             if let data {
                 AnalystConsensusContent(data: data)
+                    .onAppear { ChartAppearanceHistory.record("analyst-consensus|\(symbol)") }
                 if let error {
                     Text(error).font(.caption).foregroundStyle(.secondary)
                 }
                 HStack {
                     Spacer()
                     Button { Task { await load(forceRefresh: true) } } label: {
-                        Text(L10n.text(loading ? "加载中…" : "刷新"))
+                        Text(L10n.text("刷新"))
+                            .redacted(reason: loading ? .placeholder : [])
+                            .chartLoadingShimmer(active: loading)
                             .font(.caption).frame(minWidth: 44, minHeight: 44)
                     }
                     .disabled(loading)
                 }
             } else if loading {
-                ProgressView().frame(maxWidth: .infinity, minHeight: 120)
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack { ChartSkeletonShape(width: 85, height: 20); Spacer(); ChartSkeletonShape(width: 55, height: 14) }
+                    ChartSkeletonShape(height: 24, cornerRadius: 8)
+                    HStack { ChartSkeletonShape(width: 65); Spacer(); ChartSkeletonShape(width: 65); Spacer(); ChartSkeletonShape(width: 65) }
+                    ChartSkeletonShape(height: 8)
+                }
+                .frame(minHeight: 120)
+                .chartLoadingShimmer(appearanceID: "analyst-consensus|\(symbol)")
             } else {
                 Text(error ?? L10n.text("暂无完整评级分布"))
                     .font(.subheadline).foregroundStyle(.secondary)

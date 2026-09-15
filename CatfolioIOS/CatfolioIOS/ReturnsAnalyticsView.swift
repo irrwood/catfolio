@@ -25,6 +25,7 @@ struct ReturnsAnalyticsView: View {
                 ReturnsAnalyticsLoadingView(chart: chart)
             } else {
                 ValuationMatrixCard(matrix: response.valuation)
+                    .onAppear { ChartAppearanceHistory.record("returns-valuation") }
             }
         }
     }
@@ -37,9 +38,9 @@ struct ReturnsAnalyticsLoadingView: View {
     var body: some View {
         switch chart {
         case .drawdown:
-            AnalyticsLoadingCard(title: L10n.text("回撤水下曲线"), height: 210)
+            AnalyticsLoadingCard(title: L10n.text("回撤水下曲线"), height: 210, chart: chart)
         case .valuation:
-            AnalyticsLoadingCard(title: L10n.text("估值矩阵 (P/E vs 成长)"), height: 240)
+            AnalyticsLoadingCard(title: L10n.text("估值矩阵 (P/E vs 成长)"), height: 240, chart: chart)
         }
     }
 }
@@ -48,14 +49,22 @@ private struct AnalyticsLoadingCard: View {
     @Environment(\.locale) private var appLocale
     let title: String
     let height: CGFloat
+    let chart: ReturnsAnalyticsChart
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(title)
                 .font(ReturnsAnalyticsTypography.medium(19, relativeTo: .headline))
 
-            ProgressView()
-                .frame(maxWidth: .infinity, minHeight: height)
+            Group {
+                switch chart {
+                case .drawdown:
+                    StandardLineChartSkeleton(topInset: 8, lineWidths: [2], appearanceID: "returns-drawdown")
+                case .valuation:
+                    ChartShapeSkeleton(layout: .bubbles, appearanceID: "returns-valuation")
+                }
+            }
+            .frame(height: height)
         }
     }
 }
@@ -236,6 +245,7 @@ private struct DrawdownPlot: View {
             bottomHeight: 0,
             leadingLineOverflow: 20,
             transitionKey: transitionKey,
+            appearanceID: "returns-drawdown",
             dataTransition: .viewportZoom,
             animatesInitialAppearance: true,
             selectedDate: selectedDate,

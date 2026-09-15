@@ -47,12 +47,16 @@ final class AppModel {
     }
 
     @ObservationIgnored private var document = LocalPortfolioDocument.empty
+    @ObservationIgnored private var fullDocument = LocalPortfolioDocument.empty
     @ObservationIgnored private var portfolioRequestGeneration = 0
     @ObservationIgnored private var returnsRequestGeneration = 0
     @ObservationIgnored private var returnsAnalyticsRequestGeneration = 0
     @ObservationIgnored private var returnsPageRequestGeneration = 0
     @ObservationIgnored private var dailyChangesRequestGeneration = 0
     @ObservationIgnored private var holdingDailyChangesSignature = ""
+    @ObservationIgnored private var detailMarketObservations: [PortfolioSource: [String: SecurityMarketObservation]] = [:]
+    @ObservationIgnored private var holdingDetailContent: [HoldingDetailContentKey: HoldingDetailCachedContent] = [:]
+    @ObservationIgnored private var holdingDetailContentOrder: [HoldingDetailContentKey] = []
     @ObservationIgnored private var returnsPageTask: Task<Void, Never>?
     @ObservationIgnored private var portfolioSourceTask: Task<Void, Never>?
     @ObservationIgnored private var portfolioSourceGeneration = 0
@@ -359,39 +363,72 @@ final class AppModel {
         }
     }
 
+    private struct HoldingDetailContentKey: Hashable {
+        let source: PortfolioSource
+        let quote: String
+        let accounts: [String]
+    }
+
+    /// Keep prepared detail content alive after its sheet closes. Account data
+    /// is scoped to the portfolio source; opening another source cannot reuse it.
+    func cachedHoldingDetail(for holding: Holding) -> HoldingDetailCachedContent {
+        let key = HoldingDetailContentKey(source: portfolioSource,
+            quote: LocalMarketQuoteKey.make(ticker: holding.ticker, currency: holding.quoteCurrency ?? "USD"),
+            accounts: accounts.map(\.id).sorted())
+        holdingDetailContentOrder.removeAll { $0 == key }
+        holdingDetailContentOrder.append(key)
+        if let cached = holdingDetailContent[key] { return cached }
+        let content = HoldingDetailCachedContent()
+        holdingDetailContent[key] = content
+        while holdingDetailContentOrder.count > 24 {
+            holdingDetailContent.removeValue(forKey: holdingDetailContentOrder.removeFirst())
+        }
+        return content
+    }
+
     /// `currency` stands in for a security that is not held, whose listing
     /// currency no holding can supply.
-    func volumeProfile(for ticker: String, currency: String? = nil, forceRefresh: Bool = false) async throws -> VolumeProfile {
+    func volumeProfile(for ticker: String, currency: String? = nil, forceRefresh: Bool = false,
+                       cachedOnly: Bool = false) async throws -> VolumeProfile {
         let holding = holdings.first(where: { $0.ticker == ticker })
         return try await LocalMarketDataClient().volumeProfile(
             ticker: ticker,
             currency: holding?.quoteCurrency ?? currency ?? "USD",
             referencePrice: holding?.quotePrice.isFinite == true ? holding?.quotePrice : nil,
-            forceRefresh: forceRefresh
+            forceRefresh: forceRefresh,
+            cachedOnly: cachedOnly
         )
     }
 
     func securityPriceHistory(for ticker: String) async throws -> SecurityPriceHistory {
+        let source = portfolioSource
         let loaded = try await loadActiveDocument()
         let scoped = selectedDocument(from: loaded)
         let holding = holdings.first { $0.ticker.caseInsensitiveCompare(ticker) == .orderedSame }
-        return try await LocalMarketDataClient().securityPriceHistory(
+        let history = try await LocalMarketDataClient().securityPriceHistory(
             ticker: ticker,
             currency: holding?.quoteCurrency ?? "USD",
             referencePrice: holding?.quotePrice.isFinite == true ? holding?.quotePrice : nil,
             document: scoped
         )
+        try publishSecurityPriceHistory(history, source: source)
+        return history
     }
 
     /// A security held in no account — one opened from search, or found only
     /// inside an ETF: its market history alone, with no trades to mark.
-    func marketPriceHistory(for ticker: String, currency: String, forceRefresh: Bool = false) async throws -> SecurityPriceHistory {
-        try await LocalMarketDataClient().securityPriceHistory(
+    func marketPriceHistory(for ticker: String, currency: String, forceRefresh: Bool = false,
+                            cachedOnly: Bool = false) async throws -> SecurityPriceHistory {
+        let source = portfolioSource
+        let history = try await LocalMarketDataClient().securityPriceHistory(
             ticker: ticker,
             currency: currency,
             document: .empty,
-            forceRefresh: forceRefresh
+            forceRefresh: forceRefresh,
+            cachedOnly: cachedOnly
         )
+        try publishSecurityPriceHistory(history, source: source)
+        return history
     }
 
     /// Holdings as they stand inside a subset of accounts.
@@ -466,18 +503,93 @@ final class AppModel {
     func securityPriceHistory(
         for ticker: String,
         accountKeys: Set<String>,
-        forceRefresh: Bool = false
+        forceRefresh: Bool = false,
+        cachedOnly: Bool = false
     ) async throws -> SecurityPriceHistory {
+        let source = portfolioSource
         let context = try await holdingDetailAccountContext(for: ticker)
         let scoped = context.document(for: accountKeys)
         let scopedHolding = context.holding(for: accountKeys)
-        return try await LocalMarketDataClient().securityPriceHistory(
+        let history = try await LocalMarketDataClient().securityPriceHistory(
             ticker: ticker,
             currency: scopedHolding?.quoteCurrency ?? "USD",
             referencePrice: scopedHolding?.quotePrice.isFinite == true ? scopedHolding?.quotePrice : nil,
             document: scoped,
-            forceRefresh: forceRefresh
+            forceRefresh: forceRefresh,
+            cachedOnly: cachedOnly
         )
+        try publishSecurityPriceHistory(history, source: source)
+        return history
+    }
+
+    /// Detail and outer pages share the same observed quote. Keep these
+    /// overlays through background portfolio/daily-change refreshes, which
+    /// may have started before the detail request finished.
+    func publishSecurityPriceHistory(_ history: SecurityPriceHistory, source: PortfolioSource,
+                                     now: Date = .now) throws {
+        guard !Task.isCancelled, source == portfolioSource,
+              let observation = history.latestMarketObservation,
+              observation.observedAt <= now.addingTimeInterval(60),
+              observation.observedAt >= now.addingTimeInterval(-7 * 86_400) else { return }
+        let key = LocalMarketQuoteKey.make(ticker: history.ticker, currency: history.currency)
+        guard detailMarketObservations[source]?[key].map({ observation.observedAt > $0.observedAt }) ?? true else { return }
+        let matching = document.positions.filter {
+            LocalMarketQuoteKey.make(ticker: $0.ticker, currency: $0.quoteCurrency) == key
+        }
+        if matching.isEmpty {
+            // ETF-only constituents have no position to reprice. Share their
+            // USD market change without creating a holding or changing totals.
+            guard history.currency.uppercased() == "USD",
+                  !holdings.contains(where: { $0.ticker.uppercased() == observation.ticker }) else { return }
+            detailMarketObservations[source, default: [:]][key] = observation
+            applyDetailDailyChanges(now: now)
+            return
+        }
+        guard matching.allSatisfy({ observation.observedAt >= quoteDate($0, in: document) }) else { return }
+        detailMarketObservations[source, default: [:]][key] = observation
+        let updated = applyingDetailQuotes(to: document, now: now)
+        let presentation = try LocalPortfolioEngine.presentation(for: updated)
+        document = updated
+        overview = presentation.0
+        holdings = presentation.2
+        applyDetailDailyChanges(now: now)
+    }
+
+    private func quoteDate(_ position: LocalPositionRecord, in document: LocalPortfolioDocument) -> Date {
+        position.quoteObservedAt ?? (position.source == "CSV" ? nil : document.marketDataUpdatedAt) ?? .distantPast
+    }
+
+    private func applyingDetailQuotes(to input: LocalPortfolioDocument, now: Date = .now) -> LocalPortfolioDocument {
+        guard let observations = detailMarketObservations[portfolioSource] else { return input }
+        var result = input
+        result.positions = input.positions.map { position in
+            let key = LocalMarketQuoteKey.make(ticker: position.ticker, currency: position.quoteCurrency)
+            guard let observation = observations[key],
+                  observation.observedAt >= now.addingTimeInterval(-7 * 86_400),
+                  observation.observedAt > quoteDate(position, in: input) else { return position }
+            return position.withQuotePrice(observation.price, observedAt: observation.observedAt)
+        }
+        return result
+    }
+
+    private func applyDetailDailyChanges(now: Date = .now) {
+        guard let observations = detailMarketObservations[portfolioSource] else { return }
+        let heldTickers = Set(holdings.map { $0.ticker.uppercased() })
+        for observation in observations.values where !heldTickers.contains(observation.ticker) {
+            guard observation.currency.uppercased() == "USD", let change = observation.changePercent,
+                  observation.observedAt >= now.addingTimeInterval(-7 * 86_400) else { continue }
+            holdingDailyChanges[observation.ticker] = change
+        }
+        for holding in holdings {
+            let key = LocalMarketQuoteKey.make(ticker: holding.ticker, currency: holding.quoteCurrency ?? "USD")
+            guard let observation = observations[key], let change = observation.changePercent,
+                  observation.observedAt >= now.addingTimeInterval(-7 * 86_400) else { continue }
+            let matching = document.positions.filter {
+                LocalMarketQuoteKey.make(ticker: $0.ticker, currency: $0.quoteCurrency) == key
+            }
+            guard matching.allSatisfy({ observation.observedAt >= quoteDate($0, in: document) }) else { continue }
+            holdingDailyChanges[holding.ticker.uppercased()] = change
+        }
     }
 
     func refreshHoldingDailyChanges() async {
@@ -495,8 +607,7 @@ final class AppModel {
 
         dailyChangesRequestGeneration &+= 1
         let generation = dailyChangesRequestGeneration
-        let activeTickers = Set(snapshot.map { $0.ticker.uppercased() })
-        var changes = holdingDailyChanges.filter { activeTickers.contains($0.key) && $0.value.isFinite }
+        var changes = holdingDailyChanges.filter { $0.value.isFinite }
         var holdingsNeedingFetch: [Holding] = []
         for holding in snapshot {
             let key = holding.ticker.uppercased()
@@ -510,6 +621,7 @@ final class AppModel {
             }
         }
         holdingDailyChanges = changes
+        applyDetailDailyChanges()
 
         isHoldingDailyChangesLoading = true
         defer {
@@ -528,6 +640,7 @@ final class AppModel {
 
         changes.merge(fetched) { _, latest in latest }
         holdingDailyChanges = changes
+        applyDetailDailyChanges()
         if let benchmark, benchmark.isFinite {
             benchmarkDailyChange = benchmark
         }
@@ -569,8 +682,12 @@ final class AppModel {
     }
 
     func loadETFLookThrough(basis: ETFLookThroughBasis) async throws -> ETFLookThroughResponse {
-        let loaded = try await loadActiveDocument()
-        let snapshot = selectedDocument(from: loaded)
+        let snapshot: LocalPortfolioDocument
+        if presentedSource == portfolioSource {
+            snapshot = document
+        } else {
+            snapshot = selectedDocument(from: try await loadActiveDocument())
+        }
         let preparation = Task.detached(priority: .userInitiated) {
             try Task.checkCancellation()
             let response = try LocalETFLookThrough.make(document: snapshot, basis: basis)
@@ -589,7 +706,7 @@ final class AppModel {
     }
 
     func toggleAccount(_ accountID: String) async {
-        var next = selectedAccountKeys
+        var next = resolvedAccountKeys(in: fullDocument)
         if next.contains(accountID) {
             guard next.count > 1 else { return }
             next.remove(accountID)
@@ -711,12 +828,15 @@ final class AppModel {
         // The explicit reset action must not restore an old personal screen.
         // Shared public-data caches and built-in account snapshots stay intact.
         sourcePresentations.removeValue(forKey: .personal)
+        holdingDetailContent = holdingDetailContent.filter { $0.key.source != .personal }
+        holdingDetailContentOrder.removeAll { $0.source == .personal }
         presentedSource = nil
         isFakeDataMode = false
         UserDefaults.standard.set(false, forKey: Self.fakeDataModeKey)
         UserDefaults.standard.removeObject(forKey: Self.selectedAccountsKey)
         UserDefaults.standard.removeObject(forKey: Self.selectsAllAccountsKey)
         document = .empty
+        fullDocument = .empty
         overview = nil
         portfolioChart = nil
         isPortfolioChartLoading = false
@@ -1004,6 +1124,21 @@ final class AppModel {
         )
     }
 
+    func importSnapTrade(
+        _ snapshot: SnapTradeSnapshot,
+        context: AccountConnectorContext,
+        nickname: String
+    ) async throws -> CSVImportResult {
+        guard !isFakeDataMode && !isPublicInvestorMode else { throw SnapTradeError.accountUnavailable }
+        try snapshot.validate(context: context, existing: accounts)
+        let name = context.account?.name ?? AccountNaming.displayName(provider: "SnapTrade", nickname: nickname)
+        return try await replace(
+            snapshot.positions.map { $0.renamedAccount(to: name) },
+            source: "SnapTrade", warnings: [], replacingAccountsOnly: true,
+            syncedAccounts: [snapshot.portfolioAccount(name: name)]
+        )
+    }
+
     func importIBKR(
         _ snapshot: IBKRFlexSnapshot,
         accountNames: [String: String] = [:],
@@ -1121,11 +1256,13 @@ final class AppModel {
     }
 
     private func apply(_ loaded: LocalPortfolioDocument, invalidatesDailyChanges: Bool = true,
-                       loadsCachedChart: Bool = true, preservesChart: Bool = false) async throws {
+                       loadsCachedChart: Bool = true, preservesChart: Bool = false,
+                       localSelectionOnly: Bool = false) async throws {
         let generation = portfolioRequestGeneration
         let previousDailyChanges = holdingDailyChanges
+        let accountKeys = resolvedAccountKeys(in: loaded)
         let scoped = selectedDocument(from: loaded)
-        let presentation = try await Task.detached(priority: .userInitiated) {
+        var presentation = try await Task.detached(priority: .userInitiated) {
             try LocalPortfolioEngine.presentation(for: scoped)
         }.value
         let cachedChart: PortfolioChartResponse?
@@ -1138,12 +1275,31 @@ final class AppModel {
             cachedChart = nil
         }
         guard generation == portfolioRequestGeneration else { return }
-        document = scoped
+        // Read the overlay after suspension so an in-flight disk refresh
+        // cannot replace a quote the detail has just published.
+        fullDocument = applyingDetailQuotes(to: loaded)
+        document = applyingDetailQuotes(to: scoped)
+        if detailMarketObservations[portfolioSource]?.isEmpty == false {
+            presentation = try LocalPortfolioEngine.presentation(for: document)
+        }
         presentedSource = portfolioSource
+        accounts = fullDocument.accounts
+        selectedAccountKeys = accountKeys
         overview = presentation.0
         if !preservesChart {
             portfolioChart = cachedChart ?? presentation.1
+            if localSelectionOnly, portfolioChart?.currentPoint.marketValue.isFinite != true {
+                // Account NAV needs historical cash flows. Without that cache,
+                // show the locally known holdings value/cost under their own basis.
+                portfolioChart = PortfolioChartResponse(
+                    positionCount: presentation.2.count,
+                    positionHistory: PositionHistory(available: false, rows: []),
+                    currentPoint: ChartPoint(dateText: DayDateCodec.string(from: Date()),
+                        marketValue: presentation.0.summary.marketValue, cost: presentation.0.summary.totalCost),
+                    warning: L10n.text("历史行情缓存不完整，当前显示所选账户的持仓市值与成本。"))
+            }
             isPortfolioChartLoading = cachedChart == nil
+                && !localSelectionOnly
                 && !isFakeDataMode
                 && !isPublicInvestorMode
                 && (!scoped.positions.isEmpty || !(scoped.transactions ?? []).isEmpty)
@@ -1153,18 +1309,20 @@ final class AppModel {
         if invalidatesDailyChanges {
             dailyChangesRequestGeneration &+= 1
         }
-        let activeTickers = Set(presentation.2.map { $0.ticker.uppercased() })
-        holdingDailyChanges = previousDailyChanges.filter {
-            activeTickers.contains($0.key) && $0.value.isFinite
-        }
+        holdingDailyChanges = previousDailyChanges.filter { $0.value.isFinite }
         for holding in presentation.2 {
             if let value = holding.todayChangePercent, value.isFinite {
                 holdingDailyChanges[holding.ticker.uppercased()] = value
             }
         }
+        applyDetailDailyChanges()
         if invalidatesDailyChanges {
             holdingDailyChangesSignature = ""
             isHoldingDailyChangesLoading = !presentation.2.isEmpty
+        }
+        if localSelectionOnly {
+            holdingDailyChangesSignature = Self.dailyChangesSignature(for: presentation.2)
+            isHoldingDailyChangesLoading = false
         }
         localSource = isPublicInvestorMode ? scoped.accounts.map(\.displayName).joined(separator: "、") : scoped.source
         localUpdatedAt = loaded.marketDataUpdatedAt
@@ -1231,6 +1389,7 @@ final class AppModel {
 
     private struct SourcePresentation {
         let document: LocalPortfolioDocument
+        let fullDocument: LocalPortfolioDocument
         let overview: PortfolioOverview?
         let chart: PortfolioChartResponse?
         let holdings: [Holding]
@@ -1245,7 +1404,7 @@ final class AppModel {
     }
 
     private func captureSourcePresentation() -> SourcePresentation {
-        SourcePresentation(document: document, overview: overview, chart: portfolioChart,
+        SourcePresentation(document: document, fullDocument: fullDocument, overview: overview, chart: portfolioChart,
             holdings: holdings, accounts: accounts, accountKeys: selectedAccountKeys,
             dailyChanges: holdingDailyChanges, benchmark: benchmarkDailyChange,
             comparison: comparison, analytics: returnsAnalytics, source: localSource, updatedAt: localUpdatedAt)
@@ -1253,6 +1412,7 @@ final class AppModel {
 
     private func restoreSourcePresentation(_ cached: SourcePresentation) {
         document = cached.document
+        fullDocument = cached.fullDocument
         overview = cached.overview
         portfolioChart = cached.chart
         holdings = cached.holdings
@@ -1273,6 +1433,7 @@ final class AppModel {
     private func clearSourcePresentation() {
         // Only the outgoing screen state; never a disk-cache deletion.
         document = .empty
+        fullDocument = .empty
         presentedSource = nil
         holdings = []
         overview = nil
@@ -1313,31 +1474,40 @@ final class AppModel {
         return isFakeDataMode ? FakePortfolioGenerator.make() : loaded
     }
 
-    private func selectedDocument(from loaded: LocalPortfolioDocument) -> LocalPortfolioDocument {
-        let availableAccounts = loaded.accounts
-        let availableKeys = Set(availableAccounts.map(\.id))
+    private func resolvedAccountKeys(in loaded: LocalPortfolioDocument) -> Set<String> {
+        let availableKeys = Set(loaded.accounts.map(\.id))
         let savedKeys = Self.savedAccountKeys(forKey: selectedAccountsStorageKey, defaults: modeDefaults).intersection(availableKeys)
         let selectsAll = modeDefaults.bool(forKey: selectsAllAccountsStorageKey)
-        let effectiveKeys = selectsAll || savedKeys.isEmpty ? availableKeys : savedKeys
-        accounts = availableAccounts
-        selectedAccountKeys = effectiveKeys
-        return loaded.scoped(to: effectiveKeys)
+        return selectsAll || savedKeys.isEmpty ? availableKeys : savedKeys
+    }
+
+    private func selectedDocument(from loaded: LocalPortfolioDocument) -> LocalPortfolioDocument {
+        loaded.scoped(to: resolvedAccountKeys(in: loaded))
     }
 
     private func updateAccountSelection(_ keys: Set<String>, selectsAll: Bool) async {
         let availableKeys = Set(accounts.map(\.id))
         let next = keys.intersection(availableKeys)
-        guard !next.isEmpty else { return }
-        selectedAccountKeys = next
-        returnsRequestGeneration &+= 1
-        returnsAnalyticsRequestGeneration &+= 1
-        isReturnsLoading = false
-        isReturnsAnalyticsLoading = false
-        returnsAnalyticsPendingParts = []
+        guard !next.isEmpty, presentedSource == portfolioSource else { return }
+        let previousRequest = resolvedAccountKeys(in: fullDocument)
         Self.saveAccountKeys(next, forKey: selectedAccountsStorageKey, defaults: modeDefaults)
         modeDefaults.set(selectsAll, forKey: selectsAllAccountsStorageKey)
-        await refreshPortfolio()
-        await refreshReturnsPage()
+        guard next != previousRequest else { return }
+        portfolioSourceTask?.cancel()
+        portfolioSourceTask = nil
+        let benchmark = benchmarkDailyChange
+        invalidateInFlightRequests()
+        let generation = portfolioRequestGeneration
+        benchmarkDailyChange = benchmark
+        portfolioError = nil
+        do {
+            // Re-scope the complete in-memory ledger, reusing quote and history
+            // caches. Account visibility never triggers a broker or market refresh.
+            try await apply(fullDocument, invalidatesDailyChanges: false, localSelectionOnly: true)
+        } catch {
+            guard generation == portfolioRequestGeneration else { return }
+            portfolioError = error.localizedDescription
+        }
     }
 
     private var selectedAccountsStorageKey: String {

@@ -56,6 +56,149 @@ struct ResearchMarketSnapshot: Identifiable {
     }
 }
 
+/// Figma 264:13428: a coloured title, one quote row, and a 53pt sparkline.
+/// Series colours identify the metric; the badge and change express direction.
+struct ResearchMetricCard: View {
+    let symbol: String
+    let title: String
+    let snapshot: ResearchMarketSnapshot?
+    var isLoading = false
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .subheadline) private var titleSize = 16.0
+    @ScaledMetric(relativeTo: .title3) private var valueSize = 20.0
+    @ScaledMetric(relativeTo: .subheadline) private var changeSize = 14.0
+
+    private var seriesColor: Color {
+        switch symbol {
+        case "^GSPC": CatfolioTheme.accent
+        case "^IXIC": CatfolioTheme.services
+        case "^VIX": CatfolioTheme.warning
+        // This card's purple is specified directly in the Figma reference.
+        default: Color(red: 139 / 255, green: 92 / 255, blue: 246 / 255)
+        }
+    }
+    private var displayTitle: String {
+        symbol == "^TNX" ? L10n.text("美国 10 年期国债") : title
+    }
+    private var changeColor: Color {
+        guard let change = snapshot?.changePercent, change != 0 else { return .secondary }
+        return change > 0 ? CatfolioTheme.positive : CatfolioPalette.rose500
+    }
+    private var showsSkeleton: Bool { isLoading && snapshot == nil }
+
+    var body: some View {
+        SettingsCard {
+            VStack(alignment: .leading, spacing: 7) {
+                Text(displayTitle)
+                    .font(.system(size: titleSize, weight: .semibold, design: .rounded))
+                    .foregroundStyle(seriesColor)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                    .minimumScaleFactor(0.8)
+                    .redacted(reason: showsSkeleton ? .placeholder : [])
+                    .chartLoadingShimmer(active: showsSkeleton, appearanceID: "research-metric|\(symbol)")
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) {
+                        directionBadge
+                        quote.fixedSize()
+                        change
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        quote
+                        HStack(spacing: 6) { directionBadge; change }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .chartLoadingShimmer(active: showsSkeleton, appearanceID: "research-metric|\(symbol)")
+
+                sparkline
+                    .frame(height: 53)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("research-metric-\(symbol)")
+    }
+
+    @ViewBuilder private var quote: some View {
+        if let value = snapshot?.latest?.value {
+            Text(symbol == "^TNX"
+                 ? (value / 100).formatted(.percent.precision(.fractionLength(2)))
+                 : value.formatted(.number.precision(.fractionLength(2))))
+                .font(.system(size: valueSize, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        } else if showsSkeleton {
+            ChartSkeletonShape(width: 82, height: valueSize)
+        } else {
+            Text(L10n.text("暂无数据"))
+                .font(.system(size: changeSize, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder private var change: some View {
+        if showsSkeleton {
+            ChartSkeletonShape(width: 42, height: changeSize)
+        } else if let value = snapshot?.changePercent {
+            Text(DisplayFormat.percent(value, signed: true))
+                .font(.system(size: changeSize, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(changeColor)
+                .fixedSize()
+        }
+    }
+
+    @ViewBuilder private var directionBadge: some View {
+        if showsSkeleton {
+            ChartSkeletonShape(width: 20, height: 20, cornerRadius: 10)
+        } else if let value = snapshot?.changePercent, value != 0 {
+            Image("ResearchMetricChevron")
+                .renderingMode(.template)
+                .resizable()
+                .frame(width: 12, height: 12)
+                .rotationEffect(.degrees(value > 0 ? 180 : 0))
+                .foregroundStyle(changeColor)
+                .frame(width: 20, height: 20)
+                .background(changeColor.opacity(colorScheme == .dark ? 0.18 : 0.06), in: Circle())
+                .accessibilityHidden(true)
+        }
+    }
+
+    @ViewBuilder private var sparkline: some View {
+        if let snapshot, snapshot.points.count > 1 {
+            let domain = StandardLineChartEntrancePhase.domain(snapshot.points.map(\.value))
+            StandardLineChartEntrance(appearanceID: "research-metric|\(symbol)") { phase in
+                Chart(Array(snapshot.points.enumerated()), id: \.element.id) { item in
+                    LineMark(x: .value(L10n.text("日期"), item.offset),
+                             y: .value(L10n.text("收盘"), phase.value(item.element.value,
+                                fraction: Double(item.offset) / Double(snapshot.points.count - 1), domain: domain)))
+                        .foregroundStyle(seriesColor)
+                        .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                        .interpolationMethod(.monotone)
+                }
+                .chartXAxis(.hidden)
+                .chartYAxis(.hidden)
+                .chartXScale(domain: 0...(snapshot.points.count - 1))
+                .chartYScale(domain: domain)
+                .padding(.horizontal, 3)
+                .padding(.vertical, 5)
+                .accessibilityLabel(L10n.text("\(title)最近收盘走势"))
+                .accessibilityValue("\(snapshot.points.first?.id ?? "") – \(snapshot.latest?.id ?? "")")
+            }
+        } else if showsSkeleton {
+            StandardLineChartSkeleton(axisWidth: 0, topInset: 5, bottomHeight: 5,
+                lineWidths: [3], appearanceID: "research-metric|\(symbol)")
+        } else {
+            Color.clear.accessibilityHidden(true)
+        }
+    }
+}
+
 /// One security from the offline directory, ready to open in the detail
 /// sheet whether or not anything is held.
 struct MarketSecurityResult: Identifiable, Equatable, Sendable {
@@ -176,18 +319,6 @@ struct ResearchView: View {
 
     private static var benchmarks: [(String, String)] { [("^GSPC", "S&P 500"), ("^IXIC", "NASDAQ"), ("^VIX", L10n.text("VIX 波动率")), ("^TNX", L10n.text("美国 10 年期国债收益率"))] }
 
-    /// Health tints the symbol beside each label and leaves the number itself
-    /// in the primary colour, so the grid stays scannable while every figure
-    /// keeps its own identity.
-    private static func benchmarkGlyph(_ symbol: String) -> (name: String, tint: Color) {
-        switch symbol {
-        case "^GSPC": ("chart.line.uptrend.xyaxis", CatfolioTheme.accent)
-        case "^IXIC": ("chart.bar.fill", CatfolioTheme.services)
-        case "^VIX": ("waveform.path.ecg", CatfolioTheme.warning)
-        case "^TNX": ("percent", CatfolioTheme.preference)
-        default: ("chart.xyaxis.line", CatfolioTheme.neutralIcon)
-        }
-    }
     private var accountScope: String {
         let keys = [appLocale.identifier, model.isFakeDataMode ? "demo" : "real"] + model.selectedAccountKeys.sorted()
         return keys.map { "\($0.utf8.count):\($0)" }.joined()
@@ -220,23 +351,18 @@ struct ResearchView: View {
                 searchResultsSection
             } else if !showsAttention {
             Section {
-                if isLoading && markets.isEmpty {
-                    ProgressView(L10n.text("读取市场数据…"))
-                } else {
+                Group {
                     // Two up, but a block each — the four still get their own
                     // card and their own shape rather than sharing one, which
                     // is what let the figures be figures instead of list rows.
                     LazyVGrid(
-                        columns: [
-                            GridItem(.flexible(), spacing: SettingsTemplate.tileSpacing),
-                            GridItem(.flexible(), spacing: SettingsTemplate.tileSpacing),
-                        ],
+                        columns: Array(repeating: GridItem(.flexible(), spacing: SettingsTemplate.tileSpacing),
+                                       count: dynamicTypeSize.isAccessibilitySize ? 1 : 2),
                         spacing: SettingsTemplate.tileSpacing
                     ) {
                         ForEach(Self.benchmarks, id: \.0) { symbol, title in
-                            SettingsCard {
-                                marketCell(symbol: symbol, title: title)
-                            }
+                            ResearchMetricCard(symbol: symbol, title: title,
+                                               snapshot: markets.first { $0.id == symbol }, isLoading: isLoading)
                         }
                     }
                     // Zero, not the page inset: an inset-grouped section
@@ -287,6 +413,9 @@ struct ResearchView: View {
             }
         }
         .listStyle(.insetGrouped)
+        // Match the other root tabs while keeping the List's viewport and
+        // scroll indicator intact. The pushed attention page has no tab bar.
+        .contentMargins(.bottom, showsAttention ? nil : SettingsTemplate.rootTabBottomInset, for: .scrollContent)
         // The list keeps its own rows — a screen with this much content should
         // stay a List and keep its recycling — but it sits on the settings
         // template's ground rather than the system's colder grouped grey.
@@ -297,9 +426,8 @@ struct ResearchView: View {
         .navigationTitle(L10n.text(showsAttention ? "今天值得关注" : "研究"))
         .navigationBarTitleDisplayMode(.large)
         .toolbarVisibility(.visible, for: .navigationBar)
-        // As a tab, Research sits under the root stack's bar, which never
-        // sees a tab's own search or toolbar: its field is in the page
-        // instead, and pull to refresh stands in for the refresh button.
+        // Market search stays in the page; the pushed attention page uses
+        // its own navigation search and rule controls.
         .modifier(ResearchSystemSearch(enabled: showsAttention, query: $query))
         .scrollDismissesKeyboard(.immediately)
         .toolbar {
@@ -334,7 +462,7 @@ struct ResearchView: View {
             }
         }
         .sheet(item: $selectedSecurity) { holding in
-            HoldingDetailView(holding: holding)
+            HoldingDetailView(holding: holding, onClose: { selectedSecurity = nil })
                 .environment(model)
                 .securityDetailSheet()
         }
@@ -374,168 +502,6 @@ struct ResearchView: View {
         }
         #endif
         }
-    }
-
-    /// One figure in the key-indicator grid, in Health's order: what it is,
-    /// then the number at a size worth reading, then the trend.
-    ///
-    /// The number itself stays in the primary colour. Health tints values to
-    /// identify the metric, but here a tint would compete with the one colour
-    /// that already carries meaning — direction — so only the change and the
-    /// line take it.
-    /// A tile's label: the category mark, then the name over two lines.
-    ///
-    /// The two lines are reserved, not merely allowed. Tiles in a row of a
-    /// grid are laid out to a common height, so a name that wraps only when it
-    /// needs to would make one row taller than the next and change the height
-    /// of the page every time the data did. Reserving the second line costs a
-    /// blank line under the short names and buys a grid that does not move.
-    ///
-    /// The icon is top-aligned so it sits against the first line rather than
-    /// floating in the middle of a two-line block.
-    private func tileLabel(
-        _ title: String,
-        icon: (name: String, tint: Color),
-        uppercased: Bool,
-        tracking: CGFloat = 0
-    ) -> some View {
-        HStack(alignment: .top, spacing: 6) {
-            Image(systemName: icon.name)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(icon.tint)
-                // Nudged onto the cap height of the first line.
-                .padding(.top, 1)
-            Text(uppercased ? title.uppercased() : title)
-                .appText(.label, weight: uppercased ? .semibold : .regular)
-                .tracking(tracking)
-                .foregroundStyle(SettingsTemplate.secondaryText)
-                .multilineTextAlignment(.leading)
-                .lineLimit(2, reservesSpace: true)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-    }
-
-    /// Two marks, kept off the two ends so neither label is clipped by the
-    /// card's padding. Two rather than three because these cards are half a
-    /// screen wide — a third label lands on one of its neighbours.
-    private static func axisDates(_ points: [ResearchMarketSnapshot.Point]) -> [String] {
-        guard points.count > 2 else { return points.map(\.id) }
-        let last = points.count - 1
-        return [0.2, 0.8]
-            .map { Int((Double(last) * $0).rounded()) }
-            .reduce(into: [Int]()) { unique, index in
-                if !unique.contains(index) { unique.append(index) }
-            }
-            .map { points[$0].id }
-    }
-
-    /// `2026-09-08` reads as `09-08` under a chart: the year is the same for
-    /// every mark on a series this short, and dropping it is what lets three
-    /// labels sit side by side.
-    private static func axisLabel(_ id: String) -> String {
-        let parts = id.split(separator: "-")
-        return parts.count == 3 ? "\(parts[1])-\(parts[2])" : id
-    }
-
-    /// One metric, one block — label, figure, then the shape the figure came
-    /// from, the way a home-screen widget states a single number.
-    ///
-    /// The label is set small, tracked and upper-case so it reads as a caption
-    /// to the figure rather than a heading competing with it, and the figure
-    /// gets the room a whole card can give it.
-    private func marketCell(symbol: String, title: String) -> some View {
-        let snapshot = markets.first { $0.id == symbol }
-        let tint = trendColor(symbol: symbol, change: snapshot?.changePercent)
-        let glyph = Self.benchmarkGlyph(symbol)
-        let compactTile = !dynamicTypeSize.isAccessibilitySize
-        return VStack(alignment: .leading, spacing: compactTile ? 6 : 10) {
-            tileLabel(title, icon: glyph, uppercased: true, tracking: 0.6)
-
-            // The change sits under the figure rather than beside it: half a
-            // card is not wide enough for both, and squeezing them onto one
-            // line is what makes a six-figure index shrink to fit.
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    if let value = snapshot?.latest?.value {
-                        Text(value, format: .number.precision(.fractionLength(2)))
-                            .appNumber(.title, weight: .bold)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.6)
-                        if symbol == "^TNX" {
-                            Text("%")
-                                .appText(.footnote)
-                                .foregroundStyle(SettingsTemplate.secondaryText)
-                        }
-                    } else {
-                        Text(L10n.text("暂无数据"))
-                            .appText(.subheading)
-                            .foregroundStyle(SettingsTemplate.secondaryText)
-                    }
-                }
-
-                if let snapshot {
-                    if symbol == "^TNX", let change = snapshot.changeBasisPoints {
-                        Text("\(change >= 0 ? "+" : "")\(change.formatted(.number.precision(.fractionLength(1)))) bps")
-                            .appNumber(.label, weight: .medium)
-                            .foregroundStyle(SettingsTemplate.secondaryText)
-                    } else if let change = snapshot.changePercent {
-                        Text(DisplayFormat.percent(change, signed: true))
-                            .appNumber(.label, weight: .medium)
-                            .foregroundStyle(tint)
-                    }
-                }
-            }
-
-            if let snapshot, snapshot.points.count > 1 {
-                let domain = StandardLineChartEntrancePhase.domain(snapshot.points.map(\.value))
-                StandardLineChartEntrance { phase in
-                Chart(Array(snapshot.points.enumerated()), id: \.element.id) { item in
-                    LineMark(x: .value(L10n.text("日期"), item.element.id), y: .value(L10n.text("收盘"),
-                        phase.value(item.element.value, fraction: Double(item.offset) / Double(snapshot.points.count - 1), domain: domain)))
-                        .foregroundStyle(tint)
-                        .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-                        .interpolationMethod(.monotone)
-                }
-                // The dates are shown, not hidden: a figure with a shape under
-                // it is only readable if the reader can see how far back the
-                // shape goes.
-                //
-                // The marks are named one by one rather than left to
-                // `desiredCount`, which only thins a continuous axis — these
-                // dates are categories, so every one of them drew a label and
-                // they landed on top of each other.
-                .chartXAxis {
-                    AxisMarks(values: Self.axisDates(snapshot.points)) { value in
-                        // Solid, not the dashed default: the rule is there to
-                        // mark where a date falls, and a dash reads as a
-                        // series of its own next to a 3pt line.
-                        AxisGridLine(stroke: StrokeStyle(lineWidth: 1))
-                            .foregroundStyle(SettingsTemplate.separator)
-                        AxisValueLabel {
-                            if let raw = value.as(String.self) {
-                                Text(Self.axisLabel(raw))
-                                    .appText(.label, weight: .regular)
-                                    .foregroundStyle(SettingsTemplate.secondaryText)
-                            }
-                        }
-                    }
-                }
-                .chartYAxis(.hidden)
-                .chartYScale(domain: domain)
-                .frame(height: compactTile ? 52 : 64)
-                .padding(.top, compactTile ? 0 : 2)
-                .accessibilityLabel(L10n.text("\(title)最近收盘走势"))
-                }
-            }
-        }
-        .frame(
-            maxWidth: .infinity,
-            minHeight: compactTile ? 136 : 0,
-            alignment: .topLeading
-        )
-        .padding(.horizontal, compactTile ? 14 : SettingsTemplate.rowHorizontalPadding)
-        .padding(.vertical, compactTile ? 14 : SettingsTemplate.rowHorizontalPadding)
     }
 
     private func marketRow(symbol: String, title: String, sparkline: Bool) -> some View {
@@ -580,7 +546,7 @@ struct ResearchView: View {
                 // reaches the frame edge and reads as a solid block that hides
                 // the very shape the row exists to show.
                 let domain = StandardLineChartEntrancePhase.domain(snapshot.points.map(\.value))
-                StandardLineChartEntrance { phase in
+                StandardLineChartEntrance(appearanceID: "research-market|\(symbol)") { phase in
                 Chart(Array(snapshot.points.enumerated()), id: \.element.id) { item in
                     LineMark(x: .value(L10n.text("日期"), item.element.id), y: .value(L10n.text("收盘"),
                         phase.value(item.element.value, fraction: Double(item.offset) / Double(snapshot.points.count - 1), domain: domain)))

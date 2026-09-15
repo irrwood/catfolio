@@ -1,4 +1,5 @@
 import ImageIO
+import Observation
 import SwiftUI
 import UIKit
 
@@ -165,14 +166,382 @@ enum SecurityDetailPresentation {
     static let openFeedback = SensoryFeedback.impact(flexibility: .rigid, intensity: 0.8)
 }
 
+/// A backdrop in the presentation container, outside the sheet's zooming
+/// surface. Its opacity uses the same coordinator as the native transition,
+/// including interactive dismissal and cancellation.
+private struct SecurityDetailBackdrop: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> Controller { Controller() }
+    func updateUIViewController(_ controller: Controller, context: Context) {}
+
+    static func dismantleUIViewController(_ controller: Controller, coordinator: ()) {
+        controller.tearDown()
+    }
+
+    final class Controller: UIViewController {
+        private weak var sheetController: UIViewController?
+        // Keep the hit barrier opaque in UIKit's hit-testing sense even while
+        // its separate shade fades to zero. Background taps must not leak.
+        private let hitBarrier = UIView()
+        private let shade = UIView()
+        private var hasPresented = false
+        private var isDismissing = false
+        private var transitionInFlight = false
+
+        override func loadView() {
+            let observer = UIView(frame: .zero)
+            observer.backgroundColor = .clear
+            observer.isUserInteractionEnabled = false
+            view = observer
+
+            hitBarrier.backgroundColor = .clear
+            hitBarrier.accessibilityElementsHidden = true
+            hitBarrier.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            shade.backgroundColor = SecurityDetailPresentation.backdropColor
+            shade.alpha = 0
+            shade.isUserInteractionEnabled = false
+            shade.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            hitBarrier.addSubview(shade)
+        }
+
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            presentBackdropIfNeeded(animated: animated)
+        }
+
+        override func viewIsAppearing(_ animated: Bool) {
+            super.viewIsAppearing(animated)
+            // Some presentations attach their container after willAppear.
+            // This is still before the first rendered frame.
+            presentBackdropIfNeeded(animated: animated)
+        }
+
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            dismissBackdropIfNeeded(animated: animated)
+        }
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            guard hasPresented, !isDismissing else { return }
+            transitionInFlight = false
+            shade.alpha = 1
+        }
+
+        override func viewDidDisappear(_ animated: Bool) {
+            super.viewDidDisappear(animated)
+            guard isDismissing || sheetController?.presentingViewController == nil else { return }
+            transitionInFlight = false
+            hitBarrier.removeFromSuperview()
+        }
+
+        private func presentBackdropIfNeeded(animated: Bool) {
+            guard !hasPresented else { return }
+            var owner: UIViewController = self
+            while let parent = owner.parent { owner = parent }
+            guard owner.presentingViewController != nil,
+                  let presentation = owner.presentationController,
+                  let container = presentation.containerView,
+                  var surface = presentation.presentedView else { return }
+            // Use the public presentation surface and its ancestry, never
+            // private dimming-view names or UIKit's transition delegate.
+            while let parent = surface.superview, parent !== container { surface = parent }
+            guard surface.superview === container else { return }
+
+            sheetController = owner
+            hitBarrier.frame = container.bounds
+            shade.frame = hitBarrier.bounds
+            container.insertSubview(hitBarrier, belowSubview: surface)
+            hasPresented = true
+            animateBackdrop(presenting: true, animated: animated)
+        }
+
+        private func dismissBackdropIfNeeded(animated: Bool) {
+            // Pushing research or presenting another sheet is not dismissal
+            // of this page: its backdrop must stay in place underneath it.
+            guard hasPresented, !isDismissing,
+                  sheetController?.isBeingDismissed == true else { return }
+            isDismissing = true
+            animateBackdrop(presenting: false, animated: animated)
+        }
+
+        private func animateBackdrop(presenting: Bool, animated: Bool) {
+            let target: CGFloat = presenting ? 1 : 0
+            if let coordinator = sheetController?.transitionCoordinator ?? transitionCoordinator,
+               coordinator.isAnimated {
+                transitionInFlight = true
+                let scheduled = coordinator.animateAlongsideTransition(in: hitBarrier, animation: { _ in
+                    self.shade.alpha = target
+                }, completion: { context in
+                    self.finishTransition(presenting: presenting, cancelled: context.isCancelled)
+                })
+                if !scheduled {
+                    // The completion can still run when queuing fails. Leave
+                    // cleanup to it (or didDisappear), never to a second timer.
+                    UIView.animate(withDuration: 0.25, delay: 0,
+                                   options: [.beginFromCurrentState, .curveEaseInOut]) {
+                        self.shade.alpha = target
+                    }
+                }
+                return
+            }
+
+            // An unanimated presentation has no coordinator. If UIKit attaches
+            // this observer late, still fade instead of flashing a black layer.
+            transitionInFlight = true
+            UIView.animate(withDuration: animated ? 0.25 : 0,
+                           delay: 0, options: [.beginFromCurrentState, .curveEaseInOut]) {
+                self.shade.alpha = target
+            } completion: { _ in
+                self.finishTransition(presenting: presenting, cancelled: false)
+            }
+        }
+
+        private func finishTransition(presenting: Bool, cancelled: Bool) {
+            // A close requested during opening may already have started the
+            // next transition; its opacity and cleanup now belong to the exit.
+            guard presenting != isDismissing else { return }
+            transitionInFlight = false
+            if presenting ? cancelled : !cancelled {
+                hitBarrier.removeFromSuperview()
+            } else {
+                shade.alpha = 1
+            }
+            if !presenting, cancelled { isDismissing = false }
+        }
+
+        func tearDown() {
+            // SwiftUI may dismantle content before UIKit finishes its exit.
+            // The coordinator's completion retains us and removes the barrier.
+            guard !transitionInFlight else { return }
+            if sheetController?.isBeingDismissed == true {
+                dismissBackdropIfNeeded(animated: true)
+            } else {
+                hitBarrier.removeFromSuperview()
+            }
+        }
+    }
+}
+
+/// Keeps financial colours intact while the row responds to a press. Button
+/// owns recognition and cancellation, so starting a scroll never opens it.
+struct HoldingPressButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
+            .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82),
+                       value: configuration.isPressed)
+    }
+}
+
+/// The return target is a frozen copy in the presenter's overlay. It does not
+/// depend on a lazy row, a pressed label, or a context-menu lift staying alive.
+@MainActor @Observable
+final class SecurityDetailZoomState {
+    struct Source {
+        let id = UUID()
+        let frame: CGRect
+        let content: AnyView
+    }
+
+    private struct Key: Hashable {
+        let id: AnyHashable
+        let namespace: Namespace.ID
+    }
+
+    let coordinateSpace = UUID()
+    private(set) var activeSource: Source?
+    @ObservationIgnored private var candidates: [Key: Source] = [:]
+    @ObservationIgnored private var pendingPresentation: (() -> Void)?
+    @ObservationIgnored var viewport: CGRect = .zero
+
+    func register(id: AnyHashable, namespace: Namespace.ID, frame: CGRect, content: AnyView) {
+        guard activeSource == nil, Self.isUsable(frame) else { return }
+        candidates[Key(id: id, namespace: namespace)] = Source(frame: frame, content: content)
+    }
+
+    func prepare(id: AnyHashable, namespace: Namespace.ID, present: @escaping () -> Void) {
+        guard activeSource == nil else { return }
+        guard let candidate = candidates[Key(id: id, namespace: namespace)],
+              Self.isUsable(viewport) else {
+            present()
+            return
+        }
+        let visibleFrame = candidate.frame.intersection(viewport)
+        // An absent/offscreen source gets the ordinary sheet transition,
+        // never a zoom to an empty frame at the coordinate-space origin.
+        guard Self.isUsable(visibleFrame) else {
+            present()
+            return
+        }
+        pendingPresentation = present
+        activeSource = Source(frame: candidate.frame, content: candidate.content)
+    }
+
+    func sourceDidAppear(_ id: UUID) {
+        guard activeSource?.id == id, let present = pendingPresentation else { return }
+        pendingPresentation = nil
+        // Register the stable source with SwiftUI before asking UIKit to start
+        // the sheet. A source and destination created in one update can race.
+        DispatchQueue.main.async { [weak self] in
+            guard self?.activeSource?.id == id else { return }
+            present()
+        }
+    }
+
+    func didDismiss() {
+        // Called by sheet onDismiss, not by the selection becoming nil or a
+        // view disappearing at the start of an interactive dismissal.
+        activeSource = nil
+        pendingPresentation = nil
+    }
+
+    func unregister(id: AnyHashable, namespace: Namespace.ID) {
+        candidates.removeValue(forKey: Key(id: id, namespace: namespace))
+    }
+
+    private static func isUsable(_ frame: CGRect) -> Bool {
+        !frame.isNull && !frame.isInfinite && frame.width > 1 && frame.height > 1
+            && [frame.minX, frame.minY, frame.width, frame.height].allSatisfy(\.isFinite)
+    }
+}
+
+private struct SecurityDetailZoomStateKey: EnvironmentKey {
+    static let defaultValue: SecurityDetailZoomState? = nil
+}
+
+private struct SecurityDetailZoomOriginKey: EnvironmentKey {
+    static let defaultValue: Namespace.ID? = nil
+}
+
+extension EnvironmentValues {
+    var securityDetailZoomState: SecurityDetailZoomState? {
+        get { self[SecurityDetailZoomStateKey.self] }
+        set { self[SecurityDetailZoomStateKey.self] = newValue }
+    }
+
+    var securityDetailZoomOrigin: Namespace.ID? {
+        get { self[SecurityDetailZoomOriginKey.self] }
+        set { self[SecurityDetailZoomOriginKey.self] = newValue }
+    }
+}
+
+private struct SecurityDetailZoomSource<Content: View>: View {
+    private final class GeometryStorage {
+        var frame: CGRect = .zero
+    }
+
+    @Environment(\.securityDetailZoomState) private var state
+    @State private var geometryStorage = GeometryStorage()
+    let content: Content
+    let id: AnyHashable
+    let namespace: Namespace.ID
+
+    @ViewBuilder
+    var body: some View {
+        if let state {
+            content
+                .geometryGroup()
+                .onGeometryChange(for: CGRect.self) { geometry in
+                    geometry.frame(in: .named(state.coordinateSpace))
+                } action: { frame in
+                    geometryStorage.frame = frame
+                    state.register(id: id, namespace: namespace, frame: frame, content: AnyView(content))
+                }
+                .onAppear {
+                    state.register(id: id, namespace: namespace, frame: geometryStorage.frame, content: AnyView(content))
+                }
+                .onDisappear { state.unregister(id: id, namespace: namespace) }
+        } else {
+            content.matchedTransitionSource(id: id, in: namespace)
+        }
+    }
+}
+
+extension View {
+    func securityDetailZoomHost(_ state: SecurityDetailZoomState, in namespace: Namespace.ID) -> some View {
+        coordinateSpace(name: state.coordinateSpace)
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+                state.viewport = CGRect(origin: .zero, size: size)
+            }
+            .overlay(alignment: .topLeading) {
+                if let source = state.activeSource {
+                    source.content
+                        .frame(width: source.frame.width, height: source.frame.height)
+                        .matchedTransitionSource(id: source.id, in: namespace)
+                        .offset(x: source.frame.minX, y: source.frame.minY)
+                        .transaction { $0.animation = nil }
+                        .onAppear { state.sourceDidAppear(source.id) }
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
+            .environment(\.securityDetailZoomState, state)
+    }
+
+    @ViewBuilder
+    func securityDetailZoomTransition(_ source: SecurityDetailZoomState.Source?, in namespace: Namespace.ID) -> some View {
+        if let source {
+            navigationTransition(.zoom(sourceID: source.id, in: namespace))
+        } else {
+            self
+        }
+    }
+}
+
+private struct HoldingDetailPreviewModifier: ViewModifier {
+    // Standalone ImageRenderer trees do not inherit the app environment.
+    // A visual copy can render its label without constructing a live preview.
+    @Environment(AppModel.self) private var model: AppModel?
+    let holding: Holding?
+    let onOpen: () -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let holding, let model {
+            content
+                .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .contextMenu {
+                    Button(action: onOpen) {
+                        Label(L10n.text("打开个股"), systemImage: "arrow.up.forward.app")
+                    }
+                } preview: {
+                    // The actual detail page shares its cache with a subsequent
+                    // open. The system owns the preview's lift and dismissal.
+                    HoldingDetailView(holding: holding, onClose: {}, isPreview: true)
+                        .environment(model)
+                        .frame(width: min(390, UIScreen.main.bounds.width - 48),
+                               height: min(640, UIScreen.main.bounds.height * 0.66))
+                        .background(SecurityDetailPresentation.ground)
+                        .clipped()
+                        .allowsHitTesting(false)
+                }
+                .accessibilityHint(L10n.text("轻点打开个股，长按预览"))
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    func holdingDetailPreview(_ holding: Holding?, onOpen: @escaping () -> Void) -> some View {
+        modifier(HoldingDetailPreviewModifier(holding: holding, onOpen: onOpen))
+    }
+}
+
 extension View {
     /// Presents a security page as a sheet: the designed ground, the designed
     /// corners, no grabber.
     func securityDetailSheet() -> some View {
         presentationDetents([.large])
+            // Suppress the system's separate dimming layer. The coordinated
+            // backdrop supplies both the shade and a background hit barrier.
+            .presentationBackgroundInteraction(.enabled(upThrough: .large))
             .presentationDragIndicator(.hidden)
             .presentationCornerRadius(SecurityDetailPresentation.cornerRadius)
             .presentationBackground { SecurityDetailPresentation.ground }
+            .background { SecurityDetailBackdrop() }
     }
 
     /// The same ground for a security page pushed onto a navigation stack,
@@ -191,7 +560,7 @@ extension View {
     /// the page's own backgrounds, which the sheet's single ground now
     /// replaces; the sources did not need reshaping.
     func catfolioZoomSource(_ id: some Hashable, in namespace: Namespace.ID) -> some View {
-        matchedTransitionSource(id: id, in: namespace)
+        SecurityDetailZoomSource(content: self, id: AnyHashable(id), namespace: namespace)
     }
 
     /// Clicks when a security page is asked for — in the same run-loop turn
@@ -204,24 +573,22 @@ extension View {
     }
 }
 
-/// Tells the navigation bar which scroll view it belongs to.
-///
-/// The root is a `TabView` inside one `NavigationStack`, so the bar has three
-/// tabs' scroll views to choose from and guesses. It guessed the home page's
-/// — the first tab — and so on a tab's first scroll the large title slid away
-/// with the content and the collapsed bar never came in. With no bar there,
-/// the soft scroll edge had nothing to cover but the status bar and stopped at
-/// about 60pt instead of running under the bar to about 110pt. Switching tabs
-/// happened to correct it, which is why it looked intermittent.
-///
-/// Placed inside the scroll content, so the scroll view is found by walking up
-/// from this view; nominated on every appearance, because a tab that comes
-/// back has to be nominated again.
+/// Binds this page's scroll view before its large title first appears. Only
+/// the page directly owned by the nearest navigation controller is changed;
+/// never nominate a scroll view on a shared tab or outer navigation container.
 struct NavigationBarScrollAnchor: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> Controller { Controller() }
-    func updateUIViewController(_ controller: Controller, context: Context) {}
+    func updateUIViewController(_ controller: Controller, context: Context) {
+        controller.nominateIfVisible()
+    }
+    static func dismantleUIViewController(_ controller: Controller, coordinator: ()) {
+        controller.releaseRegistration()
+    }
 
     final class Controller: UIViewController {
+        private weak var registeredOwner: UIViewController?
+        private weak var registeredScrollView: UIScrollView?
+
         override func loadView() {
             let view = UIView(frame: .zero)
             view.backgroundColor = .clear
@@ -229,22 +596,49 @@ struct NavigationBarScrollAnchor: UIViewControllerRepresentable {
             self.view = view
         }
 
-        override func viewDidAppear(_ animated: Bool) {
-            super.viewDidAppear(animated)
-            nominate()
+        override func viewIsAppearing(_ animated: Bool) {
+            super.viewIsAppearing(animated)
+            nominateIfVisible()
         }
 
-        private func nominate() {
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            nominateIfVisible()
+        }
+
+        func nominateIfVisible() {
+            guard isViewLoaded, view.window != nil else { return }
             var candidate = view.superview
             while let current = candidate, !(current is UIScrollView) {
                 candidate = current.superview
             }
             guard let scrollView = candidate as? UIScrollView else { return }
-            var controller: UIViewController? = self
-            while let current = controller, !(current is UINavigationController) {
-                current.setContentScrollView(scrollView, for: .top)
-                controller = current.parent
+            var owner: UIViewController = self
+            while let parent = owner.parent {
+                if let navigation = parent as? UINavigationController {
+                    guard navigation.topViewController === owner else { return }
+                    if registeredOwner !== owner || registeredScrollView !== scrollView {
+                        releaseRegistration()
+                    }
+                    if owner.contentScrollView(for: .top) !== scrollView {
+                        owner.setContentScrollView(scrollView, for: .top)
+                    }
+                    registeredOwner = owner
+                    registeredScrollView = scrollView
+                    return
+                }
+                guard !(parent is UITabBarController) else { return }
+                owner = parent
             }
+        }
+
+        func releaseRegistration() {
+            if let owner = registeredOwner, let scrollView = registeredScrollView,
+               owner.contentScrollView(for: .top) === scrollView {
+                owner.setContentScrollView(nil, for: .top)
+            }
+            registeredOwner = nil
+            registeredScrollView = nil
         }
     }
 }
@@ -313,6 +707,12 @@ enum CatfolioPalette {
     static let green900 = color(0x006645)
     /// Exact Figma green used by the Today contribution bars.
     static let contributionGreen = color(0x00CC00)
+    /// Categorical segment colours from the dividend card, Figma 322:2262.
+    static let dividendSeries: [Color] = [
+        color(0x3475FF), color(0xA0CDFF), color(0xC8CD00), color(0xFF9500),
+        color(0x13BA8E), color(0xEB74FE), color(0x00CC00)
+    ]
+    static let dividendSelection = dynamic(light: 0x1F46FF, dark: 0x8BA7FF)
     /// Holding-detail transaction markers from the shared chart language.
     static let tradeBuy = color(0x01B801)
     static let tradeSellLight = color(0xFF9500)
@@ -590,7 +990,7 @@ enum CompanyNameDisplay: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .original: L10n.text("原始名称")
+        case .original: L10n.text("原文简称")
         case .chineseShort: L10n.text("中文简称")
         }
     }
@@ -602,10 +1002,10 @@ enum CompanyNameDisplay: String, CaseIterable, Identifiable {
 }
 
 enum CompanyNameCatalog {
-    static func displayName(ticker: String, fallback: String) -> String {
-        guard CompanyNameDisplay.current == .chineseShort else { return fallback }
-
+    static func displayName(ticker: String, fallback: String, mode: CompanyNameDisplay = .current) -> String {
         let ticker = ticker.uppercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let conciseName = commonNames[ticker] ?? removingLegalSuffixes(fallback)
+        guard mode == .chineseShort else { return conciseName.isEmpty ? ticker : conciseName }
         if let name = chineseShortNames[ticker] { return name }
 
         let suffixes = [".L", ".SW", ".AS", ".DE", ".PA", ".MI", ".HK", ".TO"]
@@ -614,7 +1014,46 @@ enum CompanyNameCatalog {
             if let name = chineseShortNames[baseTicker] { return name }
         }
 
-        return fallback
+        return conciseName.isEmpty ? ticker : conciseName
+    }
+
+    // Display aliases only: the source name and security identifier remain intact.
+    // Match exact listings; stripping arbitrary exchange suffixes can alias another company.
+    private static let commonNames: [String: String] = [
+        "AAPL": "Apple", "ADBE": "Adobe", "AMD": "AMD", "AMZN": "Amazon",
+        "ARM": "Arm", "ASML": "ASML", "AVGO": "Broadcom", "BABA": "Alibaba",
+        "BAC": "Bank of America", "BIDU": "Baidu", "BRK-A": "Berkshire Hathaway",
+        "BRK-B": "Berkshire Hathaway", "BRK.A": "Berkshire Hathaway", "BRK.B": "Berkshire Hathaway",
+        "COST": "Costco", "CSCO": "Cisco", "CVX": "Chevron", "DIS": "Disney",
+        "GOOG": "Alphabet", "GOOGL": "Alphabet", "GS": "Goldman Sachs", "IBM": "IBM",
+        "INTC": "Intel", "JD": "JD.com", "JNJ": "Johnson & Johnson", "JPM": "JPMorgan Chase",
+        "KO": "Coca-Cola", "LLY": "Eli Lilly", "MA": "Mastercard", "MCD": "McDonald’s",
+        "META": "Meta", "MS": "Morgan Stanley", "MSFT": "Microsoft", "MU": "Micron",
+        "NFLX": "Netflix", "NKE": "Nike", "NVDA": "NVIDIA", "ORCL": "Oracle",
+        "PEP": "PepsiCo", "PFE": "Pfizer", "PLTR": "Palantir", "QCOM": "Qualcomm",
+        "SBUX": "Starbucks", "TSLA": "Tesla", "TSM": "TSMC", "UBER": "Uber",
+        "UNH": "UnitedHealth", "V": "Visa", "WMT": "Walmart", "XOM": "ExxonMobil"
+    ]
+
+    private static let legalSuffix = try! NSRegularExpression(
+        pattern: #"[\s,]+(?:incorporated|corporation|limited|inc|corp|ltd|plc|co)\.?$"#,
+        options: [.caseInsensitive]
+    )
+    private static let fundDescriptor = try! NSRegularExpression(
+        pattern: #"\b(?:ETF|ETN|UCITS|fund|trust)\b"#, options: [.caseInsensitive]
+    )
+
+    private static func removingLegalSuffixes(_ source: String) -> String {
+        var name = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Fund names carry product, share-class and distribution information.
+        guard fundDescriptor.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) == nil else { return name }
+        while let match = legalSuffix.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)),
+              let range = Range(match.range, in: name) {
+            let shortened = String(name[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !shortened.isEmpty else { break }
+            name = shortened
+        }
+        return name
     }
 
     // Only include established everyday names. An unknown symbol keeps the broker name
@@ -1528,10 +1967,94 @@ struct GlassPrimaryButton: View {
     }
 }
 
+/// Presentation rules use image geometry and its canvas, not ticker-specific
+/// guesses about which companies have wordmarks. Run once when decoding.
+struct AssetLogoLayout: Equatable {
+    let insetFraction: CGFloat
+    let usesWhiteCanvas: Bool
+    var usesDarkCanvas: Bool = false
+
+    static func resolve(_ image: UIImage) -> Self {
+        let ratio = image.size.width / max(1, image.size.height)
+        let isSquare = (0.9...1.1).contains(ratio)
+        guard let cgImage = image.cgImage else {
+            return Self(insetFraction: isSquare ? 0 : 0.08, usesWhiteCanvas: !isSquare)
+        }
+        let edge = 32
+        var pixels = [UInt8](repeating: 0, count: edge * edge * 4)
+        guard let context = CGContext(data: &pixels, width: edge, height: edge,
+            bitsPerComponent: 8, bytesPerRow: edge * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            return Self(insetFraction: 0.08, usesWhiteCanvas: true)
+        }
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: edge, height: edge))
+        let corners = [(0, 0), (31, 0), (0, 31), (31, 31)]
+        let transparentCanvas = corners.allSatisfy { pixels[($0.1 * edge + $0.0) * 4 + 3] < 24 }
+        func isCanvas(_ x: Int, _ y: Int) -> Bool {
+            let i = (y * edge + x) * 4
+            // Transparent or near-white padding. Dark/coloured square tiles
+            // retain their complete background and original optical size.
+            return pixels[i + 3] < 24 || (!transparentCanvas && pixels[i + 3] > 240
+                && pixels[i] > 240 && pixels[i + 1] > 240 && pixels[i + 2] > 240)
+        }
+        let hasNeutralCorners = corners.allSatisfy { isCanvas($0.0, $0.1) }
+        guard hasNeutralCorners || !isSquare else {
+            return Self(insetFraction: 0, usesWhiteCanvas: false)
+        }
+        // Do not double-pad assets that already include a generous safe area.
+        // The scan measures padding only; it never crops or deforms artwork.
+        let occupiedEdge = (0..<edge).contains { position in
+            (0..<3).contains { margin in
+                !isCanvas(margin, position) || !isCanvas(edge - 1 - margin, position)
+                    || !isCanvas(position, margin) || !isCanvas(position, edge - 1 - margin)
+            }
+        }
+        // White artwork on transparency needs a dark backing in either app
+        // theme. Count only opaque ink so antialiased edges cannot dominate.
+        var opaqueInk = 0, lightInk = 0
+        if transparentCanvas {
+            for i in stride(from: 0, to: pixels.count, by: 4) where pixels[i + 3] > 240 {
+                opaqueInk += 1
+                if min(pixels[i], pixels[i + 1], pixels[i + 2]) > 210 { lightInk += 1 }
+            }
+        }
+        let needsDarkCanvas = opaqueInk > 0 && Double(lightInk) / Double(opaqueInk) > 0.8
+        return Self(insetFraction: occupiedEdge ? 0.08 : 0,
+                    usesWhiteCanvas: !needsDarkCanvas, usesDarkCanvas: needsDarkCanvas)
+    }
+}
+
+struct AssetLogoArtwork: View {
+    let image: UIImage
+    let layout: AssetLogoLayout
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            if layout.usesDarkCanvas { Color(white: 0.12) }
+            else if layout.usesWhiteCanvas { Color.white }
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .padding(size * layout.insetFraction)
+        }
+        .frame(width: size, height: size)
+    }
+}
+
 private final class AssetLogoImageCache: @unchecked Sendable {
     static let shared = AssetLogoImageCache()
 
-    private let images = NSCache<NSURL, UIImage>()
+    private let images = NSCache<NSURL, Entry>()
+
+    private final class Entry {
+        let image: UIImage
+        let layout: AssetLogoLayout
+        init(_ image: UIImage) {
+            self.image = image
+            self.layout = AssetLogoLayout.resolve(image)
+        }
+    }
 
     private init() {
         // Asset logos are bundled at 96 px and decoded only when visible.
@@ -1542,12 +2065,16 @@ private final class AssetLogoImageCache: @unchecked Sendable {
     }
 
     func image(for url: URL) -> UIImage? {
-        images.object(forKey: url as NSURL)
+        images.object(forKey: url as NSURL)?.image
     }
 
     func insert(_ image: UIImage, for url: URL) {
         let cost = Int(image.size.width * image.size.height * image.scale * image.scale * 4)
-        images.setObject(image, forKey: url as NSURL, cost: cost)
+        images.setObject(Entry(image), forKey: url as NSURL, cost: cost)
+    }
+
+    func layout(for url: URL) -> AssetLogoLayout? {
+        images.object(forKey: url as NSURL)?.layout
     }
 }
 
@@ -1623,21 +2150,35 @@ private actor AssetLogoRepository {
     }
 }
 
+private struct AssetLogoResolvedKey: EnvironmentKey {
+    static let defaultValue: (URL) -> Void = { _ in }
+}
+
+extension EnvironmentValues {
+    /// A snapshot owner can redraw when a visible logo replaces its fallback.
+    var assetLogoDidResolve: (URL) -> Void {
+        get { self[AssetLogoResolvedKey.self] }
+        set { self[AssetLogoResolvedKey.self] = newValue }
+    }
+}
+
 struct AssetLogo: View {
     @Environment(\.locale) private var appLocale
+    @Environment(\.assetLogoDidResolve) private var didResolve
     let ticker: String
     let logoSymbol: String?
     var size: CGFloat = 28
     var onBrandColorResolved: ((Color) -> Void)? = nil
     @State private var loadedImage: UIImage?
+    @State private var loadedLayout: AssetLogoLayout?
 
     var body: some View {
         Group {
             if let image = displayedImage {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: size, height: size)
+                AssetLogoArtwork(image: image,
+                    layout: loadedLayout ?? logoURL.flatMap { AssetLogoImageCache.shared.layout(for: $0) }
+                        ?? AssetLogoLayout.resolve(image),
+                    size: size)
             } else {
                 fallback
             }
@@ -1654,6 +2195,7 @@ struct AssetLogo: View {
             // SwiftUI may reuse this view when a ranked chart slot changes
             // ticker. Clear the old decoded image before resolving the new URL.
             loadedImage = nil
+            loadedLayout = nil
             await loadLogo()
         }
     }
@@ -1669,7 +2211,9 @@ struct AssetLogo: View {
             return
         }
         if let cached = AssetLogoImageCache.shared.image(for: logoURL) {
+            loadedLayout = AssetLogoImageCache.shared.layout(for: logoURL) ?? AssetLogoLayout.resolve(cached)
             loadedImage = cached
+            didResolve(logoURL)
             onBrandColorResolved?(AssetBrandColor.resolved(from: cached, fallbackKey: logoSymbol ?? ticker))
             return
         }
@@ -1678,7 +2222,9 @@ struct AssetLogo: View {
             onBrandColorResolved?(AssetBrandColor.fallback(for: logoSymbol ?? ticker))
             return
         }
+        loadedLayout = AssetLogoImageCache.shared.layout(for: logoURL) ?? AssetLogoLayout.resolve(decoded.value)
         loadedImage = decoded.value
+        didResolve(logoURL)
         onBrandColorResolved?(AssetBrandColor.resolved(from: decoded.value, fallbackKey: logoSymbol ?? ticker))
     }
 
@@ -2031,5 +2577,36 @@ enum DisplayFormat {
     static func ratioPercent(_ value: Double?) -> String {
         guard let value else { return "暂无" }
         return percent(value * 100)
+    }
+}
+
+struct ContributionStripePattern: View {
+    @Environment(\.locale) private var appLocale
+    let color: Color
+
+    var body: some View {
+        Canvas { context, size in
+            var stripes = Path()
+            // Match the exported Figma stripe asset: 13pt strokes on a
+            // 35.5pt cadence. The previous 18pt bands covered almost half of
+            // each bar and made the whole gradient read much darker.
+            let bandWidth: CGFloat = 13
+            let spacing: CGFloat = 35.5
+            // Start and end every diagonal band outside the rendered bounds.
+            // If a stroke begins at y = 0 its cap remains visible just inside
+            // the rounded mask, which reads as a short line head at the top.
+            let overscan = bandWidth * 2
+            var x = -size.height - overscan
+            while x < size.width + size.height {
+                stripes.move(to: CGPoint(x: x - overscan, y: -overscan))
+                stripes.addLine(to: CGPoint(
+                    x: x + size.height + overscan,
+                    y: size.height + overscan
+                ))
+                x += spacing
+            }
+            context.stroke(stripes, with: .color(color), lineWidth: bandWidth)
+        }
+        .allowsHitTesting(false)
     }
 }

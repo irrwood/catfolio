@@ -37,6 +37,15 @@ final class AIStreamingTests: XCTestCase {
         XCTAssertTrue(AIStreamParsing.isDone("data: [DONE]"))
     }
 
+    func testOpenRouterSendsItsThinkingAsReasoningAndItsErrorsInTheStream() {
+        XCTAssertEqual(AIStreamParsing.chatCompletionEvents(
+            #"data: {"choices":[{"delta":{"reasoning":"weighing","content":""}}]}"#), [.reasoning("weighing")])
+        XCTAssertEqual(AIStreamParsing.chatCompletionEvents(": OPENROUTER PROCESSING"), [])
+        XCTAssertEqual(AIStreamParsing.chatCompletionError(
+            #"data: {"error":{"code":502,"message":"Provider returned error"}}"#), "Provider returned error")
+        XCTAssertNil(AIStreamParsing.chatCompletionError(#"data: {"choices":[{"delta":{"content":"Hi"}}]}"#))
+    }
+
     func testTheTypewriterSpeedsUpWhenItFallsBehind() {
         XCTAssertEqual(SmoothReveal.step(backlog: 0), 0)
         XCTAssertEqual(SmoothReveal.step(backlog: 1), 1, "never past what has arrived")

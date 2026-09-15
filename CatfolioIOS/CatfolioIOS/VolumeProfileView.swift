@@ -1,31 +1,84 @@
 import SwiftUI
 import UIKit
+import Observation
 
 private typealias HoldingDetailTypography = LegacyType
 
+@MainActor @Observable
+final class HoldingDetailCachedContent {
+    var profile: VolumeProfile?
+    var priceHistory: SecurityPriceHistory?
+    var accountContext: HoldingDetailAccountContext?
+    var selectedAccountKeys: Set<String> = []
+    var realisedProfit: RealisedProfitSummary?
+    var realisedProfitRequest: HoldingDetailRealisedProfitRequest?
+    var optionsSnapshots: [Int: OISnapshot] = [:]
+    fileprivate var preparedChart: (request: SecurityPricePreparationRequest, data: SecurityPricePreparedData)?
+    fileprivate var research: [String: HoldingResearchCachedContent] = [:]
+}
+
+private struct HoldingResearchCachedContent {
+    var availability: [HoldingResearchModule: HoldingResearchAvailability] = [:]
+    var consensus: AnalystConsensusData?
+    var earnings: EarningsSnapshot?
+    var predictionMarkets: [PolymarketRelatedMarket]?
+}
+
 struct HoldingDetailView: View {
+    @Environment(AppModel.self) private var model
+    let holding: Holding
+    let onClose: () -> Void
+    var confirmsOpen = false
+    var isPreview = false
+
+    var body: some View {
+        HoldingDetailContentView(holding: holding, onClose: onClose, confirmsOpen: confirmsOpen,
+            isPreview: isPreview, cachedContent: model.cachedHoldingDetail(for: holding))
+            .id(model.portfolioSource)
+    }
+}
+
+private struct HoldingDetailContentView: View {
     @Environment(\.locale) private var appLocale
-    @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
 
     let holding: Holding
+    /// The presenting page owns dismissal, including nested and zoomed sheets.
+    let onClose: () -> Void
     /// Set only where the presenter has no state of its own to key the open
     /// click to — a `NavigationLink` push. Sheet presenters click at the tap.
     var confirmsOpen = false
+    var isPreview = false
+    let cachedContent: HoldingDetailCachedContent
     @State private var hasConfirmedOpen = false
 
-    @State private var profile: VolumeProfile?
+    private var profile: VolumeProfile? {
+        get { cachedContent.profile }
+        nonmutating set { cachedContent.profile = newValue }
+    }
     @State private var errorMessage: String?
-    @State private var priceHistory: SecurityPriceHistory?
+    private var priceHistory: SecurityPriceHistory? {
+        get { cachedContent.priceHistory }
+        nonmutating set { cachedContent.priceHistory = newValue }
+    }
     @State private var priceHistoryError: String?
-    @State private var accountContext: HoldingDetailAccountContext?
-    @State private var selectedAccountKeys: Set<String> = []
-    @State private var realisedProfit: RealisedProfitSummary?
+    private var accountContext: HoldingDetailAccountContext? {
+        get { cachedContent.accountContext }
+        nonmutating set { cachedContent.accountContext = newValue }
+    }
+    private var selectedAccountKeys: Set<String> {
+        get { cachedContent.selectedAccountKeys }
+        nonmutating set { cachedContent.selectedAccountKeys = newValue }
+    }
+    private var realisedProfit: RealisedProfitSummary? {
+        get { cachedContent.realisedProfit }
+        nonmutating set { cachedContent.realisedProfit = newValue }
+    }
     @State private var presentationReady = false
     @State private var marketDataRevision = 0
     @State private var completedMarketDataRevision: Int?
-    @State private var isLoadingMarketData = true
+    @State private var isLoadingMarketData = false
 
     private var displayedHolding: Holding {
         accountContext?.holding(for: selectedAccountKeys) ?? holding
@@ -102,18 +155,20 @@ struct HoldingDetailView: View {
                                 onToggleAccount: toggleDetailAccount,
                                 isRefreshing: isLoadingMarketData,
                                 refreshError: marketDataRevision > 0 ? priceHistoryError ?? errorMessage : nil,
-                                onRefresh: { marketDataRevision += 1 }
+                                onRefresh: { marketDataRevision += 1 },
+                                cachedContent: cachedContent
                             )
                         }
                     }
 
-                    LazyVStack(spacing: 64) {
+                    LazyVStack(spacing: HoldingDetailCardStyle.spacing) {
                         if let profile {
                             VolumePriceChart(
                                 profile: profile,
                                 holding: displayedHolding,
                                 showsHoldingCost: showsPosition
                             )
+                            .onAppear { ChartAppearanceHistory.record("volume-profile|\(holding.ticker)") }
 
                             if let high = profile.fiftyTwoWeekHigh,
                                let low = profile.fiftyTwoWeekLow,
@@ -127,20 +182,18 @@ struct HoldingDetailView: View {
                                 )
                             }
                         } else if let errorMessage {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text(L10n.text("Volume Profile"))
-                                    .font(HoldingDetailTypography.medium(19, relativeTo: .headline))
+                            HoldingDetailSectionCard(title: L10n.text("Volume Profile")) {
                                 StatusNotice(text: errorMessage, kind: .info)
                             }
                         } else if presentationReady {
-                            HStack(spacing: 10) {
-                                ProgressView()
-                                Text(L10n.text("正在读取成交量与 52 周数据…"))
-                                    .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 16) {
+                                ChartSkeletonShape(width: 140, height: 19)
+                                ChartShapeSkeleton(layout: .horizontalBars, appearanceID: "volume-profile|\(holding.ticker)")
+                                    .frame(height: 184)
+                                ChartSkeletonShape(height: 12)
                             }
-                            .font(.subheadline)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 28)
+                            .padding(HoldingDetailCardStyle.contentInset)
+                            .holdingDetailGlassCard()
                         } else {
                             Color.clear
                                 .frame(height: 72)
@@ -152,7 +205,9 @@ struct HoldingDetailView: View {
                             costUSD: showsPosition ? VolumeProfileInterpretation.convertedPrice(
                                 displayedHolding.averageCost, from: displayedHolding.costCurrency, to: "USD",
                                 usdRate: LocalPortfolioEngine.usdRate(for:)) : nil,
-                            refreshRevision: marketDataRevision)
+                            refreshRevision: marketDataRevision,
+                            initialSnapshots: cachedContent.optionsSnapshots,
+                            onSnapshot: { days, snapshot in cachedContent.optionsSnapshots[days] = snapshot })
 
                         if showsPosition {
                             HoldingPositionDetails(holding: displayedHolding, realisedProfit: realisedProfit)
@@ -161,10 +216,11 @@ struct HoldingDetailView: View {
                     // One 16pt page margin below the price chart, the same as
                     // the research cards; only the header chart keeps its own.
                     .padding(.horizontal, HoldingDetailCardStyle.pageInset)
-                    .padding(.top, showsVolumeFocusedPreview ? 28 : 40)
+                    .padding(.top, showsVolumeFocusedPreview ? 28 : 24)
 
                     HoldingResearchSection(holding: holding,
-                        price: priceHistory?.latestAvailablePrice ?? holding.quotePrice)
+                        price: priceHistory?.latestAvailablePrice ?? holding.quotePrice,
+                        cachedContent: cachedContent)
                     .id("\(holding.ticker)|\(appLocale.identifier)")
                     .padding(.bottom, 72)
                     }
@@ -177,14 +233,10 @@ struct HoldingDetailView: View {
             }
             .accessibilityIdentifier("holding-detail-scroll")
             .overlay(alignment: .topTrailing) {
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark").font(.system(size: 17, weight: .medium))
-                        .frame(width: 48, height: 48)
+                if !isPreview {
+                    HoldingDetailCloseButton(action: onClose)
+                        .padding(20)
                 }
-                .modifier(HoldingHeaderButtonStyle())
-                .accessibilityLabel(L10n.text("关闭"))
-                .accessibilityIdentifier("holding-detail-close")
-                .padding(20)
             }
             // Transparent: the ground is the presentation's, so the one
             // background there is is the one the system rounds.
@@ -200,15 +252,17 @@ struct HoldingDetailView: View {
             // available holding header renders immediately; only genuinely
             // missing chart sections show their own loading treatment.
             .task(id: HoldingDetailRealisedProfitRequest(context: accountContext, accountKeys: selectedAccountKeys)) {
-                realisedProfit = nil
                 let request = HoldingDetailRealisedProfitRequest(context: accountContext, accountKeys: selectedAccountKeys)
+                guard cachedContent.realisedProfitRequest != request else { return }
+                if cachedContent.realisedProfitRequest?.accountKeys != request.accountKeys { realisedProfit = nil }
                 let summary = await Task.detached(priority: .userInitiated) { request.summary() }.value
                 guard !Task.isCancelled else { return }
                 realisedProfit = summary
+                cachedContent.realisedProfitRequest = request
             }
             .task(id: marketDataRevision) {
                 guard completedMarketDataRevision != marketDataRevision else { return }
-                isLoadingMarketData = true
+                isLoadingMarketData = marketDataRevision > 0 || priceHistory == nil
                 async let volume: Void = loadVolumeProfile(forceRefresh: marketDataRevision > 0)
                 async let prices: Void = loadPriceHistory(forceRefresh: marketDataRevision > 0)
                 _ = await (volume, prices)
@@ -229,7 +283,11 @@ struct HoldingDetailView: View {
 
     @MainActor
     private func loadVolumeProfile(forceRefresh: Bool) async {
-        guard forceRefresh || profile == nil else { return }
+        if profile == nil, let cached = try? await model.volumeProfile(for: holding.ticker,
+            currency: holding.quoteCurrency, cachedOnly: true), !Task.isCancelled {
+            profile = cached
+        }
+        guard !Task.isCancelled else { return }
         do {
             let loaded = try await model.volumeProfile(for: holding.ticker, currency: holding.quoteCurrency,
                                                        forceRefresh: forceRefresh)
@@ -244,7 +302,6 @@ struct HoldingDetailView: View {
 
     @MainActor
     private func loadPriceHistory(forceRefresh: Bool) async {
-        guard forceRefresh || priceHistory == nil else { return }
         do {
             let context: HoldingDetailAccountContext
             do {
@@ -252,6 +309,14 @@ struct HoldingDetailView: View {
             } catch LocalPortfolioError.noPortfolio {
                 // Held in no account: the market's history stands alone,
                 // with no accounts to pick and no trades to mark.
+                accountContext = nil
+                if priceHistory == nil, let cached = try? await model.marketPriceHistory(
+                    for: holding.ticker, currency: holding.quoteCurrency ?? "USD", cachedOnly: true),
+                   !Task.isCancelled {
+                    priceHistory = cached
+                    if !forceRefresh { isLoadingMarketData = false }
+                }
+                guard !Task.isCancelled else { return }
                 let loaded = try await model.marketPriceHistory(
                     for: holding.ticker,
                     currency: holding.quoteCurrency ?? "USD",
@@ -274,6 +339,13 @@ struct HoldingDetailView: View {
                 selectedAccountKeys = context.allAccountKeys
             }
             accountContext = context
+            if priceHistory == nil, let cached = try? await model.securityPriceHistory(
+                for: holding.ticker, accountKeys: context.allAccountKeys, cachedOnly: true),
+               !Task.isCancelled {
+                priceHistory = cached
+                if !forceRefresh { isLoadingMarketData = false }
+            }
+            guard !Task.isCancelled else { return }
             let loaded = try await model.securityPriceHistory(
                 for: holding.ticker,
                 accountKeys: context.allAccountKeys,
@@ -380,6 +452,7 @@ struct HoldingDetailPriceSection: View {
     var isRefreshing = false
     var refreshError: String?
     var onRefresh: () -> Void = {}
+    var cachedContent: HoldingDetailCachedContent?
 
     @State private var priceSelection: SecurityPriceSelection?
     @State private var explanation: SecurityPaperRequest?
@@ -387,14 +460,16 @@ struct HoldingDetailPriceSection: View {
 
     private var movement: SecurityPriceMoveContext? {
         guard let priceHistory else { return nil }
-        return SecurityPriceMoveContext.latestSession(history: priceHistory, name: holding.shortName)
+        let isFund = HoldingSecurityKind.classify(holding) == .fund
+        return SecurityPriceMoveContext.latestSession(history: priceHistory,
+            name: isFund ? holding.displayName : holding.shortName, isFund: isFund)
     }
 
     var body: some View {
         VStack(spacing: 0) {
             HoldingDetailHeader(
                 holding: holding,
-                marketTodayChange: marketTodayChange,
+                marketTodayChange: priceHistory?.latestMarketObservation?.changePercent ?? marketTodayChange,
                 selectedPrice: priceSelection?.price ?? priceHistory?.latestAvailablePrice,
                 selectedReturn: priceSelection?.returnPercent,
                 isRefreshing: isRefreshing,
@@ -406,6 +481,7 @@ struct HoldingDetailPriceSection: View {
                     history: priceHistory,
                     averageCost: averageCost,
                     selectedAccountKeys: selectedAccountKeys,
+                    cachedContent: cachedContent,
                     onSelectionChange: { selection in
                         guard priceSelection != selection else { return }
                         priceSelection = selection
@@ -421,7 +497,8 @@ struct HoldingDetailPriceSection: View {
                 SecurityPriceChartState(
                     title: L10n.text("正在读取价格走势"),
                     message: L10n.text("正在整理历史行情与买卖记录"),
-                    isLoading: true
+                    isLoading: true,
+                    appearanceID: "security-price|\(holding.ticker)|\(holding.quoteCurrency ?? "USD")"
                 )
             } else {
                 Color.clear
@@ -476,12 +553,44 @@ private struct HoldingHeaderActionLabel: View {
     var isLoading = false
     var body: some View {
         HStack(spacing: 8) {
-            if isLoading { ProgressView().controlSize(.small).frame(width: 24, height: 24) }
+            if isLoading { ChartSkeletonShape(width: 18, height: 18, cornerRadius: 9).frame(width: 24, height: 24).chartLoadingShimmer() }
             else { Image(asset).resizable().scaledToFit().frame(width: 24, height: 24) }
             Text(title).appText(.footnote, weight: .medium).lineLimit(1).minimumScaleFactor(0.78)
         }
         .frame(maxWidth: .infinity, minHeight: 52)
         .contentShape(Capsule())
+    }
+}
+
+private struct HoldingDetailCloseButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(.primary)
+                .frame(width: 48, height: 48)
+                .background {
+                    // Glass is decoration inside the label, never a separate
+                    // interactive layer around the close button.
+                    Group {
+                        if #available(iOS 26.0, *) {
+                            Circle().fill(.clear)
+                                .glassEffect(.regular.tint(Color.primary.opacity(0.06)), in: Circle())
+                        } else {
+                            Circle().fill(.regularMaterial)
+                        }
+                    }
+                    .allowsHitTesting(false)
+                }
+                // A plain image button otherwise only hits the glyph. Make
+                // the whole visible circle respond, including its empty center.
+                .contentShape(.interaction, Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.text("关闭"))
+        .accessibilityIdentifier("holding-detail-close")
     }
 }
 
@@ -719,7 +828,7 @@ private struct HoldingDetailLoadingPlaceholder: View {
                 StandardLineChartSkeleton(
                     leadingLineOverflow: 30,
                     trailingEndpointInset: 9,
-                    showsSeries: false
+                    lineWidths: [2.5]
                 )
                     .frame(height: SecurityPriceChartState.plotHeight)
 
@@ -1016,6 +1125,7 @@ private struct SecurityPriceChartState: View {
     let title: String
     let message: String
     let isLoading: Bool
+    var appearanceID: String? = nil
 
     var body: some View {
         Group {
@@ -1024,12 +1134,14 @@ private struct SecurityPriceChartState: View {
                     StandardLineChartSkeleton(
                         leadingLineOverflow: 30,
                         trailingEndpointInset: 9,
-                        showsSeries: false
+                        lineWidths: [2.5],
+                        appearanceID: appearanceID
                     )
                         .frame(height: Self.plotHeight)
 
                     ChartTimeRangePickerSkeleton()
                         .frame(height: 62)
+                        .chartLoadingShimmer(appearanceID: appearanceID)
                 }
             } else {
                 VStack(spacing: 0) {
@@ -1056,12 +1168,12 @@ private struct SecurityPriceSelection: Equatable {
     // Only a historical touch/measurement overrides the independent latest quote.
     let price: Double?
     let returnPercent: Double
-    let startDate: Date
-    let endDate: Date
-    let startPrice: Double
-    let endPrice: Double
-    let rangeLabel: String
-    let isIntraday: Bool
+}
+
+private struct SecurityPricePreparationRequest: Equatable {
+    let history: SecurityPriceHistory
+    let averageCost: Double?
+    let accountKeys: Set<String>
 }
 
 private struct SecurityPriceChart: View {
@@ -1069,6 +1181,7 @@ private struct SecurityPriceChart: View {
     let history: SecurityPriceHistory
     let averageCost: Double?
     let selectedAccountKeys: Set<String>
+    let cachedContent: HoldingDetailCachedContent?
     let onSelectionChange: (SecurityPriceSelection?) -> Void
     @State private var prepared: SecurityPricePreparedData?
     @State private var isPreparing = true
@@ -1081,16 +1194,22 @@ private struct SecurityPriceChart: View {
         history: SecurityPriceHistory,
         averageCost: Double?,
         selectedAccountKeys: Set<String>,
+        cachedContent: HoldingDetailCachedContent? = nil,
         onSelectionChange: @escaping (SecurityPriceSelection?) -> Void = { _ in }
     ) {
         self.history = history
         self.averageCost = averageCost
         self.selectedAccountKeys = selectedAccountKeys
+        self.cachedContent = cachedContent
         self.onSelectionChange = onSelectionChange
+        let request = SecurityPricePreparationRequest(history: history, averageCost: averageCost, accountKeys: selectedAccountKeys)
+        let cached = cachedContent?.preparedChart.flatMap { $0.request == request ? $0.data : nil }
+        _prepared = State(initialValue: cached)
+        _isPreparing = State(initialValue: cached == nil)
         let arguments = ProcessInfo.processInfo.arguments
-        _range = State(initialValue: arguments.contains("--show-security-chart-1d")
-            ? .oneDay
-            : arguments.contains("--show-security-chart-max") ? .maximum : .oneYear)
+        // Every new detail/preview opens on the latest session, including
+        // cache-backed opens. Range changes stay local to this presentation.
+        _range = State(initialValue: arguments.contains("--show-security-chart-max") ? .maximum : .oneDay)
     }
 
     private var data: SecurityPriceRangeData {
@@ -1113,16 +1232,16 @@ private struct SecurityPriceChart: View {
     var body: some View {
         VStack(spacing: 0) {
             Group {
-                // Blank only before the first preparation. Re-preparing for
-                // another account keeps the line on screen and lets the chart
-                // morph to the new data; swapping in a blank tore the chart
-                // down and replayed its entrance — the flash on account change.
+                // Keep prepared data visible during refresh; only an empty
+                // chart needs the geometry-matched loading placeholder.
                 if isPreparing && prepared == nil {
-                    Color.clear
+                    StandardLineChartSkeleton(leadingLineOverflow: 30, trailingEndpointInset: 9,
+                        lineWidths: [2.5], appearanceID: "security-price|\(history.ticker)|\(history.currency)")
                 } else if data.points.count > 1 {
                     SecurityPricePlot(
                         data: data,
                         currency: history.currency,
+                        appearanceID: "security-price|\(history.ticker)|\(history.currency)",
                         transitionKey: "\(range.rawValue)|\(selectionSignature)",
                         selectedPoint: selectedDate == nil && measuredRange == nil ? nil : selectedPoint,
                         measuredRange: measuredRange,
@@ -1161,8 +1280,15 @@ private struct SecurityPriceChart: View {
         .onChange(of: range) { _, _ in clearInteraction() }
         .onChange(of: selectedAccountKeys) { _, _ in clearInteraction() }
         .onDisappear { onSelectionChange(nil) }
-        .task(id: preparationSignature) {
-            isPreparing = true
+        .task(id: preparationRequest) {
+            if let cached = cachedContent?.preparedChart, cached.request == preparationRequest {
+                prepared = cached.data
+                isPreparing = false
+                onSelectionChange(rangeSelection)
+                return
+            }
+            isPreparing = prepared == nil
+            let request = preparationRequest
             let history = history
             let averageCost = averageCost
             let selectedAccountKeys = selectedAccountKeys
@@ -1175,6 +1301,7 @@ private struct SecurityPriceChart: View {
             }.value
             guard !Task.isCancelled else { return }
             self.prepared = prepared
+            cachedContent?.preparedChart = (request, prepared)
             isPreparing = false
             if selectedDate == nil, measuredRange == nil {
                 onSelectionChange(rangeSelection)
@@ -1200,17 +1327,8 @@ private struct SecurityPriceChart: View {
         selectedAccountKeys.sorted().joined(separator: "|")
     }
 
-    private var preparationSignature: String {
-        let lastDaily = history.points.last
-        let lastMinute = history.intradayPoints.last
-        return [
-            history.ticker,
-            "\(history.points.count):\(lastDaily?.dateText ?? "-"):\(lastDaily?.close ?? 0)",
-            "\(history.intradayPoints.count):\(lastMinute?.dateText ?? "-"):\(lastMinute?.close ?? 0)",
-            "\(history.trades.count)",
-            "\(averageCost ?? 0)",
-            selectionSignature,
-        ].joined(separator: "|")
+    private var preparationRequest: SecurityPricePreparationRequest {
+        SecurityPricePreparationRequest(history: history, averageCost: averageCost, accountKeys: selectedAccountKeys)
     }
 
     private func dateLabel(_ date: Date) -> String {
@@ -1220,27 +1338,25 @@ private struct SecurityPriceChart: View {
     }
 
     private func selection(at date: Date) -> SecurityPriceSelection? {
-        guard let first = data.points.first, let point = data.nearest(to: date) else { return nil }
-        return makeSelection(start: first, end: point, price: point.price, label: range.rawValue)
+        guard let point = data.nearest(to: date) else { return nil }
+        // The prepared point already uses the chart's reference: previous
+        // close for 1D, first visible price for the longer time windows.
+        return SecurityPriceSelection(price: point.price, returnPercent: point.returnPercent)
     }
 
     private var rangeSelection: SecurityPriceSelection? {
-        guard let first = data.points.first, let latest = data.points.last else { return nil }
-        return makeSelection(start: first, end: latest, price: nil, label: range.rawValue)
+        // At rest 1D keeps the header's latest market quote and daily change
+        // together. Do not replace that change with first-minute-to-last-minute
+        // performance when the chart finishes preparing or a touch ends.
+        guard range != .oneDay, let latest = data.points.last else { return nil }
+        return SecurityPriceSelection(price: nil, returnPercent: latest.returnPercent)
     }
 
     private func selection(for range: ChartDateRange) -> SecurityPriceSelection? {
         guard let start = data.nearest(to: range.start),
               let end = data.nearest(to: range.end),
               start.price > 0 else { return nil }
-        return makeSelection(start: start, end: end, price: end.price, label: L10n.text("区间测量"))
-    }
-
-    private func makeSelection(start: SecurityPricePlotPoint, end: SecurityPricePlotPoint,
-                               price: Double?, label: String) -> SecurityPriceSelection {
-        SecurityPriceSelection(price: price, returnPercent: (end.price / start.price - 1) * 100,
-            startDate: start.date, endDate: end.date, startPrice: start.price, endPrice: end.price,
-            rangeLabel: label, isIntraday: data.isIntraday)
+        return SecurityPriceSelection(price: end.price, returnPercent: (end.price / start.price - 1) * 100)
     }
 
     private func clearInteraction() {
@@ -1287,6 +1403,7 @@ private struct SecurityPricePlot: View {
 
     let data: SecurityPriceRangeData
     let currency: String
+    let appearanceID: String
     let transitionKey: String
     let selectedPoint: SecurityPricePlotPoint?
     let measuredRange: ChartDateRange?
@@ -1333,6 +1450,7 @@ private struct SecurityPricePlot: View {
             leadingLineOverflow: 30,
             gridOpacity: 0.08,
             transitionKey: transitionKey,
+            appearanceID: appearanceID,
             dataTransition: .viewportZoom,
             animatesInitialAppearance: true,
             markers: data.trades.map { trade in
@@ -1604,7 +1722,7 @@ struct HoldingDetailHeader: View {
     @State private var refreshTaps = 0
 
     private var todayChange: Double? {
-        selectedReturn ?? holding.todayChangePercent ?? marketTodayChange
+        selectedReturn ?? marketTodayChange ?? holding.todayChangePercent
     }
 
     private var displayedPrice: Double {
@@ -1612,10 +1730,7 @@ struct HoldingDetailHeader: View {
     }
 
     private var displayName: String {
-        guard let original = holding.displayName.components(separatedBy: " / ").first?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-              !original.isEmpty else { return holding.ticker }
-        return original
+        holding.shortName
     }
 
     private var identityLayout: AnyLayout {
@@ -1681,7 +1796,7 @@ struct HoldingDetailHeader: View {
                         .minimumScaleFactor(0.65)
                         .allowsTightening(true)
                     if isRefreshing {
-                        ProgressView().controlSize(.small)
+                        ChartSkeletonShape(width: 16, height: 16, cornerRadius: 8).chartLoadingShimmer()
                     }
                 }
                 if let todayChangePercent = todayChange {
@@ -1827,19 +1942,23 @@ private struct HoldingPositionDetails: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        // One glass card: the title on the card's inset, the zebra stripes
+        // edge to edge beneath it.
+        VStack(alignment: .leading, spacing: 0) {
             Text(L10n.text("Data"))
-                .font(HoldingDetailTypography.medium(19, relativeTo: .headline))
+                .appText(.subheading, weight: .medium)
+                .padding([.horizontal, .top], HoldingDetailCardStyle.contentInset)
+                .padding(.bottom, 12)
 
-            // One glass card; the zebra stripes run edge to edge inside it.
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-                    HoldingDataRow(model: row, isAlternating: index.isMultiple(of: 2) == false)
+                    HoldingDataRow(model: row, isAlternating: index.isMultiple(of: 2))
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: HoldingDetailCardStyle.cornerRadius, style: .continuous))
-            .holdingDetailGlassCard()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipShape(RoundedRectangle(cornerRadius: HoldingDetailCardStyle.cornerRadius, style: .continuous))
+        .holdingDetailGlassCard()
         .animation(.snappy(duration: 0.2), value: expenseRatio)
         .task(id: holding.ticker) { await loadExpenseRatio() }
     }
@@ -1974,7 +2093,8 @@ private struct HoldingDataRow: View {
                 .minimumScaleFactor(0.66)
                 .layoutPriority(1)
         }
-        .padding(.horizontal, 14)
+        // On the card's inset, so the icons line up under the card's title.
+        .padding(.horizontal, HoldingDetailCardStyle.contentInset)
         .padding(.vertical, 12)
         // An explicit Rectangle: without a shape, inside the glass card on
         // iOS 26 the stripe took a rounded container shape and drew as a
@@ -2026,6 +2146,7 @@ struct HoldingResearchSection: View {
     let holding: Holding
     let price: Double?
     private let restoresCache: Bool
+    private let cachedContent: HoldingDetailCachedContent?
     @State private var visibility: HoldingResearchVisibility
     @State private var consensus: AnalystConsensusData?
     @State private var earnings: EarningsSnapshot?
@@ -2033,16 +2154,21 @@ struct HoldingResearchSection: View {
 
     init(holding: Holding, price: Double?, restoresCache: Bool = true,
          initialAvailability: [HoldingResearchModule: HoldingResearchAvailability] = [:],
-         initialEarnings: EarningsSnapshot? = nil) {
+         initialEarnings: EarningsSnapshot? = nil, cachedContent: HoldingDetailCachedContent? = nil) {
         self.holding = holding
         self.price = price
         self.restoresCache = restoresCache
+        self.cachedContent = cachedContent
+        let cached = cachedContent?.research[AppLanguage.currentIdentifier]
         var policy = HoldingResearchVisibility(kind: HoldingSecurityKind.classify(holding), currency: holding.quoteCurrency)
+        for (module, state) in cached?.availability ?? [:] { policy.record(state, for: module) }
         policy.record(AnalystConsensusView.hasHistory(symbol: holding.ticker) ? .available : .empty, for: .analystHistory)
         for (module, state) in initialAvailability { policy.record(state, for: module) }
         if let initialEarnings { policy.record(initialEarnings.hasUsableObservations ? .available : .empty, for: .earnings) }
         _visibility = State(initialValue: policy)
-        _earnings = State(initialValue: initialEarnings)
+        _earnings = State(initialValue: initialEarnings ?? cached?.earnings)
+        _consensus = State(initialValue: cached?.consensus)
+        _predictionMarkets = State(initialValue: cached?.predictionMarkets)
     }
 
     /// Every caveat the visible sections carry, in page order. They are
@@ -2073,7 +2199,11 @@ struct HoldingResearchSection: View {
                     if visibility.shows(.predictionMarkets) {
                         HoldingPredictionMarketsCard(holding: holding, initialMarkets: predictionMarkets,
                             usesCachedContentOnlyInitially: visibility.kind == .fund,
-                            onAvailability: { record($0, for: .predictionMarkets) })
+                            onAvailability: { record($0, for: .predictionMarkets) },
+                            onMarketsChange: { markets in
+                                predictionMarkets = markets
+                                saveCachedContent()
+                            })
                     }
                     if visibility.shows(.developments) {
                         SecurityDebateCard(ticker: holding.ticker, name: holding.shortName)
@@ -2099,7 +2229,8 @@ struct HoldingResearchSection: View {
                     }
                 }
                 .padding(.horizontal, HoldingDetailCardStyle.pageInset)
-                .padding(.top, 40)
+                // The same gap as between the cards above: one stack of cards.
+                .padding(.top, HoldingDetailCardStyle.spacing)
                 .accessibilityIdentifier("holding-research-section")
             }
 
@@ -2128,6 +2259,13 @@ struct HoldingResearchSection: View {
 
     private func record(_ state: HoldingResearchAvailability, for module: HoldingResearchModule) {
         visibility.record(state, for: module)
+        saveCachedContent()
+    }
+
+    private func saveCachedContent() {
+        cachedContent?.research[AppLanguage.currentIdentifier] = HoldingResearchCachedContent(
+            availability: visibility.availability, consensus: consensus, earnings: earnings,
+            predictionMarkets: predictionMarkets)
     }
 
     @MainActor private func restoreAvailableContent() async {
@@ -2145,9 +2283,9 @@ struct HoldingResearchSection: View {
            !debate.questions.isEmpty, !debate.sources.isEmpty {
             record(.available, for: .developments)
         }
-        consensus = values.0
-        earnings = values.1
-        predictionMarkets = values.3
+        consensus = values.0 ?? consensus
+        earnings = values.1 ?? earnings
+        predictionMarkets = values.3 ?? predictionMarkets
         if let value = values.0 { record(value.hasContent ? .available : .empty, for: .consensus) }
         if let value = values.1 { record(value.hasUsableObservations ? .available : .empty, for: .earnings) }
         if let value = values.2 { record(value.hasUsableStatements ? .available : .empty, for: .financials) }
@@ -2190,13 +2328,16 @@ private struct HoldingPredictionMarketsCard: View {
     let holding: Holding
     let usesCachedContentOnlyInitially: Bool
     let onAvailability: (HoldingResearchAvailability) -> Void
+    let onMarketsChange: ([PolymarketRelatedMarket]) -> Void
 
     init(holding: Holding, initialMarkets: [PolymarketRelatedMarket]? = nil,
          usesCachedContentOnlyInitially: Bool = false,
-         onAvailability: @escaping (HoldingResearchAvailability) -> Void = { _ in }) {
+         onAvailability: @escaping (HoldingResearchAvailability) -> Void = { _ in },
+         onMarketsChange: @escaping ([PolymarketRelatedMarket]) -> Void = { _ in }) {
         self.holding = holding
         self.usesCachedContentOnlyInitially = usesCachedContentOnlyInitially
         self.onAvailability = onAvailability
+        self.onMarketsChange = onMarketsChange
         _markets = State(initialValue: initialMarkets ?? [])
         _isLoading = State(initialValue: initialMarkets == nil)
     }
@@ -2216,8 +2357,10 @@ private struct HoldingPredictionMarketsCard: View {
             // line, and one quiet control where the others put their chevron.
             HStack(alignment: .center, spacing: 14) {
                 HoldingDetailCardTitle(title: L10n.text("Predicting markets"), subtitle: predictionSubtitle)
+                    .redacted(reason: isLoading && markets.isEmpty ? .placeholder : [])
+                    .chartLoadingShimmer(active: isLoading && markets.isEmpty)
                 if isLoading {
-                    ProgressView().controlSize(.small).frame(width: 24, height: 24)
+                    ChartSkeletonShape(width: 18, height: 18, cornerRadius: 9).frame(width: 24, height: 24).chartLoadingShimmer()
                 } else {
                     Button {
                         Task { await load(forceRefresh: true) }
@@ -2236,7 +2379,7 @@ private struct HoldingPredictionMarketsCard: View {
             .frame(maxWidth: .infinity, minHeight: HoldingDetailCardStyle.minimumRowHeight, alignment: .leading)
 
             Group {
-                if isLoading {
+                if isLoading && markets.isEmpty {
                     predictionLoadingRows
                 } else if markets.isEmpty {
                     predictionEmptyState
@@ -2261,7 +2404,7 @@ private struct HoldingPredictionMarketsCard: View {
     }
 
     private var predictionSubtitle: String {
-        if isLoading { return L10n.text("正在读取 Polymarket 盘口") }
+        if isLoading && markets.isEmpty { return "Polymarket · 3" }
         let events = PolymarketRelatedEvent.grouped(markets).count
         return events > 0 ? L10n.text("Polymarket · \(events) 个相关事件") : "Polymarket"
     }
@@ -2300,6 +2443,7 @@ private struct HoldingPredictionMarketsCard: View {
             }
         }
         .allowsHitTesting(false)
+        .chartLoadingShimmer()
         .accessibilityLabel(L10n.text("Loading prediction markets"))
     }
 
@@ -2319,11 +2463,19 @@ private struct HoldingPredictionMarketsCard: View {
     @MainActor
     private func load(forceRefresh: Bool) async {
         let language = AppLanguage.currentIdentifier
-        isLoading = true
+        isLoading = forceRefresh || markets.isEmpty
         errorMessage = nil
         do {
             let companyName = holding.displayName.components(separatedBy: " / ").first
                 ?? holding.displayName
+            if markets.isEmpty, let cached = await PolymarketClient.shared.cachedRelatedMarkets(
+                ticker: holding.ticker, companyName: companyName, language: language) {
+                guard !Task.isCancelled, language == AppLanguage.currentIdentifier else { return }
+                markets = cached.filter(\.hasUsableContent)
+                onMarketsChange(markets)
+                if !markets.isEmpty && !forceRefresh { isLoading = false }
+            }
+            guard !Task.isCancelled, language == AppLanguage.currentIdentifier else { return }
             let loaded = try await PolymarketClient.shared.relatedMarkets(
                 ticker: holding.ticker,
                 companyName: companyName,
@@ -2332,6 +2484,7 @@ private struct HoldingPredictionMarketsCard: View {
             guard !Task.isCancelled, language == AppLanguage.currentIdentifier else { return }
             let usable = loaded.filter(\.hasUsableContent)
             if !usable.isEmpty || markets.isEmpty { markets = usable }
+            onMarketsChange(markets)
             onAvailability(markets.isEmpty ? .empty : .available)
         } catch {
             guard !Task.isCancelled, language == AppLanguage.currentIdentifier else { return }
@@ -2440,7 +2593,7 @@ struct HoldingDetailCardHeader: View {
             HoldingDetailCardTitle(title: title, subtitle: subtitle)
 
             if isLoading {
-                ProgressView().controlSize(.small).frame(width: 16, height: 24)
+                ChartSkeletonShape(width: 12, height: 12, cornerRadius: 6).frame(width: 16, height: 24).chartLoadingShimmer()
             } else if let symbol {
                 Image(systemName: symbol)
                     .font(.system(size: 12, weight: .semibold))
@@ -2462,44 +2615,76 @@ struct HoldingDetailGlassCardModifier: ViewModifier {
         RoundedRectangle(cornerRadius: HoldingDetailCardStyle.cornerRadius, style: .continuous)
     }
 
-    private var fallbackTint: Color {
+    /// What the glass sees through it: one colour, drawn under the card.
+    /// The sheet's ground runs from blue-grey to black down the screen, and
+    /// glass laid straight on it carried that into every tall card as a
+    /// gradient — one that also shifted as the page scrolled. On an even
+    /// backdrop the glass keeps its rim and depth and loses the gradient.
+    private var backdrop: Color {
         colorScheme == .dark
-            ? Color(red: 22 / 255, green: 25 / 255, blue: 28 / 255).opacity(0.88)
-            : .white.opacity(0.78)
+            ? Color(red: 10 / 255, green: 11 / 255, blue: 13 / 255)
+            : Color(red: 0xF6 / 255, green: 0xF7 / 255, blue: 0xF8 / 255)
     }
 
-    /// A near-even fill under the glass, which on a plain page has no
-    /// wallpaper to bend. It used to be lit from above — bright along the top
-    /// edge, fading down the card — and read as a gradient; now only a trace
-    /// of that is left.
-    private var sheen: LinearGradient {
-        LinearGradient(
-            colors: colorScheme == .dark
-                ? [.white.opacity(0.05), .white.opacity(0.01)]
-                : [.white.opacity(0.55), .white.opacity(0.18)],
-            startPoint: .top, endPoint: .bottom
-        )
+    private var fallbackFill: Color {
+        colorScheme == .dark
+            ? Color(red: 24 / 255, green: 25 / 255, blue: 26 / 255)
+            : .white
     }
 
     private var borderColor: Color {
-        colorScheme == .dark ? .white.opacity(0.10) : .black.opacity(0.08)
+        colorScheme == .dark ? .white.opacity(0.08) : .black.opacity(0.06)
     }
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            // Untinted system glass with no drawn border: the dark tint and
-            // the hairline were covering the glass's own edge highlight,
-            // which is what makes the widgets read as clear and bright.
             content
-                .background(sheen, in: shape)
                 .glassEffect(.regular, in: shape)
+                .background(backdrop, in: shape)
         } else {
             content
-                .background(.ultraThinMaterial, in: shape)
-                .background(fallbackTint, in: shape)
-                .overlay { shape.stroke(borderColor, lineWidth: 1) }
+                .background(fallbackFill, in: shape)
+                .overlay { shape.strokeBorder(borderColor, lineWidth: 1) }
         }
+    }
+}
+
+/// A section of the page set in the same card as the research below it:
+/// the card's 20pt inset all round, the title in the research cards' type.
+struct HoldingDetailSectionCard<Trailing: View, Content: View>: View {
+    let title: String
+    var subtitle: String?
+    @ViewBuilder var trailing: () -> Trailing
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(alignment: .center, spacing: 14) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(title)
+                        .appText(.subheading, weight: .medium)
+                        .foregroundStyle(.primary)
+                    if let subtitle {
+                        Text(subtitle)
+                            .appText(.label, weight: .medium)
+                            .foregroundStyle(.primary.opacity(0.50))
+                    }
+                }
+                Spacer(minLength: 0)
+                trailing()
+            }
+            content()
+        }
+        .padding(HoldingDetailCardStyle.contentInset)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .holdingDetailGlassCard()
+    }
+}
+
+extension HoldingDetailSectionCard where Trailing == EmptyView {
+    init(title: String, subtitle: String? = nil, @ViewBuilder content: @escaping () -> Content) {
+        self.init(title: title, subtitle: subtitle, trailing: { EmptyView() }, content: content)
     }
 }
 
@@ -2621,17 +2806,12 @@ private struct FiftyTwoWeekRange: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text(L10n.text("52-Week Range"))
-                .font(HoldingDetailTypography.medium(19, relativeTo: .headline))
-                .frame(height: 23, alignment: .leading)
-
+        HoldingDetailSectionCard(title: L10n.text("52-Week Range")) {
             GeometryReader { geometry in
                 rangePlot(size: geometry.size)
             }
             .frame(height: 141)
         }
-        .frame(height: 184, alignment: .top)
         .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: selectedIndex)
         .sensoryFeedback(.selection, trigger: selectedIndex) { oldValue, newValue in
             hapticsEnabled && oldValue != nil && newValue != nil
@@ -3194,17 +3374,14 @@ struct PriceDistributionSection<Plot: View, Footer: View>: View {
     @ViewBuilder let plot: () -> Plot
     @ViewBuilder let footer: () -> Footer
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title).font(LegacyType.medium(19, relativeTo: .headline))
-                Spacer(minLength: 12)
-                Text(subtitle).font(Typography.text(size: 15, weight: .medium))
-                    .foregroundStyle(.primary.opacity(0.50))
-            }.frame(height: 23)
-            plot().padding(.top, 24)
-            footer().font(LegacyType.medium(15, relativeTo: .subheadline))
-                .foregroundStyle(.secondary).padding(.top, 12)
-        }.transaction { $0.animation = nil }
+        HoldingDetailSectionCard(title: title, subtitle: subtitle) {
+            VStack(alignment: .leading, spacing: 16) {
+                plot()
+                footer().font(LegacyType.medium(15, relativeTo: .subheadline))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .transaction { $0.animation = nil }
     }
 }
 

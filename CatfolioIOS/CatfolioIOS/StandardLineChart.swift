@@ -1,6 +1,70 @@
 import SwiftUI
 import UIKit
 
+/// Presentation history outlives individual pages, just like the in-memory
+/// chart cache. A range, theme or language change does not create a new chart.
+@MainActor
+enum ChartAppearanceHistory {
+    private static var displayed: Set<String> = []
+
+    static func hasDisplayed(_ id: String) -> Bool { displayed.contains(id) }
+
+    @discardableResult
+    static func record(_ id: String) -> Bool { displayed.insert(id).inserted }
+}
+
+/// A soft travelling highlight, masked by the placeholder itself. It never
+/// adds an outline or changes the width of the loading stroke.
+private struct ChartLoadingShimmer: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
+    let active: Bool
+    let appearanceID: String?
+
+    func body(content: Content) -> some View {
+        let animates = active && !reduceMotion
+            && !(appearanceID.map { ChartAppearanceHistory.hasDisplayed($0) } ?? false)
+        content.overlay {
+            if animates {
+                TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
+                    GeometryReader { geometry in
+                        let phase = timeline.date.timeIntervalSinceReferenceDate
+                            .truncatingRemainder(dividingBy: 2.2) / 2.2
+                        LinearGradient(
+                            colors: [.clear, .white.opacity(colorScheme == .dark ? 0.32 : 0.85), .clear],
+                            startPoint: .leading, endPoint: .trailing
+                        )
+                        .frame(width: geometry.size.width * 0.7)
+                        .offset(x: geometry.size.width * (phase * 1.7 - 0.7))
+                    }
+                }
+                .mask(content)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+        }
+    }
+}
+
+extension View {
+    func chartLoadingShimmer(active: Bool = true, appearanceID: String? = nil) -> some View {
+        modifier(ChartLoadingShimmer(active: active, appearanceID: appearanceID))
+    }
+}
+
+struct ChartSkeletonShape: View {
+    var width: CGFloat? = nil
+    var height: CGFloat = 12
+    var cornerRadius: CGFloat = 5
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(CatfolioTheme.skeletonFill)
+            .frame(width: width, height: height)
+            .accessibilityHidden(true)
+    }
+}
+
 struct StandardLineChartPoint: Identifiable {
     let id: String
     let date: Date
@@ -63,21 +127,33 @@ struct StandardLineChartSeries: Identifiable {
 }
 
 enum StandardLineChartLoadingTemplate {
-    static let xFractions: [CGFloat] = [-0.08, 0.08, 0.20, 0.31, 0.58, 1]
+    // Borrow the reference's rising line and quiet, level finish. Normalized
+    // geometry adapts to today's plots; these are not financial observations.
+    static let xFractions: [CGFloat] = (0...64).map { -0.08 + 1.08 * CGFloat($0) / 64 }
 
     static func yFractions(seriesIndex: Int, seriesCount: Int) -> [CGFloat] {
+        xFractions.map { yFraction(at: $0, seriesIndex: seriesIndex, seriesCount: seriesCount) }
+    }
+
+    private static func yFraction(at x: CGFloat, seriesIndex: Int, seriesCount: Int) -> CGFloat {
         let visibleCount = max(1, min(seriesCount, 8))
         let visibleIndex = seriesIndex % visibleCount
-        let offset = CGFloat(visibleIndex) * 0.055
-        let endsLow = visibleIndex == visibleCount - 1 && visibleCount > 2
-        return [
-            0.72 + offset,
-            0.60 + offset * 0.5,
-            0.22 + offset,
-            0.27 + offset,
-            0.50 + offset * 0.75,
-            endsLow ? 0.91 : 0.50 + offset * 0.75,
-        ]
+        let offset = CGFloat(visibleIndex / 2) * 0.045
+        if visibleIndex.isMultiple(of: 2) {
+            return 0.93 - 1.9 * (x + 0.08)
+                + 1.32 * roundedHinge(x, at: 0.13, radius: 0.035)
+                + 0.80 * roundedHinge(x, at: 0.78, radius: 0.035) + offset
+        }
+        return 0.96 - 0.72 * (x + 0.08)
+            + 0.72 * roundedHinge(x, at: 0.38, radius: 0.045) + offset
+    }
+
+    /// A quadratic knee joins straight runs without sharp corners or overshoot.
+    private static func roundedHinge(_ x: CGFloat, at center: CGFloat, radius: CGFloat) -> CGFloat {
+        let distance = x - center
+        if distance <= -radius { return 0 }
+        if distance >= radius { return distance }
+        return (distance + radius) * (distance + radius) / (4 * radius)
     }
 
     static func color(for colorScheme: ColorScheme) -> Color {
@@ -87,11 +163,8 @@ enum StandardLineChartLoadingTemplate {
     static let adaptiveColor = CatfolioTheme.skeletonFill
 
     static func value(at fraction: Double, domain: ClosedRange<Double>, seriesIndex: Int = 0, seriesCount: Int = 1) -> Double {
-        let values = yFractions(seriesIndex: seriesIndex, seriesCount: seriesCount)
-        let x = min(1, max(Double(xFractions[0]), fraction))
-        let index = (1..<xFractions.count).first { Double(xFractions[$0]) >= x } ?? xFractions.count - 1
-        let t = (x - Double(xFractions[index - 1])) / Double(xFractions[index] - xFractions[index - 1])
-        let y = Double(values[index - 1]) + Double(values[index] - values[index - 1]) * t
+        let x = CGFloat(min(1, max(Double(xFractions[0]), fraction)))
+        let y = Double(yFraction(at: x, seriesIndex: seriesIndex, seriesCount: seriesCount))
         return domain.upperBound - (domain.upperBound - domain.lowerBound) * y
     }
 }
@@ -101,12 +174,15 @@ enum StandardLineChartLoadingTemplate {
 /// entrance template as Canvas; their underlying observations stay untouched.
 struct StandardLineChartEntrance<Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var progress: CGFloat = 0
+    @State private var progress: CGFloat
     @State private var appeared = false
+    let appearanceID: String
     let content: (StandardLineChartEntrancePhase) -> Content
 
-    init(@ViewBuilder content: @escaping (StandardLineChartEntrancePhase) -> Content) {
+    init(appearanceID: String = #fileID, @ViewBuilder content: @escaping (StandardLineChartEntrancePhase) -> Content) {
+        self.appearanceID = appearanceID
         self.content = content
+        _progress = State(initialValue: ChartAppearanceHistory.hasDisplayed(appearanceID) ? 1 : 0)
     }
 
     var body: some View {
@@ -116,8 +192,19 @@ struct StandardLineChartEntrance<Content: View>: View {
         .onAppear {
             guard !appeared else { return }
             appeared = true
-            if reduceMotion { progress = 1 }
+            let firstAppearance = ChartAppearanceHistory.record(appearanceID)
+            if reduceMotion || !firstAppearance {
+                var transaction = Transaction(animation: nil)
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { progress = 1 }
+            }
             else { withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.45)) { progress = 1 } }
+        }
+        .onChange(of: reduceMotion) { _, enabled in
+            guard enabled else { return }
+            var transaction = Transaction(animation: nil)
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { progress = 1 }
         }
     }
 }
@@ -338,6 +425,7 @@ struct StandardLineChart: View {
     let gridDash: [CGFloat]
     let gridOpacity: Double
     let transitionKey: String
+    let appearanceID: String
     let dataTransition: StandardLineChartDataTransition
     let animatesInitialAppearance: Bool
     let revealsInitialAppearance: Bool
@@ -397,6 +485,7 @@ struct StandardLineChart: View {
         gridDash: [CGFloat] = [],
         gridOpacity: Double = 0.12,
         transitionKey: String,
+        appearanceID: String = #fileID,
         dataTransition: StandardLineChartDataTransition = .morph,
         animatesInitialAppearance: Bool = true,
         revealsInitialAppearance: Bool = false,
@@ -433,6 +522,7 @@ struct StandardLineChart: View {
         self.gridDash = gridDash
         self.gridOpacity = gridOpacity
         self.transitionKey = transitionKey
+        self.appearanceID = appearanceID
         self.dataTransition = dataTransition
         self.animatesInitialAppearance = animatesInitialAppearance
         self.revealsInitialAppearance = revealsInitialAppearance
@@ -459,15 +549,16 @@ struct StandardLineChart: View {
             dates: sortedDates,
             domain: domain
         )
-        let startsFromLoading = animatesInitialAppearance && !revealsInitialAppearance && !loadingSeries.isEmpty
+        let firstAppearance = !ChartAppearanceHistory.hasDisplayed(appearanceID)
+        let startsFromLoading = firstAppearance && animatesInitialAppearance && !revealsInitialAppearance && !loadingSeries.isEmpty
         _presentedSeries = State(initialValue: startsFromLoading ? loadingSeries : series)
         _presentedMarkers = State(initialValue: startsFromLoading ? [] : markers)
         _presentedDates = State(initialValue: sortedDates)
         _presentedDomain = State(initialValue: domain)
         _outgoingDomain = State(initialValue: domain)
         _needsInitialTransition = State(initialValue: startsFromLoading)
-        _initialRevealProgress = State(initialValue: revealsInitialAppearance ? 0 : 1)
-        _needsInitialReveal = State(initialValue: revealsInitialAppearance)
+        _initialRevealProgress = State(initialValue: firstAppearance && revealsInitialAppearance ? 0 : 1)
+        _needsInitialReveal = State(initialValue: firstAppearance && revealsInitialAppearance)
     }
 
     var body: some View {
@@ -602,12 +693,19 @@ struct StandardLineChart: View {
             }
         }
         .onChange(of: revision) { previous, latest in
-            if previous.contentFingerprint != latest.contentFingerprint
-                || previous.transitionKey != latest.transitionKey {
+            if previous.transitionKey != latest.transitionKey {
                 transitionToLatestData()
+            } else if previous.contentFingerprint != latest.contentFingerprint {
+                // Background refreshes replace data without replaying loading.
+                syncWithoutAnimation()
             }
         }
         .onAppear {
+            guard series.contains(where: { !$0.isLoadingPlaceholder && $0.points.count > 1 }) else { return }
+            guard ChartAppearanceHistory.record(appearanceID) else {
+                syncWithoutAnimation()
+                return
+            }
             startInitialRevealIfNeeded()
             startInitialTransitionIfNeeded()
         }
@@ -753,6 +851,9 @@ struct StandardLineChart: View {
 
     private func syncLatestData() {
         needsInitialTransition = false
+        needsInitialReveal = false
+        initialRevealProgress = 1
+        initialRevealCancelled = true
         transitionGeneration &+= 1
         presentedSeries = series
         presentedMarkers = markers
@@ -765,6 +866,12 @@ struct StandardLineChart: View {
         morphPairs = [:]
         presentationProgress.value = 1
         transitionProgress = 1
+    }
+
+    private func syncWithoutAnimation() {
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { syncLatestData() }
     }
 
     private func copySeries(_ source: StandardLineChartSeries,
@@ -855,10 +962,10 @@ struct StandardLineChart: View {
                 id: target.id,
                 points: points,
                 color: StandardLineChartLoadingTemplate.adaptiveColor,
-                lineWidth: 1.2,
-                dash: [],
+                lineWidth: target.lineWidth,
+                dash: target.dash,
                 selectionRadius: target.selectionRadius,
-                latestPointRadius: target.latestPointRadius == nil ? nil : 3,
+                latestPointRadius: target.latestPointRadius,
                 latestPointColor: StandardLineChartLoadingTemplate.adaptiveColor,
                 latestPointUsesGlass: false,
                 isLoadingPlaceholder: true
@@ -1108,8 +1215,10 @@ struct StandardLineChart: View {
         }
 
         if outgoing.isLoadingPlaceholder {
-            stroke(path, series: outgoing, opacity: 1 - Double(progress), context: &context)
-            stroke(path, series: incoming, opacity: Double(progress), context: &context)
+            // Paint one interpolated colour, not two translucent copies of
+            // the same stroke (which darken their overlapping edges).
+            stroke(path, series: incoming, opacity: 1,
+                color: outgoing.color.mix(with: incoming.color, by: Double(progress)), context: &context)
         } else {
             stroke(path, series: incoming, opacity: 1, context: &context)
         }
@@ -1399,11 +1508,21 @@ struct StandardLineChart: View {
         _ path: Path,
         series: StandardLineChartSeries,
         opacity: Double,
+        color: Color? = nil,
         context: inout GraphicsContext
     ) {
-        context.stroke(
+        var strokeContext = context
+        if let endpoint = path.currentPoint, let radius = series.latestPointRadius {
+            // Geometry, not the ring's opacity, hides the line head. This
+            // remains hollow during shimmer, fades and on gradient surfaces.
+            strokeContext.clip(to: Path(ellipseIn: CGRect(
+                x: endpoint.x - radius, y: endpoint.y - radius,
+                width: radius * 2, height: radius * 2
+            )), options: .inverse)
+        }
+        strokeContext.stroke(
             path,
-            with: .color(series.color.opacity(opacity)),
+            with: .color((color ?? series.color).opacity(opacity)),
             style: StrokeStyle(
                 lineWidth: series.lineWidth,
                 lineCap: .round,
@@ -1504,6 +1623,13 @@ struct StandardLineChart: View {
             )
             if outgoing.isLoadingPlaceholder {
                 ZStack {
+                    // Clear the endpoint once at full coverage before either
+                    // ring fades. Fading the cutout itself exposes the line.
+                    Circle()
+                        .fill(Color.black)
+                        .blendMode(.destinationOut)
+                        .frame(width: newRadius * 2, height: newRadius * 2)
+
                     StandardLineChartPlainEndpoint(
                         color: outgoing.latestPointColor ?? outgoing.color,
                         radius: outgoing.latestPointRadius ?? 3
@@ -2086,6 +2212,8 @@ struct StandardLineChartSkeleton: View {
     var seriesCount: Int = 1
     var showsSeries = true
     var showsEndpointLabels = false
+    var lineWidths: [CGFloat] = [2.25]
+    var appearanceID: String? = nil
 
     private var skeletonColor: Color {
         StandardLineChartLoadingTemplate.color(for: colorScheme)
@@ -2101,60 +2229,53 @@ struct StandardLineChartSkeleton: View {
             )
             ZStack(alignment: .topLeading) {
                 Canvas { context, _ in
-                    if showsSeries {
-                        let count = max(1, min(seriesCount, 8))
-                        for seriesIndex in 0..<count {
-                        let yFractions = StandardLineChartLoadingTemplate.yFractions(
-                            seriesIndex: seriesIndex,
-                            seriesCount: count
-                        )
-                        let fractions = Array(zip(
-                            StandardLineChartLoadingTemplate.xFractions,
-                            yFractions
-                        ))
-                        var path = Path()
-                        let lineStartX = plot.minX - leadingLineOverflow
-                        let lineEndX = plot.maxX - trailingEndpointInset
-                        for (index, fraction) in fractions.enumerated() {
-                            let point = CGPoint(
-                                x: lineStartX + (lineEndX - lineStartX) * fraction.0,
-                                y: min(
-                                    plot.maxY,
-                                    max(plot.minY, plot.minY + plot.height * fraction.1)
-                                )
-                            )
-                            index == 0 ? path.move(to: point) : path.addLine(to: point)
-                        }
-                        context.stroke(
-                            path,
-                            with: .color(skeletonColor.opacity(0.92 - Double(seriesIndex) * 0.07)),
-                            style: StrokeStyle(lineWidth: 1.2, lineCap: .round, lineJoin: .round)
-                        )
+                    guard showsSeries else { return }
+                    let count = max(1, min(seriesCount, 8))
+                    var silhouette = Path()
+                    var endpointHoles = Path()
+                    let lineStartX = plot.minX - leadingLineOverflow
+                    let lineEndX = plot.maxX - trailingEndpointInset
 
-                        let endYFraction = yFractions.last ?? 0.5
-                        let endpoint = CGRect(
-                            x: lineEndX - 3,
-                            y: plot.minY + plot.height * endYFraction - 3,
-                            width: 6,
-                            height: 6
+                    for seriesIndex in 0..<count {
+                        let lineWidth = lineWidths.isEmpty ? 2.25 : lineWidths[min(seriesIndex, lineWidths.count - 1)]
+                        let yFractions = StandardLineChartLoadingTemplate.yFractions(
+                            seriesIndex: seriesIndex, seriesCount: count
                         )
-                        context.stroke(
-                            Path(ellipseIn: endpoint),
-                            with: .color(skeletonColor),
-                            lineWidth: 1.2
-                        )
+                        let points = zip(StandardLineChartLoadingTemplate.xFractions, yFractions).map { x, y in
+                            CGPoint(x: lineStartX + (lineEndX - lineStartX) * x,
+                                    y: min(plot.maxY, max(plot.minY, plot.minY + plot.height * y)))
+                        }
+                        var path = Path()
+                        path.addLines(points)
+                        let stroke = path.strokedPath(StrokeStyle(
+                            lineWidth: lineWidth, lineCap: .round, lineJoin: .round
+                        ))
+                        silhouette = silhouette.union(stroke)
+
+                        if let endpoint = points.last {
+                            let radius = max(4.5, lineWidth * 1.6)
+                            let outer = CGRect(x: endpoint.x - radius, y: endpoint.y - radius,
+                                               width: radius * 2, height: radius * 2)
+                            silhouette = silhouette.union(Path(ellipseIn: outer))
+                            endpointHoles.addEllipse(in: outer.insetBy(dx: lineWidth, dy: lineWidth))
                         }
                     }
+                    // Resolve overlaps before applying the translucent fill.
+                    // Every ring is genuinely hollow, including where another
+                    // series passes behind it; shimmer uses this same silhouette.
+                    context.fill(silhouette.subtracting(endpointHoles), with: .color(skeletonColor))
                 }
 
-                ForEach(0..<5, id: \.self) { index in
-                    Capsule()
-                        .fill(skeletonColor)
-                        .frame(width: 28 - CGFloat(index % 2) * 3, height: 11)
-                        .position(
-                            x: plot.maxX + axisWidth / 2,
-                            y: plot.minY + plot.height * CGFloat(index) / 4
-                        )
+                if axisWidth > 0 {
+                    ForEach(0..<5, id: \.self) { index in
+                        Capsule()
+                            .fill(skeletonColor)
+                            .frame(width: 28 - CGFloat(index % 2) * 3, height: 11)
+                            .position(
+                                x: plot.maxX + axisWidth / 2,
+                                y: plot.minY + plot.height * CGFloat(index) / 4
+                            )
+                    }
                 }
 
                 if showsEndpointLabels {
@@ -2174,6 +2295,7 @@ struct StandardLineChartSkeleton: View {
                 }
             }
         }
+        .chartLoadingShimmer(appearanceID: appearanceID)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -2184,8 +2306,14 @@ struct StandardLineChartPlaceholder: View {
     let message: String
     let isLoading: Bool
     var maximumLines = 3
+    var lineWidths: [CGFloat] = [2.25]
+    var appearanceID: String? = nil
 
+    @ViewBuilder
     var body: some View {
+        if isLoading {
+            StandardLineChartSkeleton(seriesCount: lineWidths.count, lineWidths: lineWidths, appearanceID: appearanceID)
+        } else {
         ZStack {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.secondary.opacity(0.055))
@@ -2201,14 +2329,68 @@ struct StandardLineChartPlaceholder: View {
                     .multilineTextAlignment(.center)
                     .lineLimit(maximumLines)
                     .padding(.horizontal, 24)
-                if isLoading {
-                    ProgressView()
-                        .controlSize(.small)
-                        .padding(.top, 2)
-                }
             }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title)，\(message)")
+        }
+    }
+}
+
+/// Non-line plots keep their own geometry while their data is unavailable.
+struct ChartShapeSkeleton: View {
+    enum Layout { case columns, horizontalBars, bubbles }
+    let layout: Layout
+    var appearanceID: String? = nil
+
+    var body: some View {
+        GeometryReader { geometry in
+            let plot = CGRect(x: 12, y: 18, width: max(1, geometry.size.width - 52),
+                              height: max(1, geometry.size.height - 46))
+            Canvas { context, _ in
+                let fill = GraphicsContext.Shading.color(CatfolioTheme.skeletonFill)
+                switch layout {
+                case .columns:
+                    let step = plot.width / 8
+                    for index in 0..<8 {
+                        let height = plot.height * [0.36, 0.49, 0.44, 0.65, 0.56, 0.74, 0.66, 0.85][index]
+                        for column in 0..<2 {
+                            let barHeight = height * (column == 0 ? 0.82 : 1)
+                            let rect = CGRect(x: plot.minX + CGFloat(index) * step + CGFloat(column) * step * 0.35,
+                                              y: plot.maxY - barHeight, width: step * 0.28, height: barHeight)
+                            context.fill(Path(roundedRect: rect, cornerRadius: 3), with: fill)
+                        }
+                    }
+                case .horizontalBars:
+                    let step = plot.height / 18
+                    for index in 0..<18 {
+                        let width = plot.width * (0.22 + 0.30 * (1 + sin(Double(index) * 1.3)) / 2)
+                        let rect = CGRect(x: plot.midX - width / 2, y: plot.minY + CGFloat(index) * step,
+                                          width: width, height: step * 0.6)
+                        context.fill(Path(roundedRect: rect, cornerRadius: 3), with: fill)
+                    }
+                case .bubbles:
+                    for index in 0..<12 {
+                        let diameter: CGFloat = 14 + CGFloat(index % 4) * 7
+                        let x = plot.minX + plot.width * CGFloat((index * 7) % 13) / 13
+                        let y = plot.minY + plot.height * CGFloat((index * 5) % 13) / 13
+                        context.fill(Path(ellipseIn: CGRect(x: x, y: y, width: diameter, height: diameter)), with: fill)
+                    }
+                }
+                for index in 0..<5 {
+                    let label = CGRect(x: plot.maxX + 8, y: plot.minY + plot.height * CGFloat(index) / 4,
+                                       width: 25, height: 10)
+                    context.fill(Path(roundedRect: label, cornerRadius: 4), with: fill)
+                }
+                for index in 0..<4 {
+                    let label = CGRect(x: plot.minX + plot.width * CGFloat(index) / 4,
+                                       y: plot.maxY + 12, width: 28, height: 10)
+                    context.fill(Path(roundedRect: label, cornerRadius: 4), with: fill)
+                }
+            }
+        }
+        .chartLoadingShimmer(appearanceID: appearanceID)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

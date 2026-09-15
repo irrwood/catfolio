@@ -32,6 +32,7 @@ struct SectorRotationView: View {
                     SectorRotationPlot(snapshot: snapshot, selected: $selectedSymbol, precise: $precise)
                         .aspectRatio(370.0 / 246.0, contentMode: .fit)
                         .accessibilityIdentifier("rotation-chart")
+                        .onAppear { ChartAppearanceHistory.record("sector-rotation") }
                     playback.padding(.top, 28)
                     if let sector = selection {
                         detail(sector).padding(.top, 20)
@@ -70,7 +71,7 @@ struct SectorRotationView: View {
                         .foregroundStyle(Color.primary.opacity(0.4))
                         .padding(.top, 14)
                 } else if isLoading {
-                    ProgressView(L10n.text("读取每日快照…")).frame(maxWidth: .infinity, minHeight: 246)
+                    ChartShapeSkeleton(layout: .bubbles, appearanceID: "sector-rotation").frame(height: 246)
                 } else {
                     ContentUnavailableView(L10n.text("暂无板块轮动数据"), systemImage: "chart.xyaxis.line", description: Text(L10n.text("连接快照服务后读取每日板块数据。")))
                 }

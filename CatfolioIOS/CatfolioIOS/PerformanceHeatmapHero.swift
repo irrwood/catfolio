@@ -11,6 +11,9 @@ struct HeatmapHeroState {
     /// False once the page has scrolled the hero out of sight; the drift
     /// stops.
     var isOnScreen: Bool
+    /// Pause ambient motion and texture baking while the native scroll view
+    /// tracks, drags, decelerates or scrolls programmatically.
+    var isScrolling: Bool
     var onToggle: () -> Void
 
     /// How far to pull before letting go stands the heatmap up, or lays it
@@ -36,6 +39,7 @@ struct PerformanceHeatmapHero<Header: View, Heatmap: View>: View {
     @Environment(\.displayScale) private var displayScale
     @Environment(\.locale) private var locale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     let state: HeatmapHeroState
     /// Changes whenever the heatmap would draw differently.
@@ -49,11 +53,19 @@ struct PerformanceHeatmapHero<Header: View, Heatmap: View>: View {
     @State private var heatmapSize: CGSize = .zero
     @State private var drift = HeatmapHeroDrift()
     @State private var isSettling = false
+    @State private var resolvedLogoURLs: Set<URL> = []
+    @State private var isVisible = false
+    @State private var renderedTextureKey: TextureKey?
 
     var body: some View {
         let hint = IsometricBands.smoothstep(0, HeatmapHeroState.threshold, state.pull)
         let progress = state.isExpanded ? 1 - 0.12 * hint : 0.12 * hint
-        let drifts = !state.isExpanded && state.pull < 0.5 && state.isOnScreen && !isSettling && !reduceMotion
+        let canRender = isVisible && scenePhase == .active && !state.isScrolling
+        let drifts = canRender && !state.isExpanded && state.pull < 0.5
+            && state.isOnScreen && !isSettling && !reduceMotion
+        let textureKey = TextureKey(renderKey: renderKey, scheme: colorScheme, width: heatmapSize.width,
+                                    scale: displayScale, locale: locale.identifier,
+                                    logoRevision: resolvedLogoURLs.count)
 
         HeatmapHeroMorph(
             progress: progress,
@@ -69,25 +81,41 @@ struct PerformanceHeatmapHero<Header: View, Heatmap: View>: View {
             onHeaderHeight: { headerHeight = $0 },
             onHeatmapSize: { heatmapSize = $0 }
         )
+        .environment(\.assetLogoDidResolve) { url in
+            // The live tiles load even while the plane is shown. A newly
+            // decoded logo must invalidate the plane's earlier fallback.
+            resolvedLogoURLs.insert(url)
+        }
         .onChange(of: drifts, initial: true) { _, drifts in
             if drifts { drift.resume(at: .now) } else { drift.pause(at: .now) }
+        }
+        .onAppear { isVisible = true }
+        .onDisappear {
+            isVisible = false
+            drift.pause(at: .now)
         }
         // Hold the plane still until a morph has finished, so the drift
         // cannot move the tile being stood up or laid down.
         .task(id: state.isExpanded) {
             isSettling = true
-            try? await Task.sleep(for: .seconds(0.8))
+            do { try await Task.sleep(for: .seconds(0.8)) } catch { return }
             isSettling = false
         }
-        .task(id: TextureKey(renderKey: renderKey, scheme: colorScheme, width: heatmapSize.width, locale: locale.identifier)) {
-            guard heatmapSize.width > 0 else { return }
-            textures = await HeatmapHeroTextures.render(
+        .task(id: TextureRequest(key: textureKey, canRender: canRender)) {
+            guard canRender, heatmapSize.width > 0, renderedTextureKey != textureKey else { return }
+            // Batch a screenful of logos into one bake, and discard any bake
+            // superseded by another logo, layout, or account update.
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+            let rendered = await HeatmapHeroTextures.render(
                 heatmap: heatmap(true),
                 width: heatmapSize.width,
                 scheme: colorScheme,
                 locale: locale,
                 displayScale: displayScale
             )
+            guard !Task.isCancelled else { return }
+            textures = rendered
+            if rendered != nil { renderedTextureKey = textureKey }
         }
     }
 
@@ -95,7 +123,14 @@ struct PerformanceHeatmapHero<Header: View, Heatmap: View>: View {
         let renderKey: Int
         let scheme: ColorScheme
         let width: CGFloat
+        let scale: CGFloat
         let locale: String
+        let logoRevision: Int
+    }
+
+    private struct TextureRequest: Equatable {
+        let key: TextureKey
+        let canRender: Bool
     }
 }
 
@@ -173,10 +208,15 @@ struct HeatmapHeroTextures {
         patternRenderer.isOpaque = true
         guard let pattern = patternRenderer.uiImage, let source = pattern.cgImage else { return nil }
 
-        let baked = await Task.detached(priority: .userInitiated) {
+        let bakeTask = Task.detached(priority: .userInitiated) {
             HeatmapHeroBlur.bake(source, scale: pattern.scale)
-        }.value
-        guard let baked else { return nil }
+        }
+        let baked = await withTaskCancellationHandler {
+            await bakeTask.value
+        } onCancel: {
+            bakeTask.cancel()
+        }
+        guard !Task.isCancelled, let baked else { return nil }
         func image(_ baked: HeatmapHeroBlur.Baked) -> Image {
             Image(uiImage: UIImage(cgImage: baked.image, scale: baked.scale, orientation: .up))
         }
@@ -207,11 +247,13 @@ enum HeatmapHeroBlur {
     static func bake(_ pattern: CGImage, scale: CGFloat) -> (blurred: [Baked], glows: [Baked])? {
         var blurred: [Baked] = []
         for radius in IsometricBands.radii {
+            guard !Task.isCancelled else { return nil }
             guard let copy = blur(pattern, scale: scale, radius: radius, saturation: 1) else { return nil }
             blurred.append(copy)
         }
         var glows: [Baked] = []
         for style in glowStyles {
+            guard !Task.isCancelled else { return nil }
             guard let copy = blur(pattern, scale: scale, radius: style.radius, saturation: style.saturation) else { return nil }
             glows.append(copy)
         }

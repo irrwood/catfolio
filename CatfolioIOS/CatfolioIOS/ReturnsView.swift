@@ -8,6 +8,7 @@ struct ReturnsView: View {
     @State private var selectedHolding: Holding?
     @State private var heatmapExpanded = ProcessInfo.processInfo.arguments.contains("--expand-performance-heatmap")
     @State private var heroScroll = HeroScroll()
+    @State private var isScrolling = false
     #if DEBUG
     @State private var showsHeatmapPreview = ProcessInfo.processInfo.arguments.contains("--show-heatmap")
     #endif
@@ -26,11 +27,16 @@ struct ReturnsView: View {
                     pull: heroScroll.pull,
                     topInset: heroScroll.topInset,
                     isOnScreen: heroScroll.isHeroOnScreen,
+                    isScrolling: isScrolling,
                     onToggle: toggleHeatmap
                 )
             )
             .accessibilityIdentifier("performance.heatmap")
             SettingsSection(L10n.text("Performance")) {
+                SettingsNavigationRow(icon: .symbol("sparkles"), title: L10n.text("今天值得关注")) {
+                    TodayAttentionView().environment(model)
+                }
+                .accessibilityIdentifier("performance.today-attention")
                 ForEach(ReturnsChartDestination.allCases.filter { $0 != .heatmap }) { chart in
                     SettingsNavigationRow(icon: .symbol(chart.icon), title: chart.title) {
                         ReturnsChartPage(chart: chart)
@@ -72,6 +78,9 @@ struct ReturnsView: View {
             heroScroll = scroll
         }
         .onScrollPhaseChange { oldPhase, newPhase in
+            // Let native scrolling have the display budget, including inertia.
+            let scrolling = newPhase != .idle
+            if isScrolling != scrolling { isScrolling = scrolling }
             guard oldPhase == .interacting, newPhase != .interacting,
                   heroScroll.pull >= HeatmapHeroState.threshold else { return }
             toggleHeatmap()
@@ -80,6 +89,7 @@ struct ReturnsView: View {
             hapticsEnabled && !wasPast && isPast
         }
         .tracksRootTabBarScroll()
+        .onDisappear { isScrolling = false }
         .accessibilityIdentifier("returns-root")
         .softTopScrollEdge()
         .navigationTitle(L10n.text("Performance"))
@@ -89,7 +99,7 @@ struct ReturnsView: View {
             PolicyComposerEntry()
         }
         .sheet(item: $selectedHolding) { holding in
-            HoldingDetailView(holding: holding)
+            HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
                 .environment(model)
                 .securityDetailSheet()
         }
@@ -150,6 +160,7 @@ private struct ReturnsChartPage: View {
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     let chart: ReturnsChartDestination
     @State private var selectedHolding: Holding?
+    @State private var holdingHistoryRefreshRevision = 0
 
     var body: some View {
         // A chart that changes what it shows from further down the page can
@@ -172,13 +183,13 @@ private struct ReturnsChartPage: View {
                         showsHeatmap: true
                     )
                 case .contributors:
-                    HoldingContributionChart()
+                    HoldingContributionChart(refreshRevision: holdingHistoryRefreshRevision)
                 case .comparison:
                     ReturnsComparisonPanel()
                 case .drawdown:
                     analytics(.drawdown)
                 case .underwater:
-                    UnderwaterAnalysisChart()
+                    UnderwaterAnalysisChart(refreshRevision: holdingHistoryRefreshRevision)
                 case .valuation:
                     analytics(.valuation)
                 }
@@ -192,14 +203,23 @@ private struct ReturnsChartPage: View {
         .navigationTitle(chart.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
-        .refreshable { await model.refreshReturnsPage() }
+        .refreshable {
+            if chart == .underwater || chart == .contributors {
+                holdingHistoryRefreshRevision &+= 1
+            } else {
+                await model.refreshReturnsPage()
+            }
+        }
         .sheet(item: $selectedHolding) { holding in
-            HoldingDetailView(holding: holding)
+            HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
                 .environment(model)
                 .securityDetailSheet()
         }
         .securityDetailOpenFeedback(trigger: selectedHolding?.ticker, enabled: hapticsEnabled)
         .task {
+            // This page owns its history request; unrelated valuation and
+            // comparison fetches compete with it for the same price feed.
+            guard chart != .underwater, chart != .contributors else { return }
             guard !model.isReturnsLoading, !model.isReturnsAnalyticsLoading else { return }
             // Each part is fetched only when it is missing: analytics that
             // failed must not send the comparison through a full rebuild on
@@ -491,7 +511,8 @@ private struct ReturnsComparisonPlaceholder: View {
                     leadingLineOverflow: 65,
                     trailingEndpointInset: 9,
                     seriesCount: ReturnsSeriesStyle.displayOrder.count,
-                    showsSeries: false
+                    lineWidths: [2],
+                    appearanceID: "returns-comparison"
                 )
                 .frame(height: ReturnsChartLayout.plotHeight)
                 .padding(.top, ReturnsChartLayout.plotTopSpacing)
@@ -621,6 +642,7 @@ private struct ReturnsSeriesPlaceholderCard: View {
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity, minHeight: ReturnsChartLayout.chipHeight, maxHeight: ReturnsChartLayout.chipHeight)
         .redacted(reason: .placeholder)
+        .chartLoadingShimmer(appearanceID: "returns-comparison")
         .opacity(0.28)
         .background {
             ReturnsSeriesCardSurface(color: color, isVisible: false)
@@ -713,7 +735,8 @@ private struct ReturnsChart: View {
                     leadingLineOverflow: 65,
                     trailingEndpointInset: 9,
                     seriesCount: ReturnsSeriesStyle.displayOrder.count,
-                    showsSeries: false
+                    lineWidths: [2],
+                    appearanceID: "returns-comparison"
                 )
                 .frame(height: ReturnsChartLayout.plotHeight)
                 .padding(.top, ReturnsChartLayout.plotTopSpacing)
@@ -1096,6 +1119,7 @@ private struct FastReturnsPlot: View {
             leadingLineOverflow: 65,
             trailingEndpointInset: endpointInset,
             transitionKey: transitionKey,
+            appearanceID: "returns-comparison",
             dataTransition: .viewportZoom,
             animatesInitialAppearance: true,
             selectedDate: selectedDate,

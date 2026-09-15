@@ -837,12 +837,15 @@ struct SecurityDailyMovePaper: View {
 
     private var paperInside: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text(context.name + " · " + relativeSession)
+            Text(context.isFundIntroduction ? context.name : context.name + " · " + relativeSession)
                 .font(.caption).foregroundStyle(.black.opacity(0.5))
             Spacer(minLength: 0)
-            Text(context.noteTitle).opacity(min(1, max(0, (entranceProgress - 0.75) * 4))).font(.system(.title2, design: .rounded, weight: .medium))
-            Text(DisplayFormat.percent(context.changePercent)).font(.system(.largeTitle, design: .rounded))
-                .foregroundStyle(.black.opacity(0.25))
+            Text(context.isFundIntroduction ? L10n.text("基金介绍") : context.noteTitle)
+                .opacity(min(1, max(0, (entranceProgress - 0.75) * 4))).font(.system(.title2, design: .rounded, weight: .medium))
+            if !context.isFundIntroduction {
+                Text(DisplayFormat.percent(context.changePercent)).font(.system(.largeTitle, design: .rounded))
+                    .foregroundStyle(.black.opacity(0.25))
+            }
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)

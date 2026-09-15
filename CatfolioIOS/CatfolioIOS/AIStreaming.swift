@@ -39,15 +39,25 @@ enum AIStreamParsing {
         }
     }
 
-    /// A line of a chat-completions stream (DeepSeek). Its reasoning model
-    /// sends `reasoning_content` before `content`.
+    /// A line of a chat-completions stream (DeepSeek, OpenRouter). Reasoning
+    /// models send their thinking before `content` — DeepSeek as
+    /// `reasoning_content`, OpenRouter as `reasoning`.
     static func chatCompletionEvents(_ line: String) -> [AIStreamEvent] {
         guard let event = payload(line),
               let delta = (event["choices"] as? [[String: Any]])?.first?["delta"] as? [String: Any] else { return [] }
         var events: [AIStreamEvent] = []
-        if let reasoning = delta["reasoning_content"] as? String, !reasoning.isEmpty { events.append(.reasoning(reasoning)) }
+        let reasoning = (delta["reasoning_content"] as? String) ?? (delta["reasoning"] as? String)
+        if let reasoning, !reasoning.isEmpty { events.append(.reasoning(reasoning)) }
         if let text = delta["content"] as? String, !text.isEmpty { events.append(.text(text)) }
         return events
+    }
+
+    /// The message of an error sent inside a chat-completions stream.
+    /// OpenRouter reports a failure that happens after the response has
+    /// started this way, with the status already 200.
+    static func chatCompletionError(_ line: String) -> String? {
+        guard let event = payload(line), let error = event["error"] as? [String: Any] else { return nil }
+        return (error["message"] as? String) ?? L10n.text("AI 请求失败")
     }
 
     /// Whether a line ends a chat-completions stream.

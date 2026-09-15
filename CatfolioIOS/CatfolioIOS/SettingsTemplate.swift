@@ -19,6 +19,8 @@ enum SettingsTemplate {
     /// Page edge. The cards start here; the large navigation title above them
     /// keeps the system's own inset.
     static let pageInset: CGFloat = 16
+    /// Scrollable breathing room above the floating controls on root tabs.
+    static let rootTabBottomInset: CGFloat = 96
     /// The single vertical rhythm of the page: title to card, header to card,
     /// card to the next header.
     static let sectionSpacing: CGFloat = 16
@@ -291,7 +293,7 @@ struct SettingsPage<Content: View>: View {
     let subtitle: String?
     /// Room for the floating tab bar on the root settings tab. A pushed page
     /// has no bar over it and passes its own, smaller value.
-    var bottomInset: CGFloat = 96
+    var bottomInset: CGFloat = SettingsTemplate.rootTabBottomInset
     /// A large navigation title brings its own space under it. A page with an
     /// inline title does not, so it passes the page's own 16 and the first
     /// card sits off the bar by the same gap everything else uses.
@@ -301,7 +303,7 @@ struct SettingsPage<Content: View>: View {
     init(
         title: String? = nil,
         subtitle: String? = nil,
-        bottomInset: CGFloat = 96,
+        bottomInset: CGFloat = SettingsTemplate.rootTabBottomInset,
         topInset: CGFloat = 0,
         @ViewBuilder content: () -> Content
     ) {
@@ -330,9 +332,8 @@ struct SettingsPage<Content: View>: View {
             .padding(.top, topInset)
             .padding(.bottom, bottomInset)
             .background(SettingsImmediateTouchFeedback())
-            // The bar has to be told this is its scroll view, or on the root
-            // tabs it follows the home page's and never collapses — which
-            // also leaves the soft edge with no bar to run under.
+            // Associate only this page's scroll view with its native bar,
+            // before the first visible frame and again after a return.
             .background(NavigationBarScrollAnchor().accessibilityHidden(true))
         }
         .scrollContentBackground(.hidden)

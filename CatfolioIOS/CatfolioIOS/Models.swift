@@ -146,6 +146,10 @@ struct Holding: Decodable, Identifiable, Equatable {
     var id: String { ticker }
     var shortName: String {
         let original = displayName.components(separatedBy: " / ").first ?? displayName
+        if let disclosure = publicDisclosure {
+            return PublicDisclosureFormat.securityName(
+                ticker: disclosure.underlyingTicker ?? ticker, name: original)
+        }
         return CompanyNameCatalog.displayName(ticker: ticker, fallback: original)
     }
 
@@ -240,6 +244,30 @@ struct SecurityPriceHistory: Equatable, Sendable {
     }
 
     var latestAvailablePrice: Double? { chartDailyPoints.last?.close }
+
+    /// Preserve the feed's observation time when publishing a detail quote.
+    /// Daily-only data stays at its session date; it is never stamped as now.
+    var latestMarketObservation: SecurityMarketObservation? {
+        let daily = chartDailyPoints
+        guard let last = daily.last, last.date != .distantPast else { return nil }
+        let minute = intradayPoints.filter {
+            $0.timestamp != nil && $0.close.isFinite && $0.close > 0
+                && DayDateCodec.string(from: $0.date) == last.dateText
+        }.max { $0.date < $1.date }
+        let previous = daily.last { $0.dateText < last.dateText }
+        let change = previous.map { (last.close / $0.close - 1) * 100 }
+        return SecurityMarketObservation(ticker: ticker.uppercased(), currency: currency,
+                                         price: last.close, observedAt: minute?.date ?? last.date,
+                                         changePercent: change.flatMap { $0.isFinite ? $0 : nil })
+    }
+}
+
+struct SecurityMarketObservation: Sendable {
+    let ticker: String
+    let currency: String
+    let price: Double
+    let observedAt: Date
+    let changePercent: Double?
 }
 
 struct SecurityPricePoint: Equatable, Identifiable, Sendable {
@@ -718,6 +746,7 @@ struct PortfolioAttentionReport: Codable, Sendable {
 }
 
 enum BrokerProvider: String, CaseIterable, Codable, Identifiable {
+    case snaptrade
     case trading212
     case moomoo
     case ibkr
@@ -729,6 +758,7 @@ enum BrokerProvider: String, CaseIterable, Codable, Identifiable {
         case .trading212: "Trading 212"
         case .moomoo: "Moomoo"
         case .ibkr: "Interactive Brokers"
+        case .snaptrade: "SnapTrade"
         }
     }
 
@@ -737,6 +767,7 @@ enum BrokerProvider: String, CaseIterable, Codable, Identifiable {
         case .trading212: "chart.line.uptrend.xyaxis"
         case .moomoo: "network"
         case .ibkr: "building.columns"
+        case .snaptrade: "link"
         }
     }
 
@@ -748,6 +779,8 @@ enum BrokerProvider: String, CaseIterable, Codable, Identifiable {
             "支持 iPhone OAuth 2.1 + PKCE 直连。"
         case .ibkr:
             "支持 iPhone 直连 IBKR Flex Web Service。"
+        case .snaptrade:
+            "使用个人 API 连接券商账户"
         }
     }
 }

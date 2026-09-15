@@ -101,6 +101,57 @@ final class HistoryInteractionTests: XCTestCase {
         XCTAssertTrue(HistoryDividendBreakdown.build([]).rows.isEmpty)
     }
 
+    func testDividendStackHitTestingUsesVisibleWidths() {
+        let chart = HistoryDividendBreakdown(rows: [
+            .init(ticker: "A", name: "Alpha", amountUSD: 70),
+            .init(ticker: "B", name: "Beta", amountUSD: 30),
+            .init(ticker: "ZERO", name: "Zero", amountUSD: 0),
+            .init(ticker: "REV", name: "Reversal", amountUSD: -10)
+        ], positiveTotalUSD: 100)
+        XCTAssertEqual(chart.row(at: 0)?.ticker, "B")
+        XCTAssertEqual(chart.row(at: 0.299)?.ticker, "B")
+        XCTAssertEqual(chart.row(at: 0.3)?.ticker, "A")
+        XCTAssertEqual(chart.row(at: 1)?.ticker, "A")
+        XCTAssertNil(chart.row(at: -.infinity))
+        XCTAssertNil(chart.row(at: 1.01))
+        var unavailable = chart
+        unavailable.isComplete = false
+        XCTAssertNil(unavailable.row(at: 0.5))
+        XCTAssertNil(HistoryDividendBreakdown().row(at: 0))
+    }
+
+    @MainActor
+    func testDividendCardRendersFigmaLayoutInBothAppearances() async throws {
+        let values: [Double] = [121, 39, 39, 15, 15, 15, 86]
+        let chart = HistoryDividendBreakdown(rows: values.enumerated().map { index, amount in
+            .init(ticker: "STOCK\(index)", name: "公司名字", amountUSD: amount)
+        }, positiveTotalUSD: 330)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previousWindow = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        defer { window.isHidden = true; previousWindow?.makeKeyAndVisible() }
+        for dark in [false, true] {
+            let host = UIHostingController(rootView:
+                HistoryDividendCard(breakdown: chart, totalUSD: 276.23)
+                    .environment(\.locale, Locale(identifier: "zh-Hans"))
+                    .environment(\.colorScheme, dark ? .dark : .light)
+                    .frame(width: 370)
+            )
+            host.safeAreaRegions = []
+            host.overrideUserInterfaceStyle = dark ? .dark : .light
+            window.rootViewController = host
+            window.makeKeyAndVisible()
+            try await Task.sleep(for: .milliseconds(250))
+            let size = host.sizeThatFits(in: CGSize(width: 370, height: 1000))
+            XCTAssertEqual(size.width, 370, accuracy: 1)
+            XCTAssertGreaterThanOrEqual(size.height, 150)
+            XCTAssertLessThan(size.height, 180)
+            host.view.bounds = CGRect(origin: .zero, size: size)
+            host.view.layoutIfNeeded()
+            attach(host.view, name: "Dividend-Figma-\(dark ? "dark" : "light")")
+        }
+    }
+
     func testYearFiltersDoNotDropEarlierAcquisitionCosts() throws {
         let input = ledger([entry("BUY", date: "2025-01-01", price: 80), entry("SELL", price: 120)])
         let prepared = try prepare(input)
@@ -282,12 +333,12 @@ final class HistoryInteractionTests: XCTestCase {
     }
 
     @MainActor
-    func testNativeLargeTitleCollapsesAndBottomColourContinuesInLightMode() async throws {
+    func testInlineTitleStaysCompactAndBottomColourContinuesInLightMode() async throws {
         try await checkNativeNavigation(dark: false)
     }
 
     @MainActor
-    func testNativeLargeTitleCollapsesAndBottomColourContinuesInDarkMode() async throws {
+    func testInlineTitleStaysCompactAndBottomColourContinuesInDarkMode() async throws {
         try await checkNativeNavigation(dark: true)
     }
 
@@ -362,10 +413,11 @@ final class HistoryInteractionTests: XCTestCase {
         let bar = try XCTUnwrap(descendants(controller.view, of: UINavigationBar.self).first)
         let list = try XCTUnwrap(descendants(controller.view, of: UIScrollView.self)
             .first { $0.contentSize.height > $0.bounds.height })
-        let largeHeight = bar.bounds.height
-        XCTAssertGreaterThan(largeHeight, 70)
+        let inlineHeight = bar.bounds.height
+        XCTAssertLessThanOrEqual(inlineHeight, 60, "Inline navigation remains a single compact row")
+        XCTAssertGreaterThan(inlineHeight, 0)
         XCTAssertNotNil(list.refreshControl, "History still owns pull to refresh")
-        attach(controller.view, name: "History-\(dark ? "dark" : "light")-expanded")
+        attach(controller.view, name: "History-\(dark ? "dark" : "light")-inline-resting")
         let restOffset = list.contentOffset
         let barBottom = bar.convert(bar.bounds, to: controller.view).maxY
         // SwiftUI applies the category transform in its rendering layer;
@@ -393,8 +445,8 @@ final class HistoryInteractionTests: XCTestCase {
         let expanded = UIGraphicsImageRenderer(bounds: controller.view.bounds).image { _ in
             controller.view.drawHierarchy(in: controller.view.bounds, afterScreenUpdates: true)
         }
-        let titleBottom = bar.convert(bar.bounds, to: controller.view).maxY
-        let titleRect = CGRect(x: 16, y: titleBottom - 48, width: 180, height: 42)
+        let titleFrame = bar.convert(bar.bounds, to: controller.view)
+        let titleRect = CGRect(x: titleFrame.midX - 90, y: titleFrame.minY, width: 180, height: titleFrame.height)
             .applying(CGAffineTransform(scaleX: expanded.scale, y: expanded.scale))
         let titleImage = try XCTUnwrap(expanded.cgImage?.cropping(to: titleRect))
         var ink = [UInt8](repeating: 0, count: titleImage.width * titleImage.height * 4)
@@ -403,10 +455,10 @@ final class HistoryInteractionTests: XCTestCase {
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
         titleContext.draw(titleImage, in: CGRect(x: 0, y: 0, width: titleImage.width, height: titleImage.height))
         let visibleInk = stride(from: 0, to: ink.count, by: 4).filter { dark ? ink[$0] > 160 : ink[$0] < 90 }.count
-        XCTAssertGreaterThan(visibleInk, 400, "The bar material must not cover or blur the large title's ink")
+        XCTAssertGreaterThan(visibleInk, 400, "The bar material must not cover or blur the inline title's ink")
         list.setContentOffset(CGPoint(x: 0, y: 300), animated: true)
         try await Task.sleep(for: .milliseconds(650))
-        XCTAssertLessThan(bar.bounds.height, largeHeight - 25)
+        XCTAssertEqual(bar.bounds.height, inlineHeight, accuracy: 1)
         XCTAssertTrue(list.isScrollEnabled)
         XCTAssertEqual(list.convert(list.bounds, to: controller.view).maxY, controller.view.bounds.maxY, accuracy: 2,
                        "The list must continue behind the floating account control, not stop above a bottom bar")
@@ -421,7 +473,7 @@ final class HistoryInteractionTests: XCTestCase {
                        + HistoryPagingController.headerFadeLength, accuracy: 1)
         XCTAssertEqual(material.alpha, 1)
         XCTAssertFalse(material.isUserInteractionEnabled)
-        attach(controller.view, name: "History-\(dark ? "dark" : "light")-collapsed")
+        attach(controller.view, name: "History-\(dark ? "dark" : "light")-inline-scrolled")
         let pinnedImage = snapshot(controller.view)
         let pinnedLabelRect = CGRect(x: 34, y: bar.convert(bar.bounds, to: controller.view).maxY + 20,
                                      width: 32, height: 24)

@@ -16,6 +16,93 @@ final class UnderwaterAnalysisTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testSavedHistoryIsVisibleBeforeNetworkCompletes() async {
+        let state = HoldingHistoryState()
+        let saved = history(["A": [100, 110, 90, 95, 96, 99]])
+        let fresh = history(["B": [200, 220, 180, 190, 192, 198]])
+        var requests: [Bool] = []
+        await state.load { cachedOnly in
+            requests.append(cachedOnly)
+            if cachedOnly { return saved }
+            XCTAssertEqual(state.history?.rows.last?.values["A"], 99)
+            return fresh
+        }
+        XCTAssertEqual(requests, [true, false])
+        XCTAssertEqual(state.history?.rows.last?.values["B"], 198)
+        XCTAssertNil(state.errorMessage)
+    }
+
+    @MainActor
+    func testEmptyAndFailedRefreshKeepSavedHistory() async {
+        let state = HoldingHistoryState()
+        let saved = history(["A": [100, 110, 90, 95, 96, 99]])
+        for fails in [false, true] {
+            await state.load { cachedOnly in
+                if cachedOnly { return saved }
+                if fails { throw LocalServiceError.noHistoricalPrices }
+                return HoldingValueHistory(rows: [], costs: [:], names: [:])
+            }
+            XCTAssertEqual(state.history?.rows.last?.values["A"], 99)
+            XCTAssertNil(state.errorMessage)
+        }
+    }
+
+    @MainActor
+    func testNoPricesEndsLoadingWithAnErrorAndRetryCanRecover() async {
+        let state = HoldingHistoryState()
+        await state.load { _ in HoldingValueHistory(rows: [], costs: [:], names: [:]) }
+        XCTAssertNil(state.history)
+        XCTAssertNotNil(state.errorMessage)
+        let saved = history(["A": [100, 110, 90, 95, 96, 99]])
+        await state.load { _ in saved }
+        XCTAssertNotNil(state.history)
+        XCTAssertNil(state.errorMessage)
+    }
+
+    @MainActor
+    func testCancelledRequestCannotPublishEvenIfTheFeedReturnsData() async {
+        let state = HoldingHistoryState()
+        let saved = history(["A": [100, 110, 90, 95, 96, 99]])
+        var resume: CheckedContinuation<HoldingValueHistory, Never>?
+        let task = Task {
+            await state.load { cachedOnly in
+                if cachedOnly { throw LocalServiceError.noHistoricalPrices }
+                return await withCheckedContinuation { resume = $0 }
+            }
+        }
+        while resume == nil { await Task.yield() }
+        task.cancel()
+        resume?.resume(returning: saved)
+        await task.value
+        XCTAssertNil(state.history)
+        XCTAssertNil(state.errorMessage)
+    }
+
+    @MainActor
+    func testSupersededAccountRequestCannotOverwriteNewHistory() async {
+        let state = HoldingHistoryState()
+        let old = history(["A": [100, 110, 90, 95, 96, 99]])
+        let fresh = history(["B": [200, 220, 180, 190, 192, 198]])
+        var resume: CheckedContinuation<HoldingValueHistory, Never>?
+        let task = Task {
+            await state.load { cachedOnly in
+                if cachedOnly { return old }
+                return await withCheckedContinuation { resume = $0 }
+            }
+        }
+        while resume == nil { await Task.yield() }
+        await state.load { cachedOnly in
+            XCTAssertNil(state.history, "A different account must not retain the previous chart")
+            if cachedOnly { throw LocalServiceError.noHistoricalPrices }
+            return fresh
+        }
+        resume?.resume(returning: old)
+        await task.value
+        XCTAssertEqual(state.history?.rows.last?.values["B"], 198)
+        XCTAssertNil(state.history?.rows.last?.values["A"])
+    }
+
     func testTheCurveMeasuresFromTheHighSoFar() {
         let series = UnderwaterSeries(dates: days.map { ($0, DayDateCodec.date(from: $0)!) }, values: [100, 120, 90, 96, 120, 110])
         for (point, expected) in zip(series.points, [0, 0, -0.25, -0.2, 0, 110.0 / 120 - 1]) {

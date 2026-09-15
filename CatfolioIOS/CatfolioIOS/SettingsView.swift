@@ -104,6 +104,7 @@ struct SettingsView: View {
     @State private var showsCSVImport = false
     @State private var showsTrading212 = false
     @State private var showsIBKRFlex = false
+    @State private var showsSnapTrade = false
     @State private var showsMoomooOAuth = false
     @State private var showsLocalServices = false
     @State private var showsPortfolioResetConfirmation = false
@@ -125,7 +126,7 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        SettingsPage {
+        SettingsPage(title: L10n.text("设置")) {
             PublicInvestorSettingsSection()
 
             if !model.accounts.isEmpty {
@@ -162,6 +163,9 @@ struct SettingsView: View {
                 connector("Interactive Brokers", detail: L10n.text("使用 Flex Web Service 创建账户"), icon: "doc.text") {
                     showsIBKRFlex = true
                 }
+                connector("SnapTrade", detail: L10n.text("使用个人 API 连接券商账户"), icon: "link") {
+                    showsSnapTrade = true
+                }
                 connector(L10n.text("CSV 导入"), detail: L10n.text("从交易记录创建账户"), icon: "doc.badge.plus") {
                     showsCSVImport = true
                 }
@@ -188,10 +192,6 @@ struct SettingsView: View {
             }
 
             SettingsSection(L10n.text("行情与 AI")) {
-                SettingsNavigationRow(icon: .symbol("sparkles"), title: L10n.text("今天值得关注")) {
-                    TodayAttentionView().environment(model)
-                }
-                .accessibilityIdentifier("settings.today-attention")
                 connector(L10n.text("服务商"), detail: L10n.text("行情、估值与 AI 密钥"), icon: "key") {
                     showsLocalServices = true
                 }
@@ -374,6 +374,7 @@ struct SettingsView: View {
                 showsCSVImport = arguments.contains("--show-csv")
                 showsTrading212 = arguments.contains("--show-trading212")
                 showsIBKRFlex = arguments.contains("--show-flex")
+                showsSnapTrade = arguments.contains("--show-snaptrade")
                 showsMoomooOAuth = arguments.contains("--show-moomoo")
                 showsLocalServices = arguments.contains("--show-local-services")
                     || arguments.contains { $0.hasPrefix("--show-local-service-") }
@@ -406,6 +407,10 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showsTrading212) {
                 Trading212View(context: .create).environment(model)
+                    .presentationDetents([.large]).presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showsSnapTrade) {
+                SnapTradeView(context: .create).environment(model)
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showsIBKRFlex) {
@@ -550,6 +555,7 @@ struct SettingsView: View {
 }
 
 private enum AccountManagementSheet: String, Identifiable {
+    case snaptrade
     case trading212
     case moomoo
     case ibkr
@@ -711,6 +717,8 @@ private struct AccountDetailView: View {
             Trading212View(context: .manage(account))
         case .moomoo:
             MoomooOAuthView(context: .manage(account))
+        case .snaptrade:
+            SnapTradeView(context: .manage(account))
         case .ibkr:
             IBKRFlexView(context: .manage(account))
         case .csv:
@@ -724,6 +732,7 @@ private struct AccountDetailView: View {
         switch account.source {
         case "Trading 212": .trading212
         case "Moomoo": .moomoo
+        case "SnapTrade": .snaptrade
         case "IBKR Flex": .ibkr
         default: .csv
         }
@@ -733,6 +742,7 @@ private struct AccountDetailView: View {
         switch account.source {
         case "Trading 212": L10n.text("Trading 212 同步")
         case "Moomoo": L10n.text("Moomoo 同步")
+        case "SnapTrade": L10n.text("SnapTrade 同步")
         case "IBKR Flex": L10n.text("IBKR 同步")
         case "CSV": L10n.text("CSV 导入")
         case "假数据": L10n.text("本机演示数据")
@@ -1060,7 +1070,7 @@ private struct AccountTransactionsView: View {
               !apiSecret.isEmpty else { return }
 
         isSyncingHistory = true
-        syncMessage = L10n.text("正在补齐 Trading 212 成交、分红与利息…")
+        syncMessage = L10n.text("正在补齐 Trading 212 成交、股息与利息…")
         defer { isSyncingHistory = false }
 
         do {
@@ -1213,6 +1223,7 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
     case massive
     case fmp
     case deepSeek
+    case openRouter
 
     var id: String { rawValue }
 
@@ -1221,6 +1232,7 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
         case .massive: "Massive"
         case .fmp: "Financial Modeling Prep"
         case .deepSeek: "DeepSeek"
+        case .openRouter: "OpenRouter"
         }
     }
 
@@ -1236,6 +1248,7 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
         case .massive: L10n.text("美股成交量与历史行情")
         case .fmp: L10n.text("估值矩阵与行情备用")
         case .deepSeek: L10n.text("云端问答与自动回退")
+        case .openRouter: L10n.text("用一个 Key 调用多家模型")
         }
     }
 
@@ -1247,6 +1260,8 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
             L10n.text("读取估值矩阵需要的 P/E、EPS 与营收成长数据，并作为历史行情备用。")
         case .deepSeek:
             L10n.text("选择 DeepSeek 或自动模式需要回退时，组合摘要和问题会直接发送给 DeepSeek，不经过 Mac 或 Catfolio 服务端。")
+        case .openRouter:
+            L10n.text("选择 OpenRouter 或自动模式需要回退时，组合摘要和问题会直接发送给 OpenRouter，再由它转给你选的模型，不经过 Mac 或 Catfolio 服务端。")
         }
     }
 
@@ -1255,6 +1270,7 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
         case .massive: LocalServiceKeys.massive
         case .fmp: LocalServiceKeys.fmp
         case .deepSeek: LocalServiceKeys.deepSeek
+        case .openRouter: LocalServiceKeys.openRouter
         }
     }
 
@@ -1263,6 +1279,7 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
         case .massive: "chart.bar.xaxis"
         case .fmp: "chart.xyaxis.line"
         case .deepSeek: "sparkles"
+        case .openRouter: "arrow.triangle.branch"
         }
     }
 
@@ -1270,7 +1287,7 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
         switch self {
         case .massive: CatfolioTheme.accent
         case .fmp: CatfolioTheme.warning
-        case .deepSeek: CatfolioTheme.services
+        case .deepSeek, .openRouter: CatfolioTheme.services
         }
     }
 
@@ -1301,6 +1318,9 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
         case .deepSeek:
             try await LocalAIClient().testDeepSeekConnection(apiKey: apiKey)
             return L10n.text("连接成功，DeepSeek 模型列表可用")
+        case .openRouter:
+            try await LocalAIClient().testOpenRouterConnection(apiKey: apiKey)
+            return L10n.text("连接成功，OpenRouter Key 可用")
         }
     }
 }
@@ -1361,22 +1381,26 @@ private struct LocalServicesSettingsView: View {
                 SettingsSectionHeader("AI")
                 SettingsCard {
                     // The one row on these pages that is not a row: choosing a
-                    // model is a choice between three, and a segmented control
-                    // shows all three at once. It sits on the card's own 20/16
-                    // padding so it lines up with every row under it.
+                    // model is a choice between five — too many to segment on
+                    // a phone — so the choice is a menu at the row's trailing
+                    // edge. It sits on the card's own 20/16 padding so it
+                    // lines up with every row under it.
                     SettingsRowContainer(minHeight: 0) {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text(L10n.text("默认模型"))
-                                .appText(.label, weight: .medium)
-                                .foregroundStyle(SettingsTemplate.sectionHeader)
-
-                            Picker(L10n.text("默认模型"), selection: $aiProviderRaw) {
-                                ForEach(AIProviderPreference.allCases) { provider in
-                                    Text(L10n.label(provider.title)).tag(provider.rawValue)
+                            HStack {
+                                Text(L10n.text("默认模型"))
+                                    .appText(.label, weight: .medium)
+                                    .foregroundStyle(SettingsTemplate.sectionHeader)
+                                Spacer(minLength: 12)
+                                Picker(L10n.text("默认模型"), selection: $aiProviderRaw) {
+                                    ForEach(AIProviderPreference.allCases) { provider in
+                                        Text(L10n.label(provider.title)).tag(provider.rawValue)
+                                    }
                                 }
+                                .pickerStyle(.menu)
+                                .labelsHidden()
+                                .padding(.trailing, -12)
                             }
-                            .pickerStyle(.segmented)
-                            .labelsHidden()
 
                             Text(selectedAIProvider.detail)
                                 .appText(.label, weight: .regular)
@@ -1397,6 +1421,7 @@ private struct LocalServicesSettingsView: View {
                     }
 
                     codexLink
+                    providerLink(.openRouter)
                     providerLink(.deepSeek)
                 }
             }
@@ -1484,6 +1509,8 @@ private struct LocalServicesSettingsView: View {
             path = [.fmp]
         } else if arguments.contains("--show-local-service-deepseek") {
             path = [.deepSeek]
+        } else if arguments.contains("--show-local-service-openrouter") {
+            path = [.openRouter]
         }
     }
 }
@@ -1727,6 +1754,7 @@ private struct LocalServiceDetailView: View {
     @State private var showsRemoveConfirmation = false
     @State private var hasLoaded = false
     @State private var validationTask: Task<Void, Never>?
+    @AppStorage(LocalServiceKeys.openRouterModel) private var openRouterModel = ""
 
     private var trimmedKey: String {
         apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1789,6 +1817,21 @@ private struct LocalServiceDetailView: View {
                 .disabled(isTesting)
             }
             SettingsFootnote(L10n.text("仅保存在此 iPhone 的 Keychain"))
+
+            if provider == .openRouter {
+                SettingsSectionHeader(L10n.text("模型"))
+                SettingsCard {
+                    SettingsRowContainer {
+                        TextField(LocalServiceKeys.defaultOpenRouterModel, text: $openRouterModel)
+                            .font(.body.monospaced())
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.URL)
+                            .submitLabel(.done)
+                    }
+                }
+                SettingsFootnote(L10n.text("填写 OpenRouter 的模型 ID，如 anthropic/claude-sonnet-5 或 openai/gpt-5；留空时由 openrouter/auto 为每个问题挑选模型。"))
+            }
 
             if let feedback {
                 StatusNotice(text: feedback.text, kind: feedback.kind)

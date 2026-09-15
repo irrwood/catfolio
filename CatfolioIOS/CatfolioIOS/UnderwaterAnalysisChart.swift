@@ -8,15 +8,16 @@ import SwiftUI
 /// its own fall from its high, with the portfolio's line beside it.
 struct UnderwaterAnalysisChart: View {
     enum Mode: Hashable { case portfolio, holding }
+    var refreshRevision = 0
 
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.locale) private var appLocale
     @Environment(\.scrollChartPageToTop) private var scrollToTop
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
-    @State private var history: HoldingValueHistory?
+    @State private var loading = HoldingHistoryState()
+    @State private var retryRevision = 0
     @State private var stack: UnderwaterStack?
-    @State private var errorMessage: String?
     @State private var range = ChartTimeRange.oneYear
     @State private var mode = Mode.portfolio
     @State private var focus: String?
@@ -38,24 +39,33 @@ struct UnderwaterAnalysisChart: View {
                 case .portfolio: portfolio(stack)
                 case .holding: holding(stack)
                 }
-            } else if let errorMessage {
+            } else if let errorMessage = loading.errorMessage {
                 StandardLineChartPlaceholder(title: L10n.text("暂时无法绘制"), message: errorMessage, isLoading: false)
                     .frame(height: 280)
                     .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
-            } else if history != nil {
+                Button(L10n.text("重试")) { retryRevision &+= 1 }
+                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity)
+            } else if loading.history != nil {
                 StandardLineChartPlaceholder(title: L10n.text("历史数据不足"),
                                              message: L10n.text("该时间范围内没有足够的市值记录。"), isLoading: false)
                     .frame(height: 280)
                     .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
             } else {
-                StandardLineChartSkeleton(axisWidth: 0, topInset: 0, trailingEndpointInset: 21, seriesCount: 3)
+                StandardLineChartPlaceholder(title: L10n.text("正在准备历史数据"),
+                                             message: L10n.text("水下分析"), isLoading: true,
+                                             lineWidths: mode == .portfolio ? [1, 1, 2.5] : [2, 1.5],
+                                             appearanceID: "underwater-\(mode)")
                     .frame(height: 280)
-                    .accessibilityLabel(L10n.text("正在准备历史数据"))
+                    .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
             }
         }
         // The holdings count as well: opened before the portfolio has
         // loaded, the page tries again once it has.
-        .task(id: "\(model.portfolioChartRevision)|\(model.holdings.count)") { await load() }
+        .task(id: "\(model.portfolioChartRevision)|\(model.holdings.count)|\(refreshRevision)|\(retryRevision)") {
+            await loading.load { cachedOnly in try await model.fixedShareHistory(cachedOnly: cachedOnly) }
+        }
+        .onChange(of: loading.revision) { _, _ in rebuild() }
         .onChange(of: range) { _, _ in
             selectedDate = nil
             rebuild()
@@ -64,7 +74,7 @@ struct UnderwaterAnalysisChart: View {
         .onChange(of: focus) { _, _ in selectedDate = nil }
         .sensoryFeedback(.selection, trigger: "\(mode)|\(focus ?? "")") { _, _ in hapticsEnabled }
         .sheet(item: $detailHolding) { holding in
-            HoldingDetailView(holding: holding)
+            HoldingDetailView(holding: holding, onClose: { detailHolding = nil })
                 .environment(model)
                 .securityDetailSheet()
         }
@@ -391,6 +401,7 @@ struct UnderwaterAnalysisChart: View {
             trailingEndpointInset: 21,
             gridOpacity: 0,
             transitionKey: "\(range.rawValue)-\(mode)-\(focus ?? "")-\(colorScheme == .light ? "light" : "dark")",
+            appearanceID: "underwater-\(mode)",
             dataTransition: .viewportZoom,
             selectedDate: selectedDate,
             selectionSeriesIDs: selectionIDs,
@@ -526,31 +537,9 @@ struct UnderwaterAnalysisChart: View {
     }
 
     private func rebuild() {
-        guard let history else { stack = nil; return }
+        guard let history = loading.history else { stack = nil; return }
         let names = Dictionary(model.holdings.map { ($0.ticker.uppercased(), $0.shortName) }, uniquingKeysWith: { first, _ in first })
         stack = UnderwaterStack(history: history, range: range, names: names)
-    }
-
-    @MainActor
-    private func load() async {
-        // Opened straight after launch, the portfolio can still be on its
-        // way in; give it a few seconds before saying there is none.
-        for attempt in 0..<6 {
-            do {
-                history = try await model.fixedShareHistory()
-                errorMessage = nil
-                rebuild()
-                return
-            } catch is CancellationError {
-                return
-            } catch LocalPortfolioError.noPortfolio where attempt < 5 {
-                try? await Task.sleep(for: .seconds(1))
-                if Task.isCancelled { return }
-            } catch {
-                if history == nil { errorMessage = error.localizedDescription }
-                return
-            }
-        }
     }
 
     // MARK: Formatting

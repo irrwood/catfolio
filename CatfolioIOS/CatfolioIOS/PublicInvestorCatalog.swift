@@ -226,6 +226,26 @@ struct PublicInvestorActivity: Decodable, Identifiable {
 }
 
 enum PublicDisclosureFormat {
+    /// Presentation only. Keep the disclosure text and option identity in the ledger.
+    static func securityName(ticker: String, name: String,
+                             mode: CompanyNameDisplay = .current) -> String {
+        var clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let assetCodes = ["ST", "OP", "OL", "OI", "MF", "PS", "EF", "RP"]
+        var assetCode: String?
+        for code in assetCodes where clean.hasSuffix("[\(code)]") {
+            clean = String(clean.dropLast(code.count + 2)).trimmingCharacters(in: .whitespacesAndNewlines)
+            assetCode = code
+            break
+        }
+        if !ticker.isEmpty, clean.hasSuffix("(\(ticker))") {
+            clean = String(clean.dropLast(ticker.count + 2)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        // Private business interests must keep their own name even if the source
+        // supplies an unrelated listed ticker.
+        let companyTicker = ["OL", "OI", "RP"].contains(assetCode ?? "") ? "" : ticker
+        return CompanyNameCatalog.displayName(ticker: companyTicker, fallback: clean, mode: mode)
+    }
+
     static func amount(_ exact: Double?, low: Double?, high: Double?, currency: String = "USD") -> String {
         func money(_ value: Double) -> String {
             value.formatted(.currency(code: currency).precision(.fractionLength(0)))

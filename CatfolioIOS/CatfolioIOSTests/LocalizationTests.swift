@@ -4,6 +4,34 @@ import XCTest
 @testable import CatfolioIOS
 
 final class LocalizationTests: XCTestCase {
+    func testCompanyNamesUseFamiliarBrandsAndPreserveListingIdentity() {
+        let cases = [
+            ("nvda", "NVIDIA Corporation", "NVIDIA"),
+            ("COST", "Costco Wholesale Corporation", "Costco"),
+            ("IBM", "International Business Machines Corporation", "IBM"),
+            ("TSM", "Taiwan Semiconductor Manufacturing Company Limited", "TSMC"),
+            ("XYZ", "Example Technologies Corporation", "Example Technologies"),
+            ("XYZ", "Example Co., Ltd.", "Example"),
+            ("XYZ", "  Example INC.  ", "Example"),
+            ("XYZ", "The Honest Company, Inc.", "The Honest Company"),
+            ("XYZ", "Corporation Service Group", "Corporation Service Group"),
+            ("XYZ", "Acme Holdings Class B", "Acme Holdings Class B"),
+            ("XYZ", "Example S&P 500 UCITS ETF USD (Acc)", "Example S&P 500 UCITS ETF USD (Acc)"),
+            ("XYZ", "Example Investment Trust PLC", "Example Investment Trust PLC"),
+            ("COST.L", "Different Company Ltd", "Different Company"),
+            ("XYZ", "   ", "XYZ")
+        ]
+        for (ticker, original, expected) in cases {
+            XCTAssertEqual(CompanyNameCatalog.displayName(ticker: ticker, fallback: original, mode: .original), expected, original)
+        }
+    }
+
+    func testChineseCompanyNamesRetainPreferenceWithConciseFallback() {
+        XCTAssertEqual(CompanyNameCatalog.displayName(ticker: "NVDA", fallback: "NVIDIA Corporation", mode: .chineseShort), "英伟达")
+        XCTAssertEqual(CompanyNameCatalog.displayName(ticker: "UNKNOWN", fallback: "Example Corporation", mode: .chineseShort), "Example")
+        XCTAssertEqual(CompanyNameDisplay.original.rawValue, "原始名称", "Keep existing saved preferences valid")
+    }
+
     func testPredictionEventRetainsThreeOptionsWithIndividualVolume() async throws {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [LocalizedMarketProtocol.self]

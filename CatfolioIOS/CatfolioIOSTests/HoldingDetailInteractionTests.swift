@@ -459,6 +459,21 @@ final class HoldingResearchCardLayoutTests: XCTestCase {
     }
 
     @MainActor
+    func testFundIntroductionPaperLayout() async throws {
+        let context = SecurityPriceMoveContext(ticker: "TESTETF", name: "示例全球股票 UCITS ETF (Acc)", currency: "GBP",
+            rangeLabel: "2026-09-10", startDate: Date(timeIntervalSince1970: 1788912000),
+            endDate: Date(timeIntervalSince1970: 1788998400), startPrice: 100, endPrice: 106, isIntraday: false,
+            fundIntroduction: true)
+        let store = SecurityDailyMoveStore { _ in
+            SecurityDailyMoveNote(text: "这只示例 ETF 跟踪全球股票指数，投资发达市场和新兴市场的大中型公司。它采用累积份额，将收到的股息继续投入基金。", sources: [])
+        }
+        for width in [320.0, 402.0] {
+            _ = try await capture(SecurityDailyMovePaper(context: context, store: store)
+                .frame(height: 874), width: width, dark: false, name: "fund-introduction-\(width)", settle: .seconds(2))
+        }
+    }
+
+    @MainActor
     func testDailyPaperBlursPresentingScreen() async throws {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let previous = scene.windows.first(where: \.isKeyWindow)
@@ -725,6 +740,40 @@ private struct LineMotionFixture: View {
 }
 
 final class SecurityDailyMoveTests: XCTestCase {
+    func testFundIntroductionOverridesMoveRoutingAndSeparatesCache() throws {
+        let history = SecurityPriceHistory(ticker: "VWRP.L", currency: "GBP",
+            points: [.init(dateText: "2026-09-09", close: 100), .init(dateText: "2026-09-10", close: 106)],
+            intradayPoints: [], trades: [])
+        let fund = try XCTUnwrap(SecurityPriceMoveContext.latestSession(history: history,
+            name: "Vanguard FTSE All-World UCITS ETF Acc", isFund: true))
+        let stock = try XCTUnwrap(SecurityPriceMoveContext.latestSession(history: history, name: fund.name))
+        XCTAssertTrue(fund.isFundIntroduction)
+        XCTAssertEqual(fund.noteTitle, L10n.text("最近有什么动静？"))
+        XCTAssertNotEqual(fund.noteTitle, stock.noteTitle)
+        XCTAssertTrue(fund.notePrompt.contains("ETF/fund"))
+        XCTAssertTrue(fund.notePrompt.contains("exact listing and share class"))
+        XCTAssertFalse(fund.notePrompt.contains("selected_focus:"))
+        XCTAssertTrue(stock.notePrompt.contains("selected_focus:"))
+        XCTAssertNotEqual(fund.key(language: "en"), stock.key(language: "en"))
+        XCTAssertNotEqual(fund.key(language: "en"), fund.key(language: "zh-Hans"))
+        XCTAssertNotEqual(SecurityDailyMoveStore.noEvidenceNote(fund).text,
+                          SecurityDailyMoveStore.noEvidenceNote(stock).text)
+    }
+
+    func testLegacyContextDecodesAndFundContextRoundTrips() throws {
+        let legacy = SecurityPriceMoveContext(ticker: "TEST", name: "Test", currency: "USD", rangeLabel: "day",
+            startDate: Date(timeIntervalSince1970: 100), endDate: Date(timeIntervalSince1970: 200),
+            startPrice: 100, endPrice: 101, isIntraday: false)
+        let data = try JSONEncoder().encode(legacy)
+        XCTAssertFalse(String(decoding: data, as: UTF8.self).contains("fundIntroduction"))
+        XCTAssertFalse(try JSONDecoder().decode(SecurityPriceMoveContext.self, from: data).isFundIntroduction)
+        var fund = legacy
+        fund.fundIntroduction = true
+        let decoded = try JSONDecoder().decode(SecurityPriceMoveContext.self, from: JSONEncoder().encode(fund))
+        XCTAssertEqual(decoded, fund)
+        XCTAssertTrue(decoded.isFundIntroduction)
+    }
+
     func testRelativeSessionDatesAcrossWeekAndYearBoundaries() throws {
         let now = try XCTUnwrap(DayDateCodec.date(from: "2026-09-11"))
         for (date, label) in [("2026-09-11", "今天"), ("2026-09-10", "昨天"),

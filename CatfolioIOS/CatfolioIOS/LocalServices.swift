@@ -7,12 +7,28 @@ enum LocalServiceKeys {
     static let fmp = "catfolio.fmp.api-key"
     static let massive = "catfolio.massive.api-key"
     static let deepSeek = "catfolio.deepseek.api-key"
+    static let openRouter = "catfolio.openrouter.api-key"
+    /// Not a secret, so in UserDefaults: which OpenRouter model answers.
+    static let openRouterModel = "catfolio.openrouter.model"
+    /// OpenRouter's own router, which picks a model for each request.
+    static let defaultOpenRouterModel = "openrouter/auto"
+
+    static var openRouterModelID: String {
+        let stored = UserDefaults.standard.string(forKey: openRouterModel)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return stored.isEmpty ? defaultOpenRouterModel : stored
+    }
+
+    static var hasOpenRouterKey: Bool {
+        !(KeychainStore.string(for: openRouter)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+    }
 }
 
 enum LocalServiceError: LocalizedError {
     case missingMarketKey
     case missingMassiveKey
     case missingAIKey
+    case missingOpenRouterKey
     case missingCodexConnection
     case appleModelUnavailable(String)
     case noAvailableAIProvider(String)
@@ -30,6 +46,8 @@ enum LocalServiceError: LocalizedError {
             L10n.text("请先在设置中填写 Massive API Key。")
         case .missingAIKey:
             L10n.text("DeepSeek 模式需要 API Key。请在设置中填写，Key 只保存在此 iPhone。")
+        case .missingOpenRouterKey:
+            L10n.text("OpenRouter 模式需要 API Key。请在设置中填写，Key 只保存在此 iPhone。")
         case .missingCodexConnection:
             L10n.text("请先在设置中连接 ChatGPT Codex。")
         case let .appleModelUnavailable(reason):
@@ -55,6 +73,7 @@ enum AIProviderPreference: String, CaseIterable, Identifiable {
     case apple
     case codex
     case deepSeek
+    case openRouter
 
     static let storageKey = "catfolio.ai.provider"
 
@@ -72,19 +91,22 @@ enum AIProviderPreference: String, CaseIterable, Identifiable {
         case .apple: L10n.text("Apple 本地")
         case .codex: "Codex"
         case .deepSeek: "DeepSeek"
+        case .openRouter: "OpenRouter"
         }
     }
 
     var detail: String {
         switch self {
         case .automatic:
-            L10n.text("优先使用 Apple 本地模型；不可用时依次使用已连接的 Codex 和 DeepSeek。")
+            L10n.text("优先使用 Apple 本地模型；不可用时依次使用已连接的 Codex、已填 Key 的 OpenRouter 和 DeepSeek。")
         case .apple:
             L10n.text("组合摘要只在设备上处理，可离线使用；需要 Apple Intelligence 已开启且模型就绪。")
         case .codex:
             L10n.text("在此 iPhone 上登录 ChatGPT，直接使用你的 Codex 订阅进行分析。")
         case .deepSeek:
             L10n.text("组合摘要会直接发送给 DeepSeek，需要 API Key 和网络连接。")
+        case .openRouter:
+            L10n.text("组合摘要会直接发送给 OpenRouter，由你在设置里选的模型回答；需要 API Key 和网络连接。")
         }
     }
 }
@@ -1153,11 +1175,10 @@ struct LocalMarketDataClient {
             return .accountHistory(ledger: ledger, nav: account.portfolio, positionCount: document.positions.count,
                                    assumptions: account.assumptions)
         } catch {
-            if cachedOnly { throw error }
             let reason = error.localizedDescription.replacingOccurrences(of: "TWR：", with: "")
             // Last resort, still a chart: today's positions backcast at
             // each day's close against what they cost, as before the ledger.
-            if let backcast = try? await currentOpenPositionsHistory(document: document, end: DayDateCodec.string(from: Date())),
+            if let backcast = try? await currentOpenPositionsHistory(document: document, end: DayDateCodec.string(from: Date()), cachedOnly: cachedOnly),
                let last = backcast.rows.last, backcast.rows.count > 1 {
                 var response = PortfolioChartResponse(positionCount: document.positions.count,
                     positionHistory: PositionHistory(available: true, rows: backcast.rows), currentPoint: last,
@@ -1165,6 +1186,7 @@ struct LocalMarketDataClient {
                 response.dataIssues = [L10n.text("账户历史重建失败：\(reason)")] + backcast.warnings
                 return response
             }
+            if cachedOnly { throw error }
             var response = PortfolioChartResponse.unavailableAccountHistory(positionCount: document.positions.count,
                 reason: error.localizedDescription.replacingOccurrences(of: "TWR：", with: "账户历史："))
             response.dataIssues = [L10n.text("账户历史重建失败：\(reason)")]
@@ -1627,7 +1649,8 @@ struct LocalMarketDataClient {
         ticker: String,
         currency: String,
         referencePrice: Double? = nil,
-        forceRefresh: Bool = false
+        forceRefresh: Bool = false,
+        cachedOnly: Bool = false
     ) async throws -> VolumeProfile {
         let end = DayDateFormatter.shared.string(from: Date())
         let start = DayDateFormatter.shared.string(
@@ -1635,7 +1658,7 @@ struct LocalMarketDataClient {
         )
         let marketSymbol = Self.yahooSymbol(ticker: ticker, currency: currency)
         let cached = await LocalVolumeBarCache.shared.lookup(symbol: marketSymbol)
-        if !forceRefresh, let cached, cached.isFresh {
+        if let cached, cachedOnly || (!forceRefresh && cached.isFresh) {
             return try Self.makeVolumeProfile(
                 bars: cached.bars,
                 ticker: ticker,
@@ -1644,6 +1667,8 @@ struct LocalMarketDataClient {
                 fallbackDate: end
             )
         }
+
+        guard !cachedOnly else { throw LocalServiceError.noMarketData }
 
         var latestError: Error?
         if Self.supportsMassiveStockSymbol(marketSymbol),
@@ -1710,7 +1735,8 @@ struct LocalMarketDataClient {
         currency: String,
         referencePrice: Double? = nil,
         document: LocalPortfolioDocument,
-        forceRefresh: Bool = false
+        forceRefresh: Bool = false,
+        cachedOnly: Bool = false
     ) async throws -> SecurityPriceHistory {
         let normalizedTicker = ticker.uppercased()
         let transactions = (document.transactions ?? []).filter {
@@ -1726,8 +1752,9 @@ struct LocalMarketDataClient {
         let start = "1900-01-01"
         let end = DayDateCodec.string(from: Date())
         let symbol = Self.yahooSymbol(ticker: ticker, currency: currency)
-        async let dailyCloses = historicalCloses(symbol: symbol, from: start, to: end, forceRefresh: forceRefresh)
-        async let latestIntradayBars = intradayBars(symbol: symbol, forceRefresh: forceRefresh)
+        async let dailyCloses = historicalCloses(symbol: symbol, from: start, to: end,
+                                                cachedOnly: cachedOnly, forceRefresh: forceRefresh)
+        async let latestIntradayBars = intradayBars(symbol: symbol, forceRefresh: forceRefresh, cachedOnly: cachedOnly)
         let closes = try await dailyCloses
         let intradayBars = (try? await latestIntradayBars) ?? []
         guard !closes.isEmpty else { throw LocalServiceError.noHistoricalPrices }
@@ -1799,8 +1826,10 @@ struct LocalMarketDataClient {
         )
     }
 
-    private func intradayBars(symbol: String, forceRefresh: Bool = false, allowsStaleFallback: Bool = true) async throws -> [MarketIntradayBar] {
+    private func intradayBars(symbol: String, forceRefresh: Bool = false, allowsStaleFallback: Bool = true,
+                              cachedOnly: Bool = false) async throws -> [MarketIntradayBar] {
         let cached = await LocalIntradayPriceCache.shared.lookup(symbol: symbol)
+        if cachedOnly { return cached?.bars ?? [] }
         if !forceRefresh, let cached, cached.isFresh { return cached.bars }
 
         var latestError: Error?
@@ -3044,7 +3073,7 @@ struct LocalMarketDataClient {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let (data, response) = try await Self.yahooSession.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw LocalServiceError.remote("Yahoo 分红记录请求失败")
+            throw LocalServiceError.remote("Yahoo 股息记录请求失败")
         }
         let payload = try JSONDecoder().decode(YahooChartResponse.self, from: data)
         guard let result = payload.chart.result?.first else { throw LocalServiceError.noMarketData }
@@ -3891,6 +3920,8 @@ struct LocalAIClient {
             throw LocalServiceError.appleModelUnavailable(Self.appleModelStatus.message)
         case .deepSeek:
             return try await completeWithDeepSeek(question: question, context: context, structured: structured)
+        case .openRouter:
+            return try await completeWithOpenRouter(question: question, context: context, structured: structured)
         case .codex:
             return try await completeWithCodex(question: question, context: context)
         case .automatic:
@@ -3910,11 +3941,19 @@ struct LocalAIClient {
                     codexFailure = error.localizedDescription
                 }
             }
+            var openRouterFailure = ""
+            if LocalServiceKeys.hasOpenRouterKey {
+                do {
+                    return try await completeWithOpenRouter(question: question, context: context, structured: structured)
+                } catch {
+                    openRouterFailure = "；OpenRouter：\(error.localizedDescription)"
+                }
+            }
             do {
                 return try await completeWithDeepSeek(question: question, context: context, structured: structured)
             } catch {
                 throw LocalServiceError.noAvailableAIProvider(
-                    "Apple：\(appleFailure)；Codex：\(codexFailure)；DeepSeek：\(error.localizedDescription)"
+                    "Apple：\(appleFailure)；Codex：\(codexFailure)\(openRouterFailure)；DeepSeek：\(error.localizedDescription)"
                 )
             }
         }
@@ -4049,37 +4088,9 @@ struct LocalAIClient {
     }
 
     private func completeWithDeepSeek(question: String, context: String, structured: Bool = false) async throws -> String {
-        guard let key = KeychainStore.string(for: LocalServiceKeys.deepSeek), !key.isEmpty else {
-            throw LocalServiceError.missingAIKey
-        }
-        let payload: [String: Any] = [
-            "model": "deepseek-chat",
-            "temperature": 0.2,
-            "messages": [
-                ["role": "system", "content": structured ? "严格按当前请求提供的 JSON schema 输出单个 JSON 对象，不附加解释或 Markdown。仅使用提供的证据，证据不足时遵循请求中的空结果规则，不要编造内容。若请求是筛选条件解析，不支持的条件放入 unsupported，不可忽略。" : "你是 Catfolio 的投资组合分析助手。只根据用户手机提供的组合摘要回答，不虚构实时新闻或行情；明确说明这不是投资建议。" + L10n.responseLanguageInstruction],
-                ["role": "user", "content": "\(context)\n\n问题：\(question)"],
-            ],
-        ]
-        var request = URLRequest(url: URL(string: "https://api.deepseek.com/chat/completions")!)
-        request.httpMethod = "POST"
-        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-        request.timeoutInterval = 45
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-        let (data, response) = try await LocalRequestSessions.ephemeral.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else {
-            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            let detail = ((object?["error"] as? [String: Any])?["message"] as? String)
-                ?? "AI 请求失败（\(http.statusCode)）"
-            throw LocalServiceError.remote(detail)
-        }
-        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = object["choices"] as? [[String: Any]],
-              let message = choices.first?["message"] as? [String: Any],
-              let content = message["content"] as? String,
-              !content.isEmpty else { throw LocalServiceError.invalidResponse }
-        return content
+        try await completeChat(.deepSeek(),
+                               system: structured ? Self.structuredSystemPrompt : Self.portfolioSystemPrompt + L10n.responseLanguageInstruction,
+                               user: "\(context)\n\n问题：\(question)")
     }
 
     private func completeWithCodex(question: String, context: String) async throws -> String {
@@ -4092,6 +4103,42 @@ struct LocalAIClient {
     }
 
     // MARK: Streaming
+
+    /// Preset security/market questions do not require a funded portfolio or
+    /// inherit its previous attention report. Use the existing research search
+    /// capability where available; other providers explain any missing evidence.
+    func streamPublicResearch(
+        _ question: String,
+        context: String
+    ) -> AsyncThrowingStream<AIStreamEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let preference = AIProviderPreference.current
+                    let canSearch = (preference == .codex || preference == .automatic)
+                        && CodexOAuthClient.cachedConnected
+                    if canSearch {
+                        do {
+                            let result = try await researchAnswerWithNativeSearch(
+                                "\(context)\n\n问题：\(question)")
+                            try Task.checkCancellation()
+                            continuation.yield(.text(result.text))
+                            continuation.finish()
+                            return
+                        } catch {
+                            try Task.checkCancellation()
+                            guard preference == .automatic else { throw error }
+                        }
+                    }
+                    try await streamResearch(question, context: context) { continuation.yield($0) }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
 
     /// The portfolio answer as it is written, with the model's thinking where
     /// it shares it. The same providers, order and context as `answer`.
@@ -4128,6 +4175,8 @@ struct LocalAIClient {
             throw LocalServiceError.appleModelUnavailable(Self.appleModelStatus.message)
         case .deepSeek:
             try await streamWithDeepSeek(prompt: prompt, emit: emit)
+        case .openRouter:
+            try await streamWithOpenRouter(prompt: prompt, emit: emit)
         case .codex:
             guard CodexOAuthClient.cachedConnected else { throw LocalServiceError.missingCodexConnection }
             try await CodexOAuthClient().streamCompletion(prompt: prompt, emit: emit)
@@ -4156,11 +4205,19 @@ struct LocalAIClient {
                     codexFailure = error.localizedDescription
                 }
             }
+            var openRouterFailure = ""
+            if LocalServiceKeys.hasOpenRouterKey {
+                do {
+                    return try await streamWithOpenRouter(prompt: prompt, emit: tracked)
+                } catch where canFallBack(error) {
+                    openRouterFailure = "；OpenRouter：\(error.localizedDescription)"
+                }
+            }
             do {
                 try await streamWithDeepSeek(prompt: prompt, emit: tracked)
             } catch where canFallBack(error) {
                 throw LocalServiceError.noAvailableAIProvider(
-                    "Apple：\(appleFailure)；Codex：\(codexFailure)；DeepSeek：\(error.localizedDescription)"
+                    "Apple：\(appleFailure)；Codex：\(codexFailure)\(openRouterFailure)；DeepSeek：\(error.localizedDescription)"
                 )
             }
         }
@@ -4192,27 +4249,90 @@ struct LocalAIClient {
         }
     }
 
-    private func streamWithDeepSeek(prompt: String, emit: @escaping @Sendable (AIStreamEvent) -> Void) async throws {
-        guard let key = KeychainStore.string(for: LocalServiceKeys.deepSeek), !key.isEmpty else {
-            throw LocalServiceError.missingAIKey
+    private static let portfolioSystemPrompt = "你是 Catfolio 的投资组合分析助手。只根据用户手机提供的组合摘要回答，不虚构实时新闻或行情；明确说明这不是投资建议。"
+    private static let structuredSystemPrompt = "严格按当前请求提供的 JSON schema 输出单个 JSON 对象，不附加解释或 Markdown。仅使用提供的证据，证据不足时遵循请求中的空结果规则，不要编造内容。若请求是筛选条件解析，不支持的条件放入 unsupported，不可忽略。"
+
+    /// An OpenAI-style chat-completions service: DeepSeek, OpenRouter.
+    private struct ChatCompletionsService {
+        let name: String
+        let url: URL
+        let key: String
+        let model: String
+        var headers: [String: String] = [:]
+        /// Added to a streamed request, e.g. asking for the reasoning.
+        var streamingBody: [String: Any] = [:]
+
+        static func deepSeek() throws -> Self {
+            guard let key = KeychainStore.string(for: LocalServiceKeys.deepSeek), !key.isEmpty else {
+                throw LocalServiceError.missingAIKey
+            }
+            return Self(name: "DeepSeek", url: URL(string: "https://api.deepseek.com/chat/completions")!,
+                        key: key, model: "deepseek-chat")
         }
-        let payload: [String: Any] = [
-            "model": "deepseek-chat",
-            "temperature": 0.2,
-            "stream": true,
-            "messages": [
-                ["role": "system", "content": "你是 Catfolio 的投资组合分析助手。只根据用户手机提供的组合摘要回答，不虚构实时新闻或行情；明确说明这不是投资建议。" + L10n.responseLanguageInstruction],
-                ["role": "user", "content": prompt],
-            ],
-        ]
-        var request = URLRequest(url: URL(string: "https://api.deepseek.com/chat/completions")!)
-        request.httpMethod = "POST"
-        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-        request.timeoutInterval = 90
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-        let (bytes, response) = try await LocalRequestSessions.ephemeral.bytes(for: request)
+
+        /// OpenRouter normalises every model's thinking into `reasoning`,
+        /// and ignores the request for it where a model has none.
+        static func openRouter() throws -> Self {
+            guard let key = KeychainStore.string(for: LocalServiceKeys.openRouter)?
+                .trimmingCharacters(in: .whitespacesAndNewlines), !key.isEmpty else {
+                throw LocalServiceError.missingOpenRouterKey
+            }
+            return Self(name: "OpenRouter", url: URL(string: "https://openrouter.ai/api/v1/chat/completions")!,
+                        key: key, model: LocalServiceKeys.openRouterModelID,
+                        headers: ["X-Title": "Catfolio"],
+                        streamingBody: ["reasoning": ["effort": "medium"]])
+        }
+
+        func request(system: String, user: String, stream: Bool) throws -> URLRequest {
+            var payload: [String: Any] = [
+                "model": model,
+                "temperature": 0.2,
+                "messages": [["role": "system", "content": system], ["role": "user", "content": user]],
+            ]
+            if stream {
+                payload["stream"] = true
+                payload.merge(streamingBody) { current, _ in current }
+            }
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            request.timeoutInterval = stream ? 90 : 45
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(stream ? "text/event-stream" : "application/json", forHTTPHeaderField: "Accept")
+            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+            for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
+            return request
+        }
+
+        static func errorMessage(_ data: Data, status: Int) -> String {
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            return ((object?["error"] as? [String: Any])?["message"] as? String) ?? "AI 请求失败（\(status)）"
+        }
+    }
+
+    private func completeChat(_ service: ChatCompletionsService, system: String, user: String) async throws -> String {
+        let (data, response) = try await LocalRequestSessions.ephemeral.data(
+            for: service.request(system: system, user: user, stream: false))
+        guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            throw LocalServiceError.remote(ChatCompletionsService.errorMessage(data, status: http.statusCode))
+        }
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let choices = object["choices"] as? [[String: Any]],
+              let message = choices.first?["message"] as? [String: Any],
+              let content = message["content"] as? String,
+              !content.isEmpty else { throw LocalServiceError.invalidResponse }
+        return content
+    }
+
+    private func streamChat(
+        _ service: ChatCompletionsService,
+        system: String,
+        user: String,
+        emit: @escaping @Sendable (AIStreamEvent) -> Void
+    ) async throws {
+        let (bytes, response) = try await LocalRequestSessions.ephemeral.bytes(
+            for: service.request(system: system, user: user, stream: true))
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             var data = Data()
@@ -4220,20 +4340,52 @@ struct LocalAIClient {
                 data.append(byte)
                 if data.count > 64_000 { break }
             }
-            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            throw LocalServiceError.remote(((object?["error"] as? [String: Any])?["message"] as? String)
-                ?? "AI 请求失败（\(http.statusCode)）")
+            throw LocalServiceError.remote(ChatCompletionsService.errorMessage(data, status: http.statusCode))
         }
         var wroteAnswer = false
         for try await line in bytes.lines {
             try Task.checkCancellation()
             if AIStreamParsing.isDone(line) { break }
+            if let message = AIStreamParsing.chatCompletionError(line) { throw LocalServiceError.remote(message) }
             for event in AIStreamParsing.chatCompletionEvents(line) {
                 if case .text = event { wroteAnswer = true }
                 emit(event)
             }
         }
         guard wroteAnswer else { throw LocalServiceError.invalidResponse }
+    }
+
+    private func streamWithDeepSeek(prompt: String, emit: @escaping @Sendable (AIStreamEvent) -> Void) async throws {
+        try await streamChat(.deepSeek(), system: Self.portfolioSystemPrompt + L10n.responseLanguageInstruction,
+                             user: prompt, emit: emit)
+    }
+
+    private func streamWithOpenRouter(prompt: String, emit: @escaping @Sendable (AIStreamEvent) -> Void) async throws {
+        try await streamChat(.openRouter(), system: Self.portfolioSystemPrompt + L10n.responseLanguageInstruction,
+                             user: prompt, emit: emit)
+    }
+
+    private func completeWithOpenRouter(question: String, context: String, structured: Bool = false) async throws -> String {
+        try await completeChat(.openRouter(),
+                               system: structured ? Self.structuredSystemPrompt : Self.portfolioSystemPrompt + L10n.responseLanguageInstruction,
+                               user: "\(context)\n\n问题：\(question)")
+    }
+
+    /// Checks the key against OpenRouter's key endpoint, which answers for any
+    /// valid key without spending credit.
+    func testOpenRouterConnection(apiKey: String? = nil) async throws {
+        let key = (apiKey ?? KeychainStore.string(for: LocalServiceKeys.openRouter) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { throw LocalServiceError.missingOpenRouterKey }
+        var request = URLRequest(url: URL(string: "https://openrouter.ai/api/v1/key")!)
+        request.timeoutInterval = 20
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        request.setValue("Catfolio", forHTTPHeaderField: "X-Title")
+        let (data, response) = try await LocalRequestSessions.ephemeral.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            throw LocalServiceError.remote(ChatCompletionsService.errorMessage(data, status: http.statusCode))
+        }
     }
 
     private static func cleanJSON(_ text: String) -> String {

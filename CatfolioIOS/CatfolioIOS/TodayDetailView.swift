@@ -220,12 +220,16 @@ struct TodayDetailView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .modifier(ContentCard())
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(CatfolioStyle.pageHorizontalInset)
         }
-        .background(Color(uiColor: .systemBackground))
+        // ScrollView does not supply List's grouped page and row surfaces.
+        // Keep the shared card fill distinct from the page in either theme.
+        .background(Color(uiColor: .systemGroupedBackground))
         .accessibilityIdentifier("today-detail-scroll")
         .navigationDestination(isPresented: $showsSectorMembers) {
             if let selectedSector {
@@ -270,6 +274,8 @@ struct TodayDetailView: View {
             }
         }
         .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .modifier(ContentCard())
     }
 
     private var sectorSection: some View {
@@ -349,6 +355,8 @@ struct TodayDetailView: View {
                     if contribution.id != rows.last?.id { Divider() }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .modifier(ContentCard())
         }
     }
 

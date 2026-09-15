@@ -3,28 +3,49 @@ import XCTest
 @testable import CatfolioIOS
 
 final class HomeScrollInteractionTests: XCTestCase {
-    func testGlassSweepOnlyRespondsToUpwardGlassTravel() {
-        for (from, to): (CGFloat, CGFloat) in [(100, 90), (100, 100), (-20, 0), (262, 263), (400, 420)] {
-            XCTAssertEqual(PortfolioGlassSweep.strength(from: from, to: to, elapsed: 1 / 60, travel: 263), 0)
+    func testFloatingFilterRequiresTheWholeOriginalControlToExitAboveViewport() {
+        for y: CGFloat in [700, 0, -20, -43.5] {
+            XCTAssertFalse(PortfolioFloatingFilterOverlay.shouldFloat(sourceFrame: CGRect(x: 300, y: y, width: 58, height: 44)))
         }
-        XCTAssertEqual(PortfolioGlassSweep.strength(from: 0, to: 120, elapsed: 2, travel: 263), 0,
-                       "A layout jump after inactivity is not a flick")
+        for y: CGFloat in [-44, -45, -800] {
+            XCTAssertTrue(PortfolioFloatingFilterOverlay.shouldFloat(sourceFrame: CGRect(x: 300, y: y, width: 58, height: 44)))
+        }
+        XCTAssertFalse(PortfolioFloatingFilterOverlay.shouldFloat(sourceFrame: .zero))
+        XCTAssertFalse(PortfolioFloatingFilterOverlay.shouldFloat(sourceFrame: .null))
     }
 
-    func testGlassSweepSpeedIncreasesLightWithCappedIntensity() {
-        let slow = PortfolioGlassSweep.strength(from: 118, to: 130, elapsed: 0.08, travel: 263)
-        let fast = PortfolioGlassSweep.strength(from: 118, to: 130, elapsed: 0.01, travel: 263)
-        let extreme = PortfolioGlassSweep.strength(from: 0, to: 130, elapsed: 0.001, travel: 263)
-        XCTAssertGreaterThan(slow, 0)
-        XCTAssertGreaterThan(fast, slow * 2)
-        XCTAssertLessThanOrEqual(extreme, 0.9)
-    }
-
-    func testGlassSweepFadesAtBothEndsOfCardExpansion() {
-        let middle = PortfolioGlassSweep.strength(from: 125, to: 130, elapsed: 1 / 60, travel: 263)
-        for offset: CGFloat in [5, 258] {
-            let edge = PortfolioGlassSweep.strength(from: offset - 5, to: offset, elapsed: 1 / 60, travel: 263)
-            XCTAssertLessThan(edge, middle * 0.2)
+    @MainActor
+    func testFloatingFilterHomeScrollLayout() async throws {
+        let suite = "FloatingFilterTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(false, forKey: PublicInvestorPreferences.enabledKey)
+        let document = FakePortfolioGenerator.make()
+        let model = AppModel(defaults: defaults, personalDocumentLoader: { document })
+        await model.refreshPortfolio(refreshMarketData: false)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let host = UIHostingController(rootView: PortfolioView().environment(model)
+            .environment(\.locale, Locale(identifier: "zh-Hans"))
+            .preferredColorScheme(.light))
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previous?.makeKeyAndVisible() }
+        try await Task.sleep(for: .milliseconds(600))
+        func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap(descendants) }
+        let scroll = try XCTUnwrap(descendants(host.view).compactMap { $0 as? UIScrollView }
+            .max(by: { $0.contentSize.height < $1.contentSize.height }))
+        for (name, offset): (String, CGFloat) in [("initial", 0), ("floating", 1300), ("further", 1450), ("returned", 343)] {
+            scroll.setContentOffset(CGPoint(x: 0, y: offset - scroll.adjustedContentInset.top), animated: false)
+            try await Task.sleep(for: .milliseconds(400))
+            XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, offset, accuracy: 1)
+            let attachment = XCTAttachment(image: UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+                window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+            })
+            attachment.name = "home-filter-\(name)"
+            attachment.lifetime = .keepAlways
+            add(attachment)
         }
     }
 

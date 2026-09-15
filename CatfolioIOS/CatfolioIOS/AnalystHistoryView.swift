@@ -157,7 +157,7 @@ struct AnalystHistoryView: View {
         String(points.prefix { $0.date <= point.date }.filter { !$0.validTargets }.count)
     }
     private var targetsChart: some View {
-        StandardLineChartEntrance { phase in
+        StandardLineChartEntrance(appearanceID: "analyst-targets|\(symbol)") { phase in
         Chart(Array(points.enumerated()), id: \.element.id) { item in
             let p = item.element
             let fraction = Double(item.offset) / Double(max(1, points.count - 1))
@@ -181,7 +181,7 @@ struct AnalystHistoryView: View {
         }
     }
     private var ratingsChart: some View {
-        StandardLineChartEntrance { phase in
+        StandardLineChartEntrance(appearanceID: "analyst-ratings|\(symbol)") { phase in
         Chart {
             ForEach(Array(points.enumerated()), id: \.element.id) { item in
                 let p = item.element

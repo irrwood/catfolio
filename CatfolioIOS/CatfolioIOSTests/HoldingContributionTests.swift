@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import CatfolioIOS
 
@@ -18,6 +19,79 @@ final class HoldingContributionTests: XCTestCase {
             costs: Self.costs,
             names: ["A": "Alpha", "C": "Gamma"]
         )
+    }
+
+    @MainActor
+    func testLoadingRetriesWhilePortfolioArrivesAndPreservesCosts() async throws {
+        let state = HoldingHistoryState()
+        let value = history()
+        var networkAttempts = 0
+        await state.load { cachedOnly in
+            if cachedOnly { throw LocalPortfolioError.noPortfolio }
+            networkAttempts += 1
+            if networkAttempts == 1 { throw LocalPortfolioError.noPortfolio }
+            return value
+        }
+        XCTAssertEqual(networkAttempts, 2)
+        XCTAssertNil(state.errorMessage)
+        let loaded = try XCTUnwrap(state.history)
+        let stack = HoldingContributionStack(history: loaded)
+        XCTAssertEqual(stack.rows.last?.principal, 600)
+        XCTAssertEqual(stack.rows.last?.total, 1260)
+        XCTAssertEqual(loaded.costs, Self.costs)
+    }
+
+    @MainActor
+    func testChartReplacesLoadingPlaceholderWithVisibleContent() async throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previousWindow = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        var resume: CheckedContinuation<HoldingValueHistory, Never>?
+        let requested = expectation(description: "History requested by the chart")
+        let value = history()
+        let host = UIHostingController(rootView: ScrollView {
+            HoldingContributionChart(fetchHistory: { cachedOnly in
+                if cachedOnly { throw LocalServiceError.noHistoricalPrices }
+                return await withCheckedContinuation {
+                    resume = $0
+                    requested.fulfill()
+                }
+            })
+        }.environment(AppModel()))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer {
+            resume?.resume(returning: value)
+            window.isHidden = true
+            previousWindow?.makeKeyAndVisible()
+        }
+        await fulfillment(of: [requested], timeout: 5)
+        host.view.layoutIfNeeded()
+        func scrollView(_ view: UIView) -> UIScrollView? {
+            if let scroll = view as? UIScrollView { return scroll }
+            return view.subviews.lazy.compactMap { scrollView($0) }.first
+        }
+        let scroll = try XCTUnwrap(scrollView(host.view))
+        let loadingHeight = scroll.contentSize.height
+        XCTAssertGreaterThanOrEqual(loadingHeight, 300)
+        resume?.resume(returning: value)
+        resume = nil
+        for _ in 0..<30 {
+            try await Task.sleep(for: .milliseconds(100))
+            host.view.layoutIfNeeded()
+            if scroll.contentSize.height > loadingHeight + 150 { break }
+        }
+        XCTAssertGreaterThan(scroll.contentSize.height, loadingHeight + 150,
+                             "Loaded chart, range selector and legend must replace the placeholder")
+        // Include the completed chart reveal, not its grey transition frame.
+        try await Task.sleep(for: .seconds(1))
+        let image = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
+            host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+        }
+        let attachment = XCTAttachment(image: image)
+        attachment.name = "holding-contribution-loaded"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     func testBigGainersGetBandsUntilTheNextIsASmallShare() {

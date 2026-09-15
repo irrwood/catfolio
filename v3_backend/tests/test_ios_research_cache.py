@@ -56,15 +56,20 @@ def test_research_manual_refresh_and_independent_cards():
     assert 'analysisRequestID == requestID' in source
 
 
-def test_today_attention_has_its_own_settings_route():
+def test_today_attention_has_its_own_performance_route():
     source = (ROOT / "ResearchView.swift").read_text()
     settings = (ROOT / "SettingsView.swift").read_text()
+    returns = (ROOT / "ReturnsView.swift").read_text()
     assert 'struct TodayAttentionView: View' in source
     assert 'ResearchView(showsAttention: true)' in source
-    assert 'TodayAttentionView()' in settings
-    assert 'title: L10n.text("今天值得关注")' in settings
+    performance = returns.split('SettingsSection(L10n.text("Performance")) {', 1)[1].split(
+        'SettingsSection(L10n.text("行情与 AI"))', 1
+    )[0]
+    assert 'TodayAttentionView().environment(model)' in performance
+    assert 'title: L10n.text("今天值得关注")' in performance
+    assert 'performance.today-attention' in performance
+    assert 'title: L10n.text("今天值得关注")' not in settings
     assert 'L10n.text("AI 持仓分析")' not in source
-    assert '.task { if !showsAttention { await refreshMarkets() } }' in source
     assert '.task(id: accountScope) {\n            guard showsAttention else { return }' in source
     assert 'if showsAttention {\n            Section {' in source
 

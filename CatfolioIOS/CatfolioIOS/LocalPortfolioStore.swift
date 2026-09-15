@@ -602,8 +602,10 @@ struct PortfolioAccount: Identifiable, Equatable, Codable {
     /// Derived rather than stored: an account only reaches `knownAccounts`
     /// with no positions and no transactions when it was created ahead of its
     /// first sync, and the flag clears itself the moment anything lands.
+    /// SnapTrade accounts are created only after a confirmed complete preview,
+    /// so an empty SnapTrade account has already synced successfully.
     var awaitsFirstSync: Bool {
-        positionCount == 0 && transactionCount == 0
+        source != "SnapTrade" && positionCount == 0 && transactionCount == 0
     }
 
     var brokerName: String {

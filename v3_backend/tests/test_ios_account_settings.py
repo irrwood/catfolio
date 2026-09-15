@@ -243,7 +243,7 @@ def test_trading_212_history_imports_dividends_and_transaction_screen_syncs_it()
     assert 'action: "DIVIDEND"' in client
     assert "Trading212DividendSyncStore" in client
     assert "synchronizeTrading212History()" in settings
-    assert 'syncMessage = "正在补齐 Trading 212 成交、分红与利息…"' in settings
+    assert 'syncMessage = L10n.text("正在补齐 Trading 212 成交、股息与利息…")' in settings
     assert 'transaction.action.uppercased() == "DIVIDEND"' in settings
     assert "transactions: transactions" in client
 

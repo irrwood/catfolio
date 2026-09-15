@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private typealias PortfolioHomeTypography = LegacyType
 
@@ -27,18 +28,7 @@ private struct PortfolioHomeTopBackground: View {
 private struct PortfolioHomePageBackdrop: View {
     @Environment(\.locale) private var appLocale
     let colorScheme: ColorScheme
-    let scrollOffset: CGFloat
-    let fadeStartOffset: CGFloat?
-
-    private var gradientDismissalProgress: CGFloat {
-        guard let start = fadeStartOffset else { return 0 }
-        let end = start + PortfolioContentSheetLayout.backdropFadeDistance
-        let linear = min(max((scrollOffset - start) / max(end - start, 1), 0), 1)
-
-        // The gradient remains intact until TODAY has completely crossed the
-        // top of the screen, then settles as the rest of that card scrolls out.
-        return linear * linear * (3 - 2 * linear)
-    }
+    let scrollState: PortfolioHomeScrollState
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -50,7 +40,7 @@ private struct PortfolioHomePageBackdrop: View {
             // background instead of a separate pale-blue extension band.
             PortfolioHomeTopBackground(colorScheme: colorScheme)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .opacity(1 - gradientDismissalProgress)
+                .opacity(1 - scrollState.backdropProgress)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea()
@@ -71,25 +61,121 @@ private enum PortfolioContentSheetLayout {
     // summary remains visible while the chart is covered by Today.
     static let firstScrollDetent = PortfolioHeroChartLayout.sectionHeight - PortfolioHeroChartLayout.plotTop
     static let topRadius: CGFloat = 38
+    static let blurLeadDistance: CGFloat = 64
+    static let blurActivationDistance: CGFloat = 48
+    // Fade out underneath the rounded corners, where the sheet's own glass
+    // takes over. This keeps both ends of the small sampling band seamless.
+    static let blurBandHeight = blurLeadDistance + topRadius + 40
+
+    static var shape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: topRadius,
+            bottomLeadingRadius: 0,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: topRadius,
+            style: .continuous
+        )
+    }
 }
 
+/// Only the small visual layers observe scroll samples. PortfolioView keeps
+/// this reference without reading its properties while building financial
+/// content, so a pixel of travel does not reconstruct the holdings or charts.
+@MainActor @Observable
+private final class PortfolioHomeScrollState {
+    private(set) var heroOffset: CGFloat = 0
+    private(set) var sheetProgress: CGFloat = 0
+    private(set) var backdropProgress: CGFloat = 0
+    private(set) var indicatorTopInset: CGFloat = 0
+    private(set) var hasVisibleIndicatorTrack = false
+
+    @ObservationIgnored private var offset: CGFloat = 0
+    @ObservationIgnored private var pull: CGFloat = 0
+    @ObservationIgnored private var titleExitOffset: CGFloat?
+    @ObservationIgnored private var holdingsTop: CGFloat?
+    @ObservationIgnored private var viewportHeight: CGFloat = 0
+
+    func update(offset: CGFloat, pull: CGFloat) {
+        self.offset = offset
+        self.pull = pull
+        if heroOffset != offset { heroOffset = offset }
+        let progress = min(max(offset / PortfolioContentSheetLayout.widthExpansionDistance, 0), 1)
+        if sheetProgress != progress { sheetProgress = progress }
+        updateBackdrop()
+        updateIndicator()
+    }
+
+    func titleMoved(to bottom: CGFloat) {
+        guard pull < 0.5 else { return }
+        let exit = offset + bottom
+        guard titleExitOffset.map({ abs($0 - exit) > 0.5 }) ?? true else { return }
+        titleExitOffset = exit
+        updateBackdrop()
+    }
+
+    func holdingsMoved(to top: CGFloat) {
+        holdingsTop = top
+        updateIndicator()
+    }
+
+    func viewportChanged(to height: CGFloat) {
+        viewportHeight = height
+        updateIndicator()
+    }
+
+    private func updateBackdrop() {
+        guard let start = titleExitOffset else { return }
+        let linear = min(max((offset - start) / PortfolioContentSheetLayout.backdropFadeDistance, 0), 1)
+        let progress = linear * linear * (3 - 2 * linear)
+        if backdropProgress != progress { backdropProgress = progress }
+    }
+
+    private func updateIndicator() {
+        let inset = max(0, (holdingsTop ?? 0) - offset)
+        if indicatorTopInset != inset { indicatorTopInset = inset }
+        let visible = holdingsTop != nil && viewportHeight - inset > 32
+        if hasVisibleIndicatorTrack != visible { hasVisibleIndicatorTrack = visible }
+    }
+}
+
+private struct PortfolioPinnedHero: ViewModifier {
+    let scrollState: PortfolioHomeScrollState
+
+    func body(content: Content) -> some View {
+        content.offset(y: scrollState.heroOffset)
+    }
+}
+
+private struct PortfolioHomeScrollIndicators: ViewModifier {
+    let scrollState: PortfolioHomeScrollState
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .contentMargins(.top, scrollState.indicatorTopInset, for: .scrollIndicators)
+            .scrollIndicators(enabled && scrollState.hasVisibleIndicatorTrack ? .automatic : .hidden, axes: .vertical)
+            .onGeometryChange(for: CGFloat.self) { geometry in
+                max(0, geometry.size.height - geometry.safeAreaInsets.top - geometry.safeAreaInsets.bottom)
+            } action: { _, height in
+                scrollState.viewportChanged(to: height)
+            }
+    }
+}
 
 private struct PortfolioContentSheet<Content: View>: View {
     @Environment(\.locale) private var appLocale
-    let scrollOffset: CGFloat
+    let scrollState: PortfolioHomeScrollState
     let content: Content
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var sweepStrength: CGFloat = 0
-    @State private var lastSweepSampleTime: TimeInterval?
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
-    init(scrollOffset: CGFloat, @ViewBuilder content: () -> Content) {
-        self.scrollOffset = scrollOffset
+    init(scrollState: PortfolioHomeScrollState, @ViewBuilder content: () -> Content) {
+        self.scrollState = scrollState
         self.content = content()
     }
 
     private var widthProgress: CGFloat {
-        min(max(scrollOffset / PortfolioContentSheetLayout.widthExpansionDistance, 0), 1)
+        scrollState.sheetProgress
     }
 
     private var horizontalInset: CGFloat {
@@ -101,175 +187,170 @@ private struct PortfolioContentSheet<Content: View>: View {
     }
 
     private var sheetShape: UnevenRoundedRectangle {
-        UnevenRoundedRectangle(
-            topLeadingRadius: PortfolioContentSheetLayout.topRadius,
-            bottomLeadingRadius: 0,
-            bottomTrailingRadius: 0,
-            topTrailingRadius: PortfolioContentSheetLayout.topRadius,
-            style: .continuous
-        )
+        PortfolioContentSheetLayout.shape
     }
 
     var body: some View {
         content
-            .environment(\.portfolioGlassSweep, .init(
-                progress: settlingProgress, strength: reduceMotion ? 0 : sweepStrength
-            ))
             .background {
                 PortfolioContentSheetBackground(
                     colorScheme: colorScheme,
-                    settlingProgress: settlingProgress,
-                    sweepStrength: reduceMotion ? 0 : sweepStrength
+                    settlingProgress: settlingProgress
                 )
                 .allowsHitTesting(false)
             }
             .clipShape(sheetShape)
-            .padding(.horizontal, horizontalInset)
-            .accessibilityElement(children: .contain)
-            .onChange(of: scrollOffset) { oldOffset, newOffset in
-                let now = ProcessInfo.processInfo.systemUptime
-                let elapsed = now - (lastSweepSampleTime ?? (now - 1 / 60))
-                lastSweepSampleTime = now
-                let strength = PortfolioGlassSweep.strength(
-                    from: oldOffset, to: newOffset, elapsed: elapsed,
-                    travel: PortfolioContentSheetLayout.widthExpansionDistance
-                )
-                withAnimation(.easeOut(duration: strength > sweepStrength ? 0.08 : 0.18)) {
-                    sweepStrength = reduceMotion ? 0 : strength
+            .background(alignment: .top) {
+                if !reduceTransparency, settlingProgress > 0 {
+                    // Outside the foreground's SwiftUI clip: UIKit backdrop
+                    // blur needs its mask on the effect view itself. Lead the
+                    // sheet so the still-visible hero softens before coverage;
+                    // keep this band when the sheet itself becomes opaque.
+                    PortfolioSheetBackdropBlur(progress: settlingProgress)
+                        .frame(height: PortfolioContentSheetLayout.blurBandHeight)
+                        .offset(y: -PortfolioContentSheetLayout.blurLeadDistance)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
                 }
             }
-            .task(id: scrollOffset) {
-                // Cancelled by the next scroll sample. A held finger or a
-                // stopped scroll must never leave a coloured stripe behind.
-                do { try await Task.sleep(for: .milliseconds(90)) }
-                catch { return }
-                withAnimation(.easeOut(duration: 0.30)) { sweepStrength = 0 }
-            }
+            .padding(.horizontal, horizontalInset)
+            .accessibilityElement(children: .contain)
     }
 }
 
-/// A local optical accent, driven only by upward sheet travel. Neither the
-/// scroll controller nor the foreground financial content is transformed.
-enum PortfolioGlassSweep: EnvironmentKey {
-    struct Appearance {
-        var progress: CGFloat = 0
-        var strength: CGFloat = 0
-    }
-    static let defaultValue = Appearance()
-
-    static func strength(from oldOffset: CGFloat, to offset: CGFloat,
-                         elapsed: TimeInterval, travel: CGFloat) -> CGFloat {
-        guard elapsed > 0, elapsed < 0.20, travel > 0,
-              oldOffset >= 0, offset > oldOffset, offset < travel else { return 0 }
-        let progress = offset / travel
-        let envelope = pow(sin(.pi * progress), 0.8)
-        let speed = min((offset - oldOffset) / max(elapsed, 1 / 120) / 1500, 1)
-        return envelope * (0.18 + 0.72 * speed)
-    }
-}
-
-private extension EnvironmentValues {
-    var portfolioGlassSweep: PortfolioGlassSweep.Appearance {
-        get { self[PortfolioGlassSweep.self] }
-        set { self[PortfolioGlassSweep.self] = newValue }
-    }
-}
-
-private struct PortfolioGlassSweepContour: Shape {
-    var inset: CGFloat = 0
-    var depth: CGFloat = 0
-
-    var animatableData: AnimatablePair<CGFloat, CGFloat> {
-        get { AnimatablePair(inset, depth) }
-        set { inset = newValue.first; depth = newValue.second }
-    }
-
-    func path(in rect: CGRect) -> Path {
-        let left = rect.minX + inset
-        let right = rect.maxX - inset
-        let top = rect.minY + depth
-        let radius = min(PortfolioContentSheetLayout.topRadius, (right - left) / 2)
-        let shoulder = radius * 0.45
-        // Open at the bottom: this is the sheet's rounded top contour, not
-        // an ellipse or a closed glowing rectangle around the entire card.
-        return Path { path in
-            path.move(to: CGPoint(x: left, y: top + radius + 46))
-            path.addLine(to: CGPoint(x: left, y: top + radius))
-            path.addCurve(to: CGPoint(x: left + radius, y: top),
-                          control1: CGPoint(x: left, y: top + shoulder),
-                          control2: CGPoint(x: left + shoulder, y: top))
-            path.addLine(to: CGPoint(x: right - radius, y: top))
-            path.addCurve(to: CGPoint(x: right, y: top + radius),
-                          control1: CGPoint(x: right - shoulder, y: top),
-                          control2: CGPoint(x: right, y: top + shoulder))
-            path.addLine(to: CGPoint(x: right, y: top + radius + 46))
-        }
-    }
-}
-
-private struct PortfolioGlassSweepLight: View {
+/// A feathered backdrop band travels ahead of the sheet. The hero remains
+/// sharp beyond the band and progressively blurs as the edge approaches it.
+private struct PortfolioSheetBackdropBlur: UIViewRepresentable {
     let progress: CGFloat
-    let strength: CGFloat
-    let colorScheme: ColorScheme
 
-    private let cyan = Color(red: 0.05, green: 0.86, blue: 1)
-    private let blue = Color(red: 0.16, green: 0.25, blue: 1)
+    func makeUIView(context: Context) -> BlurView { BlurView() }
+    func updateUIView(_ view: BlurView, context: Context) { view.setProgress(progress) }
+    static func dismantleUIView(_ view: BlurView, coordinator: ()) { view.tearDown() }
 
-    private var contour: PortfolioGlassSweepContour {
-        PortfolioGlassSweepContour(inset: 16 * (1 - progress), depth: 3 + 42 * progress)
-    }
+    final class BlurView: UIVisualEffectView {
+        private let depthMask = UIView()
+        private let gradient = CAGradientLayer()
+        private let sideFade = CAGradientLayer()
+        private var animator: UIViewPropertyAnimator?
+        private var requestedAmount: CGFloat = 0
+        private var appliedAmount: CGFloat?
+        private var maskBounds = CGRect.null
 
-    var body: some View {
-        ZStack {
-            // Separate blue and cyan lobes give the rim a refracted colour
-            // edge; the unfilled centre keeps the card and text neutral.
-            contour
-                .stroke(blue.opacity(0.65), lineWidth: 12 + 12 * progress)
-                .blur(radius: 9)
-                .offset(y: 7)
-            contour
-                .stroke(cyan, lineWidth: 4 + 6 * progress)
-                .blur(radius: 4)
-            contour
-                .stroke(Color.white.opacity(0.86), lineWidth: 1.5)
-                .blur(radius: 0.7)
-                .offset(y: -3)
-
-            PortfolioGlassSweepContour()
-                .stroke(cyan.opacity(0.65), lineWidth: 1)
+        init() {
+            super.init(effect: nil)
+            isUserInteractionEnabled = false
+            let edge = PortfolioContentSheetLayout.blurLeadDistance / PortfolioContentSheetLayout.blurBandHeight
+            let corner = (PortfolioContentSheetLayout.blurLeadDistance + PortfolioContentSheetLayout.topRadius)
+                / PortfolioContentSheetLayout.blurBandHeight
+            gradient.colors = [
+                UIColor.clear.cgColor,
+                UIColor.black.withAlphaComponent(0.14).cgColor,
+                UIColor.black.withAlphaComponent(0.70).cgColor,
+                UIColor.black.cgColor,
+                UIColor.black.cgColor,
+                UIColor.clear.cgColor,
+            ]
+            gradient.locations = [0, edge * 0.25, edge * 0.75, edge, corner, 1]
+                .map { NSNumber(value: Double($0)) }
+            gradient.startPoint = CGPoint(x: 0.5, y: 0)
+            gradient.endPoint = CGPoint(x: 0.5, y: 1)
+            sideFade.colors = [
+                UIColor.clear.cgColor,
+                UIColor.black.cgColor,
+                UIColor.black.cgColor,
+                UIColor.clear.cgColor,
+            ]
+            sideFade.startPoint = CGPoint(x: 0, y: 0.5)
+            sideFade.endPoint = CGPoint(x: 1, y: 0.5)
+            depthMask.layer.addSublayer(gradient)
+            depthMask.layer.mask = sideFade
         }
-        // Fade the side tails without drawing a hard end to the light band.
-        .mask {
-            LinearGradient(stops: [
-                .init(color: .white, location: 0),
-                .init(color: .white, location: 0.18),
-                .init(color: .clear, location: 0.48),
-            ], startPoint: .top, endPoint: .bottom)
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { nil }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            guard bounds != maskBounds else { return }
+            maskBounds = bounds
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            depthMask.frame = bounds
+            gradient.frame = depthMask.bounds
+            sideFade.frame = depthMask.bounds
+            let feather = min(0.5, PortfolioContentSheetLayout.topRadius / max(1, bounds.width))
+            sideFade.locations = [0, feather, 1 - feather, 1]
+                .map { NSNumber(value: Double($0)) }
+            // UIKit copies a visual-effect mask internally. Reassign after a
+            // resize so the soft side edges follow the sheet's changing width.
+            mask = depthMask
+            CATransaction.commit()
         }
-        .opacity(strength * (colorScheme == .dark ? 0.72 : 1))
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+
+        func setProgress(_ progress: CGFloat) {
+            let travel = progress * PortfolioContentSheetLayout.widthExpansionDistance
+            let t = min(1, max(0, travel / PortfolioContentSheetLayout.blurActivationDistance))
+            requestedAmount = t * t * (3 - 2 * t)
+            applyAmountIfVisible()
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window == nil { tearDown() }
+            else { applyAmountIfVisible() }
+        }
+
+        private func applyAmountIfVisible() {
+            guard window != nil, appliedAmount != requestedAmount else { return }
+            let amount = requestedAmount
+            appliedAmount = amount
+            if amount == 0 || amount == 1 {
+                stopAnimator()
+                UIView.performWithoutAnimation {
+                    effect = amount == 0 ? nil : UIBlurEffect(style: .systemUltraThinMaterial)
+                }
+                return
+            }
+            if animator == nil {
+                UIView.performWithoutAnimation { effect = nil }
+                let animation = UIViewPropertyAnimator(duration: 1, curve: .linear) { [weak self] in
+                    self?.effect = UIBlurEffect(style: .systemUltraThinMaterial)
+                }
+                animation.startAnimation()
+                animation.pauseAnimation()
+                animator = animation
+            }
+            animator?.fractionComplete = amount
+        }
+
+        private func stopAnimator() {
+            animator?.stopAnimation(true)
+            animator = nil
+        }
+
+        func tearDown() {
+            stopAnimator()
+            effect = nil
+            appliedAmount = nil
+            layer.removeAllAnimations()
+        }
+
+        deinit { animator?.stopAnimation(true) }
     }
 }
 
 private struct PortfolioContentSheetBackground: View {
     @Environment(\.locale) private var appLocale
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     let colorScheme: ColorScheme
     let settlingProgress: CGFloat
-    let sweepStrength: CGFloat
 
     private var terminalColor: Color {
         colorScheme == .light ? .white : .black
     }
 
     private var sheetShape: UnevenRoundedRectangle {
-        UnevenRoundedRectangle(
-            topLeadingRadius: PortfolioContentSheetLayout.topRadius,
-            bottomLeadingRadius: 0,
-            bottomTrailingRadius: 0,
-            topTrailingRadius: PortfolioContentSheetLayout.topRadius,
-            style: .continuous
-        )
+        PortfolioContentSheetLayout.shape
     }
 
     @ViewBuilder
@@ -289,7 +370,10 @@ private struct PortfolioContentSheetBackground: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
-                liquidGlassLayer
+                // Once opaque, the sheet no longer needs backdrop sampling.
+                if !reduceTransparency, settlingProgress < 1 {
+                    liquidGlassLayer
+                }
 
                 LinearGradient(
                     stops: [
@@ -303,15 +387,9 @@ private struct PortfolioContentSheetBackground: View {
 
                 // The passive sheet must not use Glass.interactive(): its
                 // system press highlight flashes white across this large
-                // surface. Instead, scrolling continuously settles the glass
-                // into the terminal page colour in step with width expansion.
-                terminalColor.opacity(settlingProgress)
-
-                PortfolioGlassSweepLight(
-                    progress: settlingProgress,
-                    strength: sweepStrength,
-                    colorScheme: colorScheme
-                )
+                // surface. Let the covered chart blur before the sheet settles
+                // into its opaque page colour at the end of width expansion.
+                terminalColor.opacity(reduceTransparency ? 1 : pow(settlingProgress, 3))
             }
             .frame(height: PortfolioContentSheetLayout.transitionHeight)
 
@@ -328,27 +406,16 @@ struct PortfolioView: View {
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var selectedHolding: Holding?
     @State private var showsTodayDetail = false
-    @State private var homeScrollOffset: CGFloat = 0
-    @State private var homePullDistance: CGFloat = 0
+    @State private var homeScrollState = PortfolioHomeScrollState()
     @State private var homeScrollController = PortfolioHomeScrollController()
-    @State private var todayTitleExitScrollOffset: CGFloat?
-    @State private var holdingsContentTop: CGFloat?
-    @State private var homeScrollViewportHeight: CGFloat = 0
+    @State private var isHomeScrolling = false
     // One namespace per origin. A security shown both in the Today bars and
     // in the holdings list would otherwise publish two sources under the same
     // id, and the transition has no way to know which one it grew from.
     @Namespace private var holdingsRowZoom
     @Namespace private var todayBarZoom
-    @State private var activeHoldingZoom: Namespace.ID?
-
-    private var holdingsIndicatorTopInset: CGFloat {
-        max(0, (holdingsContentTop ?? 0) - homeScrollOffset)
-    }
-
-    private var showsHoldingsScrollIndicator: Bool {
-        holdingsContentTop != nil && !previewsLoading && !model.holdings.isEmpty
-            && homeScrollViewportHeight - holdingsIndicatorTopInset > 32
-    }
+    @Namespace private var holdingPresentationZoom
+    @State private var holdingZoomState = SecurityDetailZoomState()
 
     private var previewsLoading: Bool {
         #if DEBUG
@@ -358,14 +425,21 @@ struct PortfolioView: View {
         #endif
     }
 
+    private var isHomeReadyForRipple: Bool {
+        !previewsLoading && model.overview != nil && model.portfolioChart != nil
+            && !model.holdings.isEmpty && model.portfolioError == nil
+            && !model.isPortfolioLoading && !model.isPortfolioChartLoading
+            && !model.isHoldingDailyChangesLoading
+    }
+
     var body: some View {
-        NavigationStack {
+        // RootTabView owns this tab's stack, just as it does for the other tabs.
+        Group {
             ScrollViewReader { scrollProxy in
                 ZStack {
                     PortfolioHomePageBackdrop(
                         colorScheme: colorScheme,
-                        scrollOffset: homeScrollOffset,
-                        fadeStartOffset: todayTitleExitScrollOffset
+                        scrollState: homeScrollState
                     )
 
                     ScrollView {
@@ -383,12 +457,12 @@ struct PortfolioView: View {
                             )
 
                             if previewsLoading {
-                                PortfolioLoadingView(scrollOffset: homeScrollOffset)
+                                PortfolioLoadingView(scrollState: homeScrollState)
                             } else if model.holdings.isEmpty, model.overview != nil {
                                 if model.isPublicInvestorMode && !model.isPortfolioLoading {
                                     ContentUnavailableView(L10n.text("暂无持仓数据"), systemImage: "person.crop.circle", description: Text(L10n.text("请在设置中选择账户。")))
                                 } else {
-                                    PortfolioLoadingView(isAnimating: model.isPortfolioLoading, scrollOffset: homeScrollOffset)
+                                    PortfolioLoadingView(isAnimating: model.isPortfolioLoading, scrollState: homeScrollState)
                                 }
                             } else if let overview = model.overview, let chart = model.portfolioChart {
                                 CostMarketCard(
@@ -402,10 +476,10 @@ struct PortfolioView: View {
                                     // Keep the hero visually fixed in its original
                                     // scroll slot. The foreground sheet below moves
                                     // normally and therefore covers it as it rises.
-                                    .offset(y: homeScrollOffset)
+                                    .modifier(PortfolioPinnedHero(scrollState: homeScrollState))
                                     .zIndex(0)
 
-                                PortfolioContentSheet(scrollOffset: homeScrollOffset) {
+                                PortfolioContentSheet(scrollState: homeScrollState) {
                                     VStack(spacing: 0) {
                                         TodayContributionCard(
                                             holdings: model.holdings,
@@ -414,38 +488,33 @@ struct PortfolioView: View {
                                             isLoading: model.isHoldingDailyChangesLoading,
                                             onOpenDetail: { showsTodayDetail = true },
                                             onTitleBottomPositionChange: { titleBottomY in
-                                                guard homePullDistance < 0.5 else { return }
-                                                let exitOffset = homeScrollOffset + titleBottomY
-                                                if todayTitleExitScrollOffset.map({ abs($0 - exitOffset) > 0.5 }) ?? true {
-                                                    todayTitleExitScrollOffset = exitOffset
-                                                }
+                                                homeScrollState.titleMoved(to: titleBottomY)
                                             },
                                             zoomNamespace: todayBarZoom
                                         ) { holding in
-                                            activeHoldingZoom = todayBarZoom
-                                            selectedHolding = holding
+                                            openHolding(holding, from: todayBarZoom)
                                         }
                                         .id("today-contribution")
 
                                         PortfolioDetailsCard(
                                             holdings: model.holdings,
                                             onSelect: { holding in
-                                                activeHoldingZoom = holdingsRowZoom
-                                                selectedHolding = holding
+                                                openHolding(holding, from: holdingsRowZoom)
                                             },
-                                            zoomNamespace: holdingsRowZoom
+                                            zoomNamespace: holdingsRowZoom,
+                                            floatsFilter: true
                                         )
                                         .id("portfolio-details")
                                         .onGeometryChange(for: CGFloat.self) { geometry in
                                             geometry.frame(in: .named("portfolio-home-content")).minY
                                         } action: { _, top in
-                                            holdingsContentTop = top
+                                            homeScrollState.holdingsMoved(to: top)
                                         }
                                     }
                                 }
                                 .zIndex(1)
                             } else if model.isPortfolioLoading {
-                                PortfolioLoadingView(scrollOffset: homeScrollOffset)
+                                PortfolioLoadingView(scrollState: homeScrollState)
                             } else if let error = model.portfolioError {
                                 ContentUnavailableView {
                                     Label(L10n.text("暂时无法加载"), systemImage: "wifi.exclamationmark")
@@ -456,7 +525,7 @@ struct PortfolioView: View {
                                 }
                                 .frame(minHeight: 420)
                             } else {
-                                PortfolioLoadingView(scrollOffset: homeScrollOffset)
+                                PortfolioLoadingView(scrollState: homeScrollState)
                             }
                         }
                         // Leave a deliberate scroll tail above the floating
@@ -470,23 +539,22 @@ struct PortfolioView: View {
                                 detent: PortfolioContentSheetLayout.firstScrollDetent,
                                 reduceMotion: reduceMotion,
                                 onOffset: { offset, pull in
-                                    homeScrollOffset = offset
-                                    homePullDistance = pull
+                                    homeScrollState.update(offset: offset, pull: pull)
                                 },
                                 refresh: { await model.refreshPortfolio() }
                             )
                         }
                     }
                     .background(Color.clear)
+                    .onScrollPhaseChange { _, phase in
+                        isHomeScrolling = phase != .idle
+                    }
                     // Keep the native indicator track beside the holdings only;
                     // changing indicator margins leaves content and detents intact.
-                    .contentMargins(.top, holdingsIndicatorTopInset, for: .scrollIndicators)
-                    .scrollIndicators(showsHoldingsScrollIndicator ? .automatic : .hidden, axes: .vertical)
-                    .onGeometryChange(for: CGFloat.self) { geometry in
-                        max(0, geometry.size.height - geometry.safeAreaInsets.top - geometry.safeAreaInsets.bottom)
-                    } action: { _, height in
-                        homeScrollViewportHeight = height
-                    }
+                    .modifier(PortfolioHomeScrollIndicators(
+                        scrollState: homeScrollState,
+                        enabled: !previewsLoading && !model.holdings.isEmpty
+                    ))
                     .tracksRootTabBarScroll()
                     // One native rubber-band and refresh control, armed only
                     // by a new touch at the completely settled lower stop.
@@ -513,18 +581,17 @@ struct PortfolioView: View {
                         }
                     }
                 }
-                .sheet(item: $selectedHolding) { holding in
-                    HoldingDetailView(holding: holding)
+                .modifier(PortfolioLoadRipple(
+                    isReady: isHomeReadyForRipple,
+                    isScrolling: isHomeScrolling
+                ))
+                .modifier(PortfolioFloatingFilterOverlay())
+                .securityDetailZoomHost(holdingZoomState, in: holdingPresentationZoom)
+                .sheet(item: $selectedHolding, onDismiss: { holdingZoomState.didDismiss() }) { holding in
+                    HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
                         .environment(model)
                         .securityDetailSheet()
-                        // Grows out of the row that was tapped, and pinches
-                        // back into it. The source id is the ticker, so the
-                        // holdings list and the Today bars can both be the
-                        // origin for the same security.
-                        .navigationTransition(.zoom(
-                            sourceID: holding.ticker,
-                            in: activeHoldingZoom ?? holdingsRowZoom
-                        ))
+                        .securityDetailZoomTransition(holdingZoomState.activeSource, in: holdingPresentationZoom)
                 }
                 .securityDetailOpenFeedback(trigger: selectedHolding?.ticker, enabled: hapticsEnabled)
                 .navigationDestination(isPresented: $showsTodayDetail) {
@@ -543,6 +610,13 @@ struct PortfolioView: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .accessibilityIdentifier("page.portfolio")
+    }
+
+    private func openHolding(_ holding: Holding, from namespace: Namespace.ID) {
+        guard selectedHolding == nil, holdingZoomState.activeSource == nil else { return }
+        holdingZoomState.prepare(id: holding.ticker, namespace: namespace) {
+            selectedHolding = holding
+        }
     }
 
 }
@@ -572,7 +646,6 @@ private struct PortfolioRefreshTimestamp: View {
 }
 
 private struct TodayContributionCard: View {
-    @Environment(\.portfolioGlassSweep) private var glassSweep
     @Environment(\.locale) private var appLocale
     private enum Direction: Hashable {
         case gains
@@ -692,15 +765,6 @@ private struct TodayContributionCard: View {
         ZStack(alignment: .topLeading) {
             todayBackground
                 .allowsHitTesting(false)
-
-            // The dark gains/losses surface is opaque. Put its optical rim
-            // above that surface while keeping all labels and controls above it.
-            if colorScheme == .dark {
-                PortfolioGlassSweepLight(progress: glassSweep.progress,
-                                        strength: glassSweep.strength,
-                                        colorScheme: colorScheme)
-                    .frame(height: PortfolioContentSheetLayout.transitionHeight)
-            }
 
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -1217,36 +1281,6 @@ private struct TodayContributionBar: View {
     }
 }
 
-private struct ContributionStripePattern: View {
-    @Environment(\.locale) private var appLocale
-    let color: Color
-
-    var body: some View {
-        Canvas { context, size in
-            var stripes = Path()
-            // Match the exported Figma stripe asset: 13pt strokes on a
-            // 35.5pt cadence. The previous 18pt bands covered almost half of
-            // each bar and made the whole gradient read much darker.
-            let bandWidth: CGFloat = 13
-            let spacing: CGFloat = 35.5
-            // Start and end every diagonal band outside the rendered bounds.
-            // If a stroke begins at y = 0 its cap remains visible just inside
-            // the rounded mask, which reads as a short line head at the top.
-            let overscan = bandWidth * 2
-            var x = -size.height - overscan
-            while x < size.width + size.height {
-                stripes.move(to: CGPoint(x: x - overscan, y: -overscan))
-                stripes.addLine(to: CGPoint(
-                    x: x + size.height + overscan,
-                    y: size.height + overscan
-                ))
-                x += spacing
-            }
-            context.stroke(stripes, with: .color(color), lineWidth: bandWidth)
-        }
-        .allowsHitTesting(false)
-    }
-}
 
 /// A neutral, refractive shell shared by the contribution bar, value capsule,
 /// and raised logo lens. Accent colour is intentionally restrained: the light
@@ -1586,6 +1620,7 @@ private struct CostMarketCard: View {
             .accessibilityLabel(response.accountNAV != nil ? L10n.text("账户资产与净入金时间范围") : L10n.text("成本与市值时间范围"))
         }
         .frame(height: PortfolioHeroChartLayout.sectionHeight, alignment: .topLeading)
+        .preference(key: PortfolioHeroReadyPreference.self, value: !isChartLoading && hasPreparedAllRanges)
         .alert(L10n.text("账户资产与收益口径"), isPresented: $showsAccountBasis) {
             Button(L10n.text("知道了"), role: .cancel) { }
         } message: {
@@ -1651,21 +1686,18 @@ private struct CostMarketCard: View {
 
     @ViewBuilder
     private func chartContent(data: CostMarketRangeData) -> some View {
-        if forcesChartLoadingState {
+        if forcesChartLoadingState || isChartLoading {
             StandardLineChartSkeleton(
                 axisWidth: 0,
                 topInset: 0,
                 trailingEndpointInset: 21,
-                seriesCount: 2
+                seriesCount: 2,
+                lineWidths: [2.5],
+                appearanceID: "portfolio-assets"
             )
                 .accessibilityElement()
                 .accessibilityLabel(L10n.text("正在准备历史数据"))
-        } else if isChartLoading {
-            // A generic curve looks like real portfolio data. Keep this area
-            // quiet until a cache- or history-backed series is available.
-            Color.clear
-                .accessibilityElement()
-                .accessibilityLabel(L10n.text("正在准备历史数据"))
+
         } else if data.rows.count > 1 {
             FastCostMarketPlot(
                 data: data,
@@ -1819,6 +1851,7 @@ private struct FastCostMarketPlot: View {
             trailingEndpointInset: 21,
             gridOpacity: 0,
             transitionKey: "\(transitionKey)-\(colorScheme == .light ? "light" : "dark")",
+            appearanceID: "portfolio-assets",
             dataTransition: .viewportZoom,
             animatesInitialAppearance: true,
             selectedDate: selectedPoint?.date,
@@ -1997,6 +2030,7 @@ struct PortfolioDetailsCard: View {
     /// Set on the Performance tab: the heatmap is drawn as the isometric hero
     /// rather than inside a card.
     let hero: HeatmapHeroState?
+    let floatsFilter: Bool
 
     @State private var tableMode: String
 
@@ -2005,13 +2039,15 @@ struct PortfolioDetailsCard: View {
         onSelect: @escaping (Holding) -> Void,
         showsHeatmap: Bool = false,
         zoomNamespace: Namespace.ID? = nil,
-        hero: HeatmapHeroState? = nil
+        hero: HeatmapHeroState? = nil,
+        floatsFilter: Bool = false
     ) {
         self.holdings = holdings
         self.onSelect = onSelect
         self.showsHeatmap = showsHeatmap
         self.zoomNamespace = zoomNamespace
         self.hero = hero
+        self.floatsFilter = floatsFilter
         _tableMode = State(initialValue: showsHeatmap ? "热力图"
             : ProcessInfo.processInfo.arguments.contains("--show-etf") ? "ETF 穿透" : "持仓")
     }
@@ -2066,6 +2102,7 @@ struct PortfolioDetailsCard: View {
             }
         }
         // Local exposure preparation must not wait for network quotes.
+        .environment(\.securityDetailZoomOrigin, zoomNamespace)
         .task(id: "\(tableMode)-\(etfHoldingsKey)-\(heatmapLooksThroughETF)") {
             guard tableMode == "ETF 穿透" || (tableMode == "热力图" && heatmapLooksThroughETF),
                   etfResponse == nil || loadedETFHoldingsKey != etfHoldingsKey else { return }
@@ -2099,6 +2136,7 @@ struct PortfolioDetailsCard: View {
                 : nil,
             lookThroughDailyChanges: etfConstituentDailyChanges,
             screenInset: hero == nil ? CatfolioStyle.pageHorizontalInset : SettingsTemplate.pageInset,
+            isInteractive: !isSnapshot,
             onSelect: onSelect
         )
     }
@@ -2109,6 +2147,7 @@ struct PortfolioDetailsCard: View {
         var hasher = Hasher()
         for holding in holdings {
             hasher.combine(holding.ticker)
+            hasher.combine(holding.logoSymbol)
             hasher.combine(holding.marketValue)
             hasher.combine(holding.todayChangePercent)
             hasher.combine(holding.unrealizedPercent)
@@ -2158,40 +2197,41 @@ struct PortfolioDetailsCard: View {
             }
 
             Spacer()
-            HStack(spacing: 12) {
-            if tableMode == "持仓" {
-                HoldingSortMenu(
-                    field: Binding(
-                        get: { holdingSortField },
-                        set: { holdingSortFieldRawValue = $0.rawValue }
-                    ),
-                    ascending: $holdingSortAscending,
-                    performancePeriod: $holdingPerformancePeriod,
-                    iconOnly: true,
-                    usesGlass: headerUsesGlass
-                )
-            } else if tableMode == "ETF 穿透" {
-                ETFExposureSortMenu(field: $etfSortField, ascending: $etfSortAscending)
-            } else {
-                HeatmapPerformancePeriodMenu(
-                    period: $heatmapPerformancePeriod,
-                    groupsBySector: $heatmapGroupsBySector,
-                    looksThroughETF: $heatmapLooksThroughETF,
-                    usesGlass: headerUsesGlass
-                )
-            }
-            }
+            filterMenu(floating: false)
+                .accessibilityIdentifier("portfolio-inline-filter")
+                .anchorPreference(key: PortfolioFloatingFilterPreference.self, value: .bounds) { anchor in
+                    floatsFilter ? PortfolioFloatingFilterSource(bounds: anchor,
+                        menu: AnyView(filterMenu(floating: true))) : nil
+                }
         }
-        .background {
-            GeometryReader { geometry in
-                Color.clear.preference(
-                    key: PortfolioHeaderMidYPreferenceKey.self,
-                    value: geometry.frame(in: .global).midY
-                )
-            }
+        .onGeometryChange(for: Bool.self) { geometry in
+            guard #available(iOS 26.0, *) else { return false }
+            // Only publish the threshold crossing, not every global position.
+            let threshold = UIScreen.main.bounds.midY + (headerUsesGlass ? 28 : 0)
+            return geometry.frame(in: .global).midY <= threshold
+        } action: { _, usesGlass in
+            guard usesGlass != headerUsesGlass else { return }
+            withAnimation(.easeOut(duration: 0.18)) { headerUsesGlass = usesGlass }
         }
-        .onPreferenceChange(PortfolioHeaderMidYPreferenceKey.self) { midY in
-            updateHeaderMaterial(for: midY)
+    }
+
+    @ViewBuilder
+    private func filterMenu(floating: Bool) -> some View {
+        if tableMode == "持仓" {
+            HoldingSortMenu(
+                field: Binding(get: { holdingSortField }, set: { holdingSortFieldRawValue = $0.rawValue }),
+                ascending: $holdingSortAscending,
+                performancePeriod: $holdingPerformancePeriod,
+                iconOnly: true,
+                usesGlass: floating || headerUsesGlass,
+                showsFilterTitle: floating
+            )
+        } else if tableMode == "ETF 穿透" {
+            ETFExposureSortMenu(field: $etfSortField, ascending: $etfSortAscending, showsFilterTitle: floating)
+        } else {
+            HeatmapPerformancePeriodMenu(period: $heatmapPerformancePeriod,
+                groupsBySector: $heatmapGroupsBySector, looksThroughETF: $heatmapLooksThroughETF,
+                usesGlass: floating || headerUsesGlass, showsFilterTitle: floating)
         }
     }
 
@@ -2199,25 +2239,6 @@ struct PortfolioDetailsCard: View {
         switch tableMode {
         case "ETF 穿透": L10n.text("All \(etfResponse?.rows.count ?? 0)")
         default: L10n.text("All \(holdings.count)")
-        }
-    }
-
-    private func updateHeaderMaterial(for midY: CGFloat) {
-        guard #available(iOS 26.0, *) else {
-            headerUsesGlass = false
-            return
-        }
-
-        let screenMidY = UIScreen.main.bounds.midY
-        // Once glass is active, keep it until the header has moved a little
-        // below the centre again. This prevents material flicker around the
-        // threshold during slow scrolling and rubber-banding.
-        let threshold = headerUsesGlass ? screenMidY + 28 : screenMidY
-        let shouldUseGlass = midY <= threshold
-        guard shouldUseGlass != headerUsesGlass else { return }
-
-        withAnimation(.easeOut(duration: 0.18)) {
-            headerUsesGlass = shouldUseGlass
         }
     }
 
@@ -2241,9 +2262,9 @@ struct PortfolioDetailsCard: View {
                         dailyChangePercent: dailyChangePercent(for: holding)
                     )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(HoldingPressButtonStyle())
+                .holdingDetailPreview(holding) { onSelect(holding) }
                 .holdingZoomSource(holding.ticker, in: zoomNamespace)
-                .accessibilityHint(L10n.text("打开成交量分析"))
             }
         }
     }
@@ -2338,7 +2359,7 @@ struct PortfolioDetailsCard: View {
     }
 
     private func dailyChangePercent(for holding: Holding) -> Double? {
-        holding.todayChangePercent ?? model.holdingDailyChanges[holding.ticker.uppercased()]
+        model.holdingDailyChanges[holding.ticker.uppercased()] ?? holding.todayChangePercent
     }
 
     private func performanceValues(for holding: Holding) -> HoldingPerformanceValues? {
@@ -2573,6 +2594,7 @@ private struct HeatmapPerformancePeriodMenu: View {
     @Binding var groupsBySector: Bool
     @Binding var looksThroughETF: Bool
     var usesGlass = false
+    var showsFilterTitle = false
 
     var body: some View {
         Menu {
@@ -2596,13 +2618,7 @@ private struct HeatmapPerformancePeriodMenu: View {
                 Toggle(L10n.text("穿透 ETF"), isOn: $looksThroughETF)
             }
         } label: {
-            Image("PortfolioHeaderSort")
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 24, height: 24)
-                .frame(width: 58, height: 44)
-                .modifier(PortfolioHeaderMaterialControl(usesGlass: usesGlass))
+            PortfolioFilterLabel(showsTitle: showsFilterTitle, usesGlass: usesGlass)
         }
         .buttonStyle(.plain)
         .foregroundStyle(.secondary)
@@ -2640,6 +2656,7 @@ private struct HoldingSortMenu: View {
     @Binding var performancePeriod: HoldingPerformancePeriod
     var iconOnly = false
     var usesGlass = false
+    var showsFilterTitle = false
 
     var body: some View {
         menu
@@ -2694,13 +2711,7 @@ private struct HoldingSortMenu: View {
         } label: {
             Group {
                 if iconOnly {
-                    Image("PortfolioHeaderSort")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 24, height: 24)
-                        .frame(width: 58, height: 44)
-                        .modifier(PortfolioHeaderMaterialControl(usesGlass: usesGlass))
+                    PortfolioFilterLabel(showsTitle: showsFilterTitle, usesGlass: usesGlass)
                 } else {
                     HStack(spacing: 3) {
                         Text(field.compactTitle)
@@ -2711,6 +2722,58 @@ private struct HoldingSortMenu: View {
             }
         }
         .menuOrder(.fixed)
+    }
+}
+
+private struct PortfolioFilterLabel: View {
+    let showsTitle: Bool
+    let usesGlass: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image("PortfolioHeaderSort")
+                .renderingMode(.template).resizable().scaledToFit()
+                .frame(width: 24, height: 24)
+            if showsTitle { Text(L10n.text("筛选")).appText(.footnote, weight: .medium) }
+        }
+        .padding(.horizontal, 17)
+        .frame(minHeight: 44)
+        .fixedSize()
+        .modifier(PortfolioHeaderMaterialControl(usesGlass: usesGlass))
+    }
+}
+
+private struct PortfolioFloatingFilterSource {
+    let bounds: Anchor<CGRect>
+    // The bindings still belong to the details card, including its transient
+    // performance period and ETF sort. Both presentations operate on that state.
+    let menu: AnyView
+}
+
+private struct PortfolioFloatingFilterPreference: PreferenceKey {
+    static var defaultValue: PortfolioFloatingFilterSource? { nil }
+    static func reduce(value: inout PortfolioFloatingFilterSource?, nextValue: () -> PortfolioFloatingFilterSource?) {
+        value = nextValue() ?? value
+    }
+}
+
+struct PortfolioFloatingFilterOverlay: ViewModifier {
+    func body(content: Content) -> some View {
+        content.overlayPreferenceValue(PortfolioFloatingFilterPreference.self) { source in
+            GeometryReader { geometry in
+                if let source, Self.shouldFloat(sourceFrame: geometry[source.bounds]) {
+                    source.menu
+                        .accessibilityIdentifier("portfolio-floating-filter")
+                        .padding(.top, 10)
+                        .padding(.trailing, CatfolioStyle.pageHorizontalInset)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                }
+            }
+        }
+    }
+
+    static func shouldFloat(sourceFrame: CGRect) -> Bool {
+        sourceFrame.height > 0 && sourceFrame.maxY.isFinite && sourceFrame.maxY <= 0
     }
 }
 
@@ -2735,18 +2798,11 @@ private struct PortfolioHeaderMaterialControl: ViewModifier {
     }
 }
 
-private struct PortfolioHeaderMidYPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = .greatestFiniteMagnitude
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 private struct ETFExposureSortMenu: View {
     @Environment(\.locale) private var appLocale
     @Binding var field: ETFExposureSortField
     @Binding var ascending: Bool
+    var showsFilterTitle = false
 
     var body: some View {
         menu
@@ -2781,10 +2837,14 @@ private struct ETFExposureSortMenu: View {
                 )
             }
         } label: {
-            HStack(spacing: 5) {
-                Text(field.title)
-                Image(systemName: ascending ? "arrow.up" : "arrow.down")
-                    .font(.caption.weight(.semibold))
+            if showsFilterTitle {
+                PortfolioFilterLabel(showsTitle: true, usesGlass: true)
+            } else {
+                HStack(spacing: 5) {
+                    Text(field.title)
+                    Image(systemName: ascending ? "arrow.up" : "arrow.down")
+                        .font(.caption.weight(.semibold))
+                }
             }
         }
         .menuOrder(.fixed)
@@ -3033,7 +3093,7 @@ private struct HoldingRow: View {
                 Text(DisplayFormat.percent(performance.percent))
                     .numericTransition(performance.percent)
             }
-            .appNumber(.caption)
+            .appNumber(.caption, weight: .medium)
             .foregroundStyle(rowAccent)
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
@@ -3108,7 +3168,7 @@ private struct HoldingMetrics: View {
                     Text(performanceText).foregroundStyle(.secondary)
                 }
             }
-            .appNumber(.caption)
+            .appNumber(.caption, weight: .medium)
             .lineLimit(compact ? 1 : nil)
         }
     }
@@ -3223,16 +3283,16 @@ private struct PortfolioLoadingView: View {
     @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
     var isAnimating = true
-    var scrollOffset: CGFloat = 0
+    let scrollState: PortfolioHomeScrollState
 
     var body: some View {
         let color = HomeSkeletonStyle.color(for: colorScheme)
         VStack(spacing: 0) {
             PortfolioChartLoadingPlaceholder(isAnimating: isAnimating)
                 .frame(height: PortfolioHeroChartLayout.sectionHeight)
-                .offset(y: scrollOffset)
+                .modifier(PortfolioPinnedHero(scrollState: scrollState))
 
-            PortfolioContentSheet(scrollOffset: scrollOffset) {
+            PortfolioContentSheet(scrollState: scrollState) {
             VStack(spacing: 0) {
             ZStack(alignment: .top) {
                 TodayLoadingHeader(isAnimating: isAnimating)

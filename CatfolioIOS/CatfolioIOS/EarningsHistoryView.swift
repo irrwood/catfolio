@@ -67,8 +67,10 @@ struct EarningsHistoryView: View {
                         }
                     }
                     .frame(height: 222)
+                    .onAppear { ChartAppearanceHistory.record("earnings|\(symbol)") }
                 } else if loading {
-                    ProgressView().frame(maxWidth: .infinity, minHeight: 200)
+                    ChartShapeSkeleton(layout: .columns, appearanceID: "earnings|\(symbol)")
+                        .frame(height: 222)
                 } else {
                     Text(errorMessage ?? L10n.text(revenue ? "暂无收入数据" : "暂无盈利历史。"))
                         .font(.subheadline).foregroundStyle(.secondary)
@@ -77,7 +79,9 @@ struct EarningsHistoryView: View {
                 HStack {
                     Spacer()
                     Button { Task { await load(force: true) } } label: {
-                        Text(L10n.text(loading ? "加载中…" : "刷新"))
+                        Text(L10n.text("刷新"))
+                            .redacted(reason: loading ? .placeholder : [])
+                            .chartLoadingShimmer(active: loading)
                             .font(.caption).frame(minWidth: 44, minHeight: 44)
                     }
                     .disabled(loading)

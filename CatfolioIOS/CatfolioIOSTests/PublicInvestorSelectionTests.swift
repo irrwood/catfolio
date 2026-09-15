@@ -2,6 +2,131 @@ import SwiftUI
 import XCTest
 @testable import CatfolioIOS
 
+@MainActor
+final class AccountVisibilityTests: XCTestCase {
+    private func fixture() -> LocalPortfolioDocument {
+        let positions = [
+            LocalPositionRecord(ticker: "SCOPE_TEST", name: "Shared stock", shares: 10,
+                averageCost: 100, currency: "USD", quotePrice: 150, quoteCurrency: "USD", source: "CSV",
+                openedDate: nil, accountID: "A", accountName: "A"),
+            LocalPositionRecord(ticker: "SCOPE_TEST", name: "Shared stock", shares: 3,
+                averageCost: 200, currency: "USD", quotePrice: 150, quoteCurrency: "USD", source: "CSV",
+                openedDate: nil, accountID: "B", accountName: "B")
+        ]
+        return LocalPortfolioDocument(source: "CSV", updatedAt: Date(), positions: positions, snapshots: [])
+    }
+
+    func testSwitchRecalculatesSharedHoldingWithoutLoadingDocumentAgain() async throws {
+        let suite = "AccountVisibility.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let loader = AccountVisibilityLoader(fixture())
+        let model = AppModel(defaults: defaults, personalDocumentLoader: { await loader.load() })
+        await model.refreshPortfolio(refreshMarketData: false)
+        XCTAssertEqual(model.holdings.first?.shares, 13)
+        await model.toggleAccount("CSV|B")
+        XCTAssertEqual(model.selectedAccountKeys, ["CSV|A"])
+        XCTAssertEqual(model.accounts.count, 2, "Keep hidden accounts available for re-selection")
+        XCTAssertEqual(model.holdings.first?.shares, 10)
+        XCTAssertEqual(model.holdings.first?.unrealized, 500)
+        XCTAssertEqual(model.overview?.summary.marketValue, 1500)
+        XCTAssertEqual(model.portfolioChart?.currentPoint.marketValue, 1500)
+        XCTAssertFalse(model.isPortfolioLoading)
+        XCTAssertFalse(model.isPortfolioChartLoading)
+        XCTAssertFalse(model.isHoldingDailyChangesLoading)
+        await model.selectAllAccounts()
+        await model.toggleAccount("CSV|A")
+        XCTAssertEqual(model.selectedAccountKeys, ["CSV|B"])
+        XCTAssertEqual(model.holdings.first?.shares, 3)
+        XCTAssertEqual(model.holdings.first?.unrealized, -150)
+        XCTAssertEqual(model.overview?.summary.marketValue, 450)
+        await model.selectAllAccounts()
+        XCTAssertEqual(model.holdings.first?.shares, 13)
+        XCTAssertEqual(model.overview?.summary.marketValue, 1950)
+        let count = await loader.count
+        XCTAssertEqual(count, 1, "Visibility uses the full in-memory ledger, never reloads holdings")
+    }
+
+    func testRapidToggleBackCannotPublishIntermediateScope() async throws {
+        let suite = "AccountVisibility.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let input = fixture()
+        let model = AppModel(defaults: defaults, personalDocumentLoader: { input })
+        await model.refreshPortfolio(refreshMarketData: false)
+        let hide = Task { await model.toggleAccount("CSV|B") }
+        await Task.yield()
+        let restore = Task { await model.toggleAccount("CSV|B") }
+        await hide.value
+        await restore.value
+        XCTAssertEqual(model.selectedAccountKeys, ["CSV|A", "CSV|B"])
+        XCTAssertEqual(model.holdings.first?.shares, 13)
+        XCTAssertEqual(model.overview?.summary.marketValue, 1950)
+    }
+
+    func testOldRefreshCannotOverwriteNewAccountScope() async throws {
+        let suite = "AccountVisibility.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let loader = AccountVisibilityLoader(fixture())
+        let model = AppModel(defaults: defaults, personalDocumentLoader: { await loader.load() })
+        await model.refreshPortfolio(refreshMarketData: false)
+        await loader.holdNextLoad()
+        let refresh = Task { await model.refreshPortfolio(refreshMarketData: false) }
+        await fulfillment(of: [loader.waiting], timeout: 2)
+        await model.toggleAccount("CSV|B")
+        await loader.release()
+        await refresh.value
+        XCTAssertEqual(model.selectedAccountKeys, ["CSV|A"])
+        XCTAssertEqual(model.holdings.first?.shares, 10)
+        XCTAssertEqual(model.overview?.summary.marketValue, 1500)
+    }
+
+    func testDetailQuoteAndDailyMoveSurviveScopeChanges() async throws {
+        let suite = "AccountVisibility.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let input = fixture()
+        let model = AppModel(defaults: defaults, personalDocumentLoader: { input })
+        await model.refreshPortfolio(refreshMarketData: false)
+        let now = Date()
+        let history = SecurityPriceHistory(ticker: "SCOPE_TEST", currency: "USD",
+            points: [.init(dateText: DayDateCodec.string(from: now.addingTimeInterval(-86400)), close: 150),
+                     .init(dateText: DayDateCodec.string(from: now), close: 180)],
+            intradayPoints: [.init(dateText: "minute", close: 180, timestamp: now)], trades: [])
+        try model.publishSecurityPriceHistory(history, source: .personal, now: now)
+        await model.toggleAccount("CSV|B")
+        XCTAssertEqual(model.overview?.summary.marketValue, 1800)
+        XCTAssertEqual(try XCTUnwrap(model.holdingDailyChanges["SCOPE_TEST"]), 20, accuracy: 0.0001)
+        await model.selectAllAccounts()
+        XCTAssertEqual(model.holdings.first?.shares, 13)
+        XCTAssertEqual(model.overview?.summary.marketValue, 2340)
+        XCTAssertEqual(try XCTUnwrap(model.holdingDailyChanges["SCOPE_TEST"]), 20, accuracy: 0.0001)
+    }
+}
+
+private actor AccountVisibilityLoader {
+    let input: LocalPortfolioDocument
+    private(set) var count = 0
+    private var shouldHold = false
+    private var continuation: CheckedContinuation<Void, Never>?
+    nonisolated let waiting = XCTestExpectation(description: "Old document load is waiting")
+    init(_ input: LocalPortfolioDocument) { self.input = input }
+    func holdNextLoad() { shouldHold = true }
+    func load() async -> LocalPortfolioDocument {
+        count += 1
+        if shouldHold {
+            shouldHold = false
+            await withCheckedContinuation { continuation in
+                self.continuation = continuation
+                waiting.fulfill()
+            }
+        }
+        return input
+    }
+    func release() { continuation?.resume(); continuation = nil }
+}
+
 /// Choosing between your own portfolio, a public filer's, and invented data.
 final class PublicInvestorSelectionTests: XCTestCase {
 

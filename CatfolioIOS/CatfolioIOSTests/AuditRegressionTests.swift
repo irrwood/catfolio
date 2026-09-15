@@ -273,3 +273,113 @@ final class AuditRegressionTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(resumed.timeIntervalSince(blocked), 0.95)
     }
 }
+
+@MainActor
+final class DetailMarketSyncTests: XCTestCase {
+    private func history(price: Double = 130, at time: Date, currency: String = "USD") -> SecurityPriceHistory {
+        let day = DayDateCodec.string(from: time)
+        let previous = DayDateCodec.string(from: time.addingTimeInterval(-86_400))
+        return SecurityPriceHistory(ticker: "TEST", currency: currency,
+            points: [.init(dateText: previous, close: 100), .init(dateText: day, close: 120)],
+            intradayPoints: [.init(dateText: "minute", close: price, timestamp: time)], trades: [])
+    }
+
+    private func model(now: Date, observedAt: Date? = nil) async throws -> AppModel {
+        let suite = "DetailMarketSync.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let position = LocalPositionRecord(ticker: "TEST", name: "Test", shares: 10,
+            averageCost: 100, currency: "USD", quotePrice: 120, quoteCurrency: "USD", source: "CSV",
+            openedDate: DayDateCodec.string(from: now.addingTimeInterval(-86_400)),
+            quoteObservedAt: observedAt)
+        let document = LocalPortfolioDocument(source: "CSV", updatedAt: now,
+                                              positions: [position], snapshots: [])
+        let model = AppModel(defaults: defaults, personalDocumentLoader: { document })
+        await model.refreshPortfolio(refreshMarketData: false)
+        XCTAssertEqual(model.holdings.first?.quotePrice, 120)
+        return model
+    }
+
+    func testDetailPublishesPriceDailyChangeAndPortfolioValueTogether() async throws {
+        let now = Date()
+        let model = try await model(now: now)
+        let cost = model.overview?.summary.totalCost
+        try model.publishSecurityPriceHistory(history(at: now), source: model.portfolioSource, now: now)
+        XCTAssertEqual(model.holdings.first?.quotePrice, 130)
+        XCTAssertEqual(model.holdings.first?.marketValue, 1300)
+        XCTAssertEqual(model.overview?.summary.marketValue, 1300)
+        XCTAssertEqual(model.overview?.summary.totalCost, cost)
+        XCTAssertEqual(try XCTUnwrap(model.holdingDailyChanges["TEST"]), 30, accuracy: 1e-9)
+    }
+
+    func testDiskRefreshCannotUndoTheDetailQuote() async throws {
+        let now = Date()
+        let model = try await model(now: now)
+        try model.publishSecurityPriceHistory(history(at: now), source: model.portfolioSource, now: now)
+        await model.refreshPortfolio(refreshMarketData: false)
+        XCTAssertEqual(model.holdings.first?.quotePrice, 130)
+        XCTAssertEqual(try XCTUnwrap(model.holdingDailyChanges["TEST"]), 30, accuracy: 1e-9)
+    }
+
+    func testOutOfOrderAndOlderBrokerObservationsAreIgnored() async throws {
+        let now = Date()
+        let model = try await model(now: now, observedAt: now.addingTimeInterval(-60))
+        try model.publishSecurityPriceHistory(history(price: 80, at: now.addingTimeInterval(-120)),
+                                             source: model.portfolioSource, now: now)
+        XCTAssertEqual(model.holdings.first?.quotePrice, 120)
+        XCTAssertNil(model.holdingDailyChanges["TEST"])
+        try model.publishSecurityPriceHistory(history(at: now), source: model.portfolioSource, now: now)
+        try model.publishSecurityPriceHistory(history(price: 90, at: now.addingTimeInterval(-30)),
+                                             source: model.portfolioSource, now: now)
+        XCTAssertEqual(model.holdings.first?.quotePrice, 130)
+        XCTAssertEqual(try XCTUnwrap(model.holdingDailyChanges["TEST"]), 30, accuracy: 1e-9)
+    }
+
+    func testDifferentSourceCurrencyAndExpiredQuotesDoNotChangeHoldings() async throws {
+        let now = Date()
+        let model = try await model(now: now)
+        try model.publishSecurityPriceHistory(history(at: now), source: .demo, now: now)
+        try model.publishSecurityPriceHistory(history(at: now, currency: "EUR"), source: .personal, now: now)
+        try model.publishSecurityPriceHistory(history(at: now.addingTimeInterval(-8 * 86_400)), source: .personal, now: now)
+        try model.publishSecurityPriceHistory(history(at: now.addingTimeInterval(120)), source: .personal, now: now)
+        XCTAssertEqual(model.holdings.first?.quotePrice, 120)
+        XCTAssertTrue(model.holdingDailyChanges.isEmpty)
+    }
+
+    func testCancellationDoesNotPublish() async throws {
+        let now = Date()
+        let model = try await model(now: now)
+        let value = history(at: now)
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            try model.publishSecurityPriceHistory(value, source: .personal, now: now)
+        }
+        try await task.value
+        XCTAssertEqual(model.holdings.first?.quotePrice, 120)
+    }
+
+    func testETFOnlyConstituentUpdatesHeatmapWithoutInventingAPosition() async throws {
+        let now = Date()
+        let model = try await model(now: now)
+        let original = model.overview?.summary.marketValue
+        let prices = history(at: now)
+        let constituent = SecurityPriceHistory(ticker: "OTHER", currency: "USD", points: prices.points,
+                                               intradayPoints: prices.intradayPoints, trades: [])
+        try model.publishSecurityPriceHistory(constituent, source: .personal, now: now)
+        XCTAssertEqual(try XCTUnwrap(model.holdingDailyChanges["OTHER"]), 30, accuracy: 1e-9)
+        XCTAssertEqual(model.holdings.map(\.ticker), ["TEST"])
+        XCTAssertEqual(model.overview?.summary.marketValue, original)
+        await model.refreshPortfolio(refreshMarketData: false)
+        XCTAssertEqual(try XCTUnwrap(model.holdingDailyChanges["OTHER"]), 30, accuracy: 1e-9)
+    }
+
+    func testDailyOnlyHistoryRetainsItsRealDateAndIgnoresOlderMinutes() throws {
+        let daily = SecurityPriceHistory(ticker: "TEST", currency: "USD",
+            points: [.init(dateText: "2026-09-11", close: 100), .init(dateText: "2026-09-14", close: 110)],
+            intradayPoints: [.init(dateText: "old", close: 90, timestamp: DayDateCodec.date(from: "2026-09-11"))], trades: [])
+        let observation = try XCTUnwrap(daily.latestMarketObservation)
+        XCTAssertEqual(observation.price, 110)
+        XCTAssertEqual(observation.observedAt, DayDateCodec.date(from: "2026-09-14"))
+        XCTAssertEqual(try XCTUnwrap(observation.changePercent), 10, accuracy: 1e-9)
+    }
+}

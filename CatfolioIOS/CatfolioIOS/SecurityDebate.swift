@@ -381,8 +381,12 @@ extension SecurityDebateResearch {
         }.prefix(16))
     }
 
-    func documents(sources: [PortfolioAttentionSource], ticker: String, name: String) async -> [SecurityResearchDocument] {
-        let selected = Self.candidates(sources)
+    func documents(sources: [PortfolioAttentionSource], ticker: String, name: String,
+                   requiresRecentPublication: Bool = true) async -> [SecurityResearchDocument] {
+        // Product pages often have no publication date; their body still has to
+        // be readable and match the requested fund, just like news evidence.
+        let selected = requiresRecentPublication ? Self.candidates(sources) : Array(Self.deduplicated(sources)
+            .filter { ["https", "http"].contains($0.url.scheme?.lowercased() ?? "") }.prefix(16))
         return await withTaskGroup(of: (Int, SecurityResearchDocument?).self) { group in
             for (index, source) in selected.enumerated() {
                 group.addTask {

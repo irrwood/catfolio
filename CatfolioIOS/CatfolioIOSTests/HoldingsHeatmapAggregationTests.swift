@@ -2,7 +2,148 @@ import XCTest
 import SwiftUI
 @testable import CatfolioIOS
 
+final class AssetLogoLayoutTests: XCTestCase {
+    @MainActor
+    private func fixture(size: CGSize, background: UIColor?, mark: CGRect) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: size, format: format).image { context in
+            if let background { background.setFill(); context.fill(CGRect(origin: .zero, size: size)) }
+            UIColor.black.setFill()
+            context.fill(mark)
+        }
+    }
+
+    @MainActor
+    func testWideAndTallArtworkKeepTheirPixelAspectRatio() throws {
+        for size in [CGSize(width: 200, height: 40), CGSize(width: 40, height: 200)] {
+            let image = fixture(size: size, background: nil, mark: CGRect(origin: .zero, size: size))
+            let layout = AssetLogoLayout.resolve(image)
+            XCTAssertEqual(layout.insetFraction, 0.08)
+            let renderer = ImageRenderer(content: AssetLogoArtwork(image: image, layout: layout, size: 100))
+            renderer.scale = 1
+            let output = try XCTUnwrap(renderer.cgImage)
+            var pixels = [UInt8](repeating: 0, count: 100 * 100 * 4)
+            let context = try XCTUnwrap(CGContext(data: &pixels, width: 100, height: 100,
+                bitsPerComponent: 8, bytesPerRow: 400, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            context.draw(output, in: CGRect(x: 0, y: 0, width: 100, height: 100))
+            var minX = 100, maxX = -1, minY = 100, maxY = -1
+            for y in 0..<100 { for x in 0..<100 {
+                let index = (y * 100 + x) * 4
+                if pixels[index] < 40 && pixels[index + 3] > 240 {
+                    minX = min(minX, x); maxX = max(maxX, x)
+                    minY = min(minY, y); maxY = max(maxY, y)
+                }
+            } }
+            XCTAssertGreaterThan(maxX, minX)
+            XCTAssertGreaterThan(maxY, minY)
+            XCTAssertEqual(Double(maxX - minX + 1) / Double(maxY - minY + 1),
+                           size.width / size.height, accuracy: 0.3)
+            XCTAssertGreaterThanOrEqual(min(minX, minY), 7, "Keep artwork clear of rounded clipping")
+        }
+    }
+
+    @MainActor
+    func testExistingPaddingAndOpaqueBrandTilesKeepTheirOpticalSize() {
+        let size = CGSize(width: 96, height: 96)
+        let padded = fixture(size: size, background: .white, mark: CGRect(x: 14, y: 36, width: 68, height: 24))
+        XCTAssertEqual(AssetLogoLayout.resolve(padded), .init(insetFraction: 0, usesWhiteCanvas: true))
+        let branded = fixture(size: size, background: .red, mark: CGRect(x: 20, y: 20, width: 56, height: 56))
+        XCTAssertEqual(AssetLogoLayout.resolve(branded), .init(insetFraction: 0, usesWhiteCanvas: false))
+        let edgeToEdge = fixture(size: size, background: nil, mark: CGRect(x: 0, y: 36, width: 96, height: 24))
+        XCTAssertEqual(AssetLogoLayout.resolve(edgeToEdge), .init(insetFraction: 0.08, usesWhiteCanvas: true))
+    }
+
+    @MainActor
+    func testWhiteArtworkGetsContrastingBackingWithoutChangingItsPixels() {
+        let whiteMark = UIGraphicsImageRenderer(size: CGSize(width: 96, height: 96)).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(x: 8, y: 34, width: 80, height: 28))
+        }
+        let layout = AssetLogoLayout.resolve(whiteMark)
+        XCTAssertTrue(layout.usesDarkCanvas)
+        XCTAssertFalse(layout.usesWhiteCanvas)
+    }
+
+    @MainActor
+    func testLogoRuleVisualComparison() throws {
+        var examples: [(String, UIImage)] = []
+        for symbol in ["ASML", "KO", "NVDA", "ORCL", "VOO", "IBM"] {
+            let url = try XCTUnwrap(Bundle.main.url(forResource: symbol, withExtension: "png", subdirectory: "AssetLogos"))
+            examples.append((symbol, try XCTUnwrap(UIImage(contentsOfFile: url.path))))
+        }
+        let wordmark = UIGraphicsImageRenderer(size: CGSize(width: 240, height: 60)).image { _ in
+            ("WORDMARK" as NSString).draw(at: CGPoint(x: 3, y: 8), withAttributes:
+                [.font: UIFont.boldSystemFont(ofSize: 36), .foregroundColor: UIColor.black])
+        }
+        examples.append(("Wide source", wordmark))
+        let whiteMark = UIGraphicsImageRenderer(size: CGSize(width: 240, height: 60)).image { _ in
+            ("WORDMARK" as NSString).draw(at: CGPoint(x: 3, y: 8), withAttributes:
+                [.font: UIFont.boldSystemFont(ofSize: 36), .foregroundColor: UIColor.white])
+        }
+        examples.append(("White source", whiteMark))
+        for dark in [false, true] {
+            let content = VStack(spacing: 16) {
+                HStack { Text("Logo").frame(width: 110); Text("Before").frame(width: 64); Text("After").frame(width: 64); Text("40pt").frame(width: 48) }
+                ForEach(examples.indices, id: \.self) { index in
+                    let (symbol, image) = examples[index]
+                    HStack(spacing: 16) {
+                        Text(symbol).frame(width: 110, alignment: .leading)
+                        Image(uiImage: image).resizable().scaledToFill().frame(width: 64, height: 64)
+                            .background(Color(uiColor: .secondarySystemGroupedBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 64 * 2 / 7))
+                        AssetLogoArtwork(image: image, layout: .resolve(image), size: 64)
+                            .clipShape(RoundedRectangle(cornerRadius: 64 * 2 / 7))
+                        AssetLogoArtwork(image: image, layout: .resolve(image), size: 40)
+                            .clipShape(RoundedRectangle(cornerRadius: 40 * 2 / 7)).frame(width: 48)
+                    }
+                }
+            }.padding(24).background(dark ? Color.black : .white)
+                .foregroundStyle(dark ? .white : .black)
+                .environment(\.colorScheme, dark ? .dark : .light)
+            let renderer = ImageRenderer(content: content)
+            renderer.scale = 2
+            let attachment = XCTAttachment(image: try XCTUnwrap(renderer.uiImage))
+            attachment.name = "logo-rules-\(dark ? "dark" : "light")"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+    }
+}
+
 final class HoldingsHeatmapAggregationTests: XCTestCase {
+    @MainActor
+    func testLogoResolutionNotifiesSnapshotOwnerAndSnapshotUsesLoadedLogo() async throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previousWindow = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        let resolved = expectation(description: "Logo invalidates the heatmap texture")
+        var resolvedURL: URL?
+        let host = UIHostingController(rootView: AssetLogo(ticker: "NVDA", logoSymbol: "NVDA", size: 96)
+            .environment(\.assetLogoDidResolve) { url in
+                resolvedURL = url
+                resolved.fulfill()
+            })
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previousWindow?.makeKeyAndVisible() }
+        await fulfillment(of: [resolved], timeout: 5)
+        XCTAssertEqual(resolvedURL?.lastPathComponent, "NVDA.png")
+        XCTAssertTrue(resolvedURL?.isFileURL == true, "Bundled logos need no network")
+
+        // ImageRenderer does not run the logo's async task. After the live
+        // logo resolves, its synchronous cache must also supply the texture.
+        let renderer = ImageRenderer(content: AssetLogo(ticker: "NVDA", logoSymbol: "NVDA", size: 96))
+        renderer.scale = 1
+        let rendered = try XCTUnwrap(renderer.uiImage)
+        let attachment = XCTAttachment(image: rendered)
+        attachment.name = "heatmap-snapshot-resolved-logo"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        XCTAssertEqual(rendered.size, CGSize(width: 96, height: 96))
+    }
+
     private func item(_ index: Int, value: Double) -> HoldingsHeatmapTile.Model {
         let row = ETFLookThroughRow(ticker: "T\(index)", logoSymbol: nil, name: "Company \(index)",
                                    directUSD: 0, fromETFUSD: value, totalUSD: value,

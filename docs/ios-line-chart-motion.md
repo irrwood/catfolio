@@ -1,6 +1,17 @@
-# Shared line-chart motion — 2026-09-10
+# Shared line-chart motion — updated 2026-09-14
 
 ## Behaviour
+
+- Entrance history lives outside the view in `ChartAppearanceHistory`, for the
+  current app process. Stable chart IDs survive navigation, sheet recreation
+  and cache restoration; symbols distinguish security charts. Reopening a
+  displayed chart starts at its final geometry without a loading morph.
+- Background updates with the same interaction key replace data without
+  animation. Intentional range / mode transitions keep their existing motion.
+- Loading lines inherit real series widths; a 2.2-second travelling highlight
+  is masked to skeleton geometry. Text and icons use similarly sized shapes;
+  non-line charts use bars or circles. A previously displayed chart uses static
+  placeholders if it must wait again. Reduce Motion disables the shimmer.
 
 - First appearance uses the shared preset curve, continuously morphing into
   the real shape in 0.45 seconds. Canvas changes loading grey to each series'
@@ -11,6 +22,21 @@
   presentation progress, rather than jumping to the previous target first.
 - Respect the system Reduce Motion preference. No per-frame observable state
   updates are sent to the parent; correspondence is prepared once per update.
+
+## Home card overlap
+
+As the Today card moves over the pinned asset chart, a native backdrop blur
+increases with upward travel. A soft mask makes the covered content clearer
+at the card's leading edge and more blurred deeper underneath it. The card's
+own text and charts stay sharp. Its final opaque surface arrives later in the
+travel so the blur remains visible during the transition; scrolling back down
+reverses the same effect. Width, scroll detents and chart data are unchanged.
+
+`PortfolioSheetBackdropBlur` uses the existing scroll offset, a paused native
+blur animator and a mask applied directly to its effect view. It does not take
+snapshots or create another chart. The effect is removed at the clear/opaque
+endpoints and when offscreen. Reduce Transparency uses the opaque surface.
+This change was compiled and installed only; no gesture or UI tests were run.
 
 ## Root cause of comparison spikes
 
@@ -41,7 +67,10 @@ modified.
   and selection remain intact. Two-dimensional rotation trails and non-line
   visualisations are not converted.
 
-## Verification
+## Historical verification — 2026-09-10
+
+The 2026-09-14 changes were not tested, at the user’s request. The results
+below belong to the earlier implementation and do not validate this update.
 
 Simulator: `9BAE01F7-1E92-45BD-A817-395FC654CC16`, iOS 26.5. No physical iPhone
 operations or cache clearing. The existing isolated research XCTest host avoids

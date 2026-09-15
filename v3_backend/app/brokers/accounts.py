@@ -13,7 +13,6 @@ import secrets
 import sys
 import threading
 import time
-import urllib.request
 
 from app import data_store
 from app.cache import clear_all
@@ -31,6 +30,10 @@ FIELDS = {
     'ibkr': ('base_url', 'account_id'),
     'csv': (),
 }
+
+
+class Trading212ConnectionError(ValueError):
+    """A credential-free error safe to show in the account dialog."""
 
 
 def _read():
@@ -123,20 +126,15 @@ def _fetch(provider, config):
     scripts = str(ROOT / 'scripts')
     if scripts not in sys.path:
         sys.path.insert(0, scripts)
-    normalize = importlib.import_module('enrich_trading212_data').summarize_position
+    trading212 = importlib.import_module('enrich_trading212_data')
     authorization = base64.b64encode(f"{config['api_key']}:{config['api_secret']}".encode()).decode()
-    def get(path):
-        request = urllib.request.Request('https://live.trading212.com/api/v0/equity/' + path,
-            headers={'Authorization': 'Basic ' + authorization, 'Accept': 'application/json'})
-        with urllib.request.urlopen(request, timeout=25) as response:
-            return json.load(response)
-    info = get('account/info')
-    cash = get('account/cash')
-    positions = get('portfolio')
-    if not isinstance(info, dict) or not info.get('id') or not isinstance(cash, dict) or not isinstance(positions, list):
-        raise ValueError('券商返回的数据不完整。')
+    try:
+        info, cash, _ = trading212.fetch_account_details('Basic ' + authorization)
+        positions = trading212.fetch_positions('Basic ' + authorization)
+    except Exception as exc:
+        raise Trading212ConnectionError(trading212.request_error_message(exc) + ' 现有数据已保留。') from None
     label = 'Trading 212 · ' + str(info['id'])
-    return {'provider': provider, 'positions': [normalize(row) | {'account': label, 'account_key': str(info['id']), 'account_currency': info.get('currencyCode')} for row in positions],
+    return {'provider': provider, 'positions': [trading212.summarize_position(row) | {'account': label, 'account_key': str(info['id']), 'account_currency': (row.get('walletImpact') or {}).get('currency') or info.get('currencyCode')} for row in positions],
             'account_info': {label: info}, 'account_cash': {label: cash}, 'warnings': []}
 
 
@@ -153,6 +151,8 @@ def preview(account_id, csv_text=None):
     try:
         if raw is None:
             raw = _fetch(account['provider'], config)
+    except Trading212ConnectionError:
+        raise
     except Exception:
         # Provider exceptions can contain URLs or credential material.
         raise ValueError('连接失败，请检查凭证和本机网关后重试。现有数据已保留。') from None

@@ -9,21 +9,23 @@ import SwiftUI
 /// Each day is today's share counts at that day's close — for a personal
 /// portfolio the home chart's own method, so the stack's top is its value line.
 struct HoldingContributionChart: View {
+    var refreshRevision = 0
+    var fetchHistory: (@MainActor (Bool) async throws -> HoldingValueHistory)? = nil
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.locale) private var appLocale
-    @State private var history: HoldingValueHistory?
-    @State private var errorMessage: String?
+    @State private var loading = HoldingHistoryState()
+    @State private var retryRevision = 0
     @State private var range = ChartTimeRange.yearToDate
     @State private var selectedDate: Date?
     /// Holdings the reader turned off; the next ones by gain take their place.
     @State private var hiddenTickers: Set<String> = []
-    @State private var showsPrincipal = true
+    @State private var showsPrincipal = false
     @State private var showsOthers = true
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
 
     var body: some View {
-        let stack = history.map { HoldingContributionStack(history: $0, holdings: model.holdings, hiding: hiddenTickers) }
+        let stack = loading.history.map { HoldingContributionStack(history: $0, holdings: model.holdings, hiding: hiddenTickers) }
         let window = stack?.window(for: range)
 
         VStack(alignment: .leading, spacing: 18) {
@@ -48,22 +50,32 @@ struct HoldingContributionChart: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
-            } else if let errorMessage {
+            } else if let errorMessage = loading.errorMessage {
                 StandardLineChartPlaceholder(title: L10n.text("暂时无法绘制"), message: errorMessage, isLoading: false)
                     .frame(height: 300)
                     .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
-            } else if history != nil {
+                Button(L10n.text("重试")) { retryRevision &+= 1 }
+                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity)
+            } else if loading.history != nil {
                 StandardLineChartPlaceholder(title: L10n.text("历史数据不足"),
                                              message: L10n.text("该时间范围内没有足够的市值记录。"), isLoading: false)
                     .frame(height: 300)
                     .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
             } else {
-                StandardLineChartSkeleton(axisWidth: 0, topInset: 0, trailingEndpointInset: 21, seriesCount: 3)
+                StandardLineChartPlaceholder(title: L10n.text("正在准备历史数据"),
+                                             message: L10n.text("收益来源"), isLoading: true,
+                                             lineWidths: [1.5, 1.5, 1.5], appearanceID: "income-sources")
                     .frame(height: 300)
-                    .accessibilityLabel(L10n.text("正在准备历史数据"))
+                    .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
             }
         }
-        .task(id: model.portfolioChartRevision) { await load() }
+        .task(id: "\(model.portfolioChartRevision)|\(model.holdings.count)|\(refreshRevision)|\(retryRevision)") {
+            await loading.load { cachedOnly in
+                if let fetchHistory { return try await fetchHistory(cachedOnly) }
+                return try await model.holdingValueHistory(cachedOnly: cachedOnly)
+            }
+        }
         .onChange(of: range) { _, _ in selectedDate = nil }
         .sensoryFeedback(.selection, trigger: "\(hiddenTickers.sorted())|\(showsPrincipal)|\(showsOthers)") { _, _ in hapticsEnabled }
     }
@@ -161,6 +173,7 @@ struct HoldingContributionChart: View {
             trailingEndpointInset: 21,
             gridOpacity: 0,
             transitionKey: "\(range.rawValue)-\(colorScheme == .light ? "light" : "dark")",
+            appearanceID: "income-sources",
             dataTransition: .viewportZoom,
             selectedDate: selectedDate,
             selectionSeriesIDs: Set([topSeries, showsPrincipal ? "principal" : nil].compactMap { $0 }),
@@ -297,17 +310,6 @@ struct HoldingContributionChart: View {
             Text(DisplayFormat.money(amount, signed: true, fractionDigits: 0))
                 .appNumber(.callout)
                 .foregroundStyle(amount >= 0 ? CatfolioTheme.gain(for: colorScheme) : CatfolioTheme.loss(for: colorScheme))
-        }
-    }
-
-    @MainActor
-    private func load() async {
-        do {
-            history = try await model.holdingValueHistory()
-            errorMessage = nil
-        } catch is CancellationError {
-        } catch {
-            if history == nil { errorMessage = error.localizedDescription }
         }
     }
 

@@ -218,7 +218,7 @@ struct IndustrySentimentView: View {
                 ],
                 interactionDates: rows.map(\.timestamp), domain: low...high,
                 yTicks: (0...3).map { low + (high-low) * Double($0)/3 },
-                transitionKey: "sentiment-\(range)-\(data.asOf)", dataTransition: .viewportZoom,
+                transitionKey: "sentiment-\(range)", appearanceID: "industry-sentiment", dataTransition: .viewportZoom,
                 selectedDate: selectedDate, selectionSeriesIDs: ["VXSMH", "MA20"],
                 yAxisLabel: { String(format: "%.1f", $0) },
                 xAxisLabel: { $0.formatted(.dateTime.month(.twoDigits).day(.twoDigits)) },
