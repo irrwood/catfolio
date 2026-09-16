@@ -63,7 +63,14 @@ struct UnderwaterAnalysisChart: View {
         // The holdings count as well: opened before the portfolio has
         // loaded, the page tries again once it has.
         .task(id: "\(model.portfolioChartRevision)|\(model.holdings.count)|\(refreshRevision)|\(retryRevision)") {
-            await loading.load { cachedOnly in try await model.fixedShareHistory(cachedOnly: cachedOnly) }
+            await loading.load { cachedOnly in
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--demo-loss-history") {
+                    return LossAnalysisChart.demoHistory()
+                }
+                #endif
+                return try await model.fixedShareHistory(cachedOnly: cachedOnly)
+            }
         }
         .onChange(of: loading.revision) { _, _ in rebuild() }
         .onChange(of: range) { _, _ in
@@ -157,7 +164,8 @@ struct UnderwaterAnalysisChart: View {
             points: stack.rows.map { StandardLineChartPoint(id: "portfolio|\($0.dateText)", date: $0.date, value: $0.drawdown * 100) },
             color: .primary,
             lineWidth: 2.5,
-            latestPointRadius: 4,
+            // The line ends at the screen edge, where a dot would be halved.
+            latestPointRadius: 0,
             latestPointUsesGlass: false
         ))
         return chart(series: series, dates: stack.rows.map(\.date), bottom: bottom, selectionIDs: ["portfolio"])
@@ -366,7 +374,7 @@ struct UnderwaterAnalysisChart: View {
                     lineWidth: 2,
                     areaFill: loss.opacity(0.26),
                     areaBaseline: 0,
-                    latestPointRadius: 4,
+                    latestPointRadius: 0,
                     latestPointUsesGlass: false
                 ),
                 StandardLineChartSeries(
@@ -398,7 +406,7 @@ struct UnderwaterAnalysisChart: View {
             topInset: 4,
             bottomHeight: 0,
             leadingLineOverflow: 0,
-            trailingEndpointInset: 21,
+            trailingEndpointInset: 0,
             gridOpacity: 0,
             transitionKey: "\(range.rawValue)-\(mode)-\(focus ?? "")-\(colorScheme == .light ? "light" : "dark")",
             appearanceID: "underwater-\(mode)",
@@ -511,10 +519,11 @@ struct UnderwaterAnalysisChart: View {
     private func axisLabels(bottom: Double) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Spacer()
-            Text(Self.percent(bottom / 2)).appNumber(.footnote)
+            AnimatedChartValue(value: bottom / 2) { Text(Self.percent($0)).appNumber(.footnote) }
             Spacer()
-            Text(Self.percent(bottom)).appNumber(.footnote)
+            AnimatedChartValue(value: bottom) { Text(Self.percent($0)).appNumber(.footnote) }
         }
+        .animation(StandardLineChartTransition.zoom, value: bottom)
         .foregroundStyle(Color.primary.opacity(colorScheme == .light ? 0.35 : 0.4))
         .padding(.leading, CatfolioStyle.pageHorizontalInset)
         .padding(.top, 6)

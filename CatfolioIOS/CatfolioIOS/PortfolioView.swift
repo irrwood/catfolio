@@ -233,10 +233,16 @@ private struct PortfolioContentSheetBackground: View {
                     liquidGlassLayer
                 }
 
+                // The top of the card is the glass itself — `.clear`, the
+                // variant that barely frosts, so the page shows through and
+                // only its rim and highlight draw the card, like the
+                // assistant's header buttons. The wash comes in lower down,
+                // where the list needs an even ground to be read on.
                 LinearGradient(
                     stops: [
-                        .init(color: terminalColor.opacity(0.10), location: 0),
-                        .init(color: terminalColor.opacity(0.54), location: 0.42),
+                        .init(color: terminalColor.opacity(0), location: 0),
+                        .init(color: terminalColor.opacity(0.06), location: 0.28),
+                        .init(color: terminalColor.opacity(0.55), location: 0.62),
                         .init(color: terminalColor, location: 1),
                     ],
                     startPoint: .top,

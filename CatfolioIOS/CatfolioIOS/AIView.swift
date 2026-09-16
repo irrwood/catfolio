@@ -881,6 +881,7 @@ private enum FakeAIContent {
                     ),
                     thesis: PortfolioAttentionThesis(
                         stance: .strengthening,
+                        basis: .price,
                         confidence: .high,
                         whatChanged: L10n.text("演示行情显示股价放量上行，并接近模拟的 52 周高位。"),
                         whyItMatters: L10n.text("ORCL 是演示组合中权重较高的科技持仓，短期动量增强会明显影响组合表现。"),
@@ -910,6 +911,7 @@ private enum FakeAIContent {
                     fundamentals: nil,
                     thesis: PortfolioAttentionThesis(
                         stance: .maintaining,
+                        basis: .company,
                         confidence: .medium,
                         whatChanged: L10n.text("演示价格自阶段高位回落，但长期趋势尚未破坏。"),
                         whyItMatters: L10n.text("这类高波动半导体设备持仓容易放大组合的科技周期风险。"),
@@ -939,6 +941,7 @@ private enum FakeAIContent {
                     fundamentals: nil,
                     thesis: PortfolioAttentionThesis(
                         stance: .maintaining,
+                        basis: .company,
                         confidence: .medium,
                         whatChanged: L10n.text("演示行情出现放量回撤，但中期累计表现仍为正。"),
                         whyItMatters: L10n.text("单日波动与成交量同时放大，值得确认这是短期获利回吐还是趋势转弱。"),
@@ -1112,6 +1115,8 @@ struct PortfolioAttentionCard: View {
     var prominent = false
     @Namespace private var zoom
     @State private var showsDetail = false
+    /// Handed on explicitly: a pushed page does not inherit it from here.
+    @Environment(\.attentionEvidenceEditor) private var editor
 
     var body: some View {
         Group {
@@ -1121,11 +1126,13 @@ struct PortfolioAttentionCard: View {
                 }
                 .navigationDestination(isPresented: $showsDetail) {
                     PortfolioAttentionDetail(row: row)
+                        .environment(\.attentionEvidenceEditor, editor)
                         .navigationTransition(.zoom(sourceID: row.id, in: zoom))
                 }
             } else {
                 NavigationLink {
                     PortfolioAttentionDetail(row: row)
+                        .environment(\.attentionEvidenceEditor, editor)
                         .navigationTransition(.zoom(sourceID: row.id, in: zoom))
                 } label: {
                     PortfolioAttentionCardContent(row: row)
@@ -1143,12 +1150,55 @@ struct PortfolioAttentionCard: View {
 /// the plain page, no card. The argument leads; what changed, the evidence
 /// either way, the risks and what to watch follow under quiet labels, and
 /// the sources close it.
+/// Lets a reader keep their changes to a holding's evidence. Given by the
+/// pages that own a saved analysis — the attention page and its preview on
+/// Performance — and absent in the chat, where the reading stays as written.
+struct AttentionEvidenceEditor {
+    let save: (PortfolioAttentionHolding) -> Void
+}
+
+extension EnvironmentValues {
+    @Entry var attentionEvidenceEditor: AttentionEvidenceEditor? = nil
+}
+
 private struct PortfolioAttentionDetail: View {
     @Environment(\.locale) private var appLocale
     @Environment(\.dismiss) private var dismiss
-    let row: PortfolioAttentionHolding
+    @Environment(AppModel.self) private var model
+    @Environment(\.attentionEvidenceEditor) private var editor
+    @State private var row: PortfolioAttentionHolding
+    /// Evidence set aside, as edited now. Points written by hand in an
+    /// earlier version are kept and sent along, but no longer added here.
+    @State private var excluded: Set<String>
+    @State private var notes: [String]
+    @State private var isRejudging = false
+    @State private var rejudgeError: String?
+    /// The 追问 composer, and the question waiting for its answer.
+    @State private var question = ""
+    @State private var pendingQuestion: String?
+    @State private var followUpError: String?
+    @FocusState private var isAsking: Bool
+
+    init(row: PortfolioAttentionHolding) {
+        _row = State(initialValue: row)
+        _excluded = State(initialValue: Set(row.adjustment?.excluded ?? []))
+        _notes = State(initialValue: row.adjustment?.notes ?? [])
+    }
+
+    /// The model's own lists, as first written.
+    private var originalSupporting: [String] { row.adjustment?.originalSupporting ?? row.thesis.supportingEvidence }
+    private var originalCounter: [String] { row.adjustment?.originalCounter ?? row.thesis.counterEvidence }
+
+    /// Whether the evidence on screen differs from what the reading was
+    /// last judged on.
+    private var hasPendingChanges: Bool {
+        excluded != Set(row.adjustment?.excluded ?? []) || notes != (row.adjustment?.notes ?? [])
+    }
+
+    private var followUps: [PortfolioAttentionFollowUp] { row.followUps ?? [] }
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
@@ -1168,11 +1218,19 @@ private struct PortfolioAttentionDetail: View {
                         ReaderParagraph(row.thesis.whatChanged)
                     }
                 }
-                ReaderList(title: L10n.text("支持证据"), values: row.thesis.supportingEvidence)
-                ReaderList(title: L10n.text("反方证据"), values: row.thesis.counterEvidence)
+                if editor != nil {
+                    EditableEvidenceList(title: L10n.text("支持证据"), values: originalSupporting, excluded: $excluded)
+                    EditableEvidenceList(title: L10n.text("反方证据"), values: originalCounter, excluded: $excluded)
+                    rejudgeBar
+                } else {
+                    ReaderList(title: L10n.text("支持证据"), values: row.thesis.supportingEvidence)
+                    ReaderList(title: L10n.text("反方证据"), values: row.thesis.counterEvidence)
+                }
                 ReaderList(title: L10n.text("风险"), values: row.thesis.risks)
                 ReaderList(title: L10n.text("接下来关注"), values: row.thesis.watchNext)
                 ReaderList(title: L10n.text("Risk Flags"), values: row.thesis.riskFlags.map(PortfolioAttentionHolding.riskFlagText))
+
+                followUpThread
 
                 if !row.sources.isEmpty {
                     ReaderSection(L10n.text("来源")) {
@@ -1190,8 +1248,27 @@ private struct PortfolioAttentionDetail: View {
             .frame(maxWidth: 600, alignment: .leading)
             .padding(.horizontal, 24)
             .padding(.top, 12)
-            .padding(.bottom, 64)
+            .padding(.bottom, 32)
             .frame(maxWidth: .infinity)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        // Keep the newest question and its answer in view as they arrive.
+        .onChange(of: pendingQuestion) { _, pending in
+            guard pending != nil else { return }
+            withAnimation(.smooth) { proxy.scrollTo("follow-up-pending", anchor: .bottom) }
+        }
+        .onChange(of: followUps.last?.id) { _, id in
+            guard let id else { return }
+            withAnimation(.smooth) { proxy.scrollTo(id, anchor: .top) }
+        }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            followUpComposer
+                .frame(maxWidth: 600)
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 8)
+                .frame(maxWidth: .infinity)
         }
         .background(Color(uiColor: .systemBackground))
         .softTopScrollEdge()
@@ -1224,7 +1301,7 @@ private struct PortfolioAttentionDetail: View {
             Text(row.ticker)
                 .appText(.display, weight: .semibold)
                 .padding(.top, 12)
-            Text(row.name)
+            Text(row.displayName)
                 .appText(.callout)
                 .foregroundStyle(.secondary)
                 .padding(.top, 4)
@@ -1242,6 +1319,215 @@ private struct PortfolioAttentionDetail: View {
             .padding(.top, 16)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The questions asked on this page, oldest first, each followed by its
+    /// answer. Saved with the holding, so they are still here next time.
+    @ViewBuilder
+    private var followUpThread: some View {
+        if !followUps.isEmpty || pendingQuestion != nil || followUpError != nil {
+            ReaderSection(L10n.text("追问")) {
+                VStack(alignment: .leading, spacing: 28) {
+                    ForEach(followUps) { item in
+                        followUpEntry(question: item.question) {
+                            ReaderParagraph(item.answer)
+                            if item.searched {
+                                Label(L10n.text("已联网搜索"), systemImage: "globe")
+                                    .appText(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .id(item.id)
+                        .contextMenu {
+                            Button(L10n.text("拷贝回答"), systemImage: "doc.on.doc") {
+                                UIPasteboard.general.string = item.answer
+                            }
+                            Button(L10n.text("删除这条追问"), systemImage: "trash", role: .destructive) {
+                                remove(item)
+                            }
+                        }
+                    }
+                    if let pendingQuestion {
+                        followUpEntry(question: pendingQuestion) {
+                            HStack(spacing: 8) {
+                                ProgressView().controlSize(.small)
+                                Text(L10n.text("正在回答…"))
+                                    .appText(.callout)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .id("follow-up-pending")
+                    }
+                    if let followUpError {
+                        Text(followUpError)
+                            .appText(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+    }
+
+    private func followUpEntry<Answer: View>(question: String,
+                                             @ViewBuilder answer: () -> Answer) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(question)
+                .appText(.subheading, weight: .semibold)
+                .fixedSize(horizontal: false, vertical: true)
+            answer()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The AI page's floating field: a glass capsule, the send button inset
+    /// concentric with its end.
+    private var followUpComposer: some View {
+        HStack(spacing: 8) {
+            TextField(
+                L10n.text("追问这只持仓"),
+                text: $question,
+                prompt: Text(L10n.text("追问这只持仓")).foregroundStyle(Color.primary.opacity(0.62)),
+                axis: .vertical
+            )
+            .appText(.subheading)
+            .foregroundStyle(.primary)
+            .lineLimit(1...4)
+            .focused($isAsking)
+            .submitLabel(.send)
+            .onSubmit(ask)
+
+            if pendingQuestion != nil {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(.primary)
+                    .frame(width: 32, height: 32)
+            } else {
+                Button(action: ask) {
+                    Image(systemName: "arrow.up")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(canAsk ? Color(uiColor: .systemBackground) : Color.primary.opacity(0.42))
+                        .frame(width: 32, height: 32)
+                        .background(canAsk ? Color.primary : Color.primary.opacity(0.10), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!canAsk)
+                .accessibilityLabel(L10n.text("发送"))
+            }
+        }
+        .padding(.leading, 18)
+        .padding(.trailing, 8)
+        .padding(.vertical, 8)
+        .frame(minHeight: 48)
+        .floatingGlassSurface(in: Capsule(), isInteractive: false)
+    }
+
+    private var canAsk: Bool {
+        !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && pendingQuestion == nil
+    }
+
+    private func ask() {
+        let text = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, pendingQuestion == nil else { return }
+        question = ""
+        isAsking = false
+        followUpError = nil
+        pendingQuestion = text
+        let base = row
+        Task {
+            defer { pendingQuestion = nil }
+            do {
+                let answer: (text: String, searched: Bool)
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--demo-follow-up") {
+                    // A canned answer, for looking at the thread without a model.
+                    try await Task.sleep(for: .seconds(1.5))
+                    answer = ("成交量是前 30 日均量的 1.9 倍，说明这次上涨有较多资金参与，不只是少量成交推动。但放量本身不说明原因：材料里没有对应的公司公告，可能来自板块或指数资金。接下来看成交量能否维持，以及价格是否守住放量当天的低点。", true)
+                } else {
+                    answer = try await model.followUpAttention(base, question: text, history: base.followUps ?? [])
+                }
+                #else
+                answer = try await model.followUpAttention(base, question: text, history: base.followUps ?? [])
+                #endif
+                let body = answer.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !body.isEmpty else { throw LocalServiceError.invalidResponse }
+                var updated = row
+                updated.followUps = (updated.followUps ?? []) + [PortfolioAttentionFollowUp(
+                    question: text, answer: body, askedAt: .now, searched: answer.searched)]
+                row = updated
+                editor?.save(updated)
+            } catch {
+                // The question goes back in the field, so it is not lost.
+                if question.isEmpty { question = text }
+                followUpError = L10n.text("没能回答：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func remove(_ item: PortfolioAttentionFollowUp) {
+        var updated = row
+        updated.followUps = followUps.filter { $0.id != item.id }
+        row = updated
+        editor?.save(updated)
+    }
+
+    @ViewBuilder
+    private var rejudgeBar: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if hasPendingChanges || isRejudging {
+                Button(action: rejudge) {
+                    HStack(spacing: 8) {
+                        if isRejudging { ProgressView().controlSize(.small) }
+                        Text(isRejudging ? L10n.text("正在重新判断…") : L10n.text("按调整后的证据重新判断"))
+                            .appText(.callout, weight: .semibold)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.capsule)
+                .disabled(isRejudging)
+            } else if let date = row.adjustment?.rejudgedAt {
+                Text(L10n.text("已按你的调整重新判断 · \(date.formatted(date: .abbreviated, time: .shortened))"))
+                    .appText(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if let rejudgeError {
+                Text(rejudgeError).appText(.caption).foregroundStyle(.secondary)
+            }
+            Text(L10n.text("轻点证据可以去掉或恢复，再按保留的证据重新判断。调整过的判断置信度最高为中。"))
+                .appText(.micro)
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, 24)
+    }
+
+    private func rejudge() {
+        guard !isRejudging else { return }
+        isRejudging = true
+        rejudgeError = nil
+        let supporting = originalSupporting.filter { !excluded.contains($0) }
+        let counter = originalCounter.filter { !excluded.contains($0) }
+        let kept = (excluded, notes)
+        let base = row
+        Task {
+            defer { isRejudging = false }
+            do {
+                let thesis = try await model.rejudgeAttention(base, supporting: supporting, counter: counter, notes: kept.1)
+                // From the page's current row, so an answer that arrived
+                // meanwhile is kept.
+                var updated = row
+                updated.thesis = thesis
+                updated.adjustment = PortfolioAttentionAdjustment(
+                    originalSupporting: originalSupporting, originalCounter: originalCounter,
+                    excluded: Array(kept.0), notes: kept.1, rejudgedAt: .now)
+                row = updated
+                editor?.save(updated)
+            } catch {
+                rejudgeError = L10n.text("没能重新判断：\(error.localizedDescription)")
+            }
+        }
     }
 
     private func sourceRow(_ source: PortfolioAttentionSource) -> some View {
@@ -1262,6 +1548,47 @@ private struct PortfolioAttentionDetail: View {
                 .foregroundStyle(.tertiary)
         }
         .contentShape(Rectangle())
+    }
+}
+
+/// Evidence the reader can set aside: a tap turns a point off — struck
+/// through, dimmed — and on again.
+private struct EditableEvidenceList: View {
+    let title: String
+    let values: [String]
+    @Binding var excluded: Set<String>
+
+    var body: some View {
+        if !values.isEmpty {
+            ReaderSection(title) {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(values, id: \.self) { value in
+                        let isOn = !excluded.contains(value)
+                        Button {
+                            if isOn { excluded.insert(value) } else { excluded.remove(value) }
+                        } label: {
+                            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                                    .font(.callout)
+                                    .foregroundStyle(isOn ? Color.accentColor : Color.secondary)
+                                Text(value)
+                                    .appText(.subheading)
+                                    .lineSpacing(7)
+                                    .strikethrough(!isOn, color: .secondary)
+                                    .foregroundStyle(isOn ? Color.primary.opacity(0.88) : Color.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .multilineTextAlignment(.leading)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .sensoryFeedback(.selection, trigger: isOn)
+                        .accessibilityValue(isOn ? L10n.text("已采用") : L10n.text("已去掉"))
+                        .accessibilityHint(L10n.text("轻点去掉或恢复这条证据"))
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1336,19 +1663,30 @@ private extension PortfolioAttentionHolding {
         attention == .high ? Color.red : CatfolioStyle.blue
     }
 
+    /// A reading that rests on a confirmed company event speaks about the
+    /// investment case; one that rests on price signals speaks about the
+    /// price, so a rise is never printed as the case getting stronger.
     var stanceText: String {
+        if thesis.basis == .company {
+            switch thesis.stance {
+            case .strengthening: return L10n.text("投资逻辑增强")
+            case .maintaining: return L10n.text("投资逻辑维持")
+            case .weakening: return L10n.text("投资逻辑减弱")
+            }
+        }
         switch thesis.stance {
-        case .strengthening: L10n.text("投资逻辑增强")
-        case .maintaining: L10n.text("投资逻辑维持")
-        case .weakening: L10n.text("投资逻辑减弱")
+        case .strengthening: return L10n.text("走势偏强")
+        case .maintaining: return L10n.text("走势中性")
+        case .weakening: return L10n.text("走势偏弱")
         }
     }
 
     var confidenceText: String {
+        guard thesis.basis == .company else { return L10n.text("公司面待确认") }
         switch thesis.confidence {
-        case .high: "High confidence"
-        case .medium: "Medium confidence"
-        case .none: "Low confidence"
+        case .high: return L10n.text("高置信度")
+        case .medium: return L10n.text("中置信度")
+        case .none: return L10n.text("低置信度")
         }
     }
 
@@ -1376,16 +1714,19 @@ private struct PortfolioAttentionCardContent: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(row.ticker).font(prominent ? .title2.bold() : .headline)
-                    Text(row.name).font(prominent ? .subheadline : .caption).foregroundStyle(.secondary)
+                    Text(row.displayName).font(prominent ? .subheadline : .caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 HStack(spacing: 10) {
-                    Text(row.attentionText)
-                        .font(.caption2.weight(.bold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
-                        .overlay(Capsule().strokeBorder(attentionBorder, lineWidth: 1))
+                    // A dot and a word in the level's colour, as the reader
+                    // opens with — not a bordered pill competing with the
+                    // ticker for attention.
+                    HStack(spacing: 5) {
+                        Circle().fill(row.attentionTint).frame(width: 6, height: 6)
+                        Text(row.attentionText)
+                    }
+                    .appText(.caption, weight: .semibold)
+                    .foregroundStyle(row.attentionTint)
                     // The card opens; the chevron is all that says so.
                     Image(systemName: "chevron.right")
                         .font(.footnote.weight(.semibold))
@@ -1394,7 +1735,8 @@ private struct PortfolioAttentionCardContent: View {
                 }
             }
 
-            Text("\(row.stanceText) · \(row.confidenceText)")
+            Text("\(row.stanceText) · \(row.confidenceText)"
+                 + (row.adjustment?.rejudgedAt != nil ? " · " + L10n.text("已调整证据") : ""))
                 .font(.caption.weight(.semibold))
 
             ScrollView(.horizontal) {
@@ -1421,14 +1763,13 @@ private struct PortfolioAttentionCardContent: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        // Fills the height it is given, so cards side by side are as tall as
+        // the tallest; in a list it is only as tall as its content.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(20)
         .modifier(AttentionCardSurface(isVisible: !prominent))
     }
 
-    private var attentionBorder: Color {
-        row.attention == .high ? Color.red.opacity(0.28) : CatfolioStyle.blue.opacity(0.38)
-    }
 }
 
 /// The attention report's cards are Liquid Glass, like the composer below
@@ -1966,7 +2307,9 @@ private struct AIComposer: View {
                 prompt: Text(L10n.text("Ask AI")).foregroundStyle(Color.primary.opacity(0.62)),
                 axis: .vertical
             )
-                .font(.body)
+                // The app's own face, not the system body font the field
+                // otherwise takes.
+                .appText(.subheading)
                 .foregroundStyle(.primary)
                 .lineLimit(1...3)
                 .focused(focus)
@@ -1993,8 +2336,11 @@ private struct AIComposer: View {
                 .accessibilityLabel(L10n.text("发送"))
             }
         }
-        .padding(.leading, 14)
-        .padding(.trailing, 12)
+        // Clear of the capsule's curve on the left; on the right the send
+        // button sits 8pt in all round, concentric with the capsule's end.
+        .padding(.leading, 18)
+        .padding(.trailing, 8)
+        .padding(.vertical, 8)
         .frame(minHeight: 48)
     }
 
@@ -2031,20 +2377,22 @@ struct AIAssistantPage: View {
 /// shows through, in the reader's appearance.
 private enum AIConversationGround {
     static func base(for scheme: ColorScheme) -> Color {
-        scheme == .dark ? .black : Color(red: 0.955, green: 0.962, blue: 0.975)
+        scheme == .dark ? .black : .white
     }
 }
 
-/// A stationary blue light below the conversation. Keep the base opaque and
-/// size the glow to the screen, including the area behind the keyboard. On
-/// the light page the same light, weaker: a wash rather than a lamp.
+/// A stationary blue light below the conversation, on the dark page only;
+/// the light page is plain white. Keep the base opaque and size the glow to
+/// the screen, including the area behind the keyboard.
 private struct AIConversationGlowBackground: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let strength = colorScheme == .dark ? 1.0 : 0.34
+        let strength = colorScheme == .dark ? 1.0 : 0
         GeometryReader { geometry in
-            let diameter = min(geometry.size.width * 1.25, 560)
+            // Wider than the screen, centred on its bottom edge: half the
+            // light is below the glass, and what shows is a broad rise.
+            let diameter = min(geometry.size.width * 1.8, 820)
 
             Circle()
                 .fill(
@@ -2064,7 +2412,7 @@ private struct AIConversationGlowBackground: View {
                 .blur(radius: diameter * 0.08)
                 .position(
                     x: geometry.size.width / 2,
-                    y: geometry.size.height - diameter * 0.3
+                    y: geometry.size.height
                 )
         }
         .background(AIConversationGround.base(for: colorScheme))

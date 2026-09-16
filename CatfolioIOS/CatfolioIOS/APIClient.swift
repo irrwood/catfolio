@@ -691,6 +691,16 @@ final class AppModel {
         )
     }
 
+    func rejudgeAttention(_ row: PortfolioAttentionHolding, supporting: [String], counter: [String],
+                          notes: [String]) async throws -> PortfolioAttentionThesis {
+        try await LocalAIClient().rejudgeAttention(row: row, supporting: supporting, counter: counter, notes: notes)
+    }
+
+    func followUpAttention(_ row: PortfolioAttentionHolding, question: String,
+                           history: [PortfolioAttentionFollowUp]) async throws -> (text: String, searched: Bool) {
+        try await LocalAIClient().followUpAttention(row: row, question: question, history: history)
+    }
+
     func portfolioAttention() async throws -> PortfolioAttentionReport {
         let loaded = try await loadActiveDocument()
         return try await LocalAIClient().portfolioAttention(document: selectedDocument(from: loaded))

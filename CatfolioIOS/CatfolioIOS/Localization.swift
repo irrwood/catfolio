@@ -143,9 +143,13 @@ enum ContentLanguage {
     static func cacheKey(_ key: String, language: String) -> String { "\(language)|\(key)" }
     static func newsURL(ticker: String, name: String, language: String) -> URL {
         let chinese = language.hasPrefix("zh")
+        return newsURL(query: "\(ticker) \(name) " + (chinese ? "股票" : "stock analyst"), language: language)
+    }
+    static func newsURL(query: String, language: String) -> URL {
+        let chinese = language.hasPrefix("zh")
         var url = URLComponents(string: "https://news.google.com/rss/search")!
         url.queryItems = [
-            URLQueryItem(name: "q", value: "\(ticker) \(name) " + (chinese ? "股票" : "stock analyst")),
+            URLQueryItem(name: "q", value: query),
             URLQueryItem(name: "hl", value: chinese ? "zh-CN" : "en-US"),
             URLQueryItem(name: "gl", value: chinese ? "CN" : "US"),
             URLQueryItem(name: "ceid", value: chinese ? "CN:zh-Hans" : "US:en")

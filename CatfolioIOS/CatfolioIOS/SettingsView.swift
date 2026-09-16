@@ -195,6 +195,14 @@ struct SettingsView: View {
                 connector(L10n.text("服务商"), detail: L10n.text("行情、估值与 AI 密钥"), icon: "key") {
                     showsLocalServices = true
                 }
+                SettingsNavigationRow(
+                    icon: .symbol("newspaper"),
+                    title: L10n.text("新闻"),
+                    subtitle: L10n.text("新闻来源、屏蔽网站与搜索方式"),
+                    subtitleSpacing: 2
+                ) {
+                    NewsSettingsView()
+                }
             }
 
             SettingsSectionHeader(L10n.text("偏好设置"))
@@ -1224,6 +1232,7 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
     case fmp
     case deepSeek
     case openRouter
+    case finnhub
 
     var id: String { rawValue }
 
@@ -1233,6 +1242,7 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
         case .fmp: "Financial Modeling Prep"
         case .deepSeek: "DeepSeek"
         case .openRouter: "OpenRouter"
+        case .finnhub: "Finnhub"
         }
     }
 
@@ -1249,6 +1259,7 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
         case .fmp: L10n.text("估值矩阵与行情备用")
         case .deepSeek: L10n.text("云端问答与自动回退")
         case .openRouter: L10n.text("用一个 Key 调用多家模型")
+        case .finnhub: L10n.text("美股公司新闻")
         }
     }
 
@@ -1262,6 +1273,8 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
             L10n.text("选择 DeepSeek 或自动模式需要回退时，组合摘要和问题会直接发送给 DeepSeek，不经过 Mac 或 Catfolio 服务端。")
         case .openRouter:
             L10n.text("选择 OpenRouter 或自动模式需要回退时，组合摘要和问题会直接发送给 OpenRouter，再由它转给你选的模型，不经过 Mac 或 Catfolio 服务端。")
+        case .finnhub:
+            L10n.text("读取美股公司新闻和发布方摘要，作为今天值得关注、个股动态和今日异动的新闻来源之一。请求只带股票代码，不含持仓数量或金额。")
         }
     }
 
@@ -1271,6 +1284,7 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
         case .fmp: LocalServiceKeys.fmp
         case .deepSeek: LocalServiceKeys.deepSeek
         case .openRouter: LocalServiceKeys.openRouter
+        case .finnhub: LocalServiceKeys.finnhub
         }
     }
 
@@ -1280,6 +1294,7 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
         case .fmp: "chart.xyaxis.line"
         case .deepSeek: "sparkles"
         case .openRouter: "arrow.triangle.branch"
+        case .finnhub: "newspaper"
         }
     }
 
@@ -1288,6 +1303,7 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
         case .massive: CatfolioTheme.accent
         case .fmp: CatfolioTheme.warning
         case .deepSeek, .openRouter: CatfolioTheme.services
+        case .finnhub: CatfolioTheme.accent
         }
     }
 
@@ -1321,6 +1337,9 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
         case .openRouter:
             try await LocalAIClient().testOpenRouterConnection(apiKey: apiKey)
             return L10n.text("连接成功，OpenRouter Key 可用")
+        case .finnhub:
+            let items = try await FinnhubNewsProvider.companyNews(symbol: "AAPL", days: 7, apiKey: apiKey)
+            return L10n.text("连接成功，已读取 AAPL 的 \(items.count) 条新闻")
         }
     }
 }
@@ -1377,6 +1396,11 @@ private struct LocalServicesSettingsView: View {
                     providerLink(.fmp)
                 }
                 SettingsFootnote(L10n.text("Yahoo Finance 无需密钥；自动用于回撤与历史价格，也会在 Massive 不可用时补充成交量行情。"))
+
+                SettingsSection(L10n.text("新闻")) {
+                    providerLink(.finnhub)
+                }
+                SettingsFootnote(L10n.text("Google News、Yahoo Finance、SEC EDGAR 和 GDELT 无需密钥。在 设置 › 新闻 中选择使用哪些来源。"))
 
                 SettingsSectionHeader("AI")
                 SettingsCard {
@@ -1511,6 +1535,8 @@ private struct LocalServicesSettingsView: View {
             path = [.deepSeek]
         } else if arguments.contains("--show-local-service-openrouter") {
             path = [.openRouter]
+        } else if arguments.contains("--show-local-service-finnhub") {
+            path = [.finnhub]
         }
     }
 }
@@ -2033,5 +2059,147 @@ struct AccountDataIssuesView: View {
         }
         .navigationTitle(L10n.text("数据问题"))
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - News
+
+/// Which feeds news leads come from, which sites never count, and how each
+/// holding is searched. Read by the attention scan, a security's
+/// developments and today's move alike, from the next refresh on.
+private struct NewsSettingsView: View {
+    @AppStorage(NewsProvider.googleNews.enabledKey) private var googleNews = true
+    @AppStorage(NewsProvider.yahooFinance.enabledKey) private var yahooFinance = true
+    @AppStorage(NewsProvider.secEdgar.enabledKey) private var secEdgar = true
+    @AppStorage(NewsProvider.gdelt.enabledKey) private var gdelt = true
+    @AppStorage(NewsProvider.finnhub.enabledKey) private var finnhub = true
+    @AppStorage(NewsSettings.queryPlanKey) private var usesQueryPlan = true
+    @AppStorage(NewsSettings.readsArticlesKey) private var readsArticles = true
+    @AppStorage(AttentionEvidenceRules.excludeAggregatorsKey) private var excludesAggregators = true
+    @AppStorage(NewsSettings.blockedSitesKey) private var blockedSitesText = ""
+    @State private var newSite = ""
+    @State private var hasFinnhubKey = LocalServiceKeys.hasFinnhubKey
+    @FocusState private var addsSite: Bool
+
+    private var blockedSites: [String] { NewsSettings.sites(from: blockedSitesText) }
+
+    var body: some View {
+        SettingsPage(title: L10n.text("新闻"), subtitle: L10n.text("新闻来源、屏蔽网站与搜索方式"), bottomInset: 32) {
+            SettingsSection(L10n.text("新闻来源")) {
+                toggle(.googleNews, isOn: $googleNews)
+                toggle(.yahooFinance, isOn: $yahooFinance)
+                toggle(.secEdgar, isOn: $secEdgar)
+                toggle(.gdelt, isOn: $gdelt)
+                if hasFinnhubKey {
+                    toggle(.finnhub, isOn: $finnhub)
+                } else {
+                    SettingsNavigationRow(
+                        icon: .symbol(NewsProvider.finnhub.iconName),
+                        title: NewsProvider.finnhub.title,
+                        subtitle: NewsProvider.finnhub.detail,
+                        subtitleSpacing: 2,
+                        value: L10n.text("需要密钥"),
+                        valueColor: SettingsTemplate.readOnlyValue
+                    ) {
+                        LocalServiceDetailView(provider: .finnhub) { _ in
+                            hasFinnhubKey = LocalServiceKeys.hasFinnhubKey
+                        }
+                    }
+                }
+            }
+            SettingsFootnote(L10n.text("关闭的来源不会被请求。GDELT 每 5 秒只接受一次请求，一次分析会把所有持仓合并成一次搜索。Finnhub 只覆盖美股，密钥在 服务商 中设置。"))
+
+            SettingsSection(L10n.text("搜索方式")) {
+                SettingsToggleRow(
+                    icon: .symbol("list.bullet.indent"),
+                    title: L10n.text("补充诉讼与财报搜索"),
+                    subtitle: L10n.text("每只持仓另搜诉讼、调查，以及财报与指引"),
+                    isOn: $usesQueryPlan
+                )
+                SettingsToggleRow(
+                    icon: .symbol("doc.text.magnifyingglass"),
+                    title: L10n.text("分析时阅读正文"),
+                    subtitle: L10n.text("今天值得关注读取每只持仓最可靠的两篇文章"),
+                    isOn: $readsArticles
+                )
+            }
+            SettingsFootnote(L10n.text("搜索词由代码固定生成，同一只持仓每次都按同样的方式搜索。阅读正文会让分析多花几秒，但判断不再只看标题。"))
+
+            SettingsSection(L10n.text("屏蔽网站")) {
+                SettingsToggleRow(
+                    icon: .symbol("arrow.triangle.2.circlepath"),
+                    title: L10n.text("排除转述网站"),
+                    subtitle: L10n.text("StockStory、StockTitan、Simply Wall St 等"),
+                    isOn: $excludesAggregators
+                )
+                ForEach(blockedSites, id: \.self) { site in
+                    SettingsRowContainer {
+                        HStack(spacing: SettingsTemplate.iconSpacing) {
+                            SettingsRowIcon(.symbol("nosign"))
+                                .foregroundStyle(SettingsTemplate.secondaryText)
+                            Text(site)
+                                .appText(.subheading)
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                            Spacer(minLength: 8)
+                            Button {
+                                remove(site)
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                                    .font(.system(size: 20))
+                                    .symbolRenderingMode(.hierarchical)
+                                    .foregroundStyle(CatfolioTheme.danger)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(L10n.text("取消屏蔽 \(site)"))
+                        }
+                    }
+                }
+                SettingsRowContainer {
+                    HStack(spacing: SettingsTemplate.iconSpacing) {
+                        SettingsRowIcon(.symbol("plus"))
+                            .foregroundStyle(SettingsTemplate.secondaryText)
+                        TextField(L10n.text("网站名称或域名，如 fool.com"), text: $newSite)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.URL)
+                            .submitLabel(.done)
+                            .focused($addsSite)
+                            .onSubmit(add)
+                        if !NewsSettings.normalizedSite(newSite).isEmpty {
+                            Button(L10n.text("添加"), action: add)
+                                .appText(.subheading, weight: .semibold)
+                                .foregroundStyle(CatfolioTheme.accent)
+                        }
+                    }
+                }
+            }
+            SettingsFootnote(L10n.text("按发布方名称或域名匹配，屏蔽的网站不会出现在任何证据里。下次刷新分析时生效。"))
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .onAppear { hasFinnhubKey = LocalServiceKeys.hasFinnhubKey }
+    }
+
+    private func toggle(_ provider: NewsProvider, isOn: Binding<Bool>) -> some View {
+        SettingsToggleRow(
+            icon: .symbol(provider.iconName),
+            title: provider.title,
+            subtitle: provider.detail,
+            isOn: isOn
+        )
+    }
+
+    private func add() {
+        let site = NewsSettings.normalizedSite(newSite)
+        guard !site.isEmpty else { return }
+        if !blockedSites.contains(site) {
+            blockedSitesText = (blockedSites + [site]).joined(separator: "\n")
+        }
+        newSite = ""
+        addsSite = false
+    }
+
+    private func remove(_ site: String) {
+        blockedSitesText = blockedSites.filter { $0 != site }.joined(separator: "\n")
     }
 }

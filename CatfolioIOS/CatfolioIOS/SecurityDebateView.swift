@@ -587,15 +587,70 @@ enum SecurityDailyMovePresentation {
     }
 }
 
+/// What a paper note is about: the latest price move, or one card of the
+/// security page explained. The paper, its cover and its motion are the same.
+enum SecurityPaperTopic {
+    case move(SecurityPriceMoveContext, SecurityDailyMoveStore)
+    case card(SecurityCardInsightContext, SecurityCardInsightStore)
+
+    var ticker: String {
+        switch self {
+        case .move(let context, _): context.ticker
+        case .card(let context, _): context.ticker
+        }
+    }
+
+    var name: String {
+        switch self {
+        case .move(let context, _): context.name
+        case .card(let context, _): context.name
+        }
+    }
+
+    func key(language: String) -> String {
+        switch self {
+        case .move(let context, _): context.key(language: language)
+        case .card(let context, _): context.key(language: language)
+        }
+    }
+
+    @MainActor var state: SecurityDailyMoveStore.State? {
+        switch self {
+        case .move(let context, let store): store.state(context)
+        case .card(let context, let store): store.state(context)
+        }
+    }
+
+    @MainActor func start(force: Bool = false) {
+        switch self {
+        case .move(let context, let store): store.start(context, force: force)
+        case .card(let context, let store): store.start(context, force: force)
+        }
+    }
+}
+
 /// Paper Flip Lab: a two-sided cover turns upward around a horizontal spine.
 struct SecurityDailyMovePaper: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.locale) private var locale
-    let context: SecurityPriceMoveContext
-    var store: SecurityDailyMoveStore = .shared
+    let topic: SecurityPaperTopic
     var logoSymbol: String? = nil
     var sourceFrame: CGRect = .zero
+
+    init(context: SecurityPriceMoveContext, store: SecurityDailyMoveStore = .shared,
+         logoSymbol: String? = nil, sourceFrame: CGRect = .zero) {
+        self.topic = .move(context, store)
+        self.logoSymbol = logoSymbol
+        self.sourceFrame = sourceFrame
+    }
+
+    init(card: SecurityCardInsightContext, store: SecurityCardInsightStore = .shared,
+         logoSymbol: String? = nil, sourceFrame: CGRect = .zero) {
+        self.topic = .card(card, store)
+        self.logoSymbol = logoSymbol
+        self.sourceFrame = sourceFrame
+    }
     @State private var logoColor: Color?
     @State private var closing = false
     @State private var flipProgress: Double = 0
@@ -653,8 +708,8 @@ struct SecurityDailyMovePaper: View {
             settling = false
         }
         .presentationBackground(.clear)
-        .task(id: context.key(language: locale.identifier)) {
-            store.start(context)
+        .task(id: topic.key(language: locale.identifier)) {
+            topic.start()
             await Task.yield()
             guard !closing, !Task.isCancelled else { return }
             animateMotion(duration: 0.55) { progress in
@@ -791,11 +846,7 @@ struct SecurityDailyMovePaper: View {
         .accessibilityIdentifier("daily-move-paper")
     }
 
-    private var relativeSession: String {
-        SecurityNoteRelativeDate.label(context.endDate, locale: locale)
-    }
-
-    private var coverColor: Color { logoColor ?? AssetBrandColor.fallback(for: logoSymbol ?? context.ticker) }
+    private var coverColor: Color { logoColor ?? AssetBrandColor.fallback(for: logoSymbol ?? topic.ticker) }
     private var coverInk: Color {
         let color = UIColor(coverColor)
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, alpha: CGFloat = 0
@@ -804,7 +855,7 @@ struct SecurityDailyMovePaper: View {
     }
 
     @ViewBuilder private var sourceFooter: some View {
-        if case .ready(let note) = store.state(context), !note.sources.isEmpty {
+        if case .ready(let note) = topic.state, !note.sources.isEmpty {
             VStack(spacing: 4) {
                 ForEach(Array(note.sources.enumerated()), id: \.offset) { _, source in
                     Link(destination: source.url) {
@@ -821,10 +872,10 @@ struct SecurityDailyMovePaper: View {
 
     private var paperCover: some View {
         VStack(alignment: .leading, spacing: 18) {
-            AssetLogo(ticker: context.ticker, logoSymbol: logoSymbol, size: 24,
+            AssetLogo(ticker: topic.ticker, logoSymbol: logoSymbol, size: 24,
                 onBrandColorResolved: { logoColor = $0 })
             Spacer(minLength: 0)
-            Text(context.name)
+            Text(topic.name)
                 .font(.system(.largeTitle, design: .rounded, weight: .semibold))
                 .lineLimit(2)
                 .minimumScaleFactor(0.6)
@@ -835,15 +886,37 @@ struct SecurityDailyMovePaper: View {
         .background(coverColor)
     }
 
+    /// The inside of the cover: what the note is about, above the fold.
+    private var insideCaption: String {
+        switch topic {
+        case .move(let context, _):
+            context.isFundIntroduction ? context.name
+                : context.name + " · " + SecurityNoteRelativeDate.label(context.endDate, locale: locale)
+        case .card(let context, _): context.name
+        }
+    }
+
+    private var insideTitle: String {
+        switch topic {
+        case .move(let context, _): context.isFundIntroduction ? L10n.text("基金介绍") : context.noteTitle
+        case .card(let context, _): context.cardTitle
+        }
+    }
+
+    private var insideFigure: String? {
+        guard case .move(let context, _) = topic, !context.isFundIntroduction else { return nil }
+        return DisplayFormat.percent(context.changePercent)
+    }
+
     private var paperInside: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text(context.isFundIntroduction ? context.name : context.name + " · " + relativeSession)
+            Text(insideCaption)
                 .font(.caption).foregroundStyle(.black.opacity(0.5))
             Spacer(minLength: 0)
-            Text(context.isFundIntroduction ? L10n.text("基金介绍") : context.noteTitle)
+            Text(insideTitle)
                 .opacity(min(1, max(0, (entranceProgress - 0.75) * 4))).font(.system(.title2, design: .rounded, weight: .medium))
-            if !context.isFundIntroduction {
-                Text(DisplayFormat.percent(context.changePercent)).font(.system(.largeTitle, design: .rounded))
+            if let insideFigure {
+                Text(insideFigure).font(.system(.largeTitle, design: .rounded))
                     .foregroundStyle(.black.opacity(0.25))
             }
         }
@@ -854,14 +927,14 @@ struct SecurityDailyMovePaper: View {
 
     @ViewBuilder private var noteContent: some View {
         VStack(alignment: .leading, spacing: 18) {
-            switch store.state(context) {
+            switch topic.state {
             case .ready(let note):
                 Text(note.text)
                     .lineSpacing(4).lineLimit(14).minimumScaleFactor(0.65)
                     .accessibilityIdentifier("daily-move-text")
             case .failed(let message):
                 Text(message)
-                Button(L10n.text("重试")) { store.start(context, force: true) }.buttonStyle(.bordered)
+                Button(L10n.text("重试")) { topic.start(force: true) }.buttonStyle(.bordered)
             case .loading, nil:
                 SecurityPaperThinking(ready: entranceProgress >= 1, closing: closing)
             }

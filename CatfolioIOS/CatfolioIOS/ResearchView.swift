@@ -22,6 +22,14 @@ actor ResearchAnalysisCache {
         return try? JSONDecoder().decode(PortfolioAttentionReport.self, from: data)
     }
 
+    /// The account scope a report is saved under: the language, demo or real
+    /// data, and the selected accounts. Shared by the attention page and its
+    /// preview on the Performance tab, so both read the same report.
+    @MainActor static func scope(locale: Locale, model: AppModel) -> String {
+        let keys = [locale.identifier, model.isFakeDataMode ? "demo" : "real"] + model.selectedAccountKeys.sorted()
+        return keys.map { "\($0.utf8.count):\($0)" }.joined()
+    }
+
     func save(_ report: PortfolioAttentionReport, scope: String) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try JSONEncoder().encode(report).write(to: file(for: scope), options: [.atomic, .completeFileProtectionUnlessOpen])
@@ -266,6 +274,113 @@ struct TodayAttentionView: View {
     }
 }
 
+/// Today's attention, on the Performance tab itself: the last analysis's
+/// three most pressing holdings — high attention first — under a heading
+/// whose "更多" opens the full attention page.
+struct TodayAttentionPreview: View {
+    @Environment(\.locale) private var appLocale
+    @Environment(AppModel.self) private var model
+    @State private var report: PortfolioAttentionReport?
+    @State private var hasLoaded = false
+
+    private static let limit = 3
+
+    /// High attention before medium, each in the report's own order.
+    private var rows: [PortfolioAttentionHolding] {
+        let rows = report?.attentionRows ?? []
+        return Array((rows.filter { $0.attention == .high } + rows.filter { $0.attention != .high })
+            .prefix(Self.limit))
+    }
+
+    var body: some View {
+        Group {
+            HStack(alignment: .firstTextBaseline) {
+                Text(L10n.text("今天值得关注"))
+                    .appText(.body, weight: .medium)
+                    .foregroundStyle(SettingsTemplate.sectionHeader)
+                Spacer(minLength: 12)
+                NavigationLink {
+                    TodayAttentionView()
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(L10n.text("更多"))
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .appText(.footnote, weight: .medium)
+                    .foregroundStyle(SettingsTemplate.sectionHeader)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("performance.today-attention")
+            }
+            .padding(.top, SettingsTemplate.sectionHeaderTopSpacing)
+
+            if !rows.isEmpty {
+                // A row of cards, one screen wide less a glimpse of the next,
+                // snapping card by card. It runs to the screen's edges and
+                // keeps the page's margin as its content margin, so the first
+                // card lines up with everything else and the last can be
+                // scrolled fully into view.
+                ScrollView(.horizontal) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ForEach(rows) { row in
+                            PortfolioAttentionCard(row: row)
+                                .containerRelativeFrame(.horizontal) { width, _ in
+                                    rows.count > 1 ? width - SettingsTemplate.pageInset * 2 - 28
+                                                   : width - SettingsTemplate.pageInset * 2
+                                }
+                                .frame(maxHeight: .infinity, alignment: .top)
+                        }
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .scrollTargetLayout()
+                }
+                .contentMargins(.horizontal, SettingsTemplate.pageInset, for: .scrollContent)
+                // Always opens on the first — the most pressing — card.
+                .defaultScrollAnchor(.leading)
+                .scrollTargetBehavior(.viewAligned)
+                .scrollIndicators(.hidden)
+                // The glass's rim and shadow reach past each card.
+                .scrollClipDisabled()
+                .padding(.horizontal, -SettingsTemplate.pageInset)
+            } else if hasLoaded {
+                // Nothing analysed yet for these accounts: the way in is the
+                // same page "更多" opens.
+                SettingsCard {
+                    SettingsNavigationRow(icon: .symbol("sparkles"), title: L10n.text("还没有今天的分析"),
+                                          subtitle: L10n.text("在更多里分析持仓")) {
+                        TodayAttentionView()
+                    }
+                }
+            }
+        }
+        .environment(\.attentionEvidenceEditor, AttentionEvidenceEditor { updated in
+            guard var current = report,
+                  let index = current.attentionRows.firstIndex(where: { $0.id == updated.id }) else { return }
+            current.attentionRows[index] = updated
+            report = current
+            let scope = ResearchAnalysisCache.scope(locale: appLocale, model: model)
+            Task { try? await ResearchAnalysisCache.shared.save(current, scope: scope) }
+        })
+        // Again on every return, so an analysis run on the full page shows.
+        .task(id: ResearchAnalysisCache.scope(locale: appLocale, model: model)) {
+            let scope = ResearchAnalysisCache.scope(locale: appLocale, model: model)
+            var loaded = await ResearchAnalysisCache.shared.load(scope: scope)
+            #if DEBUG
+            // The demo only where nothing is saved, so a follow-up asked on
+            // the demo is still there on return.
+            if ProcessInfo.processInfo.arguments.contains("--preview-research-analysis"), loaded == nil {
+                loaded = PortfolioAttentionCard.researchPreviewReport
+            }
+            #endif
+            guard !Task.isCancelled else { return }
+            report = loaded
+            hasLoaded = true
+        }
+    }
+}
+
 private struct ResearchSystemSearch: ViewModifier {
     let enabled: Bool
     @Binding var query: String
@@ -316,12 +431,14 @@ struct ResearchView: View {
     @State private var showsRules = false
     @AppStorage("research.highAttentionOnly") private var highAttentionOnly = false
     @AppStorage("research.maximumResults") private var maximumResults = 6
+    @AppStorage(AttentionEvidenceRules.maximumAgeKey) private var evidenceMaximumAge = 30
+    @AppStorage(AttentionEvidenceRules.reliableOnlyKey) private var evidenceReliableOnly = false
+    @AppStorage(AttentionEvidenceRules.excludeAggregatorsKey) private var evidenceExcludesAggregators = true
 
     private static var benchmarks: [(String, String)] { [("^GSPC", "S&P 500"), ("^IXIC", "NASDAQ"), ("^VIX", L10n.text("VIX 波动率")), ("^TNX", L10n.text("美国 10 年期国债收益率"))] }
 
     private var accountScope: String {
-        let keys = [appLocale.identifier, model.isFakeDataMode ? "demo" : "real"] + model.selectedAccountKeys.sorted()
-        return keys.map { "\($0.utf8.count):\($0)" }.joined()
+        ResearchAnalysisCache.scope(locale: appLocale, model: model)
     }
     private func matches(_ text: String) -> Bool {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -413,6 +530,16 @@ struct ResearchView: View {
             }
         }
         .listStyle(.insetGrouped)
+        // A holding's evidence, adjusted on its reading page, is kept in the
+        // saved analysis the page shows.
+        .environment(\.attentionEvidenceEditor, showsAttention ? AttentionEvidenceEditor { updated in
+            guard var current = report,
+                  let index = current.attentionRows.firstIndex(where: { $0.id == updated.id }) else { return }
+            current.attentionRows[index] = updated
+            report = current
+            let scope = accountScope
+            Task { try? await ResearchAnalysisCache.shared.save(current, scope: scope) }
+        } : nil)
         // Match the other root tabs while keeping the List's viewport and
         // scroll indicator intact. The pushed attention page has no tab bar.
         .contentMargins(.bottom, showsAttention ? nil : SettingsTemplate.rootTabBottomInset, for: .scrollContent)
@@ -449,7 +576,21 @@ struct ResearchView: View {
                         }
                     }
                     Section {
-                        Text(L10n.text("规则保存在本机，仅控制结果展示；不更改模型结论和置信度。账户范围在设置中选择。"))
+                        Picker(L10n.text("证据最长时效"), selection: $evidenceMaximumAge) {
+                            ForEach(AttentionEvidenceRules.ageChoices, id: \.self) { days in
+                                Text(L10n.text("\(days) 天")).tag(days)
+                            }
+                        }
+                        Toggle(L10n.text("只用一手来源和通讯社"), isOn: $evidenceReliableOnly)
+                        Toggle(L10n.text("排除转述网站"), isOn: $evidenceExcludesAggregators)
+                    } header: {
+                        Text(L10n.text("证据规则"))
+                    } footer: {
+                        Text(L10n.text("一手来源指公司公告、SEC 文件和新闻稿通道；通讯社指路透、彭博、美联社等。转述网站如 StockStory、StockTitan、Simply Wall St，只会转写别人的报道。下次刷新分析时生效。"))
+                    }
+                    AttentionSignalRulesSections()
+                    Section {
+                        Text(L10n.text("规则保存在本机。结果筛选只控制显示；证据规则决定下次分析能用哪些资料，所以会影响结论和置信度。账户范围在设置中选择，新闻来源和屏蔽网站在 设置 › 新闻 中选择。"))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -483,7 +624,7 @@ struct ResearchView: View {
             guard !Task.isCancelled, scope == accountScope else { return }
             report = cached
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--preview-research-analysis") {
+            if ProcessInfo.processInfo.arguments.contains("--preview-research-analysis"), report == nil {
                 report = PortfolioAttentionCard.researchPreviewReport
             }
             #endif
@@ -737,5 +878,105 @@ struct ResearchView: View {
                 analysisError = L10n.text("分析或缓存更新失败，已保留现有结果：\(error.localizedDescription)")
             }
         }
+    }
+}
+
+/// The scan's thresholds, in 编辑规则. A holding is listed when it crosses
+/// any one of them and marked 高关注 when it crosses several.
+private struct AttentionSignalRulesSections: View {
+    private typealias Rules = AttentionSignalRules
+    @AppStorage(Rules.returnWindowKey) private var returnWindow = Rules.defaults.returnWindowDays
+    @AppStorage(Rules.returnThresholdKey) private var returnThreshold = Rules.defaults.returnThreshold
+    @AppStorage(Rules.volumeMultipleKey) private var volumeMultiple = Rules.defaults.volumeMultiple
+    @AppStorage(Rules.volumeBaselineKey) private var volumeBaseline = Rules.defaults.volumeBaselineDays
+    @AppStorage(Rules.nearExtremeKey) private var nearExtreme = Rules.defaults.nearExtremePercent
+    @AppStorage(Rules.todayMoveKey) private var todayMove = Rules.defaults.todayMoveThreshold
+    @AppStorage(Rules.movingAverageKey) private var movingAverage = Rules.defaults.movingAverageDays
+    @AppStorage(Rules.contributionShareKey) private var contributionShare = Rules.defaults.contributionShare
+    @AppStorage(Rules.highAttentionKey) private var highAttention = Rules.defaults.highAttentionSignals
+    @State private var confirmsReset = false
+
+    private var isDefault: Bool {
+        Rules.current == Rules.defaults
+    }
+
+    var body: some View {
+        Section {
+            Picker(L10n.text("涨跌幅周期"), selection: $returnWindow) {
+                ForEach(Rules.returnWindowChoices, id: \.self) { Text("\($0)D").tag($0) }
+            }
+            stepper(L10n.text("涨跌幅阈值"), value: $returnThreshold, in: 3...40, step: 1, text: "±\(Int(returnThreshold))%")
+            Picker(L10n.text("均线"), selection: $movingAverage) {
+                ForEach(Rules.movingAverageChoices, id: \.self) { Text("MA\($0)").tag($0) }
+            }
+            stepper(L10n.text("接近 52 周高低点"), value: $nearExtreme, in: 0.5...10, step: 0.5,
+                    text: L10n.text("\(Self.number(nearExtreme))% 以内"))
+        } header: {
+            Text(L10n.text("价格信号"))
+        } footer: {
+            Text(L10n.text("涨跌幅是现价相对 N 天前收盘的变化；均线信号在现价上穿或下穿均线的那天出现。"))
+        }
+
+        Section {
+            stepper(L10n.text("放量倍数"), value: $volumeMultiple, in: 1.5...5, step: 0.5, text: "\(Self.number(volumeMultiple))×")
+            Picker(L10n.text("放量基准"), selection: $volumeBaseline) {
+                ForEach(Rules.volumeBaselineChoices, id: \.self) { Text(L10n.text("\($0) 日均量")).tag($0) }
+            }
+            stepper(L10n.text("今日异动"), value: $todayMove, in: 1...15, step: 0.5, text: "±\(Self.number(todayMove))%")
+            stepper(L10n.text("占今日组合波动"), value: $contributionShare, in: 20...80, step: 5, text: "\(Int(contributionShare))%")
+        } header: {
+            Text(L10n.text("成交与异动"))
+        }
+
+        Section {
+            Stepper(value: $highAttention, in: 1...4) {
+                row(L10n.text("高关注至少"), L10n.text("\(highAttention) 个信号"))
+            }
+            Button(L10n.text("恢复默认参数"), role: .destructive) { confirmsReset = true }
+                .disabled(isDefault)
+                .confirmationDialog(L10n.text("恢复默认参数？"), isPresented: $confirmsReset, titleVisibility: .visible) {
+                    Button(L10n.text("恢复默认"), role: .destructive) { reset() }
+                    Button(L10n.text("取消"), role: .cancel) {}
+                } message: {
+                    Text(L10n.text("60D ±10%、MA200、52 周高低点 3% 以内、2× 30 日均量、今日 ±5%、占组合波动 40%、2 个信号为高关注。"))
+                }
+        } footer: {
+            Text(L10n.text("满足任一信号即列入今天值得关注，满足设定个数为高关注。阈值调低会列出更多持仓。下次刷新分析时生效。"))
+        }
+    }
+
+    private func stepper(_ title: String, value: Binding<Double>, in range: ClosedRange<Double>,
+                         step: Double, text: String) -> some View {
+        Stepper(value: value, in: range, step: step) { row(title, text) }
+    }
+
+    private func row(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(title)
+            Spacer(minLength: 8)
+            Text(value)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Writing the defaults back, not only removing the keys, so every
+    /// control on screen updates at once.
+    private func reset() {
+        let base = Rules.defaults
+        returnWindow = base.returnWindowDays
+        returnThreshold = base.returnThreshold
+        volumeMultiple = base.volumeMultiple
+        volumeBaseline = base.volumeBaselineDays
+        nearExtreme = base.nearExtremePercent
+        todayMove = base.todayMoveThreshold
+        movingAverage = base.movingAverageDays
+        contributionShare = base.contributionShare
+        highAttention = base.highAttentionSignals
+        Rules.reset()
+    }
+
+    private static func number(_ value: Double) -> String {
+        value == value.rounded() ? String(Int(value)) : String(format: "%.1f", value)
     }
 }

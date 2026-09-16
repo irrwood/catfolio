@@ -77,6 +77,7 @@ private struct HoldingDetailContentView: View {
     }
     @State private var presentationReady = false
     @State private var lowerSectionsRevealed = false
+    @State private var cardInsight: SecurityCardInsightRequest?
     @State private var marketDataRevision = 0
     @State private var completedMarketDataRevision: Int?
     @State private var isLoadingMarketData = false
@@ -252,6 +253,28 @@ private struct HoldingDetailContentView: View {
                 .background(HoldingDetailScrollBoundary())
             }
             .accessibilityIdentifier("holding-detail-scroll")
+            // A long press on a card's title reads that card aloud, so to
+            // speak, in the same paper as "今天有什么动静？".
+            .environment(\.securityCardInsight, isPreview ? nil : SecurityCardInsightAction { title, facts, source in
+                let isFund = HoldingSecurityKind.classify(holding) == .fund
+                let context = SecurityCardInsightContext(
+                    ticker: holding.ticker,
+                    name: isFund ? holding.displayName : holding.shortName,
+                    currency: holding.quoteCurrency ?? "USD",
+                    cardTitle: title,
+                    facts: facts
+                )
+                // Ask at the press, so the answer is researched while the
+                // paper opens.
+                SecurityCardInsightStore.shared.start(context)
+                SecurityDailyMovePresentation.withoutSystemTransition {
+                    cardInsight = SecurityCardInsightRequest(context: context, sourceFrame: source)
+                }
+            })
+            .fullScreenCover(item: $cardInsight) { request in
+                SecurityDailyMovePaper(card: request.context, logoSymbol: holding.logoSymbol,
+                                       sourceFrame: request.sourceFrame)
+            }
             .overlay(alignment: .topTrailing) {
                 if !isPreview {
                     HoldingDetailCloseButton(action: {
@@ -2681,6 +2704,8 @@ struct HoldingDetailGlassCardModifier: ViewModifier {
 struct HoldingDetailSectionCard<Trailing: View, Content: View>: View {
     let title: String
     var subtitle: String?
+    /// The card's figures for a long-press explanation; nil offers none.
+    var insightFacts: (() -> String?)?
     @ViewBuilder var trailing: () -> Trailing
     @ViewBuilder var content: () -> Content
 
@@ -2697,6 +2722,7 @@ struct HoldingDetailSectionCard<Trailing: View, Content: View>: View {
                             .foregroundStyle(.primary.opacity(0.50))
                     }
                 }
+                .securityCardInsight(title: title, facts: insightFacts)
                 Spacer(minLength: 0)
                 trailing()
             }
@@ -2709,9 +2735,92 @@ struct HoldingDetailSectionCard<Trailing: View, Content: View>: View {
 }
 
 extension HoldingDetailSectionCard where Trailing == EmptyView {
-    init(title: String, subtitle: String? = nil, @ViewBuilder content: @escaping () -> Content) {
-        self.init(title: title, subtitle: subtitle, trailing: { EmptyView() }, content: content)
+    init(title: String, subtitle: String? = nil, insightFacts: (() -> String?)? = nil,
+         @ViewBuilder content: @escaping () -> Content) {
+        self.init(title: title, subtitle: subtitle, insightFacts: insightFacts,
+                  trailing: { EmptyView() }, content: content)
     }
+}
+
+// MARK: - Card explanations
+
+/// Asks the page to explain a card: its title, its figures, and where the
+/// title is on screen for the paper to grow out of.
+struct SecurityCardInsightAction {
+    let present: (_ title: String, _ facts: String, _ source: CGRect) -> Void
+
+    func callAsFunction(title: String, facts: String, source: CGRect) {
+        present(title, facts, source)
+    }
+}
+
+extension EnvironmentValues {
+    @Entry var securityCardInsight: SecurityCardInsightAction? = nil
+}
+
+/// A long press on a card's title opens the AI's reading of that card, in
+/// the "今天有什么动静？" paper. The figures are read at the press, not
+/// before, so nothing is formatted while the page scrolls.
+private struct SecurityCardInsightPress: ViewModifier {
+    private final class FrameBox { var frame: CGRect = .zero }
+
+    @Environment(\.securityCardInsight) private var insight
+    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
+    let title: String
+    let facts: (() -> String?)?
+    @State private var box = FrameBox()
+    @State private var pressCount = 0
+
+    func body(content: Content) -> some View {
+        if let insight, let facts {
+            content
+                .contentShape(Rectangle())
+                // Kept in a box, not state: the frame changes on every scroll
+                // frame and nothing needs to redraw for it.
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { box.frame = $0 }
+                .onLongPressGesture(minimumDuration: 0.45) {
+                    guard let text = facts(), !text.isEmpty else { return }
+                    pressCount += 1
+                    insight(title: title, facts: text, source: box.frame)
+                }
+                .sensoryFeedback(.impact(weight: .medium), trigger: pressCount) { _, _ in hapticsEnabled }
+                .accessibilityAction(named: Text(L10n.text("AI 解读"))) {
+                    guard let text = facts(), !text.isEmpty else { return }
+                    insight(title: title, facts: text, source: box.frame)
+                }
+                .accessibilityHint(L10n.text("长按标题查看 AI 解读"))
+                #if DEBUG
+                // Fires the first card's long press, for recording the paper.
+                .task {
+                    guard ProcessInfo.processInfo.arguments.contains("--demo-card-insight"),
+                          !SecurityCardInsightDemo.fired else { return }
+                    try? await Task.sleep(for: .seconds(3))
+                    guard !SecurityCardInsightDemo.fired, let text = facts(), !text.isEmpty else { return }
+                    SecurityCardInsightDemo.fired = true
+                    insight(title: title, facts: text, source: box.frame)
+                }
+                #endif
+        } else {
+            content
+        }
+    }
+}
+
+#if DEBUG
+@MainActor private enum SecurityCardInsightDemo { static var fired = false }
+#endif
+
+extension View {
+    /// Offers an AI explanation of the card this title heads, from `facts`.
+    func securityCardInsight(title: String, facts: (() -> String?)?) -> some View {
+        modifier(SecurityCardInsightPress(title: title, facts: facts))
+    }
+}
+
+struct SecurityCardInsightRequest: Identifiable {
+    let id = UUID()
+    let context: SecurityCardInsightContext
+    let sourceFrame: CGRect
 }
 
 /// One shell for the holding detail's research entries and expanded cards.
@@ -2832,7 +2941,7 @@ private struct FiftyTwoWeekRange: View {
     }
 
     var body: some View {
-        HoldingDetailSectionCard(title: L10n.text("52-Week Range")) {
+        HoldingDetailSectionCard(title: L10n.text("52-Week Range"), insightFacts: { insightFacts }) {
             GeometryReader { geometry in
                 rangePlot(size: geometry.size)
             }
@@ -3150,6 +3259,22 @@ private struct FiftyTwoWeekRange: View {
         }
         return components.joined(separator: "，")
     }
+
+    private var insightFacts: String {
+        var lines = [
+            "52-week low: \(DisplayFormat.money(low, currency: currency))",
+            "52-week high: \(DisplayFormat.money(high, currency: currency))",
+            "Latest price: \(DisplayFormat.money(current, currency: currency))",
+            "Position within the range: \(Int((normalized(current) * 100).rounded()))% of the way from low to high",
+        ]
+        if let periodStart {
+            lines.append("Price 52 weeks ago: \(DisplayFormat.money(periodStart, currency: currency))")
+        }
+        if let changePercent {
+            lines.append("Change over 52 weeks: \(DisplayFormat.percent(changePercent))")
+        }
+        return lines.joined(separator: "\n")
+    }
 }
 
 enum VolumeProfileInterpretation {
@@ -3397,10 +3522,11 @@ struct PriceDistributionSection<Plot: View, Footer: View>: View {
     @Environment(\.locale) private var appLocale
     let title: String
     let subtitle: String
+    var insightFacts: (() -> String?)? = nil
     @ViewBuilder let plot: () -> Plot
     @ViewBuilder let footer: () -> Footer
     var body: some View {
-        HoldingDetailSectionCard(title: title, subtitle: subtitle) {
+        HoldingDetailSectionCard(title: title, subtitle: subtitle, insightFacts: insightFacts) {
             VStack(alignment: .leading, spacing: 16) {
                 plot()
                 footer().font(LegacyType.medium(15, relativeTo: .subheadline))
@@ -3494,8 +3620,22 @@ private struct VolumePriceChart: View {
         )
     }
 
+    /// Public figures only: the holding's cost stays out of it.
+    private var insightFacts: String {
+        var lines = [
+            "Window: \(profile.sessions) trading sessions, as of \(profile.asOf)",
+            "Point of control (price with the most volume): \(DisplayFormat.money(profile.pointOfControl, currency: profile.currency))",
+            "Value area (about 70% of volume): \(DisplayFormat.money(displayedValueArea.low, currency: profile.currency)) – \(DisplayFormat.money(displayedValueArea.high, currency: profile.currency))",
+        ]
+        if let currentPrice {
+            lines.append("Latest price: \(DisplayFormat.money(currentPrice, currency: profile.currency))")
+        }
+        return lines.joined(separator: "\n")
+    }
+
     var body: some View {
-        PriceDistributionSection(title: L10n.text("Volume Profile"), subtitle: L10n.text("\(profile.sessions) 个交易日")) {
+        PriceDistributionSection(title: L10n.text("Volume Profile"), subtitle: L10n.text("\(profile.sessions) 个交易日"),
+                                 insightFacts: { insightFacts }) {
             VolumeDistributionPlot(
                 profile: profile,
                 valueAreaLow: displayedValueArea.low,

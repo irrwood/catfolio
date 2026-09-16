@@ -11,6 +11,10 @@ struct ReturnsView: View {
     @State private var isScrolling = false
     #if DEBUG
     @State private var showsHeatmapPreview = ProcessInfo.processInfo.arguments.contains("--show-heatmap")
+    /// `--show-returns-chart=losses` opens that chart page, for screenshots.
+    @State private var previewChart: ReturnsChartDestination? = ProcessInfo.processInfo.arguments
+        .first { $0.hasPrefix("--show-returns-chart=") }
+        .flatMap { ReturnsChartDestination(rawValue: String($0.dropFirst("--show-returns-chart=".count))) }
     #endif
 
     var body: some View {
@@ -32,11 +36,8 @@ struct ReturnsView: View {
                 )
             )
             .accessibilityIdentifier("performance.heatmap")
+            TodayAttentionPreview()
             SettingsSection(L10n.text("Performance")) {
-                SettingsNavigationRow(icon: .symbol("sparkles"), title: L10n.text("今天值得关注")) {
-                    TodayAttentionView().environment(model)
-                }
-                .accessibilityIdentifier("performance.today-attention")
                 ForEach(ReturnsChartDestination.allCases.filter { $0 != .heatmap }) { chart in
                     SettingsNavigationRow(icon: .symbol(chart.icon), title: chart.title) {
                         ReturnsChartPage(chart: chart)
@@ -108,6 +109,9 @@ struct ReturnsView: View {
         .navigationDestination(isPresented: $showsHeatmapPreview) {
             ReturnsChartPage(chart: .heatmap)
         }
+        .navigationDestination(item: $previewChart) { chart in
+            ReturnsChartPage(chart: chart)
+        }
         .task {
             showsPolicyComposer = ProcessInfo.processInfo.arguments.contains("--show-policy-composer")
         }
@@ -128,7 +132,7 @@ private extension ReturnsView {
 }
 
 enum ReturnsChartDestination: String, CaseIterable, Identifiable {
-    case heatmap, contributors, comparison, drawdown, underwater, valuation
+    case heatmap, contributors, losses, comparison, drawdown, underwater, valuation
 
     var id: String { rawValue }
 
@@ -136,6 +140,7 @@ enum ReturnsChartDestination: String, CaseIterable, Identifiable {
         switch self {
         case .heatmap: L10n.text("持仓热力图")
         case .contributors: L10n.text("收益来源")
+        case .losses: L10n.text("亏损分析")
         case .comparison: L10n.text("收益对比")
         case .drawdown: L10n.text("回撤水下曲线")
         case .underwater: L10n.text("水下分析")
@@ -147,6 +152,7 @@ enum ReturnsChartDestination: String, CaseIterable, Identifiable {
         switch self {
         case .heatmap: "square.grid.2x2"
         case .contributors: "square.stack.3d.up"
+        case .losses: "chart.line.downtrend.xyaxis"
         case .comparison: "chart.line.uptrend.xyaxis"
         case .drawdown: "water.waves"
         case .underwater: "water.waves.and.arrow.down"
@@ -184,6 +190,8 @@ private struct ReturnsChartPage: View {
                     )
                 case .contributors:
                     HoldingContributionChart(refreshRevision: holdingHistoryRefreshRevision)
+                case .losses:
+                    LossAnalysisChart(refreshRevision: holdingHistoryRefreshRevision)
                 case .comparison:
                     ReturnsComparisonPanel()
                 case .drawdown:
@@ -204,7 +212,7 @@ private struct ReturnsChartPage: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
         .refreshable {
-            if chart == .underwater || chart == .contributors {
+            if chart == .underwater || chart == .contributors || chart == .losses {
                 holdingHistoryRefreshRevision &+= 1
             } else {
                 await model.refreshReturnsPage()
@@ -219,7 +227,7 @@ private struct ReturnsChartPage: View {
         .task {
             // This page owns its history request; unrelated valuation and
             // comparison fetches compete with it for the same price feed.
-            guard chart != .underwater, chart != .contributors else { return }
+            guard chart != .underwater, chart != .contributors, chart != .losses else { return }
             guard !model.isReturnsLoading, !model.isReturnsAnalyticsLoading else { return }
             // Each part is fetched only when it is missing: analytics that
             // failed must not send the comparison through a full rebuild on

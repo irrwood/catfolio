@@ -8,6 +8,7 @@ enum LocalServiceKeys {
     static let massive = "catfolio.massive.api-key"
     static let deepSeek = "catfolio.deepseek.api-key"
     static let openRouter = "catfolio.openrouter.api-key"
+    static let finnhub = "catfolio.finnhub.api-key"
     /// Not a secret, so in UserDefaults: which OpenRouter model answers.
     static let openRouterModel = "catfolio.openrouter.model"
     /// OpenRouter's own router, which picks a model for each request.
@@ -21,6 +22,10 @@ enum LocalServiceKeys {
 
     static var hasOpenRouterKey: Bool {
         !(KeychainStore.string(for: openRouter)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+    }
+
+    static var hasFinnhubKey: Bool {
+        !(KeychainStore.string(for: finnhub)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
     }
 }
 
@@ -1064,7 +1069,7 @@ private actor LocalVolumeBarCache {
     }
 }
 
-private enum LocalRequestSessions {
+enum LocalRequestSessions {
     static let ephemeral = URLSession(configuration: .ephemeral)
     static let waiting: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
@@ -3484,6 +3489,9 @@ private struct LocalPortfolioAttentionEngine {
         var signals: [PortfolioAttentionSignal]
     }
 
+    /// The reader's thresholds from 编辑规则, read once per scan.
+    var rules = AttentionSignalRules.current
+
     func scan(document: LocalPortfolioDocument) async throws -> PortfolioAttentionReport {
         let holdings = try LocalPortfolioEngine.presentation(for: document).2
         guard !holdings.isEmpty else { throw LocalPortfolioError.noPortfolio }
@@ -3498,7 +3506,7 @@ private struct LocalPortfolioAttentionEngine {
             guard totalAbsoluteContribution > 0,
                   let contribution = candidates[index].contribution else { continue }
             let share = abs(contribution) / totalAbsoluteContribution
-            if share >= 0.40, abs(contribution) >= 0.20 {
+            if share >= rules.contributionShare / 100, abs(contribution) >= 0.20 {
                 candidates[index].signals.append(PortfolioAttentionSignal(
                     kind: "portfolio_contribution",
                     label: "占今日组合波动 \(Int((share * 100).rounded()))%",
@@ -3509,10 +3517,13 @@ private struct LocalPortfolioAttentionEngine {
         }
         let selected = candidates.compactMap { row -> PortfolioAttentionHolding? in
             guard !row.signals.isEmpty else { return nil }
-            let level: PortfolioAttentionLevel = row.signals.count >= 2 ? .high : .medium
+            let level: PortfolioAttentionLevel = row.signals.count >= rules.highAttentionSignals ? .high : .medium
             return PortfolioAttentionHolding(
                 ticker: row.holding.ticker,
-                name: row.holding.shortName,
+                // The company's own name: the reader's 公司名称 choice is
+                // applied when the row is drawn, and a news search wants the
+                // name filings and wires use.
+                name: row.holding.researchName,
                 attention: level,
                 weight: row.holding.weight,
                 portfolioContributionPercent: row.contribution,
@@ -3570,13 +3581,13 @@ private struct LocalPortfolioAttentionEngine {
     private func candidate(holding: Holding, bars: [PortfolioAttentionDailyBar]) -> Candidate {
         let ordered = bars.sorted { $0.date < $1.date }
         let latest = ordered.last
-        let cutoff = Calendar(identifier: .gregorian).date(byAdding: .day, value: -60, to: Date()) ?? Date()
+        let cutoff = Calendar(identifier: .gregorian).date(byAdding: .day, value: -rules.returnWindowDays, to: Date()) ?? Date()
         let past = ordered.last { bar in
             guard let day = DayDateCodec.date(from: bar.date) else { return false }
             return day <= cutoff
         }
         let return60D = past.flatMap { $0.close > 0 ? (holding.quotePrice / $0.close - 1) * 100 : nil }
-        let previousVolumes = ordered.dropLast().suffix(30).map(\.volume).filter { $0 > 0 }
+        let previousVolumes = ordered.dropLast().suffix(rules.volumeBaselineDays).map(\.volume).filter { $0 > 0 }
         let averageVolume = previousVolumes.isEmpty ? nil : previousVolumes.reduce(0, +) / Double(previousVolumes.count)
         let volumeMultiple: Double? = averageVolume.flatMap { average -> Double? in
             guard average > 0, let latest, latest.volume > 0 else { return nil }
@@ -3588,33 +3599,35 @@ private struct LocalPortfolioAttentionEngine {
         let distanceHigh = high.flatMap { $0 > 0 ? ($0 - holding.quotePrice) / $0 * 100 : nil }
         let distanceLow = low.flatMap { $0 > 0 ? (holding.quotePrice - $0) / $0 * 100 : nil }
         let closes = ordered.map(\.close)
-        let ma200 = closes.count >= 200 ? closes.suffix(200).reduce(0, +) / 200 : nil
+        let length = rules.movingAverageDays
+        let ma200 = closes.count >= length ? closes.suffix(length).reduce(0, +) / Double(length) : nil
         let ma200Position = ma200.flatMap { $0 > 0 ? (holding.quotePrice / $0 - 1) * 100 : nil }
         var cross: String?
-        if closes.count >= 201, let ma200 {
-            let previousMA = closes.dropLast().suffix(200).reduce(0, +) / 200
+        if closes.count >= length + 1, let ma200 {
+            let previousMA = closes.dropLast().suffix(length).reduce(0, +) / Double(length)
             let wasAbove = closes[closes.count - 2] >= previousMA
             let isAbove = holding.quotePrice >= ma200
             if wasAbove != isAbove { cross = isAbove ? "above" : "below" }
         }
 
         var signals: [PortfolioAttentionSignal] = []
-        if let value = return60D, abs(value) >= 10 {
-            signals.append(.init(kind: "price_60d", label: "60D \(Self.signedPercent(value))", direction: value >= 0 ? "positive" : "negative", value: value))
+        if let value = return60D, abs(value) >= rules.returnThreshold {
+            signals.append(.init(kind: "price_60d", label: "\(rules.returnWindowDays)D \(Self.signedPercent(value))", direction: value >= 0 ? "positive" : "negative", value: value))
         }
-        if let value = volumeMultiple, value >= 2 {
+        if let value = volumeMultiple, value >= rules.volumeMultiple {
             signals.append(.init(kind: "volume_spike", label: "成交量 \(String(format: "%.1f", value))×", direction: "neutral", value: value))
         }
-        if let value = distanceHigh, (-3...3).contains(value) {
+        let near = -rules.nearExtremePercent...rules.nearExtremePercent
+        if let value = distanceHigh, near.contains(value) {
             signals.append(.init(kind: "near_52w_high", label: "距 52 周高点 \(String(format: "%.1f", abs(value)))%", direction: "positive", value: value))
-        } else if let value = distanceLow, (-3...3).contains(value) {
+        } else if let value = distanceLow, near.contains(value) {
             signals.append(.init(kind: "near_52w_low", label: "距 52 周低点 \(String(format: "%.1f", abs(value)))%", direction: "negative", value: value))
         }
-        if let value = holding.todayChangePercent, abs(value) >= 5 {
+        if let value = holding.todayChangePercent, abs(value) >= rules.todayMoveThreshold {
             signals.append(.init(kind: "today_move", label: "今日 \(Self.signedPercent(value))", direction: value >= 0 ? "positive" : "negative", value: value))
         }
         if let cross {
-            signals.append(.init(kind: "ma_200_cross", label: cross == "above" ? "突破 200D 均线" : "跌破 200D 均线", direction: cross == "above" ? "positive" : "negative", value: ma200Position ?? 0))
+            signals.append(.init(kind: "ma_200_cross", label: cross == "above" ? "突破 \(length)D 均线" : "跌破 \(length)D 均线", direction: cross == "above" ? "positive" : "negative", value: ma200Position ?? 0))
         }
         let contribution = holding.todayChangePercent.map { holding.weight * $0 }
         return Candidate(
@@ -3631,18 +3644,16 @@ private struct LocalPortfolioAttentionEngine {
     }
 
     private func fallbackThesis(for row: Candidate) -> PortfolioAttentionThesis {
-        let positive = row.signals.filter { $0.direction == "positive" }.count
-        let negative = row.signals.filter { $0.direction == "negative" }.count
-        let stance: PortfolioThesisStance = positive > negative ? .strengthening : (negative > positive ? .weakening : .maintaining)
         return PortfolioAttentionThesis(
-            stance: stance,
+            stance: PortfolioAttentionThesis.priceStance(row.signals),
+            basis: .price,
             confidence: .none,
             whatChanged: row.signals.map(\.label).joined(separator: "、"),
             whyItMatters: "这一变化值得核对，但在可靠公司来源确认前，不应视为基本面结论。",
             supportingEvidence: row.signals.map(\.label),
             counterEvidence: ["信号可能来自市场或板块波动，而非公司级催化剂。"],
             risks: ["公司级催化剂尚未验证"],
-            watchNext: ["公司公告与业绩", "成交量是否持续", "200 日均线"],
+            watchNext: ["公司公告与业绩", "成交量是否持续", "\(rules.movingAverageDays) 日均线"],
             riskFlags: []
         )
     }
@@ -3653,21 +3664,54 @@ private struct LocalPortfolioAttentionEngine {
 }
 
 private struct PortfolioEventResearchClient {
-    private struct Response: Decodable {
-        struct News: Decodable {
-            let title: String
-            let publisher: String?
-            let link: URL
-            let providerPublishTime: Int?
-        }
-        let news: [News]?
+    /// Leads for every holding in one pass, so rate-limited feeds are asked
+    /// once for the portfolio rather than once per holding.
+    func recentSources(for rows: [PortfolioAttentionHolding]) async -> [String: [PortfolioAttentionSource]] {
+        let language = ContentLanguage.current
+        return await NewsSourceHub().sources(for: rows.map {
+            NewsQuery(ticker: $0.ticker, name: $0.name, language: language)
+        })
     }
 
-    func recentSources(ticker: String, name: String) async -> [PortfolioAttentionSource] {
-        let research = SecurityDebateResearch()
-        async let google = research.googleNews(ticker: ticker, name: name)
-        async let yahoo = research.yahooNews(ticker: ticker, name: name)
-        return await SecurityDebateResearch.deduplicated(google + yahoo)
+    /// The opening of the two most trustworthy articles per holding, read
+    /// in full rather than judged by headline. Filings are left out: their
+    /// first pages are a cover sheet. A feed's own summary stands in for an
+    /// article that cannot be fetched.
+    func excerpts(for rows: [PortfolioAttentionHolding]) async -> [String: [SecurityResearchDocument]] {
+        await withTaskGroup(of: (String, [SecurityResearchDocument]).self) { group in
+            for row in rows {
+                group.addTask {
+                    let leads = Array(SecurityDebateResearch.candidates(row.sources)
+                        .filter { $0.tier != "filing" }.prefix(4))
+                    guard !leads.isEmpty else { return (row.ticker, []) }
+                    var documents = await SecurityDebateResearch()
+                        .documents(sources: leads, ticker: row.ticker, name: row.name)
+                    for lead in leads where documents.count < 2 && !documents.contains(where: { $0.source.id == lead.id }) {
+                        if let summary = lead.summary, summary.count >= 80 {
+                            documents.append(SecurityResearchDocument(source: lead, text: summary))
+                        }
+                    }
+                    return (row.ticker, documents.prefix(2).map { document in
+                        SecurityResearchDocument(source: document.source, text: String(document.text.prefix(1_500)))
+                    })
+                }
+            }
+            var result: [String: [SecurityResearchDocument]] = [:]
+            for await (ticker, documents) in group { result[ticker] = documents }
+            return result
+        }
+    }
+
+    /// The most direct and most recent first, and few enough that the
+    /// model reads each one. Undated reference data is kept.
+    static func leading(_ sources: [PortfolioAttentionSource], limit: Int = 24) -> [PortfolioAttentionSource] {
+        let ranks = ["filing": 0, "primary": 1, "wire": 2, "media": 3]
+        return Array(sources.enumerated().sorted { left, right in
+            let l = ranks[left.element.tier, default: 3], r = ranks[right.element.tier, default: 3]
+            if l != r { return l < r }
+            let ld = left.element.publishedAt ?? .distantFuture, rd = right.element.publishedAt ?? .distantFuture
+            return ld != rd ? ld > rd : left.offset < right.offset
+        }.map(\.element).prefix(limit))
     }
 }
 
@@ -3677,7 +3721,9 @@ private struct AttentionThesisEnvelope: Decodable {
 
 private struct AttentionThesisCandidate: Decodable {
     let ticker: String
-    let stance: String
+    /// Written by older reports; the direction now comes from the catalyst.
+    let stance: String?
+    let catalystDirection: String?
     let whatChanged: String
     let whyItMatters: String
     let supportingEvidence: [String]
@@ -3693,6 +3739,7 @@ private struct AttentionThesisCandidate: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case ticker, stance, risks
+        case catalystDirection = "catalyst_direction"
         case whatChanged = "what_changed"
         case whyItMatters = "why_it_matters"
         case supportingEvidence = "supporting_evidence"
@@ -3769,55 +3816,77 @@ struct LocalAIClient {
     }
 
     func portfolioAttention(document: LocalPortfolioDocument) async throws -> PortfolioAttentionReport {
-        var report = try await LocalPortfolioAttentionEngine().scan(document: document)
+        let signalRules = AttentionSignalRules.current
+        var report = try await LocalPortfolioAttentionEngine(rules: signalRules).scan(document: document)
         guard !report.attentionRows.isEmpty else { return report }
 
-        let research = await withTaskGroup(of: (String, [PortfolioAttentionSource], PortfolioFundamentalSnapshot?).self) { group in
+        let client = PortfolioEventResearchClient()
+        async let news = client.recentSources(for: report.attentionRows)
+        let fundamentals = await withTaskGroup(of: (String, CompanyFinancialsData?).self) { group in
             for row in report.attentionRows {
-                group.addTask {
-                    async let news = PortfolioEventResearchClient().recentSources(ticker: row.ticker, name: row.name)
-                    async let financials = try? CompanyFinancialsClient.shared.load(ticker: row.ticker)
-                    var sources = await news
-                    let data = await financials
-                    if let data, let cik = data.cik,
-                       let url = URL(string: "https://data.sec.gov/api/xbrl/companyfacts/CIK\(String(format: "%010d", cik)).json") {
-                        sources.append(PortfolioAttentionSource(
-                            id: "\(row.ticker.lowercased())-sec-facts",
-                            title: "\(data.entityName) SEC Company Facts",
-                            publisher: "SEC",
-                            url: url,
-                            publishedAt: nil,
-                            tier: "primary"
-                        ))
-                    }
-                    return (row.ticker, sources, data.map(Self.fundamentalSnapshot))
-                }
+                group.addTask { (row.ticker, try? await CompanyFinancialsClient.shared.load(ticker: row.ticker)) }
             }
-            var result: [String: ([PortfolioAttentionSource], PortfolioFundamentalSnapshot?)] = [:]
-            for await (ticker, sources, fundamentals) in group { result[ticker] = (sources, fundamentals) }
+            var result: [String: CompanyFinancialsData] = [:]
+            for await (ticker, data) in group { result[ticker] = data }
             return result
         }
+        let sources = await news
         for index in report.attentionRows.indices {
-            let item = research[report.attentionRows[index].ticker]
-            report.attentionRows[index].sources = item?.0 ?? []
-            report.attentionRows[index].fundamentals = item?.1
+            let row = report.attentionRows[index]
+            var found = sources[row.ticker] ?? []
+            let data = fundamentals[row.ticker]
+            if let data, let cik = data.cik,
+               let url = URL(string: "https://data.sec.gov/api/xbrl/companyfacts/CIK\(String(format: "%010d", cik)).json") {
+                found.append(PortfolioAttentionSource(
+                    id: "\(row.ticker.lowercased())-sec-facts",
+                    title: "\(data.entityName) SEC Company Facts",
+                    publisher: "SEC",
+                    url: url,
+                    publishedAt: nil,
+                    tier: "primary"
+                ))
+            }
+            // The reader's evidence rules decide what the model may see.
+            report.attentionRows[index].sources = PortfolioEventResearchClient.leading(AttentionEvidenceRules.allowed(found))
+            report.attentionRows[index].fundamentals = data.map(Self.fundamentalSnapshot)
         }
 
         let researchedRows = Array(report.attentionRows.prefix(6))
+        let excerpts = NewsSettings.readsArticles ? await client.excerpts(for: researchedRows) : [:]
+        // Summaries reach the model only as excerpts, never twice.
+        let promptRows = researchedRows.map { row in
+            var row = row
+            row.sources = row.sources.map { source in
+                var source = source
+                source.summary = nil
+                return source
+            }
+            return row
+        }
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        guard let evidenceData = try? encoder.encode(researchedRows),
+        guard let evidenceData = try? encoder.encode(promptRows),
               let evidence = String(data: evidenceData, encoding: .utf8) else { return report }
+        let readings = researchedRows.flatMap { row in
+            (excerpts[row.ticker] ?? []).map { document in
+                "[\(document.source.id)] \(document.source.publisher)"
+                    + (document.source.publishedAt.map { " · " + DayDateCodec.string(from: $0) } ?? "")
+                    + "\n" + document.text
+            }
+        }.joined(separator: "\n\n")
         let prompt = """
-        你是 Catfolio Portfolio Attention Engine 的 thesis 阶段。以下市场指标已由代码计算，不得重算、改写或虚构数字。只能使用附带的新闻标题和来源元数据，不得虚构文章内容。若没有清晰、已确认的公司级事件，company_specific_catalyst 和 catalyst_confirmed 必须为 false。
+        你是 Catfolio Portfolio Attention Engine 的 thesis 阶段。以下市场指标已由代码计算，不得重算、改写或虚构数字。指标口径：return60DPercent 是近 \(signalRules.returnWindowDays) 天涨跌幅，ma200PositionPercent 是相对 \(signalRules.movingAverageDays) 日均线的位置，volumeMultiple 是相对前 \(signalRules.volumeBaselineDays) 个交易日均量的倍数。只能使用附带的新闻标题、来源元数据和文章摘录，不得虚构摘录之外的文章内容。标题与摘录冲突时以摘录为准。若没有清晰、已确认的公司级事件，company_specific_catalyst 和 catalyst_confirmed 必须为 false；catalyst_confirmed 需要文章摘录或一手来源（公司公告、SEC 文件、通讯社）支持，只有转述标题时不算确认。
 
-        对每只持仓输出：发生了什么、为什么重要、投资逻辑增强/维持/减弱、支持证据、最强反方证据、风险和下一步关注。risk_flags 只允许 legal_regulatory、governance、dilution、liquidity、leadership。不输出 Buy/Sell、目标价、仓位或交易建议。
+        对每只持仓输出：发生了什么、为什么重要、支持证据、最强反方证据、风险和下一步关注。不要判断“投资逻辑增强/减弱”：方向由代码根据已确认的公司事件决定，你只报告事实。catalyst_direction 指这次已确认的公司事件对公司基本面的方向：positive、negative、mixed；没有已确认的公司事件时写 none，不要用股价涨跌代替。risk_flags 只允许 legal_regulatory、governance、dilution、liquidity、leadership。不输出 Buy/Sell、目标价、仓位或交易建议。
 
         证据：
         \(evidence)
 
+        文章摘录（代码抓取的正文开头，以 [source_id] 标注，可放入 evidence_source_ids）：
+        \(readings.isEmpty ? "（无）" : readings)
+
         只输出 JSON：
-        {"theses":[{"ticker":"NVDA","stance":"strengthening|maintaining|weakening","what_changed":"...","why_it_matters":"...","supporting_evidence":["..."],"counter_evidence":["..."],"risks":["..."],"watch_next":["..."],"risk_flags":[],"company_specific_catalyst":false,"catalyst_confirmed":false,"catalyst_is_recent":false,"evidence_source_ids":[],"severe_unresolved_risk":false}]}
+        {"theses":[{"ticker":"NVDA","catalyst_direction":"positive|negative|mixed|none","what_changed":"...","why_it_matters":"...","supporting_evidence":["..."],"counter_evidence":["..."],"risks":["..."],"watch_next":["..."],"risk_flags":[],"company_specific_catalyst":false,"catalyst_confirmed":false,"catalyst_is_recent":false,"evidence_source_ids":[],"severe_unresolved_risk":false}]}
         """
         guard let raw = try? await complete(question: prompt, document: document),
               let data = Self.cleanJSON(raw).data(using: .utf8),
@@ -3833,28 +3902,47 @@ struct LocalAIClient {
             let cited = candidate.evidenceSourceIDs.compactMap { sourceIndex[$0] }
             let recencyCutoff = Calendar(identifier: .gregorian).date(
                 byAdding: .day,
-                value: -90,
+                value: -AttentionEvidenceRules.maximumAgeDays,
                 to: Date()
             ) ?? Date.distantPast
             let hasRecentReliableSource = cited.contains {
                 ($0.tier == "primary" || $0.tier == "wire")
                     && ($0.publishedAt.map { $0 >= recencyCutoff } ?? false)
             }
+            let riskFlags = candidate.riskFlags.filter(allowedRiskFlags.contains)
+            // The investment case only moves on a confirmed company event a
+            // reliable source carries. Anything else is the price moving.
+            let isCompanyEvent = candidate.companySpecificCatalyst && candidate.catalystConfirmed
+                && candidate.catalystIsRecent && hasRecentReliableSource
+            let basis: PortfolioThesisBasis = isCompanyEvent ? .company : .price
+            var stance: PortfolioThesisStance
+            if isCompanyEvent {
+                switch (candidate.catalystDirection ?? candidate.stance ?? "").lowercased() {
+                case "positive", "strengthening": stance = .strengthening
+                case "negative", "weakening": stance = .weakening
+                default: stance = .maintaining
+                }
+                // An unresolved risk of this kind cannot read as the case
+                // getting stronger.
+                if candidate.severeUnresolvedRisk {
+                    stance = .weakening
+                } else if !riskFlags.isEmpty, stance == .strengthening {
+                    stance = .maintaining
+                }
+            } else {
+                stance = PortfolioAttentionThesis.priceStance(row.signals)
+            }
             let confidence: PortfolioAttentionLevel
-            if candidate.companySpecificCatalyst,
-               candidate.catalystConfirmed,
-               candidate.catalystIsRecent,
-               hasRecentReliableSource,
-               !candidate.counterEvidence.isEmpty,
-               !candidate.severeUnresolvedRisk {
+            if isCompanyEvent, !candidate.counterEvidence.isEmpty, !candidate.severeUnresolvedRisk {
                 confidence = .high
-            } else if candidate.companySpecificCatalyst || candidate.catalystConfirmed || !cited.isEmpty {
+            } else if isCompanyEvent {
                 confidence = .medium
             } else {
                 confidence = .none
             }
             report.attentionRows[index].thesis = PortfolioAttentionThesis(
-                stance: PortfolioThesisStance(rawValue: candidate.stance) ?? row.thesis.stance,
+                stance: stance,
+                basis: basis,
                 confidence: confidence,
                 whatChanged: candidate.whatChanged,
                 whyItMatters: candidate.whyItMatters,
@@ -3862,10 +3950,134 @@ struct LocalAIClient {
                 counterEvidence: candidate.counterEvidence,
                 risks: candidate.risks,
                 watchNext: candidate.watchNext,
-                riskFlags: candidate.riskFlags.filter(allowedRiskFlags.contains)
+                riskFlags: riskFlags
             )
         }
         return report
+    }
+
+    /// Answers a question the reader asks on a holding's attention page.
+    /// Public research only: the analysis, its evidence and sources, and the
+    /// earlier questions — never balances or other holdings. A model that can
+    /// search may look further and says so.
+    func followUpAttention(row: PortfolioAttentionHolding, question: String,
+                           history: [PortfolioAttentionFollowUp]) async throws -> (text: String, searched: Bool) {
+        let excluded = Set(row.adjustment?.excluded ?? [])
+        func list(_ values: [String]) -> String {
+            values.isEmpty ? "- （无）" : values.map { "- " + $0 }.joined(separator: "\n")
+        }
+        let sources = row.sources.prefix(16).map { source in
+            "- [\(source.tier)] \(source.publisher): \(source.title)"
+                + (source.publishedAt.map { " (\(DayDateCodec.string(from: $0)))" } ?? "")
+        }.joined(separator: "\n")
+        let earlier = history.suffix(4).map { "问：\($0.question)\n答：\($0.answer)" }.joined(separator: "\n\n")
+        let context = [
+            "持仓：\(row.name)（\(row.ticker)）。信号：\(row.signals.map(\.label).joined(separator: "、"))。",
+            "判断：\(row.thesis.basis == .company ? "已确认公司事件" : "仅价格信号，公司面待确认")，方向 \(row.thesis.stance.rawValue)，置信度 \(row.thesis.confidence.rawValue)",
+            "发生了什么：\(row.thesis.whatChanged)",
+            "为什么重要：\(row.thesis.whyItMatters)",
+            "支持证据：\n" + list(row.thesis.supportingEvidence.filter { !excluded.contains($0) }),
+            "反方证据：\n" + list(row.thesis.counterEvidence.filter { !excluded.contains($0) }),
+            "风险：\n" + list(row.thesis.risks),
+            "接下来关注：\n" + list(row.thesis.watchNext),
+            "来源（标题）：\n" + (sources.isEmpty ? "- （无）" : sources),
+            earlier.isEmpty ? "" : "之前的追问：\n\(earlier)",
+        ].filter { !$0.isEmpty }.joined(separator: "\n\n")
+        let prompt = "你是 Catfolio 的研究助手。读者正在看这只持仓的“今天值得关注”分析，现在追问。先依据上面的分析、证据和来源回答；材料里没有的信息，能搜索就搜索并写明出处，不能搜索就直接说这些材料里没有，不要编造。回答简洁：不超过 150 字，或最多 3 个要点，不用标题。不输出买卖、目标价或仓位建议。\n"
+            + L10n.responseLanguageInstruction
+            + "\n\n读者的问题：\(question)"
+        let preference = AIProviderPreference.current
+        if (preference == .codex || preference == .automatic), CodexOAuthClient.cachedConnected {
+            do {
+                return try await CodexOAuthClient().completion(prompt: "\(context)\n\n\(prompt)", webSearch: true)
+            } catch where preference == .automatic {
+                // The ordinary ladder answers from the analysis alone.
+            }
+        }
+        return (try await researchAnswer(prompt, context: context), false)
+    }
+
+    /// Re-reads one holding from the evidence the reader kept and the points
+    /// they added. The model writes the reading; the confidence stays with
+    /// the code: the reader's own points are not sourced, so any change caps
+    /// it at medium, and nothing left in support leaves none.
+    func rejudgeAttention(row: PortfolioAttentionHolding, supporting: [String], counter: [String],
+                          notes: [String]) async throws -> PortfolioAttentionThesis {
+        let sources = row.sources.map { source in
+            "- [\(source.tier)] \(source.publisher): \(source.title)"
+                + (source.publishedAt.map { " (\(DayDateCodec.string(from: $0)))" } ?? "")
+        }.joined(separator: "\n")
+        let context = [
+            "Holding: \(row.name) (\(row.ticker)). Signals: \(row.signals.map(\.label).joined(separator: ", ")).",
+            "Previous reading: \(row.thesis.whyItMatters)",
+            "Supporting evidence the reader kept:",
+            supporting.map { "- " + $0 }.joined(separator: "\n"),
+            "Counter-evidence the reader kept:",
+            counter.map { "- " + $0 }.joined(separator: "\n"),
+            "The reader's own points (not verified; weigh them, do not treat them as confirmed facts):",
+            notes.map { "- " + $0 }.joined(separator: "\n"),
+            "Sources behind the original analysis (titles only):",
+            sources,
+        ].joined(separator: "\n")
+        let prompt = "你是 Catfolio Portfolio Attention Engine 的 thesis 阶段。方向由代码决定，你只报告事实：catalyst_direction 是保留下来的证据里已确认的公司事件对基本面的方向（positive、negative、mixed），没有已确认的公司事件写 none，不要用股价涨跌代替。读者调整了这只持仓的证据：去掉了一些，也可能补充了自己的观点。只根据保留下来的证据和读者的补充，重新写这只持仓的判断；被去掉的证据当作不存在。读者的补充未经来源验证，要写成“你提到……”而不是事实。不重算数字，不虚构新闻，不输出买卖、目标价或仓位建议。\n"
+            + "只输出 JSON：{\"catalyst_direction\":\"positive|negative|mixed|none\",\"what_changed\":\"...\",\"why_it_matters\":\"...\",\"risks\":[\"...\"],\"watch_next\":[\"...\"]}\n"
+            + L10n.responseLanguageInstruction
+        let raw = try await researchAnswer(prompt, context: context, structured: true)
+        struct Reading: Decodable {
+            let stance: String?
+            let catalystDirection: String?
+            let whatChanged: String
+            let whyItMatters: String
+            let risks: [String]
+            let watchNext: [String]
+            enum CodingKeys: String, CodingKey {
+                case stance, risks
+                case catalystDirection = "catalyst_direction"
+                case whatChanged = "what_changed"
+                case whyItMatters = "why_it_matters"
+                case watchNext = "watch_next"
+            }
+        }
+        guard let data = Self.cleanJSON(raw).data(using: .utf8),
+              let reading = try? JSONDecoder().decode(Reading.self, from: data) else {
+            throw LocalServiceError.invalidResponse
+        }
+        let changed = supporting.count != row.thesis.supportingEvidence.count
+            || counter.count != row.thesis.counterEvidence.count || !notes.isEmpty
+        // Evidence removed until nothing supports a company event leaves the
+        // reading on the price signals again.
+        let basis: PortfolioThesisBasis = supporting.isEmpty ? .price : (row.thesis.basis ?? .price)
+        let confidence: PortfolioAttentionLevel
+        if basis == .price || (supporting.isEmpty && notes.isEmpty) {
+            confidence = .none
+        } else if changed && row.thesis.confidence == .high {
+            confidence = .medium
+        } else {
+            confidence = row.thesis.confidence
+        }
+        let stance: PortfolioThesisStance
+        if basis == .company {
+            switch (reading.catalystDirection ?? reading.stance ?? "").lowercased() {
+            case "positive", "strengthening": stance = .strengthening
+            case "negative", "weakening": stance = .weakening
+            case "mixed", "maintaining": stance = .maintaining
+            default: stance = row.thesis.stance
+            }
+        } else {
+            stance = PortfolioAttentionThesis.priceStance(row.signals)
+        }
+        return PortfolioAttentionThesis(
+            stance: stance,
+            basis: basis,
+            confidence: confidence,
+            whatChanged: reading.whatChanged,
+            whyItMatters: reading.whyItMatters,
+            supportingEvidence: supporting,
+            counterEvidence: counter,
+            risks: reading.risks,
+            watchNext: reading.watchNext,
+            riskFlags: row.thesis.riskFlags
+        )
     }
 
     private static func fundamentalSnapshot(_ data: CompanyFinancialsData) -> PortfolioFundamentalSnapshot {

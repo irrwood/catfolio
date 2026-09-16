@@ -356,6 +356,28 @@ enum StandardLineChartAxisSide: Equatable {
     case trailing
 }
 
+/// An axis figure that counts through a chart's own zoom. A chart draws its
+/// bands through `StandardLineChart`, which interpolates the domain over
+/// `StandardLineChartTransition.zoom`; a label placed in an overlay is outside
+/// that and would otherwise snap to its new number while the bands are still
+/// moving.
+struct AnimatedChartValue<Label: View>: View, Animatable {
+    var value: Double
+    @ViewBuilder var label: (Double) -> Label
+
+    var animatableData: Double {
+        get { value }
+        set { value = newValue }
+    }
+
+    var body: some View { label(value) }
+}
+
+enum StandardLineChartTransition {
+    /// The curve and length `StandardLineChart` moves its own data with.
+    static let zoom = Animation.timingCurve(0.22, 1, 0.36, 1, duration: 0.45)
+}
+
 enum StandardLineChartDataTransition: Equatable {
     case morph
     /// Interpolate the visible date/value viewport while drawing the union of
@@ -795,7 +817,7 @@ struct StandardLineChart: View {
         Task { @MainActor in
             await Task.yield()
             guard generation == transitionGeneration else { return }
-            withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.45)) {
+            withAnimation(StandardLineChartTransition.zoom) {
                 transitionProgress = 1
             }
         }

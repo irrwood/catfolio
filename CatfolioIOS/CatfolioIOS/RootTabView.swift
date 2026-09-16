@@ -70,6 +70,10 @@ struct RootTabView: View {
                 try? await Task.sleep(for: .seconds(4))
                 presentAI()
             }
+            .task {
+                guard ProcessInfo.processInfo.arguments.contains("--probe-news") else { return }
+                await NewsSourceHub.probe()
+            }
             #endif
     }
 

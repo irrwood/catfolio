@@ -7,88 +7,28 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A1990000000000000000ADA1 /* AuditRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1990000000000000000ADA1 /* AuditRegressionTests.swift */; };
-		AE1100000000000000000041 /* catfolio-daily-brief in Resources */ = {isa = PBXBuildFile; fileRef = BE1100000000000000000041; };
-		A5EC7000000000000000000B /* StockChartsRotationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC7000000000000000000B; };
-		A5EC7000000000000000000A /* stockcharts_rrg_reference.json in Resources */ = {isa = PBXBuildFile; fileRef = B5EC7000000000000000000A; };
-		A5EC70000000000000000009 /* StockChartsRotationUIKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000009; };
-		A5EC70000000000000000008 /* StockChartsRotationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000008; };
-		A5EC70000000000000000007 /* StockChartsRotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000007; };
-		A5EC70000000000000000005 /* SectorRotationUIKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000005; };
-				A5EC70000000000000000006 /* SectorPerformance.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000006; };
-		A5EC70000000000000000004 /* SectorRotationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000004; };
-		A5EC70000000000000000003 /* sector_rotation_history.json in Resources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000003; };
-		A5EC70000000000000000002 /* SectorRotationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000002; };
-		A5EC70000000000000000001 /* SectorRotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000001; };
-		AF1000000000000000000014 /* PolicyBackgroundService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000014; };
-		AF1000000000000000000010 /* PolicyExecution.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000010; };
-		AF1000000000000000000011 /* PolicyMarketAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000011; };
-		AF1000000000000000000012 /* PolicyRunCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000012; };
-		AF1000000000000000000020 /* PolicyShortcut.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000020; };
-		AF1000000000000000000021 /* PolicyRunTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000021; };
-		AF1000000000000000000022 /* PolicyComposerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000022; };
-		AF1000000000000000000023 /* PolicyComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000023; };
-		AF1000000000000000000024 /* UnderwaterAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000024; };
-		AFA000000000000000000001 /* HoldingHistoryState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA000000000000000000001; };
-		AF1000000000000000000025 /* UnderwaterAnalysisChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000025; };
-		AF1000000000000000000026 /* ImpliedFunding.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000026; };
-		AF1000000000000000000027 /* CycleComparison.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000027; };
-		AF1000000000000000000028 /* AIStreaming.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000028; };
-		AF1000000000000000000001 /* PolicyWorkspaceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000001; };
-		AF1000000000000000000003 /* PolicyContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000003; };
-		AF1000000000000000000004 /* PolicyTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000004; };
-		AF1000000000000000000090 /* strategy.schema.json in Resources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000090; };
-		A1E100000000000000000001 /* PortfolioHomeScrollInteraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E100000000000000000001 /* PortfolioHomeScrollInteraction.swift */; };
-		A1E099000000000000000001 /* HistoryPagingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E099000000000000000001 /* HistoryPagingView.swift */; };
-		A1E092000000000000000001 /* SettingsInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E092000000000000000001 /* SettingsInteractionTests.swift */; };
-		A1E091000000000000000001 /* HistoryInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E091000000000000000001 /* HistoryInteractionTests.swift */; };
-		A1E093000000000000000001 /* PageLoadAndJitterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E093000000000000000001 /* PageLoadAndJitterTests.swift */; };
-		A1E080000000000000000001 /* HomeScrollInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E080000000000000000001 /* HomeScrollInteractionTests.swift */; };
-		A1E090000000000000000001 /* HoldingDetailInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E090000000000000000001 /* HoldingDetailInteractionTests.swift */; };
 		339F77A85FF9414A9A93A96A /* HoldingsHeatmapAggregationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9266D7BEE7814E13A87C6F40 /* HoldingsHeatmapAggregationTests.swift */; };
-        A1D000000000000000000003 /* LocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000004 /* LocalizationTests.swift */; };
-        A1D000000000000000000001 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000001 /* Localization.swift */; };
-        A1D000000000000000000002 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = D1D000000000000000000001 /* Localizable.strings */; };
-		A1C000000000000000000001 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = B1C000000000000000000001 /* AppIcon.icon */; };
-		A19800000000000000000003 /* CompanyReferenceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000003 /* CompanyReferenceCatalog.swift */; };
-		A199000000000000000000E2 /* PublicInvestorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E2 /* PublicInvestorView.swift */; };
-		A199000000000000000000E1 /* PublicInvestorCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E1 /* PublicInvestorCatalog.swift */; };
-		A19800000000000000000004 /* company_reference.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000004 /* company_reference.json */; };
-		A199000000000000000000E3 /* public_investors.json in Resources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E3 /* public_investors.json */; };
-		A19800000000000000000011 /* stock_splits.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000011 /* stock_splits.json */; };
-		A19900000000000000FF32 /* gbp_fx_daily.json in Resources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF32 /* gbp_fx_daily.json */; };
-		A19900000000000000FF22 /* fund_fees.json in Resources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF22 /* fund_fees.json */; };
-		A19800000000000000000012 /* etf_sector_composition.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000012 /* etf_sector_composition.json */; };
-		A19800000000000000000014 /* etf_holdings.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000014 /* etf_holdings.json */; };
 		A10000000000000000000001 /* CatfolioIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* CatfolioIOSApp.swift */; };
 		A10000000000000000000002 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* Models.swift */; };
 		A10000000000000000000003 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003 /* APIClient.swift */; };
-		ACACE0000000000000000001 /* PortfolioPresentationCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCACE0000000000000000001 /* PortfolioPresentationCache.swift */; };
 		A10000000000000000000004 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000004 /* DesignSystem.swift */; };
 		A10000000000000000000005 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000005 /* RootTabView.swift */; };
 		A10000000000000000000006 /* PortfolioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000006 /* PortfolioView.swift */; };
-		A7C0F0110000000000000001 /* PortfolioLoadRipple.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0110000000000000001 /* PortfolioLoadRipple.swift */; };
-		A7C0F0120000000000000001 /* SecurityDetailTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0120000000000000001 /* SecurityDetailTransition.swift */; };
-		A7C0F0110000000000000002 /* PortfolioLoadRipple.metal in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0110000000000000002 /* PortfolioLoadRipple.metal */; };
 		A10000000000000000000007 /* VolumeProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000007 /* VolumeProfileView.swift */; };
 		A10000000000000000000008 /* ReturnsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* ReturnsView.swift */; };
 		A10000000000000000000009 /* AIView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000009 /* AIView.swift */; };
-		ACF01A100000000000000001 /* AIQuestionPresets.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCF01A100000000000000001 /* AIQuestionPresets.swift */; };
 		A1000000000000000000000A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000A /* SettingsView.swift */; };
 		A1000000000000000000000B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000B /* Assets.xcassets */; };
 		A1000000000000000000000C /* ETFLookThroughView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000E /* ETFLookThroughView.swift */; };
 		A1000000000000000000000D /* CSVImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000F /* CSVImportView.swift */; };
 		A1000000000000000000000E /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000010 /* KeychainStore.swift */; };
 		A1000000000000000000000F /* IBKRFlexClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000011 /* IBKRFlexClient.swift */; };
-		AC5100000000000000000001 /* SnapTradeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC5100000000000000000001 /* SnapTradeClient.swift */; };
 		A10000000000000000000010 /* IBKRFlexView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000012 /* IBKRFlexView.swift */; };
-		AC5100000000000000000002 /* SnapTradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC5100000000000000000002 /* SnapTradeView.swift */; };
 		A10000000000000000000011 /* MoomooOAuthClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000013 /* MoomooOAuthClient.swift */; };
 		A10000000000000000000012 /* MoomooOAuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000014 /* MoomooOAuthView.swift */; };
 		A10000000000000000000013 /* Trading212Client.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000015 /* Trading212Client.swift */; };
 		A10000000000000000000014 /* Trading212View.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000016 /* Trading212View.swift */; };
 		A10000000000000000000015 /* LocalPortfolioStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000017 /* LocalPortfolioStore.swift */; };
-		A1D710000000000000000001 /* DailyTimeWeightedReturn.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D710000000000000000001 /* DailyTimeWeightedReturn.swift */; };
 		A10000000000000000000016 /* LocalServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000018 /* LocalServices.swift */; };
 		A10000000000000000000017 /* sp500_holdings.json in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000019 /* sp500_holdings.json */; };
 		A10000000000000000000018 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000001A /* PrivacyInfo.xcprivacy */; };
@@ -106,175 +46,175 @@
 		A10000000000000000000024 /* StandardLineChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000026 /* StandardLineChart.swift */; };
 		A10000000000000000000025 /* AssetLogos in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000027 /* AssetLogos */; };
 		A1000000000000000000002B /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000002D /* HistoryView.swift */; };
-		A199000000000000000000AA /* RealisedProfitCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AA /* RealisedProfitCalculator.swift */; };
-		A199000000000000000000AB /* FMPRateLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AB /* FMPRateLimiter.swift */; };
-		A199000000000000000000AC /* NasdaqAnalystClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AC /* NasdaqAnalystClient.swift */; };
-		E10100000000000000000002 /* EarningsHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000002 /* EarningsHistoryView.swift */; };
-		E10100000000000000000001 /* EarningsHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000001 /* EarningsHistory.swift */; };
-		A199000000000000000000AE /* TodayDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AE /* TodayDetailView.swift */; };
-		A199000000000000000000AF /* SectorAttribution.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AF /* SectorAttribution.swift */; };
-		A19900000000000000FF90 /* PortfolioDocumentMerge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF90 /* PortfolioDocumentMerge.swift */; };
-		A19900000000000000FF80 /* CloudPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF80 /* CloudPreferences.swift */; };
-		A19900000000000000FF70 /* LedgerReconciliation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF70 /* LedgerReconciliation.swift */; };
-		A19900000000000000FF60 /* UKSection104Pool.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF60 /* UKSection104Pool.swift */; };
-		A19900000000000000FF50 /* UKShareMatching.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF50 /* UKShareMatching.swift */; };
-		A19900000000000000FF31 /* FXImpactCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF31 /* FXImpactCalculator.swift */; };
-		A19900000000000000FF30 /* GBPFXRates.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF30 /* GBPFXRates.swift */; };
-		A19900000000000000FF20 /* FundFeeCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF20 /* FundFeeCatalog.swift */; };
-		A199000000000000000000D8 /* ReferenceCatalogs.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D8 /* ReferenceCatalogs.swift */; };
-		A199000000000000000000D6 /* LegacyType.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D6 /* LegacyType.swift */; };
-		A199000000000000000000D5 /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D5 /* Typography.swift */; };
-		A199000000000000000000EF /* SettingsTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EF /* SettingsTemplate.swift */; };
-		A199000000000000000000D1 /* StockSplitCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D1 /* StockSplitCatalog.swift */; };
+		A19800000000000000000003 /* CompanyReferenceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000003 /* CompanyReferenceCatalog.swift */; };
+		A19800000000000000000004 /* company_reference.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000004 /* company_reference.json */; };
+		A19800000000000000000011 /* stock_splits.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000011 /* stock_splits.json */; };
+		A19800000000000000000012 /* etf_sector_composition.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000012 /* etf_sector_composition.json */; };
+		A19800000000000000000014 /* etf_holdings.json in Resources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000014 /* etf_holdings.json */; };
 		A19900000000000000000001 /* ResearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000001 /* ResearchView.swift */; };
 		A19900000000000000000002 /* StockScreenerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000002 /* StockScreenerView.swift */; };
 		A19900000000000000000003 /* AnalystConsensusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000003 /* AnalystConsensusView.swift */; };
 		A19900000000000000000009 /* OptionsOIView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000009 /* OptionsOIView.swift */; };
-		A199000000000000000000F0 /* IsometricHeatmapLab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F0 /* IsometricHeatmapLab.swift */; };
-		A199000000000000000000F2 /* PerformanceHeatmapHero.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F2 /* PerformanceHeatmapHero.swift */; };
-		A199000000000000000000F3 /* InsiderTrades.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F3 /* InsiderTrades.swift */; };
-		A199000000000000000000F4 /* InsiderTradesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F4 /* InsiderTradesView.swift */; };
-		A199000000000000000000F5 /* RevenueSegments.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F5 /* RevenueSegments.swift */; };
-		A199000000000000000000F7 /* HoldingContributionChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F7 /* HoldingContributionChart.swift */; };
-		A199000000000000000000F6 /* revenue_segments.json in Resources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F6 /* revenue_segments.json */; };
-		A199000000000000000000EB /* SecurityDebate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EB /* SecurityDebate.swift */; };
-		A199000000000000000000ED /* SecurityDebateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000ED /* SecurityDebateStore.swift */; };
-		A199000000000000000000EE /* SecurityDebateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EE /* SecurityDebateView.swift */; };
 		A199000000000000000000A1 /* MoneyWeightedReturnCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B1 /* MoneyWeightedReturnCalculatorTests.swift */; };
 		A199000000000000000000A2 /* LocalPortfolioEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B2 /* LocalPortfolioEngineTests.swift */; };
+		A199000000000000000000A3 /* RealisedProfitCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */; };
+		A199000000000000000000A4 /* BrokerResultPreservationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B4 /* BrokerResultPreservationTests.swift */; };
+		A199000000000000000000A5 /* AnalystConsensusDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B5 /* AnalystConsensusDataTests.swift */; };
+		A199000000000000000000A6 /* StockScreenerRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B6 /* StockScreenerRulesTests.swift */; };
+		A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B7 /* Trading212FillDecodingTests.swift */; };
+		A199000000000000000000AA /* RealisedProfitCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AA /* RealisedProfitCalculator.swift */; };
+		A199000000000000000000AB /* FMPRateLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AB /* FMPRateLimiter.swift */; };
+		A199000000000000000000AC /* NasdaqAnalystClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AC /* NasdaqAnalystClient.swift */; };
+		A199000000000000000000AD /* NasdaqAnalystLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */; };
+		A199000000000000000000AE /* TodayDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AE /* TodayDetailView.swift */; };
+		A199000000000000000000AF /* SectorAttribution.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AF /* SectorAttribution.swift */; };
+		A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000C1 /* SectorAttributionTests.swift */; };
+		A199000000000000000000C2 /* CompanyCIKSeedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000C2 /* CompanyCIKSeedTests.swift */; };
+		A199000000000000000000D1 /* StockSplitCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D1 /* StockSplitCatalog.swift */; };
+		A199000000000000000000D2 /* StockSplitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D2 /* StockSplitTests.swift */; };
+		A199000000000000000000D5 /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D5 /* Typography.swift */; };
+		A199000000000000000000D6 /* LegacyType.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D6 /* LegacyType.swift */; };
+		A199000000000000000000D7 /* TypographyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D7 /* TypographyTests.swift */; };
+		A199000000000000000000D8 /* ReferenceCatalogs.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D8 /* ReferenceCatalogs.swift */; };
+		A199000000000000000000E1 /* PublicInvestorCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E1 /* PublicInvestorCatalog.swift */; };
+		A199000000000000000000E2 /* PublicInvestorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E2 /* PublicInvestorView.swift */; };
+		A199000000000000000000E3 /* public_investors.json in Resources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E3 /* public_investors.json */; };
 		A199000000000000000000E4 /* PublicInvestorCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E4 /* PublicInvestorCatalogTests.swift */; };
 		A199000000000000000000E5 /* CurrencyFormattingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E5 /* CurrencyFormattingTests.swift */; };
 		A199000000000000000000E6 /* PortfolioAccountAggregationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E6 /* PortfolioAccountAggregationTests.swift */; };
 		A199000000000000000000E8 /* CompactNumberRuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E8 /* CompactNumberRuleTests.swift */; };
 		A199000000000000000000E9 /* HeatmapRemainderReturnTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000E9 /* HeatmapRemainderReturnTests.swift */; };
 		A199000000000000000000EA /* HeatmapRowTapTargetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EA /* HeatmapRowTapTargetTests.swift */; };
+		A199000000000000000000EB /* SecurityDebate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EB /* SecurityDebate.swift */; };
 		A199000000000000000000EC /* SecurityDebateResearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EC /* SecurityDebateResearchTests.swift */; };
-		A199000000000000000000A3 /* RealisedProfitCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */; };
-		A199000000000000000000A4 /* BrokerResultPreservationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B4 /* BrokerResultPreservationTests.swift */; };
-		AC5100000000000000000003 /* SnapTradeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC5100000000000000000003 /* SnapTradeTests.swift */; };
-		A199000000000000000000A5 /* AnalystConsensusDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B5 /* AnalystConsensusDataTests.swift */; };
-		A199000000000000000000A6 /* StockScreenerRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B6 /* StockScreenerRulesTests.swift */; };
-		A199000000000000000000A7 /* Trading212FillDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000B7 /* Trading212FillDecodingTests.swift */; };
-		A199000000000000000000AD /* NasdaqAnalystLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */; };
-		E10100000000000000000003 /* EarningsHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000003 /* EarningsHistoryTests.swift */; };
-		E101000000000000000000F1 /* InsiderTradesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F1 /* InsiderTradesTests.swift */; };
-		E101000000000000000000F2 /* RevenueSegmentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F2 /* RevenueSegmentsTests.swift */; };
-		E101000000000000000000F4 /* PolicyShortcutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F4 /* PolicyShortcutTests.swift */; };
-		E101000000000000000000F5 /* UnderwaterAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F5 /* UnderwaterAnalysisTests.swift */; };
-		E101000000000000000000F6 /* ImpliedFundingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F6 /* ImpliedFundingTests.swift */; };
-		E101000000000000000000F7 /* CycleComparisonTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F7 /* CycleComparisonTests.swift */; };
-		E101000000000000000000F8 /* AIStreamingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F8 /* AIStreamingTests.swift */; };
-		E101000000000000000000F3 /* HoldingContributionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F3 /* HoldingContributionTests.swift */; };
-		A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000C1 /* SectorAttributionTests.swift */; };
-		A19900000000000000FFB0 /* NumericAlternatesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FFB0 /* NumericAlternatesTests.swift */; };
-		A19900000000000000FFA0 /* PublicInvestorSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */; };
-		ACACE0000000000000000002 /* PortfolioPresentationCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCACE0000000000000000002 /* PortfolioPresentationCacheTests.swift */; };
-		A19900000000000000FF91 /* PortfolioDocumentMergeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF91 /* PortfolioDocumentMergeTests.swift */; };
-		A19900000000000000FF81 /* CloudPreferencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF81 /* CloudPreferencesTests.swift */; };
-		A19900000000000000FF71 /* LedgerReconciliationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF71 /* LedgerReconciliationTests.swift */; };
-		A19900000000000000FFC0 /* AIConversationLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FFC0 /* AIConversationLibraryTests.swift */; };
-		A19900000000000000FF61 /* UKSection104PoolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF61 /* UKSection104PoolTests.swift */; };
-		A19900000000000000FF51 /* UKShareMatchingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF51 /* UKShareMatchingTests.swift */; };
-		A19900000000000000FF40 /* FXImpactTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF40 /* FXImpactTests.swift */; };
+		A199000000000000000000ED /* SecurityDebateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000ED /* SecurityDebateStore.swift */; };
+		A199000000000000000000EE /* SecurityDebateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EE /* SecurityDebateView.swift */; };
+		A199000000000000000000EF /* SettingsTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000EF /* SettingsTemplate.swift */; };
+		A199000000000000000000F0 /* IsometricHeatmapLab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F0 /* IsometricHeatmapLab.swift */; };
+		A199000000000000000000F2 /* PerformanceHeatmapHero.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F2 /* PerformanceHeatmapHero.swift */; };
+		A199000000000000000000F3 /* InsiderTrades.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F3 /* InsiderTrades.swift */; };
+		A199000000000000000000F4 /* InsiderTradesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F4 /* InsiderTradesView.swift */; };
+		A199000000000000000000F5 /* RevenueSegments.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F5 /* RevenueSegments.swift */; };
+		A199000000000000000000F6 /* revenue_segments.json in Resources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F6 /* revenue_segments.json */; };
+		A199000000000000000000F7 /* HoldingContributionChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000F7 /* HoldingContributionChart.swift */; };
+		A1990000000000000000ADA1 /* AuditRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1990000000000000000ADA1 /* AuditRegressionTests.swift */; };
+		A19900000000000000FF20 /* FundFeeCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF20 /* FundFeeCatalog.swift */; };
 		A19900000000000000FF21 /* FundFeeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF21 /* FundFeeTests.swift */; };
-		A199000000000000000000D7 /* TypographyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D7 /* TypographyTests.swift */; };
-		A199000000000000000000D2 /* StockSplitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000D2 /* StockSplitTests.swift */; };
-		AF5A00000000000000000001 /* ETFLookThroughExpansionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5A00000000000000000001 /* ETFLookThroughExpansionTests.swift */; };
-		A199000000000000000000C2 /* CompanyCIKSeedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B199000000000000000000C2 /* CompanyCIKSeedTests.swift */; };
-		AE1100000000000000000001 /* IndustrySentimentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1100000000000000000001 /* IndustrySentimentView.swift */; };
-		AE1100000000000000000002 /* industry_sentiment.json in Resources */ = {isa = PBXBuildFile; fileRef = BE1100000000000000000002 /* industry_sentiment.json */; };
-		AC9200000000000000000001 /* AnalystHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC9200000000000000000001 /* AnalystHistoryView.swift */; };
-		AC9200000000000000000002 /* analyst_history_catalog.json in Resources */ = {isa = PBXBuildFile; fileRef = BC9200000000000000000002 /* analyst_history_catalog.json */; };
+		A19900000000000000FF22 /* fund_fees.json in Resources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF22 /* fund_fees.json */; };
+		A19900000000000000FF30 /* GBPFXRates.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF30 /* GBPFXRates.swift */; };
+		A19900000000000000FF31 /* FXImpactCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF31 /* FXImpactCalculator.swift */; };
+		A19900000000000000FF32 /* gbp_fx_daily.json in Resources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF32 /* gbp_fx_daily.json */; };
+		A19900000000000000FF40 /* FXImpactTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF40 /* FXImpactTests.swift */; };
+		A19900000000000000FF50 /* UKShareMatching.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF50 /* UKShareMatching.swift */; };
+		A19900000000000000FF51 /* UKShareMatchingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF51 /* UKShareMatchingTests.swift */; };
+		A19900000000000000FF60 /* UKSection104Pool.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF60 /* UKSection104Pool.swift */; };
+		A19900000000000000FF61 /* UKSection104PoolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF61 /* UKSection104PoolTests.swift */; };
+		A19900000000000000FF70 /* LedgerReconciliation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF70 /* LedgerReconciliation.swift */; };
+		A19900000000000000FF71 /* LedgerReconciliationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF71 /* LedgerReconciliationTests.swift */; };
+		A19900000000000000FF80 /* CloudPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF80 /* CloudPreferences.swift */; };
+		A19900000000000000FF81 /* CloudPreferencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF81 /* CloudPreferencesTests.swift */; };
+		A19900000000000000FF90 /* PortfolioDocumentMerge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF90 /* PortfolioDocumentMerge.swift */; };
+		A19900000000000000FF91 /* PortfolioDocumentMergeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FF91 /* PortfolioDocumentMergeTests.swift */; };
+		A19900000000000000FFA0 /* PublicInvestorSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */; };
+		A19900000000000000FFB0 /* NumericAlternatesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FFB0 /* NumericAlternatesTests.swift */; };
+		A19900000000000000FFC0 /* AIConversationLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000FFC0 /* AIConversationLibraryTests.swift */; };
+		A1C000000000000000000001 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = B1C000000000000000000001 /* AppIcon.icon */; };
+		A1D000000000000000000001 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000001 /* Localization.swift */; };
+		A1D000000000000000000002 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = D1D000000000000000000001 /* Localizable.strings */; };
+		A1D000000000000000000003 /* LocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000004 /* LocalizationTests.swift */; };
+		A1D710000000000000000001 /* DailyTimeWeightedReturn.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D710000000000000000001 /* DailyTimeWeightedReturn.swift */; };
+		A1E080000000000000000001 /* HomeScrollInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E080000000000000000001 /* HomeScrollInteractionTests.swift */; };
+		A1E090000000000000000001 /* HoldingDetailInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E090000000000000000001 /* HoldingDetailInteractionTests.swift */; };
+		A1E091000000000000000001 /* HistoryInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E091000000000000000001 /* HistoryInteractionTests.swift */; };
+		A1E092000000000000000001 /* SettingsInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E092000000000000000001 /* SettingsInteractionTests.swift */; };
+		A1E093000000000000000001 /* PageLoadAndJitterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E093000000000000000001 /* PageLoadAndJitterTests.swift */; };
+		A1E099000000000000000001 /* HistoryPagingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E099000000000000000001 /* HistoryPagingView.swift */; };
+		A1E100000000000000000001 /* PortfolioHomeScrollInteraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E100000000000000000001 /* PortfolioHomeScrollInteraction.swift */; };
+		A5EC70000000000000000001 /* SectorRotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000001 /* SectorRotation.swift */; };
+		A5EC70000000000000000002 /* SectorRotationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000002 /* SectorRotationView.swift */; };
+		A5EC70000000000000000003 /* sector_rotation_history.json in Resources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000003 /* sector_rotation_history.json */; };
+		A5EC70000000000000000004 /* SectorRotationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000004 /* SectorRotationTests.swift */; };
+		A5EC70000000000000000005 /* SectorRotationUIKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000005 /* SectorRotationUIKit.swift */; };
+		A5EC70000000000000000006 /* SectorPerformance.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000006 /* SectorPerformance.swift */; };
+		A5EC70000000000000000007 /* StockChartsRotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000007 /* StockChartsRotation.swift */; };
+		A5EC70000000000000000008 /* StockChartsRotationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000008 /* StockChartsRotationView.swift */; };
+		A5EC70000000000000000009 /* StockChartsRotationUIKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC70000000000000000009 /* StockChartsRotationUIKit.swift */; };
+		A5EC7000000000000000000A /* stockcharts_rrg_reference.json in Resources */ = {isa = PBXBuildFile; fileRef = B5EC7000000000000000000A /* stockcharts_rrg_reference.json */; };
+		A5EC7000000000000000000B /* StockChartsRotationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EC7000000000000000000B /* StockChartsRotationTests.swift */; };
 		A6D311000000000000000001 /* ManagementDelivery.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D311000000000000000001 /* ManagementDelivery.swift */; };
 		A6D311000000000000000002 /* ManagementDeliveryClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D311000000000000000002 /* ManagementDeliveryClient.swift */; };
 		A6D311000000000000000003 /* ManagementDeliveryAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D311000000000000000003 /* ManagementDeliveryAnalyzer.swift */; };
 		A6D311000000000000000004 /* ManagementDeliveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D311000000000000000004 /* ManagementDeliveryView.swift */; };
 		A6D311000000000000000005 /* ManagementDeliveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D311000000000000000005 /* ManagementDeliveryTests.swift */; };
+		A7C0F0110000000000000001 /* PortfolioLoadRipple.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0110000000000000001 /* PortfolioLoadRipple.swift */; };
+		A7C0F0110000000000000002 /* PortfolioLoadRipple.metal in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0110000000000000002 /* PortfolioLoadRipple.metal */; };
+		A7C0F0120000000000000001 /* SecurityDetailTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0120000000000000001 /* SecurityDetailTransition.swift */; };
+		A7C0F0130000000000000001 /* LossAnalysisChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0130000000000000001 /* LossAnalysisChart.swift */; };
+		A7C0F0140000000000000001 /* NewsSources.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0140000000000000001 /* NewsSources.swift */; };
+		AC5100000000000000000001 /* SnapTradeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC5100000000000000000001 /* SnapTradeClient.swift */; };
+		AC5100000000000000000002 /* SnapTradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC5100000000000000000002 /* SnapTradeView.swift */; };
+		AC5100000000000000000003 /* SnapTradeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC5100000000000000000003 /* SnapTradeTests.swift */; };
+		AC9200000000000000000001 /* AnalystHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC9200000000000000000001 /* AnalystHistoryView.swift */; };
+		AC9200000000000000000002 /* analyst_history_catalog.json in Resources */ = {isa = PBXBuildFile; fileRef = BC9200000000000000000002 /* analyst_history_catalog.json */; };
+		ACACE0000000000000000001 /* PortfolioPresentationCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCACE0000000000000000001 /* PortfolioPresentationCache.swift */; };
+		ACACE0000000000000000002 /* PortfolioPresentationCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCACE0000000000000000002 /* PortfolioPresentationCacheTests.swift */; };
+		ACF01A100000000000000001 /* AIQuestionPresets.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCF01A100000000000000001 /* AIQuestionPresets.swift */; };
+		AE1100000000000000000001 /* IndustrySentimentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1100000000000000000001 /* IndustrySentimentView.swift */; };
+		AE1100000000000000000002 /* industry_sentiment.json in Resources */ = {isa = PBXBuildFile; fileRef = BE1100000000000000000002 /* industry_sentiment.json */; };
+		AE1100000000000000000041 /* catfolio-daily-brief in Resources */ = {isa = PBXBuildFile; fileRef = BE1100000000000000000041 /* catfolio-daily-brief */; };
+		AF1000000000000000000001 /* PolicyWorkspaceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000001 /* PolicyWorkspaceStore.swift */; };
+		AF1000000000000000000003 /* PolicyContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000003 /* PolicyContract.swift */; };
+		AF1000000000000000000004 /* PolicyTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000004 /* PolicyTemplates.swift */; };
+		AF1000000000000000000010 /* PolicyExecution.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000010 /* PolicyExecution.swift */; };
+		AF1000000000000000000011 /* PolicyMarketAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000011 /* PolicyMarketAdapter.swift */; };
+		AF1000000000000000000012 /* PolicyRunCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000012 /* PolicyRunCoordinator.swift */; };
+		AF1000000000000000000014 /* PolicyBackgroundService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000014 /* PolicyBackgroundService.swift */; };
+		AF1000000000000000000020 /* PolicyShortcut.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000020 /* PolicyShortcut.swift */; };
+		AF1000000000000000000021 /* PolicyRunTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000021 /* PolicyRunTrace.swift */; };
+		AF1000000000000000000022 /* PolicyComposerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000022 /* PolicyComposerStore.swift */; };
+		AF1000000000000000000023 /* PolicyComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000023 /* PolicyComposerView.swift */; };
+		AF1000000000000000000024 /* UnderwaterAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000024 /* UnderwaterAnalysis.swift */; };
+		AF1000000000000000000025 /* UnderwaterAnalysisChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000025 /* UnderwaterAnalysisChart.swift */; };
+		AF1000000000000000000026 /* ImpliedFunding.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000026 /* ImpliedFunding.swift */; };
+		AF1000000000000000000027 /* CycleComparison.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000027 /* CycleComparison.swift */; };
+		AF1000000000000000000028 /* AIStreaming.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000028 /* AIStreaming.swift */; };
+		AF1000000000000000000090 /* strategy.schema.json in Resources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000090 /* strategy.schema.json */; };
+		AF5A00000000000000000001 /* ETFLookThroughExpansionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5A00000000000000000001 /* ETFLookThroughExpansionTests.swift */; };
+		AFA000000000000000000001 /* HoldingHistoryState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA000000000000000000001 /* HoldingHistoryState.swift */; };
+		E10100000000000000000001 /* EarningsHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000001 /* EarningsHistory.swift */; };
+		E10100000000000000000002 /* EarningsHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000002 /* EarningsHistoryView.swift */; };
+		E10100000000000000000003 /* EarningsHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000003 /* EarningsHistoryTests.swift */; };
+		E101000000000000000000F1 /* InsiderTradesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F1 /* InsiderTradesTests.swift */; };
+		E101000000000000000000F2 /* RevenueSegmentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F2 /* RevenueSegmentsTests.swift */; };
+		E101000000000000000000F3 /* HoldingContributionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F3 /* HoldingContributionTests.swift */; };
+		E101000000000000000000F4 /* PolicyShortcutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F4 /* PolicyShortcutTests.swift */; };
+		E101000000000000000000F5 /* UnderwaterAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F5 /* UnderwaterAnalysisTests.swift */; };
+		E101000000000000000000F6 /* ImpliedFundingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F6 /* ImpliedFundingTests.swift */; };
+		E101000000000000000000F7 /* CycleComparisonTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F7 /* CycleComparisonTests.swift */; };
+		E101000000000000000000F8 /* AIStreamingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F8 /* AIStreamingTests.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		E199000000000000000000E2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E10000000000000000000002 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E10000000000000000000001;
+			remoteInfo = CatfolioIOS;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
-		B1990000000000000000ADA1 /* AuditRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuditRegressionTests.swift; sourceTree = "<group>"; };
-		BE1100000000000000000041 /* catfolio-daily-brief */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "catfolio-daily-brief"; sourceTree = "<group>"; };
-		B5EC7000000000000000000B /* StockChartsRotationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockChartsRotationTests.swift; sourceTree = "<group>"; };
-		B5EC7000000000000000000A /* stockcharts_rrg_reference.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = stockcharts_rrg_reference.json; sourceTree = "<group>"; };
-		B5EC70000000000000000009 /* StockChartsRotationUIKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockChartsRotationUIKit.swift; sourceTree = "<group>"; };
-		B5EC70000000000000000008 /* StockChartsRotationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockChartsRotationView.swift; sourceTree = "<group>"; };
-		B5EC70000000000000000007 /* StockChartsRotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockChartsRotation.swift; sourceTree = "<group>"; };
-		B5EC70000000000000000005 /* SectorRotationUIKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorRotationUIKit.swift; sourceTree = "<group>"; };
-				B5EC70000000000000000006 /* SectorPerformance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorPerformance.swift; sourceTree = "<group>"; };
-		B5EC70000000000000000004 /* SectorRotationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorRotationTests.swift; sourceTree = "<group>"; };
-		B5EC70000000000000000003 /* sector_rotation_history.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = sector_rotation_history.json; sourceTree = "<group>"; };
-		B5EC70000000000000000002 /* SectorRotationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorRotationView.swift; sourceTree = "<group>"; };
-		B5EC70000000000000000001 /* SectorRotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorRotation.swift; sourceTree = "<group>"; };
-		BF1000000000000000000014 /* PolicyBackgroundService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyBackgroundService.swift; sourceTree = "<group>"; };
-		BF1000000000000000000010 /* PolicyExecution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyExecution.swift; sourceTree = "<group>"; };
-		BF1000000000000000000011 /* PolicyMarketAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyMarketAdapter.swift; sourceTree = "<group>"; };
-		BF1000000000000000000012 /* PolicyRunCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyRunCoordinator.swift; sourceTree = "<group>"; };
-		BF1000000000000000000020 /* PolicyShortcut.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyShortcut.swift; sourceTree = "<group>"; };
-		BF1000000000000000000021 /* PolicyRunTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyRunTrace.swift; sourceTree = "<group>"; };
-		BF1000000000000000000022 /* PolicyComposerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyComposerStore.swift; sourceTree = "<group>"; };
-		BF1000000000000000000023 /* PolicyComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyComposerView.swift; sourceTree = "<group>"; };
-		BF1000000000000000000024 /* UnderwaterAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnderwaterAnalysis.swift; sourceTree = "<group>"; };
-		BFA000000000000000000001 /* HoldingHistoryState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingHistoryState.swift; sourceTree = "<group>"; };
-		BF1000000000000000000025 /* UnderwaterAnalysisChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnderwaterAnalysisChart.swift; sourceTree = "<group>"; };
-		BF1000000000000000000026 /* ImpliedFunding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImpliedFunding.swift; sourceTree = "<group>"; };
-		BF1000000000000000000027 /* CycleComparison.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleComparison.swift; sourceTree = "<group>"; };
-		BF1000000000000000000028 /* AIStreaming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIStreaming.swift; sourceTree = "<group>"; };
-		BF1000000000000000000001 /* PolicyWorkspaceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyWorkspaceStore.swift; sourceTree = "<group>"; };
-		BF1000000000000000000003 /* PolicyContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyContract.swift; sourceTree = "<group>"; };
-		BF1000000000000000000004 /* PolicyTemplates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyTemplates.swift; sourceTree = "<group>"; };
-		BF1000000000000000000090 /* strategy.schema.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = strategy.schema.json; sourceTree = "<group>"; };
-		B1E100000000000000000001 /* PortfolioHomeScrollInteraction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioHomeScrollInteraction.swift; sourceTree = "<group>"; };
-		B1E099000000000000000001 /* HistoryPagingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryPagingView.swift; sourceTree = "<group>"; };
-		B1E092000000000000000001 /* SettingsInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsInteractionTests.swift; sourceTree = "<group>"; };
-		B1E091000000000000000001 /* HistoryInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryInteractionTests.swift; sourceTree = "<group>"; };
-		B1E093000000000000000001 /* PageLoadAndJitterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageLoadAndJitterTests.swift; sourceTree = "<group>"; };
-		B1E080000000000000000001 /* HomeScrollInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeScrollInteractionTests.swift; sourceTree = "<group>"; };
-		B1E090000000000000000001 /* HoldingDetailInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingDetailInteractionTests.swift; sourceTree = "<group>"; };
 		9266D7BEE7814E13A87C6F40 /* HoldingsHeatmapAggregationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingsHeatmapAggregationTests.swift; sourceTree = "<group>"; };
-        B1D000000000000000000004 /* LocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationTests.swift; sourceTree = "<group>"; };
-        B1D000000000000000000001 /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
-        B1D000000000000000000002 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
-        B1D000000000000000000003 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
-		B1C000000000000000000001 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
-		B19800000000000000000003 /* CompanyReferenceCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyReferenceCatalog.swift; sourceTree = "<group>"; };
-		B199000000000000000000E2 /* PublicInvestorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicInvestorView.swift; sourceTree = "<group>"; };
-		B199000000000000000000E1 /* PublicInvestorCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicInvestorCatalog.swift; sourceTree = "<group>"; };
-		B19800000000000000000004 /* company_reference.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = company_reference.json; sourceTree = "<group>"; };
-		B199000000000000000000E3 /* public_investors.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = public_investors.json; sourceTree = "<group>"; };
-		B19800000000000000000011 /* stock_splits.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = stock_splits.json; sourceTree = "<group>"; };
-		B19900000000000000FF32 /* gbp_fx_daily.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = gbp_fx_daily.json; sourceTree = "<group>"; };
-		B19900000000000000FF22 /* fund_fees.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = fund_fees.json; sourceTree = "<group>"; };
-		B19800000000000000000012 /* etf_sector_composition.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = etf_sector_composition.json; sourceTree = "<group>"; };
-		B19800000000000000000014 /* etf_holdings.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = etf_holdings.json; sourceTree = "<group>"; };
-		B19900000000000000000001 /* ResearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResearchView.swift; sourceTree = "<group>"; };
-		B19900000000000000000002 /* StockScreenerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockScreenerView.swift; sourceTree = "<group>"; };
-		B19900000000000000000003 /* AnalystConsensusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalystConsensusView.swift; sourceTree = "<group>"; };
-		B19900000000000000000009 /* OptionsOIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptionsOIView.swift; sourceTree = "<group>"; };
-		B199000000000000000000F0 /* IsometricHeatmapLab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IsometricHeatmapLab.swift; sourceTree = "<group>"; };
-		B199000000000000000000F2 /* PerformanceHeatmapHero.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceHeatmapHero.swift; sourceTree = "<group>"; };
-		B199000000000000000000F3 /* InsiderTrades.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsiderTrades.swift; sourceTree = "<group>"; };
-		B199000000000000000000F4 /* InsiderTradesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsiderTradesView.swift; sourceTree = "<group>"; };
-		B199000000000000000000F5 /* RevenueSegments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RevenueSegments.swift; sourceTree = "<group>"; };
-		B199000000000000000000F7 /* HoldingContributionChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingContributionChart.swift; sourceTree = "<group>"; };
-		B199000000000000000000F6 /* revenue_segments.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = revenue_segments.json; sourceTree = "<group>"; };
-		B199000000000000000000EB /* SecurityDebate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebate.swift; sourceTree = "<group>"; };
-		B199000000000000000000ED /* SecurityDebateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebateStore.swift; sourceTree = "<group>"; };
-		B199000000000000000000EE /* SecurityDebateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebateView.swift; sourceTree = "<group>"; };
 		B10000000000000000000001 /* CatfolioIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatfolioIOSApp.swift; sourceTree = "<group>"; };
 		B10000000000000000000002 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		B10000000000000000000003 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
-		BCACE0000000000000000001 /* PortfolioPresentationCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioPresentationCache.swift; sourceTree = "<group>"; };
 		B10000000000000000000004 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		B10000000000000000000005 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
 		B10000000000000000000006 /* PortfolioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioView.swift; sourceTree = "<group>"; };
-		B7C0F0110000000000000001 /* PortfolioLoadRipple.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioLoadRipple.swift; sourceTree = "<group>"; };
-		B7C0F0120000000000000001 /* SecurityDetailTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDetailTransition.swift; sourceTree = "<group>"; };
-		B7C0F0110000000000000002 /* PortfolioLoadRipple.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = PortfolioLoadRipple.metal; sourceTree = "<group>"; };
 		B10000000000000000000007 /* VolumeProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeProfileView.swift; sourceTree = "<group>"; };
 		B10000000000000000000008 /* ReturnsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReturnsView.swift; sourceTree = "<group>"; };
 		B10000000000000000000009 /* AIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIView.swift; sourceTree = "<group>"; };
-		BCF01A100000000000000001 /* AIQuestionPresets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIQuestionPresets.swift; sourceTree = "<group>"; };
 		B1000000000000000000000A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B1000000000000000000000B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B1000000000000000000000C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -283,15 +223,12 @@
 		B1000000000000000000000F /* CSVImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVImportView.swift; sourceTree = "<group>"; };
 		B10000000000000000000010 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		B10000000000000000000011 /* IBKRFlexClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IBKRFlexClient.swift; sourceTree = "<group>"; };
-		BC5100000000000000000001 /* SnapTradeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapTradeClient.swift; sourceTree = "<group>"; };
 		B10000000000000000000012 /* IBKRFlexView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IBKRFlexView.swift; sourceTree = "<group>"; };
-		BC5100000000000000000002 /* SnapTradeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapTradeView.swift; sourceTree = "<group>"; };
 		B10000000000000000000013 /* MoomooOAuthClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoomooOAuthClient.swift; sourceTree = "<group>"; };
 		B10000000000000000000014 /* MoomooOAuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoomooOAuthView.swift; sourceTree = "<group>"; };
 		B10000000000000000000015 /* Trading212Client.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212Client.swift; sourceTree = "<group>"; };
 		B10000000000000000000016 /* Trading212View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212View.swift; sourceTree = "<group>"; };
 		B10000000000000000000017 /* LocalPortfolioStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalPortfolioStore.swift; sourceTree = "<group>"; };
-		B1D710000000000000000001 /* DailyTimeWeightedReturn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyTimeWeightedReturn.swift; sourceTree = "<group>"; };
 		B10000000000000000000018 /* LocalServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalServices.swift; sourceTree = "<group>"; };
 		B10000000000000000000019 /* sp500_holdings.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = sp500_holdings.json; sourceTree = "<group>"; };
 		B1000000000000000000001A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -309,78 +246,155 @@
 		B10000000000000000000026 /* StandardLineChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StandardLineChart.swift; sourceTree = "<group>"; };
 		B10000000000000000000027 /* AssetLogos */ = {isa = PBXFileReference; lastKnownFileType = folder; path = AssetLogos; sourceTree = "<group>"; };
 		B1000000000000000000002D /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		B19800000000000000000003 /* CompanyReferenceCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyReferenceCatalog.swift; sourceTree = "<group>"; };
+		B19800000000000000000004 /* company_reference.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = company_reference.json; sourceTree = "<group>"; };
+		B19800000000000000000011 /* stock_splits.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = stock_splits.json; sourceTree = "<group>"; };
+		B19800000000000000000012 /* etf_sector_composition.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = etf_sector_composition.json; sourceTree = "<group>"; };
+		B19800000000000000000014 /* etf_holdings.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = etf_holdings.json; sourceTree = "<group>"; };
+		B19900000000000000000001 /* ResearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResearchView.swift; sourceTree = "<group>"; };
+		B19900000000000000000002 /* StockScreenerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockScreenerView.swift; sourceTree = "<group>"; };
+		B19900000000000000000003 /* AnalystConsensusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalystConsensusView.swift; sourceTree = "<group>"; };
+		B19900000000000000000009 /* OptionsOIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptionsOIView.swift; sourceTree = "<group>"; };
 		B199000000000000000000AA /* RealisedProfitCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealisedProfitCalculator.swift; sourceTree = "<group>"; };
 		B199000000000000000000AB /* FMPRateLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FMPRateLimiter.swift; sourceTree = "<group>"; };
 		B199000000000000000000AC /* NasdaqAnalystClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NasdaqAnalystClient.swift; sourceTree = "<group>"; };
-		F10100000000000000000002 /* EarningsHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarningsHistoryView.swift; sourceTree = "<group>"; };
-		F10100000000000000000001 /* EarningsHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarningsHistory.swift; sourceTree = "<group>"; };
+		B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NasdaqAnalystLogicTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000AE /* TodayDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayDetailView.swift; sourceTree = "<group>"; };
 		B199000000000000000000AF /* SectorAttribution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttribution.swift; sourceTree = "<group>"; };
-		B19900000000000000FF90 /* PortfolioDocumentMerge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioDocumentMerge.swift; sourceTree = "<group>"; };
-		B19900000000000000FF80 /* CloudPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPreferences.swift; sourceTree = "<group>"; };
-		B19900000000000000FF70 /* LedgerReconciliation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerReconciliation.swift; sourceTree = "<group>"; };
-		B19900000000000000FF60 /* UKSection104Pool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UKSection104Pool.swift; sourceTree = "<group>"; };
-		B19900000000000000FF50 /* UKShareMatching.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UKShareMatching.swift; sourceTree = "<group>"; };
-		B19900000000000000FF31 /* FXImpactCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FXImpactCalculator.swift; sourceTree = "<group>"; };
-		B19900000000000000FF30 /* GBPFXRates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GBPFXRates.swift; sourceTree = "<group>"; };
-		B19900000000000000FF20 /* FundFeeCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundFeeCatalog.swift; sourceTree = "<group>"; };
-		B199000000000000000000D8 /* ReferenceCatalogs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferenceCatalogs.swift; sourceTree = "<group>"; };
-		B199000000000000000000D6 /* LegacyType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyType.swift; sourceTree = "<group>"; };
-		B199000000000000000000D5 /* Typography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Typography.swift; sourceTree = "<group>"; };
-		B199000000000000000000EF /* SettingsTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTemplate.swift; sourceTree = "<group>"; };
-		B199000000000000000000D1 /* StockSplitCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockSplitCatalog.swift; sourceTree = "<group>"; };
 		B199000000000000000000B0 /* CatfolioIOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CatfolioIOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B199000000000000000000B1 /* MoneyWeightedReturnCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyWeightedReturnCalculatorTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000B2 /* LocalPortfolioEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalPortfolioEngineTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealisedProfitCalculatorTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000B4 /* BrokerResultPreservationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrokerResultPreservationTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000B5 /* AnalystConsensusDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalystConsensusDataTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000B6 /* StockScreenerRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockScreenerRulesTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000B7 /* Trading212FillDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212FillDecodingTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000C1 /* SectorAttributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttributionTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000C2 /* CompanyCIKSeedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyCIKSeedTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000D1 /* StockSplitCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockSplitCatalog.swift; sourceTree = "<group>"; };
+		B199000000000000000000D2 /* StockSplitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockSplitTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000D5 /* Typography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Typography.swift; sourceTree = "<group>"; };
+		B199000000000000000000D6 /* LegacyType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyType.swift; sourceTree = "<group>"; };
+		B199000000000000000000D7 /* TypographyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypographyTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000D8 /* ReferenceCatalogs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferenceCatalogs.swift; sourceTree = "<group>"; };
+		B199000000000000000000E1 /* PublicInvestorCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicInvestorCatalog.swift; sourceTree = "<group>"; };
+		B199000000000000000000E2 /* PublicInvestorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicInvestorView.swift; sourceTree = "<group>"; };
+		B199000000000000000000E3 /* public_investors.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = public_investors.json; sourceTree = "<group>"; };
 		B199000000000000000000E4 /* PublicInvestorCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicInvestorCatalogTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000E5 /* CurrencyFormattingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrencyFormattingTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000E6 /* PortfolioAccountAggregationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioAccountAggregationTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000E8 /* CompactNumberRuleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompactNumberRuleTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000E9 /* HeatmapRemainderReturnTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeatmapRemainderReturnTests.swift; sourceTree = "<group>"; };
 		B199000000000000000000EA /* HeatmapRowTapTargetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeatmapRowTapTargetTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000EB /* SecurityDebate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebate.swift; sourceTree = "<group>"; };
 		B199000000000000000000EC /* SecurityDebateResearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebateResearchTests.swift; sourceTree = "<group>"; };
-		B199000000000000000000B3 /* RealisedProfitCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealisedProfitCalculatorTests.swift; sourceTree = "<group>"; };
-		B199000000000000000000B4 /* BrokerResultPreservationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrokerResultPreservationTests.swift; sourceTree = "<group>"; };
-		BC5100000000000000000003 /* SnapTradeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapTradeTests.swift; sourceTree = "<group>"; };
-		B199000000000000000000B5 /* AnalystConsensusDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalystConsensusDataTests.swift; sourceTree = "<group>"; };
-		B199000000000000000000B6 /* StockScreenerRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockScreenerRulesTests.swift; sourceTree = "<group>"; };
-		B199000000000000000000B7 /* Trading212FillDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212FillDecodingTests.swift; sourceTree = "<group>"; };
-		B199000000000000000000AD /* NasdaqAnalystLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NasdaqAnalystLogicTests.swift; sourceTree = "<group>"; };
-		F10100000000000000000003 /* EarningsHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarningsHistoryTests.swift; sourceTree = "<group>"; };
-		F101000000000000000000F1 /* InsiderTradesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsiderTradesTests.swift; sourceTree = "<group>"; };
-		F101000000000000000000F2 /* RevenueSegmentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RevenueSegmentsTests.swift; sourceTree = "<group>"; };
-		F101000000000000000000F4 /* PolicyShortcutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyShortcutTests.swift; sourceTree = "<group>"; };
-		F101000000000000000000F5 /* UnderwaterAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnderwaterAnalysisTests.swift; sourceTree = "<group>"; };
-		F101000000000000000000F6 /* ImpliedFundingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImpliedFundingTests.swift; sourceTree = "<group>"; };
-		F101000000000000000000F7 /* CycleComparisonTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleComparisonTests.swift; sourceTree = "<group>"; };
-		F101000000000000000000F8 /* AIStreamingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIStreamingTests.swift; sourceTree = "<group>"; };
-		F101000000000000000000F3 /* HoldingContributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingContributionTests.swift; sourceTree = "<group>"; };
-		B199000000000000000000C1 /* SectorAttributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorAttributionTests.swift; sourceTree = "<group>"; };
-		B19900000000000000FFB0 /* NumericAlternatesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericAlternatesTests.swift; sourceTree = "<group>"; };
-		B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicInvestorSelectionTests.swift; sourceTree = "<group>"; };
-		BCACE0000000000000000002 /* PortfolioPresentationCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioPresentationCacheTests.swift; sourceTree = "<group>"; };
-		B19900000000000000FF91 /* PortfolioDocumentMergeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioDocumentMergeTests.swift; sourceTree = "<group>"; };
-		B19900000000000000FF81 /* CloudPreferencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPreferencesTests.swift; sourceTree = "<group>"; };
-		B19900000000000000FF71 /* LedgerReconciliationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerReconciliationTests.swift; sourceTree = "<group>"; };
-		B19900000000000000FFC0 /* AIConversationLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIConversationLibraryTests.swift; sourceTree = "<group>"; };
-		B19900000000000000FF61 /* UKSection104PoolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UKSection104PoolTests.swift; sourceTree = "<group>"; };
-		B19900000000000000FF51 /* UKShareMatchingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UKShareMatchingTests.swift; sourceTree = "<group>"; };
-		B19900000000000000FF40 /* FXImpactTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FXImpactTests.swift; sourceTree = "<group>"; };
+		B199000000000000000000ED /* SecurityDebateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebateStore.swift; sourceTree = "<group>"; };
+		B199000000000000000000EE /* SecurityDebateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDebateView.swift; sourceTree = "<group>"; };
+		B199000000000000000000EF /* SettingsTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTemplate.swift; sourceTree = "<group>"; };
+		B199000000000000000000F0 /* IsometricHeatmapLab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IsometricHeatmapLab.swift; sourceTree = "<group>"; };
+		B199000000000000000000F2 /* PerformanceHeatmapHero.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceHeatmapHero.swift; sourceTree = "<group>"; };
+		B199000000000000000000F3 /* InsiderTrades.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsiderTrades.swift; sourceTree = "<group>"; };
+		B199000000000000000000F4 /* InsiderTradesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsiderTradesView.swift; sourceTree = "<group>"; };
+		B199000000000000000000F5 /* RevenueSegments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RevenueSegments.swift; sourceTree = "<group>"; };
+		B199000000000000000000F6 /* revenue_segments.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = revenue_segments.json; sourceTree = "<group>"; };
+		B199000000000000000000F7 /* HoldingContributionChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingContributionChart.swift; sourceTree = "<group>"; };
+		B1990000000000000000ADA1 /* AuditRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuditRegressionTests.swift; sourceTree = "<group>"; };
+		B19900000000000000FF20 /* FundFeeCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundFeeCatalog.swift; sourceTree = "<group>"; };
 		B19900000000000000FF21 /* FundFeeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundFeeTests.swift; sourceTree = "<group>"; };
-		B199000000000000000000D7 /* TypographyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypographyTests.swift; sourceTree = "<group>"; };
-		B199000000000000000000D2 /* StockSplitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockSplitTests.swift; sourceTree = "<group>"; };
-		BF5A00000000000000000001 /* ETFLookThroughExpansionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ETFLookThroughExpansionTests.swift; sourceTree = "<group>"; };
-		B199000000000000000000C2 /* CompanyCIKSeedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyCIKSeedTests.swift; sourceTree = "<group>"; };
-		BE1100000000000000000001 /* IndustrySentimentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndustrySentimentView.swift; sourceTree = "<group>"; };
-		BE1100000000000000000002 /* industry_sentiment.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = industry_sentiment.json; sourceTree = "<group>"; };
-		BC9200000000000000000001 /* AnalystHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalystHistoryView.swift; sourceTree = "<group>"; };
-		BC9200000000000000000002 /* analyst_history_catalog.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = analyst_history_catalog.json; sourceTree = "<group>"; };
+		B19900000000000000FF22 /* fund_fees.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = fund_fees.json; sourceTree = "<group>"; };
+		B19900000000000000FF30 /* GBPFXRates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GBPFXRates.swift; sourceTree = "<group>"; };
+		B19900000000000000FF31 /* FXImpactCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FXImpactCalculator.swift; sourceTree = "<group>"; };
+		B19900000000000000FF32 /* gbp_fx_daily.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = gbp_fx_daily.json; sourceTree = "<group>"; };
+		B19900000000000000FF40 /* FXImpactTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FXImpactTests.swift; sourceTree = "<group>"; };
+		B19900000000000000FF50 /* UKShareMatching.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UKShareMatching.swift; sourceTree = "<group>"; };
+		B19900000000000000FF51 /* UKShareMatchingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UKShareMatchingTests.swift; sourceTree = "<group>"; };
+		B19900000000000000FF60 /* UKSection104Pool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UKSection104Pool.swift; sourceTree = "<group>"; };
+		B19900000000000000FF61 /* UKSection104PoolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UKSection104PoolTests.swift; sourceTree = "<group>"; };
+		B19900000000000000FF70 /* LedgerReconciliation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerReconciliation.swift; sourceTree = "<group>"; };
+		B19900000000000000FF71 /* LedgerReconciliationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerReconciliationTests.swift; sourceTree = "<group>"; };
+		B19900000000000000FF80 /* CloudPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPreferences.swift; sourceTree = "<group>"; };
+		B19900000000000000FF81 /* CloudPreferencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPreferencesTests.swift; sourceTree = "<group>"; };
+		B19900000000000000FF90 /* PortfolioDocumentMerge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioDocumentMerge.swift; sourceTree = "<group>"; };
+		B19900000000000000FF91 /* PortfolioDocumentMergeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioDocumentMergeTests.swift; sourceTree = "<group>"; };
+		B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicInvestorSelectionTests.swift; sourceTree = "<group>"; };
+		B19900000000000000FFB0 /* NumericAlternatesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericAlternatesTests.swift; sourceTree = "<group>"; };
+		B19900000000000000FFC0 /* AIConversationLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIConversationLibraryTests.swift; sourceTree = "<group>"; };
+		B1C000000000000000000001 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
+		B1C10D202609140000000001 /* CatfolioIOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CatfolioIOS.entitlements; sourceTree = "<group>"; };
+		B1D000000000000000000001 /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
+		B1D000000000000000000002 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		B1D000000000000000000003 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		B1D000000000000000000004 /* LocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationTests.swift; sourceTree = "<group>"; };
+		B1D710000000000000000001 /* DailyTimeWeightedReturn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyTimeWeightedReturn.swift; sourceTree = "<group>"; };
+		B1E080000000000000000001 /* HomeScrollInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeScrollInteractionTests.swift; sourceTree = "<group>"; };
+		B1E090000000000000000001 /* HoldingDetailInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingDetailInteractionTests.swift; sourceTree = "<group>"; };
+		B1E091000000000000000001 /* HistoryInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryInteractionTests.swift; sourceTree = "<group>"; };
+		B1E092000000000000000001 /* SettingsInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsInteractionTests.swift; sourceTree = "<group>"; };
+		B1E093000000000000000001 /* PageLoadAndJitterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageLoadAndJitterTests.swift; sourceTree = "<group>"; };
+		B1E099000000000000000001 /* HistoryPagingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryPagingView.swift; sourceTree = "<group>"; };
+		B1E100000000000000000001 /* PortfolioHomeScrollInteraction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioHomeScrollInteraction.swift; sourceTree = "<group>"; };
+		B5EC70000000000000000001 /* SectorRotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorRotation.swift; sourceTree = "<group>"; };
+		B5EC70000000000000000002 /* SectorRotationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorRotationView.swift; sourceTree = "<group>"; };
+		B5EC70000000000000000003 /* sector_rotation_history.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = sector_rotation_history.json; sourceTree = "<group>"; };
+		B5EC70000000000000000004 /* SectorRotationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorRotationTests.swift; sourceTree = "<group>"; };
+		B5EC70000000000000000005 /* SectorRotationUIKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorRotationUIKit.swift; sourceTree = "<group>"; };
+		B5EC70000000000000000006 /* SectorPerformance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectorPerformance.swift; sourceTree = "<group>"; };
+		B5EC70000000000000000007 /* StockChartsRotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockChartsRotation.swift; sourceTree = "<group>"; };
+		B5EC70000000000000000008 /* StockChartsRotationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockChartsRotationView.swift; sourceTree = "<group>"; };
+		B5EC70000000000000000009 /* StockChartsRotationUIKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockChartsRotationUIKit.swift; sourceTree = "<group>"; };
+		B5EC7000000000000000000A /* stockcharts_rrg_reference.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = stockcharts_rrg_reference.json; sourceTree = "<group>"; };
+		B5EC7000000000000000000B /* StockChartsRotationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockChartsRotationTests.swift; sourceTree = "<group>"; };
 		B6D311000000000000000001 /* ManagementDelivery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagementDelivery.swift; sourceTree = "<group>"; };
 		B6D311000000000000000002 /* ManagementDeliveryClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagementDeliveryClient.swift; sourceTree = "<group>"; };
 		B6D311000000000000000003 /* ManagementDeliveryAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagementDeliveryAnalyzer.swift; sourceTree = "<group>"; };
 		B6D311000000000000000004 /* ManagementDeliveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagementDeliveryView.swift; sourceTree = "<group>"; };
 		B6D311000000000000000005 /* ManagementDeliveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagementDeliveryTests.swift; sourceTree = "<group>"; };
-		B1C10D202609140000000001 /* CatfolioIOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CatfolioIOS.entitlements; sourceTree = "<group>"; };
+		B7C0F0110000000000000001 /* PortfolioLoadRipple.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioLoadRipple.swift; sourceTree = "<group>"; };
+		B7C0F0110000000000000002 /* PortfolioLoadRipple.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = PortfolioLoadRipple.metal; sourceTree = "<group>"; };
+		B7C0F0120000000000000001 /* SecurityDetailTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDetailTransition.swift; sourceTree = "<group>"; };
+		B7C0F0130000000000000001 /* LossAnalysisChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LossAnalysisChart.swift; sourceTree = "<group>"; };
+		B7C0F0140000000000000001 /* NewsSources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsSources.swift; sourceTree = "<group>"; };
+		BC5100000000000000000001 /* SnapTradeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapTradeClient.swift; sourceTree = "<group>"; };
+		BC5100000000000000000002 /* SnapTradeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapTradeView.swift; sourceTree = "<group>"; };
+		BC5100000000000000000003 /* SnapTradeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapTradeTests.swift; sourceTree = "<group>"; };
+		BC9200000000000000000001 /* AnalystHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalystHistoryView.swift; sourceTree = "<group>"; };
+		BC9200000000000000000002 /* analyst_history_catalog.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = analyst_history_catalog.json; sourceTree = "<group>"; };
+		BCACE0000000000000000001 /* PortfolioPresentationCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioPresentationCache.swift; sourceTree = "<group>"; };
+		BCACE0000000000000000002 /* PortfolioPresentationCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioPresentationCacheTests.swift; sourceTree = "<group>"; };
+		BCF01A100000000000000001 /* AIQuestionPresets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIQuestionPresets.swift; sourceTree = "<group>"; };
+		BE1100000000000000000001 /* IndustrySentimentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndustrySentimentView.swift; sourceTree = "<group>"; };
+		BE1100000000000000000002 /* industry_sentiment.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = industry_sentiment.json; sourceTree = "<group>"; };
+		BE1100000000000000000041 /* catfolio-daily-brief */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "catfolio-daily-brief"; sourceTree = "<group>"; };
+		BF1000000000000000000001 /* PolicyWorkspaceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyWorkspaceStore.swift; sourceTree = "<group>"; };
+		BF1000000000000000000003 /* PolicyContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyContract.swift; sourceTree = "<group>"; };
+		BF1000000000000000000004 /* PolicyTemplates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyTemplates.swift; sourceTree = "<group>"; };
+		BF1000000000000000000010 /* PolicyExecution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyExecution.swift; sourceTree = "<group>"; };
+		BF1000000000000000000011 /* PolicyMarketAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyMarketAdapter.swift; sourceTree = "<group>"; };
+		BF1000000000000000000012 /* PolicyRunCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyRunCoordinator.swift; sourceTree = "<group>"; };
+		BF1000000000000000000014 /* PolicyBackgroundService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyBackgroundService.swift; sourceTree = "<group>"; };
+		BF1000000000000000000020 /* PolicyShortcut.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyShortcut.swift; sourceTree = "<group>"; };
+		BF1000000000000000000021 /* PolicyRunTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyRunTrace.swift; sourceTree = "<group>"; };
+		BF1000000000000000000022 /* PolicyComposerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyComposerStore.swift; sourceTree = "<group>"; };
+		BF1000000000000000000023 /* PolicyComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyComposerView.swift; sourceTree = "<group>"; };
+		BF1000000000000000000024 /* UnderwaterAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnderwaterAnalysis.swift; sourceTree = "<group>"; };
+		BF1000000000000000000025 /* UnderwaterAnalysisChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnderwaterAnalysisChart.swift; sourceTree = "<group>"; };
+		BF1000000000000000000026 /* ImpliedFunding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImpliedFunding.swift; sourceTree = "<group>"; };
+		BF1000000000000000000027 /* CycleComparison.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleComparison.swift; sourceTree = "<group>"; };
+		BF1000000000000000000028 /* AIStreaming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIStreaming.swift; sourceTree = "<group>"; };
+		BF1000000000000000000090 /* strategy.schema.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = strategy.schema.json; sourceTree = "<group>"; };
+		BF5A00000000000000000001 /* ETFLookThroughExpansionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ETFLookThroughExpansionTests.swift; sourceTree = "<group>"; };
+		BFA000000000000000000001 /* HoldingHistoryState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingHistoryState.swift; sourceTree = "<group>"; };
+		F10100000000000000000001 /* EarningsHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarningsHistory.swift; sourceTree = "<group>"; };
+		F10100000000000000000002 /* EarningsHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarningsHistoryView.swift; sourceTree = "<group>"; };
+		F10100000000000000000003 /* EarningsHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarningsHistoryTests.swift; sourceTree = "<group>"; };
+		F101000000000000000000F1 /* InsiderTradesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsiderTradesTests.swift; sourceTree = "<group>"; };
+		F101000000000000000000F2 /* RevenueSegmentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RevenueSegmentsTests.swift; sourceTree = "<group>"; };
+		F101000000000000000000F3 /* HoldingContributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingContributionTests.swift; sourceTree = "<group>"; };
+		F101000000000000000000F4 /* PolicyShortcutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyShortcutTests.swift; sourceTree = "<group>"; };
+		F101000000000000000000F5 /* UnderwaterAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnderwaterAnalysisTests.swift; sourceTree = "<group>"; };
+		F101000000000000000000F6 /* ImpliedFundingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImpliedFundingTests.swift; sourceTree = "<group>"; };
+		F101000000000000000000F7 /* CycleComparisonTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleComparisonTests.swift; sourceTree = "<group>"; };
+		F101000000000000000000F8 /* AIStreamingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIStreamingTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -423,12 +437,14 @@
 				B10000000000000000000003 /* APIClient.swift */,
 				BCACE0000000000000000001 /* PortfolioPresentationCache.swift */,
 				B10000000000000000000004 /* DesignSystem.swift */,
-                B1D000000000000000000001 /* Localization.swift */,
-                D1D000000000000000000001 /* Localizable.strings */,
+				B1D000000000000000000001 /* Localization.swift */,
+				D1D000000000000000000001 /* Localizable.strings */,
 				B10000000000000000000005 /* RootTabView.swift */,
 				B10000000000000000000006 /* PortfolioView.swift */,
 				B7C0F0110000000000000001 /* PortfolioLoadRipple.swift */,
 				B7C0F0120000000000000001 /* SecurityDetailTransition.swift */,
+				B7C0F0130000000000000001 /* LossAnalysisChart.swift */,
+				B7C0F0140000000000000001 /* NewsSources.swift */,
 				B7C0F0110000000000000002 /* PortfolioLoadRipple.metal */,
 				B10000000000000000000007 /* VolumeProfileView.swift */,
 				B10000000000000000000008 /* ReturnsView.swift */,
@@ -534,6 +550,15 @@
 			path = CatfolioIOS;
 			sourceTree = "<group>";
 		};
+		D10000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B1000000000000000000000D /* CatfolioIOS.app */,
+				B199000000000000000000B0 /* CatfolioIOSTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
 		D10000000000000000000004 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
@@ -574,21 +599,12 @@
 			path = Fonts;
 			sourceTree = "<group>";
 		};
-		D10000000000000000000003 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				B1000000000000000000000D /* CatfolioIOS.app */,
-				B199000000000000000000B0 /* CatfolioIOSTests.xctest */,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
 		D199000000000000000000D0 /* CatfolioIOSTests */ = {
 			isa = PBXGroup;
 			children = (
 				B199000000000000000000B1 /* MoneyWeightedReturnCalculatorTests.swift */,
-                B1D000000000000000000004 /* LocalizationTests.swift */,
-                B5EC70000000000000000004 /* SectorRotationTests.swift */,
+				B1D000000000000000000004 /* LocalizationTests.swift */,
+				B5EC70000000000000000004 /* SectorRotationTests.swift */,
 				B5EC7000000000000000000B /* StockChartsRotationTests.swift */,
 				B199000000000000000000B2 /* LocalPortfolioEngineTests.swift */,
 				B199000000000000000000E4 /* PublicInvestorCatalogTests.swift */,
@@ -681,24 +697,6 @@
 		};
 /* End PBXNativeTarget section */
 
-/* Begin PBXContainerItemProxy section */
-		E199000000000000000000E2 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = E10000000000000000000002 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = E10000000000000000000001;
-			remoteInfo = CatfolioIOS;
-		};
-/* End PBXContainerItemProxy section */
-
-/* Begin PBXTargetDependency section */
-		E199000000000000000000E1 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = E10000000000000000000001 /* CatfolioIOS */;
-			targetProxy = E199000000000000000000E2 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
-
 /* Begin PBXProject section */
 		E10000000000000000000002 /* Project object */ = {
 			isa = PBXProject;
@@ -710,7 +708,9 @@
 					E10000000000000000000001 = {
 						CreatedOnToolsVersion = 26.5;
 						SystemCapabilities = {
-							com.apple.iCloud = { enabled = 1; };
+							com.apple.iCloud = {
+								enabled = 1;
+							};
 						};
 					};
 					E199000000000000000000E0 = {
@@ -739,15 +739,6 @@
 		};
 /* End PBXProject section */
 
-/* Begin PBXVariantGroup section */
-        D1D000000000000000000001 /* Localizable.strings */ = {
-            isa = PBXVariantGroup;
-            children = (B1D000000000000000000002, B1D000000000000000000003);
-            name = Localizable.strings;
-            sourceTree = "<group>";
-        };
-/* End PBXVariantGroup section */
-
 /* Begin PBXResourcesBuildPhase section */
 		C10000000000000000000003 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
@@ -768,7 +759,7 @@
 				A19800000000000000000012 /* etf_sector_composition.json in Resources */,
 				A19800000000000000000014 /* etf_holdings.json in Resources */,
 				A1000000000000000000000B /* Assets.xcassets in Resources */,
-                A1D000000000000000000002 /* Localizable.strings in Resources */,
+				A1D000000000000000000002 /* Localizable.strings in Resources */,
 				A10000000000000000000025 /* AssetLogos in Resources */,
 				AE1100000000000000000041 /* catfolio-daily-brief in Resources */,
 				A10000000000000000000017 /* sp500_holdings.json in Resources */,
@@ -792,11 +783,13 @@
 				A10000000000000000000003 /* APIClient.swift in Sources */,
 				ACACE0000000000000000001 /* PortfolioPresentationCache.swift in Sources */,
 				A10000000000000000000004 /* DesignSystem.swift in Sources */,
-                A1D000000000000000000001 /* Localization.swift in Sources */,
+				A1D000000000000000000001 /* Localization.swift in Sources */,
 				A10000000000000000000005 /* RootTabView.swift in Sources */,
 				A10000000000000000000006 /* PortfolioView.swift in Sources */,
 				A7C0F0110000000000000001 /* PortfolioLoadRipple.swift in Sources */,
 				A7C0F0120000000000000001 /* SecurityDetailTransition.swift in Sources */,
+				A7C0F0130000000000000001 /* LossAnalysisChart.swift in Sources */,
+				A7C0F0140000000000000001 /* NewsSources.swift in Sources */,
 				A7C0F0110000000000000002 /* PortfolioLoadRipple.metal in Sources */,
 				A10000000000000000000007 /* VolumeProfileView.swift in Sources */,
 				A10000000000000000000008 /* ReturnsView.swift in Sources */,
@@ -902,8 +895,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				A199000000000000000000A1 /* MoneyWeightedReturnCalculatorTests.swift in Sources */,
-                A1D000000000000000000003 /* LocalizationTests.swift in Sources */,
-                A5EC70000000000000000004 /* SectorRotationTests.swift in Sources */,
+				A1D000000000000000000003 /* LocalizationTests.swift in Sources */,
+				A5EC70000000000000000004 /* SectorRotationTests.swift in Sources */,
 				A5EC7000000000000000000B /* StockChartsRotationTests.swift in Sources */,
 				A199000000000000000000A2 /* LocalPortfolioEngineTests.swift in Sources */,
 				A199000000000000000000E4 /* PublicInvestorCatalogTests.swift in Sources */,
@@ -958,18 +951,69 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		E199000000000000000000E1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E10000000000000000000001 /* CatfolioIOS */;
+			targetProxy = E199000000000000000000E2 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		D1D000000000000000000001 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				B1D000000000000000000002 /* en */,
+				B1D000000000000000000003 /* zh-Hans */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
 /* Begin XCBuildConfiguration section */
+		F199000000000000000000F1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 2G5PCQU652;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.catfolio.ios.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CatfolioIOS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CatfolioIOS";
+			};
+			name = Debug;
+		};
+		F199000000000000000000F2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 2G5PCQU652;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.catfolio.ios.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CatfolioIOS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CatfolioIOS";
+			};
+			name = Release;
+		};
 		F20000000000000000000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ENABLE_TESTABILITY = YES;
-				ONLY_ACTIVE_ARCH = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				CLANG_ENABLE_MODULES = YES;
 				ENABLE_TESTABILITY = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
@@ -1038,38 +1082,6 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
-		F199000000000000000000F1 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 2G5PCQU652;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.catfolio.ios.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CatfolioIOS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CatfolioIOS";
-			};
-			name = Debug;
-		};
-		F199000000000000000000F2 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 2G5PCQU652;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.catfolio.ios.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CatfolioIOS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CatfolioIOS";
 			};
 			name = Release;
 		};

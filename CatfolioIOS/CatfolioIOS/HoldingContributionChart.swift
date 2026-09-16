@@ -73,6 +73,11 @@ struct HoldingContributionChart: View {
         .task(id: "\(model.portfolioChartRevision)|\(model.holdings.count)|\(refreshRevision)|\(retryRevision)") {
             await loading.load { cachedOnly in
                 if let fetchHistory { return try await fetchHistory(cachedOnly) }
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--demo-loss-history") {
+                    return LossAnalysisChart.demoHistory()
+                }
+                #endif
                 return try await model.holdingValueHistory(cachedOnly: cachedOnly)
             }
         }
@@ -156,7 +161,9 @@ struct HoldingContributionChart: View {
                 points: window.rows.map { StandardLineChartPoint(id: "principal|\($0.dateText)", date: $0.date, value: $0.principal) },
                 color: Self.principalLine,
                 lineWidth: 2.5,
-                latestPointRadius: 4,
+                // No endpoint dot: the line ends at the screen edge, where a
+                // dot would be cut in half.
+                latestPointRadius: 0,
                 latestPointUsesGlass: false
             ))
         }
@@ -170,7 +177,7 @@ struct HoldingContributionChart: View {
             topInset: 4,
             bottomHeight: 0,
             leadingLineOverflow: 0,
-            trailingEndpointInset: 21,
+            trailingEndpointInset: 0,
             gridOpacity: 0,
             transitionKey: "\(range.rawValue)-\(colorScheme == .light ? "light" : "dark")",
             appearanceID: "income-sources",
@@ -204,11 +211,13 @@ struct HoldingContributionChart: View {
     private func axisLabels(top: Double) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array([top, top / 2, 0].enumerated()), id: \.offset) { index, value in
-                Text(DisplayFormat.compact(value, precision: .whole))
-                    .appNumber(.footnote)
+                AnimatedChartValue(value: value) {
+                    Text(DisplayFormat.compact($0, precision: .whole)).appNumber(.footnote)
+                }
                 if index < 2 { Spacer() }
             }
         }
+        .animation(StandardLineChartTransition.zoom, value: top)
         .foregroundStyle(Color.primary.opacity(colorScheme == .light ? 0.35 : 0.4))
         .padding(.leading, CatfolioStyle.pageHorizontalInset)
         .padding(.top, 6)

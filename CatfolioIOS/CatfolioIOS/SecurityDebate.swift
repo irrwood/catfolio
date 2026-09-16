@@ -62,27 +62,12 @@ struct SecurityDebateResearch {
         return URLSession(configuration: configuration)
     }()
 
+    /// Every switched-on feed in 设置 › 新闻, with the reader's site rules applied.
     func sources(ticker: String, name: String) async -> [PortfolioAttentionSource] {
-        async let news = googleNews(ticker: ticker, name: name)
-        async let yahoo = yahooNews(ticker: ticker, name: name)
-        async let english = googleNews(ticker: ticker, name: name, edition: "en")
-        async let filings = secFilings(ticker: ticker, name: name)
-        // Wires first: the ranking the reader is shown starts from the feed
-        // most likely to carry a primary claim.
-        let collected = await news
-        let index = await yahoo
-        let documents = await filings
-        let originalLanguage = await english
-        return Self.deduplicated(documents + index + originalLanguage + collected)
+        await NewsSourceHub().sources(ticker: ticker, name: name, language: language)
     }
 
     // MARK: Google News
-
-    func googleNews(ticker: String, name: String, edition: String? = nil) async -> [PortfolioAttentionSource] {
-        let url = ContentLanguage.newsURL(ticker: ticker, name: name, language: edition ?? language)
-        guard let data = await Self.get(url, language: language) else { return [] }
-        return Self.parseRSS(data, ticker: "\(ticker)-\(edition ?? language)", limit: 20)
-    }
 
     /// Minimal RSS reader. `XMLParser` rather than a regex because Google's
     /// titles carry entities and the odd stray angle bracket.
@@ -233,7 +218,9 @@ struct SecurityDebateResearch {
         let now = Date()
         var components = URLComponents(string: "https://efts.sec.gov/LATEST/search-index")!
         components.queryItems = [
-            URLQueryItem(name: "q", value: "\"\(name)\""),
+            // "Palantir Technologies Inc. Class A" appears in no filing; the
+            // name a filing actually uses does.
+            URLQueryItem(name: "q", value: "\"\(NewsQueryPlan.searchName(name, ticker: ticker) ?? name)\""),
             URLQueryItem(name: "forms", value: "8-K,10-Q,10-K"),
             URLQueryItem(name: "dateRange", value: "custom"),
             URLQueryItem(name: "startdt", value: day.string(from: now.addingTimeInterval(-120 * 86_400))),
@@ -317,7 +304,7 @@ struct SecurityDebateResearch {
         return result
     }
 
-    private static func get(_ url: URL, language: String) async -> Data? {
+    static func get(_ url: URL, language: String) async -> Data? {
         await response(url, language: language)?.data
     }
 

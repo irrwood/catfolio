@@ -549,6 +549,7 @@ struct OptionsOIView: View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .center) {
                 Text(L10n.text("期权持仓墙 OI")).appText(.subheading, weight: .medium)
+                    .securityCardInsight(title: L10n.text("期权持仓墙 OI"), facts: { insightFacts })
                 Spacer(minLength: 12)
                 Button { showsInfo = true } label: {
                     Image(systemName: "info.circle")
@@ -596,6 +597,33 @@ struct OptionsOIView: View {
 
     private var hasWalls: Bool {
         supported && snapshot.map { OIDistribution(contracts: $0.contracts).concentration != nil } == true
+    }
+
+    /// What the wall shows, for a long-press explanation. Public option-chain
+    /// figures only; the holding's cost is not part of it.
+    private var insightFacts: String? {
+        guard supported, let snapshot else { return nil }
+        let distribution = OIDistribution(contracts: snapshot.contracts)
+        guard distribution.concentration != nil else { return nil }
+        let total = distribution.rows.reduce(0) { $0 + $1.call + $1.put }
+        let calls = distribution.rows.reduce(0) { $0 + $1.call }
+        var lines = [
+            "Expiries within \(days) days (\(snapshot.from) – \(snapshot.through)), \(snapshot.contracts.count) contracts",
+            "Total open interest: \(oiText(total)) contracts; calls \(oiText(calls)), puts \(oiText(total - calls))",
+        ]
+        if let wall = distribution.putWalls.first {
+            lines.append("Put wall (largest put OI): strike \(money(wall.strike)), \(oiText(wall.put)) contracts")
+        }
+        if let wall = distribution.callWalls.first {
+            lines.append("Call wall (largest call OI): strike \(money(wall.strike)), \(oiText(wall.call)) contracts")
+        }
+        if let range = distribution.concentration {
+            lines.append("Where most OI sits (15%–85% of cumulative OI): \(money(range.lowerBound)) – \(money(range.upperBound))")
+        }
+        if let price, price.isFinite {
+            lines.append("Latest price: \(money(price))")
+        }
+        return lines.joined(separator: "\n")
     }
 
     private var controlFill: Color {
