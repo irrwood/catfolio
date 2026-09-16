@@ -467,7 +467,7 @@ final class PolicyComposerStore {
 
     private static func answer(_ question: String) async throws -> String {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--policy-fixed-ai") {
+        if LaunchArguments.contains("--policy-fixed-ai") {
             try await Task.sleep(for: .seconds(1))
             return PolicyShortcut.generationExample
         }

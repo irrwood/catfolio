@@ -5,6 +5,14 @@ import Observation
 @MainActor
 final class AppModel {
     var overview: PortfolioOverview?
+    /// Profit already taken in the selected accounts, in USD: the broker's own
+    /// result on every sale it reported one for. `.nan` when no sale carries
+    /// one, which is not the same as zero profit.
+    private(set) var realisedProfit: Double = .nan
+    /// Sales the broker gave no result for. The figure above is short by
+    /// whatever those made or lost, so the reader is told rather than shown a
+    /// total that looks complete.
+    private(set) var realisedProfitGaps = 0
     var portfolioChart: PortfolioChartResponse?
     var holdings: [Holding] = []
     private(set) var holdingDailyChanges: [String: Double] = [:]
@@ -78,7 +86,7 @@ final class AppModel {
         defaults: UserDefaults = .standard,
         publicInvestorStore: PublicInvestorSimulationStore = .shared,
         personalDocumentLoader: @escaping @Sendable () async throws -> LocalPortfolioDocument = {
-            try await LocalPortfolioStore.shared.load()
+            try LocalPortfolioStore.shared.load()
         },
         presentationCache: PortfolioPresentationCache = .shared
     ) {
@@ -1290,6 +1298,15 @@ final class AppModel {
         )
     }
 
+    /// Adds up the broker's results on sales, each converted from the currency
+    /// it was reported in. Never estimated: a sale without a result counts as
+    /// a gap, not as zero.
+    private func updateRealisedProfit(from scoped: LocalPortfolioDocument) {
+        let summary = LocalBrokerResultSummary(transactions: scoped.transactions ?? [])
+        realisedProfitGaps = summary.missingCount
+        realisedProfit = summary.usdTotal() ?? .nan
+    }
+
     private func apply(_ loaded: LocalPortfolioDocument, invalidatesDailyChanges: Bool = true,
                        loadsCachedChart: Bool = true, preservesChart: Bool = false,
                        localSelectionOnly: Bool = false) async throws {
@@ -1318,6 +1335,7 @@ final class AppModel {
             presentation = try LocalPortfolioEngine.presentation(for: document)
         }
         presentedSource = portfolioSource
+        updateRealisedProfit(from: document)
         accounts = fullDocument.accounts
         selectedAccountKeys = accountKeys
         overview = presentation.0
@@ -1539,7 +1557,7 @@ final class AppModel {
             return try await publicInvestorStore.load(catalog: PublicInvestorCatalog.loaded.get(), selection: publicInvestorSelection)
         }
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--verify-empty-account") { return FoundationRegressionChecks.emptyFixture }
+        if LaunchArguments.contains("--verify-empty-account") { return FoundationRegressionChecks.emptyFixture }
         #endif
         if isFakeDataMode {
             return await Task.detached(priority: .userInitiated) { FakePortfolioGenerator.make() }.value

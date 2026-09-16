@@ -206,7 +206,7 @@ struct HistoryView: View {
         _category = State(initialValue: initialCategory)
 
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--verify-history-orders") {
+        if LaunchArguments.contains("--verify-history-orders") {
             _category = State(initialValue: .orders)
         }
         #endif

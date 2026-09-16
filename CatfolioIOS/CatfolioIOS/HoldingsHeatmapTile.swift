@@ -54,15 +54,17 @@ struct HoldingsHeatmapTile: View {
                 let reference: Double
                 if item.performancePeriod == .holdingPeriod, let holding = item.holding,
                    !item.isEstimated {
+                    // The holding-period return is measured from what the
+                    // holding cost; today's from its previous close.
                     guard holding.publicDisclosure == nil, holding.averageCost > 0,
-                          holding.unrealized.isFinite else { continue }
-                    reference = item.marketValue - holding.unrealized
+                          let cost = PortfolioMath.costBasis(
+                              marketValue: item.marketValue, unrealized: holding.unrealized) else { continue }
+                    reference = cost
                 } else {
                     let change = item.changePercent ?? (item.performancePeriod == .today ? dailyChanges[item.id.uppercased()] : nil)
-                    guard let change, change.isFinite, change > -100 else { continue }
-                    // Today's return is based on previous-close value; the
-                    // holding-period return is based on allocated cost.
-                    reference = item.marketValue / (1 + change / 100)
+                    guard let change, let previous = PortfolioMath.previousValue(
+                        marketValue: item.marketValue, changePercent: change) else { continue }
+                    reference = previous
                 }
                 guard reference.isFinite, reference > 0 else { continue }
                 amount += item.marketValue - reference

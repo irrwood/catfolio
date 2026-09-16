@@ -430,7 +430,7 @@ private struct GroupedHoldingsHeatmap: View {
         }
         #if DEBUG
         .task {
-            if isInteractive, ProcessInfo.processInfo.arguments.contains("--expand-first-heatmap-sector") {
+            if isInteractive, LaunchArguments.contains("--expand-first-heatmap-sector") {
                 expandedGroup = groups.first
             }
         }

@@ -2330,32 +2330,66 @@ struct StandardLineChartPlaceholder: View {
     var maximumLines = 3
     var lineWidths: [CGFloat] = [2.25]
     var appearanceID: String? = nil
+    /// What the reader can do about it, one quiet line under the message.
+    var hint: String? = nil
 
     @ViewBuilder
     var body: some View {
         if isLoading {
             StandardLineChartSkeleton(seriesCount: lineWidths.count, lineWidths: lineWidths, appearanceID: appearanceID)
         } else {
-        ZStack {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.secondary.opacity(0.055))
-            VStack(spacing: 9) {
-                Image(systemName: "chart.xyaxis.line")
-                    .font(Typography.text(.title, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Text(title)
-                    .font(Typography.text(.callout, weight: .semibold))
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(maximumLines)
-                    .padding(.horizontal, 24)
+            ZStack {
+                // The chart's own resting line, very faint. The page keeps the
+                // shape it will have once there is something to draw, rather
+                // than turning into a grey box with an icon in it.
+                restingLine
+                    .allowsHitTesting(false)
+
+                VStack(spacing: 5) {
+                    Text(title)
+                        .appText(.subheading, weight: .semibold)
+                        .foregroundStyle(.primary)
+                    Text(message)
+                        .appText(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(maximumLines)
+                    if let hint {
+                        Text(hint)
+                            .appText(.micro)
+                            .foregroundStyle(.tertiary)
+                            .multilineTextAlignment(.center)
+                            .padding(.top, 3)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 300)
+                .padding(.horizontal, 24)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel([title, message, hint].compactMap { $0 }.joined(separator: "，"))
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title)，\(message)")
+    }
+
+    private var restingLine: some View {
+        Canvas { context, size in
+            // A low, shallow curve: a horizon under the words rather than a
+            // line through them.
+            let plot = CGRect(x: 0, y: size.height * 0.62,
+                              width: max(1, size.width), height: max(1, size.height * 0.26))
+            let fractions = StandardLineChartLoadingTemplate.yFractions(seriesIndex: 0, seriesCount: 1)
+            let points = zip(StandardLineChartLoadingTemplate.xFractions, fractions).map { x, y in
+                CGPoint(x: plot.minX + plot.width * x,
+                        y: min(plot.maxY, max(plot.minY, plot.minY + plot.height * y)))
+            }
+            var path = Path()
+            path.addLines(points)
+            context.stroke(path, with: .color(CatfolioTheme.skeletonFill),
+                           style: StrokeStyle(lineWidth: 2.25, lineCap: .round, lineJoin: .round))
         }
+        .opacity(0.5)
+        .mask(LinearGradient(colors: [.black.opacity(0), .black, .black, .black.opacity(0)],
+                             startPoint: .leading, endPoint: .trailing))
     }
 }
 

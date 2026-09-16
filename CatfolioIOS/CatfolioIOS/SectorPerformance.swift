@@ -186,23 +186,6 @@ struct SectorGlassCard: View {
 }
 
 extension SectorPerformanceDefinition {
-    static func definition(for sector: PortfolioSector) -> Self {
-        let symbol: String
-        switch sector {
-        case .technology: symbol = "XLK"
-        case .healthcare: symbol = "XLV"
-        case .financials: symbol = "XLF"
-        case .energy: symbol = "XLE"
-        case .industrials: symbol = "XLI"
-        case .consumerCyclical: symbol = "XLY"
-        case .consumerDefensive: symbol = "XLP"
-        case .utilities: symbol = "XLU"
-        case .realEstate: symbol = "XLRE"
-        case .materials: symbol = "XLB"
-        case .communication: symbol = "XLC"
-        }
-        return all.first { $0.symbol == symbol }!
-    }
 }
 
 private struct SectorPerformanceDetailView: View {

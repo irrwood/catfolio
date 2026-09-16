@@ -9,7 +9,7 @@ struct SectorRotationView: View {
     @State private var selectedDate = ""
     @State private var selectedSymbol: String? = {
         #if DEBUG
-        ProcessInfo.processInfo.arguments.contains("--rotation-preview-trail") ? "XLK" : nil
+        LaunchArguments.contains("--rotation-preview-trail") ? "XLK" : nil
         #else
         nil
         #endif

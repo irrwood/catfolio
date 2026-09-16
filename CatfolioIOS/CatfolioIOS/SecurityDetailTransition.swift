@@ -301,6 +301,7 @@ final class SecurityDetailSnapshotTransition {
 
     /// The overlay: a shade over everything and the moving card above it,
     /// drawn in the window's own top layer so it sits over the sheet too.
+    @MainActor
     private struct Scene {
         let root: UIView
         let dim: UIView

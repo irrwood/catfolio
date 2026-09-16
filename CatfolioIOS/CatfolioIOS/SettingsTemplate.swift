@@ -445,106 +445,6 @@ extension View {
     }
 }
 
-/// The chip row that sits under the title and stays there while the title
-/// collapses.
-///
-/// The selected chip is the only one with a fill, and the fill travels between
-/// chips rather than being redrawn in place — the row reads as one pill moving
-/// along it, which is also what tells the reader the chips are one control and
-/// not five buttons.
-struct SettingsSegmentBar<Value: Hashable>: View {
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Namespace private var pill
-    let segments: [SettingsSegment<Value>]
-    @Binding var selection: Value
-    var showsBackground: Bool
-    /// Runs instead of writing the binding, for a caller that animates its own
-    /// content off the change.
-    var select: ((Value) -> Void)?
-
-    init(_ segments: [SettingsSegment<Value>], selection: Binding<Value>, showsBackground: Bool = true, select: ((Value) -> Void)? = nil) {
-        self.segments = segments
-        self._selection = selection
-        self.showsBackground = showsBackground
-        self.select = select
-    }
-
-    var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal) {
-                // Flush, with no gap: a chip's own 20pt padding is the whole
-                // of the space between two labels.
-                HStack(spacing: 0) {
-                    ForEach(segments) { segment in
-                        chip(segment).id(segment.value)
-                    }
-                }
-                .padding(.horizontal, SettingsTemplate.pageInset)
-                .padding(.vertical, SettingsTemplate.segmentBarVerticalPadding)
-            }
-            .scrollIndicators(.hidden)
-            // The pill sits proud of the row; clipping the scroll view to its
-            // own bounds would cut the shadow off along the top and bottom.
-            .scrollClipDisabled()
-            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-            .onChange(of: selection) {
-                withAnimation(reduceMotion ? nil : .smooth(duration: 0.22)) {
-                    proxy.scrollTo(selection)
-                }
-            }
-        }
-        .background {
-            if showsBackground { SettingsTemplate.pageBackground }
-        }
-    }
-
-    private func chip(_ segment: SettingsSegment<Value>) -> some View {
-        let isSelected = selection == segment.value
-        return Button {
-            if let select {
-                select(segment.value)
-            } else {
-                withAnimation(reduceMotion ? nil : .smooth(duration: 0.22)) {
-                    selection = segment.value
-                }
-            }
-        } label: {
-            Text(segment.title)
-                .appText(.body, weight: .medium)
-                .foregroundStyle(isSelected ? Color.primary : SettingsTemplate.secondaryText)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .padding(.horizontal, SettingsTemplate.segmentHorizontalPadding)
-                .padding(.vertical, SettingsTemplate.segmentVerticalPadding)
-                .frame(minHeight: SettingsTemplate.segmentHeight)
-                .background {
-                    if isSelected {
-                        Capsule()
-                            .fill(SettingsTemplate.card)
-                            .shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.06), radius: 8, y: 2)
-                            .matchedGeometryEffect(id: "settings-segment-pill", in: pill)
-                    }
-                }
-                .contentShape(.capsule)
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-}
-
-struct SettingsSegment<Value: Hashable>: Identifiable {
-    let value: Value
-    let title: String
-
-    var id: Value { value }
-
-    init(_ value: Value, _ title: String) {
-        self.value = value
-        self.title = title
-    }
-}
-
 /// A header, then its card. Nothing between them but the page's own 14.
 struct SettingsSection<Content: View>: View {
     let title: String?
@@ -1047,27 +947,6 @@ private struct SettingsFieldFont: ViewModifier {
         } else {
             content.appText(.subheading)
         }
-    }
-}
-
-/// The control that sits beside a field — the nickname shuffle, a reveal eye.
-/// On the icon artboard and in the row's own greys, with a tap target taller
-/// than the glyph that does not make the row taller.
-struct SettingsFieldButton: View {
-    let systemImage: String
-    let accessibilityLabel: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            SettingsRowIcon(.symbol(systemImage))
-                .foregroundStyle(SettingsTemplate.secondaryText)
-                .padding(.vertical, SettingsTemplate.rowVerticalPadding)
-                .contentShape(Rectangle())
-                .padding(.vertical, -SettingsTemplate.rowVerticalPadding)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityLabel)
     }
 }
 

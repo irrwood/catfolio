@@ -390,7 +390,7 @@ enum PublicInvestorAccountAdapter {
         let summary = PortfolioSummary(totalCost: .nan, openPositions: holdings.count,
             asOf: document.positions.compactMap { $0.publicDisclosure?.reportDates.joined(separator: ", ") }.sorted().last,
             marketValue: document.positions.isEmpty ? .nan : totals.marketValue, unrealized: .nan)
-        return (PortfolioOverview(summary: summary, todayPnl: .nan, breadth: Breadth(up: 0, down: 0, flat: 0)),
+        return (PortfolioOverview(summary: summary),
             PortfolioChartResponse(positionCount: holdings.count,
                 positionHistory: PositionHistory(available: false, rows: []),
                 currentPoint: ChartPoint(dateText: DayDateFormatter.shared.string(from: document.updatedAt), marketValue: summary.marketValue, cost: .nan),

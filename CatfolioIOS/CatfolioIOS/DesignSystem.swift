@@ -1311,24 +1311,6 @@ struct ChartRangeSummary: View {
     }
 }
 
-struct ChartLegendItem: View {
-    @Environment(\.locale) private var appLocale
-    let title: String
-    let color: Color
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(color)
-                .frame(width: 7, height: 7)
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
 /// Shared interaction and visual constants for every chart in the app.
 enum ChartInteractionStyle {
     static let activationDuration: TimeInterval = 0.23
@@ -2029,21 +2011,6 @@ struct ChartTimeRangePickerSkeleton: View {
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-    }
-}
-
-struct ToolbarIconButton: View {
-    @Environment(\.locale) private var appLocale
-    let systemImage: String
-    let accessibilityLabel: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Label(accessibilityLabel, systemImage: systemImage)
-                .labelStyle(.iconOnly)
-        }
-        .accessibilityLabel(accessibilityLabel)
     }
 }
 

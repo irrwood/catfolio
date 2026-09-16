@@ -370,7 +370,7 @@ struct TodayAttentionPreview: View {
             #if DEBUG
             // The demo only where nothing is saved, so a follow-up asked on
             // the demo is still there on return.
-            if ProcessInfo.processInfo.arguments.contains("--preview-research-analysis"), loaded == nil {
+            if LaunchArguments.contains("--preview-research-analysis"), loaded == nil {
                 loaded = PortfolioAttentionCard.researchPreviewReport
             }
             #endif
@@ -624,7 +624,7 @@ struct ResearchView: View {
             guard !Task.isCancelled, scope == accountScope else { return }
             report = cached
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--preview-research-analysis"), report == nil {
+            if LaunchArguments.contains("--preview-research-analysis"), report == nil {
                 report = PortfolioAttentionCard.researchPreviewReport
             }
             #endif
@@ -637,7 +637,7 @@ struct ResearchView: View {
         }
         #if DEBUG
         .onChange(of: report?.generatedAt) { _, _ in
-            if ProcessInfo.processInfo.arguments.contains("--preview-research-analysis") {
+            if LaunchArguments.contains("--preview-research-analysis") {
                 scroll.scrollTo("research-analysis", anchor: .top)
             }
         }

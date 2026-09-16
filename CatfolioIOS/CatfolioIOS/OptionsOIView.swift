@@ -35,8 +35,13 @@ struct OIDistribution {
     let callWalls: [Row]
     let putWalls: [Row]
     let concentration: ClosedRange<Double>?
+    /// How far from the current price a strike can sit and still be read as a
+    /// wall. A put wall is support and a call wall is resistance, so both are
+    /// near the money by definition: a strike 79% below the price carrying a
+    /// single old block is open interest, not a floor under the shares.
+    static let wallBand = 0.2
 
-    init(contracts: [OIContract]) {
+    init(contracts: [OIContract], currentPrice: Double? = nil) {
         var grouped: [Double: Row] = [:]
         var seen = Set<String>()
         for contract in contracts {
@@ -51,10 +56,8 @@ struct OIDistribution {
             grouped[strike] = row
         }
         rows = grouped.values.sorted { $0.strike < $1.strike }
-        let callMax = rows.map(\.call).max() ?? 0
-        let putMax = rows.map(\.put).max() ?? 0
-        callWalls = callMax > 0 ? rows.filter { $0.call == callMax } : []
-        putWalls = putMax > 0 ? rows.filter { $0.put == putMax } : []
+        callWalls = Self.walls(in: rows, price: currentPrice, side: .call)
+        putWalls = Self.walls(in: rows, price: currentPrice, side: .put)
         let total = rows.reduce(0) { $0 + $1.call + $1.put }
         if total > 0 {
             var cumulative = 0.0
@@ -67,6 +70,30 @@ struct OIDistribution {
             }
             concentration = low.flatMap { lower in high.map { lower...$0 } }
         } else { concentration = nil }
+    }
+
+    private enum Side { case call, put }
+
+    /// The heaviest strike on the side that faces the price: puts at or below
+    /// it, calls at or above it, and both within `wallBand` of it. Without a
+    /// price there is no side to face, so the heaviest strike overall stands.
+    /// Ties are all returned, as they always were.
+    private static func walls(in rows: [Row], price: Double?, side: Side) -> [Row] {
+        func heaviest(_ candidates: [Row]) -> [Row] {
+            let value: (Row) -> Double = side == .call ? { $0.call } : { $0.put }
+            let maximum = candidates.map(value).max() ?? 0
+            guard maximum > 0 else { return [] }
+            return candidates.filter { value($0) == maximum }
+        }
+        guard let price, price.isFinite, price > 0 else { return heaviest(rows) }
+        let facing = rows.filter { side == .call ? $0.strike >= price : $0.strike <= price }
+        let near = facing.filter { abs($0.strike - price) <= price * wallBand }
+        // Widen rather than report nothing: a chain whose strikes all sit far
+        // from the price still has a nearest heaviest one.
+        let nearWall = heaviest(near)
+        if !nearWall.isEmpty { return nearWall }
+        let facingWall = heaviest(facing)
+        return facingWall.isEmpty ? heaviest(rows) : facingWall
     }
 }
 
@@ -497,12 +524,12 @@ struct OptionsOIView: View {
         // button of its own, and one request per tap is still the rule.
         .onChange(of: refreshRevision) { _, _ in if supported { refreshID += 1 } }
         .sheet(isPresented: $showsWalls) {
-            if let snapshot { wallsDetail(OIDistribution(contracts: snapshot.contracts)) }
+            if let snapshot { wallsDetail(OIDistribution(contracts: snapshot.contracts, currentPrice: price)) }
         }
         .alert(L10n.text("OI 计算口径"), isPresented: $showsInfo) {
             Button(L10n.text("知道了"), role: .cancel) {}
         } message: {
-            Text(L10n.text("按所选到期范围汇总 Yahoo 返回合约的未平仓张数。Put／Call 墙为各自 OI 最大价位，并列峰值全部保留。主要分布显示累计 OI 的 5%–95% 区间及墙位，留有边距；切换全部可查看尾部。远离分布的现价与成本列在摘要，不扩展价格轴。集中区仍为累计 OI 的 15%–85% 等尾区间，覆盖至少 70% 已读取 OI。价格最多显示四位小数，省略末尾的零；坐标与选中值保留原始行权价。仅纳入 REGULAR 且代码可核对的合约。Yahoo 覆盖不等于交易所全部合约；缺数时保留旧缓存。获取时间不是 OI 数据日期。OI 不代表成交量、买卖方向或必然支撑阻力。") + infoDetails)
+            Text(L10n.text("按所选到期范围汇总 Yahoo 返回合约的未平仓张数。Put 墙取现价下方、Call 墙取现价上方 20% 以内 OI 最大的价位；并列峰值全部保留。更远处的大额 OI 多为旧头寸或对冲，不当作支撑阻力。没有现价时才退回全链最大值。主要分布显示累计 OI 的 5%–95% 区间及墙位，留有边距；切换全部可查看尾部。远离分布的现价与成本列在摘要，不扩展价格轴。集中区仍为累计 OI 的 15%–85% 等尾区间，覆盖至少 70% 已读取 OI。价格最多显示四位小数，省略末尾的零；坐标与选中值保留原始行权价。仅纳入 REGULAR 且代码可核对的合约。Yahoo 覆盖不等于交易所全部合约；缺数时保留旧缓存。获取时间不是 OI 数据日期。OI 不代表成交量、买卖方向或必然支撑阻力。") + infoDetails)
         }
         .task(id: "\(symbol)|\(days)|\(refreshID)") {
             // A tap forces ONE request. Without one, the wall still shows by
@@ -517,7 +544,7 @@ struct OptionsOIView: View {
             snapshotKey = key
             error = nil; selectedStrike = nil
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--preview-options-oi") {
+            if LaunchArguments.contains("--preview-options-oi") {
                 snapshot = Self.preview
                 error = L10n.text("演示数据 · 仅用于布局验证")
                 return
@@ -596,14 +623,14 @@ struct OptionsOIView: View {
     private func money(_ value: Double) -> String { OIPriceLabel.text(value, locale: appLocale) }
 
     private var hasWalls: Bool {
-        supported && snapshot.map { OIDistribution(contracts: $0.contracts).concentration != nil } == true
+        supported && snapshot.map { OIDistribution(contracts: $0.contracts, currentPrice: price).concentration != nil } == true
     }
 
     /// What the wall shows, for a long-press explanation. Public option-chain
     /// figures only; the holding's cost is not part of it.
     private var insightFacts: String? {
         guard supported, let snapshot else { return nil }
-        let distribution = OIDistribution(contracts: snapshot.contracts)
+        let distribution = OIDistribution(contracts: snapshot.contracts, currentPrice: price)
         guard distribution.concentration != nil else { return nil }
         let total = distribution.rows.reduce(0) { $0 + $1.call + $1.put }
         let calls = distribution.rows.reduce(0) { $0 + $1.call }
@@ -612,10 +639,10 @@ struct OptionsOIView: View {
             "Total open interest: \(oiText(total)) contracts; calls \(oiText(calls)), puts \(oiText(total - calls))",
         ]
         if let wall = distribution.putWalls.first {
-            lines.append("Put wall (largest put OI): strike \(money(wall.strike)), \(oiText(wall.put)) contracts")
+            lines.append("Put wall (most put OI within 20% below the price): strike \(money(wall.strike)), \(oiText(wall.put)) contracts")
         }
         if let wall = distribution.callWalls.first {
-            lines.append("Call wall (largest call OI): strike \(money(wall.strike)), \(oiText(wall.call)) contracts")
+            lines.append("Call wall (most call OI within 20% above the price): strike \(money(wall.strike)), \(oiText(wall.call)) contracts")
         }
         if let range = distribution.concentration {
             lines.append("Where most OI sits (15%–85% of cumulative OI): \(money(range.lowerBound)) – \(money(range.upperBound))")
@@ -665,7 +692,7 @@ struct OptionsOIView: View {
     /// section's one glass card. The plot keeps a fixed height, so the card
     /// does not jump while the chain loads.
     private var plotCard: some View {
-        let distribution = snapshot.map { OIDistribution(contracts: $0.contracts) }
+        let distribution = snapshot.map { OIDistribution(contracts: $0.contracts, currentPrice: price) }
         let showsWalls = supported && distribution?.concentration != nil
         return VStack(spacing: 0) {
             ZStack {
@@ -720,7 +747,7 @@ struct OptionsOIView: View {
     /// the method in the info alert.
     private var infoDetails: String {
         guard let snapshot else { return "" }
-        let distribution = OIDistribution(contracts: snapshot.contracts)
+        let distribution = OIDistribution(contracts: snapshot.contracts, currentPrice: price)
         var lines = [
             L10n.text("到期 \(snapshot.from) – \(snapshot.through) · \(snapshot.contracts.count) 份合约"),
             L10n.text("已排除 \(snapshot.excluded) 份非标准或无法确认的合约。"),

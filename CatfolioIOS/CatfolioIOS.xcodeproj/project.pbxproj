@@ -19,7 +19,6 @@
 		A10000000000000000000009 /* AIView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000009 /* AIView.swift */; };
 		A1000000000000000000000A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000A /* SettingsView.swift */; };
 		A1000000000000000000000B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000B /* Assets.xcassets */; };
-		A1000000000000000000000C /* ETFLookThroughView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000E /* ETFLookThroughView.swift */; };
 		A1000000000000000000000D /* CSVImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000F /* CSVImportView.swift */; };
 		A1000000000000000000000E /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000010 /* KeychainStore.swift */; };
 		A1000000000000000000000F /* IBKRFlexClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000011 /* IBKRFlexClient.swift */; };
@@ -151,6 +150,25 @@
 		A7C0F0120000000000000001 /* SecurityDetailTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0120000000000000001 /* SecurityDetailTransition.swift */; };
 		A7C0F0130000000000000001 /* LossAnalysisChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0130000000000000001 /* LossAnalysisChart.swift */; };
 		A7C0F0140000000000000001 /* NewsSources.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0140000000000000001 /* NewsSources.swift */; };
+		A7C0F0150000000000000001 /* PortfolioMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0150000000000000001 /* PortfolioMath.swift */; };
+		A7C0F0160000000000000001 /* LaunchArguments.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0160000000000000001 /* LaunchArguments.swift */; };
+		A7C0F0200000000000000001 /* CodexOAuthClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0200000000000000001 /* CodexOAuthClient.swift */; };
+		A7C0F0210000000000000001 /* LocalPriceCaches.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0210000000000000001 /* LocalPriceCaches.swift */; };
+		A7C0F0220000000000000001 /* LocalMarketDataClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0220000000000000001 /* LocalMarketDataClient.swift */; };
+		A7C0F0230000000000000001 /* LocalFXImpactCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0230000000000000001 /* LocalFXImpactCalculator.swift */; };
+		A7C0F0240000000000000001 /* PortfolioAttentionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0240000000000000001 /* PortfolioAttentionEngine.swift */; };
+		A7C0F0250000000000000001 /* LocalAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0250000000000000001 /* LocalAIClient.swift */; };
+		A7C0F0260000000000000001 /* LocalETFLookThrough.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0260000000000000001 /* LocalETFLookThrough.swift */; };
+		A7C0F0270000000000000001 /* DividendForecast.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0270000000000000001 /* DividendForecast.swift */; };
+		A7C0F0300000000000000001 /* HoldingDetailPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0300000000000000001 /* HoldingDetailPage.swift */; };
+		A7C0F0310000000000000001 /* SecurityPriceChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0310000000000000001 /* SecurityPriceChart.swift */; };
+		A7C0F0320000000000000001 /* HoldingDetailHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0320000000000000001 /* HoldingDetailHeader.swift */; };
+		A7C0F0330000000000000001 /* HoldingResearchSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0330000000000000001 /* HoldingResearchSection.swift */; };
+		A7C0F0340000000000000001 /* HoldingDetailCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0340000000000000001 /* HoldingDetailCards.swift */; };
+		A7C0F0400000000000000001 /* TodayContributionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0400000000000000001 /* TodayContributionCard.swift */; };
+		A7C0F0410000000000000001 /* CostMarketCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0410000000000000001 /* CostMarketCard.swift */; };
+		A7C0F0420000000000000001 /* PortfolioDetailsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0420000000000000001 /* PortfolioDetailsCard.swift */; };
+		A7C0F0430000000000000001 /* PortfolioHomeChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C0F0430000000000000001 /* PortfolioHomeChrome.swift */; };
 		AC5100000000000000000001 /* SnapTradeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC5100000000000000000001 /* SnapTradeClient.swift */; };
 		AC5100000000000000000002 /* SnapTradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC5100000000000000000002 /* SnapTradeView.swift */; };
 		AC5100000000000000000003 /* SnapTradeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC5100000000000000000003 /* SnapTradeTests.swift */; };
@@ -187,6 +205,8 @@
 		E101000000000000000000F1 /* InsiderTradesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F1 /* InsiderTradesTests.swift */; };
 		E101000000000000000000F2 /* RevenueSegmentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F2 /* RevenueSegmentsTests.swift */; };
 		E101000000000000000000F3 /* HoldingContributionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F3 /* HoldingContributionTests.swift */; };
+		E101000000000000000001F3 /* PortfolioMathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000001F3 /* PortfolioMathTests.swift */; };
+		E101000000000000000002F3 /* OptionsWallTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000002F3 /* OptionsWallTests.swift */; };
 		E101000000000000000000F4 /* PolicyShortcutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F4 /* PolicyShortcutTests.swift */; };
 		E101000000000000000000F5 /* UnderwaterAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F5 /* UnderwaterAnalysisTests.swift */; };
 		E101000000000000000000F6 /* ImpliedFundingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000F6 /* ImpliedFundingTests.swift */; };
@@ -219,7 +239,6 @@
 		B1000000000000000000000B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B1000000000000000000000C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B1000000000000000000000D /* CatfolioIOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CatfolioIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		B1000000000000000000000E /* ETFLookThroughView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ETFLookThroughView.swift; sourceTree = "<group>"; };
 		B1000000000000000000000F /* CSVImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVImportView.swift; sourceTree = "<group>"; };
 		B10000000000000000000010 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		B10000000000000000000011 /* IBKRFlexClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IBKRFlexClient.swift; sourceTree = "<group>"; };
@@ -354,6 +373,25 @@
 		B7C0F0120000000000000001 /* SecurityDetailTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDetailTransition.swift; sourceTree = "<group>"; };
 		B7C0F0130000000000000001 /* LossAnalysisChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LossAnalysisChart.swift; sourceTree = "<group>"; };
 		B7C0F0140000000000000001 /* NewsSources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsSources.swift; sourceTree = "<group>"; };
+		B7C0F0150000000000000001 /* PortfolioMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioMath.swift; sourceTree = "<group>"; };
+		B7C0F0160000000000000001 /* LaunchArguments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchArguments.swift; sourceTree = "<group>"; };
+		B7C0F0200000000000000001 /* CodexOAuthClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexOAuthClient.swift; sourceTree = "<group>"; };
+		B7C0F0210000000000000001 /* LocalPriceCaches.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalPriceCaches.swift; sourceTree = "<group>"; };
+		B7C0F0220000000000000001 /* LocalMarketDataClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalMarketDataClient.swift; sourceTree = "<group>"; };
+		B7C0F0230000000000000001 /* LocalFXImpactCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalFXImpactCalculator.swift; sourceTree = "<group>"; };
+		B7C0F0240000000000000001 /* PortfolioAttentionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioAttentionEngine.swift; sourceTree = "<group>"; };
+		B7C0F0250000000000000001 /* LocalAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAIClient.swift; sourceTree = "<group>"; };
+		B7C0F0260000000000000001 /* LocalETFLookThrough.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalETFLookThrough.swift; sourceTree = "<group>"; };
+		B7C0F0270000000000000001 /* DividendForecast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DividendForecast.swift; sourceTree = "<group>"; };
+		B7C0F0300000000000000001 /* HoldingDetailPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingDetailPage.swift; sourceTree = "<group>"; };
+		B7C0F0310000000000000001 /* SecurityPriceChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityPriceChart.swift; sourceTree = "<group>"; };
+		B7C0F0320000000000000001 /* HoldingDetailHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingDetailHeader.swift; sourceTree = "<group>"; };
+		B7C0F0330000000000000001 /* HoldingResearchSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingResearchSection.swift; sourceTree = "<group>"; };
+		B7C0F0340000000000000001 /* HoldingDetailCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingDetailCards.swift; sourceTree = "<group>"; };
+		B7C0F0400000000000000001 /* TodayContributionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayContributionCard.swift; sourceTree = "<group>"; };
+		B7C0F0410000000000000001 /* CostMarketCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CostMarketCard.swift; sourceTree = "<group>"; };
+		B7C0F0420000000000000001 /* PortfolioDetailsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioDetailsCard.swift; sourceTree = "<group>"; };
+		B7C0F0430000000000000001 /* PortfolioHomeChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioHomeChrome.swift; sourceTree = "<group>"; };
 		BC5100000000000000000001 /* SnapTradeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapTradeClient.swift; sourceTree = "<group>"; };
 		BC5100000000000000000002 /* SnapTradeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapTradeView.swift; sourceTree = "<group>"; };
 		BC5100000000000000000003 /* SnapTradeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapTradeTests.swift; sourceTree = "<group>"; };
@@ -390,6 +428,8 @@
 		F101000000000000000000F1 /* InsiderTradesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsiderTradesTests.swift; sourceTree = "<group>"; };
 		F101000000000000000000F2 /* RevenueSegmentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RevenueSegmentsTests.swift; sourceTree = "<group>"; };
 		F101000000000000000000F3 /* HoldingContributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingContributionTests.swift; sourceTree = "<group>"; };
+		F101000000000000000001F3 /* PortfolioMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioMathTests.swift; sourceTree = "<group>"; };
+		F101000000000000000002F3 /* OptionsWallTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptionsWallTests.swift; sourceTree = "<group>"; };
 		F101000000000000000000F4 /* PolicyShortcutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyShortcutTests.swift; sourceTree = "<group>"; };
 		F101000000000000000000F5 /* UnderwaterAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnderwaterAnalysisTests.swift; sourceTree = "<group>"; };
 		F101000000000000000000F6 /* ImpliedFundingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImpliedFundingTests.swift; sourceTree = "<group>"; };
@@ -445,6 +485,25 @@
 				B7C0F0120000000000000001 /* SecurityDetailTransition.swift */,
 				B7C0F0130000000000000001 /* LossAnalysisChart.swift */,
 				B7C0F0140000000000000001 /* NewsSources.swift */,
+				B7C0F0150000000000000001 /* PortfolioMath.swift */,
+				B7C0F0160000000000000001 /* LaunchArguments.swift */,
+				B7C0F0200000000000000001 /* CodexOAuthClient.swift */,
+				B7C0F0210000000000000001 /* LocalPriceCaches.swift */,
+				B7C0F0220000000000000001 /* LocalMarketDataClient.swift */,
+				B7C0F0230000000000000001 /* LocalFXImpactCalculator.swift */,
+				B7C0F0240000000000000001 /* PortfolioAttentionEngine.swift */,
+				B7C0F0250000000000000001 /* LocalAIClient.swift */,
+				B7C0F0260000000000000001 /* LocalETFLookThrough.swift */,
+				B7C0F0270000000000000001 /* DividendForecast.swift */,
+				B7C0F0300000000000000001 /* HoldingDetailPage.swift */,
+				B7C0F0310000000000000001 /* SecurityPriceChart.swift */,
+				B7C0F0320000000000000001 /* HoldingDetailHeader.swift */,
+				B7C0F0330000000000000001 /* HoldingResearchSection.swift */,
+				B7C0F0340000000000000001 /* HoldingDetailCards.swift */,
+				B7C0F0400000000000000001 /* TodayContributionCard.swift */,
+				B7C0F0410000000000000001 /* CostMarketCard.swift */,
+				B7C0F0420000000000000001 /* PortfolioDetailsCard.swift */,
+				B7C0F0430000000000000001 /* PortfolioHomeChrome.swift */,
 				B7C0F0110000000000000002 /* PortfolioLoadRipple.metal */,
 				B10000000000000000000007 /* VolumeProfileView.swift */,
 				B10000000000000000000008 /* ReturnsView.swift */,
@@ -469,7 +528,6 @@
 				BF1000000000000000000003 /* PolicyContract.swift */,
 				BF1000000000000000000004 /* PolicyTemplates.swift */,
 				B1000000000000000000000A /* SettingsView.swift */,
-				B1000000000000000000000E /* ETFLookThroughView.swift */,
 				B1000000000000000000000F /* CSVImportView.swift */,
 				B10000000000000000000010 /* KeychainStore.swift */,
 				B10000000000000000000011 /* IBKRFlexClient.swift */,
@@ -631,6 +689,8 @@
 				F101000000000000000000F7 /* CycleComparisonTests.swift */,
 				F101000000000000000000F8 /* AIStreamingTests.swift */,
 				F101000000000000000000F3 /* HoldingContributionTests.swift */,
+				F101000000000000000001F3 /* PortfolioMathTests.swift */,
+				F101000000000000000002F3 /* OptionsWallTests.swift */,
 				B199000000000000000000C1 /* SectorAttributionTests.swift */,
 				B19900000000000000FFB0 /* NumericAlternatesTests.swift */,
 				B19900000000000000FFA0 /* PublicInvestorSelectionTests.swift */,
@@ -790,6 +850,25 @@
 				A7C0F0120000000000000001 /* SecurityDetailTransition.swift in Sources */,
 				A7C0F0130000000000000001 /* LossAnalysisChart.swift in Sources */,
 				A7C0F0140000000000000001 /* NewsSources.swift in Sources */,
+				A7C0F0150000000000000001 /* PortfolioMath.swift in Sources */,
+				A7C0F0160000000000000001 /* LaunchArguments.swift in Sources */,
+				A7C0F0200000000000000001 /* CodexOAuthClient.swift in Sources */,
+				A7C0F0210000000000000001 /* LocalPriceCaches.swift in Sources */,
+				A7C0F0220000000000000001 /* LocalMarketDataClient.swift in Sources */,
+				A7C0F0230000000000000001 /* LocalFXImpactCalculator.swift in Sources */,
+				A7C0F0240000000000000001 /* PortfolioAttentionEngine.swift in Sources */,
+				A7C0F0250000000000000001 /* LocalAIClient.swift in Sources */,
+				A7C0F0260000000000000001 /* LocalETFLookThrough.swift in Sources */,
+				A7C0F0270000000000000001 /* DividendForecast.swift in Sources */,
+				A7C0F0300000000000000001 /* HoldingDetailPage.swift in Sources */,
+				A7C0F0310000000000000001 /* SecurityPriceChart.swift in Sources */,
+				A7C0F0320000000000000001 /* HoldingDetailHeader.swift in Sources */,
+				A7C0F0330000000000000001 /* HoldingResearchSection.swift in Sources */,
+				A7C0F0340000000000000001 /* HoldingDetailCards.swift in Sources */,
+				A7C0F0400000000000000001 /* TodayContributionCard.swift in Sources */,
+				A7C0F0410000000000000001 /* CostMarketCard.swift in Sources */,
+				A7C0F0420000000000000001 /* PortfolioDetailsCard.swift in Sources */,
+				A7C0F0430000000000000001 /* PortfolioHomeChrome.swift in Sources */,
 				A7C0F0110000000000000002 /* PortfolioLoadRipple.metal in Sources */,
 				A10000000000000000000007 /* VolumeProfileView.swift in Sources */,
 				A10000000000000000000008 /* ReturnsView.swift in Sources */,
@@ -814,7 +893,6 @@
 				AF1000000000000000000003 /* PolicyContract.swift in Sources */,
 				AF1000000000000000000004 /* PolicyTemplates.swift in Sources */,
 				A1000000000000000000000A /* SettingsView.swift in Sources */,
-				A1000000000000000000000C /* ETFLookThroughView.swift in Sources */,
 				A1000000000000000000000D /* CSVImportView.swift in Sources */,
 				A1000000000000000000000E /* KeychainStore.swift in Sources */,
 				A1000000000000000000000F /* IBKRFlexClient.swift in Sources */,
@@ -923,6 +1001,8 @@
 				E101000000000000000000F7 /* CycleComparisonTests.swift in Sources */,
 				E101000000000000000000F8 /* AIStreamingTests.swift in Sources */,
 				E101000000000000000000F3 /* HoldingContributionTests.swift in Sources */,
+				E101000000000000000001F3 /* PortfolioMathTests.swift in Sources */,
+				E101000000000000000002F3 /* OptionsWallTests.swift in Sources */,
 				A199000000000000000000C1 /* SectorAttributionTests.swift in Sources */,
 				A19900000000000000FFB0 /* NumericAlternatesTests.swift in Sources */,
 				A19900000000000000FFA0 /* PublicInvestorSelectionTests.swift in Sources */,

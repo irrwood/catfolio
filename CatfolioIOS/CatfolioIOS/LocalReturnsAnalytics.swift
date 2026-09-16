@@ -362,7 +362,7 @@ struct LocalReturnsAnalyticsClient {
             }
             nav *= 1 + dailyReturn
             peak = max(peak, nav)
-            let value = peak > 0 ? nav / peak - 1 : 0
+            let value = PortfolioMath.drawdown(value: nav, peak: peak)
             maxDrawdown = min(maxDrawdown, value)
             rows.append(DrawdownPoint(dateText: date, drawdown: value))
         }

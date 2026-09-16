@@ -112,13 +112,13 @@ struct SettingsView: View {
     @State private var portfolioResetError: String?
     @State private var reconciliation: LedgerReconciliation.Report?
     #if DEBUG
-    @State private var showsRotationPreview = ProcessInfo.processInfo.arguments.contains("--show-sector-rotation")
-    @State private var showsStockChartsPreview = ProcessInfo.processInfo.arguments.contains("--show-stockcharts-rrg")
-    @State private var showsScreenerPreview = ProcessInfo.processInfo.arguments.contains("--show-screener")
-    @State private var showsHistoryPreview = ProcessInfo.processInfo.arguments.contains("--show-history-preview")
-    @State private var showsResearchPreview = ProcessInfo.processInfo.arguments.contains("--preview-research-analysis")
-    @State private var showsOIPreview = ProcessInfo.processInfo.arguments.contains("--preview-options-oi")
-    @State private var showsIsometricHeatmap = ProcessInfo.processInfo.arguments.contains("--show-isometric-heatmap")
+    @State private var showsRotationPreview = LaunchArguments.contains("--show-sector-rotation")
+    @State private var showsStockChartsPreview = LaunchArguments.contains("--show-stockcharts-rrg")
+    @State private var showsScreenerPreview = LaunchArguments.contains("--show-screener")
+    @State private var showsHistoryPreview = LaunchArguments.contains("--show-history-preview")
+    @State private var showsResearchPreview = LaunchArguments.contains("--preview-research-analysis")
+    @State private var showsOIPreview = LaunchArguments.contains("--preview-options-oi")
+    @State private var showsIsometricHeatmap = LaunchArguments.contains("--show-isometric-heatmap")
     #endif
 
     init(showsCloseButton: Bool = false) {
@@ -378,7 +378,7 @@ struct SettingsView: View {
                 }
             }
             .task {
-                let arguments = ProcessInfo.processInfo.arguments
+                let arguments = LaunchArguments.all
                 showsCSVImport = arguments.contains("--show-csv")
                 showsTrading212 = arguments.contains("--show-trading212")
                 showsIBKRFlex = arguments.contains("--show-flex")
@@ -959,159 +959,6 @@ private struct SettingsHistoryOverview: View {
     }
 }
 
-private struct AccountTransactionsView: View {
-    @Environment(\.locale) private var appLocale
-    @Environment(AppModel.self) private var model
-    let account: PortfolioAccount
-    @State private var transactions: [LocalTransactionRecord] = []
-    @State private var errorMessage: String?
-    @State private var isSyncingHistory = false
-    @State private var syncMessage: String?
-
-    var body: some View {
-        Group {
-            if let errorMessage {
-                ContentUnavailableView(
-                    L10n.text("无法读取交易"),
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(errorMessage)
-                )
-            } else if transactions.isEmpty {
-                ContentUnavailableView(
-                    L10n.text("暂无交易记录"),
-                    systemImage: "list.bullet.rectangle",
-                    description: Text(L10n.text("可以通过同步、CSV 导入或手动补充添加历史交易。"))
-                )
-            } else {
-                List(transactions) { transaction in
-                    VStack(alignment: .leading, spacing: 5) {
-                        HStack {
-                            Text(transaction.ticker)
-                                .font(.body.weight(.semibold))
-                            Spacer()
-                            Text(actionTitle(transaction.action))
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(
-                                    transaction.action.uppercased() == "SELL"
-                                        ? CatfolioTheme.danger
-                                        : CatfolioTheme.positive
-                                )
-                        }
-                        HStack {
-                            Text(transaction.date)
-                            Spacer()
-                            Text(transactionDetail(transaction))
-                                .appNumber(.caption)
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 4)
-                }
-                .listStyle(.insetGrouped)
-                .scrollContentBackground(.hidden)
-                .background(CatfolioTheme.settingsBackground)
-            }
-        }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if isSyncingHistory, let syncMessage {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(syncMessage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(.ultraThinMaterial)
-            }
-        }
-        .background(CatfolioTheme.settingsBackground)
-        .tint(CatfolioTheme.accent)
-        .softTopScrollEdge()
-        .navigationTitle(L10n.text("交易记录"))
-        .navigationBarTitleDisplayMode(.inline)
-        .task(id: account.id) {
-            await loadLocalTransactions()
-            await synchronizeTrading212History()
-        }
-        .refreshable { await synchronizeTrading212History() }
-    }
-
-    private func actionTitle(_ action: String) -> String {
-        switch action.uppercased() {
-        case "BUY": L10n.text("买入")
-        case "SELL": L10n.text("卖出")
-        case "DIVIDEND": L10n.text("股息")
-        case "INTEREST": L10n.text("利息")
-        default: action
-        }
-    }
-
-    private func transactionDetail(_ transaction: LocalTransactionRecord) -> String {
-        if transaction.action.uppercased() == "DIVIDEND"
-            || transaction.action.uppercased() == "INTEREST" {
-            return "+\(DisplayFormat.money(transaction.quantity * transaction.price, currency: transaction.currency))"
-        }
-        return "\(DisplayFormat.shares(transaction.quantity)) × \(DisplayFormat.money(transaction.price, currency: transaction.currency))"
-    }
-
-    private func loadLocalTransactions() async {
-        do {
-            transactions = try await model.transactions(for: account.id)
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    private func synchronizeTrading212History() async {
-        guard account.source == "Trading 212",
-              !isSyncingHistory,
-              let accountID = account.accountID,
-              let slot = Int(accountID.replacingOccurrences(of: "account-", with: "")),
-              let apiKey = KeychainStore.string(for: "trading212.account-\(slot).api-key"),
-              let apiSecret = KeychainStore.string(for: "trading212.account-\(slot).api-secret"),
-              !apiKey.isEmpty,
-              !apiSecret.isEmpty else { return }
-
-        isSyncingHistory = true
-        syncMessage = L10n.text("正在补齐 Trading 212 成交、股息与利息…")
-        defer { isSyncingHistory = false }
-
-        do {
-            let credentials = try Trading212Credentials(apiKey: apiKey, apiSecret: apiSecret)
-            let environment = UserDefaults.standard.string(forKey: "trading212.environment")
-                .flatMap(Trading212Environment.init(rawValue:)) ?? .live
-            while !Task.isCancelled {
-                let snapshot = try await Trading212Client().fetchSnapshot(
-                    accounts: [Trading212AccountCredentials(slot: slot, credentials: credentials)],
-                    environment: environment
-                )
-                _ = try await model.importTrading212(
-                    snapshot,
-                    accountNames: [accountID: account.name],
-                    replacingAccountsOnly: true
-                )
-                await loadLocalTransactions()
-                if snapshot.hasCompleteTransactionHistory {
-                    syncMessage = nil
-                    return
-                }
-                syncMessage = snapshot.transactionHistoryStatus
-                    ?? L10n.text("历史记录较多，正在等待下一批…")
-                try await Task.sleep(for: .seconds(62))
-            }
-        } catch is CancellationError {
-            return
-        } catch {
-            syncMessage = L10n.text("同步失败：\(error.localizedDescription)")
-        }
-    }
-}
-
 private struct ManualTransactionView: View {
     @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
@@ -1526,7 +1373,7 @@ private struct LocalServicesSettingsView: View {
     private func applyLaunchRouteIfNeeded() {
         guard !hasAppliedLaunchRoute else { return }
         hasAppliedLaunchRoute = true
-        let arguments = ProcessInfo.processInfo.arguments
+        let arguments = LaunchArguments.all
         if arguments.contains("--show-local-service-massive") {
             path = [.massive]
         } else if arguments.contains("--show-local-service-fmp") {

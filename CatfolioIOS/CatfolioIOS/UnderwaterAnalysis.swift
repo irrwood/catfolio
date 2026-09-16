@@ -12,7 +12,7 @@ struct UnderwaterSeries: Sendable {
         let peak: Double
         let peakDateText: String
         /// Zero at a high, negative below it.
-        var drawdown: Double { peak > 0 ? value / peak - 1 : 0 }
+        var drawdown: Double { PortfolioMath.drawdown(value: value, peak: peak) }
     }
 
     let points: [Point]
@@ -71,7 +71,7 @@ struct UnderwaterSeries: Sendable {
     /// The rise that would take a value back to its high: a 20% fall needs
     /// a 25% gain.
     static func gainToRecover(_ drawdown: Double) -> Double {
-        drawdown > -1 ? 1 / (1 + drawdown) - 1 : .infinity
+        PortfolioMath.gainToRecover(drawdown: drawdown)
     }
 }
 

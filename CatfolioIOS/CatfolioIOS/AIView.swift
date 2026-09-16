@@ -1439,7 +1439,7 @@ private struct PortfolioAttentionDetail: View {
             do {
                 let answer: (text: String, searched: Bool)
                 #if DEBUG
-                if ProcessInfo.processInfo.arguments.contains("--demo-follow-up") {
+                if LaunchArguments.contains("--demo-follow-up") {
                     // A canned answer, for looking at the thread without a model.
                     try await Task.sleep(for: .seconds(1.5))
                     answer = ("成交量是前 30 日均量的 1.9 倍，说明这次上涨有较多资金参与，不只是少量成交推动。但放量本身不说明原因：材料里没有对应的公司公告，可能来自板块或指数资金。接下来看成交量能否维持，以及价格是否守住放量当天的低点。", true)

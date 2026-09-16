@@ -48,7 +48,8 @@ struct UnderwaterAnalysisChart: View {
                     .frame(maxWidth: .infinity)
             } else if loading.history != nil {
                 StandardLineChartPlaceholder(title: L10n.text("历史数据不足"),
-                                             message: L10n.text("该时间范围内没有足够的市值记录。"), isLoading: false)
+                                             message: L10n.text("该时间范围内没有足够的市值记录。"), isLoading: false,
+                                             hint: L10n.text("下拉刷新会重新计算这段历史。"))
                     .frame(height: 280)
                     .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
             } else {
@@ -65,7 +66,7 @@ struct UnderwaterAnalysisChart: View {
         .task(id: "\(model.portfolioChartRevision)|\(model.holdings.count)|\(refreshRevision)|\(retryRevision)") {
             await loading.load { cachedOnly in
                 #if DEBUG
-                if ProcessInfo.processInfo.arguments.contains("--demo-loss-history") {
+                if LaunchArguments.contains("--demo-loss-history") {
                     return LossAnalysisChart.demoHistory()
                 }
                 #endif

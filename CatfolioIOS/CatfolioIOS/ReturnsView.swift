@@ -6,13 +6,13 @@ struct ReturnsView: View {
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var showsPolicyComposer = false
     @State private var selectedHolding: Holding?
-    @State private var heatmapExpanded = ProcessInfo.processInfo.arguments.contains("--expand-performance-heatmap")
+    @State private var heatmapExpanded = LaunchArguments.contains("--expand-performance-heatmap")
     @State private var heroScroll = HeroScroll()
     @State private var isScrolling = false
     #if DEBUG
-    @State private var showsHeatmapPreview = ProcessInfo.processInfo.arguments.contains("--show-heatmap")
+    @State private var showsHeatmapPreview = LaunchArguments.contains("--show-heatmap")
     /// `--show-returns-chart=losses` opens that chart page, for screenshots.
-    @State private var previewChart: ReturnsChartDestination? = ProcessInfo.processInfo.arguments
+    @State private var previewChart: ReturnsChartDestination? = LaunchArguments.all
         .first { $0.hasPrefix("--show-returns-chart=") }
         .flatMap { ReturnsChartDestination(rawValue: String($0.dropFirst("--show-returns-chart=".count))) }
     #endif
@@ -113,7 +113,7 @@ struct ReturnsView: View {
             ReturnsChartPage(chart: chart)
         }
         .task {
-            showsPolicyComposer = ProcessInfo.processInfo.arguments.contains("--show-policy-composer")
+            showsPolicyComposer = LaunchArguments.contains("--show-policy-composer")
         }
         #endif
     }
@@ -263,13 +263,13 @@ struct ReturnsComparisonPanel: View {
     @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @State private var chartMode: ReturnsChartMode = {
-        let arguments = ProcessInfo.processInfo.arguments
+        let arguments = LaunchArguments.all
         if arguments.contains("--show-cash-flow") { return .cashFlowMatched }
         if arguments.contains("--show-mwr") { return .mwr }
         return .twr
     }()
     @State private var timeRange: ChartTimeRange = {
-        let arguments = ProcessInfo.processInfo.arguments
+        let arguments = LaunchArguments.all
         if arguments.contains("--show-returns-1d") { return .oneDay }
         if arguments.contains("--show-returns-1w") { return .oneWeek }
         if arguments.contains("--show-returns-1m") { return .oneMonth }
@@ -716,7 +716,7 @@ private struct ReturnsChart: View {
     }
 
     private var isChartLoading: Bool {
-        isPreparing || ProcessInfo.processInfo.arguments.contains("--show-returns-loading-state")
+        isPreparing || LaunchArguments.contains("--show-returns-loading-state")
     }
 
     var body: some View {
@@ -1052,7 +1052,7 @@ private struct ReturnsChart: View {
 
     private func applyLaunchSelectionIfNeeded() {
         let chartDates = displayData.dates
-        let arguments = ProcessInfo.processInfo.arguments
+        let arguments = LaunchArguments.all
         guard chartDates.count > 2 else { return }
         if arguments.contains("--show-returns-selection"), selectedDate == nil {
             selectedDate = chartDates[chartDates.count / 3]

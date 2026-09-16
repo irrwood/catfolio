@@ -46,7 +46,7 @@ struct CatfolioIOSApp: App {
                 .preferredColorScheme(preferredColorScheme)
                 #if DEBUG
                 .task {
-                    if ProcessInfo.processInfo.arguments.contains("--run-foundation-checks") {
+                    if LaunchArguments.contains("--run-foundation-checks") {
                         let report = await Task.detached {
                             do { return try FoundationRegressionChecks.run() }
                             catch { return "FAILED: \(error.localizedDescription)" }

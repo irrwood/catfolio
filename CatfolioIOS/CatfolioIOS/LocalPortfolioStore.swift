@@ -31,6 +31,20 @@ struct LocalBrokerResultSummary {
             totals[currency, default: 0] += decimal
         }
     }
+
+    /// The results added up in USD, each converted from the currency the
+    /// broker reported it in. Nil when there is nothing to add, or when a
+    /// currency has no rate — an incomplete total would read as a small one.
+    func usdTotal() -> Double? {
+        guard !totals.isEmpty else { return nil }
+        var total = 0.0
+        for (currency, amount) in totals {
+            guard let converted = try? LocalPortfolioEngine.usd(
+                NSDecimalNumber(decimal: amount).doubleValue, currency: currency) else { return nil }
+            total += converted
+        }
+        return total.isFinite ? total : nil
+    }
 }
 
 #if DEBUG
@@ -40,7 +54,7 @@ enum FoundationRegressionChecks {
             price: 100, currency: "USD", source: "CSV", accountID: "closed", accountName: "已清仓测试账户",
             tradeID: "test-sale", realisedProfitLoss: 2.5, realisedProfitLossCurrency: "GBP")
         var transactions = [transaction]
-        if ProcessInfo.processInfo.arguments.contains("--verify-partial-results") {
+        if LaunchArguments.contains("--verify-partial-results") {
             transactions.append(LocalTransactionRecord(date: "2026-01-02", action: "SELL", ticker: "MISSING",
                 quantity: 1, price: 200, currency: "USD", source: "CSV", accountID: "closed",
                 accountName: "已清仓测试账户", tradeID: "test-missing"))
@@ -1914,11 +1928,7 @@ enum LocalPortfolioEngine {
             marketValue: totals.marketValue,
             unrealized: unrealized
         )
-        let overview = PortfolioOverview(
-            summary: summary,
-            todayPnl: 0,
-            breadth: Breadth(up: 0, down: 0, flat: document.positions.count)
-        )
+        let overview = PortfolioOverview(summary: summary)
         // Decoded once for the whole page rather than per position: each is
         // a bundled package, and a 135-position portfolio would otherwise ask
         // for them 135 times.

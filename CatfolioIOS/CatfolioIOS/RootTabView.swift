@@ -33,7 +33,7 @@ struct RootTabView: View {
     @Namespace private var settingsAssistantZoom
 
     init() {
-        let arguments = ProcessInfo.processInfo.arguments
+        let arguments = LaunchArguments.all
         let showsLocalServiceRoute = arguments.contains("--show-local-services")
             || arguments.contains { $0.hasPrefix("--show-local-service-") }
         let initialSelection: Destination
@@ -66,12 +66,12 @@ struct RootTabView: View {
             #if DEBUG
             // Opens the assistant as the AI button does, for recording it.
             .task {
-                guard ProcessInfo.processInfo.arguments.contains("--demo-ai-open") else { return }
+                guard LaunchArguments.contains("--demo-ai-open") else { return }
                 try? await Task.sleep(for: .seconds(4))
                 presentAI()
             }
             .task {
-                guard ProcessInfo.processInfo.arguments.contains("--probe-news") else { return }
+                guard LaunchArguments.contains("--probe-news") else { return }
                 await NewsSourceHub.probe()
             }
             #endif

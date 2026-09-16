@@ -513,7 +513,9 @@ final class SecurityDailyMoveStore {
     private var completedAt: [String: Date] = [:]
     typealias Research = @Sendable (SecurityPriceMoveContext) async throws -> SecurityDailyMoveNote
     private let research: Research
-    init(research: @escaping Research = SecurityDailyMoveStore.fetch) { self.research = research }
+    init(research: @escaping Research = { try await SecurityDailyMoveStore.fetch($0) }) {
+        self.research = research
+    }
 
     func state(_ context: SecurityPriceMoveContext) -> State? {
         states[context.key(language: AppLanguage.currentIdentifier)]
@@ -644,7 +646,9 @@ final class SecurityCardInsightStore {
     private var completedAt: [String: Date] = [:]
     typealias Explain = @Sendable (SecurityCardInsightContext) async throws -> SecurityDailyMoveNote
     private let explain: Explain
-    init(explain: @escaping Explain = SecurityCardInsightStore.fetch) { self.explain = explain }
+    init(explain: @escaping Explain = { try await SecurityCardInsightStore.fetch($0) }) {
+        self.explain = explain
+    }
 
     func state(_ context: SecurityCardInsightContext) -> State? {
         states[context.key(language: AppLanguage.currentIdentifier)]
@@ -670,7 +674,7 @@ final class SecurityCardInsightStore {
     nonisolated static func fetch(_ context: SecurityCardInsightContext) async throws -> SecurityDailyMoveNote {
         #if DEBUG
         // A canned answer for recording the paper where no model is reachable.
-        if ProcessInfo.processInfo.arguments.contains("--demo-card-insight") {
+        if LaunchArguments.contains("--demo-card-insight") {
             try await Task.sleep(for: .seconds(1.5))
             return SecurityDailyMoveNote(text: "现价接近 52 周高点，距离低点已上涨约七成，处在区间的上方四分之一；过去一年整体涨幅明显，短期回撤空间需要留意。", sources: [])
         }

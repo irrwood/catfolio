@@ -1588,7 +1588,7 @@
 
 "Yahoo · 获取于 %@ · OI 日期未知" = "Yahoo · Fetched %@ · OI date unknown";
 
-"按所选到期范围汇总 Yahoo 返回合约的未平仓张数。Put／Call 墙为各自 OI 最大价位，并列峰值全部保留。主要分布显示累计 OI 的 5%–95% 区间及墙位，留有边距；切换全部可查看尾部。远离分布的现价与成本列在摘要，不扩展价格轴。集中区仍为累计 OI 的 15%–85% 等尾区间，覆盖至少 70% 已读取 OI。价格最多显示四位小数，省略末尾的零；坐标与选中值保留原始行权价。仅纳入 REGULAR 且代码可核对的合约。Yahoo 覆盖不等于交易所全部合约；缺数时保留旧缓存。获取时间不是 OI 数据日期。OI 不代表成交量、买卖方向或必然支撑阻力。" = "Open-interest contracts returned by Yahoo are summed over the selected expiry period. Put/Call walls are the maximum OI strikes; all ties are retained. Main distribution frames the cumulative 5%–95% OI range and walls with padding. All shows the tails. Distant price and cost references remain in the summary without extending the axis. Concentration remains the cumulative 15%–85% equal-tail interval, covering at least 70% of received OI. Prices show up to four decimal places with trailing zeros omitted; geometry and selection retain original strikes. Only verifiable REGULAR contracts are included. Yahoo coverage may differ from the exchange; incomplete updates retain the old cache. Fetch time is not the OI data date. OI is not trading volume, buying or selling direction, or guaranteed support or resistance.";
+"按所选到期范围汇总 Yahoo 返回合约的未平仓张数。Put 墙取现价下方、Call 墙取现价上方 20% 以内 OI 最大的价位；并列峰值全部保留。更远处的大额 OI 多为旧头寸或对冲，不当作支撑阻力。没有现价时才退回全链最大值。主要分布显示累计 OI 的 5%–95% 区间及墙位，留有边距；切换全部可查看尾部。远离分布的现价与成本列在摘要，不扩展价格轴。集中区仍为累计 OI 的 15%–85% 等尾区间，覆盖至少 70% 已读取 OI。价格最多显示四位小数，省略末尾的零；坐标与选中值保留原始行权价。仅纳入 REGULAR 且代码可核对的合约。Yahoo 覆盖不等于交易所全部合约；缺数时保留旧缓存。获取时间不是 OI 数据日期。OI 不代表成交量、买卖方向或必然支撑阻力。" = "Open-interest contracts returned by Yahoo are summed over the selected expiry period. The put wall is the strike with the most open interest within 20% below the price, the call wall the same above it; all ties are retained. Heavy open interest further out is usually an old position or a hedge, not support or resistance. Without a quote, the heaviest strike in the whole chain stands. Main distribution frames the cumulative 5%–95% OI range and walls with padding. All shows the tails. Distant price and cost references remain in the summary without extending the axis. Concentration remains the cumulative 15%–85% equal-tail interval, covering at least 70% of received OI. Prices show up to four decimal places with trailing zeros omitted; geometry and selection retain original strikes. Only verifiable REGULAR contracts are included. Yahoo coverage may differ from the exchange; incomplete updates retain the old cache. Fetch time is not the OI data date. OI is not trading volume, buying or selling direction, or guaranteed support or resistance.";
 
 // Strategy Composer
 "检查账户范围、规则增删、阈值与单位。确认只保存修订，不会执行策略。" = "Review accounts, rule changes, thresholds and units. Confirming saves a revision; it does not run the strategy.";
@@ -2593,3 +2593,12 @@
 "高置信度" = "High confidence";
 "中置信度" = "Medium confidence";
 "低置信度" = "Low confidence";
+"这里是所选区间的涨跌。切到全部可以加上已实现利润。" = "This is the change over the chosen window. Switch to All to add profit already taken.";
+"还没有带券商结果的卖出记录，只能显示未实现利润。" = "No sale carries a broker result yet, so only unrealised profit can be shown.";
+"已实现 + 未实现利润。有 %@ 笔卖出没有券商结果，未计入。" = "Taken plus unrealised profit. %@ sales have no broker result and are left out.";
+"已实现 + 未实现利润。不含股息和利息。" = "Profit taken plus unrealised. Dividends and interest are not included.";
+"只算当前持仓的未实现利润。" = "Unrealised profit on what you hold now.";
+"未实现利润" = "Unrealised profit";
+"已实现加未实现利润" = "Profit taken plus unrealised";
+"轻点切换是否计入已实现利润" = "Tap to count profit already taken, or not";
+"下拉刷新会重新计算这段历史。" = "Pull down to refresh and this history is rebuilt.";

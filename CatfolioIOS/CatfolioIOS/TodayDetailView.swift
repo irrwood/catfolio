@@ -27,12 +27,8 @@ struct TodayDetailView: View {
         holdings.compactMap { holding in
             let key = holding.ticker.uppercased()
             guard let change = dailyChanges[key] ?? holding.todayChangePercent,
-                  change.isFinite, holding.marketValue.isFinite else { return nil }
-            // Yesterday's value moved by `change`, so today's move is the part
-            // of the current value that the change accounts for.
-            let previous = holding.marketValue / (1 + change / 100)
-            let amount = holding.marketValue - previous
-            guard amount.isFinite else { return nil }
+                  let amount = PortfolioMath.dayContribution(
+                      marketValue: holding.marketValue, changePercent: change) else { return nil }
             return Contribution(holding: holding, changePercent: change, amount: amount)
         }
         .sorted { $0.amount == $1.amount ? $0.id < $1.id : $0.amount > $1.amount }

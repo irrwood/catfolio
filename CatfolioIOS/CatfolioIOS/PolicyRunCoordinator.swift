@@ -204,8 +204,8 @@ actor PolicyRunCoordinator {
                 // Explicit QA fault injection exercises the same durable
                 // cancellation/recovery path without claiming OS expiry.
                 if node["type"].string == "source", record.strategy["name"].string.hasPrefix("QA 策略验收") {
-                    if ProcessInfo.processInfo.arguments.contains("--policy-qa-interrupt") { interrupted = true; interruptionNotice = "QA故障注入：source检查点后模拟中断；非真实系统过期。可主动从历史继续。"; throw CancellationError() }
-                    if ProcessInfo.processInfo.arguments.contains("--policy-qa-pause") { try await Task.sleep(for: .seconds(30)) }
+                    if LaunchArguments.contains("--policy-qa-interrupt") { interrupted = true; interruptionNotice = "QA故障注入：source检查点后模拟中断；非真实系统过期。可主动从历史继续。"; throw CancellationError() }
+                    if LaunchArguments.contains("--policy-qa-pause") { try await Task.sleep(for: .seconds(30)) }
                 }
                 #endif
             }

@@ -20,7 +20,7 @@ struct PolicyComposerEntry: View {
     /// Acceptance runs in the simulator: a CSV account of public tickers with
     /// made-up share counts, created only when the ledger holds nothing else.
     private func prepareQAAccount() async {
-        guard ProcessInfo.processInfo.arguments.contains("--policy-qa-account") else { return }
+        guard LaunchArguments.contains("--policy-qa-account") else { return }
         let name = "QA 策略验收（合成数量与成本）"
         do {
             let current = try await LocalPortfolioStore.shared.load()

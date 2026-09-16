@@ -630,6 +630,11 @@ enum SecurityPaperTopic {
 }
 
 /// Paper Flip Lab: a two-sided cover turns upward around a horizontal spine.
+///
+/// Main-actor isolated as a whole: its initialisers default to the shared
+/// stores, and a default argument is evaluated at the call site, where an
+/// isolated `init` alone would not cover it.
+@MainActor
 struct SecurityDailyMovePaper: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -638,16 +643,18 @@ struct SecurityDailyMovePaper: View {
     var logoSymbol: String? = nil
     var sourceFrame: CGRect = .zero
 
-    init(context: SecurityPriceMoveContext, store: SecurityDailyMoveStore = .shared,
+    /// The store is resolved in here rather than as a default argument: a
+    /// default is evaluated at the call site, outside this view's isolation.
+    init(context: SecurityPriceMoveContext, store: SecurityDailyMoveStore? = nil,
          logoSymbol: String? = nil, sourceFrame: CGRect = .zero) {
-        self.topic = .move(context, store)
+        self.topic = .move(context, store ?? .shared)
         self.logoSymbol = logoSymbol
         self.sourceFrame = sourceFrame
     }
 
-    init(card: SecurityCardInsightContext, store: SecurityCardInsightStore = .shared,
+    init(card: SecurityCardInsightContext, store: SecurityCardInsightStore? = nil,
          logoSymbol: String? = nil, sourceFrame: CGRect = .zero) {
-        self.topic = .card(card, store)
+        self.topic = .card(card, store ?? .shared)
         self.logoSymbol = logoSymbol
         self.sourceFrame = sourceFrame
     }

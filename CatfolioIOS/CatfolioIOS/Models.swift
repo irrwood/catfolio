@@ -16,22 +16,16 @@ struct PortfolioSummary: Codable, Equatable {
     }
 }
 
+/// Today's figures are not part of this: the ledger has no intraday state,
+/// so every screen reads today's move from `AppModel.holdingDailyChanges`.
+/// The server-era `today_pnl_usd` and `breadth` fields were filled with
+/// zeroes here and read by nothing.
 struct PortfolioOverview: Codable {
     let summary: PortfolioSummary
-    let todayPnl: Double
-    let breadth: Breadth
 
     enum CodingKeys: String, CodingKey {
         case summary
-        case todayPnl = "today_pnl_usd"
-        case breadth
     }
-}
-
-struct Breadth: Codable {
-    let up: Int
-    let down: Int
-    let flat: Int
 }
 
 struct PortfolioChartResponse: Codable {
@@ -111,11 +105,6 @@ struct ChartPoint: Codable, Identifiable, Equatable {
         case marketValue = "market_value_usd"
         case cost = "cost_usd"
     }
-}
-
-struct HoldingsResponse: Decodable {
-    let summary: PortfolioSummary
-    let rows: [Holding]
 }
 
 struct Holding: Codable, Identifiable, Equatable {
@@ -641,23 +630,6 @@ struct ComparisonSummary: Codable {
     }
 }
 
-struct ComparisonPoint: Identifiable, Equatable {
-    let date: Date
-    let portfolio: Double
-    let benchmark: Double?
-
-    var id: Date { date }
-}
-
-struct BriefingResponse: Decodable {
-    let briefing: String
-}
-
-struct AskResponse: Decodable {
-    let answer: String
-    let question: String
-}
-
 enum PortfolioAttentionLevel: String, Codable, Sendable {
     case high, medium, none
 }
@@ -957,23 +929,6 @@ enum BrokerProvider: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-struct BrokerOverview: Decodable {
-    let provider: BrokerProvider
-}
-
-struct BrokerConnectionResult: Decodable {
-    let ok: Bool
-    let provider: BrokerProvider
-    let message: String
-    let accounts: [String]?
-}
-
-struct BrokerRefreshEnvelope: Decodable {
-    let provider: BrokerProvider
-    let refresh: BrokerRefreshResult
-    let summary: PortfolioSummary
-}
-
 struct BrokerRefreshResult: Decodable {
     let ok: Bool
     let provider: BrokerProvider?
@@ -994,11 +949,6 @@ struct BrokerChanges: Decodable {
     let updated: Int
     let removed: Int
     let unchanged: Int
-}
-
-struct SaveSettingResponse: Decodable {
-    let ok: Bool
-    let error: String?
 }
 
 struct CSVImportResult: Decodable {
@@ -1086,18 +1036,6 @@ struct ETFLookThroughRow: Decodable, Identifiable {
         case fromETFUSD = "from_etf_usd"
         case totalUSD = "total_usd"
         case etfWeightPercent = "etf_weight_percent"
-    }
-}
-
-enum BrokerConnectionState: Equatable {
-    case idle
-    case testing
-    case success(String)
-    case failure(String)
-
-    var isTesting: Bool {
-        if case .testing = self { return true }
-        return false
     }
 }
 
