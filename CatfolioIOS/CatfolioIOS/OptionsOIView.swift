@@ -125,19 +125,40 @@ struct OIPlotGeometry {
         var low = rows.first?.strike ?? 0
         var high = rows.last?.strike ?? 1
         let total = rows.reduce(0) { $0 + $1.put + $1.call }
-        if range == .main, total > 0 {
-            var cumulative = 0.0
+        if range == .main {
+            // Zoomed in means the band the reader came for: the two walls with
+            // the price between them. A cumulative 5%–95% cut used to stand
+            // here, but a chain's tails are heavy — on META it kept 210 of 262
+            // strikes, so zooming in changed almost nothing.
             var lower: Double?
-            for row in rows {
-                cumulative += row.put + row.call
-                if lower == nil && cumulative >= total * 0.05 { lower = row.strike }
-                if cumulative >= total * 0.95 { high = row.strike; break }
-            }
-            low = lower ?? low
-            // Never hide a true maximum, including tied maxima.
+            var upper: Double?
             for wall in distribution.putWalls + distribution.callWalls {
-                low = min(low, wall.strike); high = max(high, wall.strike)
+                lower = min(lower ?? wall.strike, wall.strike)
+                upper = max(upper ?? wall.strike, wall.strike)
             }
+            if let currentPrice, currentPrice.isFinite, currentPrice > 0 {
+                lower = min(lower ?? currentPrice, currentPrice)
+                upper = max(upper ?? currentPrice, currentPrice)
+            }
+            if let lower, let upper {
+                low = lower
+                high = upper
+            } else if total > 0 {
+                // No walls and no quote to centre on: the middle half of the
+                // open interest, which is still tighter than the whole chain.
+                var cumulative = 0.0
+                var quarter: Double?
+                for row in rows {
+                    cumulative += row.put + row.call
+                    if quarter == nil && cumulative >= total * 0.25 { quarter = row.strike }
+                    if cumulative >= total * 0.75 { high = row.strike; break }
+                }
+                low = quarter ?? low
+            }
+            // Room to read either side of the band rather than clipping it.
+            let margin = max((high - low) * 0.08, step * 3)
+            low -= margin
+            high += margin
         }
         let span = max(step * 2, high - low)
         // Nearby quotes help orient the reader. Remote references belong in the
@@ -604,14 +625,20 @@ struct OptionsOIView: View {
 
     #if DEBUG
     static var preview: OISnapshot {
-        let contracts = (80...130).flatMap { strike in
+        // A real chain's shape: clusters either side of the price and long
+        // thin tails, so the two zoom levels can be told apart.
+        var contracts = stride(from: 5, through: 300, by: 5).flatMap { strike in
             ["call", "put"].map { side in
                 let center = side == "call" ? 120.0 : 95.0
-                let oi = (1000 + 120000 * exp(-pow((Double(strike) - center) / 6, 2))).rounded()
+                let oi = (200 + 120000 * exp(-pow((Double(strike) - center) / 6, 2))).rounded()
                 return OIContract(details: .init(ticker: "test-\(strike)-\(side)", contract_type: side,
                     expiration_date: "2026-10-02", strike_price: Double(strike), shares_per_contract: 100), open_interest: oi)
             }
         }
+        // One old block far below the price, as META carried at 140 with the
+        // shares at 670: heavy, but neither support nor part of the zoom.
+        contracts.append(OIContract(details: .init(ticker: "test-far-put", contract_type: "put",
+            expiration_date: "2026-10-02", strike_price: 25, shares_per_contract: 100), open_interest: 150_000))
         return OISnapshot(contracts: contracts, fetchedAt: Date(), from: "2026-09-08", through: "2026-10-08", excluded: 0)
     }
     #endif

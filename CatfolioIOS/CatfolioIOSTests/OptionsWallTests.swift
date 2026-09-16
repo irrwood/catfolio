@@ -55,3 +55,50 @@ final class OptionsWallTests: XCTestCase {
         XCTAssertEqual(Set(distribution.putWalls.map(\.strike)), [95, 90])
     }
 }
+
+/// Zooming in: the band around the walls and the price, not a cut of the
+/// cumulative open interest, whose tails are heavy enough to keep everything.
+final class OptionsZoomTests: XCTestCase {
+    /// META's chain on 2026-09-16: strikes from 5 to 1480, the shares at 670,
+    /// and the walls at 550 and 700.
+    private var chain: [OIContract] {
+        var contracts: [OIContract] = []
+        for strike in stride(from: 5.0, through: 1480.0, by: 5.0) {
+            let distance = abs(strike - 670)
+            let weight = max(1, 2_000 - distance * 2)
+            contracts.append(OIContract(details: .init(ticker: "p\(strike)", contract_type: "put",
+                expiration_date: "2026-10-16", strike_price: strike, shares_per_contract: 100),
+                open_interest: strike == 550 ? 20_047 : weight))
+            contracts.append(OIContract(details: .init(ticker: "c\(strike)", contract_type: "call",
+                expiration_date: "2026-10-16", strike_price: strike, shares_per_contract: 100),
+                open_interest: strike == 700 ? 21_000 : weight))
+        }
+        // The old block far below the price, which is not a wall.
+        contracts.append(OIContract(details: .init(ticker: "pFar", contract_type: "put",
+            expiration_date: "2026-10-16", strike_price: 140, shares_per_contract: 100),
+            open_interest: 30_521))
+        return contracts
+    }
+
+    func testZoomInFramesTheWallsAndThePrice() {
+        let distribution = OIDistribution(contracts: chain, currentPrice: 670.24)
+        let zoomed = OIPlotGeometry(distribution, range: .main, currentPrice: 670.24)
+        let all = OIPlotGeometry(distribution, range: .all, currentPrice: 670.24)
+        XCTAssertTrue(zoomed.domain.contains(550), "the put wall stays in view")
+        XCTAssertTrue(zoomed.domain.contains(700), "the call wall stays in view")
+        XCTAssertTrue(zoomed.domain.contains(670.24), "so does the price")
+        let zoomedWidth = zoomed.domain.upperBound - zoomed.domain.lowerBound
+        let allWidth = all.domain.upperBound - all.domain.lowerBound
+        XCTAssertLessThan(zoomedWidth, allWidth * 0.25, "zooming in has to actually zoom")
+        XCTAssertFalse(zoomed.domain.contains(140), "the far block is left out of the zoom")
+    }
+
+    func testZoomInKeepsRoomAroundASingleStrike() {
+        let contracts = [OIContract(details: .init(ticker: "p100", contract_type: "put",
+            expiration_date: "2026-10-16", strike_price: 100, shares_per_contract: 100), open_interest: 10)]
+        let distribution = OIDistribution(contracts: contracts, currentPrice: 100)
+        let zoomed = OIPlotGeometry(distribution, range: .main, currentPrice: 100)
+        XCTAssertTrue(zoomed.domain.contains(100))
+        XCTAssertGreaterThan(zoomed.domain.upperBound - zoomed.domain.lowerBound, 0)
+    }
+}
