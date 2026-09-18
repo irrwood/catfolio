@@ -37,10 +37,9 @@ struct RootTabView: View {
         let showsLocalServiceRoute = arguments.contains("--show-local-services")
             || arguments.contains { $0.hasPrefix("--show-local-service-") }
         let initialSelection: Destination
-        if arguments.contains("--show-returns-page") || arguments.contains("--show-heatmap")
-            || arguments.contains("--show-policy-composer") {
+        if arguments.contains("--show-returns-page") || arguments.contains("--show-heatmap") {
             initialSelection = .returns
-        } else if arguments.contains("--show-research-tab") {
+        } else if arguments.contains("--show-research-tab") || arguments.contains("--show-policy-composer") {
             initialSelection = .research
         } else if arguments.contains("--show-settings") || showsLocalServiceRoute {
             initialSelection = .settings

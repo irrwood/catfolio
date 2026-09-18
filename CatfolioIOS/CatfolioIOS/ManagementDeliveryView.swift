@@ -120,7 +120,7 @@ struct ManagementDeliveryCard: View {
         case .apple:
             return L10n.text("文字稿与财报在 iPhone 下载、分析和保存，资料不上传服务器。")
         case .automatic:
-            return L10n.text("文字稿与财报在 iPhone 下载和保存。优先用 Apple 本地模型分析；不可用时，文字稿片段会发送给你已连接的云端 AI。")
+            return L10n.text("文字稿与财报在 iPhone 下载和保存；分析时，文字稿片段会发送给你已连接的云端 AI。没有连接云端 AI 时，才用 Apple 本地模型。")
         case .codex, .deepSeek, .openRouter:
             return L10n.text("文字稿与财报在 iPhone 下载和保存；分析时，文字稿片段会发送给你在服务商中选择的 AI。")
         }

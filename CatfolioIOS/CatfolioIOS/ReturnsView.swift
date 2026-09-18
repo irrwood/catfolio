@@ -4,7 +4,6 @@ struct ReturnsView: View {
     @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
-    @State private var showsPolicyComposer = false
     @State private var selectedHolding: Holding?
     @State private var heatmapExpanded = LaunchArguments.contains("--expand-performance-heatmap")
     @State private var heroScroll = HeroScroll()
@@ -45,25 +44,6 @@ struct ReturnsView: View {
                     .accessibilityIdentifier("performance.chart.\(chart.rawValue)")
                 }
             }
-            SettingsSection(L10n.text("行情与 AI")) {
-                SettingsNavigationRow(icon: .symbol("chart.xyaxis.line"), title: L10n.text("板块轮动")) {
-                    SectorRotationView()
-                }
-                SettingsNavigationRow(icon: .symbol("point.3.connected.trianglepath.dotted"), title: L10n.text("市场轮动 · RRG")) {
-                    StockChartsRotationView()
-                }
-                .accessibilityIdentifier("performance.stockcharts-rrg")
-                SettingsNavigationRow(icon: .symbol("gauge.with.dots.needle.50percent"), title: L10n.text("行业情绪")) {
-                    IndustrySentimentView()
-                }
-                SettingsNavigationRow(icon: .symbol("line.3.horizontal.decrease"), title: L10n.text("选股器")) {
-                    StockScreenerView()
-                }
-                SettingsButtonRow(icon: .symbol("slider.horizontal.3"), title: L10n.text("策略编曲家"), action: { showsPolicyComposer = true })
-                SettingsButtonRow(icon: .symbol("number.square"), title: L10n.text("税务计算"), action: {})
-                    .disabled(true)
-                    .accessibilityHint(L10n.text("功能暂未开放"))
-            }
         }
         // Only what the hero needs, so ordinary scrolling does not redraw
         // the page: the pull past the top, the bar's height, and whether the
@@ -96,9 +76,6 @@ struct ReturnsView: View {
         .navigationTitle(L10n.text("Performance"))
         .navigationBarTitleDisplayMode(.large)
         .toolbarVisibility(.visible, for: .navigationBar)
-        .fullScreenCover(isPresented: $showsPolicyComposer) {
-            PolicyComposerEntry()
-        }
         .sheet(item: $selectedHolding) { holding in
             HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
                 .environment(model)
@@ -111,9 +88,6 @@ struct ReturnsView: View {
         }
         .navigationDestination(item: $previewChart) { chart in
             ReturnsChartPage(chart: chart)
-        }
-        .task {
-            showsPolicyComposer = LaunchArguments.contains("--show-policy-composer")
         }
         #endif
     }

@@ -2607,3 +2607,6 @@
 "文字稿与财报在 iPhone 下载和保存。优先用 Apple 本地模型分析；不可用时，文字稿片段会发送给你已连接的云端 AI。" = "Transcripts and filings are downloaded and kept on this iPhone. Analysis uses Apple’s on-device model first; when it isn’t available, transcript excerpts are sent to the cloud AI you’ve connected.";
 "文字稿与财报在 iPhone 下载和保存；分析时，文字稿片段会发送给你在服务商中选择的 AI。" = "Transcripts and filings are downloaded and kept on this iPhone. For analysis, transcript excerpts are sent to the AI you chose in Providers.";
 "无法更新行情，显示的是 %@ 的数据。下拉可重试。" = "Couldn’t update. Showing data from %@. Pull down to try again.";
+"行情" = "Markets";
+"工具" = "Tools";
+"文字稿与财报在 iPhone 下载和保存；分析时，文字稿片段会发送给你已连接的云端 AI。没有连接云端 AI 时，才用 Apple 本地模型。" = "Transcripts and filings are downloaded and kept on this iPhone. For analysis, transcript excerpts are sent to the cloud AI you’ve connected; Apple’s on-device model is used only when none is connected.";

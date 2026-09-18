@@ -149,7 +149,7 @@ struct HoldingDetailGlassCardModifier: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
             content
-                .glassEffect(.regular, in: shape)
+                .softShadowGlass(in: shape)
                 .background(backdrop, in: shape)
         } else {
             content

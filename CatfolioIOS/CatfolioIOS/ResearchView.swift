@@ -429,6 +429,7 @@ struct ResearchView: View {
     @State private var analysisRequestID = UUID()
     @State private var analysisError: String?
     @State private var showsRules = false
+    @State private var showsPolicyComposer = false
     @AppStorage("research.highAttentionOnly") private var highAttentionOnly = false
     @AppStorage("research.maximumResults") private var maximumResults = 6
     @AppStorage(AttentionEvidenceRules.maximumAgeKey) private var evidenceMaximumAge = 30
@@ -496,10 +497,34 @@ struct ResearchView: View {
                 Text(L10n.text("最近可用收盘，非盘中实时行情。账户范围沿用设置中的选择。"))
             }
             .headerProminence(.increased)
-            Section {
-                NavigationLink(L10n.text("板块轮动")) { SectorRotationView() }
-                NavigationLink(L10n.text("市场轮动 · RRG")) { StockChartsRotationView() }
-                NavigationLink(L10n.text("周期对比")) { CycleComparisonView() }
+            // Everything that used to sit under 收益 › 行情与 AI lives here
+            // now, once each: the rotation pages were listed in both places.
+            Section(L10n.text("行情")) {
+                NavigationLink { SectorRotationView() } label: {
+                    Label(L10n.text("板块轮动"), systemImage: "chart.xyaxis.line")
+                }
+                NavigationLink { StockChartsRotationView() } label: {
+                    Label(L10n.text("市场轮动 · RRG"), systemImage: "point.3.connected.trianglepath.dotted")
+                }
+                .accessibilityIdentifier("research.stockcharts-rrg")
+                NavigationLink { CycleComparisonView() } label: {
+                    Label(L10n.text("周期对比"), systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                }
+                NavigationLink { IndustrySentimentView() } label: {
+                    Label(L10n.text("行业情绪"), systemImage: "gauge.with.dots.needle.50percent")
+                }
+            }
+            Section(L10n.text("工具")) {
+                NavigationLink { StockScreenerView() } label: {
+                    Label(L10n.text("选股器"), systemImage: "line.3.horizontal.decrease")
+                }
+                Button { showsPolicyComposer = true } label: {
+                    Label(L10n.text("策略编曲家"), systemImage: "slider.horizontal.3")
+                }
+                .foregroundStyle(.primary)
+                Label(L10n.text("税务计算"), systemImage: "number.square")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHint(L10n.text("功能暂未开放"))
             }
             }
             if showsAttention {
@@ -602,6 +627,9 @@ struct ResearchView: View {
                 } }
             }
         }
+        .fullScreenCover(isPresented: $showsPolicyComposer) {
+            PolicyComposerEntry()
+        }
         .sheet(item: $selectedSecurity) { holding in
             HoldingDetailView(holding: holding, onClose: { selectedSecurity = nil })
                 .environment(model)
@@ -610,6 +638,11 @@ struct ResearchView: View {
         .securityDetailOpenFeedback(trigger: selectedSecurity?.ticker, enabled: hapticsEnabled)
         .task(id: showsAttention ? "" : searchText) { await searchMarket() }
         .task { if !showsAttention { await refreshMarkets() } }
+        #if DEBUG
+        .task {
+            if !showsAttention && LaunchArguments.contains("--show-policy-composer") { showsPolicyComposer = true }
+        }
+        #endif
         .modifier(ResearchMarketRefreshModifier(enabled: !showsAttention, refresh: refreshMarkets))
         .task(id: accountScope) {
             guard showsAttention else { return }

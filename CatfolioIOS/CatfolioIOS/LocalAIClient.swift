@@ -367,7 +367,12 @@ struct LocalAIClient {
 
     /// Public research only. Unlike portfolio chat this does not load or send
     /// account balances, credentials, or the user's holdings.
-    func researchAnswer(_ question: String, context: String, structured: Bool = false) async throws -> String {
+    ///
+    /// `cloudFirst` changes only the automatic order: long documents go to a
+    /// connected cloud model before Apple's on-device one, which is kept as
+    /// the fallback rather than the first try.
+    func researchAnswer(_ question: String, context: String, structured: Bool = false,
+                        cloudFirst: Bool = false) async throws -> String {
         switch AIProviderPreference.current {
         case .apple:
             if #available(iOS 26.0, *) {
@@ -382,7 +387,10 @@ struct LocalAIClient {
             return try await completeWithCodex(question: question, context: context)
         case .automatic:
             var appleFailure = Self.appleModelStatus.message
-            if #available(iOS 26.0, *), Self.appleModelStatus.isAvailable {
+            let hasCloud = CodexOAuthClient.cachedConnected || LocalServiceKeys.hasOpenRouterKey
+                || !(KeychainStore.string(for: LocalServiceKeys.deepSeek)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+            if #available(iOS 26.0, *), Self.appleModelStatus.isAvailable, !(cloudFirst && hasCloud) {
                 do {
                     return try await completeWithApple(question: question, context: context, structured: structured)
                 } catch {
@@ -408,6 +416,11 @@ struct LocalAIClient {
             do {
                 return try await completeWithDeepSeek(question: question, context: context, structured: structured)
             } catch {
+                // Cloud first skipped Apple above; it is still the fallback.
+                if cloudFirst, hasCloud, #available(iOS 26.0, *), Self.appleModelStatus.isAvailable,
+                   let answer = try? await completeWithApple(question: question, context: context, structured: structured) {
+                    return answer
+                }
                 throw LocalServiceError.noAvailableAIProvider(
                     "Apple：\(appleFailure)；Codex：\(codexFailure)\(openRouterFailure)；DeepSeek：\(error.localizedDescription)"
                 )

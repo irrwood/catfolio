@@ -1371,7 +1371,7 @@ extension View {
             // Not interactive: it holds the composer's text field, and
             // interactive glass takes the touch for its press effect first —
             // the AI page's field took about six seconds to focus that way.
-            glassEffect(.regular, in: shape)
+            softShadowGlass(in: shape)
         } else {
             background(.ultraThinMaterial, in: shape)
         }

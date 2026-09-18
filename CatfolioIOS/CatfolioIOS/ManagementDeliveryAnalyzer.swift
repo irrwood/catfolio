@@ -22,7 +22,7 @@ struct ManagementDeliveryAnalyzer {
         let readiness = AIProviderPreference.current.readiness
         guard readiness.isReady else { throw ManagementDeliveryError.message(readiness.message) }
         try Task.checkCancellation()
-        return try await LocalAIClient().researchAnswer(prompt, context: instructions, structured: true)
+        return try await LocalAIClient().researchAnswer(prompt, context: instructions, structured: true, cloudFirst: true)
     }
 
     struct Chunk: Sendable {

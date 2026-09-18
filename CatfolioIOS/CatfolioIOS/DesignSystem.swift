@@ -2716,3 +2716,36 @@ struct ContributionStripePattern: View {
         .allowsHitTesting(false)
     }
 }
+
+@available(iOS 26.0, *)
+extension View {
+    /// Liquid Glass behind the view, with a lighter shadow than the system's.
+    ///
+    /// The system glass casts a shadow some 25pt deep that on the app's pale
+    /// pages reads as a grey smear around every card. The glass is drawn as
+    /// its own layer and masked: fully inside the shape, and outside it only
+    /// a faded band a few points deep, so the shadow keeps enough to lift the
+    /// card at a fraction of its weight. The mask sits on that layer only:
+    /// masking the card itself re-blends the glass's content and turns its
+    /// greys several shades darker.
+    func softShadowGlass<S: Shape>(
+        _ glass: Glass = .regular,
+        in shape: S,
+        shadowReach: CGFloat = 8,
+        shadowStrength: Double = 0.45
+    ) -> some View {
+        background {
+            Color.clear
+                .glassEffect(glass, in: shape)
+                .mask {
+                    ZStack {
+                        shape
+                            .padding(-shadowReach)
+                            .blur(radius: shadowReach * 0.6)
+                            .opacity(shadowStrength)
+                        shape
+                    }
+                }
+        }
+    }
+}
