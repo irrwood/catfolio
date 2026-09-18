@@ -106,6 +106,18 @@ final class AppModel {
         }
     }
 
+    /// Cached figures are on screen and public data is still coming in.
+    /// The home page sweeps a halo over the figures this affects rather than
+    /// replacing them with a skeleton.
+    var isHomeRefreshingBehindCache: Bool {
+        #if DEBUG
+        // `--demo-refresh-glow` holds the halo on, for looking at it.
+        if LaunchArguments.contains("--demo-refresh-glow") { return overview != nil }
+        #endif
+        return overview != nil && !holdings.isEmpty
+            && (isPortfolioLoading || isPortfolioChartLoading || isHoldingDailyChangesLoading)
+    }
+
     func refreshPortfolio(refreshMarketData: Bool = true) async {
         guard !Task.isCancelled else { return }
         portfolioRequestGeneration &+= 1

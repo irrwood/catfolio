@@ -1891,6 +1891,10 @@ struct ChartTimeRangePicker: View {
     @Binding var selection: ChartTimeRange
     var isDisabled = false
     var usesBrightSelectedBackground = false
+    /// On a tinted field — the gain-sources hero — the strip carries the
+    /// field's colour, so the selected range is a white pill with dark text
+    /// in both schemes rather than the page's own fill.
+    var isOnTintedField = false
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -1964,6 +1968,10 @@ struct ChartTimeRangePicker: View {
     }
 
     private func textColor(isSelected: Bool) -> Color {
+        if isOnTintedField {
+            if isSelected { return Color(red: 0.10, green: 0.10, blue: 0.10) }
+            return colorScheme == .dark ? Color.white.opacity(0.82) : Color.black.opacity(0.58)
+        }
         if isSelected {
             return colorScheme == .light ? .black : .white
         }
@@ -1971,6 +1979,7 @@ struct ChartTimeRangePicker: View {
     }
 
     private var selectedBackgroundColor: Color {
+        if isOnTintedField { return .white }
         if usesBrightSelectedBackground, colorScheme == .light {
             return .white
         }

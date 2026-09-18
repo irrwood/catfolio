@@ -2602,3 +2602,8 @@
 "已实现加未实现利润" = "Profit taken plus unrealised";
 "轻点切换是否计入已实现利润" = "Tap to count profit already taken, or not";
 "下拉刷新会重新计算这段历史。" = "Pull down to refresh and this history is rebuilt.";
+"OpenRouter 需要 API Key，请在设置 › 服务商中填写。" = "OpenRouter needs an API key. Add it in Settings › Providers.";
+"没有可用的 AI：请在设置 › 服务商中连接一个模型。" = "No AI is available. Connect a model in Settings › Providers.";
+"文字稿与财报在 iPhone 下载和保存。优先用 Apple 本地模型分析；不可用时，文字稿片段会发送给你已连接的云端 AI。" = "Transcripts and filings are downloaded and kept on this iPhone. Analysis uses Apple’s on-device model first; when it isn’t available, transcript excerpts are sent to the cloud AI you’ve connected.";
+"文字稿与财报在 iPhone 下载和保存；分析时，文字稿片段会发送给你在服务商中选择的 AI。" = "Transcripts and filings are downloaded and kept on this iPhone. For analysis, transcript excerpts are sent to the AI you chose in Providers.";
+"无法更新行情，显示的是 %@ 的数据。下拉可重试。" = "Couldn’t update. Showing data from %@. Pull down to try again.";

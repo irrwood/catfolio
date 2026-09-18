@@ -1167,7 +1167,7 @@ private struct PolicyLibrarySheet: View {
             .navigationTitle(L10n.text("策略库"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(L10n.text("完成")) { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { dismiss() } }
                 ToolbarItem(placement: .primaryAction) {
                     Button(L10n.text("新建"), systemImage: "plus") {
                         Task {
@@ -1243,7 +1243,7 @@ private struct PolicyHistorySheet: View {
             }
             .navigationTitle(L10n.text("运行记录与旧版本"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.text("完成")) { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { dismiss() } } }
             .task {
                 runs = await store.runs()
                 revisions = await store.revisions()

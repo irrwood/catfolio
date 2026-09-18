@@ -25,8 +25,9 @@ final class ManagementDeliveryStore {
 
     func start(ticker: String, quarters: Int, language: String, refresh: Bool) {
         guard !busy else { return }
-        guard LocalAIClient.appleModelStatus.isAvailable else {
-            error = LocalAIClient.appleModelStatus.message
+        let readiness = AIProviderPreference.current.readiness
+        guard readiness.isReady else {
+            error = readiness.message
             return
         }
         busy = true
@@ -108,16 +109,29 @@ struct ManagementDeliveryCard: View {
     @State private var quarters = 4
     @State private var store = ManagementDeliveryStore()
     @State private var selectedSource: ManagementDocument?
-    @State private var modelStatus = LocalAIClient.appleModelStatus
+    @State private var modelStatus = AIProviderPreference.current.readiness
 
     private var language: String { ContentLanguage.current }
+
+    /// Where the transcript excerpts actually go. With Apple's model they
+    /// never leave the phone; with a cloud model they are sent to it.
+    private var privacyNote: String {
+        switch AIProviderPreference.current {
+        case .apple:
+            return L10n.text("文字稿与财报在 iPhone 下载、分析和保存，资料不上传服务器。")
+        case .automatic:
+            return L10n.text("文字稿与财报在 iPhone 下载和保存。优先用 Apple 本地模型分析；不可用时，文字稿片段会发送给你已连接的云端 AI。")
+        case .codex, .deepSeek, .openRouter:
+            return L10n.text("文字稿与财报在 iPhone 下载和保存；分析时，文字稿片段会发送给你在服务商中选择的 AI。")
+        }
+    }
     private var cacheID: String { "\(ticker)|\(quarters)|\(locale.identifier)|\(language)" }
 
     var body: some View {
         HoldingDetailDisclosureCard(title: L10n.text("管理层兑现情况"),
             subtitle: L10n.text("过去的承诺，后来的结果"), isExpanded: $expanded, isLoading: store.busy) {
             VStack(alignment: .leading, spacing: 20) {
-                Text(L10n.text("文字稿与财报在 iPhone 下载、分析和保存，资料不上传服务器。"))
+                Text(privacyNote)
                     .font(.caption).foregroundStyle(.secondary)
                 Picker(L10n.text("核对范围"), selection: $quarters) {
                     ForEach([4, 6, 8], id: \.self) { count in Text(L10n.text("最近 \(count) 季度")).tag(count) }
@@ -145,8 +159,8 @@ struct ManagementDeliveryCard: View {
                         }
                     }.font(.caption).foregroundStyle(.secondary)
                 }
-                if !modelStatus.isAvailable {
-                    Label(modelStatus.message, systemImage: "iphone").font(.caption).foregroundStyle(.secondary)
+                if !modelStatus.isReady {
+                    Label(modelStatus.message, systemImage: "sparkles").font(.caption).foregroundStyle(.secondary)
                 }
                 if let error = store.error {
                     Text(error).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("management-delivery-error")
@@ -165,11 +179,11 @@ struct ManagementDeliveryCard: View {
                         } label: {
                             Label(store.archive == nil ? L10n.text("下载并在本机分析") : L10n.text("用本机资料重新分析"), systemImage: "text.magnifyingglass")
                                 .font(.subheadline).frame(minHeight: 44)
-                        }.disabled(!modelStatus.isAvailable)
+                        }.disabled(!modelStatus.isReady)
                         if store.archive != nil {
                             Button(L10n.text("下载最新资料并重新核对")) {
                                 store.start(ticker: ticker, quarters: quarters, language: language, refresh: true)
-                            }.font(.caption).frame(minHeight: 44).disabled(!modelStatus.isAvailable)
+                            }.font(.caption).frame(minHeight: 44).disabled(!modelStatus.isReady)
                             Button(L10n.text("删除此范围的本机资料")) {
                                 Task { await store.remove(ticker: ticker, quarters: quarters, language: language) }
                             }.font(.caption).foregroundStyle(.secondary).frame(minHeight: 44)
@@ -181,7 +195,7 @@ struct ManagementDeliveryCard: View {
         .accessibilityIdentifier("management-delivery")
         .task(id: cacheID) { await store.restore(ticker: ticker, quarters: quarters, language: language) }
         .onChange(of: scenePhase) { _, phase in
-            modelStatus = LocalAIClient.appleModelStatus
+            modelStatus = AIProviderPreference.current.readiness
             if phase == .background { store.cancel() }
         }
         .onDisappear { store.cancel() }

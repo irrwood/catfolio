@@ -24,6 +24,8 @@ struct TodayContributionCard: View {
     let dailyChanges: [String: Double]
     let benchmarkChange: Double?
     let isLoading: Bool
+    /// Cached contributions are on screen while fresh quotes arrive.
+    let isRefreshingBehindCache: Bool
     var onOpenDetail: (() -> Void)? = nil
     var onTitleBottomPositionChange: ((CGFloat) -> Void)? = nil
     let onSelect: (Holding) -> Void
@@ -51,6 +53,7 @@ struct TodayContributionCard: View {
         dailyChanges: [String: Double],
         benchmarkChange: Double?,
         isLoading: Bool,
+        isRefreshingBehindCache: Bool = false,
         onOpenDetail: (() -> Void)? = nil,
         onTitleBottomPositionChange: ((CGFloat) -> Void)? = nil,
         zoomNamespace: Namespace.ID? = nil,
@@ -60,6 +63,7 @@ struct TodayContributionCard: View {
         self.dailyChanges = dailyChanges
         self.benchmarkChange = benchmarkChange
         self.isLoading = isLoading
+        self.isRefreshingBehindCache = isRefreshingBehindCache
         self.onOpenDetail = onOpenDetail
         self.onTitleBottomPositionChange = onTitleBottomPositionChange
         self.zoomNamespace = zoomNamespace
@@ -147,6 +151,7 @@ struct TodayContributionCard: View {
                                 color: .primary
                             )
                             .contentTransition(.numericText(value: totalAmount))
+                            .refreshGlow(isActive: isRefreshingBehindCache)
                         }
                     }
                     .frame(height: 39, alignment: .leading)

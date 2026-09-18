@@ -23,6 +23,8 @@ struct CostMarketCard: View {
     let warning: String?
     let response: PortfolioChartResponse
     let isAwaitingEnrichedHistory: Bool
+    /// Cached figures are up and fresh quotes are still coming in.
+    private var isRefreshingBehindCache: Bool { model.isHomeRefreshingBehindCache }
     @State private var prepared: CostMarketPreparedData?
     @State private var isPreparing = true
     @State private var hasPreparedAllRanges = false
@@ -235,6 +237,7 @@ struct CostMarketCard: View {
             )
             .contentTransition(.numericText(value: displayedPrimaryAmount))
             .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: displayedPrimaryAmount)
+            .refreshGlow(isActive: isRefreshingBehindCache)
             .frame(height: 44, alignment: .leading)
             .offset(x: CatfolioStyle.pageHorizontalInset, y: 32)
 

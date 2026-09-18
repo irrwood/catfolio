@@ -188,7 +188,7 @@ struct MoomooOAuthView: View {
             .navigationTitle(context.isCreating ? L10n.text("新建 Moomoo 账户") : "Moomoo")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button(L10n.text("完成")) { dismiss() }
                 }
             }

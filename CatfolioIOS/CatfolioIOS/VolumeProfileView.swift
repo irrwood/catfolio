@@ -43,6 +43,9 @@ struct FiftyTwoWeekRange: View {
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var selectedIndex: Int?
     @State private var edgePull: CGFloat = 0
+    /// The year's move lights up tick by tick when the card appears, from
+    /// where the year started to where the price is now.
+    @State private var hasRevealedMove = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let markerCount = 45
@@ -134,7 +137,13 @@ struct FiftyTwoWeekRange: View {
             hapticsEnabled && oldValue != nil && newValue != nil
         }
         .onChange(of: reduceMotion) { _, enabled in if enabled { edgePull = 0 } }
-        .onDisappear { edgePull = 0; selectedIndex = nil }
+        .onDisappear { edgePull = 0; selectedIndex = nil; hasRevealedMove = false }
+        // The card sits below the fold, so the sweep waits until it is
+        // mostly on screen rather than playing out unseen when the page opens.
+        .onScrollVisibilityChange(threshold: 0.6) { isVisible in
+            guard isVisible, !hasRevealedMove else { return }
+            hasRevealedMove = true
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
         .accessibilityHint(L10n.text("按住并横向拖动可查看任意价格"))
@@ -167,6 +176,8 @@ struct FiftyTwoWeekRange: View {
                     let isCurrent = index == currentIndex
                     let isSelected = selectedIndex == index
                     let isActiveTick = isCurrent || isSelected
+                    // Steps from the year's first tick; today's tick is the last.
+                    let revealOrder = abs(index - (startIndex ?? currentIndex))
                     let isHighlighted = isCurrent || highlightedRange?.contains(index) == true
                     let width = isActiveTick ? currentTickWidth : tickWidth
                     let height = isActiveTick ? currentTickHeight : tickHeight
@@ -183,6 +194,11 @@ struct FiftyTwoWeekRange: View {
                     rangeTick(
                         isCurrent: isCurrent,
                         isHighlighted: isHighlighted,
+                        isRevealed: hasRevealedMove || reduceMotion,
+                        // Each tick takes its colour a little after the one
+                        // before it, so the move reads as travelling rather
+                        // than switching on; the whole run stays under ~0.9s.
+                        revealDelay: Double(revealOrder) * min(0.026, 0.6 / Double(max(1, markerCount))),
                         showsGlow: isSelected || showsCurrentGlow,
                         x: x,
                         rangeStartX: rangeStartX,
@@ -270,6 +286,8 @@ struct FiftyTwoWeekRange: View {
     private func rangeTick(
         isCurrent: Bool,
         isHighlighted: Bool,
+        isRevealed: Bool,
+        revealDelay: Double,
         showsGlow: Bool,
         x: CGFloat,
         rangeStartX: CGFloat,
@@ -281,29 +299,44 @@ struct FiftyTwoWeekRange: View {
         let localStartX = (rangeStartX - rectMinX) / max(width, 0.001)
         let localEndX = (rangeEndX - rectMinX) / max(width, 0.001)
         let usesVisibleGlow = showsGlow && (isCurrent || colorScheme == .dark)
+        let isLit = isHighlighted && isRevealed
 
-        Group {
-            if isCurrent {
-                Capsule().fill(performanceColor)
-            } else if isHighlighted {
-                Capsule().fill(
-                    LinearGradient(
-                        colors: highlightedGradientColors,
-                        startPoint: UnitPoint(x: localStartX, y: 0.5),
-                        endPoint: UnitPoint(x: localEndX, y: 0.5)
+        // The grey tick is always there; the colour fades in over it. Two
+        // separate shapes swapped in and out would snap rather than animate.
+        Capsule().fill(inactiveTickColor)
+            .overlay {
+                if isHighlighted {
+                    Group {
+                        if isCurrent {
+                            Capsule().fill(performanceColor)
+                        } else {
+                            Capsule().fill(
+                                LinearGradient(
+                                    colors: highlightedGradientColors,
+                                    startPoint: UnitPoint(x: localStartX, y: 0.5),
+                                    endPoint: UnitPoint(x: localEndX, y: 0.5)
+                                )
+                            )
+                        }
+                    }
+                    .opacity(isRevealed ? 1 : 0)
+                    .animation(
+                        reduceMotion ? nil : .easeOut(duration: 0.26).delay(revealDelay),
+                        value: isRevealed
                     )
-                )
-            } else {
-                Capsule().fill(inactiveTickColor)
+                }
             }
-        }
-        .frame(width: width, height: height)
-        .shadow(
-            color: usesVisibleGlow
-                ? (isHighlighted ? performanceGlowColor : inactiveTickGlowColor)
-                : .clear,
-            radius: usesVisibleGlow ? (isCurrent ? 8 : 5) : 0
-        )
+            .frame(width: width, height: height)
+            .shadow(
+                color: usesVisibleGlow
+                    ? (isLit ? performanceGlowColor : inactiveTickGlowColor)
+                    : .clear,
+                radius: usesVisibleGlow ? (isCurrent ? 8 : 5) : 0
+            )
+            .animation(
+                reduceMotion ? nil : .easeOut(duration: 0.26).delay(revealDelay),
+                value: isRevealed
+            )
     }
 
     private func bubbleDetails(

@@ -84,6 +84,28 @@ enum AIProviderPreference: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Whether this choice can answer right now, and what to tell the reader
+    /// when it can't. `automatic` is ready when any provider it falls back
+    /// through is.
+    var readiness: (isReady: Bool, message: String) {
+        let hasDeepSeekKey = !(KeychainStore.string(for: LocalServiceKeys.deepSeek)?
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        switch self {
+        case .apple:
+            return (LocalAIClient.appleModelStatus.isAvailable, LocalAIClient.appleModelStatus.message)
+        case .codex:
+            return (CodexOAuthClient.cachedConnected, L10n.text("Codex 尚未连接"))
+        case .deepSeek:
+            return (hasDeepSeekKey, L10n.text("DeepSeek 模式需要 API Key。请在设置中填写，Key 只保存在此 iPhone。"))
+        case .openRouter:
+            return (LocalServiceKeys.hasOpenRouterKey, L10n.text("OpenRouter 需要 API Key，请在设置 › 服务商中填写。"))
+        case .automatic:
+            let ready = LocalAIClient.appleModelStatus.isAvailable || CodexOAuthClient.cachedConnected
+                || LocalServiceKeys.hasOpenRouterKey || hasDeepSeekKey
+            return (ready, L10n.text("没有可用的 AI：请在设置 › 服务商中连接一个模型。"))
+        }
+    }
+
     static var current: AIProviderPreference {
         guard let raw = UserDefaults.standard.string(forKey: storageKey),
               let value = AIProviderPreference(rawValue: raw) else { return .automatic }

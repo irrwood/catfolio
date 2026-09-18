@@ -813,6 +813,9 @@ struct ResearchView: View {
 
     /// A held security opens with its position; anything else opens bare.
     private func open(_ result: MarketSecurityResult) {
+        // The keyboard would otherwise stay up over the sheet and cover half
+        // the page. The query stays, so closing the sheet returns to the list.
+        isSearchFocused = false
         selectedSecurity = heldHolding(result.ticker) ?? result.holding
     }
 

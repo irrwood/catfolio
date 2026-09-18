@@ -33,12 +33,11 @@ struct HoldingsHeatmapView: View {
 
         VStack(alignment: .leading, spacing: 12) {
             if models.isEmpty {
-                ContentUnavailableView(
-                    L10n.text("暂无持仓"),
-                    systemImage: "square.grid.3x3",
-                    description: Text(L10n.text("同步持仓后会在这里显示资产分布。"))
-                )
-                .frame(minHeight: 260)
+                // The words are left off the texture the hero bakes: it lies
+                // the whole plane down at an angle, where a sentence reads as
+                // a smudge. Standing upright, the heatmap keeps them.
+                HoldingsHeatmapPlaceholder(showsCaption: isInteractive)
+                    .frame(height: 320)
             } else {
                 Group {
                     if groupsBySector {
@@ -715,5 +714,58 @@ private struct HoldingsHeatmapRemainderDetail: View {
             loadedChanges.merge(constituentChanges) { _, fresh in fresh }
             completedQuoteIDs.formUnion(batch.map(\.id))
         }
+    }
+}
+
+/// The heatmap with nothing in it: its own tiling, laid out by the same
+/// treemap from a weight curve shaped like a portfolio's, drawn in the
+/// skeleton fill. A grid icon said "empty"; this says where the holdings
+/// will sit, and it is the shape the page will actually take.
+private struct HoldingsHeatmapPlaceholder: View {
+    var showsCaption = true
+
+    /// Weights, not sizes: one large position, a few mid ones and a tail, the
+    /// distribution a real portfolio has. Fixed, so the tiles do not reshuffle
+    /// on every redraw.
+    private static let weights: [Double] = [
+        26, 17, 12.5, 9, 7.5, 5.5, 4.5, 3.6, 3, 2.4, 2, 1.7, 1.4, 1.2, 1, 0.8, 0.7, 0.6, 0.5, 0.4,
+    ]
+
+    var body: some View {
+        GeometryReader { geometry in
+            let tiles = HoldingsTreemapLayout.layout(
+                items: Self.weights.enumerated().map {
+                    HoldingsTreemapLayout.Item(ticker: "placeholder-\($0.offset)", weight: $0.element)
+                },
+                in: CGRect(origin: .zero, size: geometry.size)
+            )
+            ZStack(alignment: .topLeading) {
+                ForEach(tiles, id: \.sourceIndex) { tile in
+                    let inset = HoldingsHeatmapTile.inset(in: tile.frame.size)
+                    let frame = tile.frame.insetBy(dx: inset, dy: inset)
+                    RoundedRectangle(cornerRadius: min(10, max(3, min(frame.width, frame.height) / 6)),
+                                     style: .continuous)
+                        .fill(CatfolioTheme.skeletonFill)
+                        .frame(width: max(0, frame.width), height: max(0, frame.height))
+                        .offset(x: frame.minX, y: frame.minY)
+                }
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+        .overlay {
+            if showsCaption {
+                VStack(spacing: 5) {
+                    Text(L10n.text("暂无持仓"))
+                        .appText(.subheading, weight: .semibold)
+                    Text(L10n.text("同步持仓后会在这里显示资产分布。"))
+                        .appText(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal, 24)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.text("暂无持仓") + "，" + L10n.text("同步持仓后会在这里显示资产分布。"))
     }
 }

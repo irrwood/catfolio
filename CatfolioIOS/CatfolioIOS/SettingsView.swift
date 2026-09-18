@@ -831,6 +831,8 @@ private struct SettingsHistoryOverview: View {
     /// holdings paid over the rest of the year last year.
     @State private var dividendForecast: Double?
     @State private var failed = false
+    /// Figures are on screen and a fresh read is running behind them.
+    @State private var isReloading = false
 
     private struct LoadKey: Hashable {
         let updatedAt: Date?
@@ -852,6 +854,7 @@ private struct SettingsHistoryOverview: View {
                 overviewCard(.fees, title: L10n.text("年费用合计"), icon: "creditcard",
                              caption: "", amount: annualFees)
             }
+            .refreshGlow(isActive: isReloading)
             if failed {
                 Button(L10n.text("无法读取速览，轻点重试")) {
                     Task { await load() }
@@ -920,11 +923,14 @@ private struct SettingsHistoryOverview: View {
     }
 
     @MainActor
+    /// A reload keeps the figures that are already up. Clearing them first
+    /// blanked all four cards and put a progress line under the grid, which
+    /// changed the section's height and shifted everything below it — the
+    /// jump a reader saw on coming back from a page that changes the key.
     private func load() async {
-        prepared = nil
-        annualFees = nil
-        dividendForecast = nil
         failed = false
+        isReloading = prepared != nil
+        defer { isReloading = false }
         do {
             let ledger = try await model.activityLedger()
             let accountIDs = Set(ledger.accounts.map(\.id))

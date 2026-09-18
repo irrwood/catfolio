@@ -219,7 +219,9 @@ struct HoldingPredictionMarketsCard: View {
             // The same header as every research card: title, a secondary
             // line, and one quiet control where the others put their chevron.
             HStack(alignment: .center, spacing: 14) {
-                HoldingDetailCardTitle(title: L10n.text("Predicting markets"), subtitle: predictionSubtitle)
+                // Just the name: the source and event count read as noise
+                // above the events themselves.
+                HoldingDetailCardTitle(title: L10n.text("Predicting markets"))
                     .redacted(reason: isLoading && markets.isEmpty ? .placeholder : [])
                     .chartLoadingShimmer(active: isLoading && markets.isEmpty)
                 if isLoading {
@@ -264,12 +266,6 @@ struct HoldingPredictionMarketsCard: View {
             }
             await load(forceRefresh: false)
         }
-    }
-
-    private var predictionSubtitle: String {
-        if isLoading && markets.isEmpty { return "Polymarket · 3" }
-        let events = PolymarketRelatedEvent.grouped(markets).count
-        return events > 0 ? L10n.text("Polymarket · \(events) 个相关事件") : "Polymarket"
     }
 
     private var predictionRows: some View {

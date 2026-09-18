@@ -68,18 +68,21 @@ struct HoldingDetailDisclosureCard<Content: View>: View {
 /// action, disclosure, and the prediction markets card alike.
 struct HoldingDetailCardTitle: View {
     let title: String
-    let subtitle: String
+    /// A card with nothing to add under its name leaves this out.
+    var subtitle: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .appText(.subheading, weight: .medium)
                 .foregroundStyle(.primary)
-            Text(subtitle)
-                .appText(.label, weight: .medium)
-                .foregroundStyle(.primary.opacity(0.50))
-                .lineSpacing(2)
-                .fixedSize(horizontal: false, vertical: true)
+            if let subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .appText(.label, weight: .medium)
+                    .foregroundStyle(.primary.opacity(0.50))
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .multilineTextAlignment(.leading)
         .frame(maxWidth: .infinity, alignment: .leading)

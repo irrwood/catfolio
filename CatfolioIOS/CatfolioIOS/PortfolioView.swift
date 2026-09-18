@@ -93,6 +93,7 @@ struct PortfolioView: View {
                                             dailyChanges: model.holdingDailyChanges,
                                             benchmarkChange: model.benchmarkDailyChange,
                                             isLoading: model.isHoldingDailyChangesLoading,
+                                            isRefreshingBehindCache: model.isHomeRefreshingBehindCache,
                                             onOpenDetail: { showsTodayDetail = true },
                                             onTitleBottomPositionChange: { titleBottomY in
                                                 homeScrollState.titleMoved(to: titleBottomY)

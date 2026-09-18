@@ -2,7 +2,10 @@ import SwiftUI
 import Charts
 import UniformTypeIdentifiers
 
-/// Values are exported by Core; the native client never recomputes sentiment scores.
+/// Core's export format. The phone now produces the same file itself from
+/// the same public sources (`IndustrySentimentClient`, a port of Core's
+/// engine); the bundled copy and a hand-imported file still load when it
+/// can't.
 struct IndustrySentimentSnapshot: Decodable {
     struct Day: Decodable, Identifiable {
         let date: String
@@ -65,6 +68,8 @@ struct IndustrySentimentView: View {
     @State private var selectedDate: Date?
     @State private var importing = false
     @State private var error: String?
+    /// A fresh read from Cboe and Yahoo is running behind the figures on screen.
+    @State private var isRefreshing = false
     private let cacheURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("industry-sentiment.json")
 
@@ -72,6 +77,7 @@ struct IndustrySentimentView: View {
         SettingsPage(bottomInset: 32, topInset: SettingsTemplate.sectionSpacing) {
             if let snapshot {
                 gaugeCard(snapshot)
+                    .refreshGlow(isActive: isRefreshing)
                 trendCard(snapshot)
                 portfolioInsight(snapshot)
             } else {
@@ -88,7 +94,11 @@ struct IndustrySentimentView: View {
                     .accessibilityLabel(L10n.text("导入行情快照"))
             }
         }
-        .task { load() }
+        .task {
+            load()
+            await refresh()
+        }
+        .refreshable { await refresh() }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
             do {
                 let url = try result.get()
@@ -104,6 +114,30 @@ struct IndustrySentimentView: View {
                 selectedDate = nil
                 error = nil
             } catch { self.error = L10n.text("无法导入，请选择有效且更新的行情快照。") }
+        }
+    }
+
+    /// Reads VXSMH from Cboe and SMH from Yahoo and runs Core's method on the
+    /// phone. What's on screen stays up while it runs, and stays up if it
+    /// fails; only a newer or equal day replaces it.
+    private func refresh() async {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+        do {
+            let data = try await IndustrySentimentClient().snapshotData()
+            let incoming = try IndustrySentimentSnapshot.decode(data)
+            guard snapshot.map({ incoming.asOf >= $0.asOf }) ?? true else { return }
+            try? FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(),
+                                                     withIntermediateDirectories: true)
+            try? data.write(to: cacheURL, options: .atomic)
+            snapshot = incoming
+            error = nil
+        } catch {
+            guard !Task.isCancelled else { return }
+            self.error = snapshot == nil
+                ? L10n.text("暂无行情数据")
+                : L10n.text("无法更新行情，显示的是 \(snapshot?.asOf ?? "") 的数据。下拉可重试。")
         }
     }
 

@@ -361,7 +361,18 @@ struct TodayDetailView: View {
         let tint = value >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger
         let money = DisplayFormat.money(contribution.amount, signed: true, fractionDigits: 2)
         let percentage = DisplayFormat.percent(contribution.changePercent, signed: true)
-        return VStack(alignment: .leading, spacing: 6) {
+        return HStack(alignment: .center, spacing: 12) {
+            // The same mark the home list shows, so a holding reads as itself
+            // here without the reader matching names.
+            AssetLogo(ticker: contribution.holding.ticker, logoSymbol: contribution.holding.logoSymbol, size: 36)
+            contributionDetail(contribution, value: value, tint: tint, money: money, percentage: percentage)
+        }
+        .padding(.vertical, 3)
+    }
+
+    private func contributionDetail(_ contribution: Contribution, value: Double, tint: Color,
+                                    money: String, percentage: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
                 Text(contribution.holding.shortName)
                     .font(.body.weight(.medium))
@@ -388,7 +399,6 @@ struct TodayDetailView: View {
                     .frame(minWidth: 62, alignment: .trailing)
             }
         }
-        .padding(.vertical, 3)
     }
 }
 
@@ -423,6 +433,8 @@ private struct SectorMembersView: View {
 
             Section {
                 ForEach(breakdown.components) { component in
+                    HStack(alignment: .center, spacing: 12) {
+                    AssetLogo(ticker: component.holding.ticker, logoSymbol: component.holding.logoSymbol, size: 32)
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(alignment: .firstTextBaseline) {
                             Text(component.holding.shortName)
@@ -443,6 +455,7 @@ private struct SectorMembersView: View {
                                     .foregroundStyle(.tertiary)
                             }
                         }
+                    }
                     }
                     .padding(.vertical, 2)
                 }

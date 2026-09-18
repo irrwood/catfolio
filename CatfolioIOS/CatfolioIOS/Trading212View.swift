@@ -179,7 +179,7 @@ struct Trading212View: View {
             .navigationTitle(context.isCreating ? L10n.text("新建 Trading 212 账户") : "Trading 212")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button(L10n.text("完成")) { dismiss() }
                 }
             }

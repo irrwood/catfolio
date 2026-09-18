@@ -242,7 +242,7 @@ struct IBKRFlexView: View {
             .navigationTitle(context.isCreating ? L10n.text("新建 IBKR 账户") : "IBKR Flex")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button(L10n.text("完成")) { dismiss() }
                 }
             }

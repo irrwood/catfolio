@@ -127,7 +127,7 @@ struct SnapTradeView: View {
             .disabled(busy)
             .navigationTitle("SnapTrade")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(L10n.text("完成")) { dismiss() }.disabled(busy) } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { dismiss() }.disabled(busy) } }
             .interactiveDismissDisabled(busy)
             .task {
                 nickname = context.account?.name ?? model.suggestedAccountNickname()

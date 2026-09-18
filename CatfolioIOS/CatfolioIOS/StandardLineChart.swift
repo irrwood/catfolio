@@ -84,6 +84,11 @@ struct StandardLineChartSeries: Identifiable {
     let lineWidth: CGFloat
     let dash: [CGFloat]
     let areaFill: Color?
+    /// How far the area's fill washes out towards the bottom of its own
+    /// shape: 0 keeps the flat colour, 0.4 mixes 40% white into the bottom
+    /// edge. The gradient spans the shape's own bounds, so a band reads as
+    /// its pure colour where it starts and pales where it ends.
+    let areaFillWash: Double
     let areaBaseline: Double?
     let areaStripeColor: Color?
     let areaStripeSpacing: CGFloat
@@ -100,6 +105,7 @@ struct StandardLineChartSeries: Identifiable {
         lineWidth: CGFloat = 2.25,
         dash: [CGFloat] = [],
         areaFill: Color? = nil,
+        areaFillWash: Double = 0,
         areaBaseline: Double? = nil,
         areaStripeColor: Color? = nil,
         areaStripeSpacing: CGFloat = 12,
@@ -115,6 +121,7 @@ struct StandardLineChartSeries: Identifiable {
         self.lineWidth = lineWidth
         self.dash = dash
         self.areaFill = areaFill
+        self.areaFillWash = areaFillWash
         self.areaBaseline = areaBaseline
         self.areaStripeColor = areaStripeColor
         self.areaStripeSpacing = areaStripeSpacing
@@ -900,6 +907,7 @@ struct StandardLineChart: View {
                             points: [StandardLineChartPoint]) -> StandardLineChartSeries {
         StandardLineChartSeries(id: source.id, points: points, color: source.color,
             lineWidth: source.lineWidth, dash: source.dash, areaFill: source.areaFill,
+            areaFillWash: source.areaFillWash,
             areaBaseline: source.areaBaseline, areaStripeColor: source.areaStripeColor,
             areaStripeSpacing: source.areaStripeSpacing, selectionRadius: source.selectionRadius,
             latestPointRadius: source.latestPointRadius, latestPointColor: source.latestPointColor,
@@ -1231,7 +1239,7 @@ struct StandardLineChart: View {
             area.closeSubpath()
             var fillContext = context
             fillContext.opacity = outgoing.isLoadingPlaceholder ? Double(progress) : 1
-            fillContext.fill(area, with: .color(fill))
+            fillContext.fill(area, with: areaShading(incoming, fill: fill, bounds: area.boundingRect))
             drawAreaStripes(in: area, color: incoming.areaStripeColor,
                 spacing: incoming.areaStripeSpacing, context: &fillContext, plot: plot)
         }
@@ -1519,7 +1527,7 @@ struct StandardLineChart: View {
             area.closeSubpath()
             var fillContext = context
             fillContext.opacity = opacity
-            fillContext.fill(area, with: .color(fill))
+            fillContext.fill(area, with: areaShading(series, fill: fill, bounds: area.boundingRect))
             drawAreaStripes(in: area, color: series.areaStripeColor,
                             spacing: series.areaStripeSpacing, context: &fillContext, plot: plot)
         }
@@ -1720,6 +1728,18 @@ struct StandardLineChart: View {
         }
     }
 
+
+    /// Flat colour, or the design's wash from the shape's top to its bottom.
+    private func areaShading(_ series: StandardLineChartSeries, fill: Color,
+                             bounds: CGRect) -> GraphicsContext.Shading {
+        guard series.areaFillWash > 0, bounds.height > 1 else { return .color(fill) }
+        return .linearGradient(
+            Gradient(colors: [fill, fill.mix(with: .white, by: series.areaFillWash)]),
+            startPoint: CGPoint(x: bounds.midX, y: bounds.minY),
+            endPoint: CGPoint(x: bounds.midX, y: bounds.maxY)
+        )
+    }
+
     private func drawArea(
         _ series: StandardLineChartSeries,
         fill: Color,
@@ -1743,7 +1763,7 @@ struct StandardLineChart: View {
             area.addLine(to: CGPoint(x: x(for: last.date, in: plot, dates: dates), y: baselineY))
             area.addLine(to: CGPoint(x: x(for: first.date, in: plot, dates: dates), y: baselineY))
             area.closeSubpath()
-            context.fill(area, with: .color(fill))
+            context.fill(area, with: areaShading(series, fill: fill, bounds: area.boundingRect))
             drawAreaStripes(
                 in: area,
                 color: series.areaStripeColor,
