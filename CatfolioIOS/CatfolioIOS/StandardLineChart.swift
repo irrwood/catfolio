@@ -89,9 +89,12 @@ struct StandardLineChartSeries: Identifiable {
     /// edge. The gradient spans the shape's own bounds, so a band reads as
     /// its pure colour where it starts and pales where it ends.
     let areaFillWash: Double
+    /// Optional design-specified gradient endpoint; other charts retain their wash.
+    let areaFillEndColor: Color?
     let areaBaseline: Double?
     let areaStripeColor: Color?
     let areaStripeSpacing: CGFloat
+    let areaStripeWidth: CGFloat
     let selectionRadius: CGFloat
     let latestPointRadius: CGFloat?
     let latestPointColor: Color?
@@ -106,9 +109,11 @@ struct StandardLineChartSeries: Identifiable {
         dash: [CGFloat] = [],
         areaFill: Color? = nil,
         areaFillWash: Double = 0,
+        areaFillEndColor: Color? = nil,
         areaBaseline: Double? = nil,
         areaStripeColor: Color? = nil,
         areaStripeSpacing: CGFloat = 12,
+        areaStripeWidth: CGFloat = 0.75,
         selectionRadius: CGFloat = 3.5,
         latestPointRadius: CGFloat? = 5.5,
         latestPointColor: Color? = nil,
@@ -122,9 +127,11 @@ struct StandardLineChartSeries: Identifiable {
         self.dash = dash
         self.areaFill = areaFill
         self.areaFillWash = areaFillWash
+        self.areaFillEndColor = areaFillEndColor
         self.areaBaseline = areaBaseline
         self.areaStripeColor = areaStripeColor
         self.areaStripeSpacing = areaStripeSpacing
+        self.areaStripeWidth = areaStripeWidth
         self.selectionRadius = selectionRadius
         self.latestPointRadius = latestPointRadius
         self.latestPointColor = latestPointColor
@@ -908,8 +915,9 @@ struct StandardLineChart: View {
         StandardLineChartSeries(id: source.id, points: points, color: source.color,
             lineWidth: source.lineWidth, dash: source.dash, areaFill: source.areaFill,
             areaFillWash: source.areaFillWash,
+            areaFillEndColor: source.areaFillEndColor,
             areaBaseline: source.areaBaseline, areaStripeColor: source.areaStripeColor,
-            areaStripeSpacing: source.areaStripeSpacing, selectionRadius: source.selectionRadius,
+            areaStripeSpacing: source.areaStripeSpacing, areaStripeWidth: source.areaStripeWidth, selectionRadius: source.selectionRadius,
             latestPointRadius: source.latestPointRadius, latestPointColor: source.latestPointColor,
             latestPointUsesGlass: source.latestPointUsesGlass)
     }
@@ -1241,7 +1249,7 @@ struct StandardLineChart: View {
             fillContext.opacity = outgoing.isLoadingPlaceholder ? Double(progress) : 1
             fillContext.fill(area, with: areaShading(incoming, fill: fill, bounds: area.boundingRect))
             drawAreaStripes(in: area, color: incoming.areaStripeColor,
-                spacing: incoming.areaStripeSpacing, context: &fillContext, plot: plot)
+                spacing: incoming.areaStripeSpacing, width: incoming.areaStripeWidth, context: &fillContext, plot: plot)
         }
 
         if outgoing.isLoadingPlaceholder {
@@ -1529,7 +1537,7 @@ struct StandardLineChart: View {
             fillContext.opacity = opacity
             fillContext.fill(area, with: areaShading(series, fill: fill, bounds: area.boundingRect))
             drawAreaStripes(in: area, color: series.areaStripeColor,
-                            spacing: series.areaStripeSpacing, context: &fillContext, plot: plot)
+                            spacing: series.areaStripeSpacing, width: series.areaStripeWidth, context: &fillContext, plot: plot)
         }
         stroke(path, series: series, opacity: opacity, context: &context)
     }
@@ -1732,9 +1740,9 @@ struct StandardLineChart: View {
     /// Flat colour, or the design's wash from the shape's top to its bottom.
     private func areaShading(_ series: StandardLineChartSeries, fill: Color,
                              bounds: CGRect) -> GraphicsContext.Shading {
-        guard series.areaFillWash > 0, bounds.height > 1 else { return .color(fill) }
+        guard series.areaFillWash > 0 || series.areaFillEndColor != nil, bounds.height > 1 else { return .color(fill) }
         return .linearGradient(
-            Gradient(colors: [fill, fill.mix(with: .white, by: series.areaFillWash)]),
+            Gradient(colors: [fill, series.areaFillEndColor ?? fill.mix(with: .white, by: series.areaFillWash)]),
             startPoint: CGPoint(x: bounds.midX, y: bounds.minY),
             endPoint: CGPoint(x: bounds.midX, y: bounds.maxY)
         )
@@ -1768,6 +1776,7 @@ struct StandardLineChart: View {
                 in: area,
                 color: series.areaStripeColor,
                 spacing: series.areaStripeSpacing,
+                width: series.areaStripeWidth,
                 context: &context,
                 plot: plot
             )
@@ -1778,6 +1787,7 @@ struct StandardLineChart: View {
         in area: Path,
         color: Color?,
         spacing: CGFloat,
+        width: CGFloat,
         context: inout GraphicsContext,
         plot: CGRect
     ) {
@@ -1792,7 +1802,7 @@ struct StandardLineChart: View {
             stripes.addLine(to: CGPoint(x: x + plot.height, y: plot.minY))
             x += safeSpacing
         }
-        stripeContext.stroke(stripes, with: .color(color), lineWidth: 0.75)
+        stripeContext.stroke(stripes, with: .color(color), lineWidth: width)
     }
 
     @ViewBuilder

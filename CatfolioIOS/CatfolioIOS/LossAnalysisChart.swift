@@ -16,6 +16,7 @@ struct LossAnalysisChart: View {
     var fetchHistory: (@MainActor (Bool) async throws -> HoldingValueHistory)? = nil
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.locale) private var appLocale
     @State private var loading = HoldingHistoryState()
     @State private var retryRevision = 0
@@ -34,15 +35,11 @@ struct LossAnalysisChart: View {
         VStack(alignment: .leading, spacing: 18) {
             if let stack, stack.rows.count > 1 {
                 let shown = stack.row(nearest: selectedDate) ?? stack.rows.last!
-                header(shown)
-                    .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
                 let visible = visibleBands(stack)
                 let bottom = floor(stack, visible: visible)
-                plot(stack: stack, visible: visible, bottom: bottom)
-                    .frame(height: 300)
-                    .overlay(alignment: .topLeading) { axisLabels(bottom: bottom) }
-                ChartTimeRangePicker(selection: $range)
-                    .frame(maxWidth: .infinity)
+                ReturnsSourceChartHero(range: $range, header: header(shown),
+                                       plot: plot(stack: stack, visible: visible, bottom: bottom),
+                                       axis: axisLabels(bottom: bottom))
                 Group {
                     if stack.bands.count > 1 || !stack.hidden.isEmpty {
                         legend(stack: stack, row: shown)
@@ -57,7 +54,8 @@ struct LossAnalysisChart: View {
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
+                .padding(.horizontal, ReturnsSourceChartStyle.inset)
+                .padding(.top, 6)
             } else if let errorMessage = loading.errorMessage {
                 StandardLineChartPlaceholder(title: L10n.text("暂时无法绘制"), message: errorMessage, isLoading: false)
                     .frame(height: 300)
@@ -79,6 +77,7 @@ struct LossAnalysisChart: View {
                     .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
             }
         }
+        .toolbarBackground(.hidden, for: .navigationBar)
         .task(id: "\(model.portfolioChartRevision)|\(model.holdings.count)|\(refreshRevision)|\(retryRevision)") {
             await loading.load { cachedOnly in
                 if let fetchHistory { return try await fetchHistory(cachedOnly) }
@@ -106,23 +105,26 @@ struct LossAnalysisChart: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(row.date.formatted(.dateTime.year().month(.abbreviated).day()))
                 .appText(.caption, weight: .medium)
-                .foregroundStyle(.secondary)
-            Text(row.totalLoss > 0 ? DisplayFormat.money(-row.totalLoss, signed: true, fractionDigits: 0)
-                                   : DisplayFormat.money(0, fractionDigits: 0))
-                .appNumber(.title, weight: .semibold)
-                .foregroundStyle(row.totalLoss > 0 ? CatfolioTheme.loss(for: colorScheme) : .primary)
+                .foregroundStyle(ReturnsSourceChartStyle.secondary(for: colorScheme))
+            CatfolioDisplayAmountText(
+                text: row.totalLoss > 0 ? DisplayFormat.money(-row.totalLoss, signed: true, fractionDigits: 0)
+                                       : DisplayFormat.money(0, fractionDigits: 0),
+                size: 34, symbolSize: 22,
+                color: ReturnsSourceChartStyle.primary(for: colorScheme)
+            )
                 .contentTransition(.numericText(value: row.totalLoss))
+                .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: row.totalLoss)
             HStack(spacing: 4) {
                 Text(L10n.text("\(row.losingCount) 只持仓低于成本"))
                     .appText(.footnote, weight: .medium)
-                    .foregroundStyle(.secondary)
-                Text("·").foregroundStyle(.tertiary)
+                    .foregroundStyle(ReturnsSourceChartStyle.secondary(for: colorScheme))
+                Text("·").foregroundStyle(ReturnsSourceChartStyle.secondary(for: colorScheme))
                 Text(L10n.text("组合盈亏"))
                     .appText(.footnote, weight: .medium)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(ReturnsSourceChartStyle.secondary(for: colorScheme))
                 Text(DisplayFormat.money(row.netGain, signed: true, fractionDigits: 0))
                     .appNumber(.footnote)
-                    .foregroundStyle(CatfolioTheme.heroPerformance(for: row.netGain, scheme: colorScheme))
+                    .foregroundStyle(ReturnsSourceChartStyle.primary(for: colorScheme))
             }
             .lineLimit(1)
             .minimumScaleFactor(0.7)
@@ -136,7 +138,12 @@ struct LossAnalysisChart: View {
         // No portfolio line on top — the bottom edge already is the total.
         var series: [StandardLineChartSeries] = []
         for (position, band) in visible.enumerated().reversed() {
-            let color = Self.color(for: stack.bands[band].kind, scheme: colorScheme)
+            let kind = stack.bands[band].kind
+            let gainKind: HoldingContributionStack.Band.Kind = switch kind {
+            case .others: .others
+            case let .holding(colour): .holding(colour: colour)
+            }
+            let color = HoldingContributionChart.fillColor(for: gainKind, scheme: colorScheme)
             let above = visible[...position]
             let id = Self.seriesID(stack.bands[band])
             series.append(StandardLineChartSeries(
@@ -146,11 +153,13 @@ struct LossAnalysisChart: View {
                                            value: -above.reduce(0) { $0 + row.bands[$1] })
                 },
                 color: color,
-                lineWidth: 1.5,
-                areaFill: color,
+                lineWidth: 0,
+                areaFill: kind == .others ? .white : color,
+                areaFillEndColor: HoldingContributionChart.fillEndColor(for: gainKind),
                 areaBaseline: 0,
-                areaStripeColor: stack.bands[band].kind == .others ? Color.white.opacity(0.07) : nil,
-                areaStripeSpacing: 10,
+                areaStripeColor: kind == .others ? ReturnsSourceChartStyle.stripeColor : nil,
+                areaStripeSpacing: 35.5,
+                areaStripeWidth: 13,
                 latestPointRadius: 0,
                 latestPointUsesGlass: false
             ))
@@ -173,6 +182,9 @@ struct LossAnalysisChart: View {
             appearanceID: "loss-sources",
             dataTransition: .viewportZoom,
             selectedDate: selectedDate,
+            selectionIndicatorLabel: selectedDate.map {
+                $0.formatted(.dateTime.year().month(.abbreviated).day())
+            },
             selectionSeriesIDs: Set([outer].compactMap { $0 }),
             dimsFutureDuringSelection: true,
             yAxisLabel: { _ in "" },
@@ -208,8 +220,8 @@ struct LossAnalysisChart: View {
             }
         }
         .animation(StandardLineChartTransition.zoom, value: bottom)
-        .foregroundStyle(Color.primary.opacity(colorScheme == .light ? 0.35 : 0.4))
-        .padding(.leading, CatfolioStyle.pageHorizontalInset)
+        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.42) : Color.black.opacity(0.32))
+        .padding(.leading, ReturnsSourceChartStyle.inset)
         .padding(.top, 6)
         .padding(.bottom, 8)
         .allowsHitTesting(false)
@@ -223,7 +235,7 @@ struct LossAnalysisChart: View {
                 let item = stack.bands[band]
                 let isOn = item.kind != .others || showsOthers
                 Button { toggle(item) } label: {
-                    legendRow(swatch: Self.color(for: item.kind, scheme: colorScheme), isOn: isOn,
+                    legendRow(rank: stack.rank(for: item), swatch: Self.color(for: item.kind, scheme: colorScheme), isOn: isOn,
                               title: item.title, subtitle: item.subtitle) {
                         VStack(alignment: .trailing, spacing: 2) {
                             lossText(row.bands[band])
@@ -238,19 +250,17 @@ struct LossAnalysisChart: View {
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(isOn ? .isSelected : [])
                 .accessibilityHint(L10n.text("轻点切换显示或隐藏"))
-                Divider()
             }
             ForEach(stack.hidden, id: \.ticker) { holding in
                 Button {
                     withAnimation(.snappy) { _ = hiddenTickers.remove(holding.ticker) }
                 } label: {
-                    legendRow(swatch: .secondary, isOn: false, title: holding.ticker, subtitle: holding.name) {
+                    legendRow(rank: stack.holdingRanks[holding.ticker], swatch: .secondary, isOn: false, title: holding.ticker, subtitle: holding.name) {
                         Text(L10n.text("已隐藏")).appText(.caption).foregroundStyle(.secondary)
                     }
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint(L10n.text("轻点重新显示"))
-                Divider()
             }
         }
     }
@@ -261,18 +271,22 @@ struct LossAnalysisChart: View {
             .foregroundStyle(loss > 0.5 ? CatfolioTheme.loss(for: colorScheme) : .secondary)
     }
 
-    private func legendRow<Trailing: View>(swatch: Color, isOn: Bool, title: String, subtitle: String,
+    private func legendRow<Trailing: View>(rank: Int?, swatch: Color, isOn: Bool, title: String, subtitle: String,
                                            @ViewBuilder trailing: () -> Trailing) -> some View {
         HStack(alignment: .center, spacing: 12) {
-            RoundedRectangle(cornerRadius: 3, style: .continuous)
+            Text(rank.map(String.init) ?? "")
+                .appNumber(.callout, weight: .semibold)
+                .foregroundStyle(.secondary)
+                .frame(width: 18, alignment: .leading)
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(isOn ? swatch : .clear)
                 .overlay {
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .strokeBorder(isOn ? .clear : Color.secondary, lineWidth: 1.5)
                 }
-                .frame(width: 12, height: 12)
+                .frame(width: 20, height: 20)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).appText(.callout, weight: .semibold).lineLimit(1)
+                Text(title).appText(.subheading, weight: .semibold).lineLimit(1)
                 Text(subtitle).appText(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 12)
@@ -338,6 +352,8 @@ struct HoldingLossStack {
     let rows: [Row]
     /// Each named holding's deepest loss in the range, as a positive amount.
     let deepest: [String: Double]
+    /// Deepest-loss rank in the selected range, computed before hiding.
+    let holdingRanks: [String: Int]
     let hidden: [(ticker: String, name: String)]
 
     init(history: HoldingValueHistory, holdings: [Holding] = [], range: ChartTimeRange, hiding: Set<String> = []) {
@@ -361,6 +377,8 @@ struct HoldingLossStack {
         let everyone = deepestLoss.keys.sorted {
             (deepestLoss[$0] ?? 0) == (deepestLoss[$1] ?? 0) ? $0 < $1 : (deepestLoss[$0] ?? 0) > (deepestLoss[$1] ?? 0)
         }
+        let ranks = Dictionary(uniqueKeysWithValues: everyone.enumerated().map { ($0.element, $0.offset + 1) })
+        holdingRanks = ranks
         func topLosers(_ tickers: [String]) -> [String] {
             Array(tickers.prefix(HoldingContributionStack.namedCount(tickers.map { deepestLoss[$0] ?? 0 })))
         }
@@ -372,7 +390,10 @@ struct HoldingLossStack {
         var free = (0..<HoldingContributionStack.maximumNamed).filter { !colours.values.contains($0) }.makeIterator()
         for ticker in named where colours[ticker] == nil { colours[ticker] = free.next() ?? 0 }
         let others = present.subtracting(named)
-        hidden = hiding.intersection(present).sorted().map { (ticker: $0, name: names[$0] ?? $0) }
+        hidden = hiding.intersection(present).sorted {
+            let left = ranks[$0] ?? Int.max, right = ranks[$1] ?? Int.max
+            return left == right ? $0 < $1 : left < right
+        }.map { (ticker: $0, name: names[$0] ?? $0) }
 
         var bands = [Band(kind: .others, title: L10n.text("其他亏损"), subtitle: L10n.text("\(others.count) 项持仓合计"))]
         for ticker in named.reversed() {
@@ -389,6 +410,11 @@ struct HoldingLossStack {
             return Row(dateText: row.dateText, date: row.date, bands: [othersLoss] + namedLosses,
                        losingCount: losing, netGain: net)
         }
+    }
+
+    func rank(for band: Band) -> Int? {
+        guard case .holding = band.kind else { return nil }
+        return holdingRanks[band.title]
     }
 
     func row(nearest date: Date?) -> Row? {

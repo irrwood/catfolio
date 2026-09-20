@@ -30,12 +30,129 @@ private struct HeroDotField: View {
     }
 }
 
+enum ReturnsSourceChartStyle {
+    static let inset: CGFloat = 24
+    static let chartHeight: CGFloat = 280
+    static let stripHeight: CGFloat = 62
+    static let stripeColor = Color(red: 92 / 255, green: 187 / 255, blue: 253 / 255).opacity(0.1)
+
+    static func primary(for scheme: ColorScheme) -> Color {
+        scheme == .dark ? .white : Color(red: 0.10, green: 0.10, blue: 0.10)
+    }
+
+    static func secondary(for scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color.white.opacity(0.72) : Color.black.opacity(0.55)
+    }
+}
+
+/// Shared Figma surface for gains and losses; each page supplies its own
+/// data-driven plot and axes, including the losses' downward direction.
+struct ReturnsSourceChartHero<Header: View, Plot: View, Axis: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Binding var range: ChartTimeRange
+    let header: Header
+    let plot: Plot
+    let axis: Axis
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+                .padding(.horizontal, ReturnsSourceChartStyle.inset)
+                .padding(.bottom, 20)
+                // Downward loss areas have colour at the top of the plot;
+                // their expanded glow must stay behind the header's text.
+                .zIndex(1)
+            ZStack {
+                // 454pt of colour behind a 280pt plot, blurred at 35pt.
+                plot
+                    .frame(height: ReturnsSourceChartStyle.chartHeight)
+                    .scaleEffect(y: 454 / 280, anchor: .bottom)
+                    .blur(radius: 35)
+                    .opacity(colorScheme == .dark ? 0.2 : 0.5)
+                    .blendMode(colorScheme == .dark ? .plusLighter : .lighten)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                plot.frame(height: ReturnsSourceChartStyle.chartHeight)
+            }
+            .frame(height: ReturnsSourceChartStyle.chartHeight)
+            .overlay(alignment: .topLeading) { axis }
+            rangeStrip(reflecting: plot)
+        }
+        .background(alignment: .bottom) { heroField }
+        .compositingGroup()
+        .mask(alignment: .bottom) {
+            UnevenRoundedRectangle(
+                cornerRadii: .init(bottomLeading: CatfolioStyle.cardRadius,
+                                   bottomTrailing: CatfolioStyle.cardRadius),
+                style: .continuous
+            )
+            .fill(Color.black)
+            .padding(.top, -320)
+        }
+    }
+
+    /// Exact Figma field paints. The apparent dark gradient comes from
+    /// the chart glow, not a second gradient baked into the background.
+    private var heroField: some View {
+        ZStack(alignment: .bottom) {
+            (colorScheme == .dark
+                ? Color(red: 0.360386, green: 0.194594, blue: 0.834078)
+                : Color(red: 238 / 255, green: 248 / 255, blue: 254 / 255))
+                .padding(.top, -320)
+            HeroDotField(color: .black)
+                .mask {
+                    LinearGradient(stops: [.init(color: .white, location: 0),
+                                           .init(color: .clear, location: 0.7684)],
+                                   startPoint: .top, endPoint: .bottom)
+                }
+                .opacity(colorScheme == .dark ? 0.34 : 0.1)
+                .blendMode(colorScheme == .dark ? .overlay : .normal)
+                // Anchor the 533pt field to the plot baseline, so extending
+                // the background behind navigation does not dilute the dots.
+                .frame(height: 533)
+                .padding(.bottom, ReturnsSourceChartStyle.stripHeight - 23)
+        }
+        .frame(maxWidth: .infinity)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    /// The range picker on a translucent strip. The design shows the chart
+    /// reflected in it — the yellow band's colour pooling under the strip on
+    /// the right — so the strip carries a mirrored, blurred copy of the chart
+    /// under its tint rather than a flat fill.
+    private func rangeStrip<Chart: View>(reflecting chart: Chart) -> some View {
+        ChartTimeRangePicker(selection: $range, isOnTintedField: true)
+            .frame(maxWidth: .infinity)
+            .frame(height: ReturnsSourceChartStyle.stripHeight)
+            .background(alignment: .top) {
+                ZStack(alignment: .top) {
+                    // Mirrored, so the chart's bottom edge continues into the
+                    // strip; blurred until only the colour is left.
+                    chart
+                        .frame(height: ReturnsSourceChartStyle.chartHeight)
+                        .scaleEffect(y: -1, anchor: .center)
+                        .offset(y: -24)
+                        .blur(radius: 20)
+                        .opacity(0.5)
+                        .allowsHitTesting(false)
+                }
+                .frame(height: ReturnsSourceChartStyle.stripHeight, alignment: .top)
+                .clipped()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+    }
+
+}
+
 struct HoldingContributionChart: View {
     var refreshRevision = 0
     var fetchHistory: (@MainActor (Bool) async throws -> HoldingValueHistory)? = nil
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.locale) private var appLocale
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var loading = HoldingHistoryState()
     @State private var retryRevision = 0
     @State private var range = ChartTimeRange.yearToDate
@@ -60,49 +177,8 @@ struct HoldingContributionChart: View {
                 // screen edges; the holdings list sits on the page's own
                 // surface below it.
                 let chart = plot(stack: stack, window: window, visible: visible, top: top)
-                VStack(alignment: .leading, spacing: 0) {
-                    header(shown)
-                        .padding(.horizontal, Self.heroInset)
-                        .padding(.bottom, 20)
-                    // Edge to edge, as the home chart is; its value labels sit
-                    // inside the plot instead of in a column beside it.
-                    ZStack {
-                        // The design carries the chart's colour into the field
-                        // around it: a blurred copy behind the bands reads as a
-                        // coloured glow rather than a grey shadow.
-                        // Night only: the violet field takes the colour and
-                        // glows. The day field in the design stays clean right
-                        // up to the band edges, so nothing is drawn behind it.
-                        if colorScheme == .dark {
-                            chart
-                                .frame(height: Self.chartHeight)
-                                .blur(radius: 18)
-                                .opacity(0.72)
-                                .blendMode(.plusLighter)
-                                .allowsHitTesting(false)
-                        }
-                        chart
-                            .frame(height: Self.chartHeight)
-
-                    }
-                    .frame(height: Self.chartHeight)
-                    .overlay(alignment: .topLeading) { axisLabels(top: top) }
-                    rangeStrip(reflecting: chart)
-                }
-                .background(alignment: .bottom) { heroField }
-                // The field is cut with the card radius along the bottom; the
-                // mask keeps the upward extension so the bar area stays
-                // covered.
-                .compositingGroup()
-                .mask(alignment: .bottom) {
-                    UnevenRoundedRectangle(
-                        cornerRadii: .init(bottomLeading: CatfolioStyle.cardRadius,
-                                           bottomTrailing: CatfolioStyle.cardRadius),
-                        style: .continuous
-                    )
-                    .fill(Color.black)
-                    .padding(.top, -320)
-                }
+                ReturnsSourceChartHero(range: $range, header: header(shown), plot: chart,
+                                       axis: axisLabels(top: top))
                 Group {
                     legend(stack: stack, row: shown)
                     Text(L10n.text("按当前持仓的股数回推每天的市值，所以已卖出的持仓不在图中。收益最多的几只各占一层：按盈利从高到低，直到下一只不到全部盈利的 6%，最多 6 只。其他持仓整体亏损时，亏损从本金层里扣除，本金层会低于本金线。轻点下方任意一行可以隐藏或显示；隐藏的持仓并入其他，由下一只补上。"))
@@ -110,7 +186,7 @@ struct HoldingContributionChart: View {
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.horizontal, Self.heroInset)
+                .padding(.horizontal, ReturnsSourceChartStyle.inset)
                 .padding(.top, 6)
             } else if let errorMessage = loading.errorMessage {
                 StandardLineChartPlaceholder(title: L10n.text("暂时无法绘制"), message: errorMessage, isLoading: false)
@@ -180,18 +256,25 @@ struct HoldingContributionChart: View {
                 symbolSize: 22,
                 color: heroPrimary
             )
+            // As on the home page: the digits roll to the new figure as the
+            // reader moves along the chart or changes the range.
             .contentTransition(.numericText(value: row.total))
+            .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: row.total)
             HStack(spacing: 4) {
                 // The sign carries the direction here; on the tinted field
                 // the line reads as one sentence rather than a green figure.
                 Text(DisplayFormat.money(row.total - row.principal, signed: true, fractionDigits: 0))
                     .foregroundStyle(heroPrimary)
+                    .contentTransition(.numericText(value: row.total - row.principal))
+                    .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: row.total - row.principal)
                 Text("·").foregroundStyle(heroSecondary)
                 Text(L10n.text("本金"))
                     .appText(.footnote, weight: .medium)
                     .foregroundStyle(heroSecondary)
                 Text(DisplayFormat.money(row.principal, fractionDigits: 0))
                     .foregroundStyle(heroSecondary)
+                    .contentTransition(.numericText(value: row.principal))
+                    .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: row.principal)
             }
             .appNumber(.footnote)
             .lineLimit(1)
@@ -200,78 +283,12 @@ struct HoldingContributionChart: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// Figma 357:2257 (light) and 362:14796 (dark).
-    static let heroInset: CGFloat = 24
-
     private var heroPrimary: Color {
-        colorScheme == .dark ? .white : Color(red: 0.10, green: 0.10, blue: 0.10)
+        ReturnsSourceChartStyle.primary(for: colorScheme)
     }
 
     private var heroSecondary: Color {
-        colorScheme == .dark ? Color.white.opacity(0.72) : Color.black.opacity(0.55)
-    }
-
-    /// Flat lavender by day, a violet gradient by night, with the design's
-    /// dotted field over it. It is drawn from the bottom of the hero upwards
-    /// so it fills the page's top padding and the space behind the bar.
-    private var heroField: some View {
-        ZStack {
-            if colorScheme == .dark {
-                // The field is drawn taller than the hero so it covers the bar
-                // area, so the top colour has to hold through that extension —
-                // otherwise the visible top starts already part-way down the
-                // gradient and reads too light.
-                LinearGradient(stops: [.init(color: Color(red: 0.361, green: 0.196, blue: 0.835), location: 0),
-                                       .init(color: Color(red: 0.361, green: 0.196, blue: 0.835), location: 0.46),
-                                       .init(color: Color(red: 0.404, green: 0.329, blue: 1.0), location: 1)],
-                               startPoint: .top, endPoint: .bottom)
-            } else {
-                Color(red: 0.922, green: 0.894, blue: 1.0)
-            }
-            // The dots thin out down the field and stop short of the range
-            // strip, which carries the chart's reflection instead.
-            HeroDotField(color: colorScheme == .dark ? Color.white.opacity(0.06)
-                                                     : Color.black.opacity(0.04))
-                .mask {
-                    LinearGradient(stops: [.init(color: .white, location: 0),
-                                           .init(color: .white.opacity(0.85), location: 0.45),
-                                           .init(color: .clear, location: 0.78)],
-                                   startPoint: .top, endPoint: .bottom)
-                }
-                .padding(.bottom, Self.stripHeight)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, -320)
-        .allowsHitTesting(false)
-    }
-
-    static let chartHeight: CGFloat = 280
-    static let stripHeight: CGFloat = 62
-
-    /// The range picker on a translucent strip. The design shows the chart
-    /// reflected in it — the yellow band's colour pooling under the strip on
-    /// the right — so the strip carries a mirrored, blurred copy of the chart
-    /// under its tint rather than a flat fill.
-    private func rangeStrip<Chart: View>(reflecting chart: Chart) -> some View {
-        ChartTimeRangePicker(selection: $range, isOnTintedField: true)
-            .frame(maxWidth: .infinity)
-            .frame(height: Self.stripHeight)
-            .background(alignment: .top) {
-                ZStack(alignment: .top) {
-                    // Mirrored, so the chart's bottom edge continues into the
-                    // strip; blurred until only the colour is left.
-                    chart
-                        .frame(height: Self.chartHeight)
-                        .scaleEffect(y: -1, anchor: .center)
-                        .blur(radius: 16)
-                        .opacity(colorScheme == .dark ? 0.55 : 0.5)
-                        .allowsHitTesting(false)
-                    (colorScheme == .dark ? Color.white.opacity(0.16) : Color.white.opacity(0.42))
-                }
-                .frame(height: Self.stripHeight, alignment: .top)
-                .clipped()
-                .allowsHitTesting(false)
-            }
+        ReturnsSourceChartStyle.secondary(for: colorScheme)
     }
 
     private func plot(stack: HoldingContributionStack, window: HoldingContributionStack.Window,
@@ -282,7 +299,7 @@ struct HoldingContributionChart: View {
         // principal band has been eaten into, the line still shows the sum.
         var series: [StandardLineChartSeries] = []
         for (position, band) in visible.enumerated().reversed() {
-            let color = Self.color(for: stack.bands[band].kind, scheme: colorScheme)
+            let color = Self.fillColor(for: stack.bands[band].kind, scheme: colorScheme)
             let below = visible[...position]
             let id = Self.seriesID(stack.bands[band])
             series.append(StandardLineChartSeries(
@@ -296,14 +313,13 @@ struct HoldingContributionChart: View {
                 // band that is zero across the range would otherwise stroke a
                 // line along the bottom of the chart.
                 lineWidth: 0,
-                areaFill: color,
-                // Figma: every gain band is its own colour at the top and
-                // pales towards its bottom edge; the striped others band and
-                // the principal keep a flat fill.
-                areaFillWash: stack.bands[band].kind == .others ? 0 : 0.38,
+                areaFill: stack.bands[band].kind == .others ? .white : color,
+                areaFillEndColor: Self.fillEndColor(for: stack.bands[band].kind),
                 areaBaseline: 0,
-                areaStripeColor: stack.bands[band].kind == .others ? Color.white.opacity(0.07) : nil,
-                areaStripeSpacing: 10,
+                areaStripeColor: stack.bands[band].kind == .others
+                    ? ReturnsSourceChartStyle.stripeColor : nil,
+                areaStripeSpacing: 35.5,
+                areaStripeWidth: 13,
                 latestPointRadius: 0,
                 latestPointUsesGlass: false
             ))
@@ -376,7 +392,7 @@ struct HoldingContributionChart: View {
         }
         .animation(StandardLineChartTransition.zoom, value: top)
         .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.42) : Color.black.opacity(0.32))
-        .padding(.leading, Self.heroInset)
+        .padding(.leading, ReturnsSourceChartStyle.inset)
         .padding(.top, 6)
         .padding(.bottom, 8)
         .allowsHitTesting(false)
@@ -392,7 +408,8 @@ struct HoldingContributionChart: View {
                 let item = stack.bands[band]
                 let isOn = isShown(item.kind)
                 Button { toggle(item) } label: {
-                    legendRow(swatch: Self.color(for: item.kind, scheme: colorScheme), isOn: isOn,
+                    legendRow(rank: stack.rank(for: item),
+                              swatch: Self.color(for: item.kind, scheme: colorScheme), isOn: isOn,
                               title: item.title, subtitle: item.subtitle) {
                         legendAmount(item.kind, row: row, band: band)
                     }
@@ -405,7 +422,8 @@ struct HoldingContributionChart: View {
                 Button {
                     withAnimation(.snappy) { _ = hiddenTickers.remove(holding.ticker) }
                 } label: {
-                    legendRow(swatch: .secondary, isOn: false, title: holding.ticker, subtitle: holding.name) {
+                    legendRow(rank: stack.holdingRanks[holding.ticker], swatch: .secondary, isOn: false,
+                              title: holding.ticker, subtitle: holding.name) {
                         Text(L10n.text("已隐藏")).appText(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -415,9 +433,15 @@ struct HoldingContributionChart: View {
         }
     }
 
-    private func legendRow<Trailing: View>(swatch: Color, isOn: Bool, title: String, subtitle: String,
+    private func legendRow<Trailing: View>(rank: Int?, swatch: Color, isOn: Bool, title: String, subtitle: String,
                                            @ViewBuilder trailing: () -> Trailing) -> some View {
         HStack(alignment: .center, spacing: 12) {
+            // The same width with or without a number, so every swatch
+            // lines up.
+            Text(rank.map(String.init) ?? "")
+                .appNumber(.callout, weight: .semibold)
+                .foregroundStyle(.secondary)
+                .frame(width: 18, alignment: .leading)
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(isOn ? swatch : .clear)
                 .overlay {
@@ -474,6 +498,34 @@ struct HoldingContributionChart: View {
             Text(DisplayFormat.money(amount, signed: true, fractionDigits: 0))
                 .appNumber(.callout)
                 .foregroundStyle(amount >= 0 ? CatfolioTheme.gain(for: colorScheme) : CatfolioTheme.loss(for: colorScheme))
+        }
+    }
+
+    /// Figma uses saturated plot paints and softer legend swatches.
+    static func fillColor(for kind: HoldingContributionStack.Band.Kind, scheme: ColorScheme) -> Color {
+        if case let .holding(index) = kind {
+            switch index % 6 {
+            case 0: return Color(red: 0, green: 202 / 255, blue: 160 / 255)
+            case 2: return Color(red: 253 / 255, green: 214 / 255, blue: 0)
+            case 3: return Color(red: 0.130390, green: 0.556810, blue: 0.983229)
+            default: break
+            }
+        }
+        return color(for: kind, scheme: scheme)
+    }
+
+    /// Chart gradients are separate from the neutral "other gains" legend key.
+    static func fillEndColor(for kind: HoldingContributionStack.Band.Kind) -> Color? {
+        switch kind {
+        case .others: nil
+        case .principal: Color(red: 124 / 255, green: 212 / 255, blue: 1)
+        case let .holding(index):
+            switch index % 6 {
+            case 0: Color(red: 0.344214, green: 0.970314, blue: 0.840135)
+            case 2: Color(red: 0.979969, green: 0.933497, blue: 0.678497)
+            case 3: Color(red: 124 / 255, green: 212 / 255, blue: 1)
+            default: color(for: kind, scheme: .light).mix(with: .white, by: 0.38)
+            }
         }
     }
 
@@ -551,6 +603,9 @@ struct HoldingContributionStack {
 
     let bands: [Band]
     let rows: [Row]
+    /// Rank all holdings by gain before filtering visibility, so a number
+    /// stays with its holding when it is hidden, restored, or promoted.
+    let holdingRanks: [String: Int]
     /// Holdings the reader turned off, with their names: they count in the
     /// others and are listed so they can be turned back on.
     let hidden: [(ticker: String, name: String)]
@@ -580,6 +635,8 @@ struct HoldingContributionStack {
         let everyone = latestGains.keys.sorted {
             (latestGains[$0] ?? 0) == (latestGains[$1] ?? 0) ? $0 < $1 : (latestGains[$0] ?? 0) > (latestGains[$1] ?? 0)
         }
+        let ranks = Dictionary(uniqueKeysWithValues: everyone.enumerated().map { ($0.element, $0.offset + 1) })
+        holdingRanks = ranks
         func topGainers(_ tickers: [String]) -> [String] {
             Array(tickers.prefix(Self.namedCount(tickers.map { latestGains[$0] ?? 0 })))
         }
@@ -594,7 +651,10 @@ struct HoldingContributionStack {
         for ticker in named where colours[ticker] == nil { colours[ticker] = free.next() ?? 0 }
         let present = Set(history.rows.flatMap(\.values.keys))
         let others = present.subtracting(named)
-        hidden = hiding.intersection(present).sorted().map { (ticker: $0, name: names[$0] ?? $0) }
+        hidden = hiding.intersection(present).sorted {
+            let left = ranks[$0] ?? Int.max, right = ranks[$1] ?? Int.max
+            return left == right ? $0 < $1 : left < right
+        }.map { (ticker: $0, name: names[$0] ?? $0) }
 
         var bands = [
             Band(kind: .principal, title: L10n.text("本金"), subtitle: L10n.text("当前持仓的买入成本")),
@@ -619,6 +679,11 @@ struct HoldingContributionStack {
                 bands: [row.cost + min(0, remainder), max(0, remainder)] + namedGains
             )
         }
+    }
+
+    func rank(for band: Band) -> Int? {
+        guard case .holding = band.kind else { return nil }
+        return holdingRanks[band.title]
     }
 
     func window(for range: ChartTimeRange) -> Window {

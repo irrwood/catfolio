@@ -164,7 +164,14 @@ struct SectorRotationView: View {
     }
 
     private var playback: some View {
-        HStack(spacing: 17) {
+        ZStack(alignment: .leading) {
+            SectorRotationTimeline(index: Int(index), dates: dates, centersSelection: true, isPlaying: playing, onInteraction: {
+                playing = false
+            }) { value in
+                playing = false
+                Task { await selectDate(dates[value]) }
+            }
+            .frame(height: 52)
             Button { playing.toggle() } label: {
                 Image(systemName: playing ? "pause.fill" : "play.fill")
                     .font(.system(size: 20, weight: .semibold))
@@ -176,14 +183,7 @@ struct SectorRotationView: View {
             .accessibilityIdentifier("rotation-play")
             .accessibilityLabel(playing ? L10n.text("暂停历史回放") : L10n.text("播放历史快照"))
             .disabled(dates.count < 2)
-            SectorRotationTimeline(index: Int(index), dates: dates) { value in
-                playing = false
-                Task { await selectDate(dates[value]) }
-            }
-            .frame(height: 52)
         }
-        .padding(.leading, 5)
-        .padding(.trailing, 16)
     }
     private func metric(_ label: String, _ value: String) -> some View {
         HStack { Text(label).foregroundStyle(.secondary); Spacer(); Text(value).monospacedDigit() }.font(.subheadline)

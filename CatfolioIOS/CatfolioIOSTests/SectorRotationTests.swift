@@ -111,7 +111,7 @@ final class SectorRotationTests: XCTestCase {
         XCTAssertNil(chart.nearestSector(at: .zero))
         XCTAssertEqual(chart.accessibilityElements?.count, 11)
     }
-    func testPressFeedbackLiftsAndReleasesWithoutMovingDataCoordinates() async throws {
+    func testPressFeedbackLiftsAndReleasesWithoutMovingDataCoordinates() throws {
         let snapshot = try decode(fixture())
         let sector = try XCTUnwrap(snapshot.sectors.first)
         let chart = SectorRotationChartView(frame: CGRect(x: 0, y: 0, width: 370, height: 246))
@@ -136,7 +136,8 @@ final class SectorRotationTests: XCTestCase {
         chart.setNeedsDisplay(); chart.layoutIfNeeded()
         attach("rotation-vector-resting")
         chart.updateTouch(at: anchor)
-        try await Task.sleep(for: .milliseconds(250))
+        // Drive frames explicitly; simulator refresh scheduling is not the contract under test.
+        for _ in 0..<15 { chart.advanceTouchFeedback(by: 1.0 / 60) }
         XCTAssertEqual(chart.pressedSymbol, sector.symbol)
         XCTAssertGreaterThan(chart.lift, 0.5)
         XCTAssertEqual(chart.point(x: sector.x, y: sector.y), anchor)
@@ -144,7 +145,7 @@ final class SectorRotationTests: XCTestCase {
         XCTAssertEqual(selections, 0, "Visual touch feedback must not select or scrub data")
         attach("rotation-vector-pressed")
         chart.updateTouch(at: nil)
-        try await Task.sleep(for: .milliseconds(800))
+        for _ in 0..<48 { chart.advanceTouchFeedback(by: 1.0 / 60) }
         XCTAssertEqual(chart.lift, 0, accuracy: 0.01)
         XCTAssertNil(chart.pressedSymbol)
         XCTAssertNil(chart.touchLocation)
@@ -165,10 +166,14 @@ final class SectorRotationTests: XCTestCase {
     }
     func testUIKitTimelineBoundsAndVoiceOverAdjustment() {
         let timeline = SectorRotationTimelineControl(frame: CGRect(x: 0, y: 0, width: 300, height: 52))
+        timeline.centersSelection = true
         timeline.dates = (0..<60).map(String.init)
-        XCTAssertEqual(timeline.index(at: -100), 0)
+        timeline.index = 30
+        XCTAssertEqual(timeline.index(at: -500), 0)
         XCTAssertEqual(timeline.index(at: 150), 30)
-        XCTAssertEqual(timeline.index(at: 400), 59)
+        XCTAssertEqual(timeline.index(at: 159), 31)
+        XCTAssertEqual(timeline.index(at: 500), 59)
+        timeline.index = 0
         var selected: Int?
         timeline.onSelection = { selected = $0 }
         timeline.accessibilityIncrement()
@@ -177,6 +182,192 @@ final class SectorRotationTests: XCTestCase {
         timeline.accessibilityDecrement()
         timeline.accessibilityDecrement()
         XCTAssertEqual(selected, 0)
+    }
+    func testTimelineScrubsRelativeToStartingDateAndPausesImmediately() {
+        let timeline = SectorRotationTimelineControl(frame: CGRect(x: 0, y: 0, width: 370, height: 52))
+        timeline.centersSelection = true
+        timeline.dates = (0..<60).map(String.init)
+        timeline.index = 59
+        var interactions = 0
+        var selections: [Int] = []
+        timeline.onInteraction = { interactions += 1 }
+        timeline.onSelection = { selections.append($0) }
+        timeline.beginScrubbing()
+        XCTAssertEqual(interactions, 1, "Touching the ruler pauses playback even before the date changes")
+        timeline.scrub(translation: 9)
+        XCTAssertEqual(timeline.index, 58)
+        timeline.scrub(translation: 27)
+        XCTAssertEqual(timeline.index, 56, "Selection updates must not shift the drag origin")
+        timeline.scrub(translation: 1000)
+        XCTAssertEqual(timeline.index, 0)
+        timeline.scrub(translation: -1000)
+        XCTAssertEqual(timeline.index, 59)
+        timeline.endScrubbing()
+        XCTAssertEqual(timeline.index(at: 185), 59)
+        XCTAssertEqual(selections, [58, 56, 0, 59])
+        timeline.beginScrubbing()
+        timeline.scrub(translation: 18)
+        timeline.endScrubbing()
+        XCTAssertEqual(timeline.index, 57)
+        XCTAssertEqual(timeline.accessibilityValue, "57")
+    }
+    func testTimelineEmptyAndSingleSnapshotCannotSelectInvalidDate() {
+        let timeline = SectorRotationTimelineControl(frame: CGRect(x: 0, y: 0, width: 370, height: 52))
+        timeline.centersSelection = true
+        var selections: [Int] = []
+        timeline.onSelection = { selections.append($0) }
+        timeline.beginScrubbing()
+        timeline.scrub(translation: 900)
+        timeline.accessibilityIncrement()
+        XCTAssertTrue(selections.isEmpty)
+        timeline.dates = ["2026-09-18"]
+        timeline.beginScrubbing()
+        timeline.scrub(translation: -900)
+        timeline.endScrubbing()
+        XCTAssertEqual(timeline.index(at: -900), 0)
+        XCTAssertEqual(timeline.index(at: 900), 0)
+        timeline.accessibilityIncrement()
+        XCTAssertEqual(selections, [0])
+    }
+    func testTimelineHapticsOnlyFireWhenManualSelectionChanges() {
+        let timeline = SectorRotationTimelineControl(frame: CGRect(x: 0, y: 0, width: 370, height: 52))
+        let feedback = TimelineFeedbackSpy()
+        timeline.selectionFeedback = feedback
+        timeline.centersSelection = true
+        timeline.dates = (0..<60).map(String.init)
+        timeline.index = 59
+        XCTAssertEqual(feedback.changes, 0, "Loading or playback must not vibrate")
+        timeline.beginScrubbing()
+        timeline.scrub(translation: 2)
+        XCTAssertEqual(feedback.changes, 0)
+        timeline.scrub(translation: 9)
+        timeline.scrub(translation: 10)
+        XCTAssertEqual(feedback.changes, 1)
+        timeline.scrub(translation: -900)
+        timeline.scrub(translation: -1000)
+        XCTAssertEqual(feedback.changes, 2, "Holding against the boundary must not repeat feedback")
+        timeline.endScrubbing()
+        timeline.accessibilityDecrement()
+        XCTAssertEqual(feedback.changes, 3)
+    }
+    func testTimelineCoastsWithEaseOutAndSnapsToADate() {
+        let timeline = SectorRotationTimelineControl(frame: CGRect(x: 0, y: 0, width: 370, height: 52))
+        timeline.centersSelection = true
+        timeline.reducesMotion = false
+        timeline.dates = (0..<60).map(String.init)
+        timeline.index = 30
+        let host = UIViewController()
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
+        window.rootViewController = host
+        window.isHidden = false
+        host.view.addSubview(timeline)
+        defer { timeline.removeFromSuperview(); window.isHidden = true }
+        var selections: [Int] = []
+        timeline.onSelection = { selections.append($0) }
+        timeline.beginScrubbing()
+        timeline.scrub(translation: 18)
+        timeline.endScrubbing(velocity: 450)
+        XCTAssertTrue(timeline.isAnimating)
+        XCTAssertEqual(timeline.position, 28)
+        timeline.advanceAnimation(by: 0.05)
+        let firstPosition = timeline.position
+        let echoedIndex = timeline.index
+        timeline.index = echoedIndex
+        XCTAssertEqual(timeline.position, firstPosition, "SwiftUI state echoes must not interrupt the animation")
+        timeline.advanceAnimation(by: 0.05)
+        XCTAssertGreaterThan(28 - firstPosition, firstPosition - timeline.position, "Equal frame intervals travel less distance as the ruler slows")
+        timeline.advanceAnimation(by: 1)
+        XCTAssertEqual(timeline.position, 20)
+        XCTAssertEqual(timeline.index, 20)
+        XCTAssertEqual(selections.last, 20)
+        XCTAssertFalse(timeline.isAnimating)
+
+        timeline.beginScrubbing()
+        timeline.scrub(translation: 4)
+        timeline.endScrubbing(velocity: 0)
+        timeline.advanceAnimation(by: 1)
+        XCTAssertEqual(timeline.position, CGFloat(timeline.index), "Even a slow release settles onto a whole tick")
+        timeline.index = 1
+        timeline.advanceAnimation(by: 1)
+        timeline.beginScrubbing()
+        timeline.endScrubbing(velocity: 2000)
+        timeline.advanceAnimation(by: 1)
+        XCTAssertEqual(timeline.position, 0, "A fast fling must stop at the earliest date")
+        timeline.index = 58
+        timeline.advanceAnimation(by: 1)
+        timeline.beginScrubbing()
+        timeline.endScrubbing(velocity: -2000)
+        timeline.advanceAnimation(by: 1)
+        XCTAssertEqual(timeline.position, 59, "A fast fling must stop at the latest date")
+    }
+    func testTimelineMotionCanBeInterruptedAndRespectsReducedMotion() {
+        let timeline = SectorRotationTimelineControl(frame: CGRect(x: 0, y: 0, width: 370, height: 52))
+        timeline.centersSelection = true
+        timeline.reducesMotion = false
+        timeline.dates = (0..<60).map(String.init)
+        timeline.index = 30
+        let host = UIViewController()
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
+        window.rootViewController = host
+        window.isHidden = false
+        host.view.addSubview(timeline)
+        defer { timeline.removeFromSuperview(); window.isHidden = true }
+        timeline.beginScrubbing()
+        timeline.endScrubbing(velocity: 450)
+        timeline.advanceAnimation(by: 0.04)
+        let movingPosition = timeline.position
+        timeline.beginScrubbing()
+        timeline.scrub(translation: 0)
+        XCTAssertEqual(timeline.position, movingPosition, "A new touch catches the moving ruler without jumping")
+        XCTAssertFalse(timeline.isAnimating)
+        timeline.endScrubbing(velocity: 450)
+        timeline.isPlaying = true
+        let resumedIndex = timeline.index
+        timeline.advanceAnimation(by: 1)
+        XCTAssertEqual(timeline.index, resumedIndex)
+        XCTAssertFalse(timeline.isAnimating, "Resuming playback cancels the pending manual coast")
+        timeline.isPlaying = false
+        timeline.index = 40
+        XCTAssertTrue(timeline.isAnimating)
+        timeline.reducesMotion = true
+        XCTAssertFalse(timeline.isAnimating)
+        XCTAssertEqual(timeline.position, 40)
+        timeline.beginScrubbing()
+        timeline.scrub(translation: 9)
+        timeline.endScrubbing(velocity: 2000)
+        XCTAssertEqual(timeline.index, 39, "Reduced motion disables inertial travel")
+        XCTAssertFalse(timeline.isAnimating)
+        timeline.reducesMotion = false
+        timeline.index = 50
+        XCTAssertTrue(timeline.isAnimating)
+        timeline.removeFromSuperview()
+        XCTAssertFalse(timeline.isAnimating, "Leaving the page stops the display link")
+    }
+    func testTimelineEdgeFadesAreSymmetricInBothAppearances() {
+        let timeline = SectorRotationTimelineControl(frame: CGRect(x: 0, y: 0, width: 370, height: 52))
+        timeline.centersSelection = true
+        timeline.dates = (0..<60).map(String.init)
+        timeline.index = 30
+        for x in stride(from: CGFloat(0), through: 185, by: 5) {
+            XCTAssertEqual(timeline.edgeOpacity(at: x), timeline.edgeOpacity(at: 370 - x), accuracy: 0.001)
+        }
+        XCTAssertEqual(timeline.edgeOpacity(at: 185), 1)
+        XCTAssertEqual(timeline.edgeOpacity(at: 0), 0)
+        XCTAssertGreaterThan(timeline.edgeOpacity(at: 110), timeline.edgeOpacity(at: 70))
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            timeline.overrideUserInterfaceStyle = style
+            UITraitCollection(userInterfaceStyle: style).performAsCurrent {
+                let image = UIGraphicsImageRenderer(bounds: timeline.bounds).image { context in
+                    UIColor.systemBackground.setFill()
+                    context.fill(timeline.bounds)
+                    timeline.draw(timeline.bounds)
+                }
+                let attachment = XCTAttachment(image: image)
+                attachment.name = style == .light ? "rotation-ruler-both-edges-light" : "rotation-ruler-both-edges-dark"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+            }
+        }
     }
     func testPerformancePreservesLastClosePairOnPartialOrOlderRefresh() throws {
         let store = SectorPerformanceStore()
@@ -219,4 +410,10 @@ final class SectorRotationTests: XCTestCase {
         object["sectors"] = sectors
         XCTAssertThrowsError(try decode(object))
     }
+}
+
+private final class TimelineFeedbackSpy: UISelectionFeedbackGenerator {
+    var changes = 0
+    override func selectionChanged() { changes += 1 }
+    override func prepare() {}
 }

@@ -186,6 +186,9 @@ final class SectorRotationChartView: UIView, UIGestureRecognizerDelegate {
     fileprivate func advanceFrame(_ link: CADisplayLink) {
         let dt = CGFloat(min(1.0 / 30, lastFrame == 0 ? 1.0 / 60 : link.timestamp - lastFrame))
         lastFrame = link.timestamp
+        advanceTouchFeedback(by: dt)
+    }
+    func advanceTouchFeedback(by dt: CGFloat) {
         // A damped spring gives touch-down a small rise and release a soft landing.
         liftVelocity += ((liftTarget - lift) * 340 - liftVelocity * 27) * dt
         lift = min(1.08, max(0, lift + liftVelocity * dt))
@@ -560,32 +563,67 @@ private final class RotationAccessiblePoint: UIAccessibilityElement {
 }
 
 struct SectorRotationTimeline: UIViewRepresentable {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let index: Int
     let dates: [String]
+    var centersSelection = false
+    var isPlaying = false
+    var onInteraction: () -> Void = {}
     let onSelection: (Int) -> Void
     func makeUIView(context: Context) -> SectorRotationTimelineControl { SectorRotationTimelineControl() }
     func updateUIView(_ view: SectorRotationTimelineControl, context: Context) {
         view.dates = dates
+        view.centersSelection = centersSelection
+        view.reducesMotion = reduceMotion
+        view.isPlaying = isPlaying
         view.index = index
+        view.onInteraction = onInteraction
         view.onSelection = onSelection
     }
 }
 
-/// A real adjustable UIControl, not an invisible SwiftUI slider layered over artwork.
+/// A date ruler that moves beneath a fixed, centered playhead.
 final class SectorRotationTimelineControl: UIControl, UIGestureRecognizerDelegate {
-    var index = 0 { didSet { setNeedsDisplay(); updateAccessibility() } }
-    var dates: [String] = [] { didSet { updateAccessibility() } }
+    private static let tickSpacing: CGFloat = 9
+    private(set) var position: CGFloat = 0
+    private var dragStart: CGFloat?
+    private var displayLink: CADisplayLink?
+    private var lastFrame: CFTimeInterval = 0
+    private var motion: (start: CGFloat, target: CGFloat, duration: TimeInterval, elapsed: TimeInterval, selectsDates: Bool)?
+    private var updatingSelection = false
+    var selectionFeedback = UISelectionFeedbackGenerator()
+    var isAnimating: Bool { motion != nil }
+    var reducesMotion = UIAccessibility.isReduceMotionEnabled {
+        didSet { if reducesMotion && !oldValue { cancelScrubbing() } }
+    }
+    var isPlaying = false {
+        didSet { if isPlaying && !oldValue { cancelScrubbing() } }
+    }
+    var centersSelection = false { didSet { setNeedsDisplay() } }
+    var index = 0 {
+        didSet {
+            guard oldValue != index else { return }
+            if dragStart == nil && !updatingSelection {
+                move(to: CGFloat(index), duration: 0.22, selectsDates: false)
+            }
+            setNeedsDisplay()
+            updateAccessibility()
+        }
+    }
+    var dates: [String] = [] { didSet { setNeedsDisplay(); updateAccessibility() } }
+    var onInteraction: (() -> Void)?
     var onSelection: ((Int) -> Void)?
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .clear
         contentMode = .redraw
+        clipsToBounds = true
         isAccessibilityElement = true
         accessibilityTraits = .adjustable
         accessibilityLabel = L10n.text("回看日期")
         accessibilityIdentifier = "rotation-timeline"
-        let tap = UITapGestureRecognizer(target: self, action: #selector(scrubbed(_:)))
-        let pan = UIPanGestureRecognizer(target: self, action: #selector(scrubbed(_:)))
+        let tap = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(panned(_:)))
         pan.delegate = self
         addGestureRecognizer(tap); addGestureRecognizer(pan)
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: SectorRotationTimelineControl, _: UITraitCollection) in
@@ -594,34 +632,181 @@ final class SectorRotationTimelineControl: UIControl, UIGestureRecognizerDelegat
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func draw(_ rect: CGRect) {
-        let selectedTick = Int((Double(index) / Double(max(1,dates.count-1)) * 38).rounded())
-        for tick in 0..<39 {
-            let x = Double(tick)/38 * max(0,bounds.width-4)
-            (tick == selectedTick ? UIColor.label : RotationPalette.uiControl).setFill()
-            UIBezierPath(roundedRect:CGRect(x:x,y:0,width:4,height:bounds.height),cornerRadius:2).fill()
+        guard !dates.isEmpty else { return }
+        if !centersSelection {
+            let selectedTick = Int((Double(index) / Double(max(1, dates.count - 1)) * 38).rounded())
+            for tick in 0..<39 {
+                let x = CGFloat(tick) / 38 * max(0, bounds.width - 4)
+                (tick == selectedTick ? UIColor.label : RotationPalette.uiControl).setFill()
+                UIBezierPath(roundedRect: CGRect(x: x, y: 0, width: 4, height: bounds.height), cornerRadius: 2).fill()
+            }
+            return
         }
+        let radius = Int(ceil(bounds.width / (2 * Self.tickSpacing))) + 1
+        let first = max(0, Int(position) - radius)
+        let last = min(dates.count - 1, Int(position) + radius)
+        guard first <= last else { return }
+        for tick in first...last {
+            let x = bounds.midX + (CGFloat(tick) - position) * Self.tickSpacing
+            // Matching edge fades leave the page background untouched.
+            let fade = edgeOpacity(at: x)
+            UIColor.label.withAlphaComponent(0.16 * fade).setFill()
+            UIBezierPath(roundedRect: CGRect(x: x - 2, y: 0, width: 4, height: bounds.height), cornerRadius: 2).fill()
+        }
+        UIColor.label.setFill()
+        UIBezierPath(roundedRect: CGRect(x: bounds.midX - 2, y: 0, width: 4, height: bounds.height), cornerRadius: 2).fill()
+    }
+    func edgeOpacity(at x: CGFloat) -> CGFloat {
+        min(1, max(0, (min(x, bounds.width - x) - 50) / 108))
     }
     func index(at x: CGFloat) -> Int {
-        let fraction = min(1,max(0,(x-2)/max(1,bounds.width-4)))
-        return Int((fraction*Double(max(0,dates.count-1))).rounded())
+        if !centersSelection {
+            let fraction = min(1, max(0, (x - 2) / max(1, bounds.width - 4)))
+            return Int((fraction * CGFloat(max(0, dates.count - 1))).rounded())
+        }
+        return clampedIndex(Int((position + (x - bounds.midX) / Self.tickSpacing).rounded()))
     }
-    @objc private func scrubbed(_ recognizer: UIGestureRecognizer) {
-        guard dates.count > 1 else { return }
-        let value = index(at:recognizer.location(in:self).x)
-        if value != index { index = value; onSelection?(value); sendActions(for:.valueChanged) }
+    private func clampedIndex(_ value: Int) -> Int {
+        min(max(0, dates.count - 1), max(0, value))
+    }
+    @objc private func tapped(_ recognizer: UITapGestureRecognizer) {
+        guard !dates.isEmpty else { return }
+        onInteraction?()
+        let value = index(at: recognizer.location(in: self).x)
+        if centersSelection {
+            selectionFeedback.prepare()
+            move(to: CGFloat(value), duration: 0.24, selectsDates: true)
+        } else { select(value) }
+    }
+    @objc private func panned(_ recognizer: UIPanGestureRecognizer) {
+        if !centersSelection {
+            guard !dates.isEmpty else { return }
+            onInteraction?()
+            select(index(at: recognizer.location(in: self).x))
+            return
+        }
+        switch recognizer.state {
+        case .began:
+            beginScrubbing()
+            scrub(translation: recognizer.translation(in: self).x)
+        case .changed:
+            scrub(translation: recognizer.translation(in: self).x)
+        case .ended:
+            scrub(translation: recognizer.translation(in: self).x)
+            endScrubbing(velocity: recognizer.velocity(in: self).x)
+        case .cancelled, .failed:
+            endScrubbing()
+        default: break
+        }
+    }
+    func beginScrubbing() {
+        guard !dates.isEmpty else { return }
+        stopAnimation()
+        dragStart = position
+        selectionFeedback.prepare()
+        onInteraction?()
+    }
+    func scrub(translation: CGFloat) {
+        guard let dragStart else { return }
+        position = min(CGFloat(max(0, dates.count - 1)), max(0, dragStart - translation / Self.tickSpacing))
+        let value = clampedIndex(Int(position.rounded()))
+        if value != index { select(value, feedback: true) }
+        setNeedsDisplay()
+    }
+    func endScrubbing(velocity: CGFloat = 0) {
+        guard dragStart != nil else { return }
+        dragStart = nil
+        // A short, bounded coast, followed by an exact stop on a trading day.
+        let travel = reducesMotion ? 0 : min(24, max(-24, velocity * 0.16 / Self.tickSpacing))
+        let target = CGFloat(clampedIndex(Int((position - travel).rounded())))
+        let duration = min(0.45, 0.18 + Double(abs(target - position)) * 0.018)
+        move(to: target, duration: duration, selectsDates: true)
+    }
+    private func cancelScrubbing() {
+        dragStart = nil
+        stopAnimation()
+        position = CGFloat(index)
+        setNeedsDisplay()
+    }
+    private func move(to target: CGFloat, duration: TimeInterval, selectsDates: Bool) {
+        stopAnimation()
+        guard centersSelection, !reducesMotion, window != nil, abs(target - position) > 0.001 else {
+            position = target
+            if selectsDates, Int(target) != index { select(Int(target), feedback: true) }
+            setNeedsDisplay()
+            return
+        }
+        motion = (position, target, duration, 0, selectsDates)
+        let link = CADisplayLink(target: RotationTimelineFrameTarget(self), selector: #selector(RotationTimelineFrameTarget.step(_:)))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 120, preferred: 120)
+        link.add(to: .main, forMode: .common)
+        displayLink = link
+    }
+    fileprivate func advanceFrame(_ link: CADisplayLink) {
+        let dt = lastFrame == 0 ? link.duration : link.timestamp - lastFrame
+        lastFrame = link.timestamp
+        advanceAnimation(by: dt)
+    }
+    func advanceAnimation(by delta: TimeInterval) {
+        guard var motion else { return }
+        motion.elapsed += max(0, delta)
+        let progress = min(1, motion.elapsed / motion.duration)
+        let eased = 1 - pow(1 - progress, 3)
+        position = motion.start + (motion.target - motion.start) * CGFloat(eased)
+        self.motion = motion
+        if motion.selectsDates {
+            let value = clampedIndex(Int(position.rounded()))
+            if value != index { select(value, feedback: true) }
+        }
+        setNeedsDisplay()
+        if progress == 1 { stopAnimation() }
+    }
+    private func stopAnimation() {
+        displayLink?.invalidate()
+        displayLink = nil
+        motion = nil
+        lastFrame = 0
+    }
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil { cancelScrubbing() }
     }
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
-        let velocity = pan.velocity(in:self)
-        return abs(velocity.x)>abs(velocity.y)
+        let velocity = pan.velocity(in: self)
+        return abs(velocity.x) > abs(velocity.y)
     }
-    override func accessibilityIncrement() { change(by:1) }
-    override func accessibilityDecrement() { change(by:-1) }
+    override func accessibilityIncrement() { change(by: 1) }
+    override func accessibilityDecrement() { change(by: -1) }
     private func change(by amount: Int) {
         guard !dates.isEmpty else { return }
-        index = min(dates.count-1,max(0,index+amount)); onSelection?(index)
+        onInteraction?()
+        cancelScrubbing()
+        select(clampedIndex(index + amount), feedback: true)
+        position = CGFloat(index)
+    }
+    private func select(_ value: Int, feedback: Bool = false) {
+        let changed = value != index
+        updatingSelection = true
+        index = value
+        updatingSelection = false
+        if changed && feedback && centersSelection {
+            selectionFeedback.selectionChanged()
+            selectionFeedback.prepare()
+        }
+        onSelection?(value)
+        sendActions(for: .valueChanged)
     }
     private func updateAccessibility() {
         accessibilityValue = dates.indices.contains(index) ? dates[index] : nil
+    }
+}
+
+private final class RotationTimelineFrameTarget: NSObject {
+    weak var timeline: SectorRotationTimelineControl?
+    init(_ timeline: SectorRotationTimelineControl) { self.timeline = timeline }
+    @objc func step(_ link: CADisplayLink) {
+        guard let timeline else { link.invalidate(); return }
+        timeline.advanceFrame(link)
     }
 }
