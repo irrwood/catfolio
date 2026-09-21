@@ -710,19 +710,7 @@ struct LocalMarketDataClient {
             )
         }
 
-        let groupedTrades = Dictionary(grouping: transactions) {
-            "\($0.date)|\(SecurityTrade.canonicalAction($0.action) ?? $0.action.uppercased())"
-        }
-        var trades = groupedTrades.values.compactMap { rows -> SecurityTrade? in
-            guard let first = rows.first else { return nil }
-            return SecurityTrade(
-                dateText: first.date,
-                action: SecurityTrade.canonicalAction(first.action) ?? first.action.uppercased(),
-                quantity: rows.reduce(0) { $0 + abs($1.quantity) },
-                tradeCount: rows.count,
-                accountKeys: Set(rows.map(\.accountKey))
-            )
-        }
+        var trades = SecurityTrade.grouped(transactions)
         // Trading 212 can provide the API position snapshot before its paged
         // order history has finished syncing. The broker-supplied openedDate
         // still gives us a trustworthy first-entry marker; later buys and all
@@ -738,7 +726,11 @@ struct LocalMarketDataClient {
                     action: "BUY",
                     quantity: rows.reduce(0) { $0 + abs($1.1) },
                     tradeCount: rows.count,
-                    accountKeys: Set(rows.map(\.2))
+                    accountKeys: Set(rows.map(\.2)),
+                    executions: rows.map {
+                        SecurityTrade.Execution(accountKey: $0.2, quantity: abs($0.1), amount: nil,
+                            currency: currency, profit: nil, profitCurrency: nil)
+                    }
                 )
             }
         }
@@ -1597,8 +1589,9 @@ struct LocalMarketDataClient {
     /// A rebuilt account dressed for the three return views: a baseline day
     /// before the first, benchmarks on the same dates, and benchmarks
     /// mirroring the account's own deposits and withdrawals.
-    private func accountLedger(
-        _ points: [LedgerDay], end: String, cachedOnly: Bool, includeBenchmarks: Bool
+    func accountLedger(
+        _ points: [LedgerDay], end: String, cachedOnly: Bool, includeBenchmarks: Bool,
+        fetchHistory: (([String], String, String) async -> [String: [String: Double]])? = nil
     ) async -> (dates: [String], portfolio: [Double?], benchmarks: [String: [Double?]], ledger: AccountMWRLedger) {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -1607,7 +1600,16 @@ struct LocalMarketDataClient {
         let baseline = calendar.date(byAdding: .day, value: -1, to: DayDateCodec.date(from: points[0].date)!)!
         let dates = [DayDateCodec.string(from: baseline)] + points.map(\.date)
         let benchmarkSymbols = includeBenchmarks ? ComparisonBenchmarkCatalog.symbols : []
-        let benchmarks = await historicalCloses(symbols: benchmarkSymbols, from: dates[0], to: end, cachedOnly: cachedOnly)
+        // The baseline or the first deposit can fall on a weekend/holiday.
+        // Fetch the preceding close as well; prices after the baseline cannot
+        // establish its NAV and must never be used to backfill it.
+        let historyStart = DayDateCodec.string(from: baseline.addingTimeInterval(-7 * 86_400))
+        let benchmarks: [String: [String: Double]]
+        if let fetchHistory {
+            benchmarks = await fetchHistory(benchmarkSymbols, historyStart, end)
+        } else {
+            benchmarks = await historicalCloses(symbols: benchmarkSymbols, from: historyStart, to: end, cachedOnly: cachedOnly)
+        }
         var series: [String: [Double?]] = [:]
         for symbol in benchmarkSymbols {
             let closes = Self.closes(onOrBefore: dates, in: benchmarks[symbol] ?? [:])
@@ -1620,13 +1622,7 @@ struct LocalMarketDataClient {
         var benchmarkValues: [String: [Double?]] = [:]
         for symbol in benchmarkSymbols {
             let history = benchmarks[symbol] ?? [:]
-            var quoteDate = history.keys.filter { $0 <= dates[0] }.max()
-            let aligned: [Double?] = dates.map { date in
-                if history[date] != nil { quoteDate = date }
-                guard let quoteDate, let quoted = DayDateCodec.date(from: quoteDate), let day = DayDateCodec.date(from: date),
-                      day.timeIntervalSince(quoted) <= 4 * 86400 else { return nil }
-                return history[quoteDate]
-            }
+            let aligned = Self.closes(onOrBefore: dates, in: history, maximumAgeDays: 4)
             benchmarkValues[symbol] = AccountMWRLedger.mirror(cashFlows: flows, prices: aligned)
         }
         let ledger = AccountMWRLedger(dates: dates, cashFlows: flows,
@@ -2033,18 +2029,29 @@ struct LocalMarketDataClient {
     /// point made the returns tab unnecessarily expensive on iPhone.
     private static func closes(
         onOrBefore dates: [String],
-        in history: [String: Double]
+        in history: [String: Double],
+        maximumAgeDays: Int? = nil
     ) -> [Double?] {
         let sortedHistory = history.sorted { $0.key < $1.key }
         var historyIndex = 0
         var lastClose: Double?
+        var lastQuoteDate: String?
         var result: [Double?] = []
         result.reserveCapacity(dates.count)
         for date in dates {
             while historyIndex < sortedHistory.count,
                   sortedHistory[historyIndex].key <= date {
                 lastClose = sortedHistory[historyIndex].value
+                lastQuoteDate = sortedHistory[historyIndex].key
                 historyIndex += 1
+            }
+            if let maximumAgeDays {
+                guard let lastQuoteDate, let quoted = DayDateCodec.date(from: lastQuoteDate),
+                      let day = DayDateCodec.date(from: date),
+                      day.timeIntervalSince(quoted) <= Double(maximumAgeDays) * 86_400 else {
+                    result.append(nil)
+                    continue
+                }
             }
             result.append(lastClose)
         }

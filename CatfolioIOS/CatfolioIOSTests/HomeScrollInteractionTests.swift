@@ -3,6 +3,19 @@ import XCTest
 @testable import CatfolioIOS
 
 final class HomeScrollInteractionTests: XCTestCase {
+    func testNightGlassOutlastsWidthExpansionAndReversesOnReturn() {
+        let progress = { (offset: CGFloat) in
+            PortfolioContentSheetLayout.settlingProgress(offset: offset, colorScheme: .dark)
+        }
+        XCTAssertEqual(progress(-40), 0)
+        XCTAssertEqual(progress(263), 0, "Full width must still retain clear night glass")
+        XCTAssertLessThan(pow(progress(343), 3), 0.02, "First scroll detent must retain refraction")
+        XCTAssertEqual(progress(589), 1)
+        XCTAssertEqual(progress(900), 1)
+        XCTAssertEqual(progress(263), 0, "Returning restores glass without a timer")
+        XCTAssertEqual(PortfolioContentSheetLayout.settlingProgress(offset: 263, colorScheme: .light), 1)
+    }
+
     func testFloatingFilterRequiresTheWholeOriginalControlToExitAboveViewport() {
         for y: CGFloat in [700, 0, -20, -43.5] {
             XCTAssertFalse(PortfolioFloatingFilterOverlay.shouldFloat(sourceFrame: CGRect(x: 300, y: y, width: 58, height: 44)))
@@ -59,6 +72,14 @@ final class HomeScrollInteractionTests: XCTestCase {
         let model = AppModel(defaults: defaults, personalDocumentLoader: { document })
         await model.refreshPortfolio(refreshMarketData: false)
         XCTAssertFalse(model.holdings.isEmpty)
+        // Offline daily quotes keep the optical snapshots populated and
+        // exercise contrast against real amounts and contribution bars.
+        var quoteRows = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(model.holdings)) as? [[String: Any]])
+        for index in quoteRows.indices {
+            quoteRows[index]["today_change_percent"] = index.isMultiple(of: 3) ? -0.6 : 1.2
+        }
+        model.holdings = try JSONDecoder().decode([Holding].self, from: JSONSerialization.data(withJSONObject: quoteRows))
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let previous = scene.windows.first(where: \.isKeyWindow)
         let host = UIHostingController(rootView: PortfolioView().environment(model).preferredColorScheme(.light))
@@ -100,6 +121,12 @@ final class HomeScrollInteractionTests: XCTestCase {
             try capture("\(name)-settled")
             XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, 128, accuracy: 1,
                            "The optical effect must not move the scroll view")
+        }
+        for offset: CGFloat in [263, 343, 426, 589, 0] {
+            scroll.setContentOffset(CGPoint(x: 0, y: offset - scroll.adjustedContentInset.top), animated: false)
+            try await Task.sleep(for: .milliseconds(400))
+            try capture("glass-dark-offset-\(Int(offset))")
+            XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, offset, accuracy: 1)
         }
     }
 

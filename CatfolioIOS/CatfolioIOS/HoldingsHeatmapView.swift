@@ -386,7 +386,7 @@ private struct HoldingsHeatmapTileCloud: View {
 
             }
         }
-        .sheet(item: $expandedRemainder) { remainder in
+        .appSheet(item: $expandedRemainder) { remainder in
             HoldingsHeatmapRemainderDetail(model: remainder)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -421,11 +421,11 @@ private struct GroupedHoldingsHeatmap: View {
                 }
             }
         }
-        .sheet(item: $expandedGroup) { group in
+        .appSheet(item: $expandedGroup) { group in
             HoldingsHeatmapSectorDetail(group: group)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(Color(uiColor: .systemBackground))
+                .presentationBackground(AppModalStyle.systemBackground)
         }
         #if DEBUG
         .task {
@@ -589,7 +589,7 @@ private struct HoldingsHeatmapRemainderDetail: View {
                     }
                     LabeledContent(L10n.text(summary.isComplete ? "P&L" : "已知盈亏"), value:
                         summary.knownCount > 0
-                            ? (summary.isEstimated ? "≈" : "") + (summary.amount > 0 ? "+" : "") + DisplayFormat.money(summary.amount)
+                            ? (summary.isEstimated ? "≈" : "") + DisplayFormat.money(summary.amount, signed: true)
                             : L10n.text("暂无数据"))
                         .currencyFont(.body)
                     LabeledContent(L10n.text("收益率"), value:
@@ -622,7 +622,7 @@ private struct HoldingsHeatmapRemainderDetail: View {
 
             }
             .softTopScrollEdge()
-            .navigationTitle(title ?? L10n.text("其他"))
+            .appPageBackground().navigationTitle(title ?? L10n.text("其他"))
             .task { await loadMissingDailyChanges() }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

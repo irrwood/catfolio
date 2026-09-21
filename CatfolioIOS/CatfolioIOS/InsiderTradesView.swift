@@ -19,7 +19,7 @@ struct HoldingInsiderTradesCard: View {
         .buttonStyle(.plain)
         .matchedTransitionSource(id: "insiders-\(holding.ticker)", in: zoom)
         .accessibilityIdentifier("holding-insider-trades")
-        .sheet(isPresented: $showsTrades) {
+        .appSheet(isPresented: $showsTrades) {
             InsiderTradesSheet(symbol: holding.ticker)
                 .navigationTransition(.zoom(sourceID: "insiders-\(holding.ticker)", in: zoom))
                 .presentationDetents([.large])
@@ -62,7 +62,7 @@ struct InsiderTradesSheet: View {
                 .padding(.bottom, 24)
             }
             .softTopScrollEdge()
-            .navigationTitle(L10n.text("内部人士交易"))
+            .appPageBackground().navigationTitle(L10n.text("内部人士交易"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

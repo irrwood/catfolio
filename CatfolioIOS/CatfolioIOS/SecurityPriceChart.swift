@@ -38,6 +38,7 @@ struct HoldingDetailPriceSection: View {
                 marketTodayChange: priceHistory?.latestMarketObservation?.changePercent ?? marketTodayChange,
                 selectedPrice: priceSelection?.price ?? priceHistory?.latestAvailablePrice,
                 selectedReturn: priceSelection?.returnPercent,
+                selectedTrades: priceSelection?.trades ?? [],
                 isRefreshing: isRefreshing,
                 onRefresh: onRefresh
             )
@@ -104,7 +105,7 @@ struct HoldingDetailPriceSection: View {
                     .frame(maxWidth: .infinity, alignment: .trailing).padding(.horizontal, 20)
             }
         }
-        .fullScreenCover(item: $explanation) { request in
+        .appFullScreenCover(item: $explanation) { request in
             SecurityDailyMovePaper(context: request.context, logoSymbol: holding.logoSymbol, sourceFrame: request.sourceFrame)
         }
         .onChange(of: selectedAccountKeys) { _, _ in
@@ -164,6 +165,7 @@ struct SecurityPriceSelection: Equatable {
     // Only a historical touch/measurement overrides the independent latest quote.
     let price: Double?
     let returnPercent: Double
+    var trades: [SecurityTrade] = []
 }
 
 struct SecurityPricePreparationRequest: Equatable {
@@ -185,6 +187,7 @@ struct SecurityPriceChart: View {
     @State private var selectedDate: Date?
     @State private var measuredRange: ChartDateRange?
     @State private var lastHeaderPublishTime: TimeInterval = 0
+    @State private var lastPublishedTrades: [SecurityTrade] = []
 
     init(
         history: SecurityPriceHistory,
@@ -337,7 +340,8 @@ struct SecurityPriceChart: View {
         guard let point = data.nearest(to: date) else { return nil }
         // The prepared point already uses the chart's reference: previous
         // close for 1D, first visible price for the longer time windows.
-        return SecurityPriceSelection(price: point.price, returnPercent: point.returnPercent)
+        return SecurityPriceSelection(price: point.price, returnPercent: point.returnPercent,
+                                      trades: data.trades(at: point.date))
     }
 
     private var rangeSelection: SecurityPriceSelection? {
@@ -359,6 +363,7 @@ struct SecurityPriceChart: View {
         selectedDate = nil
         measuredRange = nil
         lastHeaderPublishTime = 0
+        lastPublishedTrades = []
         onSelectionChange(rangeSelection)
     }
 
@@ -367,7 +372,10 @@ struct SecurityPriceChart: View {
     /// bounding that parent-facing update prevents repeated header layout.
     private func publishInteractiveSelection(_ selection: SecurityPriceSelection?) {
         let now = Date.timeIntervalSinceReferenceDate
-        guard now - lastHeaderPublishTime >= 1.0 / 30.0 else { return }
+        // Entering/leaving a trade must never be dropped by price throttling.
+        let trades = selection?.trades ?? []
+        guard trades != lastPublishedTrades || now - lastHeaderPublishTime >= 1.0 / 30.0 else { return }
+        lastPublishedTrades = trades
         lastHeaderPublishTime = now
         onSelectionChange(selection)
     }
@@ -596,7 +604,7 @@ struct SecurityPriceRangeData: @unchecked Sendable {
         let visibleStart = normalizedPoints.first?.date ?? .distantFuture
         let visibleEnd = normalizedPoints.last?.date ?? .distantPast
         let visibleTrades: [TradePoint] = usesIntraday ? [] : history.trades.compactMap { trade -> TradePoint? in
-            guard !trade.accountKeys.isDisjoint(with: selectedAccountKeys) else { return nil }
+            guard let trade = trade.filtered(accounts: selectedAccountKeys) else { return nil }
             guard trade.date >= visibleStart, trade.date <= visibleEnd,
                   let point = Self.nearestPoint(to: trade.date, in: normalizedPoints) else { return nil }
             return TradePoint(trade: trade, point: point)
@@ -624,6 +632,13 @@ struct SecurityPriceRangeData: @unchecked Sendable {
 
     func nearest(to date: Date) -> SecurityPricePlotPoint? {
         Self.nearestPoint(to: date, in: points)
+    }
+
+    func trades(at date: Date) -> [SecurityTrade] {
+        // Match the same snapped vertex that draws the ring, including dates
+        // without a quote. Adjacent ordinary price points clear the readout.
+        guard let point = nearest(to: date) else { return [] }
+        return trades.filter { $0.point.date == point.date }.map(\.trade)
     }
 
     private static func filtered(

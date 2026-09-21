@@ -266,6 +266,23 @@ final class HoldingDetailInteractionTests: XCTestCase {
 }
 
 final class HoldingResearchCardLayoutTests: XCTestCase {
+    @MainActor
+    func testTradeReadoutMatchesFigmaInBothAppearances() async throws {
+        let trades = SecurityTrade.grouped([
+            LocalTransactionRecord(date: "2026-09-10", action: "SELL", ticker: "NVDA",
+                quantity: 1, price: 216.52, currency: "USD", source: "test", accountID: "isa",
+                accountName: nil, realisedProfitLoss: 14.56, realisedProfitLossCurrency: "USD")
+        ])
+        for dark in [false, true] {
+            let header = HoldingDetailHeader(holding: visibilityHolding("NVDA", name: "NVIDIA", shares: 83.4078),
+                marketTodayChange: -2, selectedPrice: 216.52, selectedReturn: 18.1, selectedTrades: trades)
+            let size = try await capture(header.background(Color(uiColor: .systemBackground)), width: 402,
+                dark: dark, name: "stock-trade-readout-\(dark ? "dark" : "light")")
+            XCTAssertLessThan(size.height, 155)
+            _ = try await capture(header, width: 320, dark: dark, name: "stock-trade-readout-narrow-\(dark)")
+        }
+    }
+
     private var previousLanguage: Any?
 
     override func setUp() {
@@ -1073,5 +1090,64 @@ final class SecurityDailyMoveSkillTests: XCTestCase {
         let context = try XCTUnwrap(SecurityPriceMoveContext.latestSession(history: history, name: "Test"))
         XCTAssertEqual(try XCTUnwrap(context.typicalDailyMovePercent), 0.1, accuracy: 0.000001)
         XCTAssertEqual(context.noteFocus, .priceMove)
+    }
+}
+
+final class SecurityTradeSelectionTests: XCTestCase {
+    private func row(_ action: String = "SELL", account: String = "isa", currency: String = "USD",
+                     profit: Double? = 14.56, profitCurrency: String? = "USD") -> LocalTransactionRecord {
+        .init(date: "2026-09-10", action: action, ticker: "NVDA", quantity: 2, price: 100,
+              currency: currency, source: "test", accountID: account, accountName: nil,
+              realisedProfitLoss: profit, realisedProfitLossCurrency: profitCurrency)
+    }
+
+    func testAccountSelectionKeepsOnlyThatAccountsAmountAndResult() throws {
+        let grouped = try XCTUnwrap(SecurityTrade.grouped([row(), row(account: "invest", profit: -5)]).first)
+        XCTAssertEqual(grouped.amountTotals, ["USD": 400])
+        let selected = try XCTUnwrap(grouped.filtered(accounts: ["test|invest"]))
+        XCTAssertEqual(selected.quantity, 2)
+        XCTAssertEqual(selected.tradeCount, 1)
+        XCTAssertEqual(selected.amountTotals, ["USD": 200])
+        XCTAssertEqual(selected.profitTotals, ["USD": -5])
+        XCTAssertNil(grouped.filtered(accounts: ["another"]))
+    }
+
+    func testUnknownProfitIsNotReportedAsZeroOrPartialSum() throws {
+        let trade = try XCTUnwrap(SecurityTrade.grouped([row(), row(profit: nil)]).first)
+        XCTAssertNil(trade.profitTotals)
+        XCTAssertEqual(trade.amountTotals, ["USD": 400])
+        XCTAssertNil(SecurityTrade.grouped([row(profitCurrency: nil)]).first?.profitTotals)
+        XCTAssertEqual(SecurityTrade.grouped([row(profit: 0)]).first?.profitTotals, ["USD": 0])
+    }
+
+    func testDifferentCurrenciesAndBuySellStaySeparate() throws {
+        let grouped = SecurityTrade.grouped([row(), row(currency: "GBP", profit: -3, profitCurrency: "GBP"), row("BUY")])
+        XCTAssertEqual(grouped.count, 2)
+        let sell = try XCTUnwrap(grouped.first(where: \.isSell))
+        XCTAssertEqual(sell.amountTotals, ["USD": 200, "GBP": 200])
+        XCTAssertEqual(sell.profitTotals, ["USD": 14.56, "GBP": -3])
+        XCTAssertNil(grouped.first(where: \.isBuy)?.profitTotals)
+    }
+
+    func testReadoutMatchesMarkerVertexAndClearsAtAdjacentPoint() throws {
+        let trades = SecurityTrade.grouped([row(), row("BUY"), row(account: "invest")])
+        let history = SecurityPriceHistory(ticker: "NVDA", currency: "USD", points: [
+            .init(dateText: "2026-09-09", close: 95), .init(dateText: "2026-09-10", close: 103),
+            .init(dateText: "2026-09-11", close: 105)], intradayPoints: [], trades: trades)
+        let data = SecurityPriceRangeData(history: history, range: .maximum, averageCost: 80,
+                                         selectedAccountKeys: ["test|isa"])
+        let date = try XCTUnwrap(DayDateCodec.date(from: "2026-09-10"))
+        XCTAssertEqual(data.trades(at: date).count, 2)
+        XCTAssertTrue(data.trades(at: date).allSatisfy { $0.amountTotals == ["USD": 200] })
+        XCTAssertTrue(data.trades(at: date.addingTimeInterval(86400)).isEmpty)
+        XCTAssertTrue(SecurityPriceRangeData(history: history, range: .maximum, averageCost: nil,
+            selectedAccountKeys: ["another"]).trades(at: date).isEmpty)
+    }
+
+    func testInferredEntryDoesNotInventAnExecutionAmount() {
+        let inferred = SecurityTrade(dateText: "2026-09-10", action: "BUY", quantity: 10,
+                                     tradeCount: 1, accountKeys: ["isa"])
+        XCTAssertNil(inferred.amountTotals)
+        XCTAssertNil(inferred.profitTotals)
     }
 }

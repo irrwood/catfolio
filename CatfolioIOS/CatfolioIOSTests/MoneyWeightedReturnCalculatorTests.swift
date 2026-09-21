@@ -4,6 +4,55 @@ import XCTest
 /// The money-weighted return drives the Returns tab's headline number, so the
 /// Newton solver and its bisection fallback are pinned to hand-checkable cases.
 final class MoneyWeightedReturnCalculatorTests: XCTestCase {
+    func testSparseWeekendSnapshotsUseTheLatestPriorQuoteAtEachDate() async {
+        let result = await LocalMarketDataClient().accountLedger([
+            .init(date: "2024-10-20", value: 100, inflow: 100, outflow: 0, nav: 1),
+            .init(date: "2024-11-17", value: 105, inflow: 0, outflow: 0, nav: 1.05),
+        ], end: "2024-11-17", cachedOnly: false, includeBenchmarks: true, fetchHistory: { symbols, _, _ in
+            Dictionary(uniqueKeysWithValues: symbols.map { ($0, ["2024-10-18": 100.0, "2024-11-15": 110.0]) })
+        })
+        for values in result.ledger.benchmarkValues.values { XCTAssertEqual(values, [0, 100, 110]) }
+    }
+
+    func testSparseSnapshotsStillRejectStaleQuotes() async {
+        let result = await LocalMarketDataClient().accountLedger([
+            .init(date: "2024-10-20", value: 100, inflow: 100, outflow: 0, nav: 1),
+            .init(date: "2024-11-17", value: 105, inflow: 0, outflow: 0, nav: 1.05),
+        ], end: "2024-11-17", cachedOnly: false, includeBenchmarks: true, fetchHistory: { symbols, _, _ in
+            Dictionary(uniqueKeysWithValues: symbols.map { ($0, ["2024-10-18": 100.0, "2024-11-11": 110.0]) })
+        })
+        for values in result.ledger.benchmarkValues.values { XCTAssertEqual(values, [0, 100, nil]) }
+    }
+
+    func testWeekendOpeningUsesPriorCloseForAllComparisonModes() async throws {
+        let result = await LocalMarketDataClient().accountLedger([
+            .init(date: "2024-10-20", value: 100, inflow: 100, outflow: 0, nav: 1),
+            .init(date: "2024-10-21", value: 105, inflow: 0, outflow: 0, nav: 1.05),
+        ], end: "2024-10-21", cachedOnly: false, includeBenchmarks: true, fetchHistory: { symbols, from, to in
+            XCTAssertEqual(from, "2024-10-12")
+            XCTAssertEqual(to, "2024-10-21")
+            return Dictionary(uniqueKeysWithValues: symbols.map { ($0, ["2024-10-18": 100.0, "2024-10-21": 102.0]) })
+        })
+        XCTAssertEqual(result.dates, ["2024-10-19", "2024-10-20", "2024-10-21"])
+        XCTAssertFalse(result.benchmarks.isEmpty)
+        for values in result.benchmarks.values { XCTAssertEqual(values, [1, 1, 1.02]) }
+        for values in result.ledger.benchmarkValues.values { XCTAssertEqual(values, [0, 100, 102]) }
+        for values in result.ledger.returns().benchmarks.values {
+            XCTAssertEqual(try XCTUnwrap(values.last ?? nil), 0.02, accuracy: 1e-7)
+        }
+    }
+
+    func testMissingPriorCloseNeverBackfillsWeekendFromMonday() async {
+        let result = await LocalMarketDataClient().accountLedger([
+            .init(date: "2024-10-20", value: 100, inflow: 100, outflow: 0, nav: 1),
+            .init(date: "2024-10-21", value: 105, inflow: 0, outflow: 0, nav: 1.05),
+        ], end: "2024-10-21", cachedOnly: false, includeBenchmarks: true, fetchHistory: { symbols, _, _ in
+            Dictionary(uniqueKeysWithValues: symbols.map { ($0, ["2024-10-21": 102.0]) })
+        })
+        XCTAssertTrue(result.benchmarks.isEmpty)
+        for values in result.ledger.benchmarkValues.values { XCTAssertEqual(values, [0, nil, nil]) }
+    }
+
     func testCashFlowComparisonCountsGrossSameDayFlowsAndRetainedCash() throws {
         let ledger = AccountMWRLedger(dates: ["2024-01-01", "2024-01-02", "2024-01-03"],
             cashFlows: [1000, 50, -200], values: [1000, 1150, 950], benchmarkValues: ["SPY": [1000, 1050, 850]],

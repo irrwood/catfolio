@@ -19,7 +19,8 @@ enum ComparisonSnapshotCache {
     /// daily history cache governs on its own. The day is part of it, so the
     /// first visit each day rebuilds behind the saved result.
     private struct Inputs: Encodable {
-        let version = 1
+        // v3 aligns weekend baselines and sparse snapshots to prior closes.
+        let version = 3
         let day: String
         let language: String
         let benchmarks: [String]

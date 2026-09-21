@@ -174,7 +174,7 @@ struct HoldingFinancialCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityHint("Open reported company financials")
-        .sheet(isPresented: $showsFinancials, onDismiss: { onAvailability(availability) }) {
+        .appSheet(isPresented: $showsFinancials, onDismiss: { onAvailability(availability) }) {
             NavigationStack {
                 CompanyFinancialsView(holding: holding, onAvailability: { availability = $0 })
             }

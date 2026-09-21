@@ -217,7 +217,7 @@ struct MoomooOAuthView: View {
                     ? L10n.text("将使用预览中的数据创建新账户；现有账户不受影响。")
                     : L10n.text("将更新当前 Moomoo 账户持仓；其他账户不受影响。"))
             }
-            .fullScreenCover(item: $authorizationSession.authorizationPage) { page in
+            .appFullScreenCover(item: $authorizationSession.authorizationPage) { page in
                 MoomooSafariView(url: page.url) {
                     authorizationSession.cancel()
                 }

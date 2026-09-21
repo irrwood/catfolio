@@ -8,6 +8,10 @@ struct ReturnsView: View {
     @State private var heatmapExpanded = LaunchArguments.contains("--expand-performance-heatmap")
     @State private var heroScroll = HeroScroll()
     @State private var isScrolling = false
+    @State private var sourcePreviews = ReturnsSourcePreviewStore()
+    /// Bumped each time the tab comes back into view, so the cards redraw
+    /// from prices a chart page may have just refreshed.
+    @State private var appearance = 0
     #if DEBUG
     @State private var showsHeatmapPreview = LaunchArguments.contains("--show-heatmap")
     /// `--show-returns-chart=losses` opens that chart page, for screenshots.
@@ -36,8 +40,11 @@ struct ReturnsView: View {
             )
             .accessibilityIdentifier("performance.heatmap")
             TodayAttentionPreview()
-            SettingsSection(L10n.text("Performance")) {
-                ForEach(ReturnsChartDestination.allCases.filter { $0 != .heatmap }) { chart in
+            JEVTodayAttentionEntry()
+            SettingsSectionHeader(L10n.text("Performance"))
+            ReturnsSourceCards(store: sourcePreviews)
+            SettingsCard {
+                ForEach(ReturnsChartDestination.allCases.filter { ![.heatmap, .contributors, .losses].contains($0) }) { chart in
                     SettingsNavigationRow(icon: .symbol(chart.icon), title: chart.title) {
                         ReturnsChartPage(chart: chart)
                     }
@@ -70,6 +77,16 @@ struct ReturnsView: View {
             hapticsEnabled && !wasPast && isPast
         }
         .tracksRootTabBarScroll()
+        .onAppear { appearance &+= 1 }
+        .task(id: "\(sourcePreviewScope)|\(model.portfolioChartRevision)|\(model.holdings.count)|\(model.selectedAccountKeys.count)|\(appearance)") {
+            await sourcePreviews.load(
+                scope: sourcePreviewScope,
+                revision: "\(model.portfolioChartRevision)",
+                holdings: model.holdings,
+                isPortfolioLoaded: !model.selectedAccountKeys.isEmpty || !model.holdings.isEmpty,
+                fetch: { try await model.holdingValueHistory(cachedOnly: $0) }
+            )
+        }
         .onDisappear { isScrolling = false }
         .accessibilityIdentifier("returns-root")
         .softTopScrollEdge()
@@ -94,6 +111,14 @@ struct ReturnsView: View {
 }
 
 private extension ReturnsView {
+    /// The accounts the entry cards describe. Not the holdings: they are not
+    /// loaded yet when the app opens, and the saved cards must match then.
+    /// A change in holdings moves the chart revision, which redraws them.
+    var sourcePreviewScope: String {
+        let accounts = model.selectedAccountKeys.sorted().joined(separator: ",")
+        return "\(model.isFakeDataMode ? "demo" : "real")|\(accounts)"
+    }
+
     struct HeroScroll: Equatable {
         var pull: CGFloat = 0
         var topInset: CGFloat = 0
@@ -118,7 +143,7 @@ enum ReturnsChartDestination: String, CaseIterable, Identifiable {
         case .comparison: L10n.text("收益对比")
         case .drawdown: L10n.text("回撤水下曲线")
         case .underwater: L10n.text("水下分析")
-        case .valuation: L10n.text("估值矩阵 (P/E vs 成长)")
+        case .valuation: L10n.text("估值 · 成长 · 质量")
         }
     }
 
@@ -135,7 +160,7 @@ enum ReturnsChartDestination: String, CaseIterable, Identifiable {
     }
 }
 
-private struct ReturnsChartPage: View {
+struct ReturnsChartPage: View {
     @Environment(AppModel.self) private var model
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     let chart: ReturnsChartDestination
@@ -314,7 +339,7 @@ struct ReturnsComparisonPanel: View {
                 .accessibilityLabel(L10n.text("添加对比"))
             }
         }
-        .sheet(isPresented: $showsBenchmarkPicker) {
+        .appSheet(isPresented: $showsBenchmarkPicker) {
             ReturnsBenchmarkPicker()
                 .environment(model)
         }
@@ -490,7 +515,7 @@ private struct ReturnsComparisonPlaceholder: View {
                 StandardLineChartSkeleton(
                     axisWidth: 33,
                     topInset: 0,
-                    leadingLineOverflow: 65,
+                    leadingLineOverflow: 0,
                     trailingEndpointInset: 9,
                     seriesCount: ReturnsSeriesStyle.displayOrder.count,
                     lineWidths: [2],
@@ -714,7 +739,7 @@ private struct ReturnsChart: View {
                 StandardLineChartSkeleton(
                     axisWidth: 33,
                     topInset: 0,
-                    leadingLineOverflow: 65,
+                    leadingLineOverflow: 0,
                     trailingEndpointInset: 9,
                     seriesCount: ReturnsSeriesStyle.displayOrder.count,
                     lineWidths: [2],
@@ -1048,6 +1073,18 @@ private struct ReturnsRangeMeasurement {
 
 /// Nine Swift Charts series create hundreds of main-thread view nodes. Canvas
 /// draws the same native chart in one pass and keeps tab switching responsive.
+enum ReturnsAxisLabels {
+    static func percent(_ value: Double, step: Double, locale: Locale) -> String {
+        guard value.isFinite, step.isFinite, step > 0 else { return "—" }
+        let digits = min(6, max(0, Int(ceil(-log10(step)))))
+        let scale = pow(10.0, Double(digits))
+        let rounded = (value * scale).rounded() / scale
+        return (rounded == 0 ? 0 : rounded).formatted(
+            .number.grouping(.never).precision(.fractionLength(0...digits)).locale(locale)
+        ) + "%"
+    }
+}
+
 private struct FastReturnsPlot: View {
     @Environment(\.locale) private var appLocale
     let grouped: [String: [ReturnsSeriesPoint]]
@@ -1098,7 +1135,8 @@ private struct FastReturnsPlot: View {
             axisWidth: axisWidth,
             topInset: 0,
             bottomHeight: bottomHeight,
-            leadingLineOverflow: 65,
+            // Keep the range's actual baseline visible and reachable by touch.
+            leadingLineOverflow: 0,
             trailingEndpointInset: endpointInset,
             transitionKey: transitionKey,
             appearanceID: "returns-comparison",
@@ -1206,7 +1244,7 @@ private struct FastReturnsPlot: View {
                     .precision(.fractionLength(0))
             )
         }
-        return "\(Int(value.rounded()))%"
+        return ReturnsAxisLabels.percent(value, step: (domain.upperBound - domain.lowerBound) / 5, locale: appLocale)
     }
 
     private var cashFlowAxisDivisor: Double {
@@ -1757,7 +1795,7 @@ private struct ReturnsBenchmarkPicker: View {
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
-            .background(SettingsTemplate.pageBackground)
+            .appPageBackground(SettingsTemplate.pageBackground)
             .navigationTitle(L10n.text("对比标的"))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(

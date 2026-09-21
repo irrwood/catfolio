@@ -385,6 +385,7 @@ struct LocalReturnsAnalyticsClient {
         guard totalMarketValue > 0 else { return .empty }
 
         var grouped: [String: (displayName: String, yahooSymbol: String, marketValue: Double)] = [:]
+        var prices: [String: Double] = [:]
         for position in document.positions where position.currency.uppercased() == "USD" {
             let ticker = position.ticker.uppercased()
             let value = (try? LocalPortfolioEngine.usd(
@@ -392,6 +393,9 @@ struct LocalReturnsAnalyticsClient {
                 currency: position.quoteCurrency
             )) ?? 0
             guard value > 0 else { continue }
+            if position.quoteCurrency.uppercased() == "USD", position.quotePrice > 0 {
+                prices[ticker] = position.quotePrice
+            }
             let yahooSymbol = LocalMarketDataClient.yahooSymbol(
                 ticker: ticker,
                 currency: position.quoteCurrency
@@ -423,6 +427,65 @@ struct LocalReturnsAnalyticsClient {
             )
         }
 
+        // SEC filings first: P/E and growth worked out from the company's own
+        // statements and today's price — no key, no quota, and the same
+        // figures JEV reads. FMP is asked only about what SEC cannot answer.
+        let secRows = await Self.secValuations(seeds: seeds, prices: prices)
+        let fmpSeeds = seeds.filter { secRows[$0.ticker] == nil }
+        guard !fmpSeeds.isEmpty else {
+            return ValuationMatrix(rows: seeds.compactMap { secRows[$0.ticker] }.sorted { $0.weight > $1.weight },
+                                   warnings: [])
+        }
+        let fallback = await fmpValuationMatrix(seeds: fmpSeeds)
+        var fallbackRows: [ValuationBubble] = []
+        for var row in fallback.rows {
+            row.quality = await CompanyFinancialsClient.shared.cached(ticker: row.ticker)?.valuationQuality
+            row.peSource = "FMP"
+            fallbackRows.append(row)
+        }
+        let rows = seeds.compactMap { secRows[$0.ticker] } + fallbackRows
+        let present = Set(rows.map(\.ticker))
+        return ValuationMatrix(rows: rows.sorted { $0.weight > $1.weight },
+                               unavailable: seeds.filter { !present.contains($0.ticker) }.map {
+                                   ValuationUnavailable(ticker: $0.ticker, reason: "缺少有效 P/E 或财报数据")
+                               },
+                               warnings: secRows.isEmpty ? fallback.warnings
+                                   : fallback.warnings.map { $0.replacingOccurrences(of: "估值矩阵需要 FMP API Key", with: "其余持仓需要 FMP API Key") })
+    }
+
+    /// P/E and growth from SEC filings for each seed that has them: saved
+    /// filings as they are, the rest fetched a few at a time.
+    private static func secValuations(seeds: [ValuationSeed], prices: [String: Double]) async -> [String: ValuationBubble] {
+        await withTaskGroup(of: (String, ValuationBubble?).self) { group in
+            var pending = seeds.filter { prices[$0.ticker] != nil && !$0.ticker.contains(".") }.makeIterator()
+            func add(_ seed: ValuationSeed) {
+                let price = prices[seed.ticker] ?? 0
+                group.addTask {
+                    // The client owns freshness and cache migration; a direct
+                    // cached() read here would freeze annual metrics indefinitely.
+                    let filing = try? await CompanyFinancialsClient.shared.load(ticker: seed.ticker)
+                    guard let filing, let facts = JEVValuationFacts.make(filing, price: price),
+                          let pe = facts.pe else { return (seed.ticker, nil) }
+                    return (seed.ticker, ValuationBubble(
+                        ticker: seed.ticker, displayName: seed.displayName, sector: Self.sector(for: seed.ticker),
+                        pe: pe, growthPercent: facts.growthPercent,
+                        growthSource: facts.growthBasis == "net income" ? "净利润同比 · SEC" : "营收同比 · SEC",
+                        weight: seed.weight, quality: filing.valuationQuality,
+                        pePeriod: facts.throughPeriod, peSource: filing.source))
+                }
+            }
+            for _ in 0..<4 { if let seed = pending.next() { add(seed) } }
+            var result: [String: ValuationBubble] = [:]
+            while let (ticker, bubble) = await group.next() {
+                if let bubble { result[ticker] = bubble }
+                if let seed = pending.next() { add(seed) }
+            }
+            return result
+        }
+    }
+
+    /// The FMP route, for holdings SEC filings do not cover.
+    private func fmpValuationMatrix(seeds: [ValuationSeed]) async -> ValuationMatrix {
         var fundamentals: [String: CachedFundamental] = [:]
         var needsFetch: [ValuationSeed] = []
         for seed in seeds {
@@ -489,8 +552,7 @@ struct LocalReturnsAnalyticsClient {
                 rawGrowth = nil
                 source = ""
             }
-            guard let rawGrowth else { continue }
-            let growth = abs(rawGrowth) <= 2 ? rawGrowth * 100 : rawGrowth
+            let growth = rawGrowth.map { abs($0) <= 2 ? $0 * 100 : $0 }
             rows.append(ValuationBubble(
                 ticker: seed.ticker,
                 displayName: seed.displayName,

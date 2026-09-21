@@ -3,6 +3,85 @@ import Observation
 import SwiftUI
 import UIKit
 
+/// A slightly raised ground for app-owned modal pages in dark appearance.
+/// Keep this separate from the security detail's designed presentation.
+enum AppModalStyle {
+    static let uiDarkBackground = UIColor(red: 0x18 / 255.0, green: 0x18 / 255.0, blue: 0x1A / 255.0, alpha: 1)
+    static let darkBackground = Color(uiColor: uiDarkBackground)
+    static let systemBackground = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark ? uiDarkBackground : .systemBackground
+    })
+}
+
+private struct AppModalEnvironmentKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var isAppModal: Bool {
+        get { self[AppModalEnvironmentKey.self] }
+        set { self[AppModalEnvironmentKey.self] = newValue }
+    }
+}
+
+private struct AppPageBackgroundModifier: ViewModifier {
+    @Environment(\.isAppModal) private var isModal
+    @Environment(\.colorScheme) private var colorScheme
+    let fallback: Color
+
+    func body(content: Content) -> some View {
+        content.background(isModal && colorScheme == .dark ? AppModalStyle.darkBackground : fallback)
+    }
+}
+
+private struct AppModalSurfaceModifier: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if colorScheme == .dark {
+            content
+                .scrollContentBackground(.hidden)
+                .background(AppModalStyle.darkBackground.ignoresSafeArea())
+                .presentationBackground(AppModalStyle.darkBackground)
+                .toolbarBackground(AppModalStyle.darkBackground, for: .navigationBar)
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    /// Apply to the scrolling page inside a navigation stack, so its own
+    /// opaque fill cannot cover the presentation's ground.
+    func appPageBackground(_ fallback: Color = .clear) -> some View {
+        modifier(AppPageBackgroundModifier(fallback: fallback))
+    }
+
+    func appModalSurface() -> some View {
+        modifier(AppModalSurfaceModifier()).environment(\.isAppModal, true)
+    }
+
+    func appSheet<Sheet: View>(isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil,
+                              @ViewBuilder content: @escaping () -> Sheet) -> some View {
+        sheet(isPresented: isPresented, onDismiss: onDismiss) { content().appModalSurface() }
+    }
+
+    func appSheet<Item: Identifiable, Sheet: View>(item: Binding<Item?>, onDismiss: (() -> Void)? = nil,
+                                                   @ViewBuilder content: @escaping (Item) -> Sheet) -> some View {
+        sheet(item: item, onDismiss: onDismiss) { content($0).appModalSurface() }
+    }
+
+    func appFullScreenCover<Cover: View>(isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil,
+                                        @ViewBuilder content: @escaping () -> Cover) -> some View {
+        fullScreenCover(isPresented: isPresented, onDismiss: onDismiss) { content().appModalSurface() }
+    }
+
+    func appFullScreenCover<Item: Identifiable, Cover: View>(item: Binding<Item?>, onDismiss: (() -> Void)? = nil,
+                                                           @ViewBuilder content: @escaping (Item) -> Cover) -> some View {
+        fullScreenCover(item: item, onDismiss: onDismiss) { content($0).appModalSurface() }
+    }
+}
+
 /// Shared treatment for the oversized financial values used as page and card
 /// headlines: SF Rounded, with a smaller currency/sign prefix aligned to the
 /// numeral baseline.
@@ -661,6 +740,7 @@ extension View {
     /// corners, no grabber.
     func securityDetailSheet() -> some View {
         presentationDetents([.large])
+            .environment(\.isAppModal, false)
             // Suppress the system's separate dimming layer. The coordinated
             // backdrop supplies both the shade and a background hit barrier.
             .presentationBackgroundInteraction(.enabled(upThrough: .large))
@@ -2717,35 +2797,43 @@ struct ContributionStripePattern: View {
     }
 }
 
-@available(iOS 26.0, *)
-extension View {
-    /// Liquid Glass behind the view, with a lighter shadow than the system's.
-    ///
-    /// The system glass casts a shadow some 25pt deep that on the app's pale
-    /// pages reads as a grey smear around every card. The glass is drawn as
-    /// its own layer and masked: fully inside the shape, and outside it only
-    /// a faded band a few points deep, so the shadow keeps enough to lift the
-    /// card at a fraction of its weight. The mask sits on that layer only:
-    /// masking the card itself re-blends the glass's content and turns its
-    /// greys several shades darker.
-    func softShadowGlass<S: Shape>(
-        _ glass: Glass = .regular,
-        in shape: S,
-        shadowReach: CGFloat = 8,
-        shadowStrength: Double = 0.45
-    ) -> some View {
-        background {
-            Color.clear
-                .glassEffect(glass, in: shape)
-                .mask {
-                    ZStack {
-                        shape
-                            .padding(-shadowReach)
-                            .blur(radius: shadowReach * 0.6)
-                            .opacity(shadowStrength)
-                        shape
-                    }
+/// A card's surface drawn by the app rather than by Liquid Glass.
+///
+/// On an iPhone with an HDR screen the system glass lights its rim and body
+/// above normal white, so every glass card glowed brighter than the page and
+/// its shadow read as heavy against it; the simulator and screenshots, being
+/// standard range, never show it. There is no public switch to hold the glass
+/// to standard range, so cards draw the parts of it they used — a pale body,
+/// a lit top edge and a short shadow — in ordinary colours.
+struct CardSurface<S: InsettableShape>: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    let shape: S
+
+    private var isDark: Bool { colorScheme == .dark }
+
+    func body(content: Content) -> some View {
+        content.background {
+            shape
+                .fill(Color.white.opacity(isDark ? 0.06 : 0.55))
+                .overlay {
+                    shape.strokeBorder(
+                        LinearGradient(
+                            colors: isDark
+                                ? [.white.opacity(0.16), .white.opacity(0.04)]
+                                : [.white.opacity(0.95), .white.opacity(0.4)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 1
+                    )
                 }
+                .shadow(color: .black.opacity(isDark ? 0.3 : 0.05), radius: 10, y: 3)
         }
+    }
+}
+
+extension View {
+    func cardSurface<S: InsettableShape>(in shape: S) -> some View {
+        modifier(CardSurface(shape: shape))
     }
 }

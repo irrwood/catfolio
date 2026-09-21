@@ -339,7 +339,7 @@ struct SecurityDebateCardContent: View {
         ) {
             expandedContent
         }
-        .sheet(item: $opened) { question in
+        .appSheet(item: $opened) { question in
             if let debate = shown {
                 SecurityDebateQuestionSheet(question: question, debate: debate)
             }
@@ -476,7 +476,7 @@ struct SecurityDebateQuestionSheet: View {
                 .padding(.bottom, 24)
             }
             .softTopScrollEdge()
-            .navigationTitle(L10n.text("AI 关键变化"))
+            .appPageBackground().navigationTitle(L10n.text("AI 关键变化"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

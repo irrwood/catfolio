@@ -2,6 +2,42 @@ import XCTest
 @testable import CatfolioIOS
 
 final class AIStreamingTests: XCTestCase {
+    @MainActor func testStoppingKeepsReceivedTextAndRejectsLateDeltas() async {
+        let live = StreamingAnswer()
+        live.receive(.reasoning("Checking weights."))
+        live.receive(.text("Partial answer"))
+        let saved = live.stoppedMessage()
+        live.receive(.text(" late text"))
+        live.receive(.reasoning(" late reasoning"))
+        await live.finish()
+        XCTAssertEqual(saved?.text, "Partial answer")
+        XCTAssertEqual(saved?.reasoning, "Checking weights.")
+        XCTAssertEqual(live.visibleText, "Partial answer")
+        XCTAssertFalse(live.isRevealing)
+        XCTAssertTrue(live.isCancelled)
+    }
+
+    @MainActor func testStoppingBeforeAnyContentDoesNotInventAnAnswer() {
+        XCTAssertNil(StreamingAnswer().stoppedMessage())
+    }
+
+    func testCodexRequestPreservesStructuredInstructionsAndUserSchema() throws {
+        let instructions = "Output a single JSON object without Markdown."
+        let body = CodexOAuthClient.completionRequestBody(prompt: "schema: {answer: string}", instructions: instructions)
+        XCTAssertEqual(body["instructions"] as? String, instructions)
+        let encoded = try JSONSerialization.data(withJSONObject: body)
+        XCTAssertTrue(String(decoding: encoded, as: UTF8.self).contains("schema: {answer: string}"))
+        XCTAssertFalse((CodexOAuthClient.completionRequestBody(prompt: "hi")["instructions"] as? String ?? "").isEmpty)
+    }
+
+    func testStructuredCodexAnswerRejectsProseMarkdownAndJSONScalars() throws {
+        let valid = #"{"answer":"yes","items":[]}"#
+        XCTAssertEqual(try LocalAIClient.validatedStructuredAnswer(valid), valid)
+        for invalid in ["Here is my analysis.", "```json\n{}\n```", "null", "42", "[]", "{broken}"] {
+            XCTAssertThrowsError(try LocalAIClient.validatedStructuredAnswer(invalid))
+        }
+    }
+
     func testCodexStreamSplitsThinkingFromTheAnswer() throws {
         var index: Int?
         let lines = [

@@ -9,6 +9,10 @@ enum LocalServiceKeys {
     static let deepSeek = "catfolio.deepseek.api-key"
     static let openRouter = "catfolio.openrouter.api-key"
     static let finnhub = "catfolio.finnhub.api-key"
+    /// A Cloudflare API token with Workers AI access, for Jev.
+    static let cloudflareAIToken = "catfolio.cloudflare.ai-token"
+    /// Not a secret, so in UserDefaults: the account the token belongs to.
+    static let cloudflareAccountIDKey = "catfolio.cloudflare.account-id"
     /// Not a secret, so in UserDefaults: which OpenRouter model answers.
     static let openRouterModel = "catfolio.openrouter.model"
     /// OpenRouter's own router, which picks a model for each request.
@@ -26,6 +30,15 @@ enum LocalServiceKeys {
 
     static var hasFinnhubKey: Bool {
         !(KeychainStore.string(for: finnhub)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+    }
+
+    static var cloudflareAccountID: String {
+        (UserDefaults.standard.string(forKey: cloudflareAccountIDKey) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static var hasJEVCredentials: Bool {
+        !cloudflareAccountID.isEmpty
+            && !(KeychainStore.string(for: cloudflareAIToken)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
     }
 }
 

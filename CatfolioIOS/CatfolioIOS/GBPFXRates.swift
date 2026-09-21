@@ -88,9 +88,9 @@ struct GBPFXRates: Decodable, Sendable {
     /// walks forward — a rate published after the trade was not knowable at
     /// the time.
     func quote(currency: String, on date: String, within limit: Int = 7) -> Quote? {
-        let code = currency.uppercased()
+        let code = currency == "GBp" ? "GBX" : currency.uppercased()
         if code == "GBP" { return Quote(rate: 1, match: .exact, date: date) }
-        if code == "GBX" || code == "GBp" { return Quote(rate: 100, match: .exact, date: date) }
+        if code == "GBX" { return Quote(rate: 100, match: .exact, date: date) }
 
         guard let series = rates[code] else { return nil }
 

@@ -11,6 +11,7 @@ struct HoldingDetailHeader: View {
     let marketTodayChange: Double?
     let selectedPrice: Double?
     let selectedReturn: Double?
+    var selectedTrades: [SecurityTrade] = []
     /// Tapping the price refreshes the quote; there is no separate button.
     var isRefreshing = false
     var onRefresh: (() -> Void)? = nil
@@ -60,20 +61,26 @@ struct HoldingDetailHeader: View {
                 Color.clear.frame(width: 48, height: 48)
                     .accessibilityHidden(true)
             }
-            if let onRefresh {
-                Button {
-                    refreshTaps += 1
-                    onRefresh()
-                } label: {
+            HStack(alignment: .top, spacing: 12) {
+                if let onRefresh {
+                    Button {
+                        refreshTaps += 1
+                        onRefresh()
+                    } label: {
+                        quote
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isRefreshing)
+                    .sensoryFeedback(.impact(weight: .light), trigger: refreshTaps) { _, _ in hapticsEnabled }
+                    .accessibilityHint(L10n.text("刷新行情"))
+                    .accessibilityIdentifier("holding-detail-refresh")
+                } else {
                     quote
                 }
-                .buttonStyle(.plain)
-                .disabled(isRefreshing)
-                .sensoryFeedback(.impact(weight: .light), trigger: refreshTaps) { _, _ in hapticsEnabled }
-                .accessibilityHint(L10n.text("刷新行情"))
-                .accessibilityIdentifier("holding-detail-refresh")
-            } else {
-                quote
+                Spacer(minLength: 0)
+                if !selectedTrades.isEmpty {
+                    SecurityTradeReadout(trades: selectedTrades)
+                }
             }
         }
         .padding(.horizontal, 20)
@@ -110,6 +117,59 @@ struct HoldingDetailHeader: View {
                 }
             }
             .contentShape(Rectangle())
+    }
+}
+
+/// Figma 282:2003: a compact, trailing readout beside the historical quote.
+struct SecurityTradeReadout: View {
+    let trades: [SecurityTrade]
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            ForEach(trades) { trade in
+                VStack(alignment: .trailing, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text(L10n.text(trade.isBuy ? "买入" : "卖出"))
+                            .font(Typography.number(size: 16, weight: .semibold))
+                            .padding(.horizontal, 8).padding(.vertical, 2)
+                            .background(Color.primary.opacity(0.1), in: Capsule())
+                        Text(money(trade.amountTotals))
+                            .font(Typography.number(size: 18, weight: .semibold))
+                    }
+                    if trade.isSell {
+                        if let totals = trade.profitTotals {
+                            HStack(spacing: 4) {
+                                ForEach(totals.keys.sorted(), id: \.self) { currency in
+                                    let value = totals[currency]!
+                                    Text(DisplayFormat.money(value, currency: currency, signed: true, fractionDigits: 2))
+                                        .foregroundStyle(value >= 0 ? CatfolioTheme.gainDefault : CatfolioTheme.lossDefault)
+                                }
+                            }
+                            .accessibilityLabel(L10n.text("已实现盈亏"))
+                        } else {
+                            Text("—").foregroundStyle(.secondary)
+                                .accessibilityLabel(L10n.text("已实现盈亏") + " —")
+                        }
+                    } else {
+                        Text(L10n.text("数量") + " " + DisplayFormat.shares(trade.quantity))
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel(L10n.text("数量") + " " + DisplayFormat.shares(trade.quantity))
+                    }
+                }
+                .font(Typography.number(size: 18, weight: .medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .accessibilityIdentifier("security-trade-readout")
+    }
+
+    private func money(_ totals: [String: Double]?) -> String {
+        guard let totals else { return "—" }
+        return totals.keys.sorted().map {
+            DisplayFormat.money(totals[$0]!, currency: $0, fractionDigits: 2)
+        }.joined(separator: " · ")
     }
 }
 

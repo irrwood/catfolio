@@ -287,11 +287,67 @@ struct SecurityPricePoint: Equatable, Identifiable, Sendable {
 }
 
 struct SecurityTrade: Equatable, Identifiable, Sendable {
+    struct Execution: Equatable, Sendable {
+        let accountKey: String
+        let quantity: Double
+        let amount: Double?
+        let currency: String
+        let profit: Double?
+        let profitCurrency: String?
+    }
+
     let dateText: String
     let action: String
     let quantity: Double
     let tradeCount: Int
     let accountKeys: Set<String>
+    var executions: [Execution] = []
+
+    var amountTotals: [String: Double]? { totals(profit: false) }
+    var profitTotals: [String: Double]? { isSell ? totals(profit: true) : nil }
+
+    private func totals(profit: Bool) -> [String: Double]? {
+        guard !executions.isEmpty else { return nil }
+        var result: [String: Double] = [:]
+        for row in executions {
+            guard let value = profit ? row.profit : row.amount,
+                  let currency = profit ? row.profitCurrency : row.currency,
+                  value.isFinite, !currency.isEmpty else { return nil }
+            let key = currency == "GBp" ? "GBX" : currency.uppercased()
+            result[key, default: 0] += value
+        }
+        return result.values.allSatisfy(\.isFinite) ? result : nil
+    }
+
+    static func grouped(_ transactions: [LocalTransactionRecord]) -> [SecurityTrade] {
+        let rows = transactions.filter { canonicalAction($0.action) != nil }
+        return Dictionary(grouping: rows) { "\($0.date)|\(canonicalAction($0.action)!)" }
+            .values.compactMap { rows in
+                guard let first = rows.first else { return nil }
+                return SecurityTrade(dateText: first.date, action: canonicalAction(first.action)!,
+                    quantity: rows.reduce(0) { $0 + abs($1.quantity) }, tradeCount: rows.count,
+                    accountKeys: Set(rows.map(\.accountKey)), executions: rows.map { row in
+                        let amount = abs(row.quantity) * row.price
+                        let currency = row.currency.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let profitCurrency = row.realisedProfitLossCurrency?.trimmingCharacters(in: .whitespacesAndNewlines)
+                        return Execution(accountKey: row.accountKey, quantity: abs(row.quantity),
+                            amount: amount.isFinite && row.price > 0 && !currency.isEmpty ? amount : nil,
+                            currency: currency,
+                            profit: row.realisedProfitLoss.flatMap { $0.isFinite ? $0 : nil },
+                            profitCurrency: profitCurrency?.isEmpty == false ? profitCurrency : nil)
+                    })
+            }.sorted { $0.id < $1.id }
+    }
+
+    func filtered(accounts: Set<String>) -> SecurityTrade? {
+        guard !accountKeys.isDisjoint(with: accounts) else { return nil }
+        guard !executions.isEmpty else { return self }
+        let rows = executions.filter { accounts.contains($0.accountKey) }
+        guard !rows.isEmpty else { return nil }
+        return SecurityTrade(dateText: dateText, action: action,
+            quantity: rows.reduce(0) { $0 + $1.quantity }, tradeCount: rows.count,
+            accountKeys: Set(rows.map(\.accountKey)), executions: rows)
+    }
 
     var id: String { "\(dateText)|\(action)" }
     var date: Date { DayDateCodec.date(from: dateText) ?? .distantPast }

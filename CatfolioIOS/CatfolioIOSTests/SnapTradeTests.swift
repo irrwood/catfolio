@@ -2,6 +2,42 @@ import XCTest
 @testable import CatfolioIOS
 
 final class SnapTradeTests: XCTestCase {
+    @MainActor func testCancelledSnapTradeOperationCannotOverwriteANewerRequest() async throws {
+        let operation = SnapTradeOperation()
+        let firstStarted = expectation(description: "first started")
+        let secondStarted = expectation(description: "second started")
+        var firstReply: CheckedContinuation<Void, Error>?
+        var secondReply: CheckedContinuation<Void, Error>?
+        var errors = 0
+        let first = try XCTUnwrap(operation.start({
+            try await withCheckedThrowingContinuation { firstReply = $0; firstStarted.fulfill() }
+        }, onError: { _ in errors += 1 }))
+        await fulfillment(of: [firstStarted], timeout: 2)
+        operation.cancel()
+        XCTAssertFalse(operation.isRunning)
+        let second = try XCTUnwrap(operation.start({
+            try await withCheckedThrowingContinuation { secondReply = $0; secondStarted.fulfill() }
+        }, onError: { _ in errors += 1 }))
+        await fulfillment(of: [secondStarted], timeout: 2)
+        firstReply?.resume(throwing: URLError(.timedOut))
+        await first.value
+        XCTAssertTrue(operation.isRunning)
+        XCTAssertEqual(errors, 0)
+        secondReply?.resume(returning: ())
+        await second.value
+        XCTAssertFalse(operation.isRunning)
+    }
+
+    @MainActor func testCancellingSnapTradeBeforeItStartsPreventsTheAction() async throws {
+        let operation = SnapTradeOperation()
+        var calls = 0
+        let task = try XCTUnwrap(operation.start({ calls += 1 }, onError: { _ in XCTFail("cancel is not an error") }))
+        operation.cancel()
+        await task.value
+        XCTAssertEqual(calls, 0)
+        XCTAssertFalse(operation.isRunning)
+    }
+
     private let accountID = "917c8734-8470-4a3e-a18f-57c3f2ee6631"
     private let connectionID = "87b24961-b51e-4db8-9226-f198f6518a89"
 

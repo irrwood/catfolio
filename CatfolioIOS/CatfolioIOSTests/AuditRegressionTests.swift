@@ -2,6 +2,46 @@ import XCTest
 @testable import CatfolioIOS
 
 final class AuditRegressionTests: XCTestCase {
+    func testReturnsPercentageTicksRemainDistinctAcrossSmallRanges() {
+        for locale in [Locale(identifier: "en_US"), Locale(identifier: "zh_CN")] {
+            let values = [2.2, 1.56, 0.92, 0.28, -0.36, -1.0]
+            let labels = values.map { ReturnsAxisLabels.percent($0, step: 0.64, locale: locale) }
+            XCTAssertEqual(Set(labels).count, values.count)
+            XCTAssertEqual(labels[0], "2.2%")
+            XCTAssertEqual(labels[4], "-0.4%")
+            XCTAssertEqual(ReturnsAxisLabels.percent(-0.001, step: 0.4, locale: locale), "0%")
+            XCTAssertEqual(ReturnsAxisLabels.percent(20, step: 5, locale: locale), "20%")
+        }
+    }
+
+    func testLocalFXDateOnlyTradesDoNotSellBeforeTheirPurchase() {
+        let result = LocalFXImpactCalculator.remainingLots(from: [
+            trade("a-sell", "2024-01-02", "SELL", 4, 110),
+            trade("z-buy", "2024-01-02", "BUY", 10, 100),
+        ])
+        XCTAssertTrue(result.complete)
+        XCTAssertEqual(result.lots.map(\.quantity), [6])
+    }
+
+    func testLocalFXUsesExecutionTimeInsteadOfTradeIDForSameDayLots() {
+        let result = LocalFXImpactCalculator.remainingLots(from: [
+            trade("a-buy", "2024-01-02", "BUY", 7, 100, time: "2024-01-02T15:00:00Z"),
+            trade("b-sell", "2024-01-02", "SELL", 5, 110, time: "2024-01-02T14:00:00Z"),
+            trade("z-buy", "2024-01-02", "BUY", 10, 100, time: "2024-01-02T13:00:00Z"),
+        ])
+        XCTAssertTrue(result.complete)
+        XCTAssertEqual(result.lots.map(\.quantity), [5, 7])
+    }
+
+    func testLocalFXEqualExecutionTimesKeepBuyBeforeSell() {
+        let result = LocalFXImpactCalculator.remainingLots(from: [
+            trade("a-sell", "2024-01-02", "SELL", 4, 110, time: "2024-01-02T00:00:00Z"),
+            trade("z-buy", "2024-01-02", "BUY", 10, 100, time: "2024-01-02T00:00:00Z"),
+        ])
+        XCTAssertTrue(result.complete)
+        XCTAssertEqual(result.lots.map(\.quantity), [6])
+    }
+
     private func date(_ text: String) -> Date { DayDateCodec.date(from: text)! }
     private func trade(_ id: String, _ day: String, _ side: String, _ quantity: Double,
                        _ price: Double, account: String = "A", time: String? = nil) -> LocalTransactionRecord {

@@ -12,6 +12,7 @@ struct UnderwaterAnalysisChart: View {
 
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.locale) private var appLocale
     @Environment(\.scrollChartPageToTop) private var scrollToTop
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
@@ -126,6 +127,7 @@ struct UnderwaterAnalysisChart: View {
                 .appNumber(.title, weight: .semibold)
                 .foregroundStyle(row.drawdown < 0 ? CatfolioTheme.loss(for: colorScheme) : .primary)
                 .contentTransition(.numericText(value: row.drawdown))
+                .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: row.drawdown)
             Text(row.drawdown < 0
                  ? L10n.text("比高点少 \(DisplayFormat.money(row.peak - row.value, fractionDigits: 0))")
                  : L10n.text("在这段时间的最高点"))
@@ -354,6 +356,7 @@ struct UnderwaterAnalysisChart: View {
                 .appNumber(.title, weight: .semibold)
                 .foregroundStyle(point.drawdown < 0 ? CatfolioTheme.loss(for: colorScheme) : .primary)
                 .contentTransition(.numericText(value: point.drawdown))
+                .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: point.drawdown)
             Text(point.drawdown < 0
                  ? L10n.text("\(name) · 回到高点还要涨 \(DisplayFormat.percent(UnderwaterSeries.gainToRecover(point.drawdown) * 100))")
                  : L10n.text("\(name) · 在这段时间的最高点"))

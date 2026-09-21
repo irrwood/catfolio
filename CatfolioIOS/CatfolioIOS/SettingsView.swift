@@ -409,27 +409,27 @@ struct SettingsView: View {
             } message: {
                 Text(portfolioResetError ?? "")
             }
-            .sheet(isPresented: $showsCSVImport) {
+            .appSheet(isPresented: $showsCSVImport) {
                 CSVImportView(context: .create).environment(model)
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showsTrading212) {
+            .appSheet(isPresented: $showsTrading212) {
                 Trading212View(context: .create).environment(model)
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showsSnapTrade) {
+            .appSheet(isPresented: $showsSnapTrade) {
                 SnapTradeView(context: .create).environment(model)
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showsIBKRFlex) {
+            .appSheet(isPresented: $showsIBKRFlex) {
                 IBKRFlexView(context: .create).environment(model)
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showsMoomooOAuth) {
+            .appSheet(isPresented: $showsMoomooOAuth) {
                 MoomooOAuthView(context: .create).environment(model)
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
             }
-        .sheet(isPresented: $showsLocalServices) {
+        .appSheet(isPresented: $showsLocalServices) {
             LocalServicesSettingsView()
                 .presentationDetents([.large]).presentationDragIndicator(.visible)
         }
@@ -519,13 +519,30 @@ struct SettingsView: View {
         }
     }
 
+    /// A new IBKR account says what its first sync is doing; the report can
+    /// take minutes, and "awaiting first sync" alone looked like nothing was.
+    private func firstSyncSubtitle(for account: PortfolioAccount) -> String {
+        guard account.id == IBKRFlexKeys.pendingAccountID, let phase = IBKRFirstSync.shared.phase else {
+            return L10n.text("等待首次同步")
+        }
+        switch phase {
+        case let .waiting(seconds):
+            return seconds < 3 ? L10n.text("正在向 IBKR 请求报表…")
+                               : L10n.text("IBKR 正在生成报表… 已等待 \(seconds) 秒")
+        case .importing:
+            return L10n.text("正在导入持仓…")
+        case let .failed(message):
+            return L10n.text("首次同步失败：\(message)")
+        }
+    }
+
     private func accountScopeRow(_ account: PortfolioAccount) -> some View {
         let isSelected = model.selectedAccountKeys.contains(account.id)
         return SettingsSelectionRow(
             isSelected: isSelected,
             title: account.localizedDisplayName,
             subtitle: account.awaitsFirstSync
-                ? (model.isPublicInvestorMode ? L10n.text("暂无数据") : L10n.text("等待首次同步"))
+                ? (model.isPublicInvestorMode ? L10n.text("暂无数据") : firstSyncSubtitle(for: account))
                 : L10n.text("\(account.positionCount) 项 · \(DisplayFormat.money(account.marketValueUSD))"),
             // Not the accent: in this row the filled circle already means
             // "included in the portfolio", and reusing its colour for a sync
@@ -710,7 +727,7 @@ private struct AccountDetailView: View {
         } message: { notice in
             Text(notice.message)
         }
-        .sheet(item: $activeSheet) { sheet in
+        .appSheet(item: $activeSheet) { sheet in
             accountSheet(sheet)
                 .environment(model)
                 .presentationDetents([.large])
@@ -1086,6 +1103,7 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
     case deepSeek
     case openRouter
     case finnhub
+    case jev
 
     var id: String { rawValue }
 
@@ -1096,12 +1114,14 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
         case .deepSeek: "DeepSeek"
         case .openRouter: "OpenRouter"
         case .finnhub: "Finnhub"
+        case .jev: "Jev (Cloudflare)"
         }
     }
 
     var shortTitle: String {
         switch self {
         case .fmp: "FMP"
+        case .jev: "Jev"
         default: title
         }
     }
@@ -1113,6 +1133,7 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
         case .deepSeek: L10n.text("云端问答与自动回退")
         case .openRouter: L10n.text("用一个 Key 调用多家模型")
         case .finnhub: L10n.text("美股公司新闻")
+        case .jev: L10n.text("JEV 今日关注的买卖判断")
         }
     }
 
@@ -1128,6 +1149,8 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
             L10n.text("选择 OpenRouter 或自动模式需要回退时，组合摘要和问题会直接发送给 OpenRouter，再由它转给你选的模型，不经过 Mac 或 Catfolio 服务端。")
         case .finnhub:
             L10n.text("读取美股公司新闻和发布方摘要，作为今天值得关注、个股动态和今日异动的新闻来源之一。请求只带股票代码，不含持仓数量或金额。")
+        case .jev:
+            L10n.text("通过你的 Cloudflare 账户调用 TypeSafe 的 Jev 模型（Workers AI 的 typesafe/jev），为 JEV 今日关注判断每只持仓该买入、持有还是卖出。发送的是行情指标、仓位占比和浮动盈亏百分比，不含账户、股数或金额。需要 Account ID 和一个有 Workers AI 权限的 API Token。")
         }
     }
 
@@ -1138,6 +1161,7 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
         case .deepSeek: LocalServiceKeys.deepSeek
         case .openRouter: LocalServiceKeys.openRouter
         case .finnhub: LocalServiceKeys.finnhub
+        case .jev: LocalServiceKeys.cloudflareAIToken
         }
     }
 
@@ -1148,6 +1172,7 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
         case .deepSeek: "sparkles"
         case .openRouter: "arrow.triangle.branch"
         case .finnhub: "newspaper"
+        case .jev: "bolt.fill"
         }
     }
 
@@ -1157,6 +1182,7 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
         case .fmp: CatfolioTheme.warning
         case .deepSeek, .openRouter: CatfolioTheme.services
         case .finnhub: CatfolioTheme.accent
+        case .jev: CatfolioTheme.services
         }
     }
 
@@ -1193,6 +1219,9 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
         case .finnhub:
             let items = try await FinnhubNewsProvider.companyNews(symbol: "AAPL", days: 7, apiKey: apiKey)
             return L10n.text("连接成功，已读取 AAPL 的 \(items.count) 条新闻")
+        case .jev:
+            try await JEVClient(provider: .cloudflare, apiToken: apiKey).test()
+            return L10n.text("连接成功，Jev 可用")
         }
     }
 }
@@ -1300,6 +1329,7 @@ private struct LocalServicesSettingsView: View {
                     codexLink
                     providerLink(.openRouter)
                     providerLink(.deepSeek)
+                    providerLink(.jev)
                 }
             }
             .toolbar {
@@ -1390,6 +1420,8 @@ private struct LocalServicesSettingsView: View {
             path = [.openRouter]
         } else if arguments.contains("--show-local-service-finnhub") {
             path = [.finnhub]
+        } else if arguments.contains("--show-local-service-jev") {
+            path = [.jev]
         }
     }
 }
@@ -1634,9 +1666,14 @@ private struct LocalServiceDetailView: View {
     @State private var hasLoaded = false
     @State private var validationTask: Task<Void, Never>?
     @AppStorage(LocalServiceKeys.openRouterModel) private var openRouterModel = ""
+    @AppStorage(LocalServiceKeys.cloudflareAccountIDKey) private var cloudflareAccountID = ""
 
     private var trimmedKey: String {
         apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var keyPlaceholder: String {
+        provider == .jev ? L10n.text("输入 Cloudflare API Token") : L10n.text("输入 \(provider.shortTitle) API Key")
     }
 
     var body: some View {
@@ -1666,9 +1703,9 @@ private struct LocalServiceDetailView: View {
                     HStack(spacing: SettingsTemplate.iconSpacing) {
                         Group {
                             if revealsKey {
-                                TextField(L10n.text("输入 \(provider.shortTitle) API Key"), text: $apiKey)
+                                TextField(keyPlaceholder, text: $apiKey)
                             } else {
-                                SecureField(L10n.text("输入 \(provider.shortTitle) API Key"), text: $apiKey)
+                                SecureField(keyPlaceholder, text: $apiKey)
                             }
                         }
                         .font(.body.monospaced())
@@ -1696,6 +1733,20 @@ private struct LocalServiceDetailView: View {
                 .disabled(isTesting)
             }
             SettingsFootnote(L10n.text("仅保存在此 iPhone 的 Keychain"))
+
+            if provider == .jev {
+                SettingsSectionHeader("Account ID")
+                SettingsCard {
+                    SettingsRowContainer {
+                        TextField(L10n.text("Cloudflare Account ID"), text: $cloudflareAccountID)
+                            .font(.body.monospaced())
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .submitLabel(.done)
+                    }
+                }
+                SettingsFootnote(L10n.text("在 Cloudflare 控制台 › Workers AI 页面右侧可以复制 Account ID；API Token 在 My Profile › API Tokens 创建，模板选 Workers AI。"))
+            }
 
             if provider == .openRouter {
                 SettingsSectionHeader(L10n.text("模型"))
@@ -1734,7 +1785,7 @@ private struct LocalServiceDetailView: View {
                 .buttonStyle(.borderedProminent)
                 .buttonBorderShape(.roundedRectangle(radius: SettingsTemplate.cardRadius))
                 .tint(CatfolioTheme.accent)
-                .disabled(trimmedKey.isEmpty || isTesting)
+                .disabled(trimmedKey.isEmpty || isTesting || (provider == .jev && cloudflareAccountID.trimmingCharacters(in: .whitespaces).isEmpty))
                 .accessibilityLabel(isTesting ? L10n.text("正在验证") : L10n.text("保存并验证"))
                 .accessibilityHint(L10n.text("保存 API 密钥并验证连接"))
 

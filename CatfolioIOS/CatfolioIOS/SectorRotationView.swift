@@ -121,22 +121,22 @@ struct SectorRotationView: View {
             }
         }
         .onDisappear { playing = false; requestID = UUID() }
-        .sheet(isPresented: $showRules) {
+        .appSheet(isPresented: $showRules) {
             NavigationStack {
                 List {
                     Text(L10n.text("中期窗口为第 63 至第 21 个交易日前；近月窗口为最近 21 个交易日。先计算相对 SPY 的对数差并作 5 日均值，再用当日中位数与 MAD 标准化及 tanh 压缩。"))
                     Text(L10n.text("中心 ±0.25 范围为中性。新象限连续两交易日成立才切换文字标签，文字可能暂时不同于点所在象限。百分比表示相对 SPY 的变化；坐标表示相对其他板块的位置。"))
                     Text(L10n.text("轨迹读取历史快照，每个完整 ISO 周取最后有效交易日。初始化历史使用回填时可得的复权价，可能与当时发布值略有差异。此图不使用 JdK RRG 专有计算。"))
-                }.softTopScrollEdge().navigationTitle(L10n.text("如何阅读这张图"))
+                }.softTopScrollEdge().appPageBackground().navigationTitle(L10n.text("如何阅读这张图"))
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { showRules = false } } }
             }.presentationDetents([.medium, .large])
         }
-        .sheet(isPresented: $showSource) {
+        .appSheet(isPresented: $showSource) {
             NavigationStack {
                 Form {
                     TextField("https://…/api/sector-rotation", text: $endpoint).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                     Text(L10n.text("填写已部署的 HTTPS 快照 API。未连接时保留本机快照，行情过期会明确标记。此读取不触发账户同步或行情计算。"))
-                }.softTopScrollEdge().navigationTitle(L10n.text("快照数据源"))
+                }.softTopScrollEdge().appPageBackground().navigationTitle(L10n.text("快照数据源"))
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { showSource = false; Task { await refresh() } } } }
             }.presentationDetents([.medium])
         }

@@ -95,7 +95,7 @@ struct AIView: View {
         } message: {
             Text(L10n.text("此操作只会删除保存在这台 iPhone 上的聊天记录。"))
         }
-        .sheet(item: $pendingQuestionPreset) { preset in
+        .appSheet(item: $pendingQuestionPreset) { preset in
             AIQuestionSecurityPicker(preset: preset) { security in
                 pendingQuestionPreset = nil
                 guard let request = preset.request(security: security) else { return }
@@ -149,7 +149,8 @@ struct AIView: View {
                 onQuickSend: { preset in
                     sendQuestion(preset)
                 },
-                onSelectPreset: selectQuestionPreset
+                onSelectPreset: selectQuestionPreset,
+                onStop: isSending ? stopAnswer : nil
             ) {
                 sendQuestion()
             }
@@ -693,6 +694,13 @@ struct AIView: View {
                 errorMessage = error.localizedDescription
             }
         }
+    }
+
+    private func stopAnswer() {
+        let partial = streamingAnswer?.stoppedMessage()
+        cancelPendingAnswer()
+        if let partial { messages.append(partial) }
+        Task { await persistMessages() }
     }
 
     private func cancelPendingAnswer() {
@@ -2184,6 +2192,7 @@ private struct AIComposer: View {
     let onClear: () -> Void
     let onQuickSend: (String) -> Void
     let onSelectPreset: (AIQuestionPreset) -> Void
+    let onStop: (() -> Void)?
     let onSend: () -> Void
 
     var body: some View {
@@ -2316,7 +2325,16 @@ private struct AIComposer: View {
                 .submitLabel(.send)
                 .onSubmit(onSend)
 
-            if isSending {
+            if let onStop {
+                Button(action: onStop) {
+                    Image(systemName: "stop.fill")
+                        .font(.subheadline.weight(.bold))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.text("停止生成"))
+            } else if isSending {
                 ProgressView()
                     .controlSize(.small)
                     .tint(.primary)
@@ -2576,7 +2594,7 @@ private extension View {
 /// how much of that text is on screen. Text is revealed at `SmoothReveal`'s
 /// pace rather than as it lands, so a burst of tokens reads as typing.
 @MainActor @Observable
-private final class StreamingAnswer {
+final class StreamingAnswer {
     let startedAt = Date()
     private(set) var reasoning = ""
     private(set) var text = ""
@@ -2584,6 +2602,7 @@ private final class StreamingAnswer {
     /// Characters of `text` revealed so far.
     private(set) var shown = 0
     private(set) var isComplete = false
+    private(set) var isCancelled = false
     @ObservationIgnored private var revealTask: Task<Void, Never>?
 
     /// Still thinking: nothing of the answer has arrived.
@@ -2593,6 +2612,7 @@ private final class StreamingAnswer {
     var thinkingSeconds: Double { (answerStartedAt ?? Date()).timeIntervalSince(startedAt) }
 
     func receive(_ event: AIStreamEvent) {
+        guard !isCancelled else { return }
         switch event {
         case let .reasoning(delta):
             reasoning += delta
@@ -2605,14 +2625,26 @@ private final class StreamingAnswer {
 
     /// Marks the stream finished and waits for the typewriter to catch up.
     func finish() async {
+        guard !isCancelled else { return }
         isComplete = true
         startRevealing()
         await revealTask?.value
     }
 
     func cancel() {
+        isCancelled = true
+        isComplete = true
+        shown = text.count
         revealTask?.cancel()
         revealTask = nil
+    }
+
+    func stoppedMessage() -> ChatMessage? {
+        cancel()
+        guard !text.isEmpty || !reasoning.isEmpty else { return nil }
+        return ChatMessage(role: .assistant, text: text,
+                           reasoning: reasoning.isEmpty ? nil : reasoning,
+                           thinkingSeconds: thinkingSeconds)
     }
 
     private func startRevealing() {

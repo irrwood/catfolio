@@ -146,6 +146,70 @@ enum ManagementDeliveryRules {
         String(ISO8601DateFormatter().string(from: date).prefix(10))
     }
 
+    /// Guidance from an earnings release, read without a model.
+    ///
+    /// A release states its outlook in a settled form — "NVIDIA's outlook for
+    /// the third quarter of fiscal 2027 is as follows: Revenue is expected to
+    /// be $108.0 billion, plus or minus 2%" — so the promise, its period and
+    /// its number can be taken from the words themselves. Only revenue is
+    /// taken: margins and expenses are quoted as percentages or on a non-GAAP
+    /// basis the statements cannot answer. A US filer's revenue guidance is
+    /// its GAAP revenue; there is no other revenue in the statements.
+    static func guidancePromises(in document: ManagementDocument) -> [ManagementPromise] {
+        guard document.kind == .transcript,
+              let outlook = document.text.range(of: #"(?i)\n\s*(outlook|guidance)\b"#, options: .regularExpression) else { return [] }
+        let after = document.text[outlook.upperBound...]
+        let stops = [#"(?i)\n\s*highlights\b"#, #"(?i)\n\s*conference call\b"#, #"(?i)\n\s*about \w"#,
+                     #"(?i)\n\s*non-gaap measures\b"#, #"(?i)\n\s*certain statements\b"#, #"(?i)\n\s*cfo commentary\b"#]
+        let end = stops.compactMap { after.range(of: $0, options: .regularExpression)?.lowerBound }.min()
+            ?? after.index(after.startIndex, offsetBy: min(2_500, after.count))
+        let section = String(after[..<end])
+
+        // Which period the outlook covers, in the issuer's own fiscal terms.
+        let quarters = ["first": 1, "second": 2, "third": 3, "fourth": 4]
+        var period = ""
+        var fiscalYear = 0
+        if let match = section.range(of: "(?i)(first|second|third|fourth) quarter of fiscal(?: year)? (\\d{4})",
+                                     options: .regularExpression) {
+            let text = String(section[match]).lowercased()
+            if let name = quarters.keys.first(where: { text.contains($0) }), let quarter = quarters[name],
+               let year = Int(text.suffix(4)) {
+                period = "Q\(quarter)"
+                fiscalYear = year
+            }
+        } else if let match = section.range(of: "(?i)(?:full[- ]year|fiscal year) (\\d{4})", options: .regularExpression),
+                  let year = Int(String(section[match]).suffix(4)) {
+            period = "FY"
+            fiscalYear = year
+        }
+        guard !period.isEmpty, fiscalYear > 1990 else { return [] }
+
+        var promises: [ManagementPromise] = []
+        for line in section.components(separatedBy: CharacterSet(charactersIn: "\n•")) {
+            let sentence = line.trimmingCharacters(in: .whitespaces)
+            guard sentence.count >= 20, sentence.count <= 650,
+                  sentence.range(of: "(?i)\\brevenue\\b", options: .regularExpression) != nil,
+                  sentence.range(of: "(?i)expected to be|expects revenue|we expect revenue", options: .regularExpression) != nil,
+                  // A sentence naming a segment is not company-wide guidance.
+                  sentence.range(of: "(?i)data center revenue|gaming revenue|segment revenue", options: .regularExpression) == nil,
+                  let money = sentence.range(of: "\\$\\s?([0-9][0-9,]*(?:\\.[0-9]+)?)\\s*(billion|million)",
+                                             options: [.regularExpression, .caseInsensitive]) else { continue }
+            let amount = String(sentence[money])
+            let token = amount.dropFirst().trimmingCharacters(in: .whitespaces)
+                .components(separatedBy: CharacterSet(charactersIn: " ")).first ?? ""
+            let scale = amount.lowercased().contains("billion") ? "billion" : "million"
+            guard !token.isEmpty else { continue }
+            let target = ManagementTarget(metric: "revenue", fiscalYear: fiscalYear, period: period, currency: "USD",
+                                          basis: "GAAP", scope: "company", comparison: "atLeast",
+                                          lower: token, upper: "", scale: scale)
+            promises.append(ManagementPromise(
+                id: "", sourceID: document.id,
+                title: L10n.text("FY\(fiscalYear) \(period) 营收指引"),
+                quote: sentence, deadline: "", numeric: true, targets: [target]))
+        }
+        return promises
+    }
+
     static func containsQuote(_ quote: String, in text: String) -> Bool {
         let normalize: (String) -> String = { $0.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ") }
         let candidate = normalize(quote)

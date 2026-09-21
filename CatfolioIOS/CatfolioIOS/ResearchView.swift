@@ -430,6 +430,7 @@ struct ResearchView: View {
     @State private var analysisError: String?
     @State private var showsRules = false
     @State private var showsPolicyComposer = false
+    @State private var showsDCA = false
     @AppStorage("research.highAttentionOnly") private var highAttentionOnly = false
     @AppStorage("research.maximumResults") private var maximumResults = 6
     @AppStorage(AttentionEvidenceRules.maximumAgeKey) private var evidenceMaximumAge = 30
@@ -458,103 +459,13 @@ struct ResearchView: View {
 
     var body: some View {
         ScrollViewReader { scroll in
-        List {
-            if !showsAttention {
-                Section { marketSearchField }
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-            }
-            if isSearchingMarket {
-                searchResultsSection
-            } else if !showsAttention {
-            Section {
-                Group {
-                    // Two up, but a block each — the four still get their own
-                    // card and their own shape rather than sharing one, which
-                    // is what let the figures be figures instead of list rows.
-                    LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: SettingsTemplate.tileSpacing),
-                                       count: dynamicTypeSize.isAccessibilitySize ? 1 : 2),
-                        spacing: SettingsTemplate.tileSpacing
-                    ) {
-                        ForEach(Self.benchmarks, id: \.0) { symbol, title in
-                            ResearchMetricCard(symbol: symbol, title: title,
-                                               snapshot: markets.first { $0.id == symbol }, isLoading: isLoading)
-                        }
-                    }
-                    // Zero, not the page inset: an inset-grouped section
-                    // already carries its own horizontal margin, so adding one
-                    // here stacked the two and left the grid narrower than
-                    // every other card on the page.
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                }
-            } header: {
-                Text(L10n.text("关键指标"))
-            } footer: {
-                Text(L10n.text("最近可用收盘，非盘中实时行情。账户范围沿用设置中的选择。"))
-            }
-            .headerProminence(.increased)
-            // Everything that used to sit under 收益 › 行情与 AI lives here
-            // now, once each: the rotation pages were listed in both places.
-            Section(L10n.text("行情")) {
-                NavigationLink { SectorRotationView() } label: {
-                    Label(L10n.text("板块轮动"), systemImage: "chart.xyaxis.line")
-                }
-                NavigationLink { StockChartsRotationView() } label: {
-                    Label(L10n.text("市场轮动 · RRG"), systemImage: "point.3.connected.trianglepath.dotted")
-                }
-                .accessibilityIdentifier("research.stockcharts-rrg")
-                NavigationLink { CycleComparisonView() } label: {
-                    Label(L10n.text("周期对比"), systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
-                }
-                NavigationLink { IndustrySentimentView() } label: {
-                    Label(L10n.text("行业情绪"), systemImage: "gauge.with.dots.needle.50percent")
-                }
-            }
-            Section(L10n.text("工具")) {
-                NavigationLink { StockScreenerView() } label: {
-                    Label(L10n.text("选股器"), systemImage: "line.3.horizontal.decrease")
-                }
-                Button { showsPolicyComposer = true } label: {
-                    Label(L10n.text("策略编曲家"), systemImage: "slider.horizontal.3")
-                }
-                .foregroundStyle(.primary)
-                Label(L10n.text("税务计算"), systemImage: "number.square")
-                    .foregroundStyle(.secondary)
-                    .accessibilityHint(L10n.text("功能暂未开放"))
-            }
-            }
+        Group {
             if showsAttention {
-            Section {
-                if isAnalyzing { ProgressView(L10n.text("正在分析所选账户…")) }
-                if let analysisError { Text(analysisError).foregroundStyle(.secondary) }
-                if let report {
-                    Text(L10n.text("分析于 \(report.generatedAt.formatted(date: .abbreviated, time: .shortened))"))
-                        .font(.caption).foregroundStyle(.secondary)
-                    ForEach(report.warnings, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
-                    if analysisRows.isEmpty { Text(L10n.text("当前筛选下没有分析结果")).foregroundStyle(.secondary) }
-                } else if !isAnalyzing {
-                    Text(L10n.text("点击分析，使用已配置的 AI 服务研究当前持仓。未经来源验证的内容不会被视为已确认事实。"))
-                        .foregroundStyle(.secondary)
-                }
-                Button(report == nil ? L10n.text("分析持仓") : L10n.text("刷新分析"), systemImage: "arrow.clockwise", action: analyze)
-                    .disabled(isAnalyzing || isRestoringReport || model.holdings.isEmpty)
-            } footer: {
-                Text(L10n.text("保留上次分析，点击刷新才重新生成。AI 分析仅供研究参考。"))
-            }
-            .id("research-analysis")
-            ForEach(analysisRows) { row in
-                Section {
-                    PortfolioAttentionCard(row: row, prominent: true)
-                        .listRowInsets(EdgeInsets())
-                }
-            }
+                attentionList
+            } else {
+                researchPage
             }
         }
-        .listStyle(.insetGrouped)
         // A holding's evidence, adjusted on its reading page, is kept in the
         // saved analysis the page shows.
         .environment(\.attentionEvidenceEditor, showsAttention ? AttentionEvidenceEditor { updated in
@@ -565,15 +476,6 @@ struct ResearchView: View {
             let scope = accountScope
             Task { try? await ResearchAnalysisCache.shared.save(current, scope: scope) }
         } : nil)
-        // Match the other root tabs while keeping the List's viewport and
-        // scroll indicator intact. The pushed attention page has no tab bar.
-        .contentMargins(.bottom, showsAttention ? nil : SettingsTemplate.rootTabBottomInset, for: .scrollContent)
-        // The list keeps its own rows — a screen with this much content should
-        // stay a List and keep its recycling — but it sits on the settings
-        // template's ground rather than the system's colder grouped grey.
-        .scrollContentBackground(.hidden)
-        .background(SettingsTemplate.pageBackground)
-        .softTopScrollEdge()
         .tracksRootTabBarScroll()
         .navigationTitle(L10n.text(showsAttention ? "今天值得关注" : "研究"))
         .navigationBarTitleDisplayMode(.large)
@@ -589,7 +491,7 @@ struct ResearchView: View {
             }
             }
         }
-        .sheet(isPresented: $showsRules) {
+        .appSheet(isPresented: $showsRules) {
             NavigationStack {
                 Form {
                     Section(L10n.text("分析结果筛选")) {
@@ -620,16 +522,17 @@ struct ResearchView: View {
                     }
                 }
                 .softTopScrollEdge()
-                .navigationTitle(L10n.text("研究规则"))
+                .appPageBackground().navigationTitle(L10n.text("研究规则"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) {
                     Button(L10n.text("完成")) { showsRules = false }
                 } }
             }
         }
-        .fullScreenCover(isPresented: $showsPolicyComposer) {
+        .appFullScreenCover(isPresented: $showsPolicyComposer) {
             PolicyComposerEntry()
         }
+        .navigationDestination(isPresented: $showsDCA) { DCACalculatorView() }
         .sheet(item: $selectedSecurity) { holding in
             HoldingDetailView(holding: holding, onClose: { selectedSecurity = nil })
                 .environment(model)
@@ -640,6 +543,7 @@ struct ResearchView: View {
         .task { if !showsAttention { await refreshMarkets() } }
         #if DEBUG
         .task {
+            if !showsAttention && LaunchArguments.contains("--show-dca") { showsDCA = true }
             if !showsAttention && LaunchArguments.contains("--show-policy-composer") { showsPolicyComposer = true }
         }
         #endif
@@ -676,6 +580,91 @@ struct ResearchView: View {
         }
         #endif
         }
+    }
+
+    private var researchPage: some View {
+        SettingsPage {
+            marketSearchField
+            if isSearchingMarket {
+                searchResultsSection
+            } else {
+                SettingsSectionHeader(L10n.text("关键指标"))
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: SettingsTemplate.tileSpacing),
+                                   count: dynamicTypeSize.isAccessibilitySize ? 1 : 2),
+                    spacing: SettingsTemplate.tileSpacing
+                ) {
+                    ForEach(Self.benchmarks, id: \.0) { symbol, title in
+                        ResearchMetricCard(symbol: symbol, title: title,
+                                           snapshot: markets.first { $0.id == symbol }, isLoading: isLoading)
+                    }
+                }
+                SettingsFootnote(L10n.text("最近可用收盘，非盘中实时行情。账户范围沿用设置中的选择。"))
+                SettingsSection(L10n.text("行情")) {
+                    SettingsNavigationRow(icon: .symbol("chart.xyaxis.line"), title: L10n.text("板块轮动")) {
+                        SectorRotationView()
+                    }
+                    SettingsNavigationRow(icon: .symbol("point.3.connected.trianglepath.dotted"), title: L10n.text("市场轮动 · RRG")) {
+                        StockChartsRotationView()
+                    }
+                    .accessibilityIdentifier("research.stockcharts-rrg")
+                    SettingsNavigationRow(icon: .symbol("clock.arrow.trianglehead.counterclockwise.rotate.90"), title: L10n.text("周期对比")) {
+                        CycleComparisonView()
+                    }
+                    SettingsNavigationRow(icon: .symbol("gauge.with.dots.needle.50percent"), title: L10n.text("行业情绪")) {
+                        IndustrySentimentView()
+                    }
+                }
+                SettingsSection(L10n.text("工具")) {
+                    SettingsNavigationRow(icon: .symbol("calendar.badge.clock"), title: L10n.text("定投计算器")) {
+                        DCACalculatorView()
+                    }
+                    .accessibilityIdentifier("research.dca")
+                    SettingsNavigationRow(icon: .symbol("line.3.horizontal.decrease"), title: L10n.text("选股器")) {
+                        StockScreenerView()
+                    }
+                    SettingsButtonRow(icon: .symbol("slider.horizontal.3"), title: L10n.text("策略编曲家")) {
+                        showsPolicyComposer = true
+                    }
+                    SettingsValueRow(icon: .symbol("number.square"), title: L10n.text("税务计算"), value: nil)
+                        .disabled(true)
+                        .accessibilityHint(L10n.text("功能暂未开放"))
+                }
+            }
+        }
+    }
+
+    private var attentionList: some View {
+        List {
+            Section {
+                if isAnalyzing { ProgressView(L10n.text("正在分析所选账户…")) }
+                if let analysisError { Text(analysisError).foregroundStyle(.secondary) }
+                if let report {
+                    Text(L10n.text("分析于 \(report.generatedAt.formatted(date: .abbreviated, time: .shortened))"))
+                        .font(.caption).foregroundStyle(.secondary)
+                    ForEach(report.warnings, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
+                    if analysisRows.isEmpty { Text(L10n.text("当前筛选下没有分析结果")).foregroundStyle(.secondary) }
+                } else if !isAnalyzing {
+                    Text(L10n.text("点击分析，使用已配置的 AI 服务研究当前持仓。未经来源验证的内容不会被视为已确认事实。"))
+                        .foregroundStyle(.secondary)
+                }
+                Button(report == nil ? L10n.text("分析持仓") : L10n.text("刷新分析"), systemImage: "arrow.clockwise", action: analyze)
+                    .disabled(isAnalyzing || isRestoringReport || model.holdings.isEmpty)
+            } footer: {
+                Text(L10n.text("保留上次分析，点击刷新才重新生成。AI 分析仅供研究参考。"))
+            }
+            .id("research-analysis")
+            ForEach(analysisRows) { row in
+                Section {
+                    PortfolioAttentionCard(row: row, prominent: true)
+                        .listRowInsets(EdgeInsets())
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(SettingsTemplate.pageBackground)
+        .softTopScrollEdge()
     }
 
     private func marketRow(symbol: String, title: String, sparkline: Bool) -> some View {
@@ -788,21 +777,25 @@ struct ResearchView: View {
     }
 
     private var searchResultsSection: some View {
-        Section {
-            if searchResults.isEmpty {
-                Text(L10n.text(searchedQuery == searchText ? "没有找到匹配的证券" : "正在搜索…"))
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(searchResults) { result in
-                    Button { open(result) } label: { searchRow(result) }
-                        .buttonStyle(.plain)
+        Group {
+            SettingsSection(L10n.text("证券")) {
+                if searchResults.isEmpty {
+                    SettingsRowContainer {
+                        Text(L10n.text(searchedQuery == searchText ? "没有找到匹配的证券" : "正在搜索…"))
+                            .appText(.subheading)
+                            .foregroundStyle(SettingsTemplate.secondaryText)
+                    }
+                } else {
+                    ForEach(searchResults) { result in
+                        Button { open(result) } label: {
+                            SettingsRowContainer { searchRow(result) }
+                        }
+                        .buttonStyle(SettingsRowButtonStyle())
                         .accessibilityIdentifier("research.search.\(result.ticker)")
+                    }
                 }
             }
-        } header: {
-            Text(L10n.text("证券"))
-        } footer: {
-            Text(L10n.text("离线证券目录：美股与主要海外市场的股票和 ETF。轻点查看个股页。"))
+            SettingsFootnote(L10n.text("离线证券目录：美股与主要海外市场的股票和 ETF。轻点查看个股页。"))
         }
     }
 
@@ -812,12 +805,12 @@ struct ResearchView: View {
 
     private func searchRow(_ result: MarketSecurityResult) -> some View {
         let held = heldHolding(result.ticker)
-        return HStack(spacing: 12) {
-            AssetLogo(ticker: result.ticker, logoSymbol: held?.logoSymbol ?? result.ticker, size: 36)
-            VStack(alignment: .leading, spacing: 3) {
+        return HStack(spacing: SettingsTemplate.iconSpacing) {
+            AssetLogo(ticker: result.ticker, logoSymbol: held?.logoSymbol ?? result.ticker, size: SettingsTemplate.iconSize)
+            VStack(alignment: .leading, spacing: SettingsTemplate.subtitleSpacing) {
                 HStack(spacing: 6) {
                     Text(result.ticker)
-                        .appText(.body, weight: .semibold)
+                        .appText(.subheading)
                         .lineLimit(1)
                     if held != nil {
                         Text(L10n.text("已持有"))
@@ -839,8 +832,8 @@ struct ResearchView: View {
                 .foregroundStyle(SettingsTemplate.secondaryText)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
+            SettingsChevron()
         }
-        .frame(minHeight: 48)
         .contentShape(Rectangle())
     }
 

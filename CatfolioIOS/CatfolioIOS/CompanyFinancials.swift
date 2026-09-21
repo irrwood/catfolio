@@ -63,6 +63,11 @@ struct CompanyFinancialsData: Codable, Sendable {
     let balance: [BalanceSheetPeriod]
     let cashFlow: [CashFlowStatementPeriod]
     let warnings: [String]
+    /// Diluted shares from the latest filing, for a market value against the
+    /// statements; nil from providers other than SEC and on older caches.
+    var sharesOutstanding: Double? = nil
+    var valuationQuality: ValuationQuality? = nil
+    var valuationSchemaVersion: Int? = nil
 
     var hasUsableStatements: Bool {
         income.contains { [$0.revenue, $0.costOfRevenue, $0.grossProfit, $0.operatingExpenses, $0.operatingIncome].allSatisfy(\.isFinite) }
@@ -137,6 +142,7 @@ actor CompanyFinancialsClient {
         let form: String?
         let filed: String?
         let frame: String?
+        var accession: String? = nil
 
         enum CodingKeys: String, CodingKey {
             case start
@@ -147,6 +153,7 @@ actor CompanyFinancialsClient {
             case form
             case filed
             case frame
+            case accession = "accn"
         }
     }
 
@@ -242,12 +249,13 @@ actor CompanyFinancialsClient {
         var onlyConfirmedAbsence = true
         if !forceRefresh,
            let stale,
-           Date().timeIntervalSince(stale.fetchedAt) < freshness {
+           Date().timeIntervalSince(stale.fetchedAt) < freshness,
+           (!stale.data.source.hasPrefix("SEC") || stale.data.valuationSchemaVersion == 1) {
             return stale.data
         }
 
         do {
-            let secData = try await loadFromSEC(ticker: key, forceRefresh: forceRefresh)
+            let secData = try await loadFromSEC(ticker: key, forceRefresh: forceRefresh || stale != nil)
             let merged = try await supplementFromFMPIfNeeded(secData, ticker: ticker)
             save(merged, key: key)
             return merged
@@ -331,8 +339,33 @@ actor CompanyFinancialsClient {
             income: income,
             balance: balance,
             cashFlow: cashFlow,
-            warnings: []
+            warnings: [],
+            sharesOutstanding: Self.latestShares(payload.facts),
+            valuationQuality: SECQualityCalculator.calculate(payload.facts, cik: payload.cik),
+            valuationSchemaVersion: 1
         )
+    }
+
+    /// The latest diluted weighted-average share count, a quarter's if there
+    /// is one; failing that, the cover page's shares outstanding, summed over
+    /// its share classes as of the latest date.
+    static func latestShares(_ facts: [String: [String: SECFact]]) -> Double? {
+        let gaap = facts["us-gaap"] ?? [:]
+        if let diluted = gaap["WeightedAverageNumberOfDilutedSharesOutstanding"]?.units["shares"] {
+            let usable = diluted.filter { entry in
+                guard entry.value > 0, let kind = periodKind(entry, instantaneous: false) else { return false }
+                return kind == .quarterly || kind == .annual
+            }
+            if let latest = usable.max(by: { ($0.end, $0.filed ?? "") < ($1.end, $1.filed ?? "") }) {
+                return latest.value
+            }
+        }
+        guard let cover = facts["dei"]?["EntityCommonStockSharesOutstanding"]?.units["shares"],
+              let end = cover.map(\.end).max() else { return nil }
+        let atEnd = cover.filter { $0.end == end && $0.value > 0 }
+        guard let filed = atEnd.compactMap(\.filed).max() else { return atEnd.first?.value }
+        let total = atEnd.filter { $0.filed == filed }.reduce(0) { $0 + $1.value }
+        return total > 0 ? total : nil
     }
 
     private func supplementFromFMPIfNeeded(
@@ -353,7 +386,10 @@ actor CompanyFinancialsClient {
             income: sec.income.isEmpty ? fmp.income : sec.income,
             balance: sec.balance.isEmpty ? fmp.balance : sec.balance,
             cashFlow: sec.cashFlow.isEmpty ? fmp.cashFlow : sec.cashFlow,
-            warnings: usedFallback ? ["部分报表在 SEC Company Facts 中缺失，已用 FMP 补充。"] : []
+            warnings: usedFallback ? ["部分报表在 SEC Company Facts 中缺失，已用 FMP 补充。"] : [],
+            sharesOutstanding: sec.sharesOutstanding,
+            valuationQuality: sec.valuationQuality,
+            valuationSchemaVersion: sec.valuationSchemaVersion
         )
     }
 
@@ -567,10 +603,11 @@ actor CompanyFinancialsClient {
         )
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if isSEC {
-            request.setValue(
-                "Catfolio/1.0 (+https://github.com/irrwood/catfolio; contact via GitHub)",
-                forHTTPHeaderField: "User-Agent"
-            )
+            // SEC's edge answers 403 to a User-Agent carrying a URL, and a
+            // 403 here also started a quarter-hour backoff — so every lookup
+            // quietly fell back to Nasdaq. The shared name-and-email agent
+            // passes.
+            request.setValue(SecurityDebateResearch.userAgent, forHTTPHeaderField: "User-Agent")
             request.setValue("gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
         } else if isNasdaq {
             request.setValue(
@@ -762,16 +799,30 @@ private extension CompanyFinancialsClient {
         namespace: [String: SECFact],
         instantaneous: Bool
     ) -> [AnchorPeriod] {
-        guard let fact = concepts.compactMap({ namespace[$0] }).first,
-              let unit = preferredMonetaryUnit(fact.units),
-              let values = fact.units[unit] else { return [] }
+        // Every listed concept the company has used, newest-reporting first.
+        // Companies switch tags — NVIDIA's revenue moved off the first name
+        // in the list in 2022 — and taking only the first one present left
+        // the statements frozen at the year it was last filed. Periods merge
+        // across the concepts; where two report the same one, the concept
+        // still in use wins.
+        let sources: [(unit: String, values: [SECFactValue])] = concepts.compactMap { concept in
+            guard let fact = namespace[concept], let unit = preferredMonetaryUnit(fact.units),
+                  let values = fact.units[unit], !values.isEmpty else { return nil }
+            return (unit, values)
+        }.sorted { ($0.values.map(\.end).max() ?? "") > ($1.values.map(\.end).max() ?? "") }
+        guard !sources.isEmpty else { return [] }
         var best: [String: AnchorPeriod] = [:]
-        for entry in values {
-            guard let kind = periodKind(entry, instantaneous: instantaneous) else { continue }
-            let key = "\(kind.rawValue)|\(entry.end)|\(entry.fiscalPeriod ?? "")"
-            let candidate = AnchorPeriod(entry: entry, unit: unit, kind: kind)
-            if let current = best[key], (current.entry.filed ?? "") >= (entry.filed ?? "") { continue }
-            best[key] = candidate
+        for source in sources {
+            var fromThisConcept: [String: AnchorPeriod] = [:]
+            for entry in source.values {
+                guard let kind = periodKind(entry, instantaneous: instantaneous) else { continue }
+                let key = "\(kind.rawValue)|\(entry.end)|\(entry.fiscalPeriod ?? "")"
+                if best[key] != nil { continue }
+                let candidate = AnchorPeriod(entry: entry, unit: source.unit, kind: kind)
+                if let current = fromThisConcept[key], (current.entry.filed ?? "") >= (entry.filed ?? "") { continue }
+                fromThisConcept[key] = candidate
+            }
+            best.merge(fromThisConcept) { current, _ in current }
         }
         return best.values
             .sorted { $0.entry.end > $1.entry.end }

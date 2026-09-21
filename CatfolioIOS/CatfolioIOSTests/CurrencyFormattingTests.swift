@@ -136,13 +136,16 @@ final class CurrencyFormattingTests: XCTestCase {
             formatter.currencyCode = displayCurrency.rawValue
             if displayCurrency == .usd { formatter.currencySymbol = "$" }
             let symbol = formatter.currencySymbol ?? "\(displayCurrency.rawValue) "
-            let compact = abs(converted).formatted(
-                .number.notation(.compactName).precision(.fractionLength(0...1))
-                    .locale(Locale(identifier: AppLanguage.currentIdentifier))
-            )
+            let locale = Locale(identifier: AppLanguage.currentIdentifier)
+            // In English the first abbreviation is 1K. Below it the current
+            // display contract uses whole amounts, not compact decimals.
+            let compact = abs(converted) < 1_000
+                ? abs(converted).formatted(.number.precision(.fractionLength(0)).locale(locale))
+                : abs(converted).formatted(.number.notation(.compactName).precision(.fractionLength(0...1)).locale(locale))
             let expected = "\(converted < 0 ? "-" : "")\(symbol)\(compact)"
             XCTAssertEqual(DisplayFormat.compactMoney(value), expected)
         }
+        XCTAssertEqual(DisplayFormat.compactMoney(709.3, currency: "GBP"), "£709")
     }
 
     /// The cached formatters are shared across threads — the local services format

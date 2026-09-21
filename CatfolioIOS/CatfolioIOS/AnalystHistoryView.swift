@@ -125,9 +125,9 @@ struct AnalystHistoryView: View {
                 }
             }.padding(20)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .appPageBackground(Color(uiColor: .systemGroupedBackground))
         .softTopScrollEdge()
-        .navigationTitle(L10n.text("分析师历史回顾"))
+        .appPageBackground().navigationTitle(L10n.text("分析师历史回顾"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.text("关闭")) { dismiss() } } }
         .task(id: symbol) { snapshot = AnalystHistorySnapshot.load(symbol: symbol) }

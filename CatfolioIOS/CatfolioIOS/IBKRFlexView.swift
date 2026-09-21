@@ -50,9 +50,9 @@ struct IBKRFlexView: View {
     // moment the sheet is dismissed.
     /// The IBKR account ID is only known once a report arrives, so the
     /// placeholder carries a fixed key until the first sync replaces it.
-    private static let pendingAccountID = "ibkr-flex-pending"
-    private static let pendingTokenKey = "ibkr.flex.pending.token"
-    private static let pendingQueryIDKey = "ibkr.flex.pending.query-id"
+    private static let pendingAccountID = IBKRFlexKeys.pendingAccountID
+    private static let pendingTokenKey = IBKRFlexKeys.pendingToken
+    private static let pendingQueryIDKey = IBKRFlexKeys.pendingQueryID
     private static let legacyTokenKey = "ibkr.flex.token"
     private static let legacyQueryIDKey = "ibkr.flex.query-id"
 
@@ -61,11 +61,18 @@ struct IBKRFlexView: View {
     }
 
     private static func tokenKey(accountID: String) -> String {
-        "ibkr.flex.account.\(accountID).token"
+        IBKRFlexKeys.token(accountID: accountID)
     }
 
     private static func queryIDKey(accountID: String) -> String {
-        "ibkr.flex.account.\(accountID).query-id"
+        IBKRFlexKeys.queryID(accountID: accountID)
+    }
+
+    /// The placeholder made by "保存并创建账户", still waiting for its first
+    /// report. It has no IBKR account ID yet, so its credentials are the
+    /// parked ones.
+    private var isPendingAccount: Bool {
+        context.account?.id == Self.pendingAccountID
     }
 
     var body: some View {
@@ -314,7 +321,12 @@ struct IBKRFlexView: View {
     }
 
     private func prepareAccount() {
-        if let account = context.account {
+        if isPendingAccount {
+            nickname = context.account.map { AccountNaming.nickname(from: $0.displayName, provider: "IBKR") } ?? ""
+            token = KeychainStore.string(for: Self.pendingTokenKey) ?? ""
+            queryID = KeychainStore.string(for: Self.pendingQueryIDKey) ?? ""
+            if let phase = IBKRFirstSync.shared.phase { status = Self.status(for: phase) }
+        } else if let account = context.account {
             nickname = AccountNaming.nickname(from: account.displayName, provider: "IBKR")
             if let accountID = account.accountID,
                let savedToken = KeychainStore.string(for: Self.tokenKey(accountID: accountID)),
@@ -343,9 +355,21 @@ struct IBKRFlexView: View {
     /// Stores the credentials and, when creating, puts the account on screen
     /// straight away rather than making the first report a precondition.
     private func saveAndClose() async {
+        if let accountID = context.account?.accountID {
+            // An account that has synced before keeps its credentials under
+            // its own ID, not in the placeholder's slot.
+            try? KeychainStore.set(token.trimmingCharacters(in: .whitespacesAndNewlines), for: Self.tokenKey(accountID: accountID))
+            try? KeychainStore.set(queryID.trimmingCharacters(in: .whitespacesAndNewlines), for: Self.queryIDKey(accountID: accountID))
+            status = .success(L10n.text("凭证已保存。"))
+            dismiss()
+            return
+        }
         savePendingCredentials()
         guard context.isCreating else {
-            status = .success(L10n.text("凭证已保存。"))
+            // The placeholder, reopened: fetch its first report again with
+            // what was just saved.
+            IBKRFirstSync.shared.cancel()
+            IBKRFirstSync.shared.startIfNeeded(model: model)
             dismiss()
             return
         }
@@ -358,6 +382,9 @@ struct IBKRFlexView: View {
                 name: nickname.trimmingCharacters(in: .whitespacesAndNewlines),
                 baseCurrency: "USD"
             )
+            // The report is fetched in the background from here, so the new
+            // account shows it is being read rather than sitting silent.
+            IBKRFirstSync.shared.startIfNeeded(model: model)
             dismiss()
         } catch {
             status = .failure(L10n.text("无法创建账户：\(error.localizedDescription)"))
@@ -387,6 +414,7 @@ struct IBKRFlexView: View {
     }
 
     private func testFlex() async {
+        if context.isCreating || isPendingAccount { IBKRFirstSync.shared.cancel() }
         isWorking = true
         status = .working(L10n.text("正在请求 IBKR Flex 报表…"))
         defer { isWorking = false }
@@ -421,6 +449,7 @@ struct IBKRFlexView: View {
     }
 
     private func syncFlex() async {
+        if context.isCreating || isPendingAccount { IBKRFirstSync.shared.cancel() }
         isWorking = true
         status = .working(L10n.text("正在读取并转换 Flex 持仓…"))
         defer { isWorking = false }
@@ -471,6 +500,17 @@ struct IBKRFlexView: View {
         }
     }
 
+    private static func status(for phase: IBKRFirstSync.Phase) -> FlexViewStatus {
+        switch phase {
+        case let .waiting(seconds):
+            return .working(L10n.text("IBKR 正在生成报表… 已等待 \(seconds) 秒"))
+        case .importing:
+            return .working(L10n.text("Flex 已读取，正在保存到本机…"))
+        case let .failed(message):
+            return .failure(message)
+        }
+    }
+
     private func invalidatePreview() {
         guard !isWorking else { return }
         snapshot = nil
@@ -505,7 +545,7 @@ struct IBKRFlexView: View {
         let allowedIDs: Set<String>
         if let accountID = context.account?.accountID {
             allowedIDs = [accountID]
-        } else if context.isCreating {
+        } else if context.isCreating || isPendingAccount {
             let existingIDs = Set(model.accounts
                 .filter { $0.source == "IBKR Flex" }
                 .compactMap(\.accountID))

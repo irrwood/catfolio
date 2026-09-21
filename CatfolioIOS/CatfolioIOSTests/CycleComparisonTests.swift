@@ -64,6 +64,59 @@ final class CycleComparisonTests: XCTestCase {
         XCTAssertGreaterThan(current.points.first?.fraction ?? 0, 0.07, "it begins where the account did, not at the cycle's start")
     }
 
+    func testPortfolioKeepsItsFirstPartialYearAlongsideLaterYears() throws {
+        let result = CycleComparison.make(closes: closes(from: "2024-06-17", to: "2026-09-12", daily: 0.01),
+                                          length: 1, lookback: 5, today: today, allowsLateStart: true)
+        XCTAssertEqual(result.cycles.map(\.startYear), [2024, 2025, 2026])
+        let first = try XCTUnwrap(result.cycles.first)
+        XCTAssertEqual(first.joined, "2024-06-17")
+        XCTAssertEqual(first.points.first?.value, 0)
+        let fraction = DayDateCodec.date(from: "2024-06-17")!.timeIntervalSince(DayDateCodec.date(from: "2024-01-01")!)
+            / DayDateCodec.date(from: "2025-01-01")!.timeIntervalSince(DayDateCodec.date(from: "2024-01-01")!)
+        XCTAssertEqual(try XCTUnwrap(first.points.first?.fraction), fraction, accuracy: 1e-9)
+        XCTAssertEqual(first.points.last?.fraction, 1)
+        XCTAssertNil(first.ended)
+        XCTAssertEqual(result.completePastCycles.map(\.startYear), [2025], "a midyear baseline must not enter the yearly mean")
+    }
+
+    func testPastPortfolioYearStopsAtTheActualLastDay() throws {
+        let result = CycleComparison.make(closes: closes(from: "2024-03-02", to: "2024-10-18", daily: 0.01),
+                                          length: 1, lookback: 5, today: today, allowsLateStart: true)
+        XCTAssertEqual(result.cycles.map(\.startYear), [2024], "do not invent later years from a stale close")
+        let cycle = try XCTUnwrap(result.cycles.first)
+        XCTAssertEqual(cycle.joined, "2024-03-02")
+        XCTAssertEqual(cycle.ended, "2024-10-18")
+        let expected = DayDateCodec.date(from: "2024-10-18")!.timeIntervalSince(DayDateCodec.date(from: "2024-01-01")!)
+            / DayDateCodec.date(from: "2025-01-01")!.timeIntervalSince(DayDateCodec.date(from: "2024-01-01")!)
+        XCTAssertEqual(try XCTUnwrap(cycle.points.last?.fraction), expected, accuracy: 1e-9)
+        XCTAssertTrue(result.completePastCycles.isEmpty)
+    }
+
+    func testAnEarlyEndingYearIsExcludedFromTheMeanEvenWithAnOpeningBaseline() throws {
+        let result = CycleComparison.make(closes: closes(from: "2022-12-20", to: "2025-06-20"),
+                                          length: 1, lookback: 3, today: today, allowsLateStart: true)
+        XCTAssertEqual(result.cycles.map(\.startYear), [2023, 2024, 2025])
+        XCTAssertEqual(result.completePastCycles.map(\.startYear), [2023, 2024])
+        let last = try XCTUnwrap(result.cycles.last)
+        XCTAssertNil(last.joined)
+        XCTAssertEqual(last.ended, "2025-06-20")
+    }
+
+    func testIndexStillRequiresACompletePastYear() {
+        let result = CycleComparison.make(closes: closes(from: "2024-06-17", to: "2026-09-12"),
+                                          length: 1, lookback: 5, today: today)
+        XCTAssertEqual(result.cycles.map(\.startYear), [2025, 2026])
+        XCTAssertTrue(result.cycles.allSatisfy { $0.joined == nil })
+    }
+
+    func testTwoDayPartialPortfolioYearStillHasBothEndpoints() throws {
+        let result = CycleComparison.make(closes: ["2024-06-17": 100, "2024-06-18": 110],
+                                          length: 1, lookback: 5, today: today, allowsLateStart: true)
+        let cycle = try XCTUnwrap(result.cycles.first)
+        XCTAssertEqual(cycle.points.count, 2)
+        XCTAssertEqual(try XCTUnwrap(cycle.points.last?.value), 10, accuracy: 1e-9)
+    }
+
     func testALookbackShorterThanACycleHoldsOnlyTheCurrentOne() {
         let result = CycleComparison.make(closes: closes(from: "1999-12-01", to: "2026-09-12"),
                                           length: 10, lookback: 5, today: today)

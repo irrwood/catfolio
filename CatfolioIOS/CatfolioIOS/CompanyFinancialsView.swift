@@ -58,7 +58,7 @@ struct CompanyFinancialsView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 40)
         }
-        .background(Color(uiColor: .systemBackground))
+        .appPageBackground(Color(uiColor: .systemBackground))
         .softTopScrollEdge()
         .navigationTitle(L10n.text("财务 · \(ticker)"))
         .navigationBarTitleDisplayMode(.inline)

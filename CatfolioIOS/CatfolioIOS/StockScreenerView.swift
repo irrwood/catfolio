@@ -399,7 +399,7 @@ struct StockScreenerView: View {
         .toolbar { ToolbarItem(placement: .topBarTrailing) {
             Button(L10n.text("编辑条件"), systemImage: "slider.horizontal.3") { editing = true }.disabled(busy)
         } }
-        .sheet(isPresented: $editing) { editor }
+        .appSheet(isPresented: $editing) { editor }
         .onChange(of: rules) { _, value in
             clearResults()
             if (try? value.validate()) != nil, let data = try? JSONEncoder().encode(value) {
@@ -441,7 +441,7 @@ struct StockScreenerView: View {
                 }
             }
             .softTopScrollEdge()
-            .navigationTitle(L10n.text("筛选条件")).navigationBarTitleDisplayMode(.inline)
+            .appPageBackground().navigationTitle(L10n.text("筛选条件")).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { editing = false } } }
         }
     }

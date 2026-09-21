@@ -60,6 +60,14 @@ enum PortfolioContentSheetLayout {
     static let firstScrollDetent = PortfolioHeroChartLayout.sectionHeight - PortfolioHeroChartLayout.plotTop
     static let topRadius: CGFloat = 38
 
+    static func settlingProgress(offset: CGFloat, colorScheme: ColorScheme) -> CGFloat {
+        // Night glass stays clear through the width expansion, then settles
+        // over another card-height of travel. Scrolling back reverses it.
+        let start = colorScheme == .dark ? widthExpansionDistance : 0
+        let distance = colorScheme == .dark ? transitionHeight : widthExpansionDistance
+        return min(max((offset - start) / distance, 0), 1)
+    }
+
     static var shape: UnevenRoundedRectangle {
         UnevenRoundedRectangle(
             topLeadingRadius: topRadius,
@@ -175,7 +183,9 @@ struct PortfolioContentSheet<Content: View>: View {
     }
 
     private var settlingProgress: CGFloat {
-        widthProgress
+        PortfolioContentSheetLayout.settlingProgress(
+            offset: scrollState.heroOffset, colorScheme: colorScheme
+        )
     }
 
     private var sheetShape: UnevenRoundedRectangle {
@@ -239,16 +249,18 @@ struct PortfolioContentSheetBackground: View {
                 LinearGradient(
                     stops: [
                         .init(color: terminalColor.opacity(0), location: 0),
-                        .init(color: terminalColor.opacity(0.06), location: 0.28),
-                        .init(color: terminalColor.opacity(0.55), location: 0.62),
+                        .init(color: terminalColor.opacity(colorScheme == .dark ? 0.02 : 0.06),
+                              location: colorScheme == .dark ? 0.40 : 0.28),
+                        .init(color: terminalColor.opacity(colorScheme == .dark ? 0.18 : 0.55),
+                              location: colorScheme == .dark ? 0.72 : 0.62),
                         .init(color: terminalColor, location: 1),
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
 
-                // Passive glass avoids a full-card press highlight. Fade to
-                // the opaque page colour as the card finishes expanding.
+                // Passive glass avoids a full-card press highlight. Night
+                // opacity is delayed independently of the width expansion.
                 terminalColor.opacity(reduceTransparency ? 1 : pow(settlingProgress, 3))
             }
             .frame(height: PortfolioContentSheetLayout.transitionHeight)

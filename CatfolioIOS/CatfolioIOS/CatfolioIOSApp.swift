@@ -16,7 +16,15 @@ struct CatfolioIOSApp: App {
             if isIsolatedResearchTestHost {
                 Color.clear
             } else {
+                #if DEBUG
+                if LaunchArguments.contains("--preview-valuation-map") {
+                    ValuationMapPreview()
+                } else {
+                    appContent
+                }
+                #else
                 appContent
+                #endif
             }
         }
     }

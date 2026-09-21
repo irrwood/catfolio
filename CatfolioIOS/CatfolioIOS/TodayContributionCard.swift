@@ -261,26 +261,35 @@ struct TodayContributionCard: View {
                 ? Color(red: 0, green: 0.255, blue: 0)
                 : Color(red: 0.22, green: 0.031, blue: 0.02)
             let glowColor = showsGains
-                ? CatfolioPalette.contributionGreen
+                ? Color(red: 0, green: 1, blue: 0)
                 : CatfolioPalette.contributionRedGlow
+            let glowEdge = showsGains
+                ? Color(red: 0.203, green: 0.973, blue: 1)
+                : CatfolioPalette.contributionRedGlow.opacity(0.4)
 
             shape
                 .fill(
                     LinearGradient(
-                        colors: [baseColor, .black],
+                        // Figma 236:37591: 20% fill × 20% first stop.
+                        // An opaque wash here hides the sheet's native refraction.
+                        colors: [baseColor.opacity(0.04), .clear],
                         startPoint: .top,
                         endPoint: .bottom
                     )
                 )
                 .overlay(alignment: .topLeading) {
                     Circle()
-                        .fill(glowColor.opacity(showsGains ? 0.45 : 0.40))
+                        .fill(RadialGradient(
+                            colors: [glowColor, glowEdge],
+                            center: .center, startRadius: 0, endRadius: 102.5
+                        ))
                         .frame(width: 205, height: 205)
-                        .blur(radius: 50)
+                        .blur(radius: 100)
+                        .opacity(0.35)
                         .offset(x: 220, y: -92)
                 }
                 .clipShape(shape)
-                .animation(.easeOut(duration: 0.18), value: direction)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: direction)
         }
     }
 

@@ -2610,3 +2610,516 @@
 "行情" = "Markets";
 "工具" = "Tools";
 "文字稿与财报在 iPhone 下载和保存；分析时，文字稿片段会发送给你已连接的云端 AI。没有连接云端 AI 时，才用 Apple 本地模型。" = "Transcripts and filings are downloaded and kept on this iPhone. For analysis, transcript excerpts are sent to the cloud AI you’ve connected; Apple’s on-device model is used only when none is connected.";
+"近 1 年" = "Past year";
+"没有持仓低于成本" = "Nothing below cost";
+"%@ 只低于成本" = "%@ below cost";
+"持仓浮动收益" = "Unrealised gain";
+"正在向 IBKR 请求报表…" = "Requesting the report from IBKR…";
+"正在导入持仓…" = "Importing holdings…";
+"首次同步失败：%@" = "First sync failed: %@";
+"%@ 买入 · %@ 持有 · %@ 卖出" = "%@ buy · %@ hold · %@ sell";
+"60 日相对标普 500" = "60-day vs S&P 500";
+"Cloudflare Account ID" = "Cloudflare Account ID";
+"Cloudflare 拒绝了这个 API Token，请在 设置 › 服务商 中检查它是否有 Workers AI 权限。" = "Cloudflare rejected this API token. Check in Settings › Providers that it has Workers AI access.";
+"Cloudflare 请求过于频繁，请稍后再试。" = "Too many requests to Cloudflare. Try again shortly.";
+"Cloudflare 返回错误 %@：%@" = "Cloudflare returned error %@: %@";
+"JEV 今日关注" = "JEV Today";
+"JEV 今日关注的买卖判断" = "Buy or sell calls for JEV Today";
+"JEV 只看这些数字，不读新闻和财报。结果是模型对数据的判断，不构成投资建议。把握低的判断表示数据不足以下结论。" = "JEV sees only these figures, not news or filings. Its calls are a model’s reading of the data, not investment advice. A low-confidence call means the data isn’t enough to decide.";
+"JEV 是 TypeSafe 的 System One 模型，经你的 Cloudflare 账户调用。每只持仓的行情指标（涨跌、均线、RSI、波动、52 周位置、成交量、相对标普 500）和仓位占比、浮动盈亏百分比会发送给 Cloudflare；不含账户、股数或金额。" = "JEV is TypeSafe’s System One model, called through your Cloudflare account. Each holding’s price metrics (returns, moving averages, RSI, volatility, 52-week position, volume, versus the S&P 500) and its weight and unrealised gain percentage are sent to Cloudflare; no account, share counts or amounts.";
+"JEV 正在判断… %@/%@" = "JEV is deciding… %@/%@";
+"Jev 的回复无法解析。" = "Couldn’t read Jev’s reply.";
+"RSI · 仓位 · 浮盈" = "RSI · Weight · Gain";
+"上升趋势" = "Uptrend";
+"下降趋势" = "Downtrend";
+"今日 · 20 日 · 60 日" = "Today · 20D · 60D";
+"仓位过重" = "Oversized";
+"偏多" = "Bullish";
+"偏空" = "Bearish";
+"强烈看多" = "Strongly bullish";
+"强烈看空" = "Strongly bearish";
+"判断于 %@" = "Judged %@";
+"在 Cloudflare 控制台 › Workers AI 页面右侧可以复制 Account ID；API Token 在 My Profile › API Tokens 创建，模板选 Workers AI。" = "Copy the Account ID from the right side of Cloudflare dashboard › Workers AI. Create the API token under My Profile › API Tokens using the Workers AI template.";
+"在 设置 › 服务商 › Jev (Cloudflare) 中填写 Account ID 和 API Token 后即可运行。" = "Add your Account ID and API token in Settings › Providers › Jev (Cloudflare) to run it.";
+"基于行情指标的结构化判断" = "Structured calls from price metrics";
+"把握中" = "Medium confidence";
+"把握低" = "Low confidence";
+"把握高" = "High confidence";
+"把每只持仓的行情指标交给 JEV，让它判断现在该买入、持有还是卖出。" = "Give JEV each holding’s price metrics and let it call buy, hold or sell for now.";
+"正在读取行情…" = "Reading prices…";
+"涨幅过大" = "Overextended";
+"破位风险" = "Breakdown risk";
+"超跌" = "Oversold";
+"让 JEV 判断买入还是卖出" = "Let JEV call buy or sell";
+"距 50 日 · 200 日均线" = "vs 50D · 200D average";
+"距 52 周高点 · 低点" = "From 52W high · low";
+"输入 Cloudflare API Token" = "Enter Cloudflare API token";
+"运行 JEV" = "Run JEV";
+"连接成功，Jev 可用" = "Connected. Jev is available";
+"通过你的 Cloudflare 账户调用 TypeSafe 的 Jev 模型（Workers AI 的 typesafe/jev），为 JEV 今日关注判断每只持仓该买入、持有还是卖出。发送的是行情指标、仓位占比和浮动盈亏百分比，不含账户、股数或金额。需要 Account ID 和一个有 Workers AI 权限的 API Token。" = "Calls TypeSafe’s Jev model through your Cloudflare account (Workers AI typesafe/jev) to decide, for JEV Today, whether to buy, hold or sell each holding. It sends price metrics, weights and unrealised gain percentages — no account, share counts or amounts. Needs an Account ID and an API token with Workers AI access.";
+"重新判断" = "Run again";
+"需要 Cloudflare Account ID 和 API Token：在 设置 › 服务商 › Jev (Cloudflare) 中填写。" = "Needs a Cloudflare Account ID and API token: add them in Settings › Providers › Jev (Cloudflare).";
+"需要 Cloudflare 凭证" = "Cloudflare credentials needed";
+"需要在 服务商 中填写 Cloudflare 凭证" = "Add Cloudflare credentials in Providers";
+"Cloudflare 账户的 AI 额度不足（402）。Jev 是第三方模型，按 Unified Billing 从预充值额度扣费，不走 Workers AI 免费额度。请在 Cloudflare 控制台 › AI › AI Gateway › Credits Available › Manage 充值后再试。" = "Your Cloudflare account has no AI credit left (402). Jev is a third-party model billed from prepaid credits through Unified Billing, not the Workers AI free allowance. Top up in the Cloudflare dashboard › AI › AI Gateway › Credits Available › Manage, then try again.";
+"在 设置 › 服务商 › OpenRouter 中填写 API Key 后即可运行。" = "Add your API key in Settings › Providers › OpenRouter to run it.";
+"OpenRouter 拒绝了这个 API Key，请在 设置 › 服务商 › OpenRouter 中检查。" = "OpenRouter rejected this API key. Check it in Settings › Providers › OpenRouter.";
+"OpenRouter 余额不足（402）。请在 openrouter.ai/credits 充值后再试。" = "Not enough OpenRouter credit (402). Top up at openrouter.ai/credits and try again.";
+"请求过于频繁，请稍后再试。" = "Too many requests. Try again shortly.";
+"Jev 服务返回错误 %@：%@" = "The Jev service returned error %@: %@";
+"需要 %@ 凭证" = "%@ credentials needed";
+"需要在 服务商 中填写 OpenRouter 或 Cloudflare 凭证" = "Add OpenRouter or Cloudflare credentials in Providers";
+"JEV 是 TypeSafe 的 System One 模型，经你在 OpenRouter 或 Cloudflare 的账户调用。每只持仓的行情指标（涨跌、均线、RSI、波动、52 周位置、成交量、相对标普 500）和仓位占比、浮动盈亏百分比会发送给所选服务；不含账户、股数或金额。" = "JEV is TypeSafe’s System One model, called through your OpenRouter or Cloudflare account. Each holding’s price metrics (returns, moving averages, RSI, volatility, 52-week position, volume, versus the S&P 500) and its weight and unrealised gain percentage are sent to the chosen service; no account, share counts or amounts.";
+"减仓" = "Trim";
+"%@ 买入 · %@ 持有 · %@ 减仓 · %@ 卖出" = "%@ buy · %@ hold · %@ trim · %@ sell";
+"Jev 的判断依据" = "What Jev saw";
+"走势评分（0 强烈看空 – 4 强烈看多）" = "Outlook score (0 strongly bearish – 4 strongly bullish)";
+"发给 Jev 的数据" = "Data sent to Jev";
+"顺势" = "Trend";
+"逆势" = "Contrarian";
+"思路" = "Approach";
+"当前结果按「%@」判断，重新判断后生效。" = "These results used “%@”. Run again to apply the change.";
+"不确定" = "Undecided";
+"偏向%@ · %@" = "Leans %@ · %@";
+"与走势判断相反" = "Opposes the outlook";
+"AI 对 Jev 判断的解读" = "AI reading of Jev’s call";
+"这是设置中所选 AI 对 Jev 输出的事后解读，不是 Jev 自己的推理。" = "This is the AI chosen in Settings reading Jev’s output after the fact, not Jev’s own reasoning.";
+"正在解释…" = "Explaining…";
+"让 AI 解释这个判断" = "Ask AI to explain this call";
+"趋势" = "Trend";
+"动量" = "Momentum";
+"位置" = "Stretch";
+"明确下跌" = "Downtrend";
+"走弱" = "Weakening";
+"横盘" = "Sideways";
+"上升" = "Rising";
+"稳固上升" = "Strong uptrend";
+"大幅走弱" = "Sharply weaker";
+"平淡" = "Flat";
+"走强" = "Stronger";
+"大幅走强" = "Sharply stronger";
+"深度超跌" = "Deeply oversold";
+"偏超跌" = "Oversold";
+"正常" = "Normal";
+"偏过热" = "Extended";
+"严重过热" = "Overextended";
+"平稳" = "Calm";
+"偏高" = "Elevated";
+"高" = "High";
+"很高" = "Very high";
+"强势" = "Strong";
+"强势·过热" = "Strong · hot";
+"震荡" = "Range";
+"震荡·偏热" = "Range · warm";
+"震荡·偏冷" = "Range · cool";
+"弱势" = "Weak";
+"弱势·超跌" = "Weak · oversold";
+"弱势·高风险" = "Weak · risky";
+"信号不清" = "Unclear";
+"很重" = "very large";
+"较重" = "large";
+"适中" = "moderate";
+"较轻" = "small";
+"仓位%@" = "Position %@";
+"AI 对 Jev 评分的解读" = "AI reading of Jev’s scores";
+"让 AI 解释这组评分" = "Ask AI to explain these scores";
+"%@ 强势 · %@ 震荡 · %@ 弱势" = "%@ strong · %@ range · %@ weak";
+"让 JEV 描述每只持仓的状态" = "Let JEV describe each holding";
+"把每只持仓的行情指标交给 JEV，让它从趋势、动量、位置、风险四个方面描述这只股票现在的状态。" = "Give JEV each holding’s price metrics and let it describe where the stock stands on trend, momentum, stretch and risk.";
+"JEV 不给买卖结论：它在趋势、动量、位置、风险四个方面各打一个分，状态由这四个分组合而成。它只看这些数字，不读新闻和财报，不构成投资建议。" = "JEV gives no buy or sell verdict: it scores trend, momentum, stretch and risk, and the state is put together from those four scores. It sees only these figures, not news or filings, and none of this is investment advice.";
+"看空" = "Bearish";
+"看多" = "Bullish";
+"过热" = "Overheated";
+"高风险" = "High risk";
+"%@ 看多 · %@ 中性 · %@ 看空" = "%@ bullish · %@ neutral · %@ bearish";
+"JEV 不给买卖结论：它在趋势、动量、位置、风险四个方面各打一个分。看多看空由趋势和动量合成，位置和风险作为附注。它只看这些数字，不读新闻和财报，不构成投资建议。" = "JEV gives no buy or sell verdict: it scores trend, momentum, stretch and risk. Bullish or bearish comes from trend and momentum; stretch and risk are noted beside it. It sees only these figures, not news or filings, and none of this is investment advice.";
+"正在读取市场环境与估值…" = "Reading the market backdrop and valuations…";
+"正在读取期权持仓…" = "Reading options open interest…";
+"正在读取期权持仓… %@/%@" = "Reading options open interest… %@/%@";
+"市场环境" = "Market";
+"标普 20 日 %@" = "S&P 20D %@";
+"10 年期 %@%" = "10Y %@%";
+"期权" = "Options";
+"估值" = "Valuation";
+"明显偏空" = "Clearly bearish";
+"均衡" = "Balanced";
+"明显偏多" = "Clearly bullish";
+"很便宜" = "Very cheap";
+"偏便宜" = "Cheap";
+"合理" = "Fair";
+"偏贵" = "Expensive";
+"很贵" = "Very expensive";
+"恶劣" = "Hostile";
+"偏弱" = "Weak";
+"有利" = "Supportive";
+"很有利" = "Very supportive";
+"期权偏多" = "Options bullish";
+"期权偏空" = "Options bearish";
+"估值偏贵" = "Rich valuation";
+"估值便宜" = "Cheap valuation";
+"期权墙 put · call" = "Option walls put · call";
+"成交分布 · 距 POC" = "Volume profile · vs POC";
+"价值区上方" = "Above value area";
+"价值区下方" = "Below value area";
+"价值区内" = "Inside value area";
+"市盈率 · 增速 · PEG" = "P/E · growth · PEG";
+"（预期）" = " (fwd)";
+"半导体情绪" = "Semiconductor sentiment";
+"JEV 是 TypeSafe 的 System One 模型，经你在 OpenRouter 或 Cloudflare 的账户调用。每只持仓的行情指标（涨跌、均线、RSI、波动、52 周位置、成交量、相对标普 500）、期权持仓墙、成交量分布、估值（需 FMP Key），以及仓位占比、浮动盈亏百分比和市场环境会发送给所选服务；不含账户、股数或金额。" = "JEV is TypeSafe’s System One model, called through your OpenRouter or Cloudflare account. Each holding’s price metrics (returns, moving averages, RSI, volatility, 52-week position, volume, versus the S&P 500), options walls, volume profile, valuation (needs an FMP key), weight, unrealised gain percentage and the market backdrop are sent to the chosen service; no account, share counts or amounts.";
+"市盈率 · 市销率 · 增速" = "P/E · P/S · growth";
+"亏损" = "Loss";
+"净利润同比" = "Net income YoY";
+"核对管理层提出的明确承诺，展示原话、后续结果和证据。有 FMP 电话会权限时用电话会文字稿，否则用 SEC 上的季度财报新闻稿，至少需要 4 个季度。" = "Checks management’s explicit commitments, with the original words, what followed and the evidence. Uses call transcripts with FMP access, otherwise the quarterly earnings releases on SEC; needs at least 4 quarters.";
+"以下为 SEC 财报中的数字；第四季度由全年减去前三季度得出。" = "Figures from SEC filings; the fourth quarter is the year less its first three.";
+"FMP 不可用，改用 SEC 公开资料…" = "FMP unavailable, using SEC public filings…";
+"正在读取 SEC 财报…" = "Reading SEC statements…";
+"SEC 暂未返回这家公司的财报，请稍后重试。" = "SEC has not returned this company’s statements yet. Try again shortly.";
+"正在查找财报新闻稿…" = "Looking for earnings releases…";
+"SEC 公告列表暂时读取失败，请稍后重试。" = "Couldn’t read SEC’s filing list. Try again shortly.";
+"SEC 上可用的财报新闻稿不足 4 个季度，暂无法生成兑现记录。" = "Fewer than 4 quarters of earnings releases on SEC; can’t build the record yet.";
+"最近季度的财报新闻稿存在缺口，暂无法生成完整记录。" = "Recent earnings releases have a gap; can’t build a complete record.";
+"下载财报新闻稿 %@ / %@" = "Downloading earnings release %@ / %@";
+"财报新闻稿正文缺失，未更新本地结果。" = "An earnings release had no text; nothing was updated.";
+"正在整理对应财报…" = "Preparing matching statements…";
+"未取得可核对的财报，请稍后重试。" = "No statements to check against yet. Try again shortly.";
+"核对管理层在季度财报新闻稿中提出的明确承诺，展示原话、后续结果和证据。资料来自 SEC 公开申报，至少需要 4 个季度。" = "Checks the explicit commitments management made in its quarterly earnings releases, with the original words, what followed and the evidence. Everything comes from SEC public filings; needs at least 4 quarters.";
+"财报新闻稿与财报在 iPhone 下载、分析和保存，资料不上传服务器。" = "Earnings releases and statements are downloaded, analysed and kept on this iPhone; nothing is uploaded.";
+"财报新闻稿与财报在 iPhone 下载和保存；分析时，新闻稿片段会发送给你已连接的云端 AI。没有连接云端 AI 时，才用 Apple 本地模型。" = "Earnings releases and statements are downloaded and kept on this iPhone. For analysis, release excerpts are sent to the cloud AI you’ve connected; Apple’s on-device model is used only when none is connected.";
+"财报新闻稿与财报在 iPhone 下载和保存；分析时，新闻稿片段会发送给你在服务商中选择的 AI。" = "Earnings releases and statements are downloaded and kept on this iPhone. For analysis, release excerpts are sent to the AI you chose in Providers.";
+"仅取得 %@ 个季度的财报新闻稿。" = "Only %@ quarters of earnings releases were found.";
+"已分析下载的财报新闻稿，未找到可追踪的明确承诺。部分公司只在电话会上口头给出指引，新闻稿中不写。" = "Analysed the downloaded earnings releases; no trackable explicit commitment was found. Some companies give guidance only on the call, not in the release.";
+
+/* Three-dimensional valuation matrix */
+"估值 · 成长 · 质量" = "Valuation · Growth · Quality";
+"全屏查看" = "View full screen";
+"图表视图" = "Chart view";
+"重置视角" = "Reset view";
+"拖动旋转 · 双指缩放 · 点击选股 · 球体大小表示仓位" = "Drag to rotate · Pinch to zoom · Tap to select · Size shows weight";
+"点击选股 · 全屏可旋转 · 球体大小表示仓位" = "Tap to select · Rotate in full screen · Size shows weight";
+"横轴 P/E · 纵轴年度 EPS Growth · 点大小表示仓位" = "X: P/E · Y: annual EPS growth · Size shows weight";
+"空心点：ROIC 缺失" = "Hollow: ROIC unavailable";
+"低" = "Low";
+"EPS Growth 与 ROIC 使用年度财报；P/E 的期间单独列示。" = "EPS growth and ROIC use annual filings. The P/E period is shown separately.";
+"数据与计算依据" = "Data and methodology";
+"暂无完整指标" = "No complete metrics";
+"缺失指标不会按零绘制，请查看下方数据明细。" = "Missing metrics are not plotted as zero. See the data details below.";
+"期间未提供" = "Period not supplied";
+"有效税率" = "Effective tax rate";
+"投入资本（期初 / 期末）" = "Invested capital (opening / closing)";
+"申报日期" = "Filed on";
+"查看 SEC 原始申报" = "View SEC filing";
+"P/E 与年度 EPS 增长，颜色表示 ROIC" = "P/E versus annual EPS growth, colored by ROIC";
+"ROIC = 营业利润 × (1 − 有效税率) ÷ 期初期末平均投入资本。投入资本 = 权益 + 已披露有息借款 − 现金及现金等价物；不调整经营租赁、商誉或研发。" = "ROIC = operating income × (1 − effective tax rate) ÷ average opening and closing invested capital. Capital = equity + disclosed interest-bearing borrowings − cash and equivalents; no operating lease, goodwill or R&D adjustments.";
+"EPS Growth = 本年稀释 EPS ÷ 上年稀释 EPS − 1。上年 EPS 不为正时不计算增长率。" = "EPS growth = current annual diluted EPS ÷ prior annual diluted EPS − 1. Growth is unavailable when prior EPS is nonpositive.";
+"缺少同一申报中的两年稀释 EPS" = "Two years of diluted EPS from the same filing are unavailable";
+"上年 EPS 不为正，增长率不适用" = "Prior EPS is nonpositive; growth is not meaningful";
+"EPS 数据无法计算" = "EPS cannot be calculated";
+"缺少营业利润" = "Operating income is unavailable";
+"缺少税前利润或所得税费用" = "Pretax income or tax expense is unavailable";
+"税前利润或有效税率异常" = "Pretax income or effective tax rate is outside the supported range";
+"缺少完整债务、权益或现金数据" = "Complete debt, equity or cash data is unavailable";
+"期初或期末投入资本不为正" = "Opening or closing invested capital is nonpositive";
+"ROIC 数据无法计算" = "ROIC cannot be calculated";
+"金融企业不适用此 ROIC 口径" = "This ROIC method is not applicable to financial companies";
+"暂无可用 SEC 年度财报" = "SEC annual metrics are unavailable";
+"缺少有效 P/E 或财报数据" = "Valid P/E or financial data is unavailable";
+"界面验证 · 示例数据" = "UI preview · Sample data";
+
+/* Valuation map visual refinement */
+"估值地图" = "Stock map";
+"持仓分布" = "PORTFOLIO MAP";
+"大小表示仓位" = "Size shows weight";
+"拖动旋转" = "Drag to rotate";
+"点选股票" = "Tap to select";
+"可绘制" = "plotted";
+"年度 EPS / ROIC" = "Annual EPS / ROIC";
+
+
+// Native DCA calculator and conditional flow
+"%@ 年年化" = "%@-year annualized";
+"20 日实现波动率 · 年化" = "20-day realized volatility · annualized";
+"20 日效率比 · 0–1" = "20-day efficiency ratio · 0–1";
+"200 日均线 · Price / SMA200" = "200-day moving average · Price / SMA200";
+"Any / All 规则" = "Any / All rules";
+"Base Amount · 每期新增入金" = "Base Amount · New cash each period";
+"Cash Reserve · 现金储备" = "Cash Reserve";
+"Cooldown · 加仓冷却" = "Cooldown · Extra purchases";
+"ER20 判断" = "ER20 comparison";
+"IF / ELSE 条件分支" = "IF / ELSE branches";
+"Max Multiplier · 最高倍数" = "Max Multiplier";
+"Max Position · 仓位上限" = "Max Position";
+"Min Multiplier · 最低倍数" = "Min Multiplier";
+"RV20 判断" = "RV20 comparison";
+"≤ 不高于" = "≤ At most";
+"≥ 不低于" = "≥ At least";
+"买入次数" = "Purchases";
+"仓位上限" = "Position limit";
+"价格低于下限目标2×；回撤10%／20%／30%对应1.5×／2×／3×，多个加仓信号取最大倍数。否则按1×投入。" = "A price below the lower threshold targets 2×. Drawdowns of 10% / 20% / 30% target 1.5× / 2× / 3×. Use the largest qualifying multiplier; otherwise invest 1×.";
+"任一满足" = "Any condition";
+"低于此值加仓" = "Add at or below";
+"信号日 %@ · 现金 %@" = "Signal %@ · Cash %@";
+"借鉴 Composer 的条件编排；此处仅做定投模拟，不执行目标权重再平衡或券商交易。" = "Inspired by Composer's conditional blocks. This is a DCA simulation, without target-weight rebalancing or broker execution.";
+"先按全部或任一条件判断 IF 分支；不满足走减量分支，数据未知保留现金。通过后判断加仓条件，否则基础投入。最后统一检查资金与冷却期。" = "Evaluate the IF group using All or Any. A false result reduces the purchase; unknown data retains cash. A true result checks the additional-buy group, falling back to the base amount. Apply cash, position and cooldown limits last.";
+"先选分支，再检查资金边界" = "Choose a branch, then apply funding limits";
+"全部满足" = "All conditions";
+"减量分支" = "Reduced purchase";
+"减量至 %@×" = "Reduce to %@×";
+"初始现金池" = "Initial cash pool";
+"初始资金作为现金池，每期新增基础金额。只模拟所选资产与现金，仓位上限按两者之和计算；10–20% 的仓位上限通常比现金储备更严格。不主动卖出持仓。" = "Initial capital remains in a cash pool, with the base amount added each period. The simulation holds one asset and cash; position limits use their combined value. A 10–20% position limit is usually stricter than the cash reserve. Holdings are never sold.";
+"剩余现金" = "Remaining cash";
+"加仓冷却期" = "Additional-buy cooldown";
+"加仓分支" = "Additional purchase";
+"加仓条件 · %@" = "Additional-buy group · %@";
+"加仓条件组合" = "Additional-buy conditions";
+"加仓至最高 %@×" = "Add up to %@×";
+"历史不足，状态未知" = "Insufficient history · Unknown";
+"历史价格无效或存在重复日期" = "Historical prices are invalid or contain duplicate dates.";
+"参数已修改，下方保留上次回测，运行后更新" = "Settings changed. The previous result remains below until you run again.";
+"回撤" = "Drawdown";
+"回撤 ≤ −%@%" = "Drawdown ≤ −%@%";
+"回撤门槛" = "Drawdown threshold";
+"回测区间" = "Backtest period";
+"回测结果" = "Backtest results";
+"固定定投" = "Fixed DCA";
+"固定定投使用相同入金与资金限制，不使用条件倍数" = "Fixed DCA uses the same deposits and funding limits, without conditional multipliers.";
+"基础分支" = "Base purchase";
+"基础投入 1×" = "Base purchase 1×";
+"基础投入金额" = "Base amount";
+"复用编曲家的 SMA、波动率和三值判断。使用上一交易日指标、计划日收盘价模拟买入；真实行情采用拆股复权价，份额是模型等效份额。没有分红再投、费用、税费或现金利息。" = "Uses the composer's SMA, volatility and three-valued predicates. Prior-session indicators determine purchases at the scheduled session's close. Live-source history is split-adjusted; shares are model-equivalent units. Dividends, fees, taxes and cash interest are excluded.";
+"定投参数超出有效范围" = "DCA settings are outside the valid range.";
+"定投收益率" = "DCA return";
+"定投明细" = "Purchase history";
+"定投计划" = "DCA plan";
+"定投计算器" = "DCA calculator";
+"定投频率" = "Frequency";
+"导出 CSV" = "Export CSV";
+"展开全部" = "Show all";
+"年化收益 · XIRR" = "Annualized · XIRR";
+"应用配置" = "Apply settings";
+"开始回测" = "Run backtest";
+"开始日期早于行情，已按可用区间回测" = "The start predates available prices. Results use the available period.";
+"当前规则预览" = "Current rule preview";
+"截至 %@ · %@ 个交易日" = "As of %@ · %@ sessions";
+"所选区间历史行情不足" = "Insufficient historical prices for this period.";
+"执行顺序" = "Execution order";
+"收益口径" = "Return methodology";
+"收益率包含保留现金；XIRR 按实际入金日期计算，少于30天不年化；回撤剔除新增入金影响。历史不足不补假价格。" = "Returns include retained cash. XIRR uses actual deposit dates and is not annualized for periods under 30 days. Drawdown excludes new deposits. Missing history is never filled with synthetic prices.";
+"收起明细" = "Show less";
+"效率比阈值" = "Efficiency threshold";
+"数据不足，保留现金" = "Unknown data · Keep cash";
+"数据与成交" = "Data and execution";
+"最近收盘：未满足" = "Latest close: not met";
+"最近收盘：满足" = "Latest close: met";
+"期末总收益" = "Total profit";
+"期末总资产" = "Final assets";
+"未启用加仓条件" = "No additional-buy conditions";
+"未启用过滤条件" = "No filter conditions";
+"条件与分支逻辑" = "Conditions and branches";
+"条件编排" = "Conditional flow";
+"条件配置" = "Conditions";
+"正在回测…" = "Running backtest…";
+"每周" = "Weekly";
+"每月" = "Monthly";
+"每笔投入都能追溯触发分支" = "See the branch behind every purchase";
+"波动率阈值" = "Volatility threshold";
+"满足进入加仓判断；不满足使用最低倍数。未知不会当作不满足。" = "A true result checks additional-buy conditions; false uses the minimum multiplier. Unknown is distinct from false.";
+"演示行情 · 合成数据" = "Demo prices · Synthetic data";
+"现金 %@% · 仓位 ≤ %@% · 冷却 %@ 天" = "Cash %@% · Position ≤ %@% · Cooldown %@ days";
+"现金与仓位按模拟总资产计算。资金限制可使实际投入低于最低倍数；冷却期只限制额外加仓，不阻止基础定投。" = "Cash and position percentages use simulated total assets. Funding limits may reduce a purchase below the minimum multiplier. Cooldown limits extra purchases, while preserving base DCA.";
+"现金储备" = "Cash reserve";
+"第一步 · 是否允许常规投入" = "Step 1 · Allow regular purchases?";
+"第三步 · 资金保护" = "Step 3 · Funding limits";
+"第二步 · 加仓还是基础投入" = "Step 2 · Additional or base purchase?";
+"累计入金" = "Total deposits";
+"结束日期" = "End date";
+"结束日期晚于行情，结果截至最后可用交易日" = "The end date exceeds available history. Results stop at the last available session.";
+"美股与 ETF · USD" = "US stocks & ETFs · USD";
+"美股代码" = "US ticker";
+"行情暂不可用，请重试或更换标的" = "Prices are unavailable. Retry or choose another ticker.";
+"计算口径与规则说明" = "Methodology and rules";
+"请输入美股或 ETF 代码" = "Enter a US stock or ETF ticker.";
+"请选择有效日期，回测范围最多十年" = "Choose valid dates, covering at most ten years.";
+"资金" = "Value";
+"资金口径" = "Funding methodology";
+"资金走势" = "Account value";
+"起始日期" = "Start date";
+"距近252个交易日高点" = "From the trailing 252-session high";
+"过滤条件组合" = "Filter conditions";
+"部分指标历史不足，对应入金已保留为现金" = "Some indicators lack sufficient history. Affected deposits remain in cash.";
+"配置" = "Configure";
+"重新加载行情" = "Reload prices";
+"长按查看每日资金与回撤" = "Touch and hold to inspect daily value and drawdown";
+"达到此值触发减量条件" = "Reduce at or above";
+"高亮分支基于最近收盘：%@" = "Highlighted branch uses the latest close: %@";
+
+// DCA chart clarity and collapsed history
+"本策略总资产" = "Strategy total assets";
+"固定定投总资产" = "Fixed DCA total assets";
+"累计入金（本金）" = "Deposited capital";
+"按当前条件投入后的资产" = "Assets after applying your conditions";
+"每期按基础金额买入，受相同资金限制" = "Base purchases with the same funding limits";
+"你累计存入的钱，包含初始资金" = "All deposits, including starting cash";
+"两条总资产线都包含股票市值和未投入现金；总资产减去累计入金，就是收益。" = "Both asset lines include holdings and uninvested cash. Total assets minus deposited capital equals profit.";
+"0% 表示处于此前高点；越往下，表示从高点跌得越多。回撤已剔除新增入金影响。" = "0% marks the previous peak. Lower values mean a deeper decline. New deposits are excluded from drawdown.";
+"完成回测后，对比总资产与累计入金。" = "Run a backtest to compare total assets with deposits.";
+"仅显示最近五期" = "Show latest five periods";
+
+"期末回撤" = "Final drawdown";
+
+"点图例单独查看，再点一次显示全部" = "Tap a legend row to isolate it; tap again to show all";
+
+// DCA draft layout
+"初始资金保留为现金，每期再新增定投金额。" = "Initial funds stay in cash; a new contribution is added each period.";
+"回测" = "Backtest";
+"固定定投收益率" = "Fixed DCA return";
+"定投金额" = "Contribution";
+"定投金额 %@" = "Contribution %@";
+"已启用条件" = "Active conditions";
+"更多指标" = "More metrics";
+"股价 · USD" = "Price · USD";
+"股价走势，长按查看每日收盘价" = "Price history. Touch and hold for daily closing prices.";
+"选择标的" = "Choose a symbol";
+
+"回测资金走势" = "Backtest value";
+"参数已修改，图表与结果保留上次回测，运行后更新" = "Settings changed. The chart and results show the previous backtest until you run again.";
+
+"图表说明" = "Chart guide";
+
+"长按查看每日资金" = "Touch and hold to inspect daily value";
+
+// DCA side-by-side comparison
+"回测对比" = "Backtest comparison";
+"与固定定投持平" = "Equal to fixed DCA";
+"比固定定投多赚" = "Ahead of fixed DCA";
+"比固定定投少赚" = "Behind fixed DCA";
+"收益率差 %@ 个百分点" = "Return difference: %@ percentage points";
+"本策略" = "Strategy";
+"两组采用相同入金计划、回测区间、现金储备和仓位上限；固定定投每期按基础金额买入，不应用条件倍数。" = "Both use the same contributions, dates, cash reserve and position limit. Fixed DCA buys the base amount each period without conditional multipliers.";
+
+// ECDA switch
+"开启后跌时加投、涨时减投；关闭后固定金额定投" = "Increase after a decline and reduce after a rise; turn off for fixed contributions";
+"每期按固定金额投入" = "Invest a fixed amount each period";
+"上一期跌：1.5× · 涨：0.5× · 持平：1×" = "Previous period down: 1.5× · Up: 0.5× · Flat: 1×";
+"ECDA 总资产" = "ECDA total assets";
+"按当前定投方式投入后的资产" = "Assets under the selected contribution method";
+"按所选周／月频率，比较买入前最近收盘与一周／一个月前收盘。下跌投入基础金额的1.5倍，上涨0.5倍，持平或历史不足1倍。每次都从基础金额计算，不逐次累乘；关闭后固定1倍。" = "For the selected weekly or monthly frequency, compare the latest close before purchase with the close one week or month earlier. Invest 1.5× the base amount after a decline, 0.5× after a rise and 1× when flat or history is insufficient. Adjust from the base each time, without compounding. Turning ECDA off uses 1×.";
+"ECDA 不使用 SMA、RV、ER 或自定义条件，也不套用额外加仓冷却；实际投入仍受可用现金、现金储备和仓位上限限制。" = "ECDA uses no SMA, RV, ER, custom conditions or extra-buy cooldown. Actual purchases remain limited by available cash, the cash reserve and position cap.";
+"信号只使用买入前的收盘数据，按计划日收盘价模拟买入。真实行情采用拆股复权价，没有分红再投、费用、税费或现金利息。" = "Signals use only closes before purchase; fills use the scheduled trading day close. Real history is split-adjusted. Dividends, fees, taxes and cash interest are excluded.";
+
+// DCA natural-language conditions
+" 且 " = " AND ";
+" 或 " = " OR ";
+"%@ / 6000 字" = "%@ / 6000 characters";
+"AI 没有返回有效规则，请重新整理。" = "AI did not return valid rules. Try organizing again.";
+"AI 返回了不支持的规则字段。" = "AI returned unsupported rule fields.";
+"AI 返回的规则版本或说明无效。" = "AI returned an invalid rule version or explanation.";
+"ECDA 按上一期涨跌调整基础投入；实际买入仍受可用现金、现金储备和仓位上限限制。" = "ECDA adjusts the base amount using the previous period’s change. Purchases remain limited by available cash, cash reserve and position limits.";
+"买入倍数" = "Purchase multiplier";
+"从上往下，采用第一条满足的规则；倍数按基础金额计算。" = "Use the first matching rule from top to bottom. Multipliers apply to the base amount.";
+"价格 / 均线" = "Price / SMA";
+"价格低于200日均线15%时投入2倍，其余按原计划。" = "Invest 2x when the price is 15% below its 200-day SMA; otherwise follow the original plan.";
+"使用当前 AI 服务，仅发送这段描述与已有规则；不发送账户或持仓。整理后由你检查，再应用到回测。" = "Uses your current AI service. Only this description and existing rules are sent, without accounts or holdings. Review the rules before applying them to the backtest.";
+"例如：价格低于200日均线15%时投2倍；RV20高于40%时暂停，波动率条件优先。" = "For example: invest 2x below 85% of the 200-day SMA; pause when RV20 exceeds 40%. Check volatility first.";
+"其余投入基础金额的 %@×" = "Otherwise invest %@x the base amount";
+"其余按固定金额投入" = "Otherwise use fixed DCA";
+"其余跟随 ECDA" = "Otherwise follow ECDA";
+"判断" = "Comparison";
+"判断方式" = "Match";
+"固定定投 1×" = "Fixed DCA 1x";
+"年化波动率" = "Annualized volatility";
+"应用到回测" = "Apply to backtest";
+"投入基础金额的 %@×" = "Invest %@x the base amount";
+"描述已修改，请重新整理后应用" = "Description changed. Organize it again before applying.";
+"提高优先级" = "Move up";
+"效率比" = "Efficiency ratio";
+"整理后的规则" = "Organized rules";
+"暂停本期买入" = "Pause this purchase";
+"未命中时" = "When no rule matches";
+"条件参数无效：最多8条规则，每条最多8个条件，买入倍数须在0至3之间。" = "Invalid parameters: up to 8 rules with 8 conditions each; purchase multipliers must be between 0 and 3.";
+"条件只读取买入前的收盘数据；历史不足时保留现金。实际买入仍受现金储备和仓位上限限制。" = "Conditions use closes before each purchase. Insufficient history keeps cash. Cash reserve and position limits still apply.";
+"清空条件" = "Clear conditions";
+"策略条件" = "Strategy conditions";
+"自定义条件优先于 ECDA，从上往下采用第一条满足的规则。都不满足时执行所选默认方式；判断所需历史不足时暂停本期买入。AI 整理后需检查并应用，修改参数后重新运行回测。" = "Custom conditions take priority over ECDA. Use the first matching rule from top to bottom; otherwise use the selected fallback. Insufficient history pauses the purchase. Review and apply AI rules, then rerun the backtest after changing parameters.";
+"规则 %@" = "Rule %@";
+"试试：低于均线时加倍" = "Try: double below the SMA";
+"请在描述中补充或调整，再点 AI 整理。未解决的问题不会带入回测。" = "Update your description and tap Organize with AI again. Unresolved requests cannot be applied to the backtest.";
+"调整参数" = "Adjust parameters";
+"距区间高点回撤" = "Drawdown from period high";
+"跟随 ECDA" = "Follow ECDA";
+"还需要补充" = "More detail needed";
+"降低优先级" = "Move down";
+
+// DCA security picker
+"当前标的" = "Current security";
+"预设标的" = "Presets";
+"也可以搜索其他美股或 ETF，点选后加载历史行情。" = "You can also search other US stocks or ETFs. Select one to load its price history.";
+"请尝试股票代码或公司名称，当前仅支持美元计价的美股与 ETF。" = "Try a ticker or company name. Currently supports USD-denominated US stocks and ETFs.";
+
+// DCA: only visible strategy rules
+"可用现金不足" = "Insufficient available cash";
+"部分计划买入超过可用现金，已按当期可用现金买入。" = "Some planned purchases exceeded available cash and were limited to the cash available at the time.";
+"初始资金保留为现金，每期再新增定投金额。加倍买入可使用现金池；现金不足时，只买入可用金额。" = "Initial funds stay in cash, with the base amount added each period. Extra purchases can use this cash; when it runs short, only the available amount is invested.";
+"两组采用相同初始现金、入金计划和回测区间；固定定投每期买入全部基础金额，本策略按 ECDA 或已应用条件调整买入金额。" = "Both use the same initial cash, deposits and backtest period. Fixed DCA invests the full base amount each period; this strategy adjusts purchases using ECDA or applied conditions.";
+"每期买入全部基础金额" = "Invests the full base amount each period";
+"ECDA 按上一期涨跌调整基础投入；加倍买入可使用现金池，现金不足时按可用金额买入。" = "ECDA adjusts the base amount using the previous period’s change. Extra purchases can use the cash pool and are limited to the cash available.";
+"初始资金作为现金池，每期新增基础金额。固定定投每期买满基础金额；策略可使用现金池加倍买入，不借款、不主动卖出。" = "Initial funds form a cash pool and the base amount is added each period. Fixed DCA invests the full base amount. The strategy can use the pool for extra purchases, without borrowing or selling.";
+"条件只读取买入前的收盘数据；历史不足时保留现金。买入金额按所选倍数计算，现金不足时只使用可用现金。" = "Conditions use closes before each purchase. Insufficient history keeps cash. Purchases follow the selected multiplier, limited only by available cash.";
+
+// DCA: direct investment without cash pool
+"两组按相同频率和区间买入，各自累计实际投入。策略倍数会改变投入本金；收益差已扣除各自本金，不代表相同投入下的表现。" = "Both buy at the same frequency over the same period and track their own invested principal. Strategy multipliers change contributions. Profit differences exclude each portfolio’s principal and do not represent equal-capital performance.";
+"固定定投每期投入并买入基础金额；本策略按当期倍数投入并买入。暂停时不投入、不买入；两组分别累计本金，不预存或留存现金，不主动卖出。" = "Fixed DCA invests the base amount each period; this strategy invests the amount given by its multiplier. Paused periods have no contribution or purchase. Each tracks its own principal, with no prefunded or retained cash and no selling.";
+"完成回测后，对比总资产与累计投入。" = "Run a backtest to compare portfolio values and invested principal.";
+"总资产为持仓市值，减去各自累计投入就是收益。灰线为本策略本金，固定定投本金见下方对比表。" = "Portfolio value is the market value of holdings. Profit subtracts each portfolio’s own contributions. The gray line shows strategy principal; fixed DCA principal appears in the comparison below.";
+"收益率按各自实际投入计算；XIRR 按各自买入日期和金额计算，首次投入不足30天不年化；回撤剔除新增投入影响。历史不足不补假价格。" = "Returns use each portfolio’s actual contributions. XIRR uses its own purchase dates and amounts, with no annualization within 30 days of the first investment. Drawdown excludes new contributions. Missing history is not fabricated.";
+"数据不足，暂停本期买入" = "Insufficient data; skip this purchase";
+"本策略尚未投入" = "No strategy contributions yet";
+"本策略每次实际买入金额的累计值" = "The sum of actual strategy purchases";
+"本策略累计投入" = "Strategy contributions";
+"条件只读取买入前的收盘数据；历史不足时暂停本期。每期直接投入并买入基础金额乘以所选倍数，暂停时不投入。" = "Conditions use closes before each purchase; insufficient history skips the period. Invest and buy the base amount times the selected multiplier. Paused periods have no contributions.";
+"每期直接投入基础金额乘以当期倍数。例如基础金额500美元、1.5倍时，当期投入并买入750美元。" = "Each period directly invests the base amount times its multiplier. For example, a $500 base at 1.5x contributes and buys $750.";
+"累计投入" = "Total invested";
+"部分指标历史不足，对应期次未投入、未买入。" = "Some indicators had insufficient history; those periods had no contributions or purchases.";
+
+// DCA market data provenance
+"历史行情 · Yahoo Finance" = "Historical prices · Yahoo Finance";
+"Yahoo Finance 历史行情 · 截至 %@" = "Yahoo Finance historical prices · Through %@";
+
+// Bundled SPY price history
+"内置 SPY 历史行情" = "Bundled SPY history";
+"内置 SPY · Yahoo Finance · 截至 %@" = "Bundled SPY · Yahoo Finance · Through %@";
+
+"按各自实际投入计算" = "Based on each plan’s actual contributions";
+
+"投入收益率" = "Return on contributions";
+
+"净值最大回撤" = "Max NAV drawdown";
+
+"净值回撤剔除新增投入影响；两组仅持有同一标的，持有区间相同时回撤会相同。" = "NAV drawdown excludes new contributions. Both plans hold the same asset, so drawdown is identical over the same holding period.";
+
+"投入收益率 = 收益 ÷ 累计投入，不考虑投入时间；XIRR 考虑每笔投入的金额和日期。本金与投入时间可能不同，以上不是同预算的策略优劣结论。不含分红、费用与税费。" = "Return on contributions is profit divided by total contributions and ignores timing. XIRR accounts for the amount and date of each contribution. Funding amounts and timing can differ, so this is not a verdict on performance under an equal budget. Dividends, fees and taxes are excluded.";
+
+"从上往下采用第一条满足的规则。未命中时默认按固定金额投入，也可设置其他倍数；历史不足时暂停本期买入。" = "Use the first matching rule from top to bottom. Unmatched purchases default to the base amount unless another multiplier is set. Insufficient history pauses the purchase.";
+
+"自定义策略" = "Custom strategy";
+
+"自定义策略总资产" = "Custom strategy total assets";
+
+"自定义策略累计投入" = "Custom strategy contributions";
+
+"自定义策略每次实际买入金额的累计值" = "The sum of actual custom strategy purchases";
+
+"总资产为持仓市值，减去各自累计投入就是收益。灰线为自定义策略本金，固定定投本金见下方对比表。" = "Portfolio value is the market value of holdings. Profit subtracts each portfolio’s own contributions. The gray line shows custom strategy principal; fixed DCA principal appears in the comparison below.";
+
+"固定定投每期投入并买入基础金额；自定义策略按当期倍数投入并买入。暂停时不投入、不买入；两组分别累计本金，不预存或留存现金，不主动卖出。" = "Fixed DCA invests the base amount each period; this custom strategy invests the amount given by its multiplier. Paused periods have no contribution or purchase. Each tracks its own principal, with no prefunded or retained cash and no selling.";
+
+"（截至 %@）" = " (through %@)";
+
+"组合历史不足一年的部分按实际日期展示，缺少年初基准时从首日归零；多年均值只包含完整年份。" = " Partial portfolio years show only available dates and start at zero on the first day when the opening baseline is missing. The multi-year average includes complete years only.";
+
+"Codex 未返回有效的 JSON 对象。" = "Codex did not return a valid JSON object.";
+
+"停止生成" = "Stop generating";
+
+"停止等待" = "Stop waiting";
+
+"停止等待不会撤销已确认的本地持仓更新。" = "Stopping the wait does not undo a confirmed local holdings update.";

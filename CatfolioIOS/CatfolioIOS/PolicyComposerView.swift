@@ -87,7 +87,7 @@ struct PolicyComposerView: View {
                 .scrollContentBackground(.hidden)
                 .scrollDismissesKeyboard(.interactively)
                 .environment(\.defaultMinListRowHeight, 0)
-                .background(SettingsTemplate.pageBackground)
+                .appPageBackground(SettingsTemplate.pageBackground)
                 .onChange(of: store.trace?.isFinished) { wasFinished, isFinished in
                     guard wasFinished == false, isFinished == true else { return }
                     withAnimation(reduceMotion ? nil : .smooth) { scroll.scrollTo("results", anchor: .top) }
@@ -95,7 +95,7 @@ struct PolicyComposerView: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) { composerBar }
             .overlay(alignment: .bottom) { noticeBanner }
-            .navigationTitle(store.name)
+            .appPageBackground().navigationTitle(store.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarTitleMenu { titleMenu }
             .toolbar { toolbar }
@@ -116,7 +116,7 @@ struct PolicyComposerView: View {
             try? await Task.sleep(for: .seconds(8))
             withAnimation(.smooth) { store.clearChangeMarks() }
         }
-        .sheet(item: $sheet) { sheet in
+        .appSheet(item: $sheet) { sheet in
             switch sheet {
             case .actions: PolicyActionLibrary { type in store.addStep(type) }
             case .library: PolicyLibrarySheet(store: store)
@@ -1090,7 +1090,7 @@ private struct PolicyActionLibrary: View {
                 }
             }
             .searchable(text: $query, prompt: L10n.text("搜索动作"))
-            .navigationTitle(L10n.text("添加动作"))
+            .appPageBackground().navigationTitle(L10n.text("添加动作"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(L10n.text("取消")) { dismiss() } }
@@ -1164,7 +1164,7 @@ private struct PolicyLibrarySheet: View {
                                            description: Text(L10n.text("描述一个策略后会自动保存在这里。")))
                 }
             }
-            .navigationTitle(L10n.text("策略库"))
+            .appPageBackground().navigationTitle(L10n.text("策略库"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { dismiss() } }
@@ -1241,7 +1241,7 @@ private struct PolicyHistorySheet: View {
                     Text(L10n.text("恢复旧版本会成为一个新版本，可以撤销。"))
                 }
             }
-            .navigationTitle(L10n.text("运行记录与旧版本"))
+            .appPageBackground().navigationTitle(L10n.text("运行记录与旧版本"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { dismiss() } } }
             .task {
@@ -1296,7 +1296,7 @@ private struct PolicySettingsSheet: View {
                     Text(L10n.text("运行时用今天之前最近一个完整交易日的收盘价。行情比这更旧时，运行会停下并说明原因。"))
                 }
             }
-            .navigationTitle(L10n.text("数据与账户"))
+            .appPageBackground().navigationTitle(L10n.text("数据与账户"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -1340,7 +1340,7 @@ private struct PolicyBudgetSheet: View {
                     Text(L10n.text("配置步骤按这个模拟总额计算目标仓位，已选持仓也占用它。只用于这次模拟，不会写回账户，也不会下单。目前只支持美元。"))
                 }
             }
-            .navigationTitle(L10n.text("模拟总额"))
+            .appPageBackground().navigationTitle(L10n.text("模拟总额"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(L10n.text("取消")) { dismiss() } }
@@ -1371,7 +1371,7 @@ extension View {
             // Not interactive: it holds the composer's text field, and
             // interactive glass takes the touch for its press effect first —
             // the AI page's field took about six seconds to focus that way.
-            softShadowGlass(in: shape)
+            glassEffect(.regular, in: shape)
         } else {
             background(.ultraThinMaterial, in: shape)
         }

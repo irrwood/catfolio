@@ -57,9 +57,12 @@ struct ManagementDeliveryAnalyzer {
     static func extractionPrompt(_ chunk: Chunk, language: String) -> String {
         """
         Extract up to 3 concrete FORWARD-LOOKING management promises from this excerpt.
+        The excerpt is a quarterly earnings release or an earnings call transcript; guidance often sits under
+        an "Outlook" heading with no named speaker, which is still a management promise.
         Exclude analysts' questions, operators, historical results, vague optimism and market consensus.
         Separate promises with different deadlines. Keep compound targets together only for one deadline.
-        Copy a contiguous verbatim quote with speaker/context, metric, units, period and target (max 650 characters).
+        Copy a contiguous verbatim quote carrying metric, units, period and target, with the speaker when the
+        excerpt names one (max 650 characters).
         Titles must be concise in \(language). Quotes remain in the original language.
         Set numeric=true for ANY numeric business target, even unsupported ones. Do not treat a year alone as a numeric target.
         Targets can only use GAAP company-wide revenue, grossProfit, operatingIncome, netIncome, eps, epsDiluted,
@@ -162,6 +165,19 @@ struct ManagementDeliveryAnalyzer {
         let chunks = transcripts.flatMap { Self.chunks($0) }
         var promises: [ManagementPromise] = []
         var seen = Set<String>()
+        // An earnings release states its guidance in a fixed form, so the
+        // outlook is read by rule before any model sees the text: the promise
+        // then exists even when extraction returns nothing.
+        for document in transcripts {
+            for var promise in ManagementDeliveryRules.guidancePromises(in: document) {
+                let key = document.id + "|" + promise.quote.components(separatedBy: .whitespacesAndNewlines)
+                    .filter { !$0.isEmpty }.joined(separator: " ")
+                guard seen.insert(key).inserted else { continue }
+                promise.sourceID = document.id
+                promise.id = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
+                promises.append(promise)
+            }
+        }
         var rejected = 0
         for (index, chunk) in chunks.enumerated() {
             try Task.checkCancellation()
@@ -193,12 +209,12 @@ struct ManagementDeliveryAnalyzer {
         }
         var warnings = [L10n.text("仅基于已下载资料和 AI 提取的承诺；待验证项目不计为未兑现。"),
                         L10n.text("定性承诺每项检索最多 6 段后续证据；未找到证据不代表没有发生。")]
-        if transcripts.count < archive.requestedQuarters { warnings.append(L10n.text("仅取得 \(transcripts.count) 个季度的文字稿。")) }
+        if transcripts.count < archive.requestedQuarters { warnings.append(L10n.text("仅取得 \(transcripts.count) 个季度的财报新闻稿。")) }
         if total > 40 { warnings.append(L10n.text("共提取 \(total) 项承诺，本次核对最近 40 项。")) }
         if rejected > 0 { warnings.append(L10n.text("\(rejected) 条提取结果无法核对原话，已排除。")) }
         let summary: String
         if assessments.isEmpty {
-            summary = L10n.text("已分析下载的文字稿，未提取到可追踪的明确承诺。")
+            summary = L10n.text("已分析下载的财报新闻稿，未找到可追踪的明确承诺。部分公司只在电话会上口头给出指引，新闻稿中不写。")
         } else {
             await progress(L10n.text("正在本地生成总结…"))
             let counts = ManagementDeliveryStatus.allCases.map { status in

@@ -98,7 +98,7 @@ struct StockChartsRotationView: View {
                 index = endIndex + 1
             }
         }
-        .sheet(isPresented: $showInfo) {
+        .appSheet(isPresented: $showInfo) {
             NavigationStack {
                 List {
                     Text(L10n.text("这张对照图直接展示 StockCharts 返回的 JdK RS-Ratio 和 RS-Momentum，未套用板块轮动 v2 的计算、压缩或标签迟滞。"))
@@ -108,7 +108,7 @@ struct StockChartsRotationView: View {
                     Link(L10n.text("在 StockCharts 查看"), destination: StockChartsRRGResponse.loadURL)
                 }
                 .softTopScrollEdge()
-                .navigationTitle(L10n.text("如何阅读这张图"))
+                .appPageBackground().navigationTitle(L10n.text("如何阅读这张图"))
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { showInfo = false } } }
             }.presentationDetents([.medium, .large])
         }

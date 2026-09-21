@@ -44,6 +44,35 @@ final class HoldingLossTests: XCTestCase {
         XCTAssertEqual(recent.holdingRanks["C"], 2)
     }
 
+    func testPreparedLossRangesPreserveDatesAmountsAndHiddenHoldings() throws {
+        for hidden: Set<String> in [[], ["A", "E", "B"]] {
+            let prepared = try HoldingLossRanges(history: history(), hiding: hidden)
+            for range in ChartTimeRange.allCases {
+                let actual = try XCTUnwrap(prepared[range])
+                let expected = HoldingLossStack(history: history(), range: range, hiding: hidden)
+                XCTAssertEqual(actual.rows.map(\.dateText), expected.rows.map(\.dateText))
+                XCTAssertEqual(actual.rows.map(\.bands), expected.rows.map(\.bands))
+                XCTAssertEqual(actual.rows.map(\.netGain), expected.rows.map(\.netGain))
+                XCTAssertEqual(actual.rows.map(\.losingCount), expected.rows.map(\.losingCount))
+                XCTAssertEqual(actual.bands.map(\.title), expected.bands.map(\.title))
+                XCTAssertEqual(actual.holdingRanks, expected.holdingRanks)
+                XCTAssertEqual(actual.hidden.map(\.ticker), expected.hidden.map(\.ticker))
+            }
+        }
+        let refreshed = try HoldingLossRanges(history: .init(rows: [], costs: [:], names: [:]))
+        XCTAssertTrue(try XCTUnwrap(refreshed[.maximum]).rows.isEmpty)
+    }
+
+    func testPreparedLossRangeLookupPerformance() throws {
+        let prepared = try HoldingLossRanges(history: LossAnalysisChart.demoHistory())
+        let ranges = ChartTimeRange.allCases
+        measure {
+            var count = 0
+            for index in 0..<10_000 { count += prepared[ranges[index % ranges.count]]?.rows.count ?? 0 }
+            XCTAssertGreaterThan(count, 0)
+        }
+    }
+
     func testPromotedLossKeepsItsRankInsteadOfItsReusedColour() {
         let costs = Dictionary(uniqueKeysWithValues: (1...7).map { ("G\($0)", 100.0) })
         let history = HoldingValueHistory(rows: [

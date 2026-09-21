@@ -51,6 +51,10 @@ final class FXImpactTests: XCTestCase {
         let rates = try rates()
         XCTAssertEqual(rates.quote(currency: "GBP", on: "2024-01-02")?.rate, 1)
         XCTAssertEqual(rates.quote(currency: "GBX", on: "2024-01-02")?.rate, 100)
+        XCTAssertEqual(rates.quote(currency: "GBp", on: "2024-01-02")?.rate, 100)
+        XCTAssertEqual(rates.quote(currency: "gbp", on: "2024-01-02")?.rate, 1)
+        XCTAssertEqual(rates.sterling(1250, currency: "GBp", on: "2024-01-02")?.value, 12.5)
+        XCTAssertEqual(rates.sterling(1250, currency: "GBP", on: "2024-01-02")?.value, 1250)
     }
 
     /// A weekend has no rate. The caller still has to value a trade dated on
@@ -124,7 +128,7 @@ final class FXImpactTests: XCTestCase {
                 buy("TEST", "2016-06-23", qty: 100, price: 100, currency: "USD"),
                 buy("TEST", "2020-03-19", qty: 100, price: 100, currency: "USD"),
             ],
-            rates: rates
+            rates: rates, asOf: DayDateCodec.date(from: "2024-01-08")!
         ))
         let second = try XCTUnwrap(FXImpactCalculator.impact(
             ticker: "TEST",
@@ -133,7 +137,7 @@ final class FXImpactTests: XCTestCase {
                 buy("TEST", "2020-03-19", qty: 100, price: 100, currency: "USD"),
                 sell("TEST", "2024-01-05", qty: 100, price: 150, currency: "USD"),
             ],
-            rates: rates
+            rates: rates, asOf: DayDateCodec.date(from: "2024-01-08")!
         ))
         XCTAssertEqual(both.cost, 20_000, accuracy: 0.01)
         XCTAssertEqual(second.cost, 10_000, accuracy: 0.01, "FIFO should retire the 2016 lot")
@@ -173,7 +177,7 @@ final class FXImpactTests: XCTestCase {
         let result = try XCTUnwrap(FXImpactCalculator.impact(
             ticker: "TEST",
             transactions: [buy("TEST", "2024-01-06", qty: 10, price: 100, currency: "USD")],
-            rates: try rates()
+            rates: try rates(), asOf: DayDateCodec.date(from: "2024-01-08")!
         ))
         XCTAssertFalse(result.isExact)
     }

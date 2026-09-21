@@ -234,7 +234,7 @@ struct AIQuestionSecurityPicker: View {
                 }
             }
             .searchable(text: $query, prompt: L10n.text("搜索股票、ETF 或公司名"))
-            .navigationTitle(preset.title)
+            .appPageBackground().navigationTitle(preset.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

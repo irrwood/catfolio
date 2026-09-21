@@ -45,7 +45,7 @@ final class ManagementDeliveryStore {
                 if !refresh, let previous { downloaded = previous }
                 else {
                     downloaded = try await ManagementDeliveryClient().download(ticker: ticker, quarters: quarters,
-                        key: KeychainStore.string(for: LocalServiceKeys.fmp) ?? "", progress: update)
+                                                                               progress: update)
                 }
                 try Task.checkCancellation()
                 // First download survives interruption. A refresh keeps the last
@@ -66,7 +66,6 @@ final class ManagementDeliveryStore {
             } catch {
                 guard generation == token else { return }
                 if let known = error as? ManagementDeliveryError { self.error = known.localizedDescription }
-                else if error is FMPFailure { self.error = L10n.text("请检查 FMP 密钥及电话会文字稿、财报接口权限。") }
                 else { self.error = L10n.text("本地分析未完成，请重试。已有资料和结果已保留。") }
             }
             guard generation == token else { return }
@@ -118,11 +117,11 @@ struct ManagementDeliveryCard: View {
     private var privacyNote: String {
         switch AIProviderPreference.current {
         case .apple:
-            return L10n.text("文字稿与财报在 iPhone 下载、分析和保存，资料不上传服务器。")
+            return L10n.text("财报新闻稿与财报在 iPhone 下载、分析和保存，资料不上传服务器。")
         case .automatic:
-            return L10n.text("文字稿与财报在 iPhone 下载和保存；分析时，文字稿片段会发送给你已连接的云端 AI。没有连接云端 AI 时，才用 Apple 本地模型。")
+            return L10n.text("财报新闻稿与财报在 iPhone 下载和保存；分析时，新闻稿片段会发送给你已连接的云端 AI。没有连接云端 AI 时，才用 Apple 本地模型。")
         case .codex, .deepSeek, .openRouter:
-            return L10n.text("文字稿与财报在 iPhone 下载和保存；分析时，文字稿片段会发送给你在服务商中选择的 AI。")
+            return L10n.text("财报新闻稿与财报在 iPhone 下载和保存；分析时，新闻稿片段会发送给你在服务商中选择的 AI。")
         }
     }
     private var cacheID: String { "\(ticker)|\(quarters)|\(locale.identifier)|\(language)" }
@@ -140,7 +139,7 @@ struct ManagementDeliveryCard: View {
                     ManagementDeliveryResults(report: report, documents: store.archive?.documents ?? [],
                         openSource: { selectedSource = $0 })
                 } else {
-                    Text(L10n.text("核对管理层在电话会中提出的明确承诺，展示原话、后续结果和证据。至少需要 4 个季度的已有文字稿及 FMP 资料权限。"))
+                    Text(L10n.text("核对管理层在季度财报新闻稿中提出的明确承诺，展示原话、后续结果和证据。资料来自 SEC 公开申报，至少需要 4 个季度。"))
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
                 if let archive = store.archive {
@@ -199,7 +198,7 @@ struct ManagementDeliveryCard: View {
             if phase == .background { store.cancel() }
         }
         .onDisappear { store.cancel() }
-        .sheet(item: $selectedSource) { document in ManagementDeliverySourceView(document: document) }
+        .appSheet(item: $selectedSource) { document in ManagementDeliverySourceView(document: document) }
     }
 }
 
@@ -293,13 +292,15 @@ private struct ManagementDeliverySourceView: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     if document.kind == .financials {
-                        Text(L10n.text("以下为 FMP 标准化财报字段，原始申报口径请核对来源。"))
+                        Text(document.url.host?.hasSuffix("sec.gov") == true
+                             ? L10n.text("以下为 SEC 财报中的数字；第四季度由全年减去前三季度得出。")
+                             : L10n.text("以下为 FMP 标准化财报字段，原始申报口径请核对来源。"))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Text(document.text).font(.subheadline).textSelection(.enabled)
                 }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
             }
-            .navigationTitle(L10n.text("来源资料"))
+            .appPageBackground().navigationTitle(L10n.text("来源资料"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { dismiss() } } }
         }

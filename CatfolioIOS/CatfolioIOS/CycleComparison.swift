@@ -6,8 +6,8 @@ import SwiftUI
 ///
 /// Cycles begin on 1 January of a year divisible by their length — the
 /// decade for ten years, as the decennial pattern counts them — so the
-/// current one is part-way through and every earlier one ran its course.
-/// Each is measured from the last close before it began.
+/// current one is part-way through. Portfolio cycles also retain partial
+/// history; complete cycles use the last close before they began.
 struct CycleComparison: Equatable, Sendable {
     struct Point: Equatable, Sendable {
         /// How far through the cycle, from 0 to 1.
@@ -24,7 +24,19 @@ struct CycleComparison: Equatable, Sendable {
         /// The first day of a history that began after the cycle did; the
         /// line is measured from there.
         var joined: String? = nil
+        /// A historical cycle whose available history stops before year-end.
+        var ended: String? = nil
         var id: Int { startYear }
+
+        var isComplete: Bool {
+            !isCurrent && joined == nil && points.first?.fraction == 0 && points.last?.fraction == 1
+        }
+
+        var coverageLabel: String {
+            let since = joined.map { L10n.text("（\(String($0.dropFirst(5))) 起）") } ?? ""
+            let until = ended.map { L10n.text("（截至 \(String($0.dropFirst(5)))）") } ?? ""
+            return since + until
+        }
 
         var title: String {
             length == 1 ? "\(startYear)" : "\(startYear)–\(String(startYear + length - 1).suffix(2))"
@@ -38,14 +50,16 @@ struct CycleComparison: Equatable, Sendable {
 
     var current: Cycle? { cycles.first(where: \.isCurrent) }
 
+    /// Partial years use a different baseline and must not enter the mean.
+    var completePastCycles: [Cycle] { cycles.filter(\.isComplete) }
+
     /// - Parameters:
     ///   - closes: a value by day — closes for an index, the unit value for
     ///     the portfolio.
     ///   - lookback: years before the current cycle a past cycle must start
     ///     within.
-    ///   - allowsLateStart: lets the current cycle begin on the history's
-    ///     first day when there is no close before the cycle — for an
-    ///     account opened part-way through it.
+    ///   - allowsLateStart: retains partial portfolio cycles, starting on
+    ///     the first available day and ending where the history ends.
     static func make(closes: [String: Double], length: Int, lookback: Int, today: Date = Date(),
                      allowsLateStart: Bool = false) -> CycleComparison {
         let dates = closes.keys.sorted()
@@ -81,11 +95,12 @@ struct CycleComparison: Equatable, Sendable {
                startDate.timeIntervalSince(baseDay) <= 10 * 86_400,
                let value = closes[dates[before]], value > 0 {
                 base = value
-            } else if isCurrent, allowsLateStart {
+            } else if allowsLateStart {
                 let firstIndex = (before ?? -1) + 1
                 guard firstIndex < dates.count, dates[firstIndex] <= last,
                       let value = closes[dates[firstIndex]], value > 0,
-                      let firstDay = DayDateCodec.date(from: dates[firstIndex]) else { continue }
+                      let firstDay = DayDateCodec.date(from: dates[firstIndex]),
+                      firstDay >= startDate, firstDay < endDate else { continue }
                 base = value
                 joined = dates[firstIndex]
                 first = firstDay.timeIntervalSince(startDate) / span
@@ -101,20 +116,23 @@ struct CycleComparison: Equatable, Sendable {
                 guard let at = index(onOrBefore: day), let value = closes[dates[at]] else { continue }
                 points.append(Point(fraction: fraction, value: (value / base - 1) * 100))
             }
-            if isCurrent {
+            var ended: String?
+            if isCurrent || allowsLateStart {
                 // The line ends on the latest close, not the last whole step.
                 if let lastDay = DayDateCodec.date(from: last), let value = closes[last] {
                     let fraction = lastDay.timeIntervalSince(startDate) / span
                     if fraction > (points.last?.fraction ?? 0), fraction < 1 {
                         points.append(Point(fraction: fraction, value: (value / base - 1) * 100))
                     }
+                    if !isCurrent, fraction < 1 { ended = last }
                 }
                 guard points.count > 1 else { continue }
             } else {
                 // A past cycle is drawn whole or not at all.
                 guard points.count == steps + 1 else { continue }
             }
-            cycles.append(Cycle(startYear: start, length: length, points: points, isCurrent: isCurrent, joined: joined))
+            cycles.append(Cycle(startYear: start, length: length, points: points, isCurrent: isCurrent,
+                                joined: joined, ended: ended))
         }
         return CycleComparison(cycles: cycles)
     }
@@ -206,19 +224,20 @@ struct CycleComparisonView: View {
                                               allowsLateStart: subject == .portfolio)
         let past = comparison.cycles.filter { !$0.isCurrent }
         var lines = past.enumerated().map { index, cycle in
-            Line(id: "\(cycle.startYear)", title: cycle.title, cycle: cycle,
+            Line(id: "\(cycle.startYear)", title: cycle.title + cycle.coverageLabel, cycle: cycle,
                  color: Self.palette[(past.count - 1 - index) % Self.palette.count], isNow: false)
         }
         // The earlier years' mean at each point of the year: the shape the
         // year has taken on average.
-        if past.count > 1 {
+        let complete = comparison.completePastCycles
+        if complete.count > 1 {
             let points = (0...CycleComparison.steps).map { step in
-                let values = past.compactMap { $0.points.indices.contains(step) ? $0.points[step].value : nil }
+                let values = complete.map { $0.points[step].value }
                 return CycleComparison.Point(fraction: Double(step) / Double(CycleComparison.steps),
                                              value: values.reduce(0, +) / Double(max(values.count, 1)))
             }
             let average = CycleComparison.Cycle(startYear: 0, length: 1, points: points, isCurrent: false)
-            lines.append(Line(id: Self.averageLineID, title: L10n.text("\(past.count) 年均值"), cycle: average,
+            lines.append(Line(id: Self.averageLineID, title: L10n.text("\(complete.count) 年均值"), cycle: average,
                               color: Self.averageColor, isNow: false, dash: [6, 4]))
         }
         if let current = comparison.current {
@@ -237,8 +256,7 @@ struct CycleComparisonView: View {
     }
 
     private func portfolioLine(_ cycle: CycleComparison.Cycle) -> Line {
-        let since = cycle.joined.map { L10n.text("（\(String($0.dropFirst(5))) 起）") } ?? ""
-        return Line(id: Self.portfolioLineID, title: L10n.text("MY") + since, cycle: cycle,
+        return Line(id: Self.portfolioLineID, title: L10n.text("MY") + cycle.coverageLabel, cycle: cycle,
                     color: Self.portfolioColor, isNow: true)
     }
 
@@ -297,6 +315,12 @@ struct CycleComparisonView: View {
             await load(subject)
             // The portfolio's line is drawn on every index.
             if subject != .portfolio { await load(.portfolio) }
+        }
+        .onChange(of: model.comparisonRevision) { _, _ in
+            updatePortfolioHistory()
+        }
+        .onChange(of: model.isReturnsLoading) { _, isLoading in
+            if !isLoading { updatePortfolioHistory() }
         }
         .sensoryFeedback(.selection, trigger: hidden) { _, _ in hapticsEnabled }
     }
@@ -567,14 +591,15 @@ struct CycleComparisonView: View {
             ? L10n.text("我的组合按每日 TWR 计算。")
             : L10n.text("指数为价格指数，不含股息；我的组合按每日 TWR 计算。")
         return basis + L10n.text("每条线是一个自然年，从上一年最后一个收盘价起计涨跌；横轴为 1–12 月。")
+            + L10n.text("组合历史不足一年的部分按实际日期展示，缺少年初基准时从首日归零；多年均值只包含完整年份。")
     }
 
     // MARK: Loading
 
     private func load(_ subject: Subject) async {
-        guard histories[subject] == nil else { return }
         failures[subject] = nil
         if let symbol = subject.symbol {
+            guard histories[subject] == nil else { return }
             let today = DayDateCodec.string(from: Date())
             let fetched = await LocalMarketDataClient().historicalCloses(symbols: [symbol], from: Self.historyStart, to: today)
             guard !Task.isCancelled else { return }
@@ -591,6 +616,13 @@ struct CycleComparisonView: View {
             await model.refreshReturns()
         }
         guard !Task.isCancelled else { return }
+        updatePortfolioHistory()
+    }
+
+    /// The returns page may finish rebuilding after this page has opened.
+    /// Replace the local copy on every revision, including an empty result
+    /// after an account change, so the previous account cannot linger.
+    private func updatePortfolioHistory() {
         var closes: [String: Double] = [:]
         if let comparison = model.comparison, let dates = comparison.twrDates, let navs = comparison.twrPortfolio {
             for (date, nav) in zip(dates, navs) {
@@ -598,9 +630,11 @@ struct CycleComparisonView: View {
             }
         }
         if closes.count > 1 {
-            histories[subject] = closes
+            histories[.portfolio] = closes
+            failures[.portfolio] = nil
         } else {
-            failures[subject] = L10n.text("还没有可用的组合收益历史。")
+            histories[.portfolio] = nil
+            failures[.portfolio] = model.isReturnsLoading ? nil : L10n.text("还没有可用的组合收益历史。")
         }
     }
 }

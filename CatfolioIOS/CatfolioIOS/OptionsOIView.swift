@@ -544,7 +544,7 @@ struct OptionsOIView: View {
         // The page's own refresh is this section's refresh: the design has no
         // button of its own, and one request per tap is still the rule.
         .onChange(of: refreshRevision) { _, _ in if supported { refreshID += 1 } }
-        .sheet(isPresented: $showsWalls) {
+        .appSheet(isPresented: $showsWalls) {
             if let snapshot { wallsDetail(OIDistribution(contracts: snapshot.contracts, currentPrice: price)) }
         }
         .alert(L10n.text("OI 计算口径"), isPresented: $showsInfo) {
@@ -825,7 +825,7 @@ struct OptionsOIView: View {
                         }
                     }
                 }
-            }.softTopScrollEdge().navigationTitle(L10n.text("全部墙位"))
+            }.softTopScrollEdge().appPageBackground().navigationTitle(L10n.text("全部墙位"))
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { showsWalls = false } } }
         }
     }

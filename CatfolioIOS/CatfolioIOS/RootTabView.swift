@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct RootTabView: View {
+    @Environment(AppModel.self) private var model
     @Environment(\.locale) private var appLocale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private enum TabBarMetrics {
@@ -39,7 +40,7 @@ struct RootTabView: View {
         let initialSelection: Destination
         if arguments.contains("--show-returns-page") || arguments.contains("--show-heatmap") {
             initialSelection = .returns
-        } else if arguments.contains("--show-research-tab") || arguments.contains("--show-policy-composer") {
+        } else if arguments.contains("--show-research-tab") || arguments.contains("--show-policy-composer") || arguments.contains("--show-dca") {
             initialSelection = .research
         } else if arguments.contains("--show-settings") || showsLocalServiceRoute {
             initialSelection = .settings
@@ -62,6 +63,12 @@ struct RootTabView: View {
             .sensoryFeedback(.selection, trigger: selection) { _, _ in hapticsEnabled }
             // Have the assistant's conversations in memory before it is opened.
             .task { await LocalChatLibraryCache.warm() }
+            // A new IBKR account whose first report was still being built
+            // when the app closed: pick the wait up again once the accounts
+            // are loaded.
+            .task(id: model.accounts.contains { $0.id == IBKRFlexKeys.pendingAccountID }) {
+                IBKRFirstSync.shared.startIfNeeded(model: model)
+            }
             #if DEBUG
             // Opens the assistant as the AI button does, for recording it.
             .task {
@@ -72,6 +79,17 @@ struct RootTabView: View {
             .task {
                 guard LaunchArguments.contains("--probe-news") else { return }
                 await NewsSourceHub.probe()
+            }
+            // Prints exactly what JEV 今日关注 would send for each holding.
+            .task(id: model.holdings.count) {
+                guard LaunchArguments.contains("--dump-jev-state"), !model.holdings.isEmpty else { return }
+                let started = Date()
+                let (facts, _) = await JEVRunner().gather(model.holdings)
+                print("[jev-state] gathered \(facts.count) holdings in \(String(format: "%.1f", Date().timeIntervalSince(started)))s")
+                for (holding, fact) in facts {
+                    let data = (try? JSONSerialization.data(withJSONObject: fact.state, options: [.sortedKeys])) ?? Data()
+                    print("[jev-state] \(holding.ticker) \(String(decoding: data, as: UTF8.self))")
+                }
             }
             #endif
     }

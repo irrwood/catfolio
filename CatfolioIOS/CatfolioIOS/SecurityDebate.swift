@@ -46,14 +46,14 @@ extension SecurityDebate {
 
 /// Discovery feeds are only leads. Generation requires separately fetched body text.
 struct SecurityDebateResearch {
-    /// SEC asks callers to identify themselves, and its edge rejects a
-    /// User-Agent containing a URL — the obvious "Catfolio/1.0 (+https://…)"
-    /// returns 403 while the bare name and version returns 200. Name and
-    /// version it is, which identifies the caller without putting anybody's
-    /// address into a third-party request header.
+    /// SEC asks callers to identify themselves as a name and a contact email
+    /// (sec.gov/os/accessing-edgar-data), and its edge rejects a User-Agent
+    /// containing a URL — "Catfolio/1.0 (+https://…)" returns 403. Every SEC
+    /// request in the app uses this one, with the maintainer's address as the
+    /// owner chose, so SEC can reach someone about the traffic.
     let language: String = ContentLanguage.current
 
-    static let userAgent = "Catfolio/1.0"
+    static let userAgent = "Catfolio irrwood@gmail.com"
 
     private static let session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral

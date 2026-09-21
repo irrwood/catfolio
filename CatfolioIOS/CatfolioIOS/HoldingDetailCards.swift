@@ -124,38 +124,21 @@ struct HoldingDetailGlassCardModifier: ViewModifier {
         RoundedRectangle(cornerRadius: HoldingDetailCardStyle.cornerRadius, style: .continuous)
     }
 
-    /// What the glass sees through it: one colour, drawn under the card.
-    /// The sheet's ground runs from blue-grey to black down the screen, and
-    /// glass laid straight on it carried that into every tall card as a
-    /// gradient — one that also shifted as the page scrolled. On an even
-    /// backdrop the glass keeps its rim and depth and loses the gradient.
+    /// One even colour under the card. The sheet's ground runs from
+    /// blue-grey to black down the screen; the card's translucent surface
+    /// laid straight on it carried that into every tall card as a gradient
+    /// that also shifted as the page scrolled.
     private var backdrop: Color {
         colorScheme == .dark
             ? Color(red: 10 / 255, green: 11 / 255, blue: 13 / 255)
             : Color(red: 0xF6 / 255, green: 0xF7 / 255, blue: 0xF8 / 255)
     }
 
-    private var fallbackFill: Color {
-        colorScheme == .dark
-            ? Color(red: 24 / 255, green: 25 / 255, blue: 26 / 255)
-            : .white
-    }
-
-    private var borderColor: Color {
-        colorScheme == .dark ? .white.opacity(0.08) : .black.opacity(0.06)
-    }
-
     @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content
-                .softShadowGlass(in: shape)
-                .background(backdrop, in: shape)
-        } else {
-            content
-                .background(fallbackFill, in: shape)
-                .overlay { shape.strokeBorder(borderColor, lineWidth: 1) }
-        }
+        content
+            .cardSurface(in: shape)
+            .background(backdrop, in: shape)
     }
 }
 

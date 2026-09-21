@@ -337,7 +337,7 @@ struct SettingsPage<Content: View>: View {
             .background(NavigationBarScrollAnchor().accessibilityHidden(true))
         }
         .scrollContentBackground(.hidden)
-        .background(SettingsTemplate.pageBackground)
+        .appPageBackground(SettingsTemplate.pageBackground)
         // Every settings page has a bar over it — the tab's large title or a
         // pushed page's — so the page container carries the soft edge once.
         .softTopScrollEdge()

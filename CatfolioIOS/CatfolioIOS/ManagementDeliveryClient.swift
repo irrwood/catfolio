@@ -48,178 +48,269 @@ actor ManagementDeliveryFiles {
     }
 }
 
+/// Management delivery reads SEC's public filings only: each quarter's
+/// earnings release for what management said, and the company's statements
+/// for what followed. No key, no paid feed, and nothing a provider can
+/// withdraw.
 struct ManagementDeliveryClient {
-    typealias Fetch = @Sendable (URLRequest) async throws -> (Data, HTTPURLResponse)
-    let fetch: Fetch
-
-    init(fetch: @escaping Fetch = { request in
-        let config = URLSessionConfiguration.ephemeral
-        config.urlCache = nil
-        config.httpCookieStorage = nil
-        let session = URLSession(configuration: config)
-        defer { session.invalidateAndCancel() }
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
-        return (data, http)
-    }) { self.fetch = fetch }
-
-    struct TranscriptDate: Decodable, Sendable {
-        let quarter: Int
-        let fiscalYear: Int
-        let date: String
-
-        enum CodingKeys: String, CodingKey { case quarter, fiscalYear, year, date }
-        init(quarter: Int, fiscalYear: Int, date: String) { self.quarter = quarter; self.fiscalYear = fiscalYear; self.date = date }
-        init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: CodingKeys.self)
-            func integer(_ key: CodingKeys) throws -> Int {
-                if let number = try? c.decode(Int.self, forKey: key) { return number }
-                let string = try c.decode(String.self, forKey: key)
-                guard let value = Int(string.replacingOccurrences(of: "Q", with: "")) else { throw LocalServiceError.invalidResponse }
-                return value
-            }
-            quarter = try integer(.quarter)
-            fiscalYear = try c.contains(.fiscalYear) ? integer(.fiscalYear) : integer(.year)
-            date = try c.decode(String.self, forKey: .date)
-        }
-    }
-
-    struct Transcript: Decodable {
-        let symbol: String
-        let quarter: Int
-        let year: Int
-        let date: String
-        let content: String
-    }
-
-    static func selectedDates(_ dates: [TranscriptDate], quarters: Int, now: Date) -> [TranscriptDate] {
-        guard [4, 6, 8].contains(quarters) else { return [] }
-        var seen = Set<String>()
-        return Array(dates.filter {
-            (1...4).contains($0.quarter) && (1990...2100).contains($0.fiscalYear)
-                && ManagementDeliveryRules.isoDate($0.date).map { $0 <= ManagementDeliveryRules.today(now) } == true
-        }.sorted { $0.date > $1.date }.filter { seen.insert("\($0.fiscalYear)-\($0.quarter)").inserted }.prefix(quarters))
-    }
-
-    static func sourceURL(path: String, parameters: [URLQueryItem]) -> URL {
-        var components = URLComponents(string: "https://financialmodelingprep.com/stable/\(path)")!
-        components.queryItems = parameters.filter { $0.name != "apikey" }
-        return components.url!
-    }
-
-    private func get(_ path: String, parameters: [URLQueryItem], key: String) async throws -> Data {
-        var parts = URLComponents(url: Self.sourceURL(path: path, parameters: parameters), resolvingAgainstBaseURL: false)!
-        parts.queryItems = parameters + [URLQueryItem(name: "apikey", value: key)]
-        var request = URLRequest(url: parts.url!)
-        request.httpMethod = "GET"
-        request.timeoutInterval = 40
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        try await FMPRequestLimiter.shared.waitForTurn()
-        let (data, response): (Data, HTTPURLResponse)
-        do { (data, response) = try await fetch(request) }
-        catch is CancellationError { throw CancellationError() }
-        catch { // Never reflect a credential-bearing request URL or response body into UI/cache.
-            try Task.checkCancellation()
-            throw ManagementDeliveryError.message(L10n.text("资料下载失败，请检查网络后重试。"))
-        }
-        if response.statusCode == 429 {
-            await FMPRequestLimiter.shared.backOff(retryAfter: response.value(forHTTPHeaderField: "Retry-After"))
-            throw ManagementDeliveryError.message(L10n.text("资料服务限流，请稍后重试。"))
-        }
-        if [401, 402, 403].contains(response.statusCode) {
-            throw ManagementDeliveryError.message(L10n.text("请检查 FMP 密钥及电话会文字稿、财报接口权限。"))
-        }
-        guard (200..<300).contains(response.statusCode), data.count <= 15_000_000 else {
-            throw ManagementDeliveryError.message(L10n.text("资料服务返回异常，未更新本地结果。"))
-        }
-        return data
-    }
-
-    func download(ticker: String, quarters: Int, key: String, now: Date = .now,
+    func download(ticker: String, quarters: Int, now: Date = .now,
                   progress: @escaping @Sendable (String) async -> Void) async throws -> ManagementDeliveryArchive {
         guard [4, 6, 8].contains(quarters) else { throw LocalServiceError.invalidResponse }
-        guard !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw FMPFailure.missingKey }
+        return try await downloadFromSEC(ticker: ticker, quarters: quarters, now: now, progress: progress)
+    }
+}
+
+// MARK: - SEC route
+
+/// The archive from SEC's public filings. Each quarter's
+/// earnings release — the 8-K filed under Item 2.02, exhibit 99.1 — stands in
+/// for the call transcript: it carries management's own account of the
+/// quarter and, usually, the outlook for the next. The reported figures come
+/// from the company's statements in SEC Company Facts.
+extension ManagementDeliveryClient {
+    struct FiscalQuarter: Hashable, Comparable {
+        let year: Int
+        let quarter: Int
+        var ordinal: Int { year * 4 + quarter }
+        static func < (lhs: Self, rhs: Self) -> Bool { lhs.ordinal < rhs.ordinal }
+        func advanced(by steps: Int) -> FiscalQuarter {
+            let next = ordinal + steps
+            let quarter = ((next - 1) % 4 + 4) % 4 + 1
+            return FiscalQuarter(year: (next - quarter) / 4, quarter: quarter)
+        }
+    }
+
+    /// Each statement period's place in the company's own fiscal calendar:
+    /// a fiscal year is named for the year it ends in, and a quarter belongs
+    /// to the fiscal year that ends next after it.
+    static func fiscalCalendar(_ income: [IncomeStatementPeriod]) -> [String: FiscalQuarter] {
+        let annualEnds = income.filter { $0.kind == .annual }.map(\.periodEnd).sorted()
+        var result: [String: FiscalQuarter] = [:]
+        for end in annualEnds { result[end] = FiscalQuarter(year: Int(end.prefix(4)) ?? 0, quarter: 4) }
+        guard let latestAnnual = annualEnds.last, let latestDate = DayDateCodec.date(from: latestAnnual) else { return result }
+        for period in income where period.kind == .quarterly {
+            guard let end = DayDateCodec.date(from: period.periodEnd) else { continue }
+            // The fiscal year this quarter falls in ends at the first annual
+            // end after it; past the latest one, a year after that.
+            let nextAnnual = annualEnds.compactMap(DayDateCodec.date(from:)).first { $0 >= end }
+                ?? Calendar(identifier: .gregorian).date(byAdding: .year,
+                    value: Int((end.timeIntervalSince(latestDate) / (365.25 * 86_400)).rounded(.up)), to: latestDate)
+                ?? end
+            let yearStart = Calendar(identifier: .gregorian).date(byAdding: .year, value: -1, to: nextAnnual) ?? end
+            let quarter = min(3, max(1, Int((end.timeIntervalSince(yearStart) / (91.3 * 86_400)).rounded())))
+            result[period.periodEnd] = FiscalQuarter(year: Calendar(identifier: .gregorian).component(.year, from: nextAnnual),
+                                                     quarter: quarter)
+        }
+        return result
+    }
+
+    /// The fiscal quarter an earnings release filed on `filed` reports: the
+    /// latest known period ending before it, stepped forward a quarter at a
+    /// time when the release is about a period not in the statements yet
+    /// (a fourth-quarter release comes weeks before the annual report).
+    static func quarterReported(filed: String, calendar: [String: FiscalQuarter]) -> FiscalQuarter? {
+        guard let filedDate = DayDateCodec.date(from: filed),
+              let (end, quarter) = calendar.filter({ $0.key < filed }).max(by: { $0.key < $1.key }),
+              let endDate = DayDateCodec.date(from: end) else { return nil }
+        let days = filedDate.timeIntervalSince(endDate) / 86_400
+        // Releases come three to ten weeks after the quarter closes.
+        let steps = max(0, Int(((days - 20) / 91.3).rounded(.down)))
+        return quarter.advanced(by: steps)
+    }
+
+    private struct Submissions: Decodable {
+        struct Recent: Decodable {
+            let accessionNumber: [String]
+            let filingDate: [String]
+            let form: [String]
+            let items: [String]
+            let primaryDocument: [String]
+        }
+        struct Filings: Decodable { let recent: Recent }
+        let filings: Filings
+    }
+
+    /// A press-release exhibit as plain text. The news reader's extractor
+    /// looks for an article or a filing's cover wording and finds neither in
+    /// an exhibit, so this strips the markup directly.
+    static func exhibitText(_ html: String) -> String? {
+        var text = html
+            .replacingOccurrences(of: "(?s)<(script|style|head)\\b[^>]*>.*?</\\1>", with: " ", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: "(?i)<(br|/p|/div|/tr|/li|/h[1-6])\\b[^>]*>", with: "\n", options: .regularExpression)
+            .replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+        let named = ["&nbsp;": " ", "&amp;": "&", "&quot;": "\"", "&#39;": "'", "&apos;": "'", "&lt;": "<", "&gt;": ">",
+                     "&mdash;": "—", "&ndash;": "–", "&rsquo;": "’", "&lsquo;": "‘", "&ldquo;": "“", "&rdquo;": "”", "&bull;": "•"]
+        for (entity, character) in named { text = text.replacingOccurrences(of: entity, with: character) }
+        if let regex = try? NSRegularExpression(pattern: "&#(x?)([0-9a-fA-F]+);") {
+            let source = text as NSString
+            var result = ""
+            var last = 0
+            for match in regex.matches(in: text, range: NSRange(location: 0, length: source.length)) {
+                result += source.substring(with: NSRange(location: last, length: match.range.location - last))
+                let isHex = source.substring(with: match.range(at: 1)) == "x"
+                let digits = source.substring(with: match.range(at: 2))
+                if let code = UInt32(digits, radix: isHex ? 16 : 10), let scalar = Unicode.Scalar(code) {
+                    result.unicodeScalars.append(scalar)
+                }
+                last = match.range.location + match.range.length
+            }
+            result += source.substring(from: last)
+            text = result
+        }
+        let lines = text.components(separatedBy: "\n")
+            .map { SecurityDebateResearch.normalized($0) }
+            .filter { !$0.isEmpty }
+        let joined = lines.joined(separator: "\n")
+        return joined.count >= 500 ? String(joined.prefix(60_000)) : nil
+    }
+
+    /// The path of exhibit 99.1 — or failing that the first exhibit 99 — in
+    /// an EDGAR filing index page.
+    static func exhibitPath(inIndex html: String) -> String? {
+        let rows = html.components(separatedBy: "<tr").dropFirst()
+        func path(in row: String) -> String? {
+            guard let range = row.range(of: "href=\"([^\"]+)\"", options: .regularExpression) else { return nil }
+            let href = String(row[range]).dropFirst(6).dropLast()
+            return href.replacingOccurrences(of: "/ix?doc=", with: "")
+        }
+        let exhibits = rows.filter { $0.contains(">EX-99") }
+        let preferred = exhibits.first { $0.contains(">EX-99.1<") || $0.contains(">EX-99.01<") } ?? exhibits.first
+        return preferred.flatMap(path(in:))
+    }
+
+    func downloadFromSEC(ticker: String, quarters: Int, now: Date,
+                         progress: @escaping @Sendable (String) async -> Void) async throws -> ManagementDeliveryArchive {
         let symbol = ticker.uppercased()
-        let params = [URLQueryItem(name: "symbol", value: symbol)]
-        await progress(L10n.text("正在查询已有电话会文字稿…"))
-        let datesData = try await get("earning-call-transcript-dates", parameters: params, key: key)
-        let dates = Self.selectedDates(try JSONDecoder().decode([TranscriptDate].self, from: datesData), quarters: quarters, now: now)
-        guard dates.count >= 4 else {
-            throw ManagementDeliveryError.message(L10n.text("可用电话会文字稿不足 4 个季度，暂无法生成兑现记录。"))
+        await progress(L10n.text("正在读取 SEC 财报…"))
+        let financials: CompanyFinancialsData
+        do { financials = try await CompanyFinancialsClient.shared.load(ticker: symbol) }
+        catch { throw ManagementDeliveryError.message(L10n.text("SEC 暂未返回这家公司的财报，请稍后重试。")) }
+        guard let cik = financials.cik else {
+            throw ManagementDeliveryError.message(L10n.text("SEC 暂未返回这家公司的财报，请稍后重试。"))
         }
-        // Reject quarter gaps: four scattered old transcripts are not the latest four quarters.
-        let ordinals = dates.map { $0.fiscalYear * 4 + $0.quarter }.sorted()
+        let calendar = Self.fiscalCalendar(financials.income)
+        let language = ContentLanguage.current
+
+        await progress(L10n.text("正在查找财报新闻稿…"))
+        let submissionsURL = URL(string: "https://data.sec.gov/submissions/CIK\(String(format: "%010d", cik)).json")!
+        guard let submissionsData = await SecurityDebateResearch.get(submissionsURL, language: language),
+              let submissions = try? JSONDecoder().decode(Submissions.self, from: submissionsData) else {
+            throw ManagementDeliveryError.message(L10n.text("SEC 公告列表暂时读取失败，请稍后重试。"))
+        }
+        let recent = submissions.filings.recent
+        let today = ManagementDeliveryRules.today(now)
+        // Each Item 2.02 8-K, newest first, one per fiscal quarter.
+        var releases: [(quarter: FiscalQuarter, filed: String, accession: String, primary: String)] = []
+        var seen = Set<FiscalQuarter>()
+        for index in recent.form.indices where index < recent.items.count && index < recent.filingDate.count {
+            guard recent.form[index] == "8-K", recent.items[index].contains("2.02"),
+                  recent.filingDate[index] <= today,
+                  let quarter = Self.quarterReported(filed: recent.filingDate[index], calendar: calendar),
+                  seen.insert(quarter).inserted else { continue }
+            releases.append((quarter, recent.filingDate[index], recent.accessionNumber[index], recent.primaryDocument[index]))
+            if releases.count == quarters { break }
+        }
+        guard releases.count >= 4 else {
+            throw ManagementDeliveryError.message(L10n.text("SEC 上可用的财报新闻稿不足 4 个季度，暂无法生成兑现记录。"))
+        }
+        let ordinals = releases.map(\.quarter.ordinal).sorted()
         guard zip(ordinals, ordinals.dropFirst()).allSatisfy({ $1 - $0 == 1 }) else {
-            throw ManagementDeliveryError.message(L10n.text("最近季度的文字稿存在缺口，暂无法生成完整记录。"))
+            throw ManagementDeliveryError.message(L10n.text("最近季度的财报新闻稿存在缺口，暂无法生成完整记录。"))
         }
+
         var documents: [ManagementDocument] = []
-        for (index, date) in dates.enumerated() {
+        for (number, release) in releases.enumerated() {
             try Task.checkCancellation()
-            await progress(L10n.text("下载文字稿 \(index + 1) / \(dates.count)"))
-            let query = params + [URLQueryItem(name: "year", value: String(date.fiscalYear)), URLQueryItem(name: "quarter", value: String(date.quarter))]
-            let data = try await get("earning-call-transcript", parameters: query, key: key)
-            let rows = try JSONDecoder().decode([Transcript].self, from: data)
-            guard let row = rows.first(where: { $0.symbol.uppercased() == symbol && $0.year == date.fiscalYear && $0.quarter == date.quarter }),
-                  let published = ManagementDeliveryRules.isoDate(row.date), published <= ManagementDeliveryRules.today(now),
-                  row.content.trimmingCharacters(in: .whitespacesAndNewlines).count >= 500 else {
-                throw ManagementDeliveryError.message(L10n.text("文字稿正文缺失或季度不匹配，未更新本地结果。"))
+            await progress(L10n.text("下载财报新闻稿 \(number + 1) / \(releases.count)"))
+            let folder = "https://www.sec.gov/Archives/edgar/data/\(cik)/\(release.accession.replacingOccurrences(of: "-", with: ""))/"
+            // The filing's index page names each document's type; the release
+            // is exhibit 99.1, whatever the company called the file.
+            var url = URL(string: folder + release.primary)
+            if let indexData = await SecurityDebateResearch.get(URL(string: folder + "\(release.accession)-index.htm")!, language: language),
+               let path = Self.exhibitPath(inIndex: String(decoding: indexData, as: UTF8.self)) {
+                url = URL(string: "https://www.sec.gov" + path)
             }
-            documents.append(.init(id: "call-\(row.year)-Q\(row.quarter)", kind: .transcript,
-                fiscalYear: row.year, period: "Q\(row.quarter)", published: published,
-                title: "\(symbol) FY\(row.year) Q\(row.quarter) · FMP",
-                url: Self.sourceURL(path: "earning-call-transcript", parameters: query), text: row.content, facts: []))
-        }
-        await progress(L10n.text("正在下载对应财报…"))
-        for path in ["income-statement", "cash-flow-statement"] {
-            for period in ["quarter", "annual"] {
-                try Task.checkCancellation()
-                let query = params + [URLQueryItem(name: "period", value: period), URLQueryItem(name: "limit", value: period == "quarter" ? String(quarters) : "3")]
-                let data = try await get(path, parameters: query, key: key)
-                documents += try Self.financialDocuments(data, symbol: symbol, path: path,
-                    sourceURL: Self.sourceURL(path: path, parameters: query), now: now)
+            guard let url,
+                  let html = await SecurityDebateResearch.get(url, language: language),
+                  let text = Self.exhibitText(String(decoding: html, as: UTF8.self)),
+                  text.count >= 500 else {
+                throw ManagementDeliveryError.message(L10n.text("财报新闻稿正文缺失，未更新本地结果。"))
             }
+            let quarter = release.quarter
+            documents.append(.init(id: "release-\(quarter.year)-Q\(quarter.quarter)", kind: .transcript,
+                fiscalYear: quarter.year, period: "Q\(quarter.quarter)", published: release.filed,
+                title: "\(symbol) FY\(quarter.year) Q\(quarter.quarter) · SEC 8-K", url: url,
+                text: String(text.prefix(60_000)), facts: []))
         }
-        // Annual reports support full-year guidance; restrict their dates to the
-        // selected transcript window rather than analysing unrelated history.
+
+        await progress(L10n.text("正在整理对应财报…"))
+        documents += Self.secFinancialDocuments(financials, calendar: calendar, symbol: symbol, cik: cik, today: today)
         let earliest = documents.filter { $0.kind == .transcript }.map(\.published).min()!
         documents = documents.filter { $0.kind == .transcript || $0.published >= earliest }
-        var documentIDs = Set<String>()
-        documents = documents.filter { documentIDs.insert($0.id).inserted }
         guard documents.contains(where: { $0.kind == .financials && !$0.facts.isEmpty }) else {
-            throw ManagementDeliveryError.message(L10n.text("未取得可核对的财报，请检查资料权限后重试。"))
+            throw ManagementDeliveryError.message(L10n.text("未取得可核对的财报，请稍后重试。"))
         }
         return .init(ticker: symbol, downloadedAt: now, requestedQuarters: quarters, documents: documents, report: nil)
     }
 
-    static func financialDocuments(_ data: Data, symbol: String, path: String, sourceURL: URL, now: Date) throws -> [ManagementDocument] {
-        guard let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { throw LocalServiceError.invalidResponse }
-        let metrics = path == "income-statement"
-            ? ["revenue", "grossProfit", "operatingIncome", "netIncome", "eps", "epsDiluted"]
-            : ["operatingCashFlow", "freeCashFlow", "capitalExpenditure"]
-        return rows.compactMap { row in
-            guard (row["symbol"] as? String)?.uppercased() == symbol,
-                  let end = (row["date"] as? String).flatMap(ManagementDeliveryRules.isoDate),
-                  let published = ((row["filingDate"] ?? row["fillingDate"] ?? row["acceptedDate"]) as? String).flatMap(ManagementDeliveryRules.isoDate),
-                  published <= ManagementDeliveryRules.today(now),
-                  let period = row["period"] as? String, ["Q1", "Q2", "Q3", "Q4", "FY"].contains(period),
-                  let year = (row["fiscalYear"] as? Int) ?? Int(row["fiscalYear"] as? String ?? ""),
-                  let currency = row["reportedCurrency"] as? String, !currency.isEmpty else { return nil }
-            let raw = try? JSONSerialization.data(withJSONObject: row, options: [.sortedKeys])
-            let revision = SHA256.hash(data: raw ?? Data()).prefix(8).map { String(format: "%02x", $0) }.joined()
-            let id = "\(path)-\(year)-\(period)-\(published)-\(revision)"
-            let facts: [ManagementFact] = metrics.compactMap { metric in
-                guard let value = row[metric] as? NSNumber, CFGetTypeID(value) != CFBooleanGetTypeID(), value.doubleValue.isFinite else { return nil }
-                let quote = "\(metric): \(value.stringValue) \(currency); GAAP company; FY\(year) \(period); period ending \(end)."
-                return .init(id: "\(id)-\(metric)", metric: metric, fiscalYear: year, period: period, periodEnd: end,
-                    currency: currency, value: value.doubleValue, sourceID: id, quote: quote)
-            }
-            let originalURL = ["finalLink", "link"].compactMap { row[$0] as? String }.compactMap(URL.init(string:))
-                .first { $0.scheme == "https" && $0.user == nil && $0.password == nil && $0.query == nil }
-            return .init(id: id, kind: .financials, fiscalYear: year, period: period, published: published,
-                title: "\(symbol) FY\(year) \(period) · \(path)", url: originalURL ?? sourceURL,
-                text: facts.map(\.quote).joined(separator: "\n"), facts: facts,
-                rawFinancialJSON: raw)
+    /// One document per fiscal period, holding the reported figures the rule
+    /// engine checks targets against. Fourth quarters are the year less its
+    /// first three, since SEC carries no standalone Q4.
+    static func secFinancialDocuments(_ data: CompanyFinancialsData, calendar: [String: FiscalQuarter],
+                                      symbol: String, cik: Int, today: String) -> [ManagementDocument] {
+        struct Row { var values: [String: Double] = [:]; var end = ""; var filed = ""; var currency = "USD" }
+        var rows: [String: Row] = [:] // "year|period"
+        func key(_ quarter: FiscalQuarter, annual: Bool) -> String { "\(quarter.year)|\(annual ? "FY" : "Q\(quarter.quarter)")" }
+        func add(_ key: String, _ metric: String, _ value: Double?, end: String, filed: String?, currency: String) {
+            guard let value, value.isFinite else { return }
+            var row = rows[key] ?? Row()
+            row.values[metric] = value
+            row.end = end
+            row.filed = max(row.filed, filed ?? end)
+            row.currency = currency
+            rows[key] = row
         }
+        for period in data.income {
+            guard let quarter = calendar[period.periodEnd] else { continue }
+            let k = key(quarter, annual: period.kind == .annual)
+            add(k, "revenue", period.revenue, end: period.periodEnd, filed: period.filedDate, currency: period.currency)
+            add(k, "grossProfit", period.grossProfit, end: period.periodEnd, filed: period.filedDate, currency: period.currency)
+            add(k, "operatingIncome", period.operatingIncome, end: period.periodEnd, filed: period.filedDate, currency: period.currency)
+            add(k, "netIncome", period.netIncome, end: period.periodEnd, filed: period.filedDate, currency: period.currency)
+        }
+        for period in data.cashFlow {
+            guard let quarter = calendar[period.periodEnd] else { continue }
+            let k = key(quarter, annual: period.kind == .annual)
+            add(k, "operatingCashFlow", period.operatingCashFlow, end: period.periodEnd, filed: period.filedDate, currency: period.currency)
+            add(k, "freeCashFlow", period.freeCashFlow, end: period.periodEnd, filed: period.filedDate, currency: period.currency)
+        }
+        // Q4 = FY − Q1 − Q2 − Q3, metric by metric, where all four are known.
+        for (fyKey, fy) in rows where fyKey.hasSuffix("|FY") {
+            let year = fyKey.split(separator: "|")[0]
+            let quarters = (1...3).compactMap { rows["\(year)|Q\($0)"] }
+            guard quarters.count == 3, rows["\(year)|Q4"] == nil else { continue }
+            var q4 = Row(end: fy.end, filed: fy.filed, currency: fy.currency)
+            for (metric, total) in fy.values {
+                let parts = quarters.compactMap { $0.values[metric] }
+                if parts.count == 3 { q4.values[metric] = total - parts.reduce(0, +) }
+            }
+            if !q4.values.isEmpty { rows["\(year)|Q4"] = q4 }
+        }
+        let source = URL(string: "https://data.sec.gov/api/xbrl/companyfacts/CIK\(String(format: "%010d", cik)).json")!
+        return rows.compactMap { key, row in
+            let parts = key.split(separator: "|")
+            guard let year = Int(parts[0]), let published = ManagementDeliveryRules.isoDate(row.filed),
+                  published <= today, !row.values.isEmpty else { return nil }
+            let period = String(parts[1])
+            let id = "sec-\(year)-\(period)"
+            let facts: [ManagementFact] = row.values.sorted { $0.key < $1.key }.map { metric, value in
+                let quote = "\(metric): \(value) \(row.currency); GAAP company; FY\(year) \(period); period ending \(row.end)."
+                return ManagementFact(id: "\(id)-\(metric)", metric: metric, fiscalYear: year, period: period,
+                                      periodEnd: row.end, currency: row.currency, value: value, sourceID: id, quote: quote)
+            }
+            return ManagementDocument(id: id, kind: .financials, fiscalYear: year, period: period, published: published,
+                                      title: "\(symbol) FY\(year) \(period) · SEC", url: source,
+                                      text: facts.map(\.quote).joined(separator: "\n"), facts: facts)
+        }.sorted { $0.published > $1.published }
     }
 }

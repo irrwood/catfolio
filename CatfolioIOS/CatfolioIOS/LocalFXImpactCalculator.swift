@@ -9,7 +9,7 @@ import OSLog
 /// USD stock retains its GBP economic perspective before the result is finally
 /// translated to Catfolio's USD storage currency.
 struct LocalFXImpactCalculator {
-    private struct Lot {
+    struct Lot {
         var quantity: Double
         let date: String
         let currency: String
@@ -160,15 +160,12 @@ struct LocalFXImpactCalculator {
         }
     }
 
-    private static func remainingLots(
+    static func remainingLots(
         from transactions: [LocalTransactionRecord]
     ) -> (lots: [Lot], complete: Bool) {
         var lots: [Lot] = []
         var complete = true
-        for transaction in transactions.sorted(by: {
-            if $0.date == $1.date { return ($0.tradeID ?? "") < ($1.tradeID ?? "") }
-            return $0.date < $1.date
-        }) {
+        for transaction in LocalTransactionRecord.orderedForLotMatching(transactions) {
             let quantity = abs(transaction.quantity)
             guard quantity > 0 else { continue }
             switch transaction.action.uppercased() {

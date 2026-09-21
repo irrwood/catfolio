@@ -22,15 +22,14 @@ struct LossAnalysisChart: View {
     @State private var retryRevision = 0
     @State private var range = ChartTimeRange.oneYear
     @State private var selectedDate: Date?
+    @State private var preparedRanges: HoldingLossRanges?
     /// Holdings the reader turned off; the next ones by loss take their place.
     @State private var hiddenTickers: Set<String> = []
     @State private var showsOthers = true
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
 
     var body: some View {
-        let stack = loading.history.map {
-            HoldingLossStack(history: $0, holdings: model.holdings, range: range, hiding: hiddenTickers)
-        }
+        let stack = preparedRanges?[range]
 
         VStack(alignment: .leading, spacing: 18) {
             if let stack, stack.rows.count > 1 {
@@ -49,10 +48,6 @@ struct LossAnalysisChart: View {
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 12)
                     }
-                    Text(L10n.text("按当前持仓的股数回推每天的市值，所以已卖出的持仓不在图中。每只持仓低于成本的部分是它的亏损，高于成本时为零。在所选时间里亏得最深的几只各占一层：按最深亏损从大到小，直到下一只不到全部的 6%，最多 6 只；其余合为一层，贴着零线。轻点下方任意一行可以隐藏或显示；隐藏的持仓并入其他，由下一只补上。"))
-                        .appText(.micro, weight: .regular)
-                        .foregroundStyle(.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, ReturnsSourceChartStyle.inset)
                 .padding(.top, 6)
@@ -63,10 +58,9 @@ struct LossAnalysisChart: View {
                 Button(L10n.text("重试")) { retryRevision &+= 1 }
                     .buttonStyle(.bordered)
                     .frame(maxWidth: .infinity)
-            } else if loading.history != nil {
+            } else if preparedRanges != nil {
                 StandardLineChartPlaceholder(title: L10n.text("历史数据不足"),
-                                             message: L10n.text("该时间范围内没有足够的市值记录。"), isLoading: false,
-                                             hint: L10n.text("下拉刷新会重新计算这段历史。"))
+                                             message: L10n.text("该时间范围内没有足够的市值记录。"), isLoading: false)
                     .frame(height: 300)
                     .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
             } else {
@@ -88,7 +82,29 @@ struct LossAnalysisChart: View {
             }
         }
         .onChange(of: range) { _, _ in selectedDate = nil }
+        // Range taps and chart selection only read prepared values. They must
+        // not reparse every date and rerank all holdings on the main thread.
+        .task(id: preparationKey) {
+            guard let history = loading.history else { preparedRanges = nil; return }
+            var names = history.names
+            for holding in model.holdings { names[holding.ticker.uppercased()] = holding.shortName }
+            let input = HoldingValueHistory(rows: history.rows, costs: history.costs, names: names)
+            let hidden = hiddenTickers
+            let work = Task.detached(priority: .userInitiated) {
+                try HoldingLossRanges(history: input, hiding: hidden)
+            }
+            let result = try? await withTaskCancellationHandler {
+                try await work.value
+            } onCancel: { work.cancel() }
+            guard !Task.isCancelled else { return }
+            preparedRanges = result
+        }
         .sensoryFeedback(.selection, trigger: "\(hiddenTickers.sorted())|\(showsOthers)") { _, _ in hapticsEnabled }
+    }
+
+    private var preparationKey: String {
+        let names = model.holdings.map { "\($0.ticker)|\($0.shortName)" }.joined(separator: ";")
+        return "\(loading.revision)|\(hiddenTickers.sorted())|\(names)|\(appLocale.identifier)"
     }
 
     private func visibleBands(_ stack: HoldingLossStack) -> [Int] {
@@ -322,9 +338,9 @@ struct LossAnalysisChart: View {
 /// The history in the range cut into loss bands, from the axis outward: the
 /// others' losses, then the named holdings' losses from the smallest of them
 /// to the deepest. Heights are losses as positive amounts.
-struct HoldingLossStack {
-    struct Band {
-        enum Kind: Equatable {
+struct HoldingLossStack: Sendable {
+    struct Band: Sendable {
+        enum Kind: Equatable, Sendable {
             case others
             /// 0 for the deepest loss; kept when others are hidden.
             case holding(colour: Int)
@@ -335,7 +351,7 @@ struct HoldingLossStack {
         let subtitle: String
     }
 
-    struct Row {
+    struct Row: Sendable {
         let dateText: String
         let date: Date
         /// One loss per band, in `bands` order, never below nothing.
@@ -421,6 +437,23 @@ struct HoldingLossStack {
         guard let date else { return nil }
         return rows.min { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) }
     }
+}
+
+/// Built once per history/visibility revision, away from the UI thread.
+/// Every picker range is ready before the chart becomes interactive.
+struct HoldingLossRanges: Sendable {
+    private let stacks: [ChartTimeRange: HoldingLossStack]
+
+    init(history: HoldingValueHistory, hiding: Set<String> = []) throws {
+        var stacks: [ChartTimeRange: HoldingLossStack] = [:]
+        for range in ChartTimeRange.allCases {
+            try Task.checkCancellation()
+            stacks[range] = HoldingLossStack(history: history, range: range, hiding: hiding)
+        }
+        self.stacks = stacks
+    }
+
+    subscript(range: ChartTimeRange) -> HoldingLossStack? { stacks[range] }
 }
 
 #if DEBUG

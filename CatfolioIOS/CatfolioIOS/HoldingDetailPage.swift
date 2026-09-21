@@ -269,7 +269,7 @@ struct HoldingDetailContentView: View {
                     cardInsight = SecurityCardInsightRequest(context: context, sourceFrame: source)
                 }
             })
-            .fullScreenCover(item: $cardInsight) { request in
+            .appFullScreenCover(item: $cardInsight) { request in
                 SecurityDailyMovePaper(card: request.context, logoSymbol: holding.logoSymbol,
                                        sourceFrame: request.sourceFrame)
             }

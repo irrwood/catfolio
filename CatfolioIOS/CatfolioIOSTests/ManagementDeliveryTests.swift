@@ -88,29 +88,6 @@ final class ManagementDeliveryTests: XCTestCase {
         XCTAssertEqual(ManagementDeliveryRules.evaluate(promise(targets: [target(comparison: "between", lower: "12", upper: "10")], quote: text), documents: docs, now: now).status, .pending)
     }
 
-    func testTranscriptDatesSortDeduplicateAndExcludeFuture() throws {
-        let data = Data(#"[{"quarter":2,"fiscalYear":2025,"date":"2025-07-25"},{"quarter":"Q1","year":"2025","date":"2025-04-25"},{"quarter":2,"fiscalYear":2025,"date":"2025-07-25"},{"quarter":4,"fiscalYear":2027,"date":"2028-01-20"},{"quarter":9,"fiscalYear":2025,"date":"2025-08-20"}]"#.utf8)
-        let rows = try JSONDecoder().decode([ManagementDeliveryClient.TranscriptDate].self, from: data)
-        XCTAssertEqual(ManagementDeliveryClient.selectedDates(rows, quarters: 4, now: now).map(\.quarter), [2, 1])
-        XCTAssertTrue(ManagementDeliveryClient.selectedDates(rows, quarters: 2, now: now).isEmpty)
-        XCTAssertNil(ManagementDeliveryRules.isoDate("2025-02-30"))
-    }
-
-    func testFinancialAdapterKeepsNullMissingAndFiscalYear() throws {
-        let rows: [[String: Any]] = [
-            ["symbol": "TEST", "date": "2025-06-28", "filingDate": "2025-07-30", "fiscalYear": "2025", "period": "Q3", "reportedCurrency": "USD",
-             "revenue": 10_000, "eps": NSNull(), "netIncome": 0, "grossProfit": true],
-            ["symbol": "WRONG", "date": "2025-06-30", "filingDate": "2025-07-30", "fiscalYear": 2025, "period": "Q2", "reportedCurrency": "USD", "revenue": 999],
-            ["symbol": "TEST", "date": "2025-06-30", "fiscalYear": 2025, "period": "Q2", "reportedCurrency": "USD", "revenue": 999]
-        ]
-        let docs = try ManagementDeliveryClient.financialDocuments(JSONSerialization.data(withJSONObject: rows), symbol: "TEST",
-            path: "income-statement", sourceURL: URL(string: "https://example.com")!, now: now)
-        XCTAssertEqual(docs.count, 1)
-        XCTAssertEqual(docs[0].period, "Q3")
-        XCTAssertEqual(Set(docs[0].facts.map(\.metric)), ["revenue", "netIncome"])
-        XCTAssertEqual(docs[0].facts.first(where: { $0.metric == "netIncome" })?.value, 0)
-    }
-
     func testProtectedArchiveRoundTripAndLanguageIsolation() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -130,44 +107,6 @@ final class ManagementDeliveryTests: XCTestCase {
         try await files.remove(ticker: "TEST", quarters: 4, language: "en")
         let removed = await files.load(ticker: "TEST", quarters: 4, language: "en")
         XCTAssertNil(removed)
-    }
-
-    func testSourceURLNeverIncludesAPIKey() {
-        let url = ManagementDeliveryClient.sourceURL(path: "earning-call-transcript", parameters: [
-            .init(name: "symbol", value: "BRK-B"), .init(name: "apikey", value: "SECRET")])
-        XCTAssertFalse(url.absoluteString.contains("SECRET"))
-        XCTAssertFalse(url.absoluteString.contains("apikey"))
-        XCTAssertTrue(url.absoluteString.contains("BRK-B"))
-    }
-
-    func testFourQuarterDownloadWithFinancialSources() async throws {
-        let client = ManagementDeliveryClient(fetch: { request in
-            XCTAssertEqual(request.httpMethod, "GET")
-            XCTAssertNil(request.httpBody)
-            let url = request.url!
-            let query = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
-            let year = Int(query.first(where: { $0.name == "year" })?.value ?? "2026")!
-            let quarter = Int(query.first(where: { $0.name == "quarter" })?.value ?? "1")!
-            let rows: [[String: Any]]
-            if url.path.hasSuffix("earning-call-transcript-dates") {
-                rows = (1...4).map { ["quarter": $0, "fiscalYear": 2025, "date": "2025-\(String(format: "%02d", $0 * 3))-25"] }
-            } else if url.path.hasSuffix("earning-call-transcript") {
-                rows = [["symbol": "TEST", "year": year, "quarter": quarter, "date": "2025-\(String(format: "%02d", quarter * 3))-25",
-                         "content": String(repeating: "Chief Executive Officer: We expect GAAP revenue growth. ", count: 15)]]
-            } else {
-                let annual = query.contains { $0.name == "period" && $0.value == "annual" }
-                rows = [["symbol": "TEST", "date": "2025-12-31", "filingDate": "2026-02-01", "fiscalYear": "2025", "period": annual ? "FY" : "Q4",
-                         "reportedCurrency": "USD", "revenue": 12e9, "operatingCashFlow": 1e9,
-                         "finalLink": "https://www.sec.gov/Archives/example.htm"]]
-            }
-            return (try JSONSerialization.data(withJSONObject: rows), HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!)
-        })
-        let archive = try await client.download(ticker: "TEST", quarters: 4, key: "TEST-SECRET", now: now, progress: { _ in })
-        XCTAssertEqual(archive.documents.filter { $0.kind == .transcript }.count, 4)
-        XCTAssertEqual(archive.documents.filter { $0.kind == .financials }.count, 4)
-        XCTAssertTrue(archive.documents.filter { $0.kind == .financials }.allSatisfy { $0.rawFinancialJSON != nil && $0.url.host == "www.sec.gov" })
-        let encoded = String(data: try JSONEncoder().encode(archive), encoding: .utf8)!
-        XCTAssertFalse(encoded.contains("TEST-SECRET"))
     }
 
     func testNumericDeadlineAndEPSScaleCannotBeChanged() {
@@ -195,29 +134,6 @@ final class ManagementDeliveryTests: XCTestCase {
             _ = try await analyzer.analyze(archive, language: "en", now: now, progress: { _ in })
             XCTFail("Cancellation must propagate without publishing a report")
         } catch { XCTAssertTrue(error is CancellationError) }
-    }
-
-    func testDownloadRejectsInsufficientCoverageAndNeverPostsDocuments() async throws {
-        let client = ManagementDeliveryClient(fetch: { request in
-            XCTAssertEqual(request.httpMethod, "GET")
-            XCTAssertNil(request.httpBody)
-            XCTAssertEqual(request.url?.host, "financialmodelingprep.com")
-            return (Data("[]".utf8), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
-        })
-        do {
-            _ = try await client.download(ticker: "TEST", quarters: 4, key: "TEST KEY", progress: { _ in })
-            XCTFail("Insufficient coverage must fail")
-        } catch { XCTAssertTrue(error is ManagementDeliveryError) }
-    }
-
-    func testAccessDeniedDoesNotLeakCredentials() async throws {
-        let client = ManagementDeliveryClient(fetch: { request in
-            (Data("SECRET and raw body".utf8), HTTPURLResponse(url: request.url!, statusCode: 403, httpVersion: nil, headerFields: nil)!)
-        })
-        do {
-            _ = try await client.download(ticker: "TEST", quarters: 4, key: "SECRET", progress: { _ in })
-            XCTFail("Access should fail")
-        } catch { XCTAssertFalse(error.localizedDescription.contains("SECRET")) }
     }
 
     func testAnalysisUsesRuleVerdictAndRejectsInventedExtraction() async throws {
@@ -283,5 +199,41 @@ final class ManagementDeliveryTests: XCTestCase {
             attachment.lifetime = .keepAlways
             add(attachment)
         }
+    }
+
+    /// A release's outlook, read without a model: the period in the issuer's
+    /// own fiscal terms, the number exactly as printed, company-wide only.
+    func testGuidanceIsReadFromAReleaseOutlook() throws {
+        let text = """
+        NVIDIA Announces Financial Results for Second Quarter Fiscal 2027
+        Revenue of $96.2 billion, up 106% from a year ago
+
+        Outlook
+        NVIDIA’s outlook for the third quarter of fiscal 2027 is as follows:
+        • Revenue is expected to be $108.0 billion, plus or minus 2%.
+        • Data Center revenue is expected to be $89.0 billion.
+        • GAAP and non-GAAP gross margins are expected to be 74.0%, plus or minus 50 basis points.
+
+        Highlights
+        Second-quarter revenue was $89.0 billion, up 18% from the previous quarter.
+        """
+        let release = ManagementDocument(id: "release-2027-Q2", kind: .transcript, fiscalYear: 2027, period: "Q2",
+                                         published: "2026-08-26", title: "NVDA", url: URL(string: "https://www.sec.gov")!,
+                                         text: text, facts: [])
+        let promises = ManagementDeliveryRules.guidancePromises(in: release)
+        XCTAssertEqual(promises.count, 1, "Segment and margin lines are not company revenue guidance")
+        let target = try XCTUnwrap(promises.first?.targets.first)
+        XCTAssertEqual(target.metric, "revenue")
+        XCTAssertEqual(target.fiscalYear, 2027)
+        XCTAssertEqual(target.period, "Q3")
+        XCTAssertEqual(target.lower, "108.0")
+        XCTAssertEqual(target.scale, "billion")
+        XCTAssertEqual(target.comparison, "atLeast")
+        XCTAssertTrue(ManagementDeliveryRules.containsQuote(try XCTUnwrap(promises.first).quote, in: text))
+        // Nothing to find in a release without an outlook.
+        let plain = ManagementDocument(id: "r", kind: .transcript, fiscalYear: 2026, period: "Q3", published: "2026-07-30",
+                                       title: "AAPL", url: URL(string: "https://www.sec.gov")!,
+                                       text: "Apple reports third quarter results. Revenue was $94.0 billion.", facts: [])
+        XCTAssertTrue(ManagementDeliveryRules.guidancePromises(in: plain).isEmpty)
     }
 }

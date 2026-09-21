@@ -384,7 +384,7 @@ struct LocalAIClient {
         case .openRouter:
             return try await completeWithOpenRouter(question: question, context: context, structured: structured)
         case .codex:
-            return try await completeWithCodex(question: question, context: context)
+            return try await completeWithCodex(question: question, context: context, structured: structured)
         case .automatic:
             var appleFailure = Self.appleModelStatus.message
             let hasCloud = CodexOAuthClient.cachedConnected || LocalServiceKeys.hasOpenRouterKey
@@ -394,14 +394,16 @@ struct LocalAIClient {
                 do {
                     return try await completeWithApple(question: question, context: context, structured: structured)
                 } catch {
+                    try Task.checkCancellation()
                     appleFailure = error.localizedDescription
                 }
             }
             var codexFailure = L10n.text("Codex 尚未连接")
             if CodexOAuthClient.cachedConnected {
                 do {
-                    return try await completeWithCodex(question: question, context: context)
+                    return try await completeWithCodex(question: question, context: context, structured: structured)
                 } catch {
+                    try Task.checkCancellation()
                     codexFailure = error.localizedDescription
                 }
             }
@@ -410,12 +412,14 @@ struct LocalAIClient {
                 do {
                     return try await completeWithOpenRouter(question: question, context: context, structured: structured)
                 } catch {
+                    try Task.checkCancellation()
                     openRouterFailure = "；OpenRouter：\(error.localizedDescription)"
                 }
             }
             do {
                 return try await completeWithDeepSeek(question: question, context: context, structured: structured)
             } catch {
+                try Task.checkCancellation()
                 // Cloud first skipped Apple above; it is still the fallback.
                 if cloudFirst, hasCloud, #available(iOS 26.0, *), Self.appleModelStatus.isAvailable,
                    let answer = try? await completeWithApple(question: question, context: context, structured: structured) {
@@ -543,13 +547,23 @@ struct LocalAIClient {
                                user: "\(context)\n\n问题：\(question)")
     }
 
-    private func completeWithCodex(question: String, context: String) async throws -> String {
+    private func completeWithCodex(question: String, context: String, structured: Bool) async throws -> String {
         guard CodexOAuthClient.cachedConnected else {
             throw LocalServiceError.missingCodexConnection
         }
-        return try await CodexOAuthClient().complete(
-            prompt: "\(context)\n\n问题：\(question)"
+        let answer = try await CodexOAuthClient().complete(
+            prompt: "\(context)\n\n问题：\(question)",
+            instructions: structured ? Self.structuredSystemPrompt : nil
         )
+        return structured ? try Self.validatedStructuredAnswer(answer) : answer
+    }
+
+    static func validatedStructuredAnswer(_ answer: String) throws -> String {
+        guard let object = try? JSONSerialization.jsonObject(with: Data(answer.utf8)),
+              object is [String: Any] else {
+            throw LocalServiceError.remote(L10n.text("Codex 未返回有效的 JSON 对象。"))
+        }
+        return answer
     }
 
     // MARK: Streaming
@@ -638,7 +652,10 @@ struct LocalAIClient {
                 started.set()
                 emit(event)
             }
-            func canFallBack(_ error: Error) -> Bool { !started.value && !(error is CancellationError) }
+            func canFallBack(_ error: Error) -> Bool {
+                !Task.isCancelled && !started.value && !(error is CancellationError)
+                    && (error as? URLError)?.code != .cancelled
+            }
             var appleFailure = Self.appleModelStatus.message
             if #available(iOS 26.0, *), Self.appleModelStatus.isAvailable {
                 do {

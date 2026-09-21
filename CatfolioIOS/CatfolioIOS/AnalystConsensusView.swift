@@ -216,7 +216,7 @@ struct AnalystConsensusView: View {
                     )
                 }.buttonStyle(.plain)
                 .accessibilityIdentifier("analyst-history-entry")
-                .sheet(isPresented: $showsHistory) {
+                .appSheet(isPresented: $showsHistory) {
                     NavigationStack { AnalystHistoryView(symbol: symbol) }
                         .presentationDetents([.large])
                         .presentationDragIndicator(.visible)
