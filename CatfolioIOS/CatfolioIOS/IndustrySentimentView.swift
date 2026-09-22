@@ -6,8 +6,9 @@ import UniformTypeIdentifiers
 /// the same public sources (`IndustrySentimentClient`, a port of Core's
 /// engine); the bundled copy and a hand-imported file still load when it
 /// can't.
-struct IndustrySentimentSnapshot: Decodable {
-    struct Day: Decodable, Identifiable {
+struct IndustrySentimentSnapshot: Codable, Identifiable {
+    var id: String { sector }
+    struct Day: Codable, Identifiable {
         let date: String
         let close: Double
         let ma20: Double?
@@ -44,11 +45,22 @@ struct IndustrySentimentSnapshot: Decodable {
         guard let date = Self.dateFormatter.date(from: asOf) else { return true }
         return Date().timeIntervalSince(date) >= 5 * 86400
     }
+    /// The market this snapshot claims to be, as the shared table has it.
+    var definition: IndustrySentimentEngine.Sector? { IndustrySentimentEngine.sector(sector) }
+    var title: String { definition?.title ?? sector }
+
     static func decode(_ data: Data) throws -> Self {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        let value = try decoder.decode(Self.self, from: data)
-        guard value.sector == "semiconductors", value.volatilitySymbol == "VXSMH", value.priceSymbol == "SMH",
+        return try validated(decoder.decode(Self.self, from: data))
+    }
+
+    /// A snapshot must name a market the app knows and carry that market's
+    /// two symbols: a file may not relabel VIX as the semiconductor index.
+    static func validated(_ value: Self) throws -> Self {
+        guard let definition = value.definition,
+              value.volatilitySymbol == definition.volatilitySymbol,
+              value.priceSymbol == definition.priceSymbol,
               Self.dateFormatter.date(from: value.asOf) != nil,
               value.score.map({ (0...100).contains($0) }) ?? true,
               value.sampleCount > 0, value.sampleCount <= 252,
@@ -61,9 +73,61 @@ struct IndustrySentimentSnapshot: Decodable {
     }
 }
 
+extension JSONEncoder {
+    /// Writes a snapshot back in the shape Core exports it, so the page's own
+    /// cache is a file the page — and Core — would accept.
+    static let sentimentEncoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        return encoder
+    }()
+}
+
+/// What a snapshot file holds: the markets Core last exported, in the table's
+/// order. Files written before the page tracked more than semiconductors are
+/// a bare snapshot object, and still read as a one-market file — a reader who
+/// kept an older export does not lose it on upgrade.
+struct IndustrySentimentFile {
+    let sectors: [IndustrySentimentSnapshot]
+
+    /// The newest day any market in the file was read; what "older than what
+    /// is on screen" is measured against.
+    var asOf: String { sectors.map(\.asOf).max() ?? "" }
+
+    static func decode(_ data: Data) throws -> Self {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        struct Payload: Decodable { let sectors: [IndustrySentimentSnapshot] }
+        if let payload = try? decoder.decode(Payload.self, from: data) {
+            let sectors = try payload.sectors.map { try IndustrySentimentSnapshot.validated($0) }
+            guard !sectors.isEmpty,
+                  Set(sectors.map(\.sector)).count == sectors.count else { throw CocoaError(.fileReadCorruptFile) }
+            return Self(sectors: sectors)
+        }
+        return Self(sectors: [try IndustrySentimentSnapshot.decode(data)])
+    }
+
+    /// Merges an incoming file into what is on screen, market by market: a
+    /// refresh of one market must not drop the other nine, and an older day
+    /// never replaces a newer one.
+    func merging(_ incoming: Self) -> Self {
+        var byKey = Dictionary(uniqueKeysWithValues: sectors.map { ($0.sector, $0) })
+        for sector in incoming.sectors where (byKey[sector.sector]?.asOf ?? "") <= sector.asOf {
+            byKey[sector.sector] = sector
+        }
+        let order = IndustrySentimentEngine.sectors.map(\.key)
+        return Self(sectors: byKey.values.sorted {
+            (order.firstIndex(of: $0.sector) ?? .max) < (order.firstIndex(of: $1.sector) ?? .max)
+        })
+    }
+}
+
 struct IndustrySentimentView: View {
     @Environment(AppModel.self) private var model
-    @State private var snapshot: IndustrySentimentSnapshot?
+    @State private var file: IndustrySentimentFile?
+    /// The market on screen. Kept across launches so the reader's own market
+    /// is what opens, not whichever one the table lists first.
+    @AppStorage("industry-sentiment.sector") private var sectorKey = "semiconductors"
     @State private var range = 63
     @State private var selectedDate: Date?
     @State private var importing = false
@@ -73,9 +137,15 @@ struct IndustrySentimentView: View {
     private let cacheURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("industry-sentiment.json")
 
+    /// The market on screen: the one chosen, or the first the file carries.
+    private var snapshot: IndustrySentimentSnapshot? {
+        file?.sectors.first { $0.sector == sectorKey } ?? file?.sectors.first
+    }
+
     var body: some View {
         SettingsPage(bottomInset: 32, topInset: SettingsTemplate.sectionSpacing) {
             if let snapshot {
+                sectorPicker
                 gaugeCard(snapshot)
                     .refreshGlow(isActive: isRefreshing)
                 trendCard(snapshot)
@@ -98,6 +168,12 @@ struct IndustrySentimentView: View {
             load()
             await refresh()
         }
+        // Each market is read on its own, so switching to one the file has
+        // only an old day for brings that one up to date.
+        .task(id: sectorKey) {
+            selectedDate = nil
+            await refresh()
+        }
         .refreshable { await refresh() }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
             do {
@@ -106,32 +182,58 @@ struct IndustrySentimentView: View {
                 defer { if scoped { url.stopAccessingSecurityScopedResource() } }
                 let data = try Data(contentsOf: url)
                 guard data.count <= 5_000_000 else { throw CocoaError(.fileReadTooLarge) }
-                let incoming = try IndustrySentimentSnapshot.decode(data)
-                guard snapshot.map({ incoming.asOf >= $0.asOf }) ?? true else { throw CocoaError(.fileReadCorruptFile) }
+                let incoming = try IndustrySentimentFile.decode(data)
+                guard file.map({ incoming.asOf >= $0.asOf }) ?? true else { throw CocoaError(.fileReadCorruptFile) }
                 try FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try data.write(to: cacheURL, options: .atomic)
-                snapshot = incoming
+                try store(file.map { $0.merging(incoming) } ?? incoming)
                 selectedDate = nil
                 error = nil
             } catch { self.error = L10n.text("无法导入，请选择有效且更新的行情快照。") }
         }
     }
 
-    /// Reads VXSMH from Cboe and SMH from Yahoo and runs Core's method on the
-    /// phone. What's on screen stays up while it runs, and stays up if it
-    /// fails; only a newer or equal day replaces it.
+    private var sectorPicker: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach(file?.sectors ?? []) { entry in
+                    let selected = entry.sector == snapshot?.sector
+                    Button { sectorKey = entry.sector } label: {
+                        Text(entry.title)
+                            .appText(.footnote, weight: .medium)
+                            .foregroundStyle(selected ? Color.white : SettingsTemplate.secondaryText)
+                            .padding(.horizontal, 14)
+                            .frame(height: 34)
+                            .background(
+                                selected ? AnyShapeStyle(CatfolioStyle.blue) : AnyShapeStyle(SettingsTemplate.card),
+                                in: Capsule()
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(selected ? [.isSelected] : [])
+                }
+            }
+            .padding(.horizontal, 2)
+        }
+        .scrollIndicators(.hidden)
+        .accessibilityLabel(L10n.text("选择市场"))
+    }
+
+    /// Reads the market on screen — its Cboe index and its Yahoo fund — and
+    /// runs Core's method on the phone. Only the market being shown is
+    /// fetched: ten markets on every open would be twenty requests for nine
+    /// charts nobody is looking at. What's on screen stays up while it runs,
+    /// and stays up if it fails; only a newer or equal day replaces it.
     private func refresh() async {
-        guard !isRefreshing else { return }
+        guard !isRefreshing, let sector = snapshot?.definition
+            ?? IndustrySentimentEngine.sector(sectorKey) else { return }
         isRefreshing = true
         defer { isRefreshing = false }
         do {
-            let data = try await IndustrySentimentClient().snapshotData()
-            let incoming = try IndustrySentimentSnapshot.decode(data)
-            guard snapshot.map({ incoming.asOf >= $0.asOf }) ?? true else { return }
+            let data = try await IndustrySentimentClient().snapshotData(sector: sector)
+            let incoming = try IndustrySentimentFile.decode(data)
             try? FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(),
                                                      withIntermediateDirectories: true)
-            try? data.write(to: cacheURL, options: .atomic)
-            snapshot = incoming
+            try store(file.map { $0.merging(incoming) } ?? incoming)
             error = nil
         } catch {
             guard !Task.isCancelled else { return }
@@ -141,14 +243,29 @@ struct IndustrySentimentView: View {
         }
     }
 
+    /// The merged file is what is cached, so a refresh of one market never
+    /// costs the reader the other nine.
+    private func store(_ merged: IndustrySentimentFile) throws {
+        let payload: [String: Any] = [
+            "schema_version": 2,
+            "sectors": try merged.sectors.map { snapshot in
+                try JSONSerialization.jsonObject(with: JSONEncoder.sentimentEncoder.encode(snapshot))
+            },
+        ]
+        try JSONSerialization.data(withJSONObject: payload).write(to: cacheURL, options: .atomic)
+        file = merged
+    }
+
     private func load() {
         let bundled = Bundle.main.url(forResource: "industry_sentiment", withExtension: "json")
-        let candidates = [cacheURL, bundled].compactMap { $0 }.compactMap { url -> IndustrySentimentSnapshot? in
+        let candidates = [cacheURL, bundled].compactMap { $0 }.compactMap { url -> IndustrySentimentFile? in
             guard let data = try? Data(contentsOf: url) else { return nil }
-            return try? IndustrySentimentSnapshot.decode(data)
+            return try? IndustrySentimentFile.decode(data)
         }
-        snapshot = candidates.max { $0.asOf < $1.asOf }
-        if snapshot == nil { error = L10n.text("暂无行情数据") }
+        // Merged rather than picked: a cache holding one refreshed market and
+        // a bundle holding ten must leave the reader with ten.
+        file = candidates.dropFirst().reduce(candidates.first) { $0?.merging($1) }
+        if file == nil { error = L10n.text("暂无行情数据") }
     }
 
     /// The page's own card, on the settings template's fill, radius and
@@ -178,7 +295,7 @@ struct IndustrySentimentView: View {
                 }
                 Text(String(format: "%.1f%%", exposed / total * 100))
                     .font(Typography.number(.title, weight: .semibold))
-                Text(L10n.text("半导体直接持仓占比"))
+                Text(L10n.text("\(data.title)直接持仓占比"))
                     .font(.subheadline).foregroundStyle(.secondary)
                 Text(L10n.text("不含现金及 ETF 穿透"))
                     .font(.caption).foregroundStyle(.secondary)
@@ -190,12 +307,12 @@ struct IndustrySentimentView: View {
         card {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(L10n.text("半导体")).font(.headline)
+                    Text(data.title).font(.headline)
                     Text(data.asOf + (data.stale ? " · " + L10n.text("已过期") : ""))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text("VXSMH / SMH").font(.caption).foregroundStyle(.secondary)
+                Text("\(data.volatilitySymbol) / \(data.priceSymbol)").font(.caption).foregroundStyle(.secondary)
             }
             SentimentGauge(score: data.score)
             HStack {
@@ -205,12 +322,12 @@ struct IndustrySentimentView: View {
             }.font(.subheadline)
             Divider()
             LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 20) {
-                metric("VXSMH", data.close)
+                metric(data.volatilitySymbol, data.close)
                 metric(L10n.text("20日均值"), data.ma20)
                 metric(L10n.text("20日 Z-Score"), data.z20)
                 metric(L10n.text(data.percentile == nil ? "可用历史分位数" : "1年分位数"), data.percentile ?? data.availablePercentile, suffix: "%")
-                metric(L10n.text("VXSMH 1日变化"), data.changePct, suffix: "%")
-                metric(L10n.text("SMH 1日涨跌"), data.priceChangePct, suffix: "%")
+                metric(L10n.text("\(data.volatilitySymbol) 1日变化"), data.changePct, suffix: "%")
+                metric(L10n.text("\(data.priceSymbol) 1日涨跌"), data.priceChangePct, suffix: "%")
             }
         }
     }
@@ -238,28 +355,28 @@ struct IndustrySentimentView: View {
             }.pickerStyle(.segmented)
                 .onChange(of: range) { _, _ in selectedDate = nil }
             HStack(spacing: 16) {
-                Label("VXSMH", systemImage: "circle.fill").foregroundStyle(CatfolioPalette.securityPriceLine)
+                Label(data.volatilitySymbol, systemImage: "circle.fill").foregroundStyle(CatfolioPalette.securityPriceLine)
                 Label("MA20", systemImage: "minus").foregroundStyle(.secondary)
             }.font(.caption)
             if let focused {
-                Text("\(focused.date)  ·  VXSMH \(String(format: "%.2f", focused.close))  ·  MA20 \(focused.ma20.map { String(format: "%.2f", $0) } ?? "—")")
+                Text("\(focused.date)  ·  \(data.volatilitySymbol) \(String(format: "%.2f", focused.close))  ·  MA20 \(focused.ma20.map { String(format: "%.2f", $0) } ?? "—")")
                     .font(.caption).monospacedDigit().foregroundStyle(.secondary)
             }
             StandardLineChart(
                 series: [
-                    StandardLineChartSeries(id: "VXSMH", points: rows.map { .init(date: $0.timestamp, value: $0.close) }, color: CatfolioPalette.securityPriceLine),
+                    StandardLineChartSeries(id: "volatility", points: rows.map { .init(date: $0.timestamp, value: $0.close) }, color: CatfolioPalette.securityPriceLine),
                     StandardLineChartSeries(id: "MA20", points: rows.compactMap { row in row.ma20.map { .init(date: row.timestamp, value: $0) } }, color: .secondary, dash: [5, 4], latestPointRadius: nil)
                 ],
                 interactionDates: rows.map(\.timestamp), domain: low...high,
                 yTicks: (0...3).map { low + (high-low) * Double($0)/3 },
                 transitionKey: "sentiment-\(range)", appearanceID: "industry-sentiment", dataTransition: .viewportZoom,
-                selectedDate: selectedDate, selectionSeriesIDs: ["VXSMH", "MA20"],
+                selectedDate: selectedDate, selectionSeriesIDs: ["volatility", "MA20"],
                 yAxisLabel: { String(format: "%.1f", $0) },
                 xAxisLabel: { $0.formatted(.dateTime.month(.twoDigits).day(.twoDigits)) },
                 onSelect: { selectedDate = $0 }, onInteractionEnded: { _ in selectedDate = nil }
             ).frame(height: 240)
             HStack {
-                Text(L10n.text("SMH 成交量"))
+                Text(L10n.text("\(data.priceSymbol) 成交量"))
                 Spacer()
                 // Through the shared ladder, so this reads 万 and 亿 in Chinese
                 // like every other abbreviated figure. See DESIGN.md.

@@ -30,10 +30,56 @@ enum IndustrySentimentEngine {
     static let semiconductors = ["NVDA", "AMD", "TSM", "AVGO", "QCOM", "INTC", "MU", "AMAT", "LRCX", "KLAC",
                                  "ASML", "MRVL", "NXPI", "ADI", "TXN", "MCHP", "ON", "MPWR", "SMH", "SOXX"]
 
+    /// Core's `SECTORS` table (`core/volatility/__init__.py`), in the same
+    /// order, so the two agree on what a snapshot may claim to be.
+    ///
+    /// `exposure` is empty where matching holdings to the market is not a
+    /// claim that holds up — owning gold is not owning the twenty
+    /// semiconductor names — and the portfolio card stays hidden there.
+    struct Sector: Sendable, Identifiable, Equatable {
+        let key: String
+        let volatilitySymbol: String
+        let priceSymbol: String
+        var exposure: [String] = []
+        var id: String { key }
+        /// Localised on read: the table is data, the wording is the page's.
+        var title: String {
+            switch key {
+            case "semiconductors": L10n.text("半导体")
+            case "nasdaq-100": L10n.text("纳斯达克 100")
+            case "large-caps": L10n.text("美股大盘")
+            case "small-caps": L10n.text("美股小盘")
+            case "gold": L10n.text("黄金")
+            case "crude-oil": L10n.text("原油")
+            case "treasuries": L10n.text("长期美债")
+            case "emerging-markets": L10n.text("新兴市场")
+            case "china": L10n.text("中国")
+            case "brazil": L10n.text("巴西")
+            default: key
+            }
+        }
+    }
+
+    static let sectors: [Sector] = [
+        Sector(key: "semiconductors", volatilitySymbol: "VXSMH", priceSymbol: "SMH", exposure: semiconductors.sorted()),
+        Sector(key: "nasdaq-100", volatilitySymbol: "VXN", priceSymbol: "QQQ"),
+        Sector(key: "large-caps", volatilitySymbol: "VIX", priceSymbol: "SPY"),
+        Sector(key: "small-caps", volatilitySymbol: "RVX", priceSymbol: "IWM"),
+        Sector(key: "gold", volatilitySymbol: "GVZ", priceSymbol: "GLD"),
+        Sector(key: "crude-oil", volatilitySymbol: "OVX", priceSymbol: "USO"),
+        Sector(key: "treasuries", volatilitySymbol: "VXTLT", priceSymbol: "TLT"),
+        Sector(key: "emerging-markets", volatilitySymbol: "VXEEM", priceSymbol: "EEM"),
+        Sector(key: "china", volatilitySymbol: "VXFXI", priceSymbol: "FXI"),
+        Sector(key: "brazil", volatilitySymbol: "VXEWZ", priceSymbol: "EWZ"),
+    ]
+
+    static func sector(_ key: String) -> Sector? { sectors.first { $0.key == key } }
+
     /// The exported snapshot as a JSON object with Core's snake_case keys,
     /// so it goes through `IndustrySentimentSnapshot.decode` and its checks
     /// exactly as an exported file would.
-    static func evaluate(volatility: [VolatilityDay], prices: [PriceDay], asOf: String) throws -> [String: Any] {
+    static func evaluate(volatility: [VolatilityDay], prices: [PriceDay], asOf: String,
+                         sector: Sector = sectors[0]) throws -> [String: Any] {
         var vx: [String: Double] = [:]
         for row in volatility where row.date <= asOf {
             guard row.close.isFinite, row.close > 0 else { throw EngineError.invalidObservation }
@@ -136,19 +182,24 @@ enum IndustrySentimentEngine {
             "price_change_pct": json(priceChange),
             "aligned": paired,
             "history": history,
-            "exposure_symbols": semiconductors.sorted(),
-            "sector": "semiconductors",
-            "volatility_symbol": "VXSMH",
-            "price_symbol": "SMH",
+            "exposure_symbols": sector.exposure,
+            "sector": sector.key,
+            "volatility_symbol": sector.volatilitySymbol,
+            "price_symbol": sector.priceSymbol,
         ]
     }
 }
 
-/// Fetches what Core's collector fetches — Cboe's VXSMH history and Yahoo's
-/// SMH daily bars — and runs the engine on the phone.
+/// Fetches what Core's collector fetches — a Cboe volatility history and the
+/// matching Yahoo daily bars — and runs the engine on the phone.
 struct IndustrySentimentClient {
-    static let volatilityURL = URL(string: "https://cdn.cboe.com/api/global/us_indices/daily_prices/VXSMH_History.csv")!
-    static let pricesURL = URL(string: "https://query1.finance.yahoo.com/v8/finance/chart/SMH?range=2y&interval=1d")!
+    static func volatilityURL(_ sector: IndustrySentimentEngine.Sector) -> URL {
+        URL(string: "https://cdn.cboe.com/api/global/us_indices/daily_prices/\(sector.volatilitySymbol)_History.csv")!
+    }
+
+    static func pricesURL(_ sector: IndustrySentimentEngine.Sector) -> URL {
+        URL(string: "https://query1.finance.yahoo.com/v8/finance/chart/\(sector.priceSymbol)?range=2y&interval=1d")!
+    }
 
     private static let session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
@@ -159,9 +210,10 @@ struct IndustrySentimentClient {
 
     /// The exported-file form, ready for `IndustrySentimentSnapshot.decode`
     /// and for writing to the page's cache.
-    func snapshotData(now: Date = Date()) async throws -> Data {
-        async let volatilityRaw = Self.get(Self.volatilityURL)
-        async let pricesRaw = Self.get(Self.pricesURL)
+    func snapshotData(sector: IndustrySentimentEngine.Sector = IndustrySentimentEngine.sectors[0],
+                      now: Date = Date()) async throws -> Data {
+        async let volatilityRaw = Self.get(Self.volatilityURL(sector))
+        async let pricesRaw = Self.get(Self.pricesURL(sector))
         let (vxData, smhData) = try await (volatilityRaw, pricesRaw)
 
         var newYork = Calendar(identifier: .gregorian)
@@ -176,22 +228,28 @@ struct IndustrySentimentClient {
             ? newYork.date(byAdding: .day, value: 1, to: today)! : today
         let cutoff = formatter.string(from: cutoffDay)
 
-        let volatility = try Self.parseVolatility(vxData).filter { $0.date < cutoff }
-        let prices = try Self.parsePrices(smhData, formatter: formatter).filter { $0.date < cutoff }
+        let volatility = try Self.parseVolatility(vxData, symbol: sector.volatilitySymbol).filter { $0.date < cutoff }
+        let prices = try Self.parsePrices(smhData, symbol: sector.priceSymbol, formatter: formatter)
+            .filter { $0.date < cutoff }
         let asOf = formatter.string(from: now)
-        let object = try IndustrySentimentEngine.evaluate(volatility: volatility, prices: prices, asOf: asOf)
+        let object = try IndustrySentimentEngine.evaluate(volatility: volatility, prices: prices,
+                                                          asOf: asOf, sector: sector)
         let data = try JSONSerialization.data(withJSONObject: object)
         // Only hand back what the page itself would accept.
         _ = try IndustrySentimentSnapshot.decode(data)
         return data
     }
 
-    static func parseVolatility(_ data: Data) throws -> [IndustrySentimentEngine.VolatilityDay] {
+    /// Cboe publishes two layouts: OHLC, and a single close column named for
+    /// the index itself (GVZ, OVX, VXTLT). Read the close by column name in
+    /// either, never by position.
+    static func parseVolatility(_ data: Data, symbol: String = "VXSMH") throws -> [IndustrySentimentEngine.VolatilityDay] {
         guard var text = String(data: data, encoding: .utf8) else { throw LocalServiceError.invalidResponse }
         if text.hasPrefix("\u{FEFF}") { text.removeFirst() }
         let lines = text.split(whereSeparator: \.isNewline).map(String.init)
         guard let header = lines.first?.uppercased().split(separator: ",").map({ $0.trimmingCharacters(in: .whitespaces) }),
-              let dateIndex = header.firstIndex(of: "DATE"), let closeIndex = header.firstIndex(of: "CLOSE") else {
+              let dateIndex = header.firstIndex(of: "DATE"),
+              let closeIndex = header.firstIndex(of: "CLOSE") ?? header.firstIndex(of: symbol.uppercased()) else {
             throw LocalServiceError.invalidResponse
         }
         let parser = DateFormatter()
@@ -208,7 +266,8 @@ struct IndustrySentimentClient {
         }
     }
 
-    static func parsePrices(_ data: Data, formatter: DateFormatter) throws -> [IndustrySentimentEngine.PriceDay] {
+    static func parsePrices(_ data: Data, symbol: String = "SMH",
+                            formatter: DateFormatter) throws -> [IndustrySentimentEngine.PriceDay] {
         struct Payload: Decodable {
             struct Chart: Decodable {
                 struct Result: Decodable {
@@ -232,7 +291,7 @@ struct IndustrySentimentClient {
             let chart: Chart
         }
         let payload = try JSONDecoder().decode(Payload.self, from: data)
-        guard let result = payload.chart.result.first, result.meta.symbol == "SMH",
+        guard let result = payload.chart.result.first, result.meta.symbol == symbol,
               let quote = result.indicators.quote.first else { throw LocalServiceError.invalidResponse }
         return result.timestamp.enumerated().compactMap { index, stamp in
             guard index < quote.close.count,

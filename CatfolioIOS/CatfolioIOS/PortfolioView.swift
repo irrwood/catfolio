@@ -14,7 +14,6 @@ struct PortfolioView: View {
     @State private var showsTodayDetail = false
     @State private var homeScrollState = PortfolioHomeScrollState()
     @State private var homeScrollController = PortfolioHomeScrollController()
-    @State private var isHomeScrolling = false
     // One namespace per origin. A security shown both in the Today bars and
     // in the holdings list would otherwise publish two sources under the same
     // id, and the transition has no way to know which one it grew from.
@@ -29,13 +28,6 @@ struct PortfolioView: View {
         #else
         false
         #endif
-    }
-
-    private var isHomeReadyForRipple: Bool {
-        !previewsLoading && model.overview != nil && model.portfolioChart != nil
-            && !model.holdings.isEmpty && model.portfolioError == nil
-            && !model.isPortfolioLoading && !model.isPortfolioChartLoading
-            && !model.isHoldingDailyChangesLoading
     }
 
     var body: some View {
@@ -154,9 +146,6 @@ struct PortfolioView: View {
                         }
                     }
                     .background(Color.clear)
-                    .onScrollPhaseChange { _, phase in
-                        isHomeScrolling = phase != .idle
-                    }
                     // Keep the native indicator track beside the holdings only;
                     // changing indicator margins leaves content and detents intact.
                     .modifier(PortfolioHomeScrollIndicators(
@@ -205,10 +194,6 @@ struct PortfolioView: View {
                         #endif
                     }
                 }
-                .modifier(PortfolioLoadRipple(
-                    isReady: isHomeReadyForRipple,
-                    isScrolling: isHomeScrolling
-                ))
                 .modifier(PortfolioFloatingFilterOverlay())
                 .securityDetailZoomHost(holdingZoomState, in: holdingPresentationZoom)
                 .sheet(item: $selectedHolding, onDismiss: { holdingZoomState.didDismiss() }) { holding in

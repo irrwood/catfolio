@@ -25,6 +25,8 @@ struct PortfolioHomeTopBackground: View {
 
 struct PortfolioHomePageBackdrop: View {
     @Environment(\.locale) private var appLocale
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isOnScreen = false
     let colorScheme: ColorScheme
     let scrollState: PortfolioHomeScrollState
 
@@ -36,12 +38,167 @@ struct PortfolioHomePageBackdrop: View {
             // #9ADCFF to the terminal page surface. Keeping it fixed behind
             // the native ScrollView also makes rubber-banding reveal the same
             // background instead of a separate pale-blue extension band.
-            PortfolioHomeTopBackground(colorScheme: colorScheme)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .opacity(1 - scrollState.backdropProgress)
+            Group {
+                if colorScheme == .dark {
+                    PortfolioNightGlow(
+                        cardTop: scrollState.restingSheetTop,
+                        // Nothing moves once the glow has faded out, while
+                        // another tab is up, or with the app in the background.
+                        isAnimating: isOnScreen && scenePhase == .active && scrollState.backdropProgress < 1
+                    )
+                } else {
+                    PortfolioHomeTopBackground(colorScheme: colorScheme)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .opacity(1 - scrollState.backdropProgress)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea()
+        .onAppear { isOnScreen = true }
+        .onDisappear { isOnScreen = false }
+    }
+}
+
+/// Figma 398:3114's night page. There is no gradient and no coloured light:
+/// the canvas is a pale blue, and black shapes blurred over it take the light
+/// away. What survives between them is the glow — a band behind the card's
+/// top edge, brighter on the left because a second, narrower shape shades
+/// the right.
+///
+/// The shapes are placed against the card's resting top rather than the
+/// screen, so the band sits behind the card whatever height the hero above
+/// it takes (Figma has the card at 398pt with no chart; here it rests lower).
+struct PortfolioNightGlow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The sheet's top in the backdrop's space with the page at rest.
+    let cardTop: CGFloat?
+    /// False while the glow is off screen or faded out: nothing to move.
+    var isAnimating = true
+
+    static let canvas = Color(red: 0x7D / 255, green: 0xA7 / 255, blue: 0xEC / 255)
+    /// Figma's card top in its 402pt frame; every shape is placed from it.
+    private static let figmaCardTop: CGFloat = 398
+    private static let blur: CGFloat = 100
+    /// Room for the blur on every side of a pre-rendered shape (3σ).
+    private static let bleed: CGFloat = 300
+
+    var body: some View {
+        GeometryReader { geometry in
+            // Horizontal geometry follows the width; vertical, the card.
+            let scale = geometry.size.width / 402
+            let shift = (cardTop ?? Self.figmaCardTop) - Self.figmaCardTop
+            ZStack(alignment: .topLeading) {
+                ZStack(alignment: .topLeading) {
+                    Self.canvas
+                    // Figma's top shape starts 275pt above the screen. Moved
+                    // down to this card it would let blue in at the status
+                    // bar, so everything above its centre is held black —
+                    // which also covers the top shape's drift.
+                    Rectangle()
+                        .fill(.black)
+                        .frame(width: geometry.size.width + 400, height: 400 + (-275 + 365.5 + shift))
+                        .blur(radius: Self.blur)
+                        .offset(x: -200, y: -400)
+                }
+                // Static: flattened once.
+                .drawingGroup()
+
+                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isAnimating || reduceMotion)) { context in
+                    let drift = reduceMotion ? Self.still : Self.drift(at: context.date.timeIntervalSinceReferenceDate)
+                    ZStack(alignment: .topLeading) {
+                        // The top of the page goes black.
+                        shape(width: 736 * scale, height: 731)
+                            .offset(x: -159 * scale + drift.top.width, y: -275 + shift + drift.top.height)
+                        // The right side stays dark longer, so the glow leans left.
+                        shape(width: 246 * scale, height: 709)
+                            .offset(x: 235 * scale + drift.right.width, y: -278 + shift + drift.right.height)
+                    }
+                }
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
+            .clipped()
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    /// A blurred black ellipse, rendered once and then only moved. Blurring
+    /// two screen-sized shapes by 100pt every frame to animate them would cost
+    /// the GPU far more than the drift is worth; translating a finished
+    /// texture costs nothing.
+    private func shape(width: CGFloat, height: CGFloat) -> some View {
+        Image(uiImage: Self.blurredEllipse(width: width, height: height))
+            .resizable()
+            .frame(width: width + 2 * Self.bleed, height: height + 2 * Self.bleed)
+            .offset(x: -Self.bleed, y: -Self.bleed)
+    }
+
+    /// The glow drifts: each shape wanders a few points on two slow sines
+    /// with unrelated periods, so the light never visibly repeats or pulses.
+    /// Offsets stay small — the band moves, the composition does not.
+    /// Figma's own placement, for Reduce Motion.
+    static let still = (top: CGSize.zero, right: CGSize.zero)
+
+    static func drift(at time: TimeInterval) -> (top: CGSize, right: CGSize) {
+        func wave(_ amplitude: Double, _ period: Double, _ phase: Double) -> CGFloat {
+            CGFloat(amplitude * sin(2 * .pi * time / period + phase))
+        }
+        return (
+            CGSize(width: wave(22, 17, 0), height: wave(16, 13, 1.1)),
+            CGSize(width: wave(30, 11, 2.3), height: wave(22, 19, 0.4))
+        )
+    }
+
+    @MainActor private static var cache: [String: UIImage] = [:]
+
+    /// Rendered at a quarter of the point size: a 100pt blur has no detail a
+    /// finer texture would keep, and the image stays a few hundred KB.
+    @MainActor private static func blurredEllipse(width: CGFloat, height: CGFloat) -> UIImage {
+        let key = "\(Int(width.rounded()))x\(Int(height.rounded()))"
+        if let image = cache[key] { return image }
+        let renderer = ImageRenderer(content:
+            Ellipse()
+                .fill(.black)
+                .frame(width: width, height: height)
+                .blur(radius: blur)
+                .frame(width: width + 2 * bleed, height: height + 2 * bleed)
+        )
+        renderer.scale = 0.25
+        let image = renderer.uiImage ?? UIImage()
+        cache[key] = image
+        return image
+    }
+}
+
+/// The black slab under the night card, Figma's `Rectangle 34625532`. It
+/// starts one corner radius below the card's top, so the glass's top edge
+/// still has the blue behind it and the body below has black. Drawn behind
+/// the sheet and not clipped to it: its blur is what shades the gutters
+/// either side of the card.
+struct PortfolioNightCardSlab: View {
+    static let inset: CGFloat = 53
+    static let cornerRadius: CGFloat = 53
+    /// How far the sheet has opened towards the full width, 0…1.
+    let widthProgress: CGFloat
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+            .fill(.black)
+            .padding(.top, Self.inset)
+            // At rest the blurred sides are Figma's blue gutters. Once the
+            // sheet reaches the screen edges there are no gutters, and a blur
+            // centred on the edge left a half-blue strip down both sides; the
+            // slab widens past the screen as the sheet does.
+            .padding(.horizontal, -60 * widthProgress)
+            // Figma's runs 1,116pt, well past the screen. A short portfolio
+            // ends its sheet mid-screen, and the blue canvas showed under it.
+            .padding(.bottom, -1200)
+            // Figma's layer blur 30 matched the render as a Gaussian of about
+            // 20pt; it is also what spreads into the side gutters.
+            .blur(radius: 20)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
@@ -61,7 +218,7 @@ enum PortfolioContentSheetLayout {
     static let topRadius: CGFloat = 38
 
     static func settlingProgress(offset: CGFloat, colorScheme: ColorScheme) -> CGFloat {
-        // Night glass stays clear through the width expansion, then settles
+        // The night gradient stays translucent through width expansion, then settles
         // over another card-height of travel. Scrolling back reverses it.
         let start = colorScheme == .dark ? widthExpansionDistance : 0
         let distance = colorScheme == .dark ? transitionHeight : widthExpansionDistance
@@ -89,9 +246,13 @@ final class PortfolioHomeScrollState {
     private(set) var backdropProgress: CGFloat = 0
     private(set) var indicatorTopInset: CGFloat = 0
     private(set) var hasVisibleIndicatorTrack = false
+    /// Where the sheet's top sits on screen with the page at rest. The night
+    /// glow is placed behind it; it changes with layout, never with scrolling.
+    private(set) var restingSheetTop: CGFloat?
 
     @ObservationIgnored private var offset: CGFloat = 0
     @ObservationIgnored private var pull: CGFloat = 0
+    @ObservationIgnored private var lastSheetTop: CGFloat?
     @ObservationIgnored private var titleExitOffset: CGFloat?
     @ObservationIgnored private var holdingsTop: CGFloat?
     @ObservationIgnored private var viewportHeight: CGFloat = 0
@@ -104,6 +265,7 @@ final class PortfolioHomeScrollState {
         if sheetProgress != progress { sheetProgress = progress }
         updateBackdrop()
         updateIndicator()
+        updateRestingSheetTop()
     }
 
     func titleMoved(to bottom: CGFloat) {
@@ -117,6 +279,23 @@ final class PortfolioHomeScrollState {
     func holdingsMoved(to top: CGFloat) {
         holdingsTop = top
         updateIndicator()
+    }
+
+    /// `top` is the sheet's current top on screen.
+    func sheetMoved(to top: CGFloat) {
+        lastSheetTop = top
+        updateRestingSheetTop()
+    }
+
+    // Read only with the page at rest. Mid-scroll, the offset and the sheet's
+    // frame reach here a frame apart, and the difference would move the
+    // glow — re-blurring a screen of backdrop — on every frame. Checked from
+    // both callbacks, since either can be the last to arrive at rest.
+    private func updateRestingSheetTop() {
+        guard abs(offset) < 0.5, pull == 0, let lastSheetTop else { return }
+        let resting = lastSheetTop.rounded()
+        guard restingSheetTop.map({ abs($0 - resting) > 0.5 }) ?? true else { return }
+        restingSheetTop = resting
     }
 
     func viewportChanged(to height: CGFloat) {
@@ -202,7 +381,15 @@ struct PortfolioContentSheet<Content: View>: View {
                 .allowsHitTesting(false)
             }
             .clipShape(sheetShape)
+            // Behind the glass and outside its clip, so the glass takes its
+            // colour from it and its blur reaches the gutters.
+            .background {
+                if colorScheme == .dark { PortfolioNightCardSlab(widthProgress: widthProgress) }
+            }
             .padding(.horizontal, horizontalInset)
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { _, top in
+                scrollState.sheetMoved(to: top)
+            }
             .accessibilityElement(children: .contain)
     }
 }
@@ -221,11 +408,18 @@ struct PortfolioContentSheetBackground: View {
         PortfolioContentSheetLayout.shape
     }
 
+    /// iOS's clear glass adds a grey haze of its own at night — black behind
+    /// it read back as #131313 where Figma's glass stays #000 — and doubled
+    /// the blue at the card's top. A black tint takes the haze back out while
+    /// the glass still refracts: measured against Figma 398:3114, 0.5 left the
+    /// top at #1A2437 for Figma's #172131 and 0.7 went past it.
+    private static let nightTint = 0.55
+
     @ViewBuilder
     private var liquidGlassLayer: some View {
         if #available(iOS 26.0, *) {
             Color.clear
-                .glassEffect(.clear, in: sheetShape)
+                .glassEffect(colorScheme == .dark ? .clear.tint(.black.opacity(Self.nightTint)) : .clear, in: sheetShape)
         } else {
             Rectangle()
                 .fill(.ultraThinMaterial)
@@ -235,32 +429,42 @@ struct PortfolioContentSheetBackground: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
-                // The card retains its own glass surface. No separate blur
-                // band extends beyond its rounded edge.
+                // Keep native refraction in both appearances. A light surface
+                // wash leaves the top clear; the lower gradient protects text.
                 if !reduceTransparency, settlingProgress < 1 {
                     liquidGlassLayer
                 }
 
-                // The top of the card is the glass itself — `.clear`, the
-                // variant that barely frosts, so the page shows through and
-                // only its rim and highlight draw the card, like the
-                // assistant's header buttons. The wash comes in lower down,
-                // where the list needs an even ground to be read on.
-                LinearGradient(
-                    stops: [
-                        .init(color: terminalColor.opacity(0), location: 0),
-                        .init(color: terminalColor.opacity(colorScheme == .dark ? 0.02 : 0.06),
-                              location: colorScheme == .dark ? 0.40 : 0.28),
-                        .init(color: terminalColor.opacity(colorScheme == .dark ? 0.18 : 0.55),
-                              location: colorScheme == .dark ? 0.72 : 0.62),
-                        .init(color: terminalColor, location: 1),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+                // Night paints nothing over most of the glass (Figma
+                // 398:3114): the black slab behind it gives the body its black
+                // and the page's blue gives the top edge its light. Only its
+                // last stretch fades to black — the glass ends here, above the
+                // solid sheet, and its rim read as a rule between the Today
+                // card and the holdings.
+                if colorScheme == .dark {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .clear, location: 0.72),
+                            .init(color: .black, location: 1),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                } else {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .white.opacity(0), location: 0),
+                            .init(color: .white.opacity(0.03), location: 0.28),
+                            .init(color: .white.opacity(0.30), location: 0.62),
+                            .init(color: .white, location: 1),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
 
-                // Passive glass avoids a full-card press highlight. Night
-                // opacity is delayed independently of the width expansion.
+                // Settle into the page surface independently of width expansion.
                 terminalColor.opacity(reduceTransparency ? 1 : pow(settlingProgress, 3))
             }
             .frame(height: PortfolioContentSheetLayout.transitionHeight)

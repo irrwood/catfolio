@@ -43,3 +43,19 @@ These rules apply to every UI change in `v3_backend/app/routes/` and `v3_backend
 - Keep data APIs and UI presentation separate.
 - Add or update focused tests in `v3_backend/tests/` for shared design-system wiring and important UI contracts.
 - Do not change financial calculations while performing a visual migration.
+
+# iOS app (`CatfolioIOS/`)
+
+## Project file
+
+- Targets use Xcode 16 synchronized folders: every file under `CatfolioIOS/CatfolioIOS/`, `CatfolioIOS/CatfolioIOSTests/` and `CatfolioIOS/CatfolioIOSViewTests/` is in its target automatically. **Do not add `PBXBuildFile` / `PBXFileReference` entries to `project.pbxproj` for new files** — create the file in the folder and it is built. To keep a file out of a target, add it to that folder's `membershipExceptions`.
+- `Resources/AssetLogos` and `Resources/catfolio-daily-brief` are copied as folders (`explicitFolders`); every other resource is copied flat into the bundle, so resource file names must be unique.
+- `Info.plist`, `CatfolioIOS.entitlements` and `Resources/analyst_history_aapl.json` are excluded from the app target on purpose.
+
+## Tests
+
+- `CatfolioIOSTests/`: pure logic — no `import SwiftUI`. `CatfolioIOSViewTests/`: anything that imports SwiftUI (rendering, layout, interaction). Put a new test in the folder that matches.
+- Run one side with a test plan; only that plan's target is built, so a broken file in the other target does not block you:
+  - `xcodebuild test -project CatfolioIOS/CatfolioIOS.xcodeproj -scheme CatfolioIOS -testPlan Logic -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`
+  - `-testPlan Views` for the view tests; `-testPlan All` (the scheme's default) for both.
+- `-only-testing:` alone does not help: it still builds every test target in the plan first.

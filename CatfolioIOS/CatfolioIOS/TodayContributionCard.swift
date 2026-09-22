@@ -43,9 +43,12 @@ struct TodayContributionCard: View {
     private let contributions: [Contribution]
 
     @State private var direction: Direction = TodayContributionCard.launchDirection
-    @State private var barRevealProgress: CGFloat = 0
+    /// Starts full once the bars have grown this launch, so a card rebuilt
+    /// by a tab switch or a reload shows them standing rather than regrowing.
+    @State private var barRevealProgress: CGFloat = TodayContributionAnimation.hasPlayed ? 1 : 0
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @AppStorage("catfolio.haptics") private var hapticsEnabled = true
 
     init(
@@ -117,9 +120,6 @@ struct TodayContributionCard: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            todayBackground
-                .allowsHitTesting(false)
-
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 4) {
@@ -208,8 +208,19 @@ struct TodayContributionCard: View {
             .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
             .offset(y: 139)
         }
-        .frame(height: 326)
+        .frame(height: 326, alignment: .top)
         .task(id: barAnimationKey) {
+            // The bars grow once a launch. The key also changes whenever
+            // fresh quotes reorder the top five, and the card is rebuilt on a
+            // tab switch or a reload; each of those used to grow them from
+            // zero again. Bars already standing now update in place, and a
+            // reveal in flight is left to finish. Only bars not yet shown
+            // grow: the first time, and after the up/down switch, which
+            // lowers them to bring in the other set. Keying on that rather
+            // than on a flag means a switch to an empty side still grows the
+            // bars that arrive there later.
+            guard barRevealProgress < 1 else { return }
+
             var resetTransaction = Transaction(animation: nil)
             resetTransaction.disablesAnimations = true
             withTransaction(resetTransaction) {
@@ -222,6 +233,7 @@ struct TodayContributionCard: View {
             withAnimation(TodayContributionAnimation.reveal) {
                 barRevealProgress = 1
             }
+            TodayContributionAnimation.hasPlayed = true
         }
         .onChange(of: reduceMotion) { _, isReduced in
             if isReduced {
@@ -239,57 +251,6 @@ struct TodayContributionCard: View {
             Text("\(difference >= 0 ? "+" : "-")SPY \(DisplayFormat.percent(abs(difference), signed: false))")
         } else {
             Text(L10n.text("SPY 暂无数据"))
-        }
-    }
-
-    @ViewBuilder
-    private var todayBackground: some View {
-        let shape = UnevenRoundedRectangle(
-            topLeadingRadius: 38,
-            bottomLeadingRadius: 0,
-            bottomTrailingRadius: 0,
-            topTrailingRadius: 38,
-            style: .continuous
-        )
-        if colorScheme == .light {
-            // The shared content sheet owns the light glass-to-white surface.
-            // Keep this card clear so the hero chart can show through its top.
-            shape.fill(Color.clear)
-        } else {
-            let showsGains = direction == .gains
-            let baseColor = showsGains
-                ? Color(red: 0, green: 0.255, blue: 0)
-                : Color(red: 0.22, green: 0.031, blue: 0.02)
-            let glowColor = showsGains
-                ? Color(red: 0, green: 1, blue: 0)
-                : CatfolioPalette.contributionRedGlow
-            let glowEdge = showsGains
-                ? Color(red: 0.203, green: 0.973, blue: 1)
-                : CatfolioPalette.contributionRedGlow.opacity(0.4)
-
-            shape
-                .fill(
-                    LinearGradient(
-                        // Figma 236:37591: 20% fill × 20% first stop.
-                        // An opaque wash here hides the sheet's native refraction.
-                        colors: [baseColor.opacity(0.04), .clear],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .overlay(alignment: .topLeading) {
-                    Circle()
-                        .fill(RadialGradient(
-                            colors: [glowColor, glowEdge],
-                            center: .center, startRadius: 0, endRadius: 102.5
-                        ))
-                        .frame(width: 205, height: 205)
-                        .blur(radius: 100)
-                        .opacity(0.35)
-                        .offset(x: 220, y: -92)
-                }
-                .clipShape(shape)
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: direction)
         }
     }
 
@@ -328,10 +289,23 @@ struct TodayContributionCard: View {
         }
     }
 
+    @ViewBuilder
     private var directionPicker: some View {
-        directionPickerContent
-            .background(Color.white.opacity(0.40), in: Capsule())
+        if #available(iOS 26.0, *), !reduceTransparency {
+            // Liquid glass, like the card it sits on. Not interactive: the
+            // two buttons inside take the touch, and interactive glass holds
+            // it for its own press effect first.
+            directionPickerContent
+                .glassEffect(.regular, in: Capsule())
+        } else {
+            directionPickerContent
+                .background(Color.white.opacity(colorScheme == .dark ? 0.16 : 0.40), in: Capsule())
+        }
     }
+
+    /// Figma 398:3514 at night: the chosen side is a darker well in the glass,
+    /// not a white capsule, and the arrows are white.
+    private var isNight: Bool { colorScheme == .dark }
 
     private var directionPickerContent: some View {
         HStack(spacing: 2) {
@@ -348,12 +322,14 @@ struct TodayContributionCard: View {
         } label: {
             Image(systemName: systemImage)
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color(red: 17 / 255, green: 17 / 255, blue: 17 / 255))
+                .foregroundStyle(isNight
+                    ? Color.white.opacity(direction == value ? 1 : 0.55)
+                    : Color(red: 17 / 255, green: 17 / 255, blue: 17 / 255))
                 .frame(width: 44, height: 41)
                 .background {
                     if direction == value {
                         Capsule()
-                            .fill(Color.white)
+                            .fill(isNight ? Color.black.opacity(0.30) : Color.white)
                             .shadow(color: Color.black.opacity(0.10), radius: 2, y: 2)
                     }
                 }
@@ -379,6 +355,9 @@ struct TodayContributionCard: View {
 }
 
 enum TodayContributionAnimation {
+    /// Whether the bars have had their entrance this launch.
+    @MainActor static var hasPlayed = false
+
     static var reveal: Animation {
         .timingCurve(0.16, 1, 0.30, 1, duration: 0.34)
     }

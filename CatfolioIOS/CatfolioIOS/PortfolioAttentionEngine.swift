@@ -171,13 +171,17 @@ struct LocalPortfolioAttentionEngine {
     }
 
     private func fallbackThesis(for row: Candidate) -> PortfolioAttentionThesis {
+        // The portfolio-share signal is why this holding is being raised, not
+        // a reason to read the move one way or the other; listed as evidence
+        // it argued the position from the size of the position.
+        let securitySignals = row.signals.filter { !$0.isPortfolioRelative }
         return PortfolioAttentionThesis(
             stance: PortfolioAttentionThesis.priceStance(row.signals),
             basis: .price,
             confidence: .none,
             whatChanged: row.signals.map(\.label).joined(separator: "、"),
             whyItMatters: "这一变化值得核对，但在可靠公司来源确认前，不应视为基本面结论。",
-            supportingEvidence: row.signals.map(\.label),
+            supportingEvidence: securitySignals.map(\.label),
             counterEvidence: ["信号可能来自市场或板块波动，而非公司级催化剂。"],
             risks: ["公司级催化剂尚未验证"],
             watchNext: ["公司公告与业绩", "成交量是否持续", "\(rules.movingAverageDays) 日均线"],

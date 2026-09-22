@@ -1,0 +1,20 @@
+{
+  "configurations": [
+    {
+      "id": "69D93DD3-8131-5A63-9FB0-FF1E6D486604",
+      "name": "Default",
+      "options": {}
+    }
+  ],
+  "defaultOptions": {},
+  "testTargets": [
+    {
+      "target": {
+        "containerPath": "container:CatfolioIOS.xcodeproj",
+        "identifier": "D1A00000000000005C200001",
+        "name": "CatfolioIOSViewTests"
+      }
+    }
+  ],
+  "version": 1
+}

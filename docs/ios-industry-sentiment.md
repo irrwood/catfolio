@@ -1,18 +1,24 @@
 # iOS 行业情绪
 
-入口：收益表现 → 行情与 AI → 行业情绪。
+入口：研究 → 行业情绪。
 
-原生 SwiftUI 页面：分段仪表盘、Core 评分、市场状态、六项指标、VXSMH/MA20趋势与SMH成交量。趋势复用 `StandardLineChart`，包含统一坐标、网格、端点、长按查看和区间切换；MA20用虚线。组合卡片只在当前账户有已识别半导体持仓且行业快照未过期时显示，使用本机当前持仓美元绝对市值口径；演示模式显式标记。
+2026-09-22 起跟踪 10 个市场，不再只有半导体：半导体 VXSMH/SMH、纳斯达克 100 VXN/QQQ、美股大盘 VIX/SPY、美股小盘 RVX/IWM、黄金 GVZ/GLD、原油 OVX/USO、长期美债 VXTLT/TLT、新兴市场 VXEEM/EEM、中国 VXFXI/FXI、巴西 VXEWZ/EWZ。市场表在 `core/volatility/__init__.py` 的 `SECTORS`，iOS 侧同一张表在 `IndustrySentimentEngine.sectors`。VXXLE 2022 年起停止发布，故不收录。
 
-评分、MA、Z、分位数、Regime全部来自Core导出，不在Swift重算。半导体识别清单也由Core发布。iOS仅做展示范围裁剪、图表坐标范围和当前持仓暴露比例。
+组合暴露只有半导体给出清单：把持仓和“黄金”“原油”这类市场对应起来不是一个站得住的判断，其余市场的组合卡片直接不显示。
+
+页面顶部是市场选择条，选中的市场记在本机。刷新只取当前市场（两个请求），不是每次打开都拉十个市场的二十个请求；缓存按市场合并，刷新一个不会丢掉其余九个。快照文件为 `{schema_version: 2, sectors: [...]}`，旧的单市场文件仍能导入。
+
+原生 SwiftUI 页面：市场选择条、分段仪表盘、Core 评分、市场状态、六项指标、所选市场的波动率/MA20趋势与其基金成交量。趋势复用 `StandardLineChart`，包含统一坐标、网格、端点、长按查看和区间切换；MA20用虚线。组合卡片只在该市场给出暴露清单、当前账户有已识别持仓且快照未过期时显示，使用本机当前持仓美元绝对市值口径；演示模式显式标记。
+
+评分、MA、Z、分位数、Regime全部来自Core导出，不在Swift重算；手机自己刷新时走的是同一套方法的 Swift 移植。市场表与半导体识别清单由Core发布，iOS 保持同一份副本。iOS仅做展示范围裁剪、图表坐标范围和当前持仓暴露比例。
 
 ```sh
 ./core/dev collect-volatility
 ./core/dev export-volatility-ios
 ```
 
-导出精简市场快照到 `CatfolioIOS/CatfolioIOS/Resources/industry_sentiment.json`，不含账户数据。构建随App携带快照。真机无需依赖Mac的localhost，离线可查看；右上角导入按钮接受同结构JSON，校验后保存到App本地。不会导入比现有快照旧的日期，格式错误保持原快照。
+导出精简市场快照到 `CatfolioIOS/CatfolioIOS/Resources/industry_sentiment.json`，不含账户数据。每个市场只带最近 252 个交易日（页面最长区间与分位数窗口都是 252）；带全量历史时十个市场是 3.2MB，裁剪后 199KB。评分、Z、分位数仍按完整序列计算，裁剪发生在计算之后。构建随App携带快照。真机无需依赖Mac的localhost，离线可查看；右上角导入按钮接受同结构JSON，校验后保存到App本地。不会导入比现有快照旧的日期，格式错误保持原快照。
 
 当前没有公网实时更新服务，也不把构建时快照称为实时行情。日期始终可见，超过4个自然日标记过期；日常自动采集仍更新T7源数据，手机更新需重新导出并导入，或以后接通托管快照服务。
 
-验证：Core 10项测试、原生JSON解码/设置与统一图表接线测试、iOS Simulator Debug编译。未修改现有账户、收益计算及图表公共组件。
+验证：Core 14项测试（新增市场表与两种 Cboe CSV 版式的解析）、导出文件对 iOS 解码器每条校验的核对、iOS Simulator Debug编译。未修改现有账户、收益计算及图表公共组件。

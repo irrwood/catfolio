@@ -675,10 +675,17 @@ actor CompanyFinancialsClient {
     }
 }
 
-private extension CompanyFinancialsClient {
+// Not private: the SEC concept preferences and the period merge are what the
+// statements are read through, and the tests exercise them directly.
+extension CompanyFinancialsClient {
     struct SECConceptCatalog {
+        // Lenders and banks lead with revenue net of interest expense; their
+        // contract revenue is only the fee part of the top line, and reading
+        // it as the whole understated SoFi's 2025 revenue by five sixths.
+        // Listed first so it wins the tie when a filer reports both.
         let revenue = [
-            "RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues", "SalesRevenueNet", "Revenue",
+            "RevenuesNetOfInterestExpense", "RevenueFromContractWithCustomerExcludingAssessedTax",
+            "Revenues", "SalesRevenueNet", "Revenue",
         ]
         let costOfRevenue = [
             "CostOfRevenue", "CostOfGoodsAndServiceExcludingDepreciationDepletionAndAmortization",
@@ -686,6 +693,13 @@ private extension CompanyFinancialsClient {
         ]
         let grossProfit = ["GrossProfit"]
         let operatingExpenses = ["OperatingExpenses", "OperatingExpense"]
+        // A single total-expense line, the shape lenders, banks and insurers
+        // file in place of operating expenses under a gross profit. Read as
+        // revenue less this, never as the gross less this.
+        let totalCosts = [
+            "NoninterestExpense", "CostsAndExpenses", "OperatingCostsAndExpenses",
+            "BenefitsLossesAndExpenses",
+        ]
         let operatingIncome = ["OperatingIncomeLoss", "ProfitLossFromOperatingActivities"]
         let netIncome = ["NetIncomeLoss", "ProfitLoss"]
         let assets = ["Assets"]
@@ -728,7 +742,17 @@ private extension CompanyFinancialsClient {
             let cost = reportedCost ?? (revenue - gross)
             let reportedOperating = value(for: secConcepts.operatingIncome, namespace: namespace, anchor: anchor)
             let reportedExpenses = value(for: secConcepts.operatingExpenses, namespace: namespace, anchor: anchor)
-            guard let operating = reportedOperating ?? reportedExpenses.map({ gross - $0 }) else { return nil }
+            // SoFi stopped tagging both of those after 2021, as lenders do,
+            // and every period was dropped for want of an operating line —
+            // the whole statement came back empty. Their total expense line
+            // stands in, taken off revenue rather than off the gross, which
+            // already has the cost of revenue out of it.
+            let reportedTotalCosts = reportedOperating == nil && reportedExpenses == nil
+                ? value(for: secConcepts.totalCosts, namespace: namespace, anchor: anchor)
+                : nil
+            guard let operating = reportedOperating
+                ?? reportedExpenses.map({ gross - $0 })
+                ?? reportedTotalCosts.map({ revenue - $0 }) else { return nil }
             let expenses = reportedExpenses ?? (gross - operating)
             return IncomeStatementPeriod(
                 periodEnd: anchor.entry.end,
@@ -805,11 +829,22 @@ private extension CompanyFinancialsClient {
         // the statements frozen at the year it was last filed. Periods merge
         // across the concepts; where two report the same one, the concept
         // still in use wins.
-        let sources: [(unit: String, values: [SECFactValue])] = concepts.compactMap { concept in
-            guard let fact = namespace[concept], let unit = preferredMonetaryUnit(fact.units),
-                  let values = fact.units[unit], !values.isEmpty else { return nil }
-            return (unit, values)
-        }.sorted { ($0.values.map(\.end).max() ?? "") > ($1.values.map(\.end).max() ?? "") }
+        // Two concepts reported through the same quarter are ranked by the
+        // order they are listed in, which states the preference; the sort is
+        // not stable, so without the rank a filer that tags both — SoFi tags
+        // fee revenue and revenue net of interest expense alike — got one or
+        // the other depending on the run.
+        let sources: [(rank: Int, unit: String, values: [SECFactValue])] = concepts.enumerated()
+            .compactMap { rank, concept in
+                guard let fact = namespace[concept], let unit = preferredMonetaryUnit(fact.units),
+                      let values = fact.units[unit], !values.isEmpty else { return nil }
+                return (rank, unit, values)
+            }.sorted { lhs, rhs in
+                let lhsEnd = lhs.values.map(\.end).max() ?? ""
+                let rhsEnd = rhs.values.map(\.end).max() ?? ""
+                if lhsEnd != rhsEnd { return lhsEnd > rhsEnd }
+                return lhs.rank < rhs.rank
+            }
         guard !sources.isEmpty else { return [] }
         var best: [String: AnchorPeriod] = [:]
         for source in sources {

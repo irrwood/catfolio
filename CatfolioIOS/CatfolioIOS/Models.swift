@@ -709,6 +709,13 @@ struct PortfolioAttentionSignal: Identifiable, Codable, Sendable {
     let value: Double
 
     var id: String { kind }
+
+    /// A fact about the reader's own position rather than about the security:
+    /// how much of today's portfolio move this holding accounts for. It says
+    /// why the holding is worth their attention, and nothing about whether
+    /// the company is doing well, so it is never supporting evidence for a
+    /// stance — cited as one it only restates the move that raised the flag.
+    var isPortfolioRelative: Bool { kind == "portfolio_contribution" }
 }
 
 struct PortfolioAttentionSource: Identifiable, Codable, Sendable {
@@ -739,7 +746,11 @@ struct PortfolioAttentionThesis: Codable, Sendable {
 
     /// Which way the price signals lean, for a reading that rests on them.
     /// Volume alone has no direction, so a spike on its own reads as neutral.
+    /// Portfolio-relative signals do not vote. The share of the day a holding
+    /// accounts for carries the sign of the move that raised it, so counting
+    /// it weighed the same move twice and let position size tip the reading.
     static func priceStance(_ signals: [PortfolioAttentionSignal]) -> PortfolioThesisStance {
+        let signals = signals.filter { !$0.isPortfolioRelative }
         let positive = signals.filter { $0.direction == "positive" }.count
         let negative = signals.filter { $0.direction == "negative" }.count
         if positive > negative { return .strengthening }

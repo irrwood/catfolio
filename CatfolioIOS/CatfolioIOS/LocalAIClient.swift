@@ -216,7 +216,8 @@ struct LocalAIClient {
         }.joined(separator: "\n")
         let earlier = history.suffix(4).map { "问：\($0.question)\n答：\($0.answer)" }.joined(separator: "\n\n")
         let context = [
-            "持仓：\(row.name)（\(row.ticker)）。信号：\(row.signals.map(\.label).joined(separator: "、"))。",
+            "持仓：\(row.name)（\(row.ticker)）。信号：\(Self.securitySignalLine(row))。",
+            Self.portfolioSignalLine(row),
             "判断：\(row.thesis.basis == .company ? "已确认公司事件" : "仅价格信号，公司面待确认")，方向 \(row.thesis.stance.rawValue)，置信度 \(row.thesis.confidence.rawValue)",
             "发生了什么：\(row.thesis.whatChanged)",
             "为什么重要：\(row.thesis.whyItMatters)",
@@ -241,6 +242,25 @@ struct LocalAIClient {
         return (try await researchAnswer(prompt, context: context), false)
     }
 
+    /// The signals that say something about the security. Handed to the model
+    /// as the signal list.
+    static func securitySignalLine(_ row: PortfolioAttentionHolding, separator: String = "、") -> String {
+        row.signals.filter { !$0.isPortfolioRelative }.map(\.label).joined(separator: separator)
+    }
+
+    /// How much of the reader's day this holding accounts for, stated apart
+    /// from the signals and named for what it is. Given as a signal it was
+    /// read as a fact about the company, and answers argued a stance from the
+    /// size of the position.
+    static func portfolioSignalLine(_ row: PortfolioAttentionHolding, english: Bool = false) -> String {
+        let portfolio = row.signals.filter(\.isPortfolioRelative)
+        guard !portfolio.isEmpty else { return "" }
+        let labels = portfolio.map(\.label).joined(separator: english ? ", " : "、")
+        return english
+            ? "The reader's own exposure (why this is being raised, not evidence about the company): \(labels)."
+            : "读者的持仓背景（说明为什么提醒他，不是公司面的证据）：\(labels)。"
+    }
+
     /// Re-reads one holding from the evidence the reader kept and the points
     /// they added. The model writes the reading; the confidence stays with
     /// the code: the reader's own points are not sourced, so any change caps
@@ -252,7 +272,8 @@ struct LocalAIClient {
                 + (source.publishedAt.map { " (\(DayDateCodec.string(from: $0)))" } ?? "")
         }.joined(separator: "\n")
         let context = [
-            "Holding: \(row.name) (\(row.ticker)). Signals: \(row.signals.map(\.label).joined(separator: ", ")).",
+            "Holding: \(row.name) (\(row.ticker)). Signals: \(Self.securitySignalLine(row, separator: ", ")).",
+            Self.portfolioSignalLine(row, english: true),
             "Previous reading: \(row.thesis.whyItMatters)",
             "Supporting evidence the reader kept:",
             supporting.map { "- " + $0 }.joined(separator: "\n"),
@@ -262,7 +283,7 @@ struct LocalAIClient {
             notes.map { "- " + $0 }.joined(separator: "\n"),
             "Sources behind the original analysis (titles only):",
             sources,
-        ].joined(separator: "\n")
+        ].filter { !$0.isEmpty }.joined(separator: "\n")
         let prompt = "你是 Catfolio Portfolio Attention Engine 的 thesis 阶段。方向由代码决定，你只报告事实：catalyst_direction 是保留下来的证据里已确认的公司事件对基本面的方向（positive、negative、mixed），没有已确认的公司事件写 none，不要用股价涨跌代替。读者调整了这只持仓的证据：去掉了一些，也可能补充了自己的观点。只根据保留下来的证据和读者的补充，重新写这只持仓的判断；被去掉的证据当作不存在。读者的补充未经来源验证，要写成“你提到……”而不是事实。不重算数字，不虚构新闻，不输出买卖、目标价或仓位建议。\n"
             + "只输出 JSON：{\"catalyst_direction\":\"positive|negative|mixed|none\",\"what_changed\":\"...\",\"why_it_matters\":\"...\",\"risks\":[\"...\"],\"watch_next\":[\"...\"]}\n"
             + L10n.responseLanguageInstruction

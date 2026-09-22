@@ -20,7 +20,7 @@
 
 ## iOS 已有计算与数据能力
 
-下表中的文件相对 `CatfolioIOS/CatfolioIOS/`；测试相对 `CatfolioIOS/CatfolioIOSTests/`。
+下表中的文件相对 `CatfolioIOS/CatfolioIOS/`；测试在 `CatfolioIOS/CatfolioIOSTests/`（纯逻辑）或 `CatfolioIOS/CatfolioIOSViewTests/`（`import SwiftUI` 的渲染、布局与交互测试）。
 
 | 能力 | 实现入口 | 调用/消费位置 | 测试与边界 |
 |---|---|---|---|
