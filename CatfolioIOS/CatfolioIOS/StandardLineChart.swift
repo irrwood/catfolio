@@ -679,10 +679,17 @@ struct StandardLineChart: View {
                                         height: plot.height
                                     )))
                                 }
-                                // The viewport overshoot can be imperceptible on a nearly
-                                // flat range. Move the plotted lines a few points past their
-                                // resting position so the rebound is visible in every range.
-                                lineContext.translateBy(x: rangeReboundOffset(progress), y: 0)
+                                // Stretch the plot about its right endpoint. The left and
+                                // middle of the curve rebound while the latest point keeps
+                                // its horizontal position beneath the separate endpoint ring.
+                                let rebound = rangeReboundOffset(progress)
+                                if rebound != 0 {
+                                    let anchorX = plot.maxX - trailingEndpointInset
+                                    let plottedWidth = max(anchorX - (plot.minX - leadingLineOverflow), 1)
+                                    lineContext.translateBy(x: anchorX, y: 0)
+                                    lineContext.scaleBy(x: 1 - rebound / plottedWidth, y: 1)
+                                    lineContext.translateBy(x: -anchorX, y: 0)
+                                }
                                 if !outgoingSeries.isEmpty,
                                    settledProgress < 1 || (bouncesSeriesChange && progress > 1)
                                        || (bouncesRangeTransition && viewportProgress > 1) {
@@ -718,7 +725,6 @@ struct StandardLineChart: View {
                                               viewportProgress: bouncesRangeTransition
                                                   ? rangeViewportProgress(progress) : min(1, max(0, progress)),
                                               bounceProgress: progress)
-                                    .offset(x: rangeReboundOffset(progress))
                             }
                         }
 
@@ -1278,10 +1284,8 @@ struct StandardLineChart: View {
         return min(progress, CGFloat(1 + limit))
     }
 
-    /// The endpoint is anchored during a viewport zoom, so its date/value
-    /// overshoot alone barely moves on screen. A short horizontal spring keeps
-    /// the entire curve and its endpoint together while leaving the data and
-    /// final geometry untouched.
+    /// Left-edge travel for a short spring. Canvas scales about the chart's
+    /// right endpoint, so this never changes the latest point's horizontal position.
     private func rangeReboundOffset(_ raw: CGFloat) -> CGFloat {
         guard bouncesRangeTransition, raw > 1,
               let oldStart = outgoingDates.first, let oldEnd = outgoingDates.last,
@@ -1289,7 +1293,7 @@ struct StandardLineChart: View {
         let oldSpan = oldEnd.timeIntervalSince(oldStart)
         let newSpan = newEnd.timeIntervalSince(newStart)
         let direction: CGFloat = newSpan < oldSpan ? -1 : 1
-        return direction * min(12, (raw - 1) * 170)
+        return direction * min(20, (raw - 1) * 260)
     }
 
     private func drawViewportZoomedSeries(
