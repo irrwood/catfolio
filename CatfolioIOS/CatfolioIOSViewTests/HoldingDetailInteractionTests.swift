@@ -672,6 +672,52 @@ final class LineChartMotionTests: XCTestCase {
         dates.map { StandardLineChartPoint(date: Date(timeIntervalSinceReferenceDate: $0), value: value($0)) }
     }
 
+    func testRangeHistoryZoomOutUsesRealNewValuesBeyondOldWindow() {
+        let old = points([4, 6, 8, 10]) { 1_000 + $0 }
+        let new = points([0, 2, 4, 6, 8, 10]) { 100 + $0 }
+        let history = StandardLineChartRangeHistory(from: old, to: new)
+        let visible = history.samples(from: new[0].date, to: new[new.count - 1].date)
+
+        XCTAssertEqual(visible.map(\.date), new.map(\.date))
+        XCTAssertEqual(visible.map(\.value), new.map(\.value))
+        XCTAssertEqual(history.points.count, new.count)
+    }
+
+    func testRangeHistoryDoesNotExtendFlatLineBeforeFirstObservation() throws {
+        let old = points([4, 6, 8]) { $0 * 10 }
+        let new = points([2, 4, 6, 8]) { $0 * 10 }
+        let history = StandardLineChartRangeHistory(from: old, to: new)
+        let requestedStart = Date(timeIntervalSinceReferenceDate: -20)
+        let requestedEnd = Date(timeIntervalSinceReferenceDate: 3)
+        let visible = history.samples(from: requestedStart, to: requestedEnd)
+
+        XCTAssertEqual(visible.count, 2)
+        XCTAssertEqual(visible.first?.date, new[0].date)
+        XCTAssertEqual(visible.first?.value, 20)
+        XCTAssertEqual(visible.last?.date, requestedEnd)
+        XCTAssertEqual(visible.last?.value, 30)
+        XCTAssertTrue(history.samples(
+            from: requestedStart,
+            to: Date(timeIntervalSinceReferenceDate: 1)
+        ).isEmpty)
+    }
+
+    func testRangeHistoryInterpolatesOnlyCutSegmentsAndSettlesAtExactVertices() {
+        let old = points([0, 10, 20]) { $0 * 2 }
+        let new = points([10, 20]) { $0 * 2 }
+        let history = StandardLineChartRangeHistory(from: old, to: new)
+        let cut = history.samples(
+            from: Date(timeIntervalSinceReferenceDate: 5),
+            to: Date(timeIntervalSinceReferenceDate: 15)
+        )
+
+        XCTAssertEqual(cut.map { $0.date.timeIntervalSinceReferenceDate }, [5, 10, 15])
+        XCTAssertEqual(cut.map(\.value), [10, 20, 30])
+        let settled = history.samples(from: new[0].date, to: new[1].date)
+        XCTAssertEqual(settled.map(\.date), new.map(\.date))
+        XCTAssertEqual(settled.map(\.value), new.map(\.value))
+    }
+
     func testRebasedInterleavedDatesCannotCreateSpikes() {
         let old = points([0, 2, 4, 6, 8, 10]) { _ in 10 }
         let new = points([1, 3, 5, 7, 9, 10]) { _ in 100 }
@@ -696,20 +742,6 @@ final class LineChartMotionTests: XCTestCase {
             XCTAssertEqual(path.samples(progress: -0.1).map(\.value), old.map(\.value))
             XCTAssertEqual(path.samples(progress: 1.1).map(\.value), new.map(\.value))
         }
-    }
-
-    func testRangeBounceCanPassViewportThenSettleAtExactTarget() throws {
-        let old = points([0, 2, 4, 6, 8, 10]) { 100 + $0 }
-        let new = points([4, 5, 6, 8, 10]) { 150 + $0 }
-        let path = StandardLineChartViewportPath(from: old, to: new)
-        let bounced = path.samples(progress: 1.06, allowingOvershoot: true)
-
-        XCTAssertGreaterThan(try XCTUnwrap(bounced.first?.date), new[0].date)
-        XCTAssertEqual(bounced.map(\.date), bounced.map(\.date).sorted())
-        XCTAssertTrue(bounced.allSatisfy { $0.value.isFinite })
-        XCTAssertEqual(path.samples(progress: 1.06).map(\.date), new.map(\.date))
-        XCTAssertEqual(path.samples(progress: 1).map(\.date), new.map(\.date))
-        XCTAssertEqual(path.samples(progress: 1).map(\.value), new.map(\.value))
     }
 
     func testRapidRetargetStartsAtCurrentGeometryNotPreviousDestination() {
