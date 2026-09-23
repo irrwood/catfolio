@@ -7,7 +7,7 @@ struct LocalMarketDataClient {
     private static let yahooSession: URLSession = {
         let configuration = URLSessionConfiguration.default
         configuration.waitsForConnectivity = false
-        configuration.requestCachePolicy = .returnCacheDataElseLoad
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.urlCache = URLCache(
             memoryCapacity: 24 * 1_024 * 1_024,
             diskCapacity: 120 * 1_024 * 1_024
@@ -87,7 +87,8 @@ struct LocalMarketDataClient {
 
     func portfolioChart(
         document: LocalPortfolioDocument,
-        cachedOnly: Bool = false
+        cachedOnly: Bool = false,
+        forceRefresh: Bool = false
     ) async throws -> PortfolioChartResponse {
         if document.isPublicDisclosure, let current = document.snapshots.last {
             let rows = document.snapshots.map { ChartPoint(dateText: $0.date, marketValue: $0.marketValueUSD, cost: $0.costUSD) }
@@ -99,15 +100,18 @@ struct LocalMarketDataClient {
         if document.isSynthetic == true { return try LocalPortfolioEngine.presentation(for: document).1 }
         do {
             let account = try await tolerantAccountSeries(document: document,
-                to: DayDateCodec.string(from: Date()), cachedOnly: cachedOnly, includeBenchmarks: false)
+                to: DayDateCodec.string(from: Date()), cachedOnly: cachedOnly, includeBenchmarks: false,
+                homeValuation: true, forceRefresh: forceRefresh)
             guard let ledger = account.ledger else { throw LocalServiceError.noHistoricalPrices }
-            return .accountHistory(ledger: ledger, nav: account.portfolio, positionCount: document.positions.count,
+            var response = PortfolioChartResponse.accountHistory(ledger: ledger, nav: account.portfolio, positionCount: document.positions.count,
                                    assumptions: account.assumptions)
+            response.marketDates = account.marketDates
+            return response
         } catch {
             let reason = error.localizedDescription.replacingOccurrences(of: "TWR：", with: "")
             // Last resort, still a chart: today's positions backcast at
             // each day's close against what they cost, as before the ledger.
-            if let backcast = try? await currentOpenPositionsHistory(document: document, end: DayDateCodec.string(from: Date()), cachedOnly: cachedOnly),
+            if let backcast = try? await currentOpenPositionsHistory(document: document, end: DayDateCodec.string(from: Date()), cachedOnly: cachedOnly, forceRefresh: forceRefresh),
                let last = backcast.rows.last, backcast.rows.count > 1 {
                 var response = PortfolioChartResponse(positionCount: document.positions.count,
                     positionHistory: PositionHistory(available: true, rows: backcast.rows), currentPoint: last,
@@ -239,7 +243,7 @@ struct LocalMarketDataClient {
     /// result is keyed by ticker and quote currency so multiple broker
     /// accounts for the same instrument share one market request while still
     /// preserving their independent quantities and costs.
-    func latestQuotes(for positions: [LocalPositionRecord]) async -> [String: ObservedMarketQuote] {
+    func latestQuotes(for positions: [LocalPositionRecord], forceRefresh: Bool = false) async -> [String: ObservedMarketQuote] {
         guard !positions.isEmpty else { return [:] }
         let symbols = positions.map {
             Self.yahooSymbol(ticker: $0.ticker, currency: $0.quoteCurrency)
@@ -249,7 +253,7 @@ struct LocalMarketDataClient {
             let concurrencyLimit = min(8, symbols.count)
             for _ in 0..<concurrencyLimit {
                 guard let symbol = iterator.next() else { break }
-                group.addTask { (symbol, await latestRawPrice(for: symbol)) }
+                group.addTask { (symbol, await latestRawPrice(for: symbol, forceRefresh: forceRefresh)) }
             }
 
             var result: [String: ObservedMarketQuote] = [:]
@@ -258,7 +262,7 @@ struct LocalMarketDataClient {
                     result[symbol] = price
                 }
                 if let next = iterator.next() {
-                    group.addTask { (next, await latestRawPrice(for: next)) }
+                    group.addTask { (next, await latestRawPrice(for: next, forceRefresh: forceRefresh)) }
                 }
             }
             return result
@@ -283,10 +287,43 @@ struct LocalMarketDataClient {
         }
     }
 
-    private func latestRawPrice(for symbol: String) async -> ObservedMarketQuote? {
+    /// Overlay only the observed market session, never today's calendar date.
+    /// `currency == nil` denotes raw provider units; ledger callers supply
+    /// their explicit denomination so GBP and GBX cannot be mixed.
+    static func homeCloses(_ closes: [String: Double], symbol: String, currency: String?,
+                           positions: [LocalPositionRecord], through end: String,
+                           now: Date = .now) -> [String: Double] {
+        guard let position = positions.filter({
+            yahooSymbol(ticker: $0.ticker, currency: $0.quoteCurrency) == symbol
+                && $0.quotePrice.isFinite && $0.quotePrice > 0
+                && $0.quoteObservedAt.map { $0 <= now.addingTimeInterval(60)
+                    && $0 >= now.addingTimeInterval(-7 * 86_400) } == true
+        }).max(by: { $0.quoteObservedAt! < $1.quoteObservedAt! }),
+              let observedAt = position.quoteObservedAt else { return closes }
+        let day = sessionKey(for: observedAt, symbol: symbol)
+        guard day <= end, day >= (closes.keys.max() ?? day) else { return closes }
+        let price: Double
+        if let currency {
+            func unit(_ code: String) -> (String, Double) {
+                code == "GBp" || code.uppercased() == "GBX" ? ("GBP", 0.01) : (code.uppercased(), 1)
+            }
+            let source = unit(position.quoteCurrency), target = unit(currency)
+            guard source.0 == target.0 else { return closes }
+            price = position.quotePrice * source.1 / target.1
+        } else {
+            let scale = priceScale(ticker: position.ticker, currency: position.quoteCurrency,
+                referencePrice: position.quotePrice, marketPrice: closes[closes.keys.max() ?? ""] ?? position.quotePrice)
+            price = position.quotePrice / scale
+        }
+        var result = closes
+        result[day] = price
+        return result
+    }
+
+    private func latestRawPrice(for symbol: String, forceRefresh: Bool) async -> ObservedMarketQuote? {
         // Display charts may retain stale bars; a failed live refresh must
         // never turn those bars into a newly observed portfolio quote.
-        if let bars = try? await intradayBars(symbol: symbol, allowsStaleFallback: false),
+        if let bars = try? await intradayBars(symbol: symbol, forceRefresh: forceRefresh, allowsStaleFallback: false),
            let bar = bars.max(by: { $0.timestamp < $1.timestamp }),
            bar.close.isFinite, bar.close > 0 {
             return ObservedMarketQuote(price: bar.close, observedAt: bar.timestamp)
@@ -298,8 +335,8 @@ struct LocalMarketDataClient {
         let now = Date()
         guard let closes = try? await historicalCloses(symbol: symbol,
                 from: DayDateCodec.string(from: now.addingTimeInterval(-7 * 86400)),
-                to: DayDateCodec.string(from: now), dividendAdjusted: false),
-              let day = closes.keys.max(), let observedAt = DayDateCodec.date(from: day),
+                to: DayDateCodec.string(from: now), dividendAdjusted: false, forceRefresh: forceRefresh),
+              let day = closes.keys.max(), let observedAt = Self.marketDayStart(day, symbol: symbol),
               let price = closes[day], price.isFinite, price > 0 else { return nil }
         return ObservedMarketQuote(price: price, observedAt: observedAt)
     }
@@ -317,7 +354,8 @@ struct LocalMarketDataClient {
         document: LocalPortfolioDocument,
         end: String,
         cachedOnly: Bool = false,
-        fundingAtEntryValue: Bool = false
+        fundingAtEntryValue: Bool = false,
+        forceRefresh: Bool = false
     ) async throws -> (rows: [ChartPoint], warnings: [String]) {
         var earliestBuyDates: [String: String] = [:]
         for transaction in document.transactions ?? [] where transaction.action.uppercased() == "BUY" {
@@ -337,14 +375,22 @@ struct LocalMarketDataClient {
         let symbols = datedPositions.map {
             Self.yahooSymbol(ticker: $0.position.ticker, currency: $0.position.quoteCurrency)
         }.uniqued()
-        let histories = await historicalCloses(
+        var histories = await historicalCloses(
             symbols: symbols,
             from: start,
             to: end,
-            cachedOnly: cachedOnly
+            dividendAdjusted: fundingAtEntryValue,
+            cachedOnly: cachedOnly,
+            forceRefresh: forceRefresh
         )
         if cachedOnly, histories.count != symbols.count {
             throw LocalServiceError.noHistoricalPrices
+        }
+        if !fundingAtEntryValue {
+            for symbol in symbols {
+                histories[symbol] = Self.homeCloses(histories[symbol] ?? [:], symbol: symbol,
+                    currency: nil, positions: document.positions, through: end)
+            }
         }
         let dates = histories.values.flatMap(\.keys).sorted().uniqued()
         guard !dates.isEmpty else {
@@ -407,8 +453,8 @@ struct LocalMarketDataClient {
         var warnings: [String] = []
         let missingSymbols = symbols.filter { histories[$0]?.isEmpty != false }
         if !missingSymbols.isEmpty {
-            let preview = missingSymbols.prefix(6).joined(separator: "、")
-            let remainder = missingSymbols.count > 6 ? " 等 \(missingSymbols.count) 个标的" : ""
+            let preview = missingSymbols.prefix(6).joined(separator: L10n.listSeparator)
+            let remainder = missingSymbols.count > 6 ? L10n.text(" 等 \(missingSymbols.count) 个标的") : ""
             warnings.append("\(preview)\(remainder)缺少历史行情，市值暂按成本估算。")
         }
         let missingDateCount = document.positions.count - datedPositions.count
@@ -421,7 +467,7 @@ struct LocalMarketDataClient {
     /// Reads the latest two cached daily closes for every holding in one bounded
     /// batch. This powers the heatmap without issuing a separate volume-profile
     /// request for every tile.
-    func dailyChanges(for holdings: [Holding]) async -> [String: Double] {
+    func dailyChanges(for holdings: [Holding], positions: [LocalPositionRecord] = [], forceRefresh: Bool = false) async -> [String: Double] {
         guard !holdings.isEmpty else { return [:] }
 
         let endDate = Date.now
@@ -435,14 +481,16 @@ struct LocalMarketDataClient {
         let symbols = holdings.map {
             Self.yahooSymbol(ticker: $0.ticker, currency: $0.quoteCurrency ?? "USD")
         }.uniqued()
-        let histories = await historicalCloses(symbols: symbols, from: start, to: end)
+        let histories = await historicalCloses(symbols: symbols, from: start, to: end, dividendAdjusted: false, forceRefresh: forceRefresh)
 
         return holdings.reduce(into: [String: Double]()) { result, holding in
             let symbol = Self.yahooSymbol(
                 ticker: holding.ticker,
                 currency: holding.quoteCurrency ?? "USD"
             )
-            guard let change = Self.latestDailyChange(in: histories[symbol]) else { return }
+            let closes = Self.homeCloses(histories[symbol] ?? [:], symbol: symbol,
+                currency: nil, positions: positions, through: end)
+            guard let change = Self.latestDailyChange(in: closes) else { return }
             result[holding.ticker.uppercased()] = change
         }
     }
@@ -480,7 +528,7 @@ struct LocalMarketDataClient {
         }
     }
 
-    func dailyChange(ticker: String, currency: String = "USD") async -> Double? {
+    func dailyChange(ticker: String, currency: String = "USD", forceRefresh: Bool = false) async -> Double? {
         let endDate = Date.now
         let startDate = Calendar(identifier: .gregorian).date(
             byAdding: .day,
@@ -490,7 +538,7 @@ struct LocalMarketDataClient {
         let start = DayDateCodec.string(from: startDate)
         let end = DayDateCodec.string(from: endDate)
         let symbol = Self.yahooSymbol(ticker: ticker, currency: currency)
-        let histories = await historicalCloses(symbols: [symbol], from: start, to: end)
+        let histories = await historicalCloses(symbols: [symbol], from: start, to: end, dividendAdjusted: false, forceRefresh: forceRefresh)
         return Self.latestDailyChange(in: histories[symbol])
     }
 
@@ -800,12 +848,18 @@ struct LocalMarketDataClient {
         request.timeoutInterval = 12
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await LocalRequestSessions.ephemeral.data(for: request)
+        let (data, response) = try await LocalRequestSessions.ephemeral.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             throw LocalServiceError.remote(Self.message(from: data, fallback: "Massive 日内行情请求失败（\(http.statusCode)）"))
         }
-        let payload = try JSONDecoder().decode(MassiveAggregatesResponse.self, from: data)
+        let payload: MassiveAggregatesResponse
+        do {
+            payload = try JSONDecoder().decode(MassiveAggregatesResponse.self, from: data)
+        } catch {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
+            throw error
+        }
         if let error = payload.error ?? payload.message, !error.isEmpty {
             throw LocalServiceError.remote(error)
         }
@@ -842,12 +896,18 @@ struct LocalMarketDataClient {
         request.timeoutInterval = 9
         request.setValue("Mozilla/5.0 Catfolio-iOS", forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await Self.yahooSession.data(for: request)
+        let (data, response) = try await Self.yahooSession.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             throw LocalServiceError.remote("Yahoo 日内行情请求失败（\(http.statusCode)）")
         }
-        let payload = try JSONDecoder().decode(YahooChartResponse.self, from: data)
+        let payload: YahooChartResponse
+        do {
+            payload = try JSONDecoder().decode(YahooChartResponse.self, from: data)
+        } catch {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
+            throw error
+        }
         if let error = payload.chart.error {
             throw LocalServiceError.remote(error.description ?? error.code ?? "Yahoo 日内行情读取失败")
         }
@@ -896,6 +956,14 @@ struct LocalMarketDataClient {
             return minute >= 9 * 60 + 30 && minute <= 16 * 60
         }
         return regularSession.count > 1 ? regularSession : latest
+    }
+
+    static func marketDayStart(_ day: String, symbol: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = marketTimeZone(for: symbol)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: day)
     }
 
     private static func sessionKey(for date: Date, symbol: String) -> String {
@@ -950,7 +1018,7 @@ struct LocalMarketDataClient {
         var request = URLRequest(url: components.url!)
         request.timeoutInterval = 25
         try await FMPRequestLimiter.shared.waitForTurn()
-        let (data, response) = try await LocalRequestSessions.waiting.data(for: request)
+        let (data, response) = try await LocalRequestSessions.waiting.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         if http.statusCode == 429 {
             await FMPRequestLimiter.shared.backOff(retryAfter: http.value(forHTTPHeaderField: "Retry-After"))
@@ -964,6 +1032,7 @@ struct LocalMarketDataClient {
         do {
             bars = try JSONDecoder().decode([MarketDailyBar].self, from: data)
         } catch {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
             throw LocalServiceError.remote(Self.message(from: data, fallback: "FMP 返回格式无法识别"))
         }
         guard !bars.isEmpty else { throw LocalServiceError.noMarketData }
@@ -990,7 +1059,7 @@ struct LocalMarketDataClient {
         request.timeoutInterval = 20
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await LocalRequestSessions.ephemeral.data(for: request)
+        let (data, response) = try await LocalRequestSessions.ephemeral.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             throw LocalServiceError.remote(Self.message(from: data, fallback: "Massive 行情请求失败（\(http.statusCode)）"))
@@ -999,6 +1068,7 @@ struct LocalMarketDataClient {
         do {
             payload = try JSONDecoder().decode(MassiveAggregatesResponse.self, from: data)
         } catch {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
             throw LocalServiceError.remote("Massive 返回格式无法识别")
         }
         if let error = payload.error ?? payload.message, !error.isEmpty {
@@ -1047,12 +1117,18 @@ struct LocalMarketDataClient {
         request.timeoutInterval = 9
         request.setValue("Mozilla/5.0 Catfolio-iOS", forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await Self.yahooSession.data(for: request)
+        let (data, response) = try await Self.yahooSession.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             throw LocalServiceError.remote("Yahoo 成交量请求失败（\(http.statusCode)）")
         }
-        let payload = try JSONDecoder().decode(YahooChartResponse.self, from: data)
+        let payload: YahooChartResponse
+        do {
+            payload = try JSONDecoder().decode(YahooChartResponse.self, from: data)
+        } catch {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
+            throw error
+        }
         if let error = payload.chart.error {
             throw LocalServiceError.remote(error.description ?? error.code ?? "Yahoo 成交量读取失败")
         }
@@ -1194,7 +1270,7 @@ struct LocalMarketDataClient {
             for symbol in benchmarkSymbols { returns[symbol] = mirrored.benchmarkReturns[symbol]?.last ?? nil }
             let unavailable = benchmarkSymbols.filter { (mirrored.benchmarks[$0]?.last ?? nil) == nil }
             if !unavailable.isEmpty {
-                comparisonWarnings.append("现金流镜像：\(unavailable.joined(separator: "、")) 缺少可用行情或无法支付同额出金，最新结果不可用。")
+                comparisonWarnings.append("现金流镜像：\(unavailable.joined(separator: L10n.listSeparator)) 缺少可用行情或无法支付同额出金，最新结果不可用。")
             }
             let mwr = ledger.returns()
             mwrPortfolioSeries = mwr.portfolio
@@ -1205,7 +1281,7 @@ struct LocalMarketDataClient {
         if !document.isPublicDisclosure && document.isSynthetic != true {
             do {
                 let account = try await tolerantAccountSeries(document: document, to: end)
-                if present(account) {
+                if present((account.dates, account.portfolio, account.benchmarks, account.ledger, account.assumptions)) {
                     dataIssues = account.assumptions
                     if !account.assumptions.isEmpty { comparisonWarnings.append(Self.impliedFundingNote) }
                     comparisonWarnings.append("现金流镜像：组合与基准使用相同日期、相同金额的真实外部资金流。曲线为剩余资产（含现金）＋累计取出金额，单位 USD；百分比为累计盈亏÷累计入金。基准按同日可用收盘总收益价格模拟，不含额外交易费用，非实际日内成交。现金余额尚未与券商核对。")
@@ -1286,16 +1362,17 @@ struct LocalMarketDataClient {
     /// account where it does not. What went wrong is kept as an assumption
     /// for Settings to list, not a reason to draw nothing.
     private func tolerantAccountSeries(
-        document: LocalPortfolioDocument, to end: String, cachedOnly: Bool = false, includeBenchmarks: Bool = true
-    ) async throws -> (dates: [String], portfolio: [Double?], benchmarks: [String: [Double?]], ledger: AccountMWRLedger?, assumptions: [String]) {
+        document: LocalPortfolioDocument, to end: String, cachedOnly: Bool = false, includeBenchmarks: Bool = true,
+        homeValuation: Bool = false, forceRefresh: Bool = false
+    ) async throws -> (dates: [String], portfolio: [Double?], benchmarks: [String: [Double?]], ledger: AccountMWRLedger?, assumptions: [String], marketDates: [String]) {
         do {
-            return try await accountTimeWeightedSeries(document: document, to: end, cachedOnly: cachedOnly, includeBenchmarks: includeBenchmarks)
+            return try await accountTimeWeightedSeries(document: document, to: end, cachedOnly: cachedOnly, includeBenchmarks: includeBenchmarks, homeValuation: homeValuation, forceRefresh: forceRefresh)
         } catch is CancellationError {
             throw CancellationError()
         } catch {
             if cachedOnly { throw error }
             let reason = error.localizedDescription.replacingOccurrences(of: "TWR：", with: "")
-            var retry = try await accountTimeWeightedSeries(document: document, to: end, includeBenchmarks: includeBenchmarks, rebuildAll: true)
+            var retry = try await accountTimeWeightedSeries(document: document, to: end, includeBenchmarks: includeBenchmarks, rebuildAll: true, homeValuation: homeValuation, forceRefresh: forceRefresh)
             retry.assumptions.append(L10n.text("按原始流水重建时出错（\(reason)），已对全部账户按推算重建。"))
             return retry
         }
@@ -1303,8 +1380,8 @@ struct LocalMarketDataClient {
 
     private func accountTimeWeightedSeries(
         document: LocalPortfolioDocument, to end: String, cachedOnly: Bool = false, includeBenchmarks: Bool = true,
-        rebuildAll: Bool = false
-    ) async throws -> (dates: [String], portfolio: [Double?], benchmarks: [String: [Double?]], ledger: AccountMWRLedger?, assumptions: [String]) {
+        rebuildAll: Bool = false, homeValuation: Bool = false, forceRefresh: Bool = false
+    ) async throws -> (dates: [String], portfolio: [Double?], benchmarks: [String: [Double?]], ledger: AccountMWRLedger?, assumptions: [String], marketDates: [String]) {
         typealias T = DailyTimeWeightedReturn
         let records = document.transactions ?? []
         // An account with positions and no rows starts where the broker says
@@ -1382,7 +1459,7 @@ struct LocalMarketDataClient {
                 group.addTask {
                     do {
                         try Task.checkCancellation()
-                        return (symbol, try await ledgerPriceHistory(symbol: symbol, from: start, to: end, cachedOnly: cachedOnly))
+                        return (symbol, try await ledgerPriceHistory(symbol: symbol, from: start, to: end, cachedOnly: cachedOnly, forceRefresh: forceRefresh))
                     } catch {
                         if cachedOnly || error is CancellationError { throw error }
                         return (symbol, nil)
@@ -1401,7 +1478,11 @@ struct LocalMarketDataClient {
         }
         try Task.checkCancellation()
         for (symbol, history) in histories {
-            if let history {
+            if var history {
+                if homeValuation {
+                    history.closes = Self.homeCloses(history.closes, symbol: symbol,
+                        currency: history.currency, positions: document.positions, through: end)
+                }
                 prices[symbol] = history
                 currencies.insert(history.currency)
                 splits += history.splits
@@ -1443,7 +1524,7 @@ struct LocalMarketDataClient {
         for currency in currencies where currency != "USD" {
             let normalized = currency == "GBX" ? "GBP" : currency
             let fxStart = DayDateCodec.string(from: DayDateCodec.date(from: start)!.addingTimeInterval(-7 * 86400))
-            let history = try await historicalCloses(symbol: "\(normalized)USD=X", from: fxStart, to: end, cachedOnly: cachedOnly)
+            let history = try await historicalCloses(symbol: "\(normalized)USD=X", from: fxStart, to: end, cachedOnly: cachedOnly, forceRefresh: forceRefresh)
             fx[currency] = history.mapValues { currency == "GBX" ? $0 / 100 : $0 }
         }
         guard var date = DayDateCodec.date(from: start), let last = DayDateCodec.date(from: end) else {
@@ -1502,7 +1583,7 @@ struct LocalMarketDataClient {
 
             func names(_ symbols: [String]) -> String {
                 let unique = Array(NSOrderedSet(array: symbols.map { $0.replacingOccurrences(of: ".L", with: "") })) as? [String] ?? []
-                return unique.prefix(4).joined(separator: "、") + (unique.count > 4 ? L10n.text(" 等") : "")
+                return unique.prefix(4).joined(separator: L10n.listSeparator) + (unique.count > 4 ? L10n.text(" 等") : "")
             }
             assumptions.append(Self.impliedFundingNote)
             if !valuedFills.isEmpty {
@@ -1513,7 +1594,7 @@ struct LocalMarketDataClient {
             }
             if !skippedTypes.isEmpty {
                 let kinds = Array(NSOrderedSet(array: skippedTypes)) as? [String] ?? []
-                assumptions.append(L10n.text("\(skippedTypes.count) 条流水（\(kinds.prefix(3).joined(separator: "、"))）暂时读不懂，已跳过；持仓按当前账户对齐。"))
+                assumptions.append(L10n.text("\(skippedTypes.count) 条流水（\(kinds.prefix(3).joined(separator: L10n.listSeparator))）暂时读不懂，已跳过；持仓按当前账户对齐。"))
             }
             if !closings.symbols.isEmpty {
                 assumptions.append(L10n.text("\(names(closings.symbols)) 已不在当前持仓里，但没有卖出记录，按最后一个收盘价转出。"))
@@ -1543,7 +1624,7 @@ struct LocalMarketDataClient {
                       nav: NSDecimalNumber(decimal: $0.nav).doubleValue)
         }
         let assembled = await accountLedger(points, end: end, cachedOnly: cachedOnly, includeBenchmarks: includeBenchmarks)
-        return (assembled.dates, assembled.portfolio, assembled.benchmarks, assembled.ledger, assumptions)
+        return (assembled.dates, assembled.portfolio, assembled.benchmarks, assembled.ledger, assumptions, Array(Set(prices.values.flatMap { $0.closes.keys })).filter { $0 <= end }.sorted())
     }
 
     /// One day of a rebuilt account, in USD.
@@ -1642,7 +1723,7 @@ struct LocalMarketDataClient {
 
     /// Yahoo quote.close is split-adjusted. Undo subsequent splits to get the
     /// contemporaneous price used with actual historical share quantities.
-    private func ledgerPriceHistory(symbol: String, from: String, to: String, cachedOnly: Bool = false) async throws -> LedgerPriceHistory {
+    private func ledgerPriceHistory(symbol: String, from: String, to: String, cachedOnly: Bool = false, forceRefresh: Bool = false) async throws -> LedgerPriceHistory {
         let cacheKey = Data("ledger-v1|\(symbol)|\(from)|\(to)".utf8).base64EncodedString()
             .replacingOccurrences(of: "/", with: "_")
         let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
@@ -1652,7 +1733,7 @@ struct LocalMarketDataClient {
             guard let cached else { throw LocalServiceError.noHistoricalPrices }
             return cached
         }
-        if let cached, Date().timeIntervalSince(cached.fetchedAt) < 12 * 3600 { return cached }
+        if !forceRefresh, let cached, Date().timeIntervalSince(cached.fetchedAt) < 12 * 3600 { return cached }
         guard let start = DayDateCodec.date(from: from), let end = DayDateCodec.date(from: to) else { throw LocalServiceError.invalidResponse }
         var url = URLComponents(string: "https://query1.finance.yahoo.com/v8/finance/chart/")!
         url.path += symbol
@@ -1663,9 +1744,9 @@ struct LocalMarketDataClient {
         request.timeoutInterval = 15
         request.setValue("Mozilla/5.0 Catfolio-iOS", forHTTPHeaderField: "User-Agent")
         do {
-            let (data, response) = try await Self.yahooSession.data(for: request)
-            guard (response as? HTTPURLResponse)?.statusCode == 200,
-                  let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let (data, response) = try await Self.yahooSession.recordedData(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw LocalServiceError.invalidResponse }
+            guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let chart = root["chart"] as? [String: Any],
                   let result = (chart["result"] as? [[String: Any]])?.first,
                   let meta = result["meta"] as? [String: Any], let currency = meta["currency"] as? String,
@@ -1673,7 +1754,10 @@ struct LocalMarketDataClient {
                   let timestamps = result["timestamp"] as? [Double],
                   let indicators = result["indicators"] as? [String: Any],
                   let quote = (indicators["quote"] as? [[String: Any]])?.first,
-                  let closes = quote["close"] as? [Any] else { throw LocalServiceError.invalidResponse }
+                  let closes = quote["close"] as? [Any] else {
+                DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .missingRequiredFields)
+                throw LocalServiceError.invalidResponse
+            }
             let formatter = DateFormatter()
             formatter.locale = Locale(identifier: "en_US_POSIX")
             formatter.timeZone = zone
@@ -1684,7 +1768,10 @@ struct LocalMarketDataClient {
             var splits: [DailyTimeWeightedReturn.Split] = []
             for event in rawSplits.values {
                 guard let timestamp = event["date"] as? Double, let numerator = event["numerator"] as? Double,
-                      let denominator = event["denominator"] as? Double, numerator > 0, denominator > 0 else { throw LocalServiceError.invalidResponse }
+                      let denominator = event["denominator"] as? Double, numerator > 0, denominator > 0 else {
+                    DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .missingRequiredFields)
+                    throw LocalServiceError.invalidResponse
+                }
                 splits.append(.init(date: day(timestamp), symbol: symbol, factor: Decimal(numerator / denominator)))
             }
             var values: [String: Double] = [:]
@@ -1710,7 +1797,8 @@ struct LocalMarketDataClient {
         from: String,
         to: String,
         dividendAdjusted: Bool = true,
-        cachedOnly: Bool = false
+        cachedOnly: Bool = false,
+        forceRefresh: Bool = false
     ) async -> [String: [String: Double]] {
         await withTaskGroup(of: (String, [String: Double]?).self) { group in
             // A large broker CSV can contain hundreds of symbols. Sending all
@@ -1726,7 +1814,8 @@ struct LocalMarketDataClient {
                         from: from,
                         to: to,
                         dividendAdjusted: dividendAdjusted,
-                        cachedOnly: cachedOnly
+                        cachedOnly: cachedOnly,
+                        forceRefresh: forceRefresh
                     ))
                 }
             }
@@ -1743,7 +1832,8 @@ struct LocalMarketDataClient {
                             from: from,
                             to: to,
                             dividendAdjusted: dividendAdjusted,
-                            cachedOnly: cachedOnly
+                            cachedOnly: cachedOnly,
+                            forceRefresh: forceRefresh
                         ))
                     }
                 }
@@ -1861,7 +1951,7 @@ struct LocalMarketDataClient {
         request.timeoutInterval = 9
         request.setValue("Mozilla/5.0 Catfolio-iOS", forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await Self.yahooSession.data(for: request)
+        let (data, response) = try await Self.yahooSession.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             throw LocalServiceError.remote("Yahoo 历史行情请求失败（\(http.statusCode)）")
@@ -1870,6 +1960,7 @@ struct LocalMarketDataClient {
         do {
             payload = try JSONDecoder().decode(YahooChartResponse.self, from: data)
         } catch {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
             throw LocalServiceError.remote("Yahoo 历史行情返回格式无法识别")
         }
         if let error = payload.chart.error {
@@ -1909,11 +2000,17 @@ struct LocalMarketDataClient {
         request.timeoutInterval = 9
         request.setValue("Mozilla/5.0 Catfolio-iOS", forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await Self.yahooSession.data(for: request)
+        let (data, response) = try await Self.yahooSession.recordedData(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw LocalServiceError.remote("Yahoo 股息记录请求失败")
         }
-        let payload = try JSONDecoder().decode(YahooChartResponse.self, from: data)
+        let payload: YahooChartResponse
+        do {
+            payload = try JSONDecoder().decode(YahooChartResponse.self, from: data)
+        } catch {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
+            throw error
+        }
         guard let result = payload.chart.result?.first else { throw LocalServiceError.noMarketData }
         let listed = result.meta?.currency ?? "USD"
         let currency = listed == "GBp" ? "GBX" : listed.uppercased()
@@ -1975,7 +2072,7 @@ struct LocalMarketDataClient {
         var request = URLRequest(url: components.url!)
         request.timeoutInterval = 25
         try await FMPRequestLimiter.shared.waitForTurn()
-        let (data, response) = try await LocalRequestSessions.ephemeral.data(for: request)
+        let (data, response) = try await LocalRequestSessions.ephemeral.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         if http.statusCode == 429 {
             await FMPRequestLimiter.shared.backOff(retryAfter: http.value(forHTTPHeaderField: "Retry-After"))
@@ -1986,6 +2083,7 @@ struct LocalMarketDataClient {
             throw LocalServiceError.remote(Self.message(from: data, fallback: "行情请求失败（\(http.statusCode)）"))
         }
         guard let bars = try? JSONDecoder().decode([MarketDailyBar].self, from: data) else {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
             throw LocalServiceError.remote(Self.message(from: data, fallback: "FMP 返回格式无法识别"))
         }
         return Dictionary(uniqueKeysWithValues: bars.map { ($0.date, $0.close) })

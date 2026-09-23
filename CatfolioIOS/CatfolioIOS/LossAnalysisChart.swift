@@ -149,38 +149,8 @@ struct LossAnalysisChart: View {
     }
 
     private func plot(stack: HoldingLossStack, visible: [Int], bottom: Double) -> some View {
-        // Deepest level first: each band's area reaches the axis and the
-        // next one paints over its upper part, leaving the band between.
-        // No portfolio line on top — the bottom edge already is the total.
-        var series: [StandardLineChartSeries] = []
-        for (position, band) in visible.enumerated().reversed() {
-            let kind = stack.bands[band].kind
-            let gainKind: HoldingContributionStack.Band.Kind = switch kind {
-            case .others: .others
-            case let .holding(colour): .holding(colour: colour)
-            }
-            let color = HoldingContributionChart.fillColor(for: gainKind, scheme: colorScheme)
-            let above = visible[...position]
-            let id = Self.seriesID(stack.bands[band])
-            series.append(StandardLineChartSeries(
-                id: id,
-                points: stack.rows.map { row in
-                    StandardLineChartPoint(id: "\(id)|\(row.dateText)", date: row.date,
-                                           value: -above.reduce(0) { $0 + row.bands[$1] })
-                },
-                color: color,
-                lineWidth: 0,
-                areaFill: kind == .others ? .white : color,
-                areaFillEndColor: HoldingContributionChart.fillEndColor(for: gainKind),
-                areaBaseline: 0,
-                areaStripeColor: kind == .others ? ReturnsSourceChartStyle.stripeColor : nil,
-                areaStripeSpacing: 35.5,
-                areaStripeWidth: 13,
-                latestPointRadius: 0,
-                latestPointUsesGlass: false
-            ))
-        }
-        let outer = visible.last.map { Self.seriesID(stack.bands[$0]) }
+        let series = Self.chartSeries(stack: stack, visible: visible, scheme: colorScheme)
+        let outer = series.first?.id
         return StandardLineChart(
             series: series,
             interactionDates: stack.rows.map(\.date),
@@ -215,10 +185,44 @@ struct LossAnalysisChart: View {
         .accessibilityLabel(L10n.text("亏损来源堆叠图，长按后拖动查看单日"))
     }
 
-    private static func seriesID(_ band: HoldingLossStack.Band) -> String {
-        switch band.kind {
-        case .others: "loss-others"
-        case .holding: "loss-\(band.title)"
+    static func chartSeries(stack: HoldingLossStack, visible: [Int], scheme: ColorScheme) -> [StandardLineChartSeries] {
+        // These paths are cumulative boundaries, not individual holdings.
+        // Match them by depth when range rankings change, or a ticker moving
+        // between ranks will pull its old boundary across neighbouring bands.
+        let named = Array(visible.filter { stack.bands[$0].kind != .others }.reversed())
+        let others = visible.filter { stack.bands[$0].kind == .others }
+        let maximumNamed = HoldingContributionStack.maximumNamed
+        return (0...maximumNamed).map { depth in
+            let isOthers = depth == maximumNamed
+            let kind: HoldingLossStack.Band.Kind = isOthers ? .others
+                : depth < named.count ? stack.bands[named[depth]].kind : .holding(colour: depth)
+            let gainKind: HoldingContributionStack.Band.Kind = switch kind {
+            case .others: .others
+            case let .holding(colour): .holding(colour: colour)
+            }
+            let color = HoldingContributionChart.fillColor(for: gainKind, scheme: scheme)
+            // Keep unused layers at zero thickness against the others layer.
+            // A range with fewer losers can then shrink bands continuously,
+            // instead of fading old cumulative areas over the new viewport.
+            let above = Array(named.dropFirst(depth)) + others
+            let id = isOthers ? "loss-others" : "loss-depth-\(depth)"
+            return StandardLineChartSeries(
+                id: id,
+                points: stack.rows.map { row in
+                    StandardLineChartPoint(id: "\(id)|\(row.dateText)", date: row.date,
+                                           value: -above.reduce(0) { $0 + row.bands[$1] })
+                },
+                color: color,
+                lineWidth: 0,
+                areaFill: kind == .others ? .white : color,
+                areaFillEndColor: HoldingContributionChart.fillEndColor(for: gainKind),
+                areaBaseline: 0,
+                areaStripeColor: kind == .others ? ReturnsSourceChartStyle.stripeColor : nil,
+                areaStripeSpacing: 35.5,
+                areaStripeWidth: 13,
+                latestPointRadius: 0,
+                latestPointUsesGlass: false
+            )
         }
     }
 
@@ -235,7 +239,7 @@ struct LossAnalysisChart: View {
                 Text(DisplayFormat.compact($0, precision: .whole)).appNumber(.footnote)
             }
         }
-        .animation(StandardLineChartTransition.zoom, value: bottom)
+        .animation(reduceMotion ? nil : StandardLineChartTransition.zoom, value: bottom)
         .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.42) : Color.black.opacity(0.32))
         .padding(.leading, ReturnsSourceChartStyle.inset)
         .padding(.top, 6)
@@ -251,7 +255,8 @@ struct LossAnalysisChart: View {
                 let item = stack.bands[band]
                 let isOn = item.kind != .others || showsOthers
                 Button { toggle(item) } label: {
-                    legendRow(rank: stack.rank(for: item), swatch: Self.color(for: item.kind, scheme: colorScheme), isOn: isOn,
+                    legendRow(rank: stack.rank(for: item), maximumRank: stack.holdingRanks.count,
+                              swatch: Self.color(for: item.kind, scheme: colorScheme), isOn: isOn,
                               title: item.title, subtitle: item.subtitle) {
                         VStack(alignment: .trailing, spacing: 2) {
                             lossText(row.bands[band])
@@ -271,7 +276,8 @@ struct LossAnalysisChart: View {
                 Button {
                     withAnimation(.snappy) { _ = hiddenTickers.remove(holding.ticker) }
                 } label: {
-                    legendRow(rank: stack.holdingRanks[holding.ticker], swatch: .secondary, isOn: false, title: holding.ticker, subtitle: holding.name) {
+                    legendRow(rank: stack.holdingRanks[holding.ticker], maximumRank: stack.holdingRanks.count,
+                              swatch: .secondary, isOn: false, title: holding.ticker, subtitle: holding.name) {
                         Text(L10n.text("已隐藏")).appText(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -287,13 +293,10 @@ struct LossAnalysisChart: View {
             .foregroundStyle(loss > 0.5 ? CatfolioTheme.loss(for: colorScheme) : .secondary)
     }
 
-    private func legendRow<Trailing: View>(rank: Int?, swatch: Color, isOn: Bool, title: String, subtitle: String,
+    private func legendRow<Trailing: View>(rank: Int?, maximumRank: Int, swatch: Color, isOn: Bool, title: String, subtitle: String,
                                            @ViewBuilder trailing: () -> Trailing) -> some View {
         HStack(alignment: .center, spacing: 12) {
-            Text(rank.map(String.init) ?? "")
-                .appNumber(.callout, weight: .semibold)
-                .foregroundStyle(.secondary)
-                .frame(width: 18, alignment: .leading)
+            ReturnsSourceRankLabel(rank: rank, maximumRank: maximumRank)
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(isOn ? swatch : .clear)
                 .overlay {

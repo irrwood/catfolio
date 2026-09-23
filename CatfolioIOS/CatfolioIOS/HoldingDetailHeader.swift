@@ -7,11 +7,15 @@ struct HoldingDetailHeader: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .title2) private var priceSize = 22.0
     @ScaledMetric(relativeTo: .headline) private var nameSize = 18.0
+    @ScaledMetric(relativeTo: .title2) private var quoteColumnWidth = 130.0
     let holding: Holding
     let marketTodayChange: Double?
     let selectedPrice: Double?
     let selectedReturn: Double?
     var selectedTrades: [SecurityTrade] = []
+    /// Actual historical readouts that can appear while scrubbing. Hidden
+    /// representatives reserve their measured size before a trade is selected.
+    var tradeReadoutReservations: [SecurityTradeReadout.Measurement] = []
     /// Tapping the price refreshes the quote; there is no separate button.
     var isRefreshing = false
     var onRefresh: (() -> Void)? = nil
@@ -30,38 +34,10 @@ struct HoldingDetailHeader: View {
         holding.shortName
     }
 
-    private var identityLayout: AnyLayout {
-        dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
-            : AnyLayout(HStackLayout(spacing: 6))
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                AssetLogo(ticker: holding.ticker, logoSymbol: holding.logoSymbol, size: 44)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(displayName)
-                        .font(Typography.text(size: nameSize, weight: .semibold))
-                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
-                        .minimumScaleFactor(0.76)
-                    identityLayout {
-                        // No count for a security with no shares behind it:
-                        // "0" read as a position that had been sold.
-                        if holding.shares > 0 {
-                            Text(DisplayFormat.shares(holding.shares)).appNumber(.label, monospaced: false)
-                        }
-                        Text(holding.ticker.uppercased()).appCaps(.label)
-                    }
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                }
-                Spacer(minLength: 8)
-                // Reserve the fixed close button's space at the top of the report.
-                Color.clear.frame(width: 48, height: 48)
-                    .accessibilityHidden(true)
-            }
-            HStack(alignment: .top, spacing: 12) {
+            identityHeader
+            HoldingQuoteTradeLayout(quoteColumnWidth: quoteColumnWidth) {
                 if let onRefresh {
                     Button {
                         refreshTaps += 1
@@ -77,9 +53,16 @@ struct HoldingDetailHeader: View {
                 } else {
                     quote
                 }
-                Spacer(minLength: 0)
                 if !selectedTrades.isEmpty {
                     SecurityTradeReadout(trades: selectedTrades)
+                } else {
+                    Color.clear.frame(width: 0, height: 0)
+                }
+                ForEach(tradeReadoutReservations.indices, id: \.self) { index in
+                    SecurityTradeReadout(measurement: tradeReadoutReservations[index])
+                        .hidden()
+                        .accessibilityHidden(true)
+                        .allowsHitTesting(false)
                 }
             }
         }
@@ -87,6 +70,64 @@ struct HoldingDetailHeader: View {
         .padding(.top, 20)
         .padding(.bottom, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var identityHeader: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            // At large sizes the logo and fixed close control must not take
+            // most of the width away from a name or an exact share quantity.
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    logo
+                    Spacer(minLength: 8)
+                    closeReservation
+                }
+                Text(displayName)
+                    .font(Typography.text(size: nameSize, weight: .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                identity
+            }
+        } else {
+            HStack(spacing: 12) {
+                logo
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(displayName)
+                        .font(Typography.text(size: nameSize, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.76)
+                    identity
+                }
+                Spacer(minLength: 8)
+                closeReservation
+            }
+        }
+    }
+
+    private var logo: some View {
+        AssetLogo(ticker: holding.ticker, logoSymbol: holding.logoSymbol, size: 44)
+    }
+
+    private var closeReservation: some View {
+        Color.clear.frame(width: 48, height: 48).accessibilityHidden(true)
+    }
+
+    private var identity: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) { identityText }.fixedSize()
+            VStack(alignment: .leading, spacing: 2) { identityText }
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(.secondary)
+    }
+
+    @ViewBuilder
+    private var identityText: some View {
+        // No count for a security with no shares behind it.
+        if holding.shares > 0 {
+            Text(DisplayFormat.shares(holding.shares)).appNumber(.label, monospaced: false)
+        }
+        Text(holding.ticker.uppercased()).appCaps(.label)
     }
 
     private var quote: some View {
@@ -105,6 +146,8 @@ struct HoldingDetailHeader: View {
                 if let todayChangePercent = todayChange {
                     Text(DisplayFormat.percent(todayChangePercent))
                         .appNumber(.heading)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         .foregroundStyle(
                             todayChangePercent >= 0
                                 ? CatfolioTheme.gainDefault
@@ -120,56 +163,191 @@ struct HoldingDetailHeader: View {
     }
 }
 
+/// The hidden historical readouts take part in measurement, but never in
+/// accessibility or hit testing. Scrubbing cannot move the plot underneath
+/// the finger when a date has both a buy and a sell.
+struct HoldingQuoteTradeLayout: Layout {
+    let quoteColumnWidth: CGFloat
+    private let spacing: CGFloat = 12
+
+    private func geometry(width: CGFloat, subviews: Subviews) -> (vertical: Bool, quote: CGSize, trade: CGSize) {
+        guard let quote = subviews.first else { return (false, .zero, .zero) }
+        let readouts = subviews.dropFirst()
+        let idealTradeWidth = readouts.map { $0.sizeThatFits(.unspecified).width }.max() ?? 0
+        let vertical = idealTradeWidth > 0 && quoteColumnWidth + spacing + idealTradeWidth > width
+        let quoteWidth = vertical ? width : min(quoteColumnWidth, width)
+        let quoteSize = quote.sizeThatFits(.init(width: quoteWidth, height: nil))
+        let tradeWidth = vertical ? width : max(0, width - quoteWidth - spacing)
+        let tradeHeight = readouts.map { $0.sizeThatFits(.init(width: tradeWidth, height: nil)).height }.max() ?? 0
+        return (vertical, CGSize(width: quoteWidth, height: quoteSize.height), CGSize(width: tradeWidth, height: tradeHeight))
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? subviews.map { $0.sizeThatFits(.unspecified).width }.reduce(0, +)
+        let sizes = geometry(width: width, subviews: subviews)
+        let height = sizes.vertical
+            ? sizes.quote.height + spacing + sizes.trade.height
+            : max(sizes.quote.height, sizes.trade.height)
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let quote = subviews.first else { return }
+        let sizes = geometry(width: bounds.width, subviews: subviews)
+        quote.place(at: bounds.origin, anchor: .topLeading,
+                    proposal: .init(width: sizes.quote.width, height: sizes.quote.height))
+        for readout in subviews.dropFirst() {
+            readout.place(at: CGPoint(x: bounds.maxX, y: bounds.minY + (sizes.vertical ? sizes.quote.height + spacing : 0)),
+                          anchor: .topTrailing, proposal: .init(width: sizes.trade.width, height: nil))
+        }
+    }
+}
+
 /// Figma 282:2003: a compact, trailing readout beside the historical quote.
 struct SecurityTradeReadout: View {
-    let trades: [SecurityTrade]
+    @ScaledMetric(relativeTo: .body) private var badgeSize = 16.0
+    @ScaledMetric(relativeTo: .body) private var amountSize = 18.0
+    private let rows: [Row]
+
+    init(trades: [SecurityTrade]) {
+        rows = trades.map(Row.init)
+    }
+
+    /// This initializer is only used by the hidden geometry reservations.
+    init(measurement: Measurement) {
+        rows = measurement.rows
+    }
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
-            ForEach(trades) { trade in
+            ForEach(rows) { row in
                 VStack(alignment: .trailing, spacing: 2) {
-                    HStack(spacing: 4) {
-                        Text(L10n.text(trade.isBuy ? "买入" : "卖出"))
-                            .font(Typography.number(size: 16, weight: .semibold))
-                            .padding(.horizontal, 8).padding(.vertical, 2)
-                            .background(Color.primary.opacity(0.1), in: Capsule())
-                        Text(money(trade.amountTotals))
-                            .font(Typography.number(size: 18, weight: .semibold))
-                    }
-                    if trade.isSell {
-                        if let totals = trade.profitTotals {
-                            HStack(spacing: 4) {
-                                ForEach(totals.keys.sorted(), id: \.self) { currency in
-                                    let value = totals[currency]!
-                                    Text(DisplayFormat.money(value, currency: currency, signed: true, fractionDigits: 2))
-                                        .foregroundStyle(value >= 0 ? CatfolioTheme.gainDefault : CatfolioTheme.lossDefault)
-                                }
-                            }
-                            .accessibilityLabel(L10n.text("已实现盈亏"))
-                        } else {
-                            Text("—").foregroundStyle(.secondary)
-                                .accessibilityLabel(L10n.text("已实现盈亏") + " —")
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 4) {
+                            badge(row)
+                            amounts(row)
                         }
-                    } else {
-                        Text(L10n.text("数量") + " " + DisplayFormat.shares(trade.quantity))
-                            .foregroundStyle(.secondary)
-                            .accessibilityLabel(L10n.text("数量") + " " + DisplayFormat.shares(trade.quantity))
+                        .fixedSize(horizontal: true, vertical: false)
+                        VStack(alignment: .trailing, spacing: 4) {
+                            badge(row)
+                            amounts(row)
+                        }
                     }
+                    VStack(alignment: .trailing, spacing: 2) {
+                        ForEach(row.details.indices, id: \.self) { index in
+                            let detail = row.details[index]
+                            Text(detail.text)
+                                .foregroundStyle(detail.isPositive.map {
+                                    $0 ? CatfolioTheme.gainDefault : CatfolioTheme.lossDefault
+                                } ?? .secondary)
+                        }
+                    }
+                    .accessibilityLabel(row.isBuy ? row.details[0].text : L10n.text("已实现盈亏"))
                 }
-                .font(Typography.number(size: 18, weight: .medium))
-                .lineLimit(1)
-                .minimumScaleFactor(0.65)
+                .font(Typography.number(size: amountSize, weight: .medium))
+                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityElement(children: .combine)
             }
         }
         .accessibilityIdentifier("security-trade-readout")
     }
 
-    private func money(_ totals: [String: Double]?) -> String {
-        guard let totals else { return "—" }
-        return totals.keys.sorted().map {
-            DisplayFormat.money(totals[$0]!, currency: $0, fractionDigits: 2)
-        }.joined(separator: " · ")
+    private func badge(_ row: Row) -> some View {
+        Text(L10n.text(row.isBuy ? "买入" : "卖出"))
+            .font(Typography.number(size: badgeSize, weight: .semibold))
+            .fixedSize()
+            .padding(.horizontal, 8).padding(.vertical, 2)
+            .background(Color.primary.opacity(0.1), in: Capsule())
+    }
+
+    private func amounts(_ row: Row) -> some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            ForEach(row.amounts.indices, id: \.self) { index in
+                Text(row.amounts[index])
+            }
+        }
+        .font(Typography.number(size: amountSize, weight: .semibold))
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// Presentation-only strings, never transactions or input to financial
+    /// calculations. Each currency/line shape keeps one synthetic readout
+    /// containing its widest amount, quantity and result fields.
+    struct Measurement: Equatable, Identifiable {
+        let id: String
+        fileprivate var rows: [Row]
+    }
+
+    fileprivate struct Detail: Equatable {
+        let text: String
+        let isPositive: Bool?
+    }
+
+    fileprivate struct Row: Equatable, Identifiable {
+        let id: String
+        let isBuy: Bool
+        var amounts: [String]
+        var details: [Detail]
+
+        init(_ trade: SecurityTrade) {
+            id = trade.id
+            isBuy = trade.isBuy
+            amounts = trade.amountTotals.map { totals in
+                totals.keys.sorted().map { DisplayFormat.money(totals[$0]!, currency: $0, fractionDigits: 2) }
+            } ?? ["—"]
+            if trade.isSell {
+                details = trade.profitTotals.map { totals in
+                    totals.keys.sorted().map {
+                        Detail(text: DisplayFormat.money(totals[$0]!, currency: $0, signed: true, fractionDigits: 2),
+                               isPositive: totals[$0]! >= 0)
+                    }
+                } ?? [Detail(text: "—", isPositive: nil)]
+            } else {
+                details = [Detail(text: L10n.text("数量") + " " + DisplayFormat.shares(trade.quantity), isPositive: nil)]
+            }
+        }
+    }
+
+    static func reservationCandidates(for trades: [SecurityTrade]) -> [Measurement] {
+        var candidates: [String: Measurement] = [:]
+        let groups = Dictionary(grouping: trades, by: \.dateText)
+        for date in groups.keys.sorted() {
+            let group = groups[date]!.sorted { $0.id < $1.id }
+            let shape = group.map { trade in
+                trade.action + ":" + (trade.amountTotals?.keys.sorted().joined(separator: ",") ?? "—")
+                    + ":" + (trade.isSell ? (trade.profitTotals?.keys.sorted().joined(separator: ",") ?? "—") : "quantity")
+            }.joined(separator: "|")
+            let rows = group.map(Row.init)
+            if var current = candidates[shape] {
+                for index in rows.indices {
+                    for field in rows[index].amounts.indices where
+                        measuredWidth(rows[index].amounts[field], weight: .semibold)
+                            > measuredWidth(current.rows[index].amounts[field], weight: .semibold) {
+                        current.rows[index].amounts[field] = rows[index].amounts[field]
+                    }
+                    for field in rows[index].details.indices where
+                        measuredWidth(rows[index].details[field].text, weight: .medium)
+                            > measuredWidth(current.rows[index].details[field].text, weight: .medium) {
+                        current.rows[index].details[field] = rows[index].details[field]
+                    }
+                }
+                candidates[shape] = current
+            } else {
+                candidates[shape] = Measurement(id: shape, rows: rows)
+            }
+        }
+        return candidates.keys.sorted().compactMap { candidates[$0] }
+    }
+
+    /// All figures share one scaled font, so relative widths can be compared
+    /// at its base size. Monospaced digits match the displayed numeric face.
+    private static func measuredWidth(_ text: String, weight: UIFont.Weight) -> CGFloat {
+        let base = NumericAlternates.font(size: 18, weight: weight, rounded: true)
+        let descriptor = base.fontDescriptor.addingAttributes([.featureSettings: [
+            [UIFontDescriptor.FeatureKey.type: kNumberSpacingType,
+             UIFontDescriptor.FeatureKey.selector: kMonospacedNumbersSelector]
+        ]])
+        return (text as NSString).size(withAttributes: [.font: UIFont(descriptor: descriptor, size: 18)]).width
     }
 }
 
@@ -417,37 +595,23 @@ struct HoldingDataRow: View {
     let isAlternating: Bool
 
     var body: some View {
-        HStack(spacing: 10) {
-            Group {
-                if let assetName = model.icon.assetName {
-                    Image(assetName)
-                        .resizable()
-                        .renderingMode(.template)
-                        .scaledToFit()
-                } else {
-                    Image(systemName: model.icon.systemName)
-                        .font(.system(size: model.icon.pointSize, weight: .regular))
-                        .symbolRenderingMode(.monochrome)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                icon
+                title.fixedSize()
+                Spacer(minLength: 8)
+                value.fixedSize()
+            }
+            HStack(alignment: .top, spacing: 10) {
+                icon
+                VStack(alignment: .leading, spacing: 6) {
+                    title
+                        .fixedSize(horizontal: false, vertical: true)
+                    value
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
-            .foregroundStyle(.primary.opacity(0.50))
-            .frame(width: 24, height: 24)
-            .accessibilityHidden(true)
-
-            Text(model.title.uppercased())
-                .appText(.footnote, weight: .semibold)
-                .foregroundStyle(.primary.opacity(0.50))
-                .lineLimit(1)
-                .minimumScaleFactor(0.74)
-
-            Spacer(minLength: 8)
-
-            Text(model.value)
-                .appNumber(.footnote, weight: .semibold)
-                .foregroundStyle(model.color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.66)
-                .layoutPriority(1)
         }
         // On the card's inset, so the icons line up under the card's title.
         .padding(.horizontal, HoldingDetailCardStyle.contentInset)
@@ -457,6 +621,33 @@ struct HoldingDataRow: View {
         // capsule. The design's stripes are square at both ends.
         .background(alternatingBackground, in: Rectangle())
         .accessibilityElement(children: .combine)
+    }
+
+    private var icon: some View {
+        Group {
+            if let assetName = model.icon.assetName {
+                Image(assetName).resizable().renderingMode(.template).scaledToFit()
+            } else {
+                Image(systemName: model.icon.systemName)
+                    .font(.system(size: model.icon.pointSize, weight: .regular))
+                    .symbolRenderingMode(.monochrome)
+            }
+        }
+        .foregroundStyle(.primary.opacity(0.50))
+        .frame(width: 24, height: 24)
+        .accessibilityHidden(true)
+    }
+
+    private var title: some View {
+        Text(model.title.uppercased())
+            .appText(.footnote, weight: .semibold)
+            .foregroundStyle(.primary.opacity(0.50))
+    }
+
+    private var value: some View {
+        Text(model.value)
+            .appNumber(.footnote, weight: .semibold)
+            .foregroundStyle(model.color)
     }
 
     /// Translucent, not a solid #f8f8f8 slab: on glass an opaque stripe sat

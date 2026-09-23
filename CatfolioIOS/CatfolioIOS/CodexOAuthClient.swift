@@ -199,7 +199,7 @@ struct CodexOAuthClient: Sendable {
         request.setValue("catfolio_ios", forHTTPHeaderField: "originator")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        let (bytes, response) = try await Self.session.bytes(for: request)
+        let (bytes, response) = try await Self.session.recordedBytes(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         if http.statusCode == 401 { throw CodexRequestError.unauthorized }
         guard (200..<300).contains(http.statusCode) else {
@@ -214,14 +214,31 @@ struct CodexOAuthClient: Sendable {
         }
         var summaryIndex: Int?
         var wroteAnswer = false
-        for try await line in bytes.lines {
-            try Task.checkCancellation()
-            for event in try AIStreamParsing.codexEvents(line, summaryIndex: &summaryIndex) {
-                if case .text = event { wroteAnswer = true }
-                emit(event)
+        var reportedMalformedEvent = false
+        do {
+            for try await line in bytes.lines {
+                try Task.checkCancellation()
+                let events: [AIStreamEvent]
+                do {
+                    events = try AIStreamParsing.codexEvents(line, summaryIndex: &summaryIndex)
+                } catch {
+                    reportedMalformedEvent = true
+                    DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .providerRejected)
+                    throw error
+                }
+                for event in events {
+                    if case .text = event { wroteAnswer = true }
+                    emit(event)
+                }
             }
+        } catch {
+            if !reportedMalformedEvent { await DataSourceHealth.record(request.url, error: error) }
+            throw error
         }
-        guard wroteAnswer else { throw LocalServiceError.invalidResponse }
+        guard wroteAnswer else {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .emptyResult)
+            throw LocalServiceError.invalidResponse
+        }
     }
 
     /// - Returns: the answer, and whether the model was actually allowed to
@@ -380,7 +397,7 @@ struct CodexOAuthClient: Sendable {
         request.setValue("catfolio_ios", forHTTPHeaderField: "originator")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        let (data, response) = try await Self.session.data(for: request)
+        let (data, response) = try await Self.session.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         if http.statusCode == 401 { throw CodexRequestError.unauthorized }
         try Self.requireSuccess(http, data: data, fallback: L10n.text("Codex 分析请求失败"))
@@ -404,7 +421,7 @@ struct CodexOAuthClient: Sendable {
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("catfolio_ios", forHTTPHeaderField: "originator")
-        let (data, response) = try await Self.session.data(for: request)
+        let (data, response) = try await Self.session.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         return (data, http)
     }

@@ -1,6 +1,51 @@
 import XCTest
 @testable import CatfolioIOS
 
+final class SecurityWeeklyRangeTests: XCTestCase {
+    private func history(_ rows: [(String, Double)], minutes: [SecurityPricePoint] = []) -> SecurityPriceHistory {
+        SecurityPriceHistory(ticker: "META", currency: "USD",
+            points: rows.map { .init(dateText: $0.0, close: $0.1) }, intradayPoints: minutes, trades: [])
+    }
+
+    private func week(_ history: SecurityPriceHistory) -> SecurityPriceRangeData {
+        SecurityPriceRangeData(history: history, range: .oneWeek, averageCost: nil, selectedAccountKeys: [])
+    }
+
+    func testExactWeekBoundaryUsesThatDaysClose() throws {
+        let data = week(history([("2026-09-11", 648.03), ("2026-09-14", 665.60),
+            ("2026-09-15", 670.24), ("2026-09-16", 673.31), ("2026-09-17", 682.31),
+            ("2026-09-18", 665.75), ("2026-09-21", 719.25)]))
+        XCTAssertEqual(data.points.first?.dateText, "2026-09-14")
+        XCTAssertEqual(data.points.count, 6)
+        XCTAssertEqual(try XCTUnwrap(data.points.last?.returnPercent), (719.25 / 665.60 - 1) * 100, accuracy: 1e-9)
+    }
+
+    func testHolidayBoundaryIncludesPriorCloseInsteadOfStartingAfterTheHoliday() throws {
+        let data = week(history([("2026-09-03", 610.68), ("2026-09-04", 616.77),
+            ("2026-09-08", 613.48), ("2026-09-09", 653.69), ("2026-09-10", 644.38),
+            ("2026-09-11", 648.03), ("2026-09-14", 665.60)]))
+        XCTAssertEqual(data.points.first?.dateText, "2026-09-04")
+        XCTAssertEqual(data.points.first?.returnPercent, 0)
+        XCTAssertEqual(try XCTUnwrap(data.points.last?.returnPercent), (665.60 / 616.77 - 1) * 100, accuracy: 1e-9)
+    }
+
+    func testLatestMinuteAndWeeklyReturnUseTheSameEndPrice() throws {
+        let minute = SecurityPricePoint(dateText: "latest", close: 720,
+            timestamp: ISO8601DateFormatter().date(from: "2026-09-21T15:00:00Z")!)
+        let data = week(history([("2026-09-14", 665.60), ("2026-09-18", 665.75),
+            ("2026-09-21", 719.25)], minutes: [minute]))
+        XCTAssertEqual(data.points.last?.price, 720)
+        XCTAssertEqual(data.points.filter { $0.dateText == "2026-09-21" }.count, 1)
+        XCTAssertEqual(try XCTUnwrap(data.points.last?.returnPercent), (720 / 665.60 - 1) * 100, accuracy: 1e-9)
+    }
+
+    func testNewListingKeepsAvailableHistoryWithoutInventingAWeekEarlierPrice() throws {
+        let data = week(history([("2026-09-17", 100), ("2026-09-18", 105), ("2026-09-21", 110)]))
+        XCTAssertEqual(data.points.first?.dateText, "2026-09-17")
+        XCTAssertEqual(try XCTUnwrap(data.points.last?.returnPercent), 10, accuracy: 1e-9)
+    }
+}
+
 final class AuditRegressionTests: XCTestCase {
     func testReturnsPercentageTicksRemainDistinctAcrossSmallRanges() {
         for locale in [Locale(identifier: "en_US"), Locale(identifier: "zh_CN")] {

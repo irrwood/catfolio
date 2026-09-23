@@ -445,6 +445,27 @@ private final class StandardLineChartHapticDriver {
 /// It owns the common grid, axes, edge-to-edge range transition, one/two-finger
 /// inspection, haptic-friendly selection callbacks, range measurement, area
 /// fills and event markers. Feature-specific views only prepare data and labels.
+/// Small screen-space attraction for optional chart markers. A two-point
+/// release margin prevents jitter without holding the cursor far from a trade.
+enum ChartMarkerMagnet {
+    static func date(at x: CGFloat, targets: [(date: Date, x: CGFloat)],
+                     currentDate: Date?, radius: CGFloat) -> Date? {
+        guard x.isFinite, radius.isFinite, radius > 0 else { return nil }
+        let valid = targets.filter { $0.x.isFinite }
+        if let nearest = valid.min(by: {
+            let left = abs($0.x - x), right = abs($1.x - x)
+            return left == right ? $0.date < $1.date : left < right
+        }), abs(nearest.x - x) <= radius {
+            return nearest.date
+        }
+        if let currentDate, let held = valid.first(where: { $0.date == currentDate }),
+           abs(held.x - x) <= radius + 2 {
+            return held.date
+        }
+        return nil
+    }
+}
+
 struct StandardLineChart: View {
     let series: [StandardLineChartSeries]
     let interactionDates: [Date]
@@ -466,6 +487,7 @@ struct StandardLineChart: View {
     let animatesInitialAppearance: Bool
     let revealsInitialAppearance: Bool
     let markers: [StandardLineChartMarker]
+    let markerMagnetRadius: CGFloat
     let referenceLines: [StandardLineChartReferenceLine]
     let selectedDate: Date?
     let measuredRange: ChartDateRange?
@@ -526,6 +548,7 @@ struct StandardLineChart: View {
         animatesInitialAppearance: Bool = true,
         revealsInitialAppearance: Bool = false,
         markers: [StandardLineChartMarker] = [],
+        markerMagnetRadius: CGFloat = 0,
         referenceLines: [StandardLineChartReferenceLine] = [],
         selectedDate: Date? = nil,
         measuredRange: ChartDateRange? = nil,
@@ -563,6 +586,7 @@ struct StandardLineChart: View {
         self.animatesInitialAppearance = animatesInitialAppearance
         self.revealsInitialAppearance = revealsInitialAppearance
         self.markers = markers
+        self.markerMagnetRadius = markerMagnetRadius
         self.referenceLines = referenceLines
         self.selectedDate = selectedDate
         self.measuredRange = measuredRange
@@ -1962,7 +1986,9 @@ struct StandardLineChart: View {
     }
 
     private func updateSelection(from locations: [CGPoint], plot: CGRect) {
-        let dates = locations.compactMap { date(at: $0.x, plot: plot) }
+        let dates = locations.compactMap {
+            date(at: $0.x, plot: plot, attractsMarkers: locations.count == 1)
+        }
         updateSelectionHaptic(for: dates)
         if dates.count >= 2, let onMeasure {
             onMeasure(ChartDateRange(dates[0], dates[1]))
@@ -1996,7 +2022,7 @@ struct StandardLineChart: View {
         selectionHapticDriver.selectionChanged()
     }
 
-    private func date(at locationX: CGFloat, plot: CGRect) -> Date? {
+    private func date(at locationX: CGFloat, plot: CGRect, attractsMarkers: Bool) -> Date? {
         guard !interactionDates.isEmpty, plot.width > 0 else { return nil }
         let clampedX = min(max(locationX, plot.minX), plot.maxX)
         let startX = plot.minX - leadingLineOverflow
@@ -2004,6 +2030,16 @@ struct StandardLineChart: View {
         let ratio = min(1, max(0, Double((clampedX - startX) / max(endX - startX, 1))))
         let first = interactionDates[0]
         let last = interactionDates[interactionDates.count - 1]
+        if attractsMarkers, markerMagnetRadius > 0 {
+            let targets = markers.compactMap { marker -> (date: Date, x: CGFloat)? in
+                guard marker.point.date >= first, marker.point.date <= last else { return nil }
+                return (marker.point.date, interactionX(for: marker.point.date, in: plot))
+            }
+            if let attracted = ChartMarkerMagnet.date(at: clampedX, targets: targets,
+                currentDate: selectedDate, radius: markerMagnetRadius) {
+                return attracted
+            }
+        }
         let candidate = first.addingTimeInterval(last.timeIntervalSince(first) * ratio)
         return nearestDate(to: candidate)
     }
@@ -2379,7 +2415,7 @@ struct StandardLineChartPlaceholder: View {
                     Text(title)
                         .appText(.subheading, weight: .semibold)
                         .foregroundStyle(.primary)
-                    Text(message)
+                    Text(L10n.message(message))
                         .appText(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -2397,7 +2433,7 @@ struct StandardLineChartPlaceholder: View {
                 .padding(.horizontal, 24)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel([title, message, hint].compactMap { $0 }.joined(separator: "，"))
+            .accessibilityLabel([title, message, hint].compactMap { $0 }.map { L10n.message($0) }.joined(separator: L10n.listSeparator))
         }
     }
 

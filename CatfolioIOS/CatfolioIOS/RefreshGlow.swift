@@ -13,7 +13,6 @@ import SwiftUI
 /// figure is on screen and stops the moment the refresh ends.
 struct RefreshGlow: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorScheme) private var colorScheme
     let isActive: Bool
 
     /// One pass, then a rest before the next: a heartbeat, not a barber's pole.
@@ -23,7 +22,7 @@ struct RefreshGlow: ViewModifier {
     private var period: Double { Self.sweep + Self.rest }
 
     private var light: Color {
-        CatfolioStyle.blue.opacity(colorScheme == .dark ? 0.95 : 0.8)
+        Color.white.opacity(0.6)
     }
 
     func body(content: Content) -> some View {

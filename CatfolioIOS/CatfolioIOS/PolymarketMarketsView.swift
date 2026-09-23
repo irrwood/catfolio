@@ -239,11 +239,17 @@ actor PolymarketClient {
             + ranked.map { URLQueryItem(name: "id", value: $0.id) }
         var request = URLRequest(url: url.url!, cachePolicy: forceRefresh ? .reloadIgnoringLocalCacheData : .useProtocolCachePolicy)
         request.setValue(language, forHTTPHeaderField: "Accept-Language")
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.recordedData(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw PolymarketClientError.invalidResponse
         }
-        let translations = try JSONDecoder().decode(Payload.self, from: data).markets
+        let translations: [Translation]
+        do {
+            translations = try JSONDecoder().decode(Payload.self, from: data).markets
+        } catch {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
+            throw error
+        }
         return ranked.compactMap { market in
             guard let translated = translations.first(where: { $0.id == market.id }),
                   ContentLanguage.acceptsHeadline(translated.question, language: language) else { return nil }
@@ -283,7 +289,7 @@ actor PolymarketClient {
             timeoutInterval: 12
         )
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw PolymarketClientError.invalidResponse
         }
@@ -293,6 +299,7 @@ actor PolymarketClient {
         do {
             return try JSONDecoder().decode(SearchResponse.self, from: data).events ?? []
         } catch {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
             throw PolymarketClientError.invalidResponse
         }
     }

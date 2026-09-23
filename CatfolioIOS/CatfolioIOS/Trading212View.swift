@@ -14,15 +14,15 @@ struct Trading212View: View {
     @State private var nickname = ""
     @State private var nicknameEdited = false
     @State private var snapshot: Trading212Snapshot?
-    @State private var snapshotAccounts: [Trading212AccountCredentials]?
-    @State private var snapshotEnvironment: Trading212Environment?
+    @State private var snapshotRequest: Trading212RequestConfiguration?
     @State private var status: Trading212ViewStatus = .idle
-    @State private var isWorking = false
+    @State private var operation = Trading212Operation()
     @State private var showsClearConfirmation = false
     @State private var showsSyncConfirmation = false
     @State private var historyRetryTask: Task<Void, Never>?
 
     private static let environmentPreferenceName = "trading212.environment"
+    private var isWorking: Bool { operation.isRunning }
 
     init(context: AccountConnectorContext = .create) {
         self.context = context
@@ -74,7 +74,7 @@ struct Trading212View: View {
                             title: L10n.text("重新读取持仓"),
                             showsChevron: false
                         ) {
-                            Task { await preview() }
+                            perform(.preview)
                         }
                         .disabled(isWorking)
 
@@ -97,7 +97,7 @@ struct Trading212View: View {
                                 systemImage: "arrow.down.circle",
                                 isBusy: isWorking
                             ) {
-                                Task { await preview() }
+                                perform(.preview)
                             }
                         }
                     }
@@ -175,19 +175,17 @@ struct Trading212View: View {
                     }
                 }
             }
+            .disabled(isWorking)
             .softTopScrollEdge()
             .navigationTitle(context.isCreating ? L10n.text("新建 Trading 212 账户") : "Trading 212")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.text("完成")) { dismiss() }
+                    AppModalDoneButton { stopWaiting(); dismiss() }
                 }
             }
             .task { prepareAccount() }
-            .onDisappear {
-                historyRetryTask?.cancel()
-                historyRetryTask = nil
-            }
+            .onDisappear { stopWaiting() }
             .onChange(of: environment) { _, _ in invalidatePreview() }
             .onChange(of: apiKey) { _, _ in invalidatePreview() }
             .onChange(of: apiSecret) { _, _ in invalidatePreview() }
@@ -207,7 +205,7 @@ struct Trading212View: View {
                 titleVisibility: .visible
             ) {
                 Button(context.isCreating ? L10n.text("创建账户") : L10n.text("同步并更新")) {
-                    Task { await sync() }
+                    perform(.sync)
                 }
                 Button(L10n.text("取消"), role: .cancel) {}
             } message: {
@@ -244,7 +242,7 @@ struct Trading212View: View {
         case let .working(message):
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text(message)
+                Text(L10n.message(message))
             }
             .appText(.label, weight: .regular)
             .foregroundStyle(SettingsTemplate.secondaryText)
@@ -296,91 +294,101 @@ struct Trading212View: View {
         return [Trading212AccountCredentials(slot: accountSlot, credentials: credentials)]
     }
 
-    private func saveCredentials(_ accounts: [Trading212AccountCredentials]) throws {
-        guard let account = accounts.first else { return }
+    private func saveCredentials(_ request: Trading212RequestConfiguration) throws {
+        guard let account = request.accounts.first else { return }
         try KeychainStore.set(account.credentials.apiKey, for: Self.apiKeyKey(slot: account.slot))
         try KeychainStore.set(account.credentials.apiSecret, for: Self.apiSecretKey(slot: account.slot))
-        UserDefaults.standard.set(environment.rawValue, forKey: Self.environmentPreferenceName)
+        UserDefaults.standard.set(request.environment.rawValue, forKey: Self.environmentPreferenceName)
     }
 
-    private func preview() async {
-        isWorking = true
-        status = .working(L10n.text("正在读取 Trading 212 持仓与历史成交…"))
-        defer { isWorking = false }
+    private func perform(_ action: Trading212HistoryRetryAction) {
+        guard !isWorking, !model.isFakeDataMode, !model.isPublicInvestorMode else { return }
+        historyRetryTask?.cancel()
+        historyRetryTask = nil
         do {
-            let accounts = try accountCredentials()
-            try saveCredentials(accounts)
-            let result = try await Trading212Client().fetchSnapshot(accounts: accounts, environment: environment)
-            if context.isCreating, !nicknameEdited {
-                // The current API snapshot supplies an account label, not a personal name.
-                nickname = result.syncedAccounts.first?.name ?? "Trading 212"
+            // Keep the response tied to the exact environment and credentials
+            // that produced it, even if the draft changes during suspension.
+            let request = Trading212RequestConfiguration(accounts: try accountCredentials(), environment: environment)
+            try saveCredentials(request)
+            let cached = action == .sync && snapshotRequest == request && snapshot?.hasCompleteTransactionHistory == true
+                ? snapshot : nil
+            if action == .preview {
+                snapshot = nil
+                snapshotRequest = nil
             }
-            snapshot = result
-            snapshotAccounts = accounts
-            snapshotEnvironment = environment
-            let historyText = result.transactionHistoryStatus.map { "；\($0)" } ?? ""
-            status = .success(L10n.text("读取成功：\(result.accountCount) 个账户，\(result.positions.count) 项持仓\(historyText)"))
-            if !result.hasCompleteTransactionHistory {
-                scheduleHistoryRetry(.preview)
-            }
+            status = .working(action == .preview
+                ? L10n.text("正在读取 Trading 212 持仓与历史成交…")
+                : L10n.text("正在同步 Trading 212 持仓与历史数据…"))
+            operation.start(request: request, fetch: { request in
+                if let cached { return cached }
+                return try await Trading212Client().fetchSnapshot(accounts: request.accounts, environment: request.environment)
+            }, apply: { request, result in
+                switch action {
+                case .preview: applyPreview(result, request: request)
+                case .sync: try await sync(result, request: request)
+                }
+            }, onError: { error in
+                status = .failure(error.localizedDescription)
+            })
         } catch {
             status = .failure(error.localizedDescription)
         }
     }
 
-    private func sync() async {
-        isWorking = true
-        status = .working(L10n.text("正在同步 Trading 212 持仓与历史数据…"))
-        defer { isWorking = false }
-        do {
-            let accounts = try accountCredentials()
-            try saveCredentials(accounts)
-            let currentSnapshot: Trading212Snapshot
-            if let snapshot,
-               snapshotAccounts == accounts,
-               snapshotEnvironment == environment,
-               snapshot.hasCompleteTransactionHistory {
-                currentSnapshot = snapshot
-            } else {
-                currentSnapshot = try await Trading212Client().fetchSnapshot(accounts: accounts, environment: environment)
-                snapshot = currentSnapshot
-                snapshotAccounts = accounts
-                snapshotEnvironment = environment
-            }
-            status = .working(L10n.text("Trading 212 已读取，正在保存到本机…"))
-            let accountID = "account-\(accountSlot)"
-            let accountNames = model.accountNames(
-                source: "Trading 212",
-                accountIDs: [accountID],
-                preferredNickname: nickname,
-                targetAccountID: context.account?.accountID
-            )
-            let result = try await model.importTrading212(
-                currentSnapshot,
-                accountNames: accountNames,
-                replacingAccountsOnly: true
-            )
-            let warningText = result.warnings.isEmpty ? "" : L10n.text("，跳过 \(result.warnings.count) 项")
-            let historyText = currentSnapshot.transactionHistoryStatus.map { "；\($0)" } ?? ""
-            status = .success(context.isCreating
-                ? L10n.text("已创建账户，导入 \(result.holdingsCount) 个持仓\(warningText)\(historyText)")
-                : L10n.text("已同步 \(result.holdingsCount) 个持仓\(warningText)\(historyText)"))
-            if !currentSnapshot.hasCompleteTransactionHistory {
-                scheduleHistoryRetry(.sync)
-            }
-        } catch {
-            status = .failure(error.localizedDescription)
+    private func applyPreview(_ result: Trading212Snapshot, request: Trading212RequestConfiguration) {
+        if context.isCreating, !nicknameEdited {
+            // The current API snapshot supplies an account label, not a personal name.
+            nickname = result.syncedAccounts.first?.name ?? "Trading 212"
+        }
+        snapshot = result
+        snapshotRequest = request
+        let historyText = result.transactionHistoryStatus.map { L10n.clauseSeparator + L10n.message($0) } ?? ""
+        status = .success(L10n.text("读取成功：\(result.accountCount) 个账户，\(result.positions.count) 项持仓\(historyText)"))
+        if !result.hasCompleteTransactionHistory {
+            scheduleHistoryRetry(.preview)
+        }
+    }
+
+    private func sync(_ currentSnapshot: Trading212Snapshot, request: Trading212RequestConfiguration) async throws {
+        snapshot = currentSnapshot
+        snapshotRequest = request
+        status = .working(L10n.text("Trading 212 已读取，正在保存到本机…"))
+        let accountID = "account-\(accountSlot)"
+        let accountNames = model.accountNames(
+            source: "Trading 212",
+            accountIDs: [accountID],
+            preferredNickname: nickname,
+            targetAccountID: context.account?.accountID
+        )
+        let result = try await model.importTrading212(
+            currentSnapshot,
+            accountNames: accountNames,
+            replacingAccountsOnly: true
+        )
+        // Cancellation cannot roll back a completed local import, but a
+        // dismissed sheet must not publish stale state or start a retry.
+        try Task.checkCancellation()
+        let warningText = result.warnings.isEmpty ? "" : L10n.text("，跳过 \(result.warnings.count) 项")
+        let historyText = currentSnapshot.transactionHistoryStatus.map { L10n.clauseSeparator + L10n.message($0) } ?? ""
+        status = .success(context.isCreating
+            ? L10n.text("已创建账户，导入 \(result.holdingsCount) 个持仓\(warningText)\(historyText)")
+            : L10n.text("已同步 \(result.holdingsCount) 个持仓\(warningText)\(historyText)"))
+        if !currentSnapshot.hasCompleteTransactionHistory {
+            scheduleHistoryRetry(.sync)
         }
     }
 
     private func invalidatePreview() {
-        guard !isWorking else { return }
+        stopWaiting()
+        snapshot = nil
+        snapshotRequest = nil
+        status = .idle
+    }
+
+    private func stopWaiting() {
+        operation.cancel()
         historyRetryTask?.cancel()
         historyRetryTask = nil
-        snapshot = nil
-        snapshotAccounts = nil
-        snapshotEnvironment = nil
-        status = .idle
     }
 
     private func scheduleHistoryRetry(_ action: Trading212HistoryRetryAction) {
@@ -388,12 +396,8 @@ struct Trading212View: View {
         historyRetryTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(62))
             guard !Task.isCancelled else { return }
-            switch action {
-            case .preview:
-                await preview()
-            case .sync:
-                await sync()
-            }
+            historyRetryTask = nil
+            perform(action)
         }
     }
 
@@ -404,8 +408,7 @@ struct Trading212View: View {
         apiKey = ""
         apiSecret = ""
         snapshot = nil
-        snapshotAccounts = nil
-        snapshotEnvironment = nil
+        snapshotRequest = nil
         historyRetryTask?.cancel()
         historyRetryTask = nil
         status = .idle
@@ -424,7 +427,62 @@ private enum Trading212ViewStatus {
     case failure(String)
 }
 
-private enum Trading212HistoryRetryAction {
+private enum Trading212HistoryRetryAction: Equatable {
     case preview
     case sync
+}
+
+struct Trading212RequestConfiguration: Equatable {
+    let accounts: [Trading212AccountCredentials]
+    let environment: Trading212Environment
+}
+
+/// Owns a sheet request and gates its response before any local import. Some
+/// network work can finish after cancellation; an old result must stay inert.
+@MainActor @Observable
+final class Trading212Operation {
+    private(set) var isRunning = false
+    @ObservationIgnored private var task: Task<Void, Never>?
+    private var generation = UUID()
+
+    @discardableResult
+    func start(
+        request: Trading212RequestConfiguration,
+        fetch: @escaping @MainActor (Trading212RequestConfiguration) async throws -> Trading212Snapshot,
+        apply: @escaping @MainActor (Trading212RequestConfiguration, Trading212Snapshot) async throws -> Void,
+        onError: @escaping @MainActor (Error) -> Void
+    ) -> Task<Void, Never>? {
+        guard !isRunning else { return nil }
+        let id = UUID()
+        generation = id
+        isRunning = true
+        let next = Task { @MainActor [weak self] in
+            defer {
+                if self?.generation == id {
+                    self?.isRunning = false
+                    self?.task = nil
+                }
+            }
+            do {
+                try Task.checkCancellation()
+                let result = try await fetch(request)
+                try Task.checkCancellation()
+                guard self?.generation == id else { return }
+                try await apply(request, result)
+            } catch {
+                guard !Task.isCancelled, self?.generation == id,
+                      !(error is CancellationError), (error as? URLError)?.code != .cancelled else { return }
+                onError(error)
+            }
+        }
+        task = next
+        return next
+    }
+
+    func cancel() {
+        generation = UUID()
+        task?.cancel()
+        task = nil
+        isRunning = false
+    }
 }

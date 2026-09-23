@@ -75,7 +75,7 @@ enum LocalServiceError: LocalizedError {
         case .invalidResponse:
             L10n.text("第三方服务返回了无法识别的数据")
         case let .remote(message):
-            message
+            L10n.message(message)
         case .noMarketData:
             L10n.text("没有读取到这只证券的历史成交量")
         case .noHistoricalPrices:

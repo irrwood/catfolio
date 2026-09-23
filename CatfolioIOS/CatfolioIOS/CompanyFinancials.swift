@@ -85,13 +85,13 @@ enum CompanyFinancialsError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .unsupportedTicker:
-            "SEC 没有找到这只证券对应的申报公司"
+            L10n.text("SEC 没有找到这只证券对应的申报公司")
         case .invalidResponse:
-            "财务数据返回格式无法识别"
+            L10n.text("财务数据返回格式无法识别")
         case let .remote(message):
-            message
+            L10n.message(message)
         case .noStatements:
-            "暂未读取到可用于财务图的年度或季度报表"
+            L10n.text("暂未读取到可用于财务图的年度或季度报表")
         }
     }
 }
@@ -297,7 +297,7 @@ actor CompanyFinancialsClient {
 
         if onlyConfirmedAbsence { throw CompanyFinancialsError.noStatements }
         throw CompanyFinancialsError.remote(
-            "SEC 当前限制了此网络，备用财务数据也暂时不可用。请稍后下拉重试。"
+            L10n.text("SEC 当前限制了此网络，备用财务数据也暂时不可用。请稍后下拉重试。")
         )
     }
 
@@ -321,6 +321,7 @@ actor CompanyFinancialsClient {
         do {
             payload = try JSONDecoder().decode(SECCompanyFacts.self, from: data)
         } catch {
+            DataSourceHealth.reportUnusable(DataSource.of(url), "Company Facts 的格式无法识别", subject: ticker)
             throw CompanyFinancialsError.invalidResponse
         }
 
@@ -329,6 +330,10 @@ actor CompanyFinancialsClient {
         let balance = Self.makeSECBalance(namespace: namespace)
         let cashFlow = Self.makeSECCashFlow(namespace: namespace)
         guard !income.isEmpty || !balance.isEmpty || !cashFlow.isEmpty else {
+            // The filing arrived; none of its tags formed a statement. Said
+            // here, not left as an empty page, since the answer is usually a
+            // tag the catalogue does not read yet (SoFi's, until 2026-09).
+            DataSourceHealth.reportUnusable(DataSource.of(url), "申报里没有能组成报表的标签", subject: ticker)
             throw CompanyFinancialsError.noStatements
         }
         return CompanyFinancialsData(
@@ -382,11 +387,11 @@ actor CompanyFinancialsClient {
             ticker: sec.ticker,
             entityName: sec.entityName,
             cik: sec.cik,
-            source: usedFallback ? "SEC 为主 · FMP 补充缺失报表" : sec.source,
+            source: usedFallback ? L10n.text("SEC 为主 · FMP 补充缺失报表") : sec.source,
             income: sec.income.isEmpty ? fmp.income : sec.income,
             balance: sec.balance.isEmpty ? fmp.balance : sec.balance,
             cashFlow: sec.cashFlow.isEmpty ? fmp.cashFlow : sec.cashFlow,
-            warnings: usedFallback ? ["部分报表在 SEC Company Facts 中缺失，已用 FMP 补充。"] : [],
+            warnings: usedFallback ? [L10n.text("部分报表在 SEC Company Facts 中缺失，已用 FMP 补充。")] : [],
             sharesOutstanding: sec.sharesOutstanding,
             valuationQuality: sec.valuationQuality,
             valuationSchemaVersion: sec.valuationSchemaVersion
@@ -453,7 +458,16 @@ actor CompanyFinancialsClient {
         let url = URL(string: "https://www.sec.gov/files/company_tickers.json")!
         do {
             let data = try await request(url: url, isSEC: true, forceRefresh: forceRefresh)
-            let rows = try JSONDecoder().decode([String: SECTickerRow].self, from: data)
+            let rows: [String: SECTickerRow]
+            do {
+                rows = try JSONDecoder().decode([String: SECTickerRow].self, from: data)
+            } catch {
+                DataSourceHealth.reportUnusable(DataSource.of(url), issue: .invalidFormat)
+                throw error
+            }
+            if rows.isEmpty {
+                DataSourceHealth.reportUnusable(DataSource.of(url), issue: .emptyResult)
+            }
             let fetched = Dictionary(uniqueKeysWithValues: rows.values.map { ($0.ticker.uppercased(), $0) })
             tickerMap = tickerMap.merging(fetched) { _, fresh in fresh }
             tickerCacheDate = Date()
@@ -495,17 +509,18 @@ actor CompanyFinancialsClient {
                 let cash = Self.makeFMPCashFlow(annualCash, kind: .annual)
                     + Self.makeFMPCashFlow(quarterlyCash, kind: .quarterly)
                 guard !income.isEmpty || !balance.isEmpty || !cash.isEmpty else {
+                    DataSourceHealth.reportUnusable(DataSource.named("fmp"), issue: .missingRequiredFields)
                     throw CompanyFinancialsError.noStatements
                 }
                 return CompanyFinancialsData(
                     ticker: ticker,
                     entityName: ticker,
                     cik: nil,
-                    source: "FMP · SEC 未覆盖时使用",
+                    source: L10n.text("FMP · SEC 未覆盖时使用"),
                     income: income,
                     balance: balance,
                     cashFlow: cash,
-                    warnings: ["SEC 未返回该证券的可用报表，当前显示 FMP 标准化数据。"]
+                    warnings: [L10n.text("SEC 未返回该证券的可用报表，当前显示 FMP 标准化数据。")]
                 )
             } catch {
                 lastError = error
@@ -533,8 +548,13 @@ actor CompanyFinancialsClient {
         try await FMPRequestLimiter.shared.waitForTurn()
         let data = try await request(url: components.url!, isSEC: false, forceRefresh: true)
         do {
-            return try JSONDecoder().decode([Row].self, from: data)
+            let rows = try JSONDecoder().decode([Row].self, from: data)
+            if rows.isEmpty {
+                DataSourceHealth.reportUnusable(DataSource.of(components.url), issue: .emptyResult)
+            }
+            return rows
         } catch {
+            DataSourceHealth.reportUnusable(DataSource.of(components.url), issue: .invalidFormat)
             throw CompanyFinancialsError.invalidResponse
         }
     }
@@ -558,13 +578,25 @@ actor CompanyFinancialsClient {
         )
         let (annualData, quarterlyData) = try await (annualBytes, quarterlyBytes)
         let decoder = JSONDecoder()
-        let annualResponse = try decoder.decode(NasdaqFinancialsResponse.self, from: annualData)
-        let quarterlyResponse = try decoder.decode(NasdaqFinancialsResponse.self, from: quarterlyData)
+        let annualResponse: NasdaqFinancialsResponse
+        let quarterlyResponse: NasdaqFinancialsResponse
+        do {
+            annualResponse = try decoder.decode(NasdaqFinancialsResponse.self, from: annualData)
+            quarterlyResponse = try decoder.decode(NasdaqFinancialsResponse.self, from: quarterlyData)
+        } catch {
+            DataSourceHealth.reportUnusable(DataSource.of(annualURL), issue: .invalidFormat)
+            throw CompanyFinancialsError.invalidResponse
+        }
         guard annualResponse.allowsStatementRead, quarterlyResponse.allowsStatementRead else {
+            // Nasdaq answers 200 and puts its refusal in the body.
+            DataSourceHealth.reportUnusable(DataSource.of(annualURL), "返回里的状态码拒绝了请求", subject: ticker)
             throw CompanyFinancialsError.invalidResponse
         }
         let annual = annualResponse.data, quarterly = quarterlyResponse.data
-        guard annual != nil || quarterly != nil else { throw CompanyFinancialsError.noStatements }
+        guard annual != nil || quarterly != nil else {
+            DataSourceHealth.reportUnusable(DataSource.of(annualURL), "没有这只证券的报表", subject: ticker)
+            throw CompanyFinancialsError.noStatements
+        }
 
         let income = Self.makeNasdaqIncome(annual?.incomeStatementTable, kind: .annual)
             + Self.makeNasdaqIncome(quarterly?.incomeStatementTable, kind: .quarterly)
@@ -573,17 +605,18 @@ actor CompanyFinancialsClient {
         let cashFlow = Self.makeNasdaqCashFlow(annual?.cashFlowTable, kind: .annual)
             + Self.makeNasdaqCashFlow(quarterly?.cashFlowTable, kind: .quarterly)
         guard !income.isEmpty || !balance.isEmpty || !cashFlow.isEmpty else {
+            DataSourceHealth.reportUnusable(DataSource.of(annualURL), issue: .missingRequiredFields)
             throw CompanyFinancialsError.noStatements
         }
         return CompanyFinancialsData(
             ticker: ticker,
             entityName: annual?.symbol ?? quarterly?.symbol ?? ticker,
             cik: nil,
-            source: "Nasdaq 财务数据 · SEC 网络受限时使用",
+            source: L10n.text("Nasdaq 财务数据 · SEC 网络受限时使用"),
             income: income,
             balance: balance,
             cashFlow: cashFlow,
-            warnings: ["SEC 当前限制了此网络的自动访问，已自动切换到 Nasdaq；恢复后仍会优先读取 SEC。"]
+            warnings: [L10n.text("SEC 当前限制了此网络的自动访问，已自动切换到 Nasdaq；恢复后仍会优先读取 SEC。")]
         )
     }
 
@@ -594,7 +627,7 @@ actor CompanyFinancialsClient {
         isNasdaq: Bool = false
     ) async throws -> Data {
         if isSEC, let secBackoffUntil, secBackoffUntil > Date() {
-            throw CompanyFinancialsError.remote("SEC 正在限流冷却中")
+            throw CompanyFinancialsError.remote(L10n.text("SEC 正在限流冷却中"))
         }
         var request = URLRequest(
             url: url,
@@ -617,7 +650,7 @@ actor CompanyFinancialsClient {
             request.setValue("https://www.nasdaq.com", forHTTPHeaderField: "Origin")
             request.setValue("https://www.nasdaq.com/", forHTTPHeaderField: "Referer")
         }
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw CompanyFinancialsError.invalidResponse
         }
@@ -626,9 +659,9 @@ actor CompanyFinancialsClient {
                 let retrySeconds = http.value(forHTTPHeaderField: "Retry-After")
                     .flatMap(TimeInterval.init) ?? 15 * 60
                 secBackoffUntil = Date().addingTimeInterval(max(60, min(retrySeconds, 60 * 60)))
-                throw CompanyFinancialsError.remote("SEC 暂时限制了此网络的自动访问，请稍后重试")
+                throw CompanyFinancialsError.remote(L10n.text("SEC 暂时限制了此网络的自动访问，请稍后重试"))
             }
-            throw CompanyFinancialsError.remote("财务数据请求失败（HTTP \(http.statusCode)）")
+            throw CompanyFinancialsError.remote(L10n.text("财务数据请求失败（HTTP \(http.statusCode)）"))
         }
         return data
     }

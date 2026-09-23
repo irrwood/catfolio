@@ -139,7 +139,7 @@ struct SnapTradeView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.text("完成")) { stopWaiting(); dismiss() }
+                    AppModalDoneButton { stopWaiting(); dismiss() }
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     if busy {

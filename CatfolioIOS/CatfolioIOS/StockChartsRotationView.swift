@@ -109,7 +109,7 @@ struct StockChartsRotationView: View {
                 }
                 .softTopScrollEdge()
                 .appPageBackground().navigationTitle(L10n.text("如何阅读这张图"))
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { showInfo = false } } }
+                .toolbar { ToolbarItem(placement: .confirmationAction) { AppModalDoneButton { showInfo = false } } }
             }.presentationDetents([.medium, .large])
         }
     }

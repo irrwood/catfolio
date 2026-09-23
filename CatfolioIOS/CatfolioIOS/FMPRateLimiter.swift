@@ -58,9 +58,9 @@ enum FMPFailure: LocalizedError {
     var errorDescription: String? {
         switch self {
         case let .rateLimited(seconds):
-            "已达到 FMP 的请求频率上限（429）。这不是密钥或权限问题——同时打开多张数据卡片会更快触顶。约 \(seconds) 秒后可重试。"
+            L10n.text("已达到 FMP 的请求频率上限（429）。这不是密钥或权限问题——同时打开多张数据卡片会更快触顶。约 \(seconds) 秒后可重试。")
         case .missingKey:
-            "请先在设置 → 服务商中配置 FMP。筛选和财报接口需要相应的数据权限。"
+            L10n.text("请先在设置 → 服务商中配置 FMP。筛选和财报接口需要相应的数据权限。")
         }
     }
 }

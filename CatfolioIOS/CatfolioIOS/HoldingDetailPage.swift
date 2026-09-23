@@ -73,8 +73,7 @@ struct HoldingDetailContentView: View {
         get { cachedContent.realisedProfit }
         nonmutating set { cachedContent.realisedProfit = newValue }
     }
-    @State private var presentationReady = false
-    @State private var lowerSectionsRevealed = false
+    @State private var lowerContentReady = false
     @State private var cardInsight: SecurityCardInsightRequest?
     @State private var marketDataRevision = 0
     @State private var completedMarketDataRevision: Int?
@@ -103,7 +102,7 @@ struct HoldingDetailContentView: View {
 
     /// A preview has no presentation to wait for.
     private var showsLowerSections: Bool {
-        lowerSectionsRevealed || isPreview || showsVolumeFocusedPreview
+        lowerContentReady || isPreview || showsVolumeFocusedPreview
     }
 
     private var showsInitialLoadingPlaceholder: Bool {
@@ -152,7 +151,6 @@ struct HoldingDetailContentView: View {
                                 marketTodayChange: profile?.todayChangePercent,
                                 priceHistory: priceHistory,
                                 priceHistoryError: priceHistoryError,
-                                presentationReady: presentationReady,
                                 averageCost: averageCostInQuoteCurrency,
                                 selectedAccountKeys: selectedAccountKeys,
                                 accountOptions: accountContext?.options ?? [],
@@ -166,11 +164,9 @@ struct HoldingDetailContentView: View {
                         }
                     }
 
-                    // Everything below the price section waits for the zoom
-                    // to land, then fades in. Built in the same update as the
-                    // sheet, these cards were most of the half second between
-                    // the tap and the zoom starting, and the frames it dropped
-                    // on the way.
+                    // Lightweight placeholders exist from the first sheet frame.
+                    // Mount the expensive cards once native presentation settles;
+                    // each card then keeps its own loading/error/cache state.
                     if showsLowerSections {
                         VStack(spacing: 0) {
                             // A plain stack: built once when the page lands. Lazily,
@@ -201,19 +197,8 @@ struct HoldingDetailContentView: View {
                                     HoldingDetailSectionCard(title: L10n.text("Volume Profile")) {
                                         StatusNotice(text: errorMessage, kind: .info)
                                     }
-                                } else if presentationReady {
-                                    VStack(alignment: .leading, spacing: 16) {
-                                        ChartSkeletonShape(width: 140, height: 19)
-                                        ChartShapeSkeleton(layout: .horizontalBars, appearanceID: "volume-profile|\(holding.ticker)")
-                                            .frame(height: 184)
-                                        ChartSkeletonShape(height: 12)
-                                    }
-                                    .padding(HoldingDetailCardStyle.contentInset)
-                                    .holdingDetailGlassCard()
                                 } else {
-                                    Color.clear
-                                        .frame(height: 72)
-                                        .accessibilityHidden(true)
+                                    HoldingVolumeProfileLoadingPlaceholder(ticker: holding.ticker)
                                 }
 
                                 OptionsOIView(symbol: holding.ticker, currency: holding.quoteCurrency,
@@ -240,7 +225,8 @@ struct HoldingDetailContentView: View {
                             .id("\(holding.ticker)|\(appLocale.identifier)")
                             .padding(.bottom, 72)
                         }
-                        .transition(.opacity)
+                    } else {
+                        HoldingDetailLowerLoadingPlaceholder(ticker: holding.ticker, showsPosition: showsPosition)
                     }
                     }
                 }
@@ -275,9 +261,7 @@ struct HoldingDetailContentView: View {
             }
             .overlay(alignment: .topTrailing) {
                 if !isPreview {
-                    HoldingDetailCloseButton(action: {
-                        SecurityDetailSnapshotTransition.shared.close(perform: onClose)
-                    })
+                    HoldingDetailCloseButton(action: onClose)
                         .padding(20)
                 }
             }
@@ -287,11 +271,7 @@ struct HoldingDetailContentView: View {
                 PresentationDidAppearReader {
                     var transaction = Transaction(animation: nil)
                     transaction.disablesAnimations = true
-                    withTransaction(transaction) { presentationReady = true }
-                    // Opened from a row, wait for the card to land as well.
-                    SecurityDetailSnapshotTransition.shared.whenOpenSettles {
-                        withAnimation(.easeOut(duration: 0.25)) { lowerSectionsRevealed = true }
-                    }
+                    withTransaction(transaction) { lowerContentReady = true }
                 }
             }
             // Start cache-backed work as soon as SwiftUI inserts the sheet,
@@ -691,6 +671,65 @@ struct HoldingDetailAccountSelector: View {
                     }
             }
         }
+    }
+}
+
+/// Shared with the live volume section so arrival does not replace one
+/// loading layout with a different loading layout.
+struct HoldingVolumeProfileLoadingPlaceholder: View {
+    let ticker: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ChartSkeletonShape(width: 140, height: 19)
+            ChartShapeSkeleton(layout: .horizontalBars, appearanceID: "volume-profile|\(ticker)")
+                .frame(height: 184)
+            ChartSkeletonShape(height: 12)
+        }
+        .padding(HoldingDetailCardStyle.contentInset)
+        .holdingDetailGlassCard()
+    }
+}
+
+/// Only cheap shapes during the native slide. No research initializers,
+/// disk reads or chart preparation are needed to show that content is coming.
+struct HoldingDetailLowerLoadingPlaceholder: View {
+    let ticker: String
+    let showsPosition: Bool
+
+    var body: some View {
+        VStack(spacing: HoldingDetailCardStyle.spacing) {
+            HoldingVolumeProfileLoadingPlaceholder(ticker: ticker)
+            VStack(alignment: .leading, spacing: 8) {
+                ChartSkeletonShape(width: 130, height: 19)
+                    .padding([.horizontal, .top], HoldingDetailCardStyle.contentInset)
+                ChartShapeSkeleton(layout: .horizontalBars, appearanceID: "options-oi|\(ticker)")
+                    .padding(.horizontal, 20)
+                    .frame(height: 397)
+            }
+            .holdingDetailGlassCard()
+            if showsPosition {
+                VStack(alignment: .leading, spacing: 20) {
+                    ChartSkeletonShape(width: 100, height: 19)
+                    ForEach(0..<4, id: \.self) { _ in
+                        HStack {
+                            ChartSkeletonShape(width: 82, height: 12)
+                            Spacer()
+                            ChartSkeletonShape(width: 64, height: 12)
+                        }
+                    }
+                }
+                .padding(HoldingDetailCardStyle.contentInset)
+                .holdingDetailGlassCard()
+            }
+        }
+        .padding(.horizontal, HoldingDetailCardStyle.pageInset)
+        .padding(.top, 24)
+        .padding(.bottom, 72)
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.text("正在加载个股详情"))
+        .accessibilityIdentifier("holding-detail-lower-loading")
     }
 }
 

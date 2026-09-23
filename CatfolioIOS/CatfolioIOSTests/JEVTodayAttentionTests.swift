@@ -3,6 +3,23 @@ import XCTest
 
 /// What JEV 今日关注 sends to Jev, and how it reads the answers back.
 final class JEVTodayAttentionTests: XCTestCase {
+    private var previousLanguagePreference: Any?
+
+    override func setUp() {
+        super.setUp()
+        previousLanguagePreference = UserDefaults.standard.object(forKey: AppLanguage.preferenceKey)
+        UserDefaults.standard.set(AppLanguage.simplifiedChinese.rawValue, forKey: AppLanguage.preferenceKey)
+    }
+
+    override func tearDown() {
+        if let previousLanguagePreference {
+            UserDefaults.standard.set(previousLanguagePreference, forKey: AppLanguage.preferenceKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: AppLanguage.preferenceKey)
+        }
+        super.tearDown()
+    }
+
     private func holding(price: Double) -> Holding {
         Holding(ticker: "TEST", logoSymbol: nil, displayName: "Test Co", sector: "Technology", source: nil,
                 shares: 10, averageCost: 50, costCurrency: "USD", quotePrice: price, quoteCurrency: "USD",

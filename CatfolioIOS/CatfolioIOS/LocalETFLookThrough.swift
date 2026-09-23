@@ -44,6 +44,7 @@ enum LocalETFLookThrough {
         var sector: String?
         var fromETFUSD: Double
         var costUSD: Double? = 0
+        var fundMarketValues: [String: Double] = [:]
     }
 
     private struct HoldingsCatalog: Decodable {
@@ -86,7 +87,7 @@ enum LocalETFLookThrough {
         if document.positions.contains(where: { $0.publicDisclosure != nil }) {
             guard basis == .market,
                   document.positions.allSatisfy({ $0.publicDisclosure?.value != nil && $0.publicDisclosure?.instrumentLabel == nil }) else {
-                throw LocalServiceError.remote("当前数据不足，暂时无法按该口径计算。")
+                throw LocalServiceError.remote(L10n.text("当前数据不足，暂时无法按该口径计算。"))
             }
         }
         let supported = Set(funds.keys)
@@ -158,18 +159,25 @@ enum LocalETFLookThrough {
         var aggregated: [String: AggregatedExposure] = [:]
         var otherFromETFUSD = 0.0
         var otherCostUSD: Double? = 0
+        var otherFundValues: [String: Double] = [:]
 
         for exposure in etfExposures {
             guard let dataset = datasets[exposure.definition.resource] else { continue }
             let etfCost = try positionCost(exposure.position)
             var allocatedWeight = 0.0
+            let fundTicker = exposure.position.ticker.uppercased()
+            // Rounded provider weights can exceed 100%; never manufacture value.
+            let weightTotal = dataset.rows.reduce(0.0) { $0 + ($1.weight.isFinite ? max(0, $1.weight) : 0) }
+            let weightScale = 100 / max(100, weightTotal)
             for constituent in dataset.rows {
-                let weight = max(0, constituent.weight)
+                let weight = (constituent.weight.isFinite ? max(0, constituent.weight) : 0) * weightScale
+                guard weight > 0 else { continue }
                 allocatedWeight += weight
                 let amount = exposure.amount * weight / 100
                 let ticker = constituent.ticker.uppercased()
                 if ticker == "CASH" || ticker == "ETF 其他" {
                     otherFromETFUSD += amount
+                    otherFundValues[fundTicker, default: 0] += amount
                     if weight > 0 {
                         otherCostUSD = otherCostUSD.flatMap { sum in etfCost.map { sum + $0 * weight / 100 } }
                     }
@@ -181,6 +189,7 @@ enum LocalETFLookThrough {
                     fromETFUSD: 0
                 )
                 current.fromETFUSD += amount
+                current.fundMarketValues[fundTicker, default: 0] += amount
                 // Use the same weights for both known fund market value and
                 // cost. This allocates fund P/L; it is not a constituent's
                 // historical price return and requires no extra quote request.
@@ -192,6 +201,7 @@ enum LocalETFLookThrough {
             }
             let unallocatedWeight = max(0, 100 - allocatedWeight)
             otherFromETFUSD += exposure.amount * unallocatedWeight / 100
+            otherFundValues[fundTicker, default: 0] += exposure.amount * unallocatedWeight / 100
             if unallocatedWeight > 0 {
                 otherCostUSD = otherCostUSD.flatMap { sum in etfCost.map { sum + $0 * unallocatedWeight / 100 } }
             }
@@ -211,25 +221,30 @@ enum LocalETFLookThrough {
                 totalUSD: directUSD + exposure.fromETFUSD,
                 etfWeightPercent: etfTotal > 0 ? exposure.fromETFUSD / etfTotal * 100 : 0,
                 sector: SectorAttribution.resolvedSector(ticker: ticker, reportedSector: exposure.sector)?.displayName,
-                estimatedHoldingPeriodPercent: estimatedPercent(market: directUSD + exposure.fromETFUSD, cost: combinedCost)
+                estimatedHoldingPeriodPercent: estimatedPercent(market: directUSD + exposure.fromETFUSD, cost: combinedCost),
+                allocatedCostUSD: basis == .market ? combinedCost : nil,
+                fundMarketValues: basis == .market ? exposure.fundMarketValues : nil
             )
         }
 
         let otherWeight = etfTotal > 0 ? otherFromETFUSD / etfTotal * 100 : 0
         let covered = max(0, 100 - otherWeight)
-        if otherFromETFUSD > 0.001 {
+        if otherFromETFUSD > 0 {
             rows.append(ETFLookThroughRow(
-                ticker: "ETF 其他", logoSymbol: nil, name: "基金现金、衍生品及未识别部分",
+                ticker: "ETF 其他", logoSymbol: nil, name: L10n.text("基金现金、衍生品及未识别部分"),
                 directUSD: 0, fromETFUSD: otherFromETFUSD,
                 totalUSD: otherFromETFUSD, etfWeightPercent: otherWeight, sector: "ETF / Other",
-                estimatedHoldingPeriodPercent: estimatedPercent(market: otherFromETFUSD, cost: otherCostUSD)
+                estimatedHoldingPeriodPercent: estimatedPercent(market: otherFromETFUSD, cost: otherCostUSD),
+                allocatedCostUSD: basis == .market ? otherCostUSD : nil,
+                fundMarketValues: basis == .market ? otherFundValues : nil
             ))
         }
         rows.append(contentsOf: direct.map { ticker, item in
             ETFLookThroughRow(
                 ticker: ticker, logoSymbol: ticker, name: item.name.isEmpty ? ticker : item.name,
                 directUSD: item.value, fromETFUSD: 0, totalUSD: item.value, etfWeightPercent: 0,
-                sector: SectorAttribution.primarySector(ticker: ticker)?.displayName
+                sector: SectorAttribution.primarySector(ticker: ticker)?.displayName,
+                allocatedCostUSD: missingDirectCosts.contains(ticker) ? nil : directCosts[ticker]
             )
         })
         rows.sort { $0.totalUSD > $1.totalUSD }
@@ -249,7 +264,7 @@ enum LocalETFLookThrough {
         let xs2dAliases = Set(["XS2D", "XS2D.L", "DBPG", "DBPG.DE", "XS2L", "XS2L.MI"])
         let hasXS2D = etfs.contains { xs2dAliases.contains($0.ticker.uppercased()) }
         let onlyXS2D = etfs.allSatisfy { xs2dAliases.contains($0.ticker.uppercased()) }
-        let sourceSummary = (sources + (hasXS2D ? ["XS2D：S&P 500 经济暴露近似"] : []))
+        let sourceSummary = (sources + (hasXS2D ? [L10n.text("XS2D：S&P 500 经济暴露近似")] : []))
             .joined(separator: " · ")
         let xs2dSourceURL = "https://etf.dws.com/en-gb/AssetDownload/Index/15d381e4-a965-436a-a89e-dc706840c3cf/Overall-Factsheet.pdf"
 
@@ -265,5 +280,45 @@ enum LocalETFLookThrough {
             holdingsSourceURL: hasXS2D ? (onlyXS2D ? xs2dSourceURL : nil) : singleDataset?.sourceURL,
             rows: rows
         )
+    }
+}
+
+/// Display-only aggregation. It never changes broker shares, trades or the ledger.
+extension ETFLookThroughRow {
+    func mergedPerformance(for period: HoldingPerformancePeriod,
+                           holdings: [String: Holding], dailyChanges: [String: Double]) -> HoldingPerformanceValues? {
+        guard totalUSD.isFinite else { return nil }
+        if fromETFUSD == 0 {
+            guard let direct = holdings[ticker.uppercased()] else { return nil }
+            return direct.performanceValues(for: period,
+                dailyChangePercent: dailyChanges[ticker.uppercased()] ?? direct.todayChangePercent)
+        }
+        switch period {
+        case .holdingPeriod:
+            guard let cost = allocatedCostUSD, cost.isFinite, cost > 0 else { return nil }
+            let amount = totalUSD - cost
+            let percent = amount / cost * 100
+            guard amount.isFinite, percent.isFinite else { return nil }
+            return HoldingPerformanceValues(amount: amount, percent: percent)
+        case .today:
+            guard let fundMarketValues,
+                  abs(fundMarketValues.values.reduce(0, +) - fromETFUSD) <= max(0.000001, abs(fromETFUSD) * 1e-9) else { return nil }
+            var amount = 0.0
+            if directUSD != 0 {
+                guard let direct = holdings[ticker.uppercased()],
+                      let change = dailyChanges[ticker.uppercased()] ?? direct.todayChangePercent,
+                      let contribution = PortfolioMath.dayContribution(marketValue: directUSD, changePercent: change) else { return nil }
+                amount += contribution
+            }
+            for (fund, value) in fundMarketValues where value != 0 {
+                guard value.isFinite,
+                      let change = dailyChanges[fund] ?? holdings[fund]?.todayChangePercent,
+                      let contribution = PortfolioMath.dayContribution(marketValue: value, changePercent: change) else { return nil }
+                amount += contribution
+            }
+            let opening = totalUSD - amount
+            guard amount.isFinite, opening > 0 else { return nil }
+            return HoldingPerformanceValues(amount: amount, percent: amount / opening * 100)
+        }
     }
 }

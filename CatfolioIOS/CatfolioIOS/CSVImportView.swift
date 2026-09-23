@@ -45,6 +45,7 @@ struct CSVImportView: View {
                     ) {
                         showsFileImporter = true
                     }
+                    .disabled(isImporting)
 
                     if isReadingFile { ProgressView().padding() }
                     if let selectedFile {
@@ -73,7 +74,8 @@ struct CSVImportView: View {
                                     ? L10n.text("正在导入")
                                     : (context.isCreating ? L10n.text("创建 CSV 账户") : L10n.text("导入并更新账户")),
                                 systemImage: "arrow.down.doc",
-                                isDisabled: context.isCreating && nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                                isDisabled: !selectedFile.hasDataRows || isReadingFile
+                                    || (context.isCreating && nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty),
                                 isBusy: isImporting
                             ) {
                                 showsImportConfirmation = true
@@ -92,46 +94,7 @@ struct CSVImportView: View {
                 }
 
                 if let importResult {
-                    SettingsSection(L10n.text("导入完成")) {
-                        SettingsRowContainer {
-                            Label(L10n.text("已导入 \(importResult.holdingsCount) 个持仓"), systemImage: "checkmark.circle")
-                                .appText(.subheading)
-                                .foregroundStyle(CatfolioTheme.positive)
-                        }
-                        if let count = importResult.transactionsCount {
-                            SettingsValueRow(title: L10n.text("有效交易"), value: L10n.text("\(count) 条"))
-                        }
-                        if importResult.backupCreated == true {
-                            SettingsRowContainer {
-                                Label(L10n.text("持仓已保存到此 iPhone"), systemImage: "iphone.gen3")
-                                    .appText(.label, weight: .regular)
-                                    .foregroundStyle(SettingsTemplate.secondaryText)
-                            }
-                        }
-                        ForEach((importResult.holdings ?? []).prefix(8)) { holding in
-                            SettingsRowContainer {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: SettingsTemplate.subtitleSpacing) {
-                                        Text(holding.ticker)
-                                            .appText(.subheading, weight: .semibold)
-                                        if !holding.name.isEmpty {
-                                            Text(holding.name)
-                                                .appText(.label, weight: .regular)
-                                                .foregroundStyle(SettingsTemplate.secondaryText)
-                                        }
-                                    }
-                                    Spacer()
-                                    VStack(alignment: .trailing, spacing: SettingsTemplate.subtitleSpacing) {
-                                        Text(DisplayFormat.shares(holding.shares))
-                                            .appNumber(.subheading)
-                                        Text(L10n.text("均价 \(DisplayFormat.money(holding.averageCost, currency: holding.currency))"))
-                                            .appNumber(.label, weight: .regular, monospaced: false)
-                                            .foregroundStyle(SettingsTemplate.secondaryText)
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    CSVImportResultSection(result: importResult)
                 } else if let statusMessage {
                     SettingsCard {
                         SettingsRowContainer {
@@ -145,7 +108,7 @@ struct CSVImportView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.text("完成")) { dismiss() }
+                    AppModalDoneButton { dismiss() }
                 }
             }
             .fileImporter(
@@ -233,7 +196,7 @@ struct CSVImportView: View {
     }
 
     private func importSelectedFile() async {
-        guard let selectedFile, selectedFile.hasDataRows else { return }
+        guard !isImporting, !isReadingFile, let selectedFile, selectedFile.hasDataRows else { return }
         isImporting = true
         statusMessage = nil
         importResult = nil
@@ -254,6 +217,74 @@ struct CSVImportView: View {
             )
         } catch {
             statusMessage = error.localizedDescription
+        }
+    }
+}
+
+/// The saved result includes parser warnings: skipped rows must remain visible
+/// even when the valid rows were successfully imported.
+struct CSVImportResultSection: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let result: CSVImportResult
+
+    var body: some View {
+        SettingsSection(result.warnings.isEmpty
+                ? L10n.text("导入完成") : L10n.text("导入完成，请检查提示")) {
+            SettingsRowContainer {
+                Label(L10n.text("已导入 \(result.holdingsCount) 个持仓"), systemImage: "checkmark.circle")
+                    .appText(.subheading)
+                    .foregroundStyle(CatfolioTheme.positive)
+            }
+            if let count = result.transactionsCount {
+                if dynamicTypeSize.isAccessibilitySize {
+                    SettingsRowContainer {
+                        VStack(alignment: .leading, spacing: SettingsTemplate.subtitleSpacing) {
+                            Text(L10n.text("有效交易")).appText(.subheading)
+                            Text(L10n.text("\(count) 条"))
+                                .appNumber(.subheading)
+                                .foregroundStyle(SettingsTemplate.secondaryText)
+                        }
+                    }
+                } else {
+                    SettingsValueRow(title: L10n.text("有效交易"), value: L10n.text("\(count) 条"))
+                }
+            }
+            if result.backupCreated == true {
+                SettingsRowContainer {
+                    Label(L10n.text("持仓已保存到此 iPhone"), systemImage: "iphone.gen3")
+                        .appText(.label, weight: .regular)
+                        .foregroundStyle(SettingsTemplate.secondaryText)
+                }
+            }
+            ForEach(Array(result.warnings.enumerated()), id: \.offset) { index, warning in
+                SettingsRowContainer {
+                    StatusNotice(text: warning)
+                        .accessibilityIdentifier("csv-import-warning-\(index)")
+                }
+            }
+            ForEach((result.holdings ?? []).prefix(8)) { holding in
+                SettingsRowContainer {
+                    HStack {
+                        VStack(alignment: .leading, spacing: SettingsTemplate.subtitleSpacing) {
+                            Text(holding.ticker)
+                                .appText(.subheading, weight: .semibold)
+                            if !holding.name.isEmpty {
+                                Text(holding.name)
+                                    .appText(.label, weight: .regular)
+                                    .foregroundStyle(SettingsTemplate.secondaryText)
+                            }
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: SettingsTemplate.subtitleSpacing) {
+                            Text(DisplayFormat.shares(holding.shares))
+                                .appNumber(.subheading)
+                            Text(L10n.text("均价 \(DisplayFormat.money(holding.averageCost, currency: holding.currency))"))
+                                .appNumber(.label, weight: .regular, monospaced: false)
+                                .foregroundStyle(SettingsTemplate.secondaryText)
+                        }
+                    }
+                }
+            }
         }
     }
 }

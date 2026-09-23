@@ -2,6 +2,23 @@ import XCTest
 @testable import CatfolioIOS
 
 final class PublicInvestorCatalogTests: XCTestCase {
+    private var previousLanguagePreference: Any?
+
+    override func setUp() {
+        super.setUp()
+        previousLanguagePreference = UserDefaults.standard.object(forKey: AppLanguage.preferenceKey)
+        UserDefaults.standard.set(AppLanguage.simplifiedChinese.rawValue, forKey: AppLanguage.preferenceKey)
+    }
+
+    override func tearDown() {
+        if let previousLanguagePreference {
+            UserDefaults.standard.set(previousLanguagePreference, forKey: AppLanguage.preferenceKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: AppLanguage.preferenceKey)
+        }
+        super.tearDown()
+    }
+
     func testDisclosureNamesRemoveRedundantCodesWithoutAddingTypeLabels() {
         let cases = [
             ("AAPL", "Apple Inc. (AAPL) [ST]", "Apple"),

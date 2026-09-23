@@ -4,6 +4,7 @@ struct CompanyFinancialsView: View {
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @Environment(\.locale) private var appLocale
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum Statement: String, CaseIterable, Identifiable {
         case income = "利润表"
@@ -77,8 +78,14 @@ struct CompanyFinancialsView: View {
         .task { await load(forceRefresh: false) }
         .task(id: segmentKind) { await loadSegments() }
         .onChange(of: statement) { _, _ in selectedPeriodEnd = nil }
-        .onChange(of: periodKind) { _, _ in selectedPeriodEnd = nil }
         .onChange(of: segmentKind) { _, _ in selectedPeriodEnd = nil }
+    }
+
+    private var periodSelection: Binding<FinancialPeriodKind> {
+        Binding(get: { periodKind }, set: { value in
+            selectedPeriodEnd = nil
+            periodKind = value
+        })
     }
 
     private var header: some View {
@@ -98,7 +105,7 @@ struct CompanyFinancialsView: View {
             HStack(spacing: 0) {
                 ForEach(Statement.allCases) { item in
                     Button {
-                        withAnimation(.easeOut(duration: 0.18)) { statement = item }
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { statement = item }
                     } label: {
                         VStack(spacing: 9) {
                             Text(L10n.label(item.rawValue))
@@ -128,7 +135,7 @@ struct CompanyFinancialsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .sensoryFeedback(.selection, trigger: segmentKind) { _, _ in hapticsEnabled }
             } else {
-                Picker(L10n.text("报告周期"), selection: $periodKind) {
+                Picker(L10n.text("报告周期"), selection: periodSelection) {
                     Text(L10n.text("年度")).tag(FinancialPeriodKind.annual)
                     Text(L10n.text("季度")).tag(FinancialPeriodKind.quarterly)
                 }
@@ -309,7 +316,7 @@ struct CompanyFinancialsView: View {
         ContentUnavailableView {
             Label(L10n.text("暂未读取到财务数据"), systemImage: "chart.bar.xaxis")
         } description: {
-            Text(errorMessage ?? L10n.text("SEC 没有返回可用的 10-K / 10-Q 数据"))
+            Text(L10n.message(errorMessage ?? L10n.text("SEC 没有返回可用的 10-K / 10-Q 数据")))
         } actions: {
             Button(L10n.text("重新读取")) { Task { await load(forceRefresh: true) } }
         }
@@ -327,13 +334,13 @@ struct CompanyFinancialsView: View {
 
     private func sourceFooter(_ data: CompanyFinancialsData) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            Label(data.source, systemImage: "building.columns")
+            Label(L10n.message(data.source), systemImage: "building.columns")
                 .font(.caption.weight(.semibold))
             Text(L10n.text("同一报告期存在重述时取最新申报值。金额保留报表原币种，不按持仓展示币种换算。"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             ForEach(data.warnings, id: \.self) { warning in
-                Text(warning)
+                Text(L10n.message(warning))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -453,18 +460,10 @@ private struct FinancialFlowDiagram: View {
     var body: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
-            let revenueFlows = pairedFlowThickness(
-                middleTop.value,
-                middleBottom.value,
-                span: 112
-            )
+            let revenueFlows = pairedFlowThickness(middleTop.value, middleBottom.value, span: 112)
             let grossThickness = revenueFlows.first
             let costThickness = revenueFlows.second
-            let grossFlows = pairedFlowThickness(
-                rightTop.value,
-                rightBottom.value,
-                span: grossThickness
-            )
+            let grossFlows = pairedFlowThickness(rightTop.value, rightBottom.value, span: grossThickness)
             let operatingThickness = grossFlows.first
             let expenseThickness = grossFlows.second
             let sourceTop: CGFloat = 116
@@ -476,19 +475,19 @@ private struct FinancialFlowDiagram: View {
             let operatingSourceCenter = grossTop + operatingThickness / 2
             let expenseSourceCenter = grossTop + operatingThickness + expenseThickness / 2
             ZStack {
-                Canvas { context, size in
+                Group {
                     let x0: CGFloat = 48
-                    let x1 = size.width * 0.50
-                    let x2 = size.width - 48
-                    ribbon(context: &context, from: CGPoint(x: x0, y: grossSourceCenter), to: CGPoint(x: x1, y: grossCenter), thickness: grossThickness, color: middleTop.ribbonColor)
-                    ribbon(context: &context, from: CGPoint(x: x0, y: costSourceCenter), to: CGPoint(x: x1, y: costCenter), thickness: costThickness, color: middleBottom.ribbonColor)
-                    ribbon(context: &context, from: CGPoint(x: x1, y: operatingSourceCenter), to: CGPoint(x: x2, y: 90), thickness: operatingThickness, color: rightTop.ribbonColor)
-                    ribbon(context: &context, from: CGPoint(x: x1, y: expenseSourceCenter), to: CGPoint(x: x2, y: 181), thickness: expenseThickness, color: rightBottom.ribbonColor)
-                    bar(context: &context, x: x0, y: sourceTop, height: grossThickness + costThickness, color: left.color)
-                    bar(context: &context, x: x1, y: grossTop, height: grossThickness, color: middleTop.color)
-                    bar(context: &context, x: x1, y: costCenter - costThickness / 2, height: costThickness, color: middleBottom.color)
-                    bar(context: &context, x: x2, y: 90 - operatingThickness / 2, height: operatingThickness, color: rightTop.color)
-                    bar(context: &context, x: x2, y: 181 - expenseThickness / 2, height: expenseThickness, color: rightBottom.color)
+                    let x1 = width * 0.50
+                    let x2 = width - 48
+                    FinancialRibbon(from: CGPoint(x: x0, y: grossSourceCenter), to: CGPoint(x: x1, y: grossCenter), thickness: grossThickness, color: middleTop.ribbonColor)
+                    FinancialRibbon(from: CGPoint(x: x0, y: costSourceCenter), to: CGPoint(x: x1, y: costCenter), thickness: costThickness, color: middleBottom.ribbonColor)
+                    FinancialRibbon(from: CGPoint(x: x1, y: operatingSourceCenter), to: CGPoint(x: x2, y: 90), thickness: operatingThickness, color: rightTop.ribbonColor)
+                    FinancialRibbon(from: CGPoint(x: x1, y: expenseSourceCenter), to: CGPoint(x: x2, y: 181), thickness: expenseThickness, color: rightBottom.ribbonColor)
+                    FinancialFlowBar(x: x0, y: sourceTop, height: grossThickness + costThickness, color: left.color)
+                    FinancialFlowBar(x: x1, y: grossTop, height: grossThickness, color: middleTop.color)
+                    FinancialFlowBar(x: x1, y: costCenter - costThickness / 2, height: costThickness, color: middleBottom.color)
+                    FinancialFlowBar(x: x2, y: 90 - operatingThickness / 2, height: operatingThickness, color: rightTop.color)
+                    FinancialFlowBar(x: x2, y: 181 - expenseThickness / 2, height: expenseThickness, color: rightBottom.color)
                 }
                 nodeLabel(left, currency: currency).position(x: 48, y: 42)
                 nodeLabel(middleTop, currency: currency).position(x: width * 0.50, y: 34)
@@ -519,14 +518,14 @@ private struct FinancialSplitDiagram: View {
             let upperSourceCenter = sourceTop + upperThickness / 2
             let lowerSourceCenter = sourceTop + upperThickness + lowerThickness / 2
             ZStack {
-                Canvas { context, size in
+                Group {
                     let x0: CGFloat = 54
-                    let x1 = size.width - 54
-                    ribbon(context: &context, from: CGPoint(x: x0, y: upperSourceCenter), to: CGPoint(x: x1, y: 108), thickness: upperThickness, color: upper.ribbonColor)
-                    ribbon(context: &context, from: CGPoint(x: x0, y: lowerSourceCenter), to: CGPoint(x: x1, y: 218), thickness: lowerThickness, color: lower.ribbonColor)
-                    bar(context: &context, x: x0, y: sourceTop, height: upperThickness + lowerThickness, color: source.color)
-                    bar(context: &context, x: x1, y: 108 - upperThickness / 2, height: upperThickness, color: upper.color)
-                    bar(context: &context, x: x1, y: 218 - lowerThickness / 2, height: lowerThickness, color: lower.color)
+                    let x1 = width - 54
+                    FinancialRibbon(from: CGPoint(x: x0, y: upperSourceCenter), to: CGPoint(x: x1, y: 108), thickness: upperThickness, color: upper.ribbonColor)
+                    FinancialRibbon(from: CGPoint(x: x0, y: lowerSourceCenter), to: CGPoint(x: x1, y: 218), thickness: lowerThickness, color: lower.ribbonColor)
+                    FinancialFlowBar(x: x0, y: sourceTop, height: upperThickness + lowerThickness, color: source.color)
+                    FinancialFlowBar(x: x1, y: 108 - upperThickness / 2, height: upperThickness, color: upper.color)
+                    FinancialFlowBar(x: x1, y: 218 - lowerThickness / 2, height: lowerThickness, color: lower.color)
                 }
                 nodeLabel(source, currency: currency).position(x: 54, y: 42)
                 nodeLabel(upper, currency: currency).position(x: width - 54, y: 35)
@@ -535,6 +534,79 @@ private struct FinancialSplitDiagram: View {
         }
         .frame(height: 320)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Each ribbon keeps the same Shape identity between reports. SwiftUI
+/// interpolates its four boundary heights, so both Bézier edges deform in
+/// place rather than cross-fading two Canvas renderings.
+private struct FinancialRibbonShape: Shape {
+    let fromX: CGFloat
+    let toX: CGFloat
+    var sourceTop: CGFloat
+    var sourceBottom: CGFloat
+    var targetTop: CGFloat
+    var targetBottom: CGFloat
+
+    var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>, AnimatablePair<CGFloat, CGFloat>> {
+        get { AnimatablePair(AnimatablePair(sourceTop, sourceBottom), AnimatablePair(targetTop, targetBottom)) }
+        set {
+            sourceTop = newValue.first.first
+            sourceBottom = newValue.first.second
+            targetTop = newValue.second.first
+            targetBottom = newValue.second.second
+        }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let control = max(34, abs(toX - fromX) * 0.42)
+        var path = Path()
+        path.move(to: CGPoint(x: fromX, y: sourceTop))
+        path.addCurve(to: CGPoint(x: toX, y: targetTop),
+                      control1: CGPoint(x: fromX + control, y: sourceTop),
+                      control2: CGPoint(x: toX - control, y: targetTop))
+        path.addLine(to: CGPoint(x: toX, y: targetBottom))
+        path.addCurve(to: CGPoint(x: fromX, y: sourceBottom),
+                      control1: CGPoint(x: toX - control, y: targetBottom),
+                      control2: CGPoint(x: fromX + control, y: sourceBottom))
+        path.closeSubpath()
+        return path
+    }
+}
+
+private enum FinancialFlowMotion {
+    static let animation = Animation.easeInOut(duration: 0.45)
+}
+
+private struct FinancialRibbon: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let from: CGPoint
+    let to: CGPoint
+    let thickness: CGFloat
+    let color: Color
+
+    var body: some View {
+        let shape = FinancialRibbonShape(fromX: from.x, toX: to.x,
+            sourceTop: from.y - thickness / 2, sourceBottom: from.y + thickness / 2,
+            targetTop: to.y - thickness / 2, targetBottom: to.y + thickness / 2)
+        shape.fill(color)
+            .animation(reduceMotion ? nil : FinancialFlowMotion.animation, value: shape.animatableData)
+    }
+}
+
+private struct FinancialFlowBar: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let x: CGFloat
+    let y: CGFloat
+    let height: CGFloat
+    let color: Color
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 5)
+            .fill(color)
+            .frame(width: 14, height: height)
+            .position(x: x, y: y + height / 2)
+            .animation(reduceMotion ? nil : FinancialFlowMotion.animation, value: AnimatablePair(y, height))
     }
 }
 

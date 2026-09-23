@@ -127,10 +127,14 @@ struct FiftyTwoWeekRange: View {
 
     var body: some View {
         HoldingDetailSectionCard(title: L10n.text("52-Week Range"), insightFacts: { insightFacts }) {
-            GeometryReader { geometry in
-                rangePlot(size: geometry.size)
+            VStack(spacing: 10) {
+                GeometryReader { geometry in
+                    rangePlot(size: geometry.size)
+                }
+                .frame(height: currentTickHeight)
+                FiftyTwoWeekRangeLabels(low: low, high: high, currency: currency)
+                    .foregroundStyle(rangeLabelColor)
             }
-            .frame(height: 141)
         }
         .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: selectedIndex)
         .sensoryFeedback(.selection, trigger: selectedIndex) { oldValue, newValue in
@@ -238,21 +242,6 @@ struct FiftyTwoWeekRange: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.92)))
                     .zIndex(2)
             }
-
-            HStack(spacing: 12) {
-                Text(L10n.text("Lowest \(DisplayFormat.money(low, currency: currency))"))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Text(L10n.text("\(DisplayFormat.money(high, currency: currency)) Highest"))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            }
-            .appNumber(.callout)
-            .foregroundStyle(rangeLabelColor)
-            .frame(width: size.width)
-            .position(x: size.width / 2, y: 129)
 
             ChartPointInteractionOverlay(
                 onLocationChanged: { location in
@@ -472,7 +461,7 @@ struct FiftyTwoWeekRange: View {
         if let changePercent {
             components.append(L10n.text("52 周变化 \(DisplayFormat.percent(changePercent))"))
         }
-        return components.joined(separator: "，")
+        return components.joined(separator: L10n.listSeparator)
     }
 
     private var insightFacts: String {
@@ -643,7 +632,10 @@ enum VolumeProfileInterpretation {
             )
         }
 
-        let period = sessions > 0 ? L10n.text("过去\(sessions)个交易日") : L10n.text("所选历史区间")
+        let rawPeriod = sessions > 0 ? L10n.text("过去\(sessions)个交易日") : L10n.text("所选历史区间")
+        let isEnglish = AppLanguage.currentIdentifier == "en"
+        let period = isEnglish ? rawPeriod.prefix(1).lowercased() + String(rawPeriod.dropFirst()) : rawPeriod
+        let sentenceSpace = isEnglish ? " " : ""
         let areaWidth = valueAreaHigh - valueAreaLow
         let isNearPointOfControl = pointOfControl.map { point in
             point.isFinite
@@ -663,7 +655,9 @@ enum VolumeProfileInterpretation {
         } else {
             pricePosition = .inside
             priceText = L10n.text("当前价格位于\(period)的主成交区内")
-            priceText += isNearPointOfControl ? L10n.text("，且接近成交峰值。") : "。"
+            priceText += isNearPointOfControl
+                ? sentenceSpace + L10n.text("，且接近成交峰值。")
+                : (isEnglish ? "." : "。")
         }
 
         guard let cost, cost.isFinite, cost > 0 else {
@@ -692,7 +686,7 @@ enum VolumeProfileInterpretation {
         }
 
         return Result(
-            text: "\(priceText)\(costText)",
+            text: "\(priceText)\(sentenceSpace)\(costText)",
             pricePosition: pricePosition,
             costPosition: costPosition,
             isNearPointOfControl: isNearPointOfControl,
@@ -729,6 +723,36 @@ enum VolumeProfileInterpretation {
 
     private static func percentageText(_ value: Double) -> String {
         String(format: "%.1f", value)
+    }
+}
+
+/// Keep ordinary prices at opposite ends of the scale. Large text or long
+/// amounts get their own rows rather than losing the low/high distinction.
+struct FiftyTwoWeekRangeLabels: View {
+    @Environment(\.locale) private var appLocale
+    let low: Double
+    let high: Double
+    let currency: String
+
+    private var lowLabel: String { L10n.text("Lowest \(DisplayFormat.money(low, currency: currency))") }
+    private var highLabel: String { L10n.text("\(DisplayFormat.money(high, currency: currency)) Highest") }
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                Text(lowLabel).fixedSize()
+                Spacer(minLength: 0)
+                Text(highLabel).fixedSize()
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                Text(lowLabel)
+                Text(highLabel)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .appNumber(.callout)
+        .accessibilityIdentifier("fifty-two-week-range-labels")
     }
 }
 
@@ -893,6 +917,65 @@ private struct VolumeLabelFramesKey: PreferenceKey {
     }
 }
 
+/// Only labels move. Each marker's anchor remains the original price y so
+/// a displaced label can be joined back to the correct value with a leader.
+enum VolumeProfileMarkerLayout {
+    struct Marker {
+        let id: String
+        let centerX: CGFloat
+        let width: CGFloat
+        let anchorY: CGFloat
+    }
+
+    static func frames(for markers: [Marker], height: CGFloat,
+                       pillHeight: CGFloat = 24, gap: CGFloat = 6) -> [String: CGRect] {
+        let half = pillHeight / 2
+        let lower = half
+        let upper = max(lower, height - half)
+        func clamped(_ y: CGFloat) -> CGFloat { min(upper, max(lower, y)) }
+        var result: [String: CGRect] = [:]
+        for marker in markers {
+            func frame(_ y: CGFloat) -> CGRect {
+                CGRect(x: marker.centerX - marker.width / 2, y: y - half,
+                       width: marker.width, height: pillHeight)
+            }
+            let occupied = Array(result.values)
+            let candidates = [clamped(marker.anchorY), lower, upper] + occupied.flatMap {
+                [clamped($0.minY - gap - half), clamped($0.maxY + gap + half)]
+            }
+            let available = candidates.filter { y in
+                !occupied.contains { frame(y).intersects($0.insetBy(dx: -gap / 2, dy: -gap / 2)) }
+            }
+            let y = available.min {
+                let left = abs($0 - marker.anchorY), right = abs($1 - marker.anchorY)
+                return left == right ? $0 < $1 : left < right
+            } ?? clamped(marker.anchorY)
+            result[marker.id] = frame(y)
+        }
+        return result
+    }
+
+    /// Pick a clear vertical lane between the other pills, including the
+    /// original price row. The dot must not disappear underneath another label.
+    static func leaderX(for frame: CGRect, anchorY: CGFloat, width: CGFloat,
+                        excluding otherFrames: [CGRect]) -> CGFloat {
+        var lanes: [ClosedRange<CGFloat>] = [1...max(1, width - 1)]
+        let top = min(anchorY, frame.midY), bottom = max(anchorY, frame.midY)
+        for other in otherFrames where other.maxY >= top && other.minY <= bottom {
+            let cut = (other.minX - 3)...(other.maxX + 3)
+            lanes = lanes.flatMap { lane -> [ClosedRange<CGFloat>] in
+                guard cut.upperBound > lane.lowerBound, cut.lowerBound < lane.upperBound else { return [lane] }
+                var remaining: [ClosedRange<CGFloat>] = []
+                if cut.lowerBound > lane.lowerBound { remaining.append(lane.lowerBound...cut.lowerBound) }
+                if cut.upperBound < lane.upperBound { remaining.append(cut.upperBound...lane.upperBound) }
+                return remaining
+            }
+        }
+        return lanes.map { min($0.upperBound, max($0.lowerBound, frame.midX)) }
+            .min { abs($0 - frame.midX) < abs($1 - frame.midX) } ?? min(width - 1, max(1, frame.midX))
+    }
+}
+
 private struct VolumeDistributionPlot: View {
     @Environment(\.locale) private var appLocale
     let profile: VolumeProfile
@@ -1000,6 +1083,11 @@ private struct VolumeDistributionPlot: View {
             let currentMarkerX = markersWouldOverlap
                 ? rightMarkerX - markerWidth - markerGap
                 : rightMarkerX
+            let markerFrames = VolumeProfileMarkerLayout.frames(for: [
+                hasValidPeak ? VolumeProfileMarkerLayout.Marker(id: "peak", centerX: peakMarkerX, width: peakMarkerWidth, anchorY: peakY) : nil,
+                costY.map { .init(id: "cost", centerX: rightMarkerX, width: markerWidth, anchorY: $0) },
+                currentY.map { .init(id: "current", centerX: currentMarkerX, width: markerWidth, anchorY: $0) },
+            ].compactMap { $0 }, height: size.height)
             let currentRuleEndX = currentMarkerX - markerWidth / 2 - markerGap
             let costRuleEndX = rightMarkerX - markerWidth / 2 - markerGap
             // Size the selection pill for the longest price in this chart. Keeping
@@ -1093,6 +1181,22 @@ private struct VolumeDistributionPlot: View {
                         .zIndex(1)
                 }
 
+                if let currentY, let frame = markerFrames["current"] {
+                    markerLeader(id: "current", frame: frame, anchorY: currentY, width: size.width,
+                                 frames: markerFrames, color: currentPriceText.opacity(0.65))
+                        .zIndex(1)
+                }
+                if let costY, let frame = markerFrames["cost"] {
+                    markerLeader(id: "cost", frame: frame, anchorY: costY, width: size.width,
+                                 frames: markerFrames, color: volumeCostText)
+                        .zIndex(1)
+                }
+                if hasValidPeak, let frame = markerFrames["peak"] {
+                    markerLeader(id: "peak", frame: frame, anchorY: peakY, width: size.width,
+                                 frames: markerFrames, color: volumeSelectionBlue)
+                        .zIndex(1)
+                }
+
                 if hasValidValueArea {
                     edgePriceLabel(price: valueAreaHigh)
                         .background(labelFrameReader("value-area-high"))
@@ -1115,7 +1219,7 @@ private struct VolumeDistributionPlot: View {
                         width: markerWidth
                     )
                     .background(labelFrameReader("current"))
-                    .position(x: currentMarkerX, y: currentY)
+                    .position(x: currentMarkerX, y: markerFrames["current"]?.midY ?? currentY)
                     .zIndex(2)
                 }
 
@@ -1126,7 +1230,7 @@ private struct VolumeDistributionPlot: View {
                         width: peakMarkerWidth
                     )
                     .background(labelFrameReader("peak"))
-                    .position(x: peakMarkerX, y: peakY)
+                    .position(x: peakMarkerX, y: markerFrames["peak"]?.midY ?? peakY)
                     .zIndex(2)
                 }
 
@@ -1139,7 +1243,7 @@ private struct VolumeDistributionPlot: View {
                         width: markerWidth
                     )
                     .background(labelFrameReader("cost"))
-                    .position(x: rightMarkerX, y: costY)
+                    .position(x: rightMarkerX, y: markerFrames["cost"]?.midY ?? costY)
                     .shadow(color: volumeCostGreen.opacity(0.42), radius: 18)
                     .zIndex(2)
                 }
@@ -1186,6 +1290,30 @@ private struct VolumeDistributionPlot: View {
         return text.reduce(CGFloat(0)) { $0 + ($1.isASCII ? 7 : 11.5) } + 20
     }
 
+    @ViewBuilder
+    private func markerLeader(id: String, frame: CGRect, anchorY: CGFloat, width: CGFloat,
+                              frames: [String: CGRect], color: Color) -> some View {
+        if abs(frame.midY - anchorY) > 0.5 {
+            let others = frames.filter { $0.key != id }.map(\.value)
+            let x = VolumeProfileMarkerLayout.leaderX(for: frame, anchorY: anchorY,
+                                                     width: width, excluding: others)
+            let meetsVerticalEdge = x < frame.minX || x > frame.maxX
+            let target = meetsVerticalEdge
+                ? CGPoint(x: min(frame.maxX, max(frame.minX, x)), y: frame.midY)
+                : CGPoint(x: x, y: anchorY > frame.midY ? frame.maxY : frame.minY)
+            Path { path in
+                path.move(to: CGPoint(x: x, y: anchorY))
+                path.addLine(to: CGPoint(x: x, y: target.y))
+                path.addLine(to: target)
+            }
+            .stroke(color, style: StrokeStyle(lineWidth: 1, lineCap: .round, lineJoin: .round))
+            .allowsHitTesting(false)
+            Circle().fill(color).frame(width: 3, height: 3)
+                .position(x: x, y: anchorY)
+                .allowsHitTesting(false)
+        }
+    }
+
     /// A marker rule from `start` to `end`, broken wherever a price label or
     /// pill sits on it: the line stops short of the figure and carries on
     /// beyond it rather than running through it.
@@ -1227,7 +1355,7 @@ private struct VolumeDistributionPlot: View {
         var parts = [L10n.text("成交量价格分布"), L10n.text("成交峰值 \(money(profile.pointOfControl))")]
         if let currentPrice { parts.insert(L10n.text("当前价格 \(money(currentPrice))"), at: 1) }
         if let holdingCost { parts.append(L10n.text("持仓成本 \(money(holdingCost))")) }
-        return parts.joined(separator: "，")
+        return parts.joined(separator: L10n.listSeparator)
     }
 
     private var volumeCostGreen: Color {

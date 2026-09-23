@@ -120,16 +120,16 @@ struct PublicInvestor: Decodable, Identifiable {
     }
     var sourceLabel: String {
         switch sourceType {
-        case "HOUSE_PTR": "国会家庭披露"
-        case "SEC_13F": "机构 13F 披露"
+        case "HOUSE_PTR": L10n.text("国会家庭披露")
+        case "SEC_13F": L10n.text("机构 13F 披露")
         default: "Public Ownership"
         }
     }
     var scopeNote: String {
         switch sourceType {
-        case "HOUSE_PTR": "家庭年度证券披露与交易申报，金额可能为区间，非完整实时账户。"
-        case "SEC_13F": "机构申报持仓，不代表个人账户或每笔投资的决策者。季度变化不是成交记录；期权价值为标的申报价值。"
-        default: "仅展示公开所有权记录，非个人投资组合。目前尚无可用记录。"
+        case "HOUSE_PTR": L10n.text("家庭年度证券披露与交易申报，金额可能为区间，非完整实时账户。")
+        case "SEC_13F": L10n.text("机构申报持仓，不代表个人账户或每笔投资的决策者。季度变化不是成交记录；期权价值为标的申报价值。")
+        default: L10n.text("仅展示公开所有权记录，非个人投资组合。目前尚无可用记录。")
         }
     }
     var sortedActivities: [PublicInvestorActivity] {
@@ -171,7 +171,7 @@ struct PublicInvestorPosition: Decodable, Identifiable {
     let option: PublicInvestorOption?
     let confidence: String
     var id: String { positionId }
-    var title: String { ticker ?? issuerName ?? cusip ?? "未匹配证券" }
+    var title: String { ticker ?? issuerName ?? cusip ?? L10n.text("未匹配证券") }
 }
 
 struct PublicInvestorActivity: Decodable, Identifiable {
@@ -196,7 +196,7 @@ struct PublicInvestorActivity: Decodable, Identifiable {
     let confidence: String
     var id: String { activityId }
     var sortDate: String { exactDate ?? periodEnd ?? filedDate }
-    var title: String { ticker ?? issuerName ?? cusip ?? "未匹配证券" }
+    var title: String { ticker ?? issuerName ?? cusip ?? L10n.text("未匹配证券") }
     var dateLabel: String {
         if let exactDate { return exactDate }
         return "\(periodStart ?? "—") → \(periodEnd ?? "—")"
@@ -204,22 +204,22 @@ struct PublicInvestorActivity: Decodable, Identifiable {
     var actionLabel: String {
         if let eventNature, eventNature != "TRADE" {
             switch eventNature {
-            case "EXPIRATION": return "期权到期"
-            case "EXERCISE": return "期权行权"
-            case "GIFT": return "赠与"
+            case "EXPIRATION": return L10n.text("期权到期")
+            case "EXERCISE": return L10n.text("期权行权")
+            case "GIFT": return L10n.text("赠与")
             default: break
             }
         }
         switch type {
-        case "BUY": return "披露买入"
-        case "SELL": return "披露卖出"
-        case "OPTION_BUY": return "期权买入"
-        case "OPTION_SELL": return "期权卖出"
-        case "OPENED": return "季度新增"
-        case "INCREASED": return "季度增加"
-        case "DECREASED": return "季度减少"
-        case "EXITED": return "季度退出"
-        case "CLOSED": return "披露关闭"
+        case "BUY": return L10n.text("披露买入")
+        case "SELL": return L10n.text("披露卖出")
+        case "OPTION_BUY": return L10n.text("期权买入")
+        case "OPTION_SELL": return L10n.text("期权卖出")
+        case "OPENED": return L10n.text("季度新增")
+        case "INCREASED": return L10n.text("季度增加")
+        case "DECREASED": return L10n.text("季度减少")
+        case "EXITED": return L10n.text("季度退出")
+        case "CLOSED": return L10n.text("披露关闭")
         default: return type
         }
     }
@@ -254,22 +254,22 @@ enum PublicDisclosureFormat {
         if let low, let high { return "\(money(low))–\(money(high))" }
         if let low { return "≥ \(money(low))" }
         if let high { return "≤ \(money(high))" }
-        return "未披露"
+        return L10n.text("未披露")
     }
     static func owner(_ value: String?) -> String? {
         guard let value else { return nil }
         switch value {
-        case "SP": return "配偶"
-        case "JT": return "共同持有"
-        case "DC": return "受抚养子女"
+        case "SP": return L10n.text("配偶")
+        case "JT": return L10n.text("共同持有")
+        case "DC": return L10n.text("受抚养子女")
         default: return value
         }
     }
     static func confidence(_ value: String) -> String {
         switch value {
-        case "VERIFIED": "已核验"
-        case "ESTIMATED": "估算 / 身份推定"
-        default: "资料不完整"
+        case "VERIFIED": L10n.text("已核验")
+        case "ESTIMATED": L10n.text("估算 / 身份推定")
+        default: L10n.text("资料不完整")
         }
     }
 }
@@ -394,7 +394,7 @@ enum PublicInvestorAccountAdapter {
             PortfolioChartResponse(positionCount: holdings.count,
                 positionHistory: PositionHistory(available: false, rows: []),
                 currentPoint: ChartPoint(dateText: DayDateFormatter.shared.string(from: document.updatedAt), marketValue: summary.marketValue, cost: .nan),
-                warning: "交易记录不足，暂时无法计算收益曲线。"), holdings)
+                warning: L10n.text("交易记录不足，暂时无法计算收益曲线。")), holdings)
     }
 }
 

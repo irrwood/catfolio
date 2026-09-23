@@ -5,6 +5,23 @@ import XCTest
 /// tokens, the wiring that follows moves and deletions, the AI answer, and a
 /// finished run read back into cause and effect.
 final class PolicyShortcutTests: XCTestCase {
+    private var previousLanguagePreference: Any?
+
+    override func setUp() {
+        super.setUp()
+        previousLanguagePreference = UserDefaults.standard.object(forKey: AppLanguage.preferenceKey)
+        UserDefaults.standard.set(AppLanguage.simplifiedChinese.rawValue, forKey: AppLanguage.preferenceKey)
+    }
+
+    override func tearDown() {
+        if let previousLanguagePreference {
+            UserDefaults.standard.set(previousLanguagePreference, forKey: AppLanguage.preferenceKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: AppLanguage.preferenceKey)
+        }
+        super.tearDown()
+    }
+
     private func example() throws -> PolicyJSON {
         let base = try PolicyShortcut.blank(name: "测试", accountIDs: ["acct"])
         return try PolicyShortcut.parseGenerated(PolicyShortcut.generationExample, base: base, accountIDs: ["acct"]).document

@@ -147,7 +147,67 @@ final class PageLoadAndJitterTests: XCTestCase {
     }
 
     @MainActor
+    func testTodaySectorRowAlignsWrappedEnglishCardsAndKeepsOddColumnWidth() async throws {
+        let scene = try connectedWindowScene()
+        let previousWindow = scene.windows.first(where: \.isKeyWindow)
+        var frames: [Int: CGRect] = [:]
+        let host = UIHostingController(rootView:
+            VStack {
+                TodaySectorRowLayout(columns: 2, spacing: 12) {
+                    ForEach(0..<2) { index in
+                        VStack(alignment: .leading) {
+                            Text(index == 0 ? "Communication Services" : "Energy")
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 8)
+                            Text("+$100.00")
+                                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                                    frames[index + 10] = $0
+                                }
+                        }
+                        .padding(20)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                            frames[index] = $0
+                        }
+                    }
+                }
+                TodaySectorRowLayout(columns: 2, spacing: 12) {
+                    Text("Industrials")
+                        .frame(maxWidth: .infinity)
+                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                            frames[2] = $0
+                        }
+                }
+            }
+            .font(.body)
+            .environment(\.dynamicTypeSize, .large)
+        )
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previousWindow?.makeKeyAndVisible() }
+        for width: CGFloat in [280, 353] {
+            window.frame = CGRect(x: 0, y: 0, width: width, height: 720)
+            host.view.frame = window.bounds
+            host.view.layoutIfNeeded()
+            try await Task.sleep(for: .milliseconds(150))
+            let left = try XCTUnwrap(frames[0])
+            let right = try XCTUnwrap(frames[1])
+            XCTAssertEqual(left.width, (width - 12) / 2, accuracy: 1)
+            XCTAssertEqual(left.width, right.width, accuracy: 1)
+            XCTAssertEqual(left.minY, right.minY, accuracy: 1)
+            XCTAssertEqual(left.maxY, right.maxY, accuracy: 1)
+            XCTAssertEqual(right.minX - left.maxX, 12, accuracy: 1)
+            XCTAssertEqual(try XCTUnwrap(frames[10]).maxY, try XCTUnwrap(frames[11]).maxY, accuracy: 1)
+            XCTAssertEqual(try XCTUnwrap(frames[2]).width, left.width, accuracy: 1)
+        }
+    }
+
+    @MainActor
     private func verifyTodayLayout(width: CGFloat, typeSize: DynamicTypeSize, scheme: ColorScheme) async throws {
+        let previousLanguage = UserDefaults.standard.string(forKey: AppLanguage.preferenceKey)
+        UserDefaults.standard.set("en", forKey: AppLanguage.preferenceKey)
+        defer { UserDefaults.standard.set(previousLanguage, forKey: AppLanguage.preferenceKey) }
         let tickers = ["MSFT", "AMZN", "META", "JPM", "XOM", "UNH", "CAT", "PG", "NEE", "PLD", "LIN", "ZZTEST"]
         let holdings = tickers.enumerated().map { index, ticker in
             Holding(
@@ -202,9 +262,12 @@ final class PageLoadAndJitterTests: XCTestCase {
                            "The page must not jump after scrolling settles")
             XCTAssertLessThanOrEqual(scroll.contentSize.width, scroll.bounds.width + 1)
         }
-        let attachment = XCTAttachment(image: UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
+        let screenshot = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
             host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
-        })
+        }
+        try screenshot.pngData()?.write(to: URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("Today-\(Int(width))-\(typeSize)-\(scheme).png"))
+        let attachment = XCTAttachment(image: screenshot)
         attachment.name = "Today-\(Int(width))-\(typeSize)-\(scheme)"
         attachment.lifetime = .keepAlways
         add(attachment)

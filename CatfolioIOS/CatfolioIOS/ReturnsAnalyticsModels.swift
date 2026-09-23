@@ -37,8 +37,8 @@ struct ValuationBubble: Identifiable, Equatable, Sendable {
             || sector.localizedCaseInsensitiveContains("insurance")
     }
     var qualityReason: String? {
-        if isFinancial { return "金融企业不适用此 ROIC 口径" }
-        return quality?.roicUnavailableReason ?? (quality == nil ? "暂无可用 SEC 年度财报" : nil)
+        if isFinancial { return L10n.text("金融企业不适用此 ROIC 口径") }
+        return quality?.roicUnavailableReason ?? (quality == nil ? L10n.text("暂无可用 SEC 年度财报") : nil)
     }
     var isThreeDimensional: Bool {
         pe.isFinite && pe > 0 && epsGrowthPercent != nil && roicPercent != nil

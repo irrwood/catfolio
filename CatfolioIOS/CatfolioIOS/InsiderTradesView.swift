@@ -46,7 +46,7 @@ struct InsiderTradesSheet: View {
                         ContentUnavailableView {
                             Label(L10n.text("无法加载内部人士交易"), systemImage: "exclamationmark.triangle")
                         } description: {
-                            Text(errorMessage)
+                            Text(L10n.message(errorMessage))
                         } actions: {
                             Button(L10n.text("重试")) { Task { await load(forceRefresh: true) } }
                         }
@@ -138,7 +138,7 @@ struct InsiderTradesSheet: View {
 
 /// Open-market buying and selling insiders chose to do, over three and
 /// twelve months.
-private struct InsiderTradesSummaryCard: View {
+struct InsiderTradesSummaryCard: View {
     let snapshot: InsiderTradesSnapshot
     private let column: CGFloat = 112
 
@@ -147,8 +147,28 @@ private struct InsiderTradesSummaryCard: View {
         let year = snapshot.summary(months: 12)
 
         VStack(alignment: .leading, spacing: 0) {
+            ViewThatFits(in: .horizontal) {
+                comparisonTable(recent: recent, year: year)
+                stackedComparison(recent: recent, year: year)
+            }
+            if !year.isComplete, let start = snapshot.coverageStart {
+                Text(L10n.text("12 个月只含 \(start.formatted(date: .abbreviated, time: .omitted)) 之后的记录。"))
+                    .appText(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.bottom, 12)
+            }
+        }
+        .padding(.horizontal, 16)
+        .holdingDetailGlassCard()
+    }
+
+    private func comparisonTable(recent: InsiderTradesSnapshot.Summary,
+                                 year: InsiderTradesSnapshot.Summary) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(L10n.text("主动交易")).frame(maxWidth: .infinity, alignment: .leading)
+                Text(L10n.text("主动交易"))
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Text(L10n.text("近 3 个月")).frame(width: column, alignment: .trailing)
                 Text(L10n.text("近 12 个月")).frame(width: column, alignment: .trailing)
             }
@@ -164,28 +184,69 @@ private struct InsiderTradesSummaryCard: View {
             Divider()
             HStack {
                 Text(L10n.text("净买入额")).appText(.callout, weight: .medium)
+                    .fixedSize(horizontal: true, vertical: false)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .researchLayoutFrame("insider.net.label")
                 net(recent.netValue, count: recent.buys + recent.sells)
                     .frame(width: column, alignment: .trailing)
                 net(year.netValue, count: year.buys + year.sells)
                     .frame(width: column, alignment: .trailing)
             }
             .padding(.vertical, 12)
-            if !year.isComplete, let start = snapshot.coverageStart {
-                Text(L10n.text("12 个月只含 \(start.formatted(date: .abbreviated, time: .omitted)) 之后的记录。"))
-                    .appText(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.bottom, 12)
+        }
+    }
+
+    /// Keep the familiar table whenever its labels fit. Narrow screens and
+    /// larger text show each period in turn, so neither names nor amounts
+    /// compete for the few points left beside two fixed amount columns.
+    private func stackedComparison(recent: InsiderTradesSnapshot.Summary,
+                                   year: InsiderTradesSnapshot.Summary) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(L10n.text("主动交易"))
+                .appText(.caption, weight: .semibold).foregroundStyle(.secondary)
+            periodSummary(L10n.text("近 3 个月"), summary: recent, netLabelID: "insider.net.label")
+            Divider()
+            periodSummary(L10n.text("近 12 个月"), summary: year, netLabelID: "insider.net.label.year")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 12)
+    }
+
+    private func periodSummary(_ title: String, summary: InsiderTradesSnapshot.Summary,
+                               netLabelID: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title).appText(.caption, weight: .semibold).foregroundStyle(.secondary)
+            adaptiveRow(L10n.text("买入")) { tradeValue(count: summary.buys, value: summary.valueBought) }
+            adaptiveRow(L10n.text("卖出")) { tradeValue(count: summary.sells, value: summary.valueSold) }
+            adaptiveRow(L10n.text("净买入额"), labelID: netLabelID) {
+                net(summary.netValue, count: summary.buys + summary.sells)
             }
         }
-        .padding(.horizontal, 16)
-        .holdingDetailGlassCard()
+    }
+
+    private func adaptiveRow<Value: View>(_ title: String, labelID: String? = nil,
+                                         @ViewBuilder value: () -> Value) -> some View {
+        let label = Text(title).appText(.callout, weight: .medium)
+            .fixedSize(horizontal: true, vertical: false)
+            .researchLayoutFrame(labelID)
+        return ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                label
+                Spacer(minLength: 0)
+                value().fixedSize(horizontal: true, vertical: false)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                label
+                value().fixedSize(horizontal: true, vertical: false)
+            }
+        }
     }
 
     /// The amount, with the number of trades under it in small type.
     private func row(_ title: String, recent: (Int, Double), year: (Int, Double)) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title).appText(.callout, weight: .medium)
+                .fixedSize(horizontal: true, vertical: false)
                 .frame(maxWidth: .infinity, alignment: .leading)
             cell(count: recent.0, value: recent.1)
             cell(count: year.0, value: year.1)
@@ -193,8 +254,12 @@ private struct InsiderTradesSummaryCard: View {
         .padding(.vertical, 12)
     }
 
-    @ViewBuilder
     private func cell(count: Int, value: Double) -> some View {
+        tradeValue(count: count, value: value)
+            .frame(width: column, alignment: .trailing)
+    }
+
+    private func tradeValue(count: Int, value: Double) -> some View {
         VStack(alignment: .trailing, spacing: 2) {
             if count == 0 {
                 Text("—").appNumber(.callout).foregroundStyle(.secondary)
@@ -205,7 +270,6 @@ private struct InsiderTradesSummaryCard: View {
         }
         .lineLimit(1)
         .minimumScaleFactor(0.8)
-        .frame(width: column, alignment: .trailing)
     }
 
     @ViewBuilder

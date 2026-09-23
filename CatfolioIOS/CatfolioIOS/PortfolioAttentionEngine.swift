@@ -36,7 +36,7 @@ struct LocalPortfolioAttentionEngine {
             if share >= rules.contributionShare / 100, abs(contribution) >= 0.20 {
                 candidates[index].signals.append(PortfolioAttentionSignal(
                     kind: "portfolio_contribution",
-                    label: "占今日组合波动 \(Int((share * 100).rounded()))%",
+                    label: L10n.text("占今日组合波动 \(Int((share * 100).rounded()))%"),
                     direction: contribution >= 0 ? "positive" : "negative",
                     value: share
                 ))
@@ -72,7 +72,7 @@ struct LocalPortfolioAttentionEngine {
             return abs($0.portfolioContributionPercent ?? 0) > abs($1.portfolioContributionPercent ?? 0)
         }
         let missingHistory = candidates.filter { histories[$0.holding.ticker.uppercased()]?.count ?? 0 < 40 }.count
-        let warnings = missingHistory > 0 ? ["\(missingHistory) 只持仓历史行情不足，未由 AI 补全缺失指标。"] : []
+        let warnings = missingHistory > 0 ? [L10n.text("\(missingHistory) 只持仓历史行情不足，未由 AI 补全缺失指标。")] : []
         return PortfolioAttentionReport(
             generatedAt: Date(),
             holdingsCount: holdings.count,
@@ -142,19 +142,19 @@ struct LocalPortfolioAttentionEngine {
             signals.append(.init(kind: "price_60d", label: "\(rules.returnWindowDays)D \(Self.signedPercent(value))", direction: value >= 0 ? "positive" : "negative", value: value))
         }
         if let value = volumeMultiple, value >= rules.volumeMultiple {
-            signals.append(.init(kind: "volume_spike", label: "成交量 \(String(format: "%.1f", value))×", direction: "neutral", value: value))
+            signals.append(.init(kind: "volume_spike", label: L10n.text("成交量 \(String(format: "%.1f", value))×"), direction: "neutral", value: value))
         }
         let near = -rules.nearExtremePercent...rules.nearExtremePercent
         if let value = distanceHigh, near.contains(value) {
-            signals.append(.init(kind: "near_52w_high", label: "距 52 周高点 \(String(format: "%.1f", abs(value)))%", direction: "positive", value: value))
+            signals.append(.init(kind: "near_52w_high", label: L10n.text("距 52 周高点 \(String(format: "%.1f", abs(value)))%"), direction: "positive", value: value))
         } else if let value = distanceLow, near.contains(value) {
-            signals.append(.init(kind: "near_52w_low", label: "距 52 周低点 \(String(format: "%.1f", abs(value)))%", direction: "negative", value: value))
+            signals.append(.init(kind: "near_52w_low", label: L10n.text("距 52 周低点 \(String(format: "%.1f", abs(value)))%"), direction: "negative", value: value))
         }
         if let value = holding.todayChangePercent, abs(value) >= rules.todayMoveThreshold {
-            signals.append(.init(kind: "today_move", label: "今日 \(Self.signedPercent(value))", direction: value >= 0 ? "positive" : "negative", value: value))
+            signals.append(.init(kind: "today_move", label: L10n.text("今日 \(Self.signedPercent(value))"), direction: value >= 0 ? "positive" : "negative", value: value))
         }
         if let cross {
-            signals.append(.init(kind: "ma_200_cross", label: cross == "above" ? "突破 \(length)D 均线" : "跌破 \(length)D 均线", direction: cross == "above" ? "positive" : "negative", value: ma200Position ?? 0))
+            signals.append(.init(kind: "ma_200_cross", label: cross == "above" ? L10n.text("突破 \(length)D 均线") : L10n.text("跌破 \(length)D 均线"), direction: cross == "above" ? "positive" : "negative", value: ma200Position ?? 0))
         }
         let contribution = holding.todayChangePercent.map { holding.weight * $0 }
         return Candidate(
@@ -179,12 +179,12 @@ struct LocalPortfolioAttentionEngine {
             stance: PortfolioAttentionThesis.priceStance(row.signals),
             basis: .price,
             confidence: .none,
-            whatChanged: row.signals.map(\.label).joined(separator: "、"),
-            whyItMatters: "这一变化值得核对，但在可靠公司来源确认前，不应视为基本面结论。",
+            whatChanged: row.signals.map(\.label).joined(separator: L10n.listSeparator),
+            whyItMatters: L10n.text("这一变化值得核对，但在可靠公司来源确认前，不应视为基本面结论。"),
             supportingEvidence: securitySignals.map(\.label),
-            counterEvidence: ["信号可能来自市场或板块波动，而非公司级催化剂。"],
-            risks: ["公司级催化剂尚未验证"],
-            watchNext: ["公司公告与业绩", "成交量是否持续", "\(rules.movingAverageDays) 日均线"],
+            counterEvidence: [L10n.text("信号可能来自市场或板块波动，而非公司级催化剂。")],
+            risks: [L10n.text("公司级催化剂尚未验证")],
+            watchNext: [L10n.text("公司公告与业绩"), L10n.text("成交量是否持续"), L10n.text("\(rules.movingAverageDays) 日均线")],
             riskFlags: []
         )
     }

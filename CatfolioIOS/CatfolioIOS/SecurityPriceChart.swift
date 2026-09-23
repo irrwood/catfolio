@@ -5,11 +5,11 @@ import Observation
 /// Owns the fast-changing chart selection so dragging never invalidates the
 /// volume profile, 52-week range, financials and analyst sections below it.
 struct HoldingDetailPriceSection: View {
+    @Environment(\.locale) private var appLocale
     let holding: Holding
     let marketTodayChange: Double?
     let priceHistory: SecurityPriceHistory?
     let priceHistoryError: String?
-    let presentationReady: Bool
     let averageCost: Double?
     let selectedAccountKeys: Set<String>
     var accountOptions: [HoldingDetailAccountOption] = []
@@ -23,6 +23,7 @@ struct HoldingDetailPriceSection: View {
     @State private var priceSelection: SecurityPriceSelection?
     @State private var explanation: SecurityPaperRequest?
     @State private var explanationAnchor = SecurityPaperSourceAnchor()
+    @State private var tradeReadoutReservations: [SecurityTradeReadout.Measurement] = []
 
     private var movement: SecurityPriceMoveContext? {
         guard let priceHistory else { return nil }
@@ -39,6 +40,7 @@ struct HoldingDetailPriceSection: View {
                 selectedPrice: priceSelection?.price ?? priceHistory?.latestAvailablePrice,
                 selectedReturn: priceSelection?.returnPercent,
                 selectedTrades: priceSelection?.trades ?? [],
+                tradeReadoutReservations: tradeReadoutReservations,
                 isRefreshing: isRefreshing,
                 onRefresh: onRefresh
             )
@@ -60,17 +62,13 @@ struct HoldingDetailPriceSection: View {
                     message: priceHistoryError,
                     isLoading: false
                 )
-            } else if presentationReady {
+            } else {
                 SecurityPriceChartState(
                     title: L10n.text("正在读取价格走势"),
                     message: L10n.text("正在整理历史行情与买卖记录"),
                     isLoading: true,
                     appearanceID: "security-price|\(holding.ticker)|\(holding.quoteCurrency ?? "USD")"
                 )
-            } else {
-                Color.clear
-                    .frame(height: SecurityPriceChartState.fixedHeight)
-                    .accessibilityHidden(true)
             }
 
             if !accountOptions.isEmpty {
@@ -101,7 +99,7 @@ struct HoldingDetailPriceSection: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
             if let refreshError {
-                Text(refreshError).font(.caption).foregroundStyle(.secondary)
+                Text(L10n.message(refreshError)).font(.caption).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .trailing).padding(.horizontal, 20)
             }
         }
@@ -110,7 +108,19 @@ struct HoldingDetailPriceSection: View {
         }
         .onChange(of: selectedAccountKeys) { _, _ in
             priceSelection = nil
+            updateTradeReadoutReservations()
         }
+        .onChange(of: priceHistory?.trades, initial: true) { _, _ in
+            updateTradeReadoutReservations()
+        }
+        .onChange(of: appLocale.identifier) { _, _ in
+            updateTradeReadoutReservations()
+        }
+    }
+
+    private func updateTradeReadoutReservations() {
+        let trades = (priceHistory?.trades ?? []).compactMap { $0.filtered(accounts: selectedAccountKeys) }
+        tradeReadoutReservations = SecurityTradeReadout.reservationCandidates(for: trades)
     }
 }
 
@@ -234,7 +244,7 @@ struct SecurityPriceChart: View {
                 // Keep prepared data visible during refresh; only an empty
                 // chart needs the geometry-matched loading placeholder.
                 if isPreparing && prepared == nil {
-                    StandardLineChartSkeleton(leadingLineOverflow: 30, trailingEndpointInset: 9,
+                    StandardLineChartSkeleton(leadingLineOverflow: 0, trailingEndpointInset: 9,
                         lineWidths: [2.5], appearanceID: "security-price|\(history.ticker)|\(history.currency)")
                 } else if data.points.count > 1 {
                     SecurityPricePlot(
@@ -431,7 +441,8 @@ struct SecurityPricePlot: View {
             axisWidth: 49,
             topInset: 15,
             bottomHeight: 0,
-            leadingLineOverflow: 30,
+            // The first price is also the return baseline; keep it visible.
+            leadingLineOverflow: 0,
             gridOpacity: 0.08,
             transitionKey: transitionKey,
             appearanceID: appearanceID,
@@ -457,6 +468,7 @@ struct SecurityPricePlot: View {
                     seriesID: "price"
                 )
             },
+            markerMagnetRadius: 6,
             referenceLines: [costReference].compactMap { $0 },
             selectedDate: selectedPoint?.date,
             measuredRange: measuredRange,
@@ -665,6 +677,13 @@ struct SecurityPriceRangeData: @unchecked Sendable {
         case .maximum: start = nil
         }
         guard let start else { return points }
+        if range == .oneWeek {
+            // Measure from the last available close on or before one week ago.
+            // A holiday must not move the baseline forward and omit the next
+            // session's change. Retain the close's actual date on the chart.
+            let first = points.lastIndex(where: { $0.date <= start }) ?? points.startIndex
+            return Array(points[first...])
+        }
         let result = points.filter { $0.date >= start }
         return result.count > 1 ? result : Array(points.suffix(2))
     }

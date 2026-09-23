@@ -232,7 +232,7 @@ struct HistoryView: View {
                 ContentUnavailableView(
                     L10n.text("Unable to load History"),
                     systemImage: "exclamationmark.triangle",
-                    description: Text(errorMessage)
+                    description: Text(L10n.message(errorMessage))
                 )
             } else {
                 HistoryPagingView(selection: $category) { pageCategory in
@@ -298,7 +298,7 @@ struct HistoryView: View {
         )) {
             Button(L10n.text("OK"), role: .cancel) { exportError = nil }
         } message: {
-            Text(exportError ?? "")
+            Text(L10n.message(exportError ?? ""))
         }
         .task(id: HistoryPreparationKey(
             revision: ledgerRevision, accountIDs: effectiveAccountIDs, locale: appLocale.identifier

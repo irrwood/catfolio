@@ -49,17 +49,17 @@ struct ValuationQuality: Codable, Equatable, Sendable {
         return result.isFinite ? result : nil
     }
     var epsUnavailableReason: String? {
-        if dilutedEPS == nil || priorDilutedEPS == nil { return "缺少同一申报中的两年稀释 EPS" }
-        if (priorDilutedEPS ?? 0) <= 0 { return "上年 EPS 不为正，增长率不适用" }
-        return epsGrowthPercent == nil ? "EPS 数据无法计算" : nil
+        if dilutedEPS == nil || priorDilutedEPS == nil { return L10n.text("缺少同一申报中的两年稀释 EPS") }
+        if (priorDilutedEPS ?? 0) <= 0 { return L10n.text("上年 EPS 不为正，增长率不适用") }
+        return epsGrowthPercent == nil ? L10n.text("EPS 数据无法计算") : nil
     }
     var roicUnavailableReason: String? {
-        if operatingIncome == nil { return "缺少营业利润" }
-        if pretaxIncome == nil || incomeTax == nil { return "缺少税前利润或所得税费用" }
-        if effectiveTaxRate == nil { return "税前利润或有效税率异常" }
-        if openingCapital == nil || closingCapital == nil { return "缺少完整债务、权益或现金数据" }
-        if averageCapital == nil { return "期初或期末投入资本不为正" }
-        return roicPercent == nil ? "ROIC 数据无法计算" : nil
+        if operatingIncome == nil { return L10n.text("缺少营业利润") }
+        if pretaxIncome == nil || incomeTax == nil { return L10n.text("缺少税前利润或所得税费用") }
+        if effectiveTaxRate == nil { return L10n.text("税前利润或有效税率异常") }
+        if openingCapital == nil || closingCapital == nil { return L10n.text("缺少完整债务、权益或现金数据") }
+        if averageCapital == nil { return L10n.text("期初或期末投入资本不为正") }
+        return roicPercent == nil ? L10n.text("ROIC 数据无法计算") : nil
     }
 }
 

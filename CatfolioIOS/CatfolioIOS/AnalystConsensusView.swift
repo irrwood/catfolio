@@ -1,4 +1,70 @@
 import SwiftUI
+import Observation
+
+#if DEBUG
+/// Anchors are read by the snapshot fixture using the displayed components.
+struct ResearchCardLayoutFrames: PreferenceKey {
+    static let defaultValue: [String: Anchor<CGRect>] = [:]
+    static func reduce(value: inout [String: Anchor<CGRect>], nextValue: () -> [String: Anchor<CGRect>]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, latest in latest })
+    }
+}
+#endif
+
+extension View {
+    @ViewBuilder
+    func researchLayoutFrame(_ id: String?) -> some View {
+        #if DEBUG
+        if let id {
+            transformAnchorPreference(key: ResearchCardLayoutFrames.self, value: .bounds) { frames, anchor in
+                frames[id] = anchor
+            }
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+}
+
+/// Folding and reopening a research card can start its replacement request
+/// before the cancelled request returns. Only the latest request owns the
+/// spinner and may publish a value, error, or recovered cache entry.
+@MainActor @Observable
+final class ResearchCardLoadState {
+    private(set) var isLoading = false
+    private(set) var revision = UUID()
+
+    func canPublish(_ request: UUID) -> Bool {
+        request == revision && !Task.isCancelled
+    }
+
+    func load<Value>(
+        operation: () async throws -> Value,
+        fallback: () async -> Value? = { nil },
+        onSuccess: (Value) -> Void,
+        onFailure: (Error, Value?) -> Void
+    ) async {
+        guard !Task.isCancelled else { return }
+        let request = UUID()
+        revision = request
+        isLoading = true
+        defer { if revision == request { isLoading = false } }
+        do {
+            let value = try await operation()
+            guard canPublish(request) else { return }
+            onSuccess(value)
+        } catch is CancellationError {
+            // An intentional stop keeps the existing result and error state.
+        } catch {
+            guard canPublish(request) else { return }
+            let cached = await fallback()
+            guard canPublish(request) else { return }
+            onFailure(error, cached)
+        }
+    }
+}
 
 struct AnalystConsensusData: Codable, Sendable {
     let ratings: RatingSpread?
@@ -14,6 +80,17 @@ struct AnalystConsensusData: Codable, Sendable {
     let warnings: [String]
     var total: Int { ratings?.total ?? 0 }
     var hasContent: Bool { total > 0 || Self.validTargets(low: low, mean: mean, high: high) }
+
+    /// Ratings and targets can outlive the quote saved with them. The value
+    /// labelled current always comes from this presentation's holding quote;
+    /// an unavailable or incompatible quote must not revive the cached price.
+    func withCurrentQuote(_ price: Double?, currency: String?) -> Self {
+        let quote = currency?.uppercased() == "USD"
+            ? price.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+            : nil
+        return Self(ratings: ratings, consensus: consensus, low: low, mean: mean, high: high,
+                    current: quote, source: source, fetchedAt: fetchedAt, warnings: warnings)
+    }
 
     static func ratingCounts(_ row: [String: Any]) -> [Int]? {
         let keys = ["strongSell", "sell", "hold", "buy", "strongBuy"]
@@ -85,7 +162,9 @@ actor AnalystConsensusClient {
             throw ScreenFailure.message(L10n.text("暂仅支持美元报价的证券，目标价不与其他币种混用。"))
         }
         let symbol = symbol.uppercased()
-        if !forceRefresh, let cached = cached(symbol: symbol) { return cached }
+        if !forceRefresh, let cached = cached(symbol: symbol) {
+            return cached.withCurrentQuote(price, currency: currency)
+        }
         let previous = cache[symbol]
         let client = StockScreenDataClient.shared
         let query = ["symbol": symbol]
@@ -125,7 +204,7 @@ actor AnalystConsensusClient {
                 if error as? NasdaqAnalystError != .noCoverage { warnings.append(error.localizedDescription) }
             }
             if let reason = warnings.first { throw ScreenFailure.message(reason) }
-            if let previous { return previous }
+            if let previous { return previous.withCurrentQuote(price, currency: currency) }
         }
         // Preserve every usable partial snapshot too. A missing target endpoint
         // must not make a valid rating disappear on the next presentation.
@@ -180,9 +259,10 @@ struct AnalystConsensusView: View {
     var onAvailability: (HoldingResearchAvailability) -> Void = { _ in }
     @State private var data: AnalystConsensusData?
     @State private var error: String?
-    @State private var loading = false
+    @State private var loadState = ResearchCardLoadState()
     @State private var isExpanded = false
     @State private var showsHistory = false
+    private var loading: Bool { loadState.isLoading }
 
     /// One line saying what the analysts think, for the collapsed row.
     private var summary: String? {
@@ -248,8 +328,12 @@ struct AnalystConsensusView: View {
         // opened spent the page's shared FMP budget on a card most visits
         // never look at, and scrolling past a holding spent it too.
         .task(id: symbol) {
-            if let initialData { data = initialData }
-            else { data = await AnalystConsensusClient.shared.cached(symbol: symbol.uppercased()) }
+            let revision = loadState.revision
+            let cached: AnalystConsensusData?
+            if let initialData { cached = initialData }
+            else { cached = await AnalystConsensusClient.shared.cached(symbol: symbol.uppercased()) }
+            guard loadState.canPublish(revision) else { return }
+            data = cached
             if let data { onAvailability(data.hasContent ? .available : .empty) }
         }
         // Opening the card is the request.
@@ -262,10 +346,10 @@ struct AnalystConsensusView: View {
     @ViewBuilder private var expandedContent: some View {
         VStack(alignment: .leading, spacing: 16) {
             if let data {
-                AnalystConsensusContent(data: data)
+                AnalystConsensusContent(data: data.withCurrentQuote(price, currency: currency))
                     .onAppear { ChartAppearanceHistory.record("analyst-consensus|\(symbol)") }
                 if let error {
-                    Text(error).font(.caption).foregroundStyle(.secondary)
+                    Text(L10n.message(error)).font(.caption).foregroundStyle(.secondary)
                 }
                 HStack {
                     Spacer()
@@ -296,41 +380,33 @@ struct AnalystConsensusView: View {
 
     @MainActor @discardableResult
     private func load(forceRefresh: Bool = false) async -> AnalystConsensusData? {
-        // No `guard !loading` here. `.task(id:)` restarts this on re-entry, and
-        // bailing out because a superseded run had not finished unwinding left
-        // the card with no data, no error and no spinner — a blank box.
-        loading = true
+        guard !Task.isCancelled else { return data }
         error = nil
-        defer { loading = false }
-        do {
-            let loaded = try await AnalystConsensusClient.shared.load(
+        await loadState.load {
+            try await AnalystConsensusClient.shared.load(
                 symbol: symbol.uppercased(),
                 currency: currency,
                 price: price,
                 forceRefresh: forceRefresh
             )
-            try Task.checkCancellation()
+        } fallback: {
+            if let data { return data }
+            return await AnalystConsensusClient.shared.cached(symbol: symbol.uppercased())
+        } onSuccess: { loaded in
             data = loaded
             onAvailability(loaded.hasContent ? .available : .empty)
-            return loaded
-        } catch is CancellationError {
-            // Superseded by a newer load; keep whatever is already on screen.
-            return data
-        } catch {
-            guard !Task.isCancelled else { return data }
-            self.error = error.localizedDescription
+        } onFailure: { failure, cached in
+            error = failure.localizedDescription
             // A failed manual refresh never erases the last usable snapshot.
-            if data == nil {
-                data = await AnalystConsensusClient.shared.cached(symbol: symbol.uppercased())
-            }
+            if data == nil { data = cached }
             onAvailability(data?.hasContent == true ? .available : .failed)
-            return data
         }
+        return data
     }
 
 }
 
-private struct AnalystConsensusContent: View {
+struct AnalystConsensusContent: View {
     @Environment(\.locale) private var appLocale
     let data: AnalystConsensusData
 
@@ -353,17 +429,31 @@ private struct AnalystConsensusContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             if let ratings = data.ratings, data.total > 0 {
-                HStack {
-                    Text(ratingLabel).font(.subheadline.weight(.semibold))
-                        .padding(8).background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-                    Spacer()
-                    Text(L10n.text("\(data.total) 份评级")).font(.subheadline).foregroundStyle(.secondary)
+                ViewThatFits(in: .horizontal) {
+                    HStack {
+                        ratingBadge
+                        Spacer(minLength: 12)
+                        ratingCount
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        ratingBadge
+                        ratingCount
+                    }
                 }
                 let totals = [ratings.bearish, ratings.neutral, ratings.bullish]
-                HStack {
-                    Text(L10n.text("\(totals[0]) 看跌")).foregroundStyle(.red)
-                    Spacer(); Text(L10n.text("\(totals[1]) 中性")).foregroundStyle(.secondary)
-                    Spacer(); Text(L10n.text("\(totals[2]) 看涨")).foregroundStyle(.green)
+                ViewThatFits(in: .horizontal) {
+                    HStack {
+                        rating(totals[0], index: 0)
+                        Spacer()
+                        rating(totals[1], index: 1)
+                        Spacer()
+                        rating(totals[2], index: 2)
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        rating(totals[0], index: 0)
+                        rating(totals[1], index: 1)
+                        rating(totals[2], index: 2)
+                    }
                 }.appNumber(.callout)
                 GeometryReader { geo in
                     HStack(spacing: 0) {
@@ -375,9 +465,8 @@ private struct AnalystConsensusContent: View {
                 }.frame(height: 7).accessibilityHidden(true)
             } else { Text(L10n.text("暂无完整评级分布")).foregroundStyle(.secondary) }
             if let low = data.low, let mean = data.mean, let high = data.high {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 18) { metrics(low: low, mean: mean, high: high) }.fixedSize(horizontal: true, vertical: false)
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 16) { metrics(low: low, mean: mean, high: high) }
+                AnalystMetricsLayout {
+                    metrics(low: low, mean: mean, high: high)
                 }
                 let minimum = min(low, data.current ?? low)
                 let maximum = max(high, data.current ?? high)
@@ -399,8 +488,30 @@ private struct AnalystConsensusContent: View {
             } else { Text(L10n.text("暂无可核验的目标价区间")).foregroundStyle(.secondary) }
             Text(L10n.text("\(data.source) · 读取于 \(data.fetchedAt.formatted(date: .abbreviated, time: .shortened))"))
                 .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .researchLayoutFrame("analyst.source")
         }
     }
+    private var ratingBadge: some View {
+        Text(ratingLabel).font(.subheadline.weight(.semibold))
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(8).background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var ratingCount: some View {
+        Text(L10n.text("\(data.total) 份评级")).font(.subheadline).foregroundStyle(.secondary)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func rating(_ count: Int, index: Int) -> some View {
+        let title = index == 0 ? L10n.text("\(count) 看跌")
+            : index == 1 ? L10n.text("\(count) 中性") : L10n.text("\(count) 看涨")
+        return Text(title)
+            .foregroundStyle(index == 0 ? Color.red : index == 1 ? Color.secondary : Color.green)
+            .fixedSize(horizontal: true, vertical: false)
+            .researchLayoutFrame("analyst.rating.\(index == 0 ? "bearish" : index == 1 ? "neutral" : "bullish")")
+    }
+
     @ViewBuilder private func metrics(low: Double, mean: Double, high: Double) -> some View {
         metric(L10n.text("最低目标"), value: low)
         metric(L10n.text("当前报价"), value: data.current)
@@ -410,7 +521,58 @@ private struct AnalystConsensusContent: View {
     private func metric(_ title: String, value: Double?) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(value.map { $0.formatted(.currency(code: "USD")) } ?? "—").appNumber(.callout, weight: .semibold)
+                .lineLimit(1).minimumScaleFactor(0.8)
+                .researchLayoutFrame("analyst.value.\(title)")
             Text(title).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Four metrics keep their existing row or equal-width two-column arrangement
+/// while they fit. Their measured text selects a single column when necessary.
+private struct AnalystMetricsLayout: Layout {
+    private struct Plan {
+        let columns: Int
+        let widths: [CGFloat]
+        let rowHeights: [CGFloat]
+        let spacing: CGFloat
+        let width: CGFloat
+        var height: CGFloat { rowHeights.reduce(0, +) + CGFloat(max(0, rowHeights.count - 1)) * 16 }
+    }
+
+    private func plan(proposal: ProposedViewSize, subviews: Subviews) -> Plan {
+        let ideal = subviews.map { $0.sizeThatFits(.unspecified).width }
+        let rowWidth = ideal.reduce(0, +) + CGFloat(max(0, ideal.count - 1)) * 18
+        let width = proposal.width.flatMap { $0.isFinite ? max(0, $0) : nil } ?? rowWidth
+        let columns = rowWidth <= width ? max(1, ideal.count)
+            : (ideal.max() ?? 0) * 2 + 16 <= width ? 2 : 1
+        let spacing: CGFloat = columns > 2 ? 18 : 16
+        let widths = columns > 2 ? ideal
+            : Array(repeating: max(0, (width - CGFloat(columns - 1) * spacing) / CGFloat(columns)), count: columns)
+        var heights: [CGFloat] = []
+        for index in subviews.indices {
+            let row = index / columns
+            if heights.count <= row { heights.append(0) }
+            heights[row] = max(heights[row], subviews[index].sizeThatFits(
+                .init(width: widths[index % columns], height: nil)).height)
+        }
+        return Plan(columns: columns, widths: widths, rowHeights: heights, spacing: spacing, width: width)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let layout = plan(proposal: proposal, subviews: subviews)
+        return CGSize(width: layout.width, height: layout.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let layout = plan(proposal: .init(width: bounds.width, height: nil), subviews: subviews)
+        for index in subviews.indices {
+            let column = index % layout.columns
+            let row = index / layout.columns
+            let x = layout.widths.prefix(column).reduce(0, +) + CGFloat(column) * layout.spacing
+            let y = layout.rowHeights.prefix(row).reduce(0, +) + CGFloat(row) * 16
+            subviews[index].place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y), anchor: .topLeading,
+                                 proposal: .init(width: layout.widths[column], height: layout.rowHeights[row]))
         }
     }
 }

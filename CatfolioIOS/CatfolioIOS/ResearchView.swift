@@ -525,7 +525,7 @@ struct ResearchView: View {
                 .appPageBackground().navigationTitle(L10n.text("研究规则"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.text("完成")) { showsRules = false }
+                    AppModalDoneButton { showsRules = false }
                 } }
             }
         }
@@ -638,11 +638,11 @@ struct ResearchView: View {
         List {
             Section {
                 if isAnalyzing { ProgressView(L10n.text("正在分析所选账户…")) }
-                if let analysisError { Text(analysisError).foregroundStyle(.secondary) }
+                if let analysisError { Text(L10n.message(analysisError)).foregroundStyle(.secondary) }
                 if let report {
                     Text(L10n.text("分析于 \(report.generatedAt.formatted(date: .abbreviated, time: .shortened))"))
                         .font(.caption).foregroundStyle(.secondary)
-                    ForEach(report.warnings, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
+                    ForEach(report.warnings, id: \.self) { Text(L10n.message($0)).font(.caption).foregroundStyle(.secondary) }
                     if analysisRows.isEmpty { Text(L10n.text("当前筛选下没有分析结果")).foregroundStyle(.secondary) }
                 } else if !isAnalyzing {
                     Text(L10n.text("点击分析，使用已配置的 AI 服务研究当前持仓。未经来源验证的内容不会被视为已确认事实。"))

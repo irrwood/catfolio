@@ -228,9 +228,21 @@ struct IndustrySentimentClient {
             ? newYork.date(byAdding: .day, value: 1, to: today)! : today
         let cutoff = formatter.string(from: cutoffDay)
 
-        let volatility = try Self.parseVolatility(vxData, symbol: sector.volatilitySymbol).filter { $0.date < cutoff }
-        let prices = try Self.parsePrices(smhData, symbol: sector.priceSymbol, formatter: formatter)
-            .filter { $0.date < cutoff }
+        let volatility: [IndustrySentimentEngine.VolatilityDay]
+        do {
+            volatility = try Self.parseVolatility(vxData, symbol: sector.volatilitySymbol).filter { $0.date < cutoff }
+        } catch {
+            DataSourceHealth.reportUnusable(DataSource.of(Self.volatilityURL(sector)), issue: .invalidFormat)
+            throw error
+        }
+        let prices: [IndustrySentimentEngine.PriceDay]
+        do {
+            prices = try Self.parsePrices(smhData, symbol: sector.priceSymbol, formatter: formatter)
+                .filter { $0.date < cutoff }
+        } catch {
+            DataSourceHealth.reportUnusable(DataSource.of(Self.pricesURL(sector)), issue: .invalidFormat)
+            throw error
+        }
         let asOf = formatter.string(from: now)
         let object = try IndustrySentimentEngine.evaluate(volatility: volatility, prices: prices,
                                                           asOf: asOf, sector: sector)
@@ -305,9 +317,14 @@ struct IndustrySentimentClient {
     private static func get(_ url: URL) async throws -> Data {
         var request = URLRequest(url: url)
         request.setValue("Mozilla/5.0 Catfolio", forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
-              data.count <= 5_000_000 else { throw LocalServiceError.invalidResponse }
+        let (data, response) = try await session.recordedData(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw LocalServiceError.invalidResponse
+        }
+        guard data.count <= 5_000_000 else {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
+            throw LocalServiceError.invalidResponse
+        }
         return data
     }
 }

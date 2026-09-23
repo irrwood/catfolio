@@ -627,7 +627,7 @@ private struct HoldingsHeatmapRemainderDetail: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(L10n.text("完成")) { dismiss() }
+                    AppModalDoneButton { dismiss() }
                 }
             }
         }
@@ -766,6 +766,6 @@ private struct HoldingsHeatmapPlaceholder: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.text("暂无持仓") + "，" + L10n.text("同步持仓后会在这里显示资产分布。"))
+        .accessibilityLabel(L10n.sentences([L10n.text("暂无持仓"), L10n.text("同步持仓后会在这里显示资产分布。")]))
     }
 }

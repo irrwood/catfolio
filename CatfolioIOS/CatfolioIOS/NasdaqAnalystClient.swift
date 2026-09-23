@@ -38,9 +38,9 @@ enum NasdaqAnalystError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .unknownSymbol: "Nasdaq 没有这个代码的记录。"
-        case .noCoverage: "Nasdaq 没有这只证券的分析师覆盖。"
-        case let .service(message): "Nasdaq：\(message)"
+        case .unknownSymbol: L10n.text("Nasdaq 没有这个代码的记录。")
+        case .noCoverage: L10n.text("Nasdaq 没有这只证券的分析师覆盖。")
+        case let .service(message): "Nasdaq: \(L10n.message(message))"
         }
     }
 }
@@ -157,7 +157,7 @@ actor NasdaqAnalystClient {
         if status.rCode == 400 || message?.code == 1001 { throw NasdaqAnalystError.unknownSymbol }
         if message?.code == 1002 { throw NasdaqAnalystError.noCoverage }
         if let rCode = status.rCode, !(200..<300).contains(rCode) {
-            throw NasdaqAnalystError.service(message?.errorMessage ?? "请求失败（\(rCode)）")
+            throw NasdaqAnalystError.service(message?.errorMessage ?? L10n.text("请求失败（\(rCode)）"))
         }
     }
 
@@ -170,14 +170,15 @@ actor NasdaqAnalystClient {
         request.timeoutInterval = 15
         request.setValue("Mozilla/5.0 Catfolio-iOS", forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.recordedData(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw NasdaqAnalystError.service("网络请求失败")
+            throw NasdaqAnalystError.service(L10n.text("网络请求失败"))
         }
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
-            throw NasdaqAnalystError.service("返回格式无法识别")
+            DataSourceHealth.reportUnusable(DataSource.of(url), issue: .invalidFormat)
+            throw NasdaqAnalystError.service(L10n.text("返回格式无法识别"))
         }
     }
 }

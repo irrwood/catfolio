@@ -33,8 +33,19 @@ struct PortfolioDetailsCard: View {
         _tableMode = State(initialValue: showsHeatmap ? "热力图"
             : LaunchArguments.contains("--show-etf") ? "ETF 穿透" : "持仓")
     }
+    @AppStorage("portfolio.holdings.mergeETF") private var mergesETF = false
+    @State private var selectedMergedRow: ETFLookThroughRow?
+    private var showsMergedHoldings: Bool {
+        mergesETF || LaunchArguments.contains("--show-merged-etf")
+    }
+    private var needsETFData: Bool {
+        tableMode == "ETF 穿透" || (tableMode == "持仓" && showsMergedHoldings)
+            || (tableMode == "热力图" && heatmapLooksThroughETF)
+    }
+
     @State private var etfResponse: ETFLookThroughResponse?
     @State private var etfError: String?
+    @State private var failedETFHoldingsKey = ""
     @State private var isLoadingETF = false
     @State private var etfLoadGeneration = 0
     @State private var loadedETFHoldingsKey = ""
@@ -60,16 +71,15 @@ struct PortfolioDetailsCard: View {
                 PerformanceHeatmapHero(
                     state: hero,
                     renderKey: heatmapRenderKey,
-                    header: { headerRow },
                     heatmap: { heatmapView(isSnapshot: $0) }
                 )
             } else {
                 VStack(alignment: .leading, spacing: 18) {
-                    headerRow
+                    if !showsHeatmap { headerRow }
 
                     Group {
                         if tableMode == "持仓" {
-                            holdingsTable
+                            if showsMergedHoldings { mergedHoldingsTable } else { holdingsTable }
                         } else if tableMode == "热力图" {
                             heatmapView(isSnapshot: false)
                         } else {
@@ -83,10 +93,20 @@ struct PortfolioDetailsCard: View {
                 .background(colorScheme == .light ? Color.white : Color(red: 0, green: 0.008, blue: 0))
             }
         }
+        .toolbar {
+            if showsHeatmap {
+                ToolbarItem(placement: .topBarTrailing) {
+                    HeatmapPerformancePeriodMenu(period: $heatmapPerformancePeriod,
+                        groupsBySector: $heatmapGroupsBySector, looksThroughETF: $heatmapLooksThroughETF,
+                        isToolbarItem: true)
+                        .accessibilityIdentifier("performance.heatmap.filter")
+                }
+            }
+        }
         // Local exposure preparation must not wait for network quotes.
         .environment(\.securityDetailZoomOrigin, zoomNamespace)
-        .task(id: "\(tableMode)-\(etfHoldingsKey)-\(heatmapLooksThroughETF)") {
-            guard tableMode == "ETF 穿透" || (tableMode == "热力图" && heatmapLooksThroughETF),
+        .task(id: "\(tableMode)-\(etfHoldingsKey)-\(heatmapLooksThroughETF)-\(showsMergedHoldings)") {
+            guard needsETFData,
                   etfResponse == nil || loadedETFHoldingsKey != etfHoldingsKey else { return }
             await loadETF()
         }
@@ -98,6 +118,14 @@ struct PortfolioDetailsCard: View {
             guard tableMode == "热力图", heatmapLooksThroughETF,
                   heatmapPerformancePeriod == .today else { return }
             await loadETFConstituentDailyChanges()
+        }
+        .task(id: "merged-daily-\(tableMode)-\(showsMergedHoldings)-\(holdingPerformancePeriod.rawValue)-\(etfHoldingsKey)") {
+            guard tableMode == "持仓", showsMergedHoldings, holdingPerformancePeriod == .today else { return }
+            await model.refreshHoldingDailyChanges()
+        }
+        .appSheet(item: $selectedMergedRow) { row in
+            ETFMergedHoldingDetail(row: row, holdings: holdingsByTicker, dailyChanges: model.holdingDailyChanges,
+                holdingsAsOf: etfResponse?.holdingsAsOf, source: etfResponse?.holdingsSource)
         }
         .onChange(of: etfSortField) { _, _ in etfVisibleLimit = 20 }
         .onChange(of: etfSortAscending) { _, _ in etfVisibleLimit = 20 }
@@ -148,15 +176,18 @@ struct PortfolioDetailsCard: View {
 
     private var headerRow: some View {
         HStack(alignment: .center, spacing: 10) {
-            if showsHeatmap {
-                Text(L10n.text("持仓热力图"))
-                    .font(.title2.weight(.semibold))
-            } else {
             Menu {
                 Button {
+                    mergesETF = false
                     tableMode = "持仓"
                 } label: {
-                    Label(L10n.text("持仓明细"), systemImage: tableMode == "持仓" ? "checkmark" : "list.bullet")
+                    Label(L10n.text("持仓明细"), systemImage: tableMode == "持仓" && !showsMergedHoldings ? "checkmark" : "list.bullet")
+                }
+                Button {
+                    mergesETF = true
+                    tableMode = "持仓"
+                } label: {
+                    Label(L10n.text("合并穿透"), systemImage: tableMode == "持仓" && showsMergedHoldings ? "checkmark" : "square.stack.3d.up")
                 }
                 Button {
                     tableMode = "ETF 穿透"
@@ -176,7 +207,6 @@ struct PortfolioDetailsCard: View {
                 .foregroundStyle(.primary)
             }
             .buttonStyle(.plain)
-            }
 
             Spacer()
             filterMenu(floating: false)
@@ -228,7 +258,7 @@ struct PortfolioDetailsCard: View {
         switch tableMode {
         case "ETF 穿透": L10n.text("ETF 穿透")
         case "热力图": L10n.text("持仓热力图")
-        default: "Catfolio"
+        default: showsMergedHoldings ? L10n.text("合并穿透") : "Catfolio"
         }
     }
 
@@ -247,6 +277,73 @@ struct PortfolioDetailsCard: View {
                 .buttonStyle(HoldingPressButtonStyle())
                 .holdingDetailPreview(holding) { onSelect(holding) }
                 .holdingZoomSource(holding.ticker, in: zoomNamespace)
+            }
+        }
+    }
+
+    private var holdingsByTicker: [String: Holding] {
+        Dictionary(holdings.map { ($0.ticker.uppercased(), $0) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    private var mergedEntries: [(row: ETFLookThroughRow, performance: HoldingPerformanceValues?)] {
+        guard loadedETFHoldingsKey == etfHoldingsKey else { return [] }
+        let direct = holdingsByTicker
+        return (etfResponse?.rows ?? []).map { row in
+            (row: row, performance: row.mergedPerformance(for: holdingPerformancePeriod,
+                holdings: direct, dailyChanges: model.holdingDailyChanges))
+        }.sorted { left, right in
+            if holdingSortField == .name {
+                let comparison = CompanyNameCatalog.displayName(ticker: left.row.ticker, fallback: left.row.name)
+                    .localizedStandardCompare(CompanyNameCatalog.displayName(ticker: right.row.ticker, fallback: right.row.name))
+                if comparison != .orderedSame {
+                    return holdingSortAscending ? comparison == .orderedAscending : comparison == .orderedDescending
+                }
+            }
+            func value(_ entry: (row: ETFLookThroughRow, performance: HoldingPerformanceValues?)) -> Double? {
+                switch holdingSortField {
+                case .marketValue: entry.row.totalUSD
+                case .unrealized: entry.performance?.amount
+                case .unrealizedPercent: entry.performance?.percent
+                case .name: nil
+                }
+            }
+            return compareOptional(value(left), value(right), leftTicker: left.row.ticker, rightTicker: right.row.ticker)
+        }
+    }
+
+    @ViewBuilder
+    private var mergedHoldingsTable: some View {
+        if let etfError, failedETFHoldingsKey == etfHoldingsKey {
+            Text(L10n.message(etfError)).appText(.caption).foregroundStyle(.secondary)
+            holdingsTable
+        } else if loadedETFHoldingsKey != etfHoldingsKey || etfResponse == nil {
+            HStack(spacing: 8) {
+                ProgressView()
+                Text(L10n.text("正在计算 ETF 底层持仓…")).appText(.caption).foregroundStyle(.secondary)
+            }
+            holdingsTable
+        } else {
+            Text(L10n.text("ETF 已拆分并合并到同名股票。盈亏按基金成分权重分摊估算，点按可看金额来源；未覆盖部分保留为 ETF 其他。"))
+                .appText(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            LazyVStack(spacing: 4) {
+                ForEach(mergedEntries, id: \.row.id) { entry in
+                    if entry.row.fromETFUSD == 0, let direct = directHolding(for: entry.row.ticker) {
+                        Button { onSelect(direct) } label: {
+                            HoldingRow(holding: direct, performancePeriod: holdingPerformancePeriod,
+                                dailyChangePercent: dailyChangePercent(for: direct))
+                        }
+                        .buttonStyle(HoldingPressButtonStyle())
+                        .holdingDetailPreview(direct) { onSelect(direct) }
+                        .holdingZoomSource(direct.ticker, in: zoomNamespace)
+                    } else {
+                        Button { selectedMergedRow = entry.row } label: {
+                            ETFMergedHoldingRow(row: entry.row, performance: entry.performance,
+                                portfolioTotal: etfPortfolioTotal)
+                        }
+                        .buttonStyle(HoldingPressButtonStyle())
+                    }
+                }
             }
         }
     }
@@ -416,8 +513,8 @@ struct PortfolioDetailsCard: View {
     }
 
     private var etfHoldingsKey: String {
-        model.selectedAccountKeys.sorted().joined(separator: ",") + "|" + holdings.map {
-            "\($0.ticker):\($0.shares):\($0.quotePrice):\($0.averageCost):\($0.costCurrency ?? ""):\($0.marketValue)"
+        "\(model.portfolioSource)|" + model.selectedAccountKeys.sorted().joined(separator: ",") + "|" + holdings.map {
+            "\($0.ticker):\($0.shares):\($0.quotePrice):\($0.averageCost):\($0.costCurrency ?? ""):\($0.quoteCurrency ?? ""):\($0.marketValue):\($0.unrealized)"
         }.joined(separator: "|")
     }
 
@@ -488,6 +585,7 @@ struct PortfolioDetailsCard: View {
             guard !Task.isCancelled, generation == etfLoadGeneration,
                   requestedKey == etfHoldingsKey else { return }
             etfResponse = nil
+            failedETFHoldingsKey = requestedKey
             etfError = error.localizedDescription
         }
     }
@@ -577,6 +675,7 @@ struct HeatmapPerformancePeriodMenu: View {
     @Binding var looksThroughETF: Bool
     var usesGlass = false
     var showsFilterTitle = false
+    var isToolbarItem = false
 
     var body: some View {
         Menu {
@@ -600,7 +699,13 @@ struct HeatmapPerformancePeriodMenu: View {
                 Toggle(L10n.text("穿透 ETF"), isOn: $looksThroughETF)
             }
         } label: {
-            PortfolioFilterLabel(showsTitle: showsFilterTitle, usesGlass: usesGlass)
+            if isToolbarItem {
+                Image("PortfolioHeaderSort")
+                    .renderingMode(.template).resizable().scaledToFit()
+                    .frame(width: 24, height: 24)
+            } else {
+                PortfolioFilterLabel(showsTitle: showsFilterTitle, usesGlass: usesGlass)
+            }
         }
         .buttonStyle(.plain)
         .foregroundStyle(.secondary)
@@ -971,6 +1076,7 @@ extension Holding {
 
 struct HoldingRow: View {
     @Environment(\.locale) private var appLocale
+    @Environment(\.colorScheme) private var colorScheme
     let holding: Holding
     let performancePeriod: HoldingPerformancePeriod
     let dailyChangePercent: Double?
@@ -1089,7 +1195,7 @@ struct HoldingRow: View {
 
     private var rowAccent: Color {
         if (performance?.amount ?? 0) >= 0 {
-            return CatfolioTheme.gainDefault
+            return CatfolioTheme.gain(for: colorScheme)
         }
         return CatfolioPalette.rose500
     }
@@ -1164,5 +1270,139 @@ struct HoldingMetrics: View {
         guard let performance else { return L10n.text("\(period.title)暂无数据") }
         return "\(DisplayFormat.money(performance.amount, signed: true, fractionDigits: 2)) "
             + "· \(DisplayFormat.percent(performance.percent))"
+    }
+}
+
+private struct ETFMergedHoldingRow: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let row: ETFLookThroughRow
+    let performance: HoldingPerformanceValues?
+    let portfolioTotal: Double
+
+    private var portfolioWeightText: String {
+        guard portfolioTotal.isFinite, portfolioTotal > 0, row.totalUSD.isFinite else { return "—" }
+        return DisplayFormat.percent(row.totalUSD / portfolioTotal * 100, signed: false)
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            AssetLogo(ticker: row.ticker, logoSymbol: row.logoSymbol, size: 40)
+            VStack(alignment: .leading, spacing: 5) {
+                if dynamicTypeSize.isAccessibilitySize {
+                    name
+                    amount
+                    subtitle
+                    profit
+                } else {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        name
+                        Spacer(minLength: 4)
+                        amount
+                    }
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        subtitle
+                        Spacer(minLength: 2)
+                        profit
+                    }
+                }
+            }
+        }
+        .frame(minHeight: 64)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(L10n.text("查看合并金额与盈亏来源"))
+    }
+
+    private var name: some View {
+        Text(row.ticker == "ETF 其他" ? L10n.text("ETF 其他") : CompanyNameCatalog.displayName(ticker: row.ticker, fallback: row.name))
+            .appText(.body, weight: .medium).foregroundStyle(.primary)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+    }
+
+    private var amount: some View {
+        Text(DisplayFormat.money(row.totalUSD, fractionDigits: 2))
+            .appNumber(.body).foregroundStyle(.primary)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var subtitle: some View {
+        Text("\(row.ticker == "ETF 其他" ? L10n.text("ETF 其他") : row.ticker) · \(portfolioWeightText)")
+            .appText(.caption, weight: .medium).foregroundStyle(.secondary).lineLimit(1)
+            .accessibilityLabel(L10n.text("\(row.ticker == "ETF 其他" ? L10n.text("ETF 其他") : row.ticker)，")
+                + L10n.text("\(portfolioWeightText) · 组合占比"))
+    }
+
+    @ViewBuilder private var profit: some View {
+        if let performance {
+            Text("≈\(DisplayFormat.money(performance.amount, signed: true, fractionDigits: 2)) · \(DisplayFormat.percent(performance.percent))")
+                .appNumber(.caption, weight: .medium)
+                .foregroundStyle(performance.amount >= 0 ? CatfolioTheme.gain(for: colorScheme) : CatfolioTheme.loss(for: colorScheme))
+                .fixedSize(horizontal: true, vertical: false)
+        } else {
+            Text(L10n.text("暂无数据")).appText(.caption).foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct ETFMergedHoldingDetail: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    let row: ETFLookThroughRow
+    let holdings: [String: Holding]
+    let dailyChanges: [String: Double]
+    let holdingsAsOf: String?
+    let source: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section(L10n.text("合并金额")) {
+                    amountRow("市值", row.totalUSD)
+                    amountRow("分摊成本", row.allocatedCostUSD)
+                }
+                Section(L10n.text("金额来源")) {
+                    if row.directUSD != 0 { amountRow("直接持仓", row.directUSD) }
+                    ForEach((row.fundMarketValues ?? [:]).keys.sorted(), id: \.self) { fund in
+                        amountRow(fund, row.fundMarketValues?[fund])
+                    }
+                }
+                Section(L10n.text("分摊盈亏")) {
+                    performanceRow(.holdingPeriod)
+                    performanceRow(.today)
+                }
+                Section {
+                    Text(L10n.text("按基金当前成分权重分摊市值、成本和基金盈亏，再与直接持仓合并。约号表示分摊估算，不代表成分股自身的历史收益。缺少成本或行情时不计算该项盈亏。"))
+                    Text(L10n.text("这只是持仓展示模式，不会修改券商持仓、交易记录或账户总额。"))
+                    if let holdingsAsOf, !holdingsAsOf.isEmpty { Text(holdingsAsOf) }
+                    if let source, !source.isEmpty { Text(L10n.message(source)) }
+                }
+                .appText(.caption).foregroundStyle(.secondary)
+            }
+            .navigationTitle(row.ticker == "ETF 其他" ? L10n.text("ETF 其他") : row.ticker)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { AppModalDoneButton { dismiss() } }
+            }
+        }
+    }
+
+    private func amountRow(_ title: String, _ value: Double?) -> some View {
+        LabeledContent(L10n.label(title)) {
+            Text(value.map { DisplayFormat.money($0, fractionDigits: 2) } ?? "—").appNumber(.body)
+        }
+    }
+
+    private func performanceRow(_ period: HoldingPerformancePeriod) -> some View {
+        let result = row.mergedPerformance(for: period, holdings: holdings, dailyChanges: dailyChanges)
+        return LabeledContent(period.title) {
+            if let result {
+                Text("≈\(DisplayFormat.money(result.amount, signed: true, fractionDigits: 2)) · \(DisplayFormat.percent(result.percent))")
+                    .appNumber(.callout)
+                    .foregroundStyle(result.amount >= 0 ? CatfolioTheme.gain(for: colorScheme) : CatfolioTheme.loss(for: colorScheme))
+            } else {
+                Text(L10n.text("暂无数据")).foregroundStyle(.secondary)
+            }
+        }
     }
 }

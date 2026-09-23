@@ -151,7 +151,7 @@ struct JEVClient {
             request.setValue("Catfolio", forHTTPHeaderField: "X-Title")
         }
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-        let (data, response) = try await Self.session.data(for: request)
+        let (data, response) = try await Self.session.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else { throw JEVError.malformed }
         let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         switch http.statusCode {
@@ -162,10 +162,20 @@ struct JEVClient {
         default:
             throw JEVError.http(http.statusCode, Self.errorMessage(body) ?? String(data: data.prefix(200), encoding: .utf8) ?? "")
         }
-        if body?["success"] as? Bool == false {
+        guard let body else {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
+            throw JEVError.malformed
+        }
+        if body["success"] as? Bool == false {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .providerRejected)
             throw JEVError.http(http.statusCode, Self.errorMessage(body) ?? "")
         }
-        return try Self.answers(from: body)
+        do {
+            return try Self.answers(from: body)
+        } catch {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .missingRequiredFields)
+            throw error
+        }
     }
 
     /// The typed answers out of a reply. Cloudflare's REST envelope puts the
@@ -1650,7 +1660,7 @@ private struct JEVCallCard: View {
                         }
 
                         if let error = call.error {
-                            Text(error).appText(.caption).foregroundStyle(CatfolioTheme.warning)
+                            Text(L10n.message(error)).appText(.caption).foregroundStyle(CatfolioTheme.warning)
                         } else {
                             VStack(spacing: 8) {
                                 ForEach(JEVDimension.allCases) { dimension in
@@ -1704,7 +1714,7 @@ private struct JEVCallCard: View {
                 .disabled(isExplaining)
             }
             if let explanationError {
-                Text(explanationError)
+                Text(L10n.message(explanationError))
                     .appText(.caption)
                     .foregroundStyle(CatfolioTheme.warning)
             }

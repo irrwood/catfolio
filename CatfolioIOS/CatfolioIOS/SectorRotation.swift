@@ -144,9 +144,19 @@ actor SectorRotationStore {
         guard let url = parts.url else { throw URLError(.badURL) }
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 25)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200, data.count < 2_000_000 else { throw URLError(.badServerResponse) }
-        let snapshot = try SectorRotationSnapshot.decode(data)
+        let (data, response) = try await URLSession.shared.recordedData(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw URLError(.badServerResponse) }
+        guard data.count < 2_000_000 else {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
+            throw URLError(.badServerResponse)
+        }
+        let snapshot: SectorRotationSnapshot
+        do {
+            snapshot = try SectorRotationSnapshot.decode(data)
+        } catch {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
+            throw error
+        }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try data.write(to: directory.appendingPathComponent(snapshot.asOf + ".json"), options: [.atomic, .completeFileProtectionUnlessOpen])
         return snapshot

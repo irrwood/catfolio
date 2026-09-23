@@ -54,22 +54,47 @@ def main():
     settings = (ROOT / "SettingsView.swift").read_text()
     assert 'value: L10n.label(model.localSource)' in settings
     assert 'value: L10n.label(account.accountType)' in settings
-    # Literal labels can otherwise bypass the translation catalog entirely.
-    for start, end, key in scan(settings):
-        prefix = settings[max(0, start - 80):start]
-        if re.search(r'(?:Text|TextField|Label|Button|Section|accessibilityLabel|accessibilityHint)\($', prefix):
-            assert not re.search("[一-鿿。；、]", key), f"Unlocalized Settings label: {key}"
     missing = []
     count = 0
     for path in ROOT.glob("*.swift"):
         source = path.read_text()
-        for start, end, key in scan(source):
-            if not source[max(0, start - 10):start].endswith("L10n.text("):
-                continue
-            count += 1
-            key = json.loads('"' + key + '"')
-            if key not in catalogs["en"]:
-                missing.append(f"{path.name}: {key}")
+        literals = list(scan(source))
+        # Mask strings before scanning call parentheses: interpolation and
+        # punctuation inside a message must not terminate the outer call.
+        masked = list(source)
+        for start, end, _ in literals:
+            masked[start:end] = " " * (end - start)
+        masked = "".join(masked)
+        masked = re.sub(r'"""[\s\S]*?"""|//[^\n]*|/\*[\s\S]*?\*/',
+                        lambda match: " " * len(match[0]), masked)
+        localized_ranges = []
+        for call in re.finditer(r'L10n\.(?:text|label)\s*\(', masked):
+            depth, end = 1, call.end()
+            while end < len(masked) and depth:
+                depth += (masked[end] == "(") - (masked[end] == ")")
+                end += 1
+            localized_ranges.append((call.end(), end))
+        for start, end, key in literals:
+            if any(first <= start < last for first, last in localized_ranges):
+                if re.search(r'(?:\[|==|!=)\s*$', source[max(0, start - 50):start]):
+                    continue  # Data keys/conditions inside a localized ternary.
+                count += 1
+                key = json.loads('"' + key + '"')
+                if key not in catalogs["en"]:
+                    missing.append(f"{path.name}: {key}")
+            else:
+                # Apply the former Settings-only guard across every screen,
+                # including multiline labels and accessibility descriptions.
+                prefix = source[max(0, start - 100):start]
+                if re.search(r'(?:Text|TextField|Label|Button|Section|Toggle|Picker|navigationTitle|accessibilityLabel|accessibilityHint|accessibilityValue)\(\s*$', prefix):
+                    assert not re.search("[一-鿿。；、，：！？（）]", key), f"Unlocalized UI label in {path.name}: {key}"
+                # These engines retain canonical diagnostic text in caches or
+                # use its prefixes for routing. Their display layer translates
+                # it, so the catalog must cover those strings as well.
+                if path.name in {"LocalReturnsAnalytics.swift", "LocalMarketDataClient.swift", "DailyTimeWeightedReturn.swift"} and re.search("[一-鿿]", key):
+                    decoded = json.loads('"' + key + '"')
+                    if decoded not in catalogs["en"]:
+                        missing.append(f"{path.name} cached diagnostic: {decoded}")
     assert not missing, "Missing translations:\n" + "\n".join(missing)
     # These values route screens, select financial series, or identify synthetic data.
     # Their display labels can be translated; changing their stored values breaks behavior.
@@ -77,7 +102,8 @@ def main():
     returns = (ROOT / "ReturnsView.swift").read_text()
     assert 'tableMode = L10n.' not in portfolio
     assert 'case L10n.' not in portfolio
-    assert '$0.ticker != "ETF 其他"' in portfolio
+    details = (ROOT / "PortfolioDetailsCard.swift").read_text()
+    assert '$0.ticker != "ETF 其他"' in details
     assert 'static let portfolio = "组合"' in returns
     print(f"OK: {len(catalogs['en'])} bilingual keys, {count} localized call sites; stable routing and series identifiers.")
 

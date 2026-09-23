@@ -14,6 +14,8 @@ struct PortfolioView: View {
     @State private var showsTodayDetail = false
     @State private var homeScrollState = PortfolioHomeScrollState()
     @State private var homeScrollController = PortfolioHomeScrollController()
+    @State private var refreshNotice: PortfolioRefreshResult?
+    @State private var refreshNoticeToken = UUID()
     // One namespace per origin. A security shown both in the Today bars and
     // in the holdings list would otherwise publish two sources under the same
     // id, and the transition has no way to know which one it grew from.
@@ -119,9 +121,9 @@ struct PortfolioView: View {
                                 ContentUnavailableView {
                                     Label(L10n.text("暂时无法加载"), systemImage: "wifi.exclamationmark")
                                 } description: {
-                                    Text(error)
+                                    Text(L10n.message(error))
                                 } actions: {
-                                    Button(L10n.text("重试")) { Task { await model.refreshPortfolio() } }
+                                    Button(L10n.text("重试")) { Task { await refreshFromUser() } }
                                 }
                                 .frame(minHeight: 420)
                             } else {
@@ -141,7 +143,7 @@ struct PortfolioView: View {
                                 onOffset: { offset, pull in
                                     homeScrollState.update(offset: offset, pull: pull)
                                 },
-                                refresh: { await model.refreshPortfolio() }
+                                refresh: { await refreshFromUser() }
                             )
                         }
                     }
@@ -187,11 +189,20 @@ struct PortfolioView: View {
                                 }) else { break }
                                 openHolding(holding, from: todayBarZoom)
                                 try? await Task.sleep(for: .seconds(2.5))
-                                SecurityDetailSnapshotTransition.shared.close { selectedHolding = nil }
+                                selectedHolding = nil
                                 try? await Task.sleep(for: .seconds(2.5))
                             }
                         }
                         #endif
+                    }
+                }
+                .overlay(alignment: .top) {
+                    if let refreshNotice {
+                        PortfolioRefreshNotice(result: refreshNotice)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 8)
+                            .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                            .zIndex(10)
                     }
                 }
                 .modifier(PortfolioFloatingFilterOverlay())
@@ -229,6 +240,25 @@ struct PortfolioView: View {
         }
     }
 
+    @MainActor private func refreshFromUser() async {
+        let token = UUID()
+        refreshNoticeToken = token
+        refreshNotice = nil
+        guard let result = await model.refreshPortfolioReportingResult(), !Task.isCancelled else { return }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+            refreshNotice = result
+        }
+        if UIAccessibility.isVoiceOverRunning {
+            UIAccessibility.post(notification: .announcement, argument: result.noticeText)
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(6))
+            guard refreshNoticeToken == token else { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+                refreshNotice = nil
+            }
+        }
+    }
 }
 
 
@@ -246,5 +276,60 @@ extension View {
             self
         }
     }
+
 }
 
+extension PortfolioRefreshResult {
+    var noticeText: String {
+        switch self {
+        case .quotesUpdated: L10n.text("已获取新报价，持仓数据已更新")
+        case .portfolioLoaded: L10n.text("持仓数据已载入")
+        case .portfolioLoadedWithoutNewQuotes: L10n.text("持仓已载入；暂无新报价")
+        case .unchangedQuotes: L10n.text("未获取新报价，继续显示已有数据")
+        case .unchangedContent: L10n.text("已检查，暂无新内容")
+        case .noHeldQuotes: L10n.text("当前没有持仓报价可刷新")
+        case .failed(let retainsData): retainsData
+            ? L10n.text("刷新失败，继续显示已有数据")
+            : L10n.text("刷新失败，请稍后重试")
+        }
+    }
+
+    var noticeSymbol: String {
+        switch self {
+        case .quotesUpdated, .portfolioLoaded: "checkmark.circle.fill"
+        case .portfolioLoadedWithoutNewQuotes, .unchangedQuotes, .unchangedContent, .noHeldQuotes: "info.circle.fill"
+        case .failed: "exclamationmark.circle.fill"
+        }
+    }
+
+    var noticeTint: Color {
+        switch self {
+        case .quotesUpdated, .portfolioLoaded: CatfolioTheme.positive
+        case .portfolioLoadedWithoutNewQuotes, .unchangedQuotes, .unchangedContent, .noHeldQuotes: CatfolioTheme.warning
+        case .failed: CatfolioTheme.danger
+        }
+    }
+}
+
+struct PortfolioRefreshNotice: View {
+    let result: PortfolioRefreshResult
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: result.noticeSymbol)
+                .foregroundStyle(result.noticeTint)
+                .padding(.top, 3)
+            Text(result.noticeText)
+                .appText(.footnote, weight: .semibold)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("portfolio-refresh-result")
+        .allowsHitTesting(false)
+    }
+}

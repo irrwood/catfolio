@@ -120,6 +120,81 @@ enum L10n {
         render(message, language: ContentLanguage.current)
     }
 
+    /// Render an app-authored status/error retained in a data cache. Match only
+    /// complete catalog messages; never use this for names, news or AI answers.
+    /// Captured values remain verbatim, just like `text` interpolation.
+    static func message(_ value: String, language: String = ContentLanguage.current) -> String {
+        let target = storedMessages.catalogs[language] ?? storedMessages.catalogs["en"] ?? [:]
+        if let exact = target[value] { return exact }
+        if let key = storedMessages.exactKeys[value], let exact = target[key] { return exact }
+        for rule in storedMessages.rules where value.contains(rule.anchor) {
+            let range = NSRange(value.startIndex..., in: value)
+            guard let match = rule.expression.firstMatch(in: value, range: range),
+                  let template = target[rule.key] else { continue }
+            let parts = template.components(separatedBy: "%@")
+            guard parts.count == match.numberOfRanges else { continue }
+            var result = parts[0]
+            for index in 1..<match.numberOfRanges {
+                guard let capture = Range(match.range(at: index), in: value) else { return value }
+                result += String(value[capture]) + parts[index]
+            }
+            return result
+        }
+        // These prefixes are also stable routing markers in cached return
+        // warnings. Translate their presentation without rewriting that data.
+        for key in ["每日 TWR ", "现金流镜像：", "MWR：", "TWR：", "账户历史："] {
+            for prefix in Set([key, storedMessages.catalogs["en"]?[key] ?? key])
+                where value.hasPrefix(prefix) && value.count > prefix.count {
+                return (target[key] ?? prefix) + message(String(value.dropFirst(prefix.count)), language: language)
+            }
+        }
+        if value.contains("\n") {
+            return value.components(separatedBy: "\n").map { message($0, language: language) }.joined(separator: "\n")
+        }
+        return value
+    }
+
+    private struct StoredMessageCatalog {
+        struct Rule {
+            let key: String
+            let anchor: String
+            let expression: NSRegularExpression
+        }
+        var catalogs: [String: [String: String]] = [:]
+        var exactKeys: [String: String] = [:]
+        var rules: [Rule] = []
+
+        init() {
+            for language in ["en", "zh-Hans"] {
+                guard let path = Bundle.main.path(forResource: "Localizable", ofType: "strings", inDirectory: nil, forLocalization: language),
+                      let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+                      let catalog = (try? PropertyListSerialization.propertyList(from: data, format: nil)) as? [String: String] else { continue }
+                catalogs[language] = catalog
+            }
+            var candidates: [String: Set<String>] = [:]
+            for key in (catalogs["en"] ?? [:]).keys.sorted() {
+                for template in Set([key, catalogs["en"]?[key] ?? key, catalogs["zh-Hans"]?[key] ?? key]) {
+                    let parts = template.components(separatedBy: "%@")
+                    if parts.count == 1 {
+                        candidates[template, default: []].insert(key)
+                    } else if let anchor = parts.max(by: { $0.count < $1.count }), anchor.count >= 2,
+                              parts.joined().count >= 6 || ["今日 %@", "成交量 %@×", "%@ 日均线"].contains(key) {
+                        // A substantial literal anchor avoids treating generic
+                        // formats such as "%@ %@" as arbitrary text templates.
+                        let pattern = "\\A" + parts.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "(.*?)") + "\\z"
+                        if let expression = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) {
+                            rules.append(Rule(key: key, anchor: anchor, expression: expression))
+                        }
+                    }
+                }
+            }
+            for (text, keys) in candidates where keys.count == 1 { exactKeys[text] = keys.first }
+            rules.sort { $0.anchor.count == $1.anchor.count ? $0.key < $1.key : $0.anchor.count > $1.anchor.count }
+        }
+    }
+
+    private static let storedMessages = StoredMessageCatalog()
+
     static func render(_ message: Message, language: String, bundle: Bundle = .main) -> String {
         let resource = bundle.path(forResource: language, ofType: "lproj")
             .flatMap(Bundle.init(path:)) ?? bundle

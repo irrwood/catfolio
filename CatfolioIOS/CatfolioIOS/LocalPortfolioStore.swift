@@ -2376,7 +2376,7 @@ enum LocalCSVImporter {
                 let isTrade = action == "BUY" || action == "SELL"
                 let rawTicker = field("ticker")
                 let ticker = rawTicker.isEmpty && !isTrade ? "CASH" : Trading212Position.catfolioTicker(rawTicker)
-                guard !ticker.isEmpty else { throw LocalPortfolioError.invalidCSV("交易缺少股票代码") }
+                guard !ticker.isEmpty else { throw LocalPortfolioError.invalidCSV(L10n.text("交易缺少股票代码")) }
                 let quantity = isTrade ? abs(try number(field("quantity"))) : 1
                 let price = isTrade ? try number(field("price")) : (numericValue(field("total")) ?? numericValue(field("netCash")) ?? numericValue(field("price")) ?? 0)
                 var postings: [DailyTimeWeightedReturn.Cash]? = nil

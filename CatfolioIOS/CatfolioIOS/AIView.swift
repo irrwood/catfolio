@@ -989,30 +989,25 @@ private enum FakeAIContent {
     static func answer(to question: String) -> String {
         let normalized = question.lowercased()
         if normalized.contains("集中") || normalized.contains("风险") || normalized.contains("concentration") || normalized.contains("risk") {
-            return """
-            ## 演示组合风险摘要
-
-            - **指数重叠：** VOO、VUAG 与 EQQQ 的大型科技敞口存在部分重叠。
-            - **科技周期：** ORCL、AMD 与 ASML 合计形成较明显的成长风格暴露。
-            - **汇率波动：** 演示账户同时包含 USD、GBP、EUR、HKD、JPY 与 SGD 资产。
-
-            > 以上内容完全由独立假数据生成，不包含你的真实持仓。
-            """
+            return [
+                L10n.text("## 演示组合风险摘要"),
+                L10n.text("- **指数重叠：** VOO、VUAG 与 EQQQ 的大型科技敞口存在部分重叠。"),
+                L10n.text("- **科技周期：** ORCL、AMD 与 ASML 合计形成较明显的成长风格暴露。"),
+                L10n.text("- **汇率波动：** 演示账户同时包含 USD、GBP、EUR、HKD、JPY 与 SGD 资产。"),
+                L10n.text("> 以上内容完全由独立假数据生成，不包含你的真实持仓。")
+            ].joined(separator: "\n\n")
         }
         if normalized.contains("表现") || normalized.contains("收益") || normalized.contains("performance") || normalized.contains("return") {
-            return """
-            ## 近期表现（演示）
-
-            ORCL 与 COST 是近期主要的模拟收益来源；UBER 和 ASML 的回撤形成部分抵消。组合仍保持正收益，但短期波动有所抬升。
-
-            > 这是演示结论，不代表实时市场数据。
-            """
+            return [
+                L10n.text("## 近期表现（演示）"),
+                L10n.text("ORCL 与 COST 是近期主要的模拟收益来源；UBER 和 ASML 的回撤形成部分抵消。组合仍保持正收益，但短期波动有所抬升。"),
+                L10n.text("> 这是演示结论，不代表实时市场数据。")
+            ].joined(separator: "\n\n")
         }
-        return """
-        ## 假数据模式
-
-        当前回答基于 Trading 212、Moomoo 与 IBKR 三个独立演示账户。可以继续询问组合风险、集中度或近期表现；所有数字和结论均为合成内容。
-        """
+        return [
+                L10n.text("## 假数据模式"),
+                L10n.text("当前回答基于 Trading 212、Moomoo 与 IBKR 三个独立演示账户。可以继续询问组合风险、集中度或近期表现；所有数字和结论均为合成内容。")
+            ].joined(separator: "\n\n")
     }
 }
 
@@ -1104,7 +1099,7 @@ private struct PortfolioAttentionReportView: View {
             .attentionGlassCard()
 
             ForEach(report.warnings, id: \.self) { warning in
-                Label(warning, systemImage: "exclamationmark.circle")
+                Label(L10n.message(warning), systemImage: "exclamationmark.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 4)
@@ -1318,7 +1313,7 @@ private struct PortfolioAttentionDetail: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(row.stanceText) · \(row.confidenceText)")
                 if !row.signals.isEmpty {
-                    Text(row.signals.map(\.label).joined(separator: " · "))
+                    Text(row.signals.map { L10n.message($0.label) }.joined(separator: " · "))
                 }
             }
             .appText(.footnote)
@@ -1367,7 +1362,7 @@ private struct PortfolioAttentionDetail: View {
                         .id("follow-up-pending")
                     }
                     if let followUpError {
-                        Text(followUpError)
+                        Text(L10n.message(followUpError))
                             .appText(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -1501,7 +1496,7 @@ private struct PortfolioAttentionDetail: View {
                     .foregroundStyle(.secondary)
             }
             if let rejudgeError {
-                Text(rejudgeError).appText(.caption).foregroundStyle(.secondary)
+                Text(L10n.message(rejudgeError)).appText(.caption).foregroundStyle(.secondary)
             }
             Text(L10n.text("轻点证据可以去掉或恢复，再按保留的证据重新判断。调整过的判断置信度最高为中。"))
                 .appText(.micro)
@@ -1750,7 +1745,7 @@ private struct PortfolioAttentionCardContent: View {
             ScrollView(.horizontal) {
                 HStack(spacing: 6) {
                     ForEach(row.signals) { signal in
-                        Text(signal.label)
+                        Text(L10n.message(signal.label))
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 7)

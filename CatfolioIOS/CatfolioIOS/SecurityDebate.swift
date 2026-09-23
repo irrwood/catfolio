@@ -72,8 +72,15 @@ struct SecurityDebateResearch {
     /// Minimal RSS reader. `XMLParser` rather than a regex because Google's
     /// titles carry entities and the odd stray angle bracket.
     static func parseRSS(_ data: Data, ticker: String, limit: Int) -> [PortfolioAttentionSource] {
+        parseRSSChecked(data, ticker: ticker, limit: limit) ?? []
+    }
+
+    /// Nil means the reply was not readable RSS; an empty array is a valid
+    /// feed with no matching items.
+    static func parseRSSChecked(_ data: Data, ticker: String, limit: Int) -> [PortfolioAttentionSource]? {
         final class Reader: NSObject, XMLParserDelegate {
             var items: [(title: String, link: String, source: String, date: String)] = []
+            var sawRSS = false
             private var element = ""
             private var title = "", link = "", source = "", date = ""
             private var inItem = false
@@ -81,6 +88,7 @@ struct SecurityDebateResearch {
             func parser(_ parser: XMLParser, didStartElement name: String,
                         namespaceURI: String?, qualifiedName: String?,
                         attributes: [String: String]) {
+                if name == "rss" { sawRSS = true }
                 element = name
                 if name == "item" { inItem = true; title = ""; link = ""; source = ""; date = "" }
             }
@@ -107,7 +115,7 @@ struct SecurityDebateResearch {
         let reader = Reader()
         let parser = XMLParser(data: data)
         parser.delegate = reader
-        guard parser.parse() else { return [] }
+        guard parser.parse(), reader.sawRSS else { return nil }
 
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -140,7 +148,12 @@ struct SecurityDebateResearch {
         // general news feed. Search the symbol alone and verify every result.
         let url = Self.yahooNewsURL(ticker: ticker)
         guard let data = await Self.get(url, language: language) else { return [] }
-        return Self.parseYahooNews(data, ticker: ticker, name: name)
+        do {
+            return try Self.decodedYahooNews(data, ticker: ticker, name: name)
+        } catch {
+            DataSourceHealth.reportUnusable(DataSource.of(url), issue: .invalidFormat)
+            return []
+        }
     }
 
     static func yahooNewsURL(ticker: String) -> URL {
@@ -159,6 +172,10 @@ struct SecurityDebateResearch {
     }
 
     static func parseYahooNews(_ data: Data, ticker: String, name: String) -> [PortfolioAttentionSource] {
+        (try? decodedYahooNews(data, ticker: ticker, name: name)) ?? []
+    }
+
+    private static func decodedYahooNews(_ data: Data, ticker: String, name: String) throws -> [PortfolioAttentionSource] {
         struct Payload: Decodable {
             struct News: Decodable {
                 let title: String
@@ -169,7 +186,7 @@ struct SecurityDebateResearch {
             }
             let news: [News]?
         }
-        guard let payload = try? JSONDecoder().decode(Payload.self, from: data) else { return [] }
+        let payload = try JSONDecoder().decode(Payload.self, from: data)
         return (payload.news ?? []).enumerated().compactMap { index, item in
             let related = item.relatedTickers.map { symbols in
                 symbols.contains { normalizedSymbol($0) == normalizedSymbol(ticker) }
@@ -226,8 +243,14 @@ struct SecurityDebateResearch {
             URLQueryItem(name: "startdt", value: day.string(from: now.addingTimeInterval(-120 * 86_400))),
             URLQueryItem(name: "enddt", value: day.string(from: now)),
         ]
-        guard let url = components.url, let data = await Self.get(url, language: language),
-              let payload = try? JSONDecoder().decode(Payload.self, from: data) else { return [] }
+        guard let url = components.url, let data = await Self.get(url, language: language) else { return [] }
+        let payload: Payload
+        do {
+            payload = try JSONDecoder().decode(Payload.self, from: data)
+        } catch {
+            DataSourceHealth.reportUnusable(DataSource.of(url), issue: .invalidFormat)
+            return []
+        }
 
         return payload.hits.hits.filter { hit in
             (hit._source.display_names ?? []).contains { $0.localizedCaseInsensitiveContains("(\(ticker))") }
@@ -313,7 +336,7 @@ struct SecurityDebateResearch {
         var request = URLRequest(url: url)
         request.setValue(language.hasPrefix("zh") ? "zh-CN,zh;q=0.9" : "en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        guard let (data, response) = try? await session.data(for: request),
+        guard let (data, response) = try? await session.recordedData(for: request),
               let http = response as? HTTPURLResponse,
               (200..<300).contains(http.statusCode) else { return nil }
         return (data, http.url ?? url)

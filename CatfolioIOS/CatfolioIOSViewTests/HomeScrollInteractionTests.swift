@@ -3,16 +3,16 @@ import XCTest
 @testable import CatfolioIOS
 
 final class HomeScrollInteractionTests: XCTestCase {
-    func testNightGlassOutlastsWidthExpansionAndReversesOnReturn() {
+    func testNightGradientOutlastsWidthExpansionAndReversesOnReturn() {
         let progress = { (offset: CGFloat) in
             PortfolioContentSheetLayout.settlingProgress(offset: offset, colorScheme: .dark)
         }
         XCTAssertEqual(progress(-40), 0)
-        XCTAssertEqual(progress(263), 0, "Full width must still retain clear night glass")
-        XCTAssertLessThan(pow(progress(343), 3), 0.02, "First scroll detent must retain refraction")
+        XCTAssertEqual(progress(263), 0, "Full width must still retain the night gradient")
+        XCTAssertLessThan(pow(progress(343), 3), 0.02, "First scroll detent must retain the gradient")
         XCTAssertEqual(progress(589), 1)
         XCTAssertEqual(progress(900), 1)
-        XCTAssertEqual(progress(263), 0, "Returning restores glass without a timer")
+        XCTAssertEqual(progress(263), 0, "Returning restores the gradient without a timer")
         XCTAssertEqual(PortfolioContentSheetLayout.settlingProgress(offset: 263, colorScheme: .light), 1)
     }
 

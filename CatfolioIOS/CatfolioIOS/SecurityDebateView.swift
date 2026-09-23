@@ -178,7 +178,7 @@ struct SecurityPriceMoveSheet: View {
             }
         case .failed(let message), .empty(let message):
             VStack(alignment: .leading, spacing: 12) {
-                Text(message).appText(.footnote).foregroundStyle(.secondary)
+                Text(L10n.message(message)).appText(.footnote).foregroundStyle(.secondary)
                 if result != nil {
                     Text(L10n.text("已有分析仍保留在下方。"))
                         .appText(.caption).foregroundStyle(.secondary)
@@ -940,7 +940,7 @@ struct SecurityDailyMovePaper: View {
                     .lineSpacing(4).lineLimit(14).minimumScaleFactor(0.65)
                     .accessibilityIdentifier("daily-move-text")
             case .failed(let message):
-                Text(message)
+                Text(L10n.message(message))
                 Button(L10n.text("重试")) { topic.start(force: true) }.buttonStyle(.bordered)
             case .loading, nil:
                 SecurityPaperThinking(ready: entranceProgress >= 1, closing: closing)

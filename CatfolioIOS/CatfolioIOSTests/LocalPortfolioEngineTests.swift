@@ -6,6 +6,23 @@ import XCTest
 /// pence/pound relationship that an earlier build got wrong for Trading 212
 /// positions (see `migrateKnownInstrumentCurrencies`).
 final class LocalPortfolioEngineTests: XCTestCase {
+    private var previousLanguagePreference: Any?
+
+    override func setUp() {
+        super.setUp()
+        previousLanguagePreference = UserDefaults.standard.object(forKey: AppLanguage.preferenceKey)
+        UserDefaults.standard.set(AppLanguage.simplifiedChinese.rawValue, forKey: AppLanguage.preferenceKey)
+    }
+
+    override func tearDown() {
+        if let previousLanguagePreference {
+            UserDefaults.standard.set(previousLanguagePreference, forKey: AppLanguage.preferenceKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: AppLanguage.preferenceKey)
+        }
+        super.tearDown()
+    }
+
     func testHomeChartUsesAccountCashAndNetDeposits() throws {
         let ledger = AccountMWRLedger(dates: ["2026-01-01", "2026-01-02", "2026-01-03"],
             cashFlows: [0, 1000, -500], values: [0, 1000, 600], benchmarkValues: [:])
@@ -279,5 +296,155 @@ final class LocalPortfolioEngineTests: XCTestCase {
         XCTAssertEqual(remaining.amount, 10, accuracy: 1e-9)
         XCTAssertEqual(remaining.currency, "USD")
         XCTAssertEqual(DividendForecast.remaining(shares: 0, payments: payments, today: today).amount, 0)
+    }
+}
+
+/// Home refresh must value the same observed prices without replacing an
+/// account (cash + shares) with a holdings-only total.
+@MainActor
+final class HomeLiveValuationTests: XCTestCase {
+    private func position(_ price: Double, at date: Date?, currency: String = "USD") -> LocalPositionRecord {
+        LocalPositionRecord(ticker: "HOME_REFRESH_TEST", name: "Home refresh fixture", shares: 10,
+            averageCost: 100, currency: currency, quotePrice: price, quoteCurrency: currency,
+            source: "CSV", openedDate: nil, accountID: "A", accountName: "A", quoteObservedAt: date)
+    }
+
+    func testObservedQuoteReplacesSameSessionCloseWithoutChangingBaseline() {
+        let now = ISO8601DateFormatter().date(from: "2026-09-21T15:00:00Z")!
+        let result = LocalMarketDataClient.homeCloses(["2026-09-18": 100, "2026-09-21": 120],
+            symbol: "HOME_REFRESH_TEST", currency: "USD", positions: [position(130, at: now)],
+            through: "2026-09-21", now: now)
+        XCTAssertEqual(result, ["2026-09-18": 100, "2026-09-21": 130])
+    }
+
+    func testDailyFallbackTimestampStaysOnItsExchangeSession() throws {
+        let observed = try XCTUnwrap(LocalMarketDataClient.marketDayStart("2026-09-21", symbol: "HOME_REFRESH_TEST"))
+        let result = LocalMarketDataClient.homeCloses(["2026-09-18": 100], symbol: "HOME_REFRESH_TEST",
+            currency: "USD", positions: [position(130, at: observed)], through: "2026-09-21", now: observed)
+        XCTAssertEqual(result["2026-09-21"], 130)
+        XCTAssertNil(result["2026-09-20"])
+    }
+
+    func testWeekendUsesQuoteSessionAndRejectsUnknownExpiredOrFutureObservations() {
+        let now = ISO8601DateFormatter().date(from: "2026-09-20T15:00:00Z")!
+        let friday = now.addingTimeInterval(-2 * 86_400)
+        let result = LocalMarketDataClient.homeCloses(["2026-09-17": 100], symbol: "HOME_REFRESH_TEST",
+            currency: "USD", positions: [position(130, at: friday)], through: "2026-09-20", now: now)
+        XCTAssertEqual(result, ["2026-09-17": 100, "2026-09-18": 130])
+        for observed in [nil, now.addingTimeInterval(-8 * 86_400), now.addingTimeInterval(120)] {
+            XCTAssertEqual(LocalMarketDataClient.homeCloses(["2026-09-17": 100], symbol: "HOME_REFRESH_TEST",
+                currency: "USD", positions: [position(130, at: observed)], through: "2026-09-20", now: now),
+                ["2026-09-17": 100])
+        }
+    }
+
+    func testLedgerLiveQuotesConvertPenceAndDoNotMixCurrencies() {
+        let now = ISO8601DateFormatter().date(from: "2026-09-21T15:00:00Z")!
+        let gbp = position(2, at: now, currency: "GBP")
+        let symbol = LocalMarketDataClient.yahooSymbol(ticker: gbp.ticker, currency: gbp.quoteCurrency)
+        XCTAssertEqual(LocalMarketDataClient.homeCloses(["2026-09-18": 150], symbol: symbol,
+            currency: "GBX", positions: [gbp], through: "2026-09-21", now: now)["2026-09-21"], 200)
+        XCTAssertNil(LocalMarketDataClient.homeCloses(["2026-09-18": 150], symbol: symbol,
+            currency: "USD", positions: [gbp], through: "2026-09-21", now: now)["2026-09-21"])
+    }
+
+    func testOneDayUsesActualPreviousSessionAcrossCarriedWeekend() throws {
+        let days = ["2026-09-16", "2026-09-17", "2026-09-18", "2026-09-19", "2026-09-20"]
+        let values = [900.0, 1000, 1100, 1100, 1100]
+        var response = PortfolioChartResponse.accountHistory(ledger: .init(dates: days,
+            cashFlows: [900, 0, 0, 0, 0], values: values.map(Optional.some), benchmarkValues: [:]),
+            nav: [1, 1.1, 1.21, 1.21, 1.21], positionCount: 1)
+        response.marketDates = Array(days.prefix(3))
+        let oneDay = CostMarketPreparedData(source: .init(response: response)).data(for: .oneDay)
+        XCTAssertEqual(oneDay.rows.first?.dateText, "2026-09-17")
+        let result = response.accountPerformance(from: try XCTUnwrap(oneDay.rows.first).dateText,
+                                               to: try XCTUnwrap(oneDay.rows.last).dateText)
+        XCTAssertEqual(result.amount, 100)
+        XCTAssertEqual(result.percentage, 10, accuracy: 1e-8)
+    }
+
+    func testCurrentEndpointReplacesCachedDayAndExtendsHistory() {
+        for day in ["2026-09-18", "2026-09-21"] {
+            let response = PortfolioChartResponse(positionCount: 1,
+                positionHistory: .init(available: true, rows: [
+                    .init(dateText: "2026-09-17", marketValue: 1000, cost: 900),
+                    .init(dateText: "2026-09-18", marketValue: 1100, cost: 900)]),
+                currentPoint: .init(dateText: day, marketValue: 1300, cost: 900), warning: nil)
+            let source = CostMarketPreparedSource(response: response)
+            XCTAssertEqual(source.points.last?.marketValue, 1300)
+            XCTAssertEqual(source.points.filter { $0.dateText == day }.count, 1)
+        }
+    }
+
+    func testYTDIncludesPreviousYearEnd() {
+        let rows = [ChartPoint(dateText: "2025-12-31", marketValue: 1000, cost: 900),
+                    ChartPoint(dateText: "2026-01-01", marketValue: 1100, cost: 900),
+                    ChartPoint(dateText: "2026-09-21", marketValue: 1300, cost: 900)]
+        let response = PortfolioChartResponse(positionCount: 1, positionHistory: .init(available: true, rows: rows),
+                                              currentPoint: rows.last!, warning: nil)
+        let result = CostMarketPreparedData(source: .init(response: response)).data(for: .yearToDate)
+        XCTAssertEqual(result.rows.first?.dateText, "2025-12-31")
+    }
+
+    private func fixture() throws -> (LocalPortfolioDocument, URL) {
+        let now = Date()
+        let end = DayDateCodec.string(from: now)
+        let start = DayDateCodec.string(from: now.addingTimeInterval(-4 * 86_400))
+        let quoteDay = try XCTUnwrap(LocalMarketDataClient.homeCloses([:], symbol: "HOME_REFRESH_TEST",
+            currency: "USD", positions: [position(130, at: now)], through: end).keys.first)
+        let previous = DayDateCodec.string(from: DayDateCodec.date(from: quoteDay)!.addingTimeInterval(-86_400))
+        let key = Data("ledger-v1|HOME_REFRESH_TEST|\(start)|\(end)".utf8).base64EncodedString()
+            .replacingOccurrences(of: "/", with: "_")
+        let url = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(key + ".json")
+        let cache: [String: Any] = ["currency": "USD", "closes": [start: 100, previous: 100, quoteDay: 120],
+                                   "splits": [], "fetchedAt": now.timeIntervalSinceReferenceDate]
+        try JSONSerialization.data(withJSONObject: cache).write(to: url)
+        var document = LocalPortfolioDocument.empty
+        document.positions = [position(130, at: now)]
+        document.transactions = [
+            .init(date: start, action: "DEPOSIT", ticker: "CASH", quantity: 1, price: 2000, currency: "USD",
+                  source: "CSV", accountID: "A", accountName: "A", cashPostings: [.init(currency: "USD", amount: 2000)]),
+            .init(date: start, action: "BUY", ticker: "HOME_REFRESH_TEST", quantity: 10, price: 100, currency: "USD",
+                  source: "CSV", accountID: "A", accountName: "A", cashPostings: [.init(currency: "USD", amount: -1000)]),
+            .init(date: end, action: "DEPOSIT", ticker: "CASH", quantity: 1, price: 100, currency: "USD",
+                  source: "CSV", accountID: "A", accountName: "A", cashPostings: [.init(currency: "USD", amount: 100)])]
+        return (document, url)
+    }
+
+    func testLiveRebuildPreservesCashAndExcludesDepositFromProfit() async throws {
+        let (document, url) = try fixture()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let chart = try await LocalMarketDataClient().portfolioChart(document: document, cachedOnly: true)
+        XCTAssertEqual(chart.currentPoint.marketValue, 2400, accuracy: 1e-8, "1300 shares + 1100 cash")
+        XCTAssertEqual(chart.currentPoint.cost, 2100)
+        let rows = CostMarketPreparedData(source: .init(response: chart)).data(for: .oneDay).rows
+        let day = chart.accountPerformance(from: try XCTUnwrap(rows.first).dateText, to: chart.currentPoint.dateText)
+        XCTAssertEqual(day.amount, 300, accuracy: 1e-8, "The 100 deposit is not profit")
+    }
+
+    func testDetailQuoteRebuildsHomeAndPublishesNewRevision() async throws {
+        let (input, url) = try fixture()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let suite = "HomeLiveValuation.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = AppModel(defaults: defaults, personalDocumentLoader: { input },
+            presentationCache: PortfolioPresentationCache(directory: FileManager.default.temporaryDirectory.appendingPathComponent(suite)))
+        await model.refreshPortfolio(refreshMarketData: false)
+        model.portfolioChart = try await LocalMarketDataClient().portfolioChart(document: input, cachedOnly: true)
+        let revision = model.portfolioChartRevision
+        let now = Date()
+        let history = SecurityPriceHistory(ticker: "HOME_REFRESH_TEST", currency: "USD",
+            points: [.init(dateText: DayDateCodec.string(from: now.addingTimeInterval(-86_400)), close: 100)],
+            intradayPoints: [.init(dateText: "minute", close: 140, timestamp: now)], trades: [])
+        try model.publishSecurityPriceHistory(history, source: .personal, now: now)
+        for _ in 0..<100 where model.portfolioChartRevision == revision {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertGreaterThan(model.portfolioChartRevision, revision)
+        XCTAssertEqual(model.portfolioChart?.currentPoint.marketValue, 2500)
+        XCTAssertEqual(model.overview?.summary.marketValue, 1400)
+        XCTAssertEqual(model.portfolioChart?.currentPoint.cost, 2100)
     }
 }

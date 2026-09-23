@@ -13,6 +13,24 @@ enum AppModalStyle {
     })
 }
 
+/// One completion treatment across sheets and popovers, in both appearances.
+struct AppModalDoneButton: View {
+    var expands = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(L10n.text("完成"))
+                .appText(.callout, weight: .semibold)
+                .foregroundStyle(.white)
+                .frame(maxWidth: expands ? .infinity : nil, minHeight: expands ? 36 : nil)
+        }
+        .buttonStyle(.borderedProminent)
+        .buttonBorderShape(.capsule)
+        .tint(.black)
+    }
+}
+
 private struct AppModalEnvironmentKey: EnvironmentKey {
     static let defaultValue = false
 }
@@ -450,9 +468,8 @@ struct HoldingPressButtonStyle: ButtonStyle {
     }
 }
 
-/// Which row a security page opens from. The motion itself is
-/// `SecurityDetailSnapshotTransition`'s; this keeps the presenter's side —
-/// one open at a time, and the source it came from.
+/// Keeps one security sheet open at a time. UIKit owns the native slide-up
+/// presentation and interactive dismissal; the source identifies the request.
 @MainActor @Observable
 final class SecurityDetailZoomState {
     struct Source {
@@ -462,29 +479,17 @@ final class SecurityDetailZoomState {
 
     private(set) var activeSource: Source?
 
-    /// Presents in the same update as the tap. With a source on screen the
-    /// sheet appears without animation and the snapshot card moves instead.
+    /// Do not suppress the sheet transaction or start a snapshot animation.
     func prepare(id: AnyHashable, namespace: Namespace.ID, present: @escaping () -> Void) {
         guard activeSource == nil else { return }
-        switch SecurityDetailSnapshotTransition.shared.beginOpen(id: id, namespace: namespace) {
-        case .busy:
-            return
-        case .plain:
-            activeSource = Source(id: id, namespace: namespace)
-            present()
-        case .snapshot:
-            activeSource = Source(id: id, namespace: namespace)
-            var transaction = Transaction(animation: nil)
-            transaction.disablesAnimations = true
-            withTransaction(transaction) { present() }
-        }
+        activeSource = Source(id: id, namespace: namespace)
+        present()
     }
 
     func didDismiss() {
         // Called by sheet onDismiss, not by the selection becoming nil or a
         // view disappearing at the start of an interactive dismissal.
         activeSource = nil
-        SecurityDetailSnapshotTransition.shared.presentationDidEnd()
     }
 }
 
@@ -500,15 +505,12 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// Kept so presenters read the same; the snapshot transition needs
-    /// nothing from the host.
+    /// Compatibility for existing presenters; native sheets need no zoom host.
     func securityDetailZoomHost(_ state: SecurityDetailZoomState, in namespace: Namespace.ID) -> some View {
         self
     }
 
-    /// Kept so presenters read the same. The system zoom is no longer used:
-    /// on iOS 26 its geometry, timing, shadow and cross-fade were fixed and
-    /// its tail left a double image of the row.
+    /// Preserve the native sheet transition without attaching a source zoom.
     func securityDetailZoomTransition(_ source: SecurityDetailZoomState.Source?, in namespace: Namespace.ID) -> some View {
         self
     }
@@ -741,13 +743,12 @@ extension View {
     func securityDetailSheet() -> some View {
         presentationDetents([.large])
             .environment(\.isAppModal, false)
-            // Suppress the system's separate dimming layer. The coordinated
-            // backdrop supplies both the shade and a background hit barrier.
-            .presentationBackgroundInteraction(.enabled(upThrough: .large))
+            // The system coordinates dimming, touch blocking and the slide
+            // in both directions, including a cancelled drag to dismiss.
+            .presentationBackgroundInteraction(.disabled)
             .presentationDragIndicator(.hidden)
             .presentationCornerRadius(SecurityDetailPresentation.cornerRadius)
             .presentationBackground { SecurityDetailPresentation.ground }
-            .background { SecurityDetailBackdrop() }
     }
 
     /// The same ground for a security page pushed onto a navigation stack,
@@ -774,7 +775,7 @@ extension View {
     }
 
     /// Clicks when a security page is asked for — in the same run-loop turn
-    /// as the tap that set `trigger`, which is before the zoom has begun.
+    /// as the tap that set `trigger`, before the sheet starts sliding in.
     /// Nothing fires on the way back: the reader already feels the drag.
     func securityDetailOpenFeedback<ID: Equatable>(trigger: ID?, enabled: Bool) -> some View {
         sensoryFeedback(SecurityDetailPresentation.openFeedback, trigger: trigger) { _, new in
@@ -1387,7 +1388,7 @@ struct ChartRangeSummary: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("区间 \(dateText)，变化 \(primaryValue)，\(secondaryValue)")
+        .accessibilityLabel(L10n.text("区间 \(dateText)，变化 \(primaryValue)，\(secondaryValue)"))
     }
 }
 
@@ -1749,7 +1750,7 @@ struct StatusNotice: View {
                 .foregroundStyle(accentColor)
                 .frame(width: 20)
 
-            Text(text)
+            Text(L10n.message(text))
                 .font(.footnote)
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -2159,6 +2160,66 @@ struct AssetLogoLayout: Equatable {
     let insetFraction: CGFloat
     let usesWhiteCanvas: Bool
     var usesDarkCanvas: Bool = false
+    var edgeCanvas: EdgeColor? = nil
+    var edgeTileBounds: CGRect? = nil
+
+    struct EdgeColor: Equatable {
+        let red: Double
+        let green: Double
+        let blue: Double
+
+        var color: Color { Color(red: red, green: green, blue: blue) }
+    }
+
+    /// Locate an inset colour tile before sampling. Source padding can be
+    /// transparent or baked-in white; neither should become a white frame.
+    private static func matchingEdgeTile(_ pixels: [UInt8], edge: Int) -> (EdgeColor, CGRect)? {
+        var minX = edge, minY = edge, maxX = -1, maxY = -1
+        for y in 0..<edge { for x in 0..<edge {
+            let i = (y * edge + x) * 4
+            let alpha = Double(pixels[i + 3])
+            guard alpha > 240,
+                  min(Double(pixels[i]), Double(pixels[i + 1]), Double(pixels[i + 2])) / alpha < 0.92 else { continue }
+            minX = min(minX, x); maxX = max(maxX, x)
+            minY = min(minY, y); maxY = max(maxY, y)
+        } }
+        let width = maxX - minX + 1, height = maxY - minY + 1
+        // A broad, nearly square tile, not a narrow wordmark or small glyph.
+        guard width >= edge * 2 / 3, height >= edge * 2 / 3,
+              (0.88...1.12).contains(Double(width) / Double(height)) else { return nil }
+        let horizontal = (minX + width / 4)..<(minX + width * 3 / 4)
+        let vertical = (minY + height / 4)..<(minY + height * 3 / 4)
+        let sides = [horizontal.map { ($0, minY + 1) }, horizontal.map { ($0, maxY - 1) },
+                     vertical.map { (minX + 1, $0) }, vertical.map { (maxX - 1, $0) }]
+        let samples = sides.map { side in
+            side.compactMap { x, y -> (Double, Double, Double)? in
+                let i = (y * edge + x) * 4
+                let alpha = Double(pixels[i + 3])
+                guard alpha > 240 else { return nil }
+                return (Double(pixels[i]) / alpha, Double(pixels[i + 1]) / alpha,
+                        Double(pixels[i + 2]) / alpha)
+            }
+        }
+        guard zip(samples, sides).allSatisfy({ Double($0.0.count) / Double($0.1.count) >= 0.9 }) else { return nil }
+        let all = samples.flatMap { $0 }
+        func median(_ values: [Double]) -> Double { values.sorted()[values.count / 2] }
+        let red = median(all.map { $0.0 }), green = median(all.map { $0.1 }), blue = median(all.map { $0.2 })
+        func matches(_ value: (Double, Double, Double)) -> Bool {
+            max(abs(value.0 - red), abs(value.1 - green), abs(value.2 - blue)) < 0.10
+        }
+        // Tolerate a few compressed/antialiased pixels, but require every
+        // side to agree. This rejects circles, multicolour marks and letters.
+        guard min(red, green, blue) < 0.92,
+              samples.allSatisfy({ Double($0.filter(matches).count) / Double($0.count) >= 0.9 }) else { return nil }
+        let matching = all.filter(matches)
+        let count = Double(matching.count)
+        let color = EdgeColor(red: matching.reduce(0) { $0 + $1.0 } / count,
+                              green: matching.reduce(0) { $0 + $1.1 } / count,
+                              blue: matching.reduce(0) { $0 + $1.2 } / count)
+        let bounds = CGRect(x: Double(minX) / Double(edge), y: Double(minY) / Double(edge),
+                            width: Double(width) / Double(edge), height: Double(height) / Double(edge))
+        return (color, bounds)
+    }
 
     static func resolve(_ image: UIImage) -> Self {
         let ratio = image.size.width / max(1, image.size.height)
@@ -2205,6 +2266,10 @@ struct AssetLogoLayout: Equatable {
             }
         }
         let needsDarkCanvas = opaqueInk > 0 && Double(lightInk) / Double(opaqueInk) > 0.8
+        if isSquare, let (edgeColor, bounds) = matchingEdgeTile(pixels, edge: edge) {
+            return Self(insetFraction: occupiedEdge ? 0.08 : 0, usesWhiteCanvas: false,
+                        edgeCanvas: edgeColor, edgeTileBounds: bounds)
+        }
         return Self(insetFraction: occupiedEdge ? 0.08 : 0,
                     usesWhiteCanvas: !needsDarkCanvas, usesDarkCanvas: needsDarkCanvas)
     }
@@ -2217,14 +2282,33 @@ struct AssetLogoArtwork: View {
 
     var body: some View {
         ZStack {
-            if layout.usesDarkCanvas { Color(white: 0.12) }
+            if let edgeColor = layout.edgeCanvas { edgeColor.color }
+            else if layout.usesDarkCanvas { Color(white: 0.12) }
             else if layout.usesWhiteCanvas { Color.white }
             Image(uiImage: image)
                 .resizable()
                 .scaledToFit()
+                // Matched tiles can carry white pixels outside their own
+                // rounded corners. Let the matching canvas show there too.
+                .clipShape(AssetLogoTileMask(bounds: layout.edgeTileBounds))
                 .padding(size * layout.insetFraction)
         }
         .frame(width: size, height: size)
+    }
+}
+
+private struct AssetLogoTileMask: Shape {
+    let bounds: CGRect?
+
+    func path(in rect: CGRect) -> Path {
+        guard let bounds else { return Path(rect) }
+        let tile = CGRect(x: rect.minX + bounds.minX * rect.width,
+                          y: rect.minY + bounds.minY * rect.height,
+                          width: bounds.width * rect.width, height: bounds.height * rect.height)
+        // Core Graphics bitmap rows run bottom-up; logo views run top-down.
+        let upright = CGRect(x: tile.minX, y: rect.minY + (1 - bounds.maxY) * rect.height,
+                             width: tile.width, height: tile.height)
+        return RoundedRectangle(cornerRadius: min(tile.width, tile.height) * 0.12).path(in: upright)
     }
 }
 
@@ -2761,7 +2845,7 @@ enum DisplayFormat {
     }
 
     static func ratioPercent(_ value: Double?) -> String {
-        guard let value else { return "暂无" }
+        guard let value else { return L10n.text("暂无") }
         return percent(value * 100)
     }
 }

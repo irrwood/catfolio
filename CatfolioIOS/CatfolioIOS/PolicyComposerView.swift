@@ -138,10 +138,24 @@ struct PolicyComposerView: View {
         } message: {
             Text(L10n.text("会发送你写的这段话和现有步骤给设置里选的 AI 服务，不会发送持仓、股数、成本或账户。"))
         }
-        .alert(L10n.text("重命名策略"), isPresented: $renaming) {
-            TextField(L10n.text("策略名称"), text: $draftName)
-            Button(L10n.text("完成")) { store.rename(draftName) }
-            Button(L10n.text("取消"), role: .cancel) {}
+        .appSheet(isPresented: $renaming) {
+            NavigationStack {
+                Form {
+                    TextField(L10n.text("策略名称"), text: $draftName)
+                        .onSubmit { store.rename(draftName); renaming = false }
+                }
+                .navigationTitle(L10n.text("重命名策略"))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(L10n.text("取消")) { renaming = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        AppModalDoneButton { store.rename(draftName); renaming = false }
+                    }
+                }
+            }
+            .presentationDetents([.height(220)])
         }
         .confirmationDialog(
             L10n.text("后面有步骤只能用这一步的结果"),
@@ -810,8 +824,8 @@ private struct PolicyQuantityToken: View {
 
     private var placeholder: String {
         switch rule.unit {
-        case "PERCENT": "？%"
-        case "PRICE", "CURRENCY": "$？"
+        case "PERCENT": "?%"
+        case "PRICE", "CURRENCY": "$?"
         default: "？ " + PolicyShortcut.unitSuffix(rule)
         }
     }
@@ -850,12 +864,9 @@ private struct PolicyQuantityEditor: View {
                 }
             }
             if let error {
-                Text(error).appText(.caption).foregroundStyle(CatfolioTheme.danger)
+                Text(L10n.message(error)).appText(.caption).foregroundStyle(CatfolioTheme.danger)
             }
-            Button(action: commit) {
-                Text(L10n.text("完成")).appText(.callout, weight: .semibold).frame(maxWidth: .infinity, minHeight: 36)
-            }
-            .buttonStyle(.borderedProminent)
+            AppModalDoneButton(expands: true, action: commit)
         }
         .padding(16)
         .frame(width: 260)
@@ -1167,7 +1178,7 @@ private struct PolicyLibrarySheet: View {
             .appPageBackground().navigationTitle(L10n.text("策略库"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { AppModalDoneButton { dismiss() } }
                 ToolbarItem(placement: .primaryAction) {
                     Button(L10n.text("新建"), systemImage: "plus") {
                         Task {
@@ -1243,7 +1254,7 @@ private struct PolicyHistorySheet: View {
             }
             .appPageBackground().navigationTitle(L10n.text("运行记录与旧版本"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { AppModalDoneButton { dismiss() } } }
             .task {
                 runs = await store.runs()
                 revisions = await store.revisions()
@@ -1300,7 +1311,7 @@ private struct PolicySettingsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.text("完成")) {
+                    AppModalDoneButton {
                         store.rename(name)
                         store.updateMaxAge(maxAge)
                         dismiss()
@@ -1334,7 +1345,7 @@ private struct PolicyBudgetSheet: View {
                             .keyboardType(.decimalPad)
                     }
                     if let error {
-                        Text(error).appText(.caption).foregroundStyle(CatfolioTheme.danger)
+                        Text(L10n.message(error)).appText(.caption).foregroundStyle(CatfolioTheme.danger)
                     }
                 } footer: {
                     Text(L10n.text("配置步骤按这个模拟总额计算目标仓位，已选持仓也占用它。只用于这次模拟，不会写回账户，也不会下单。目前只支持美元。"))

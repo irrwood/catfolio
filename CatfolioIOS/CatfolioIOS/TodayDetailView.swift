@@ -284,14 +284,11 @@ struct TodayDetailView: View {
             // scroll content height stable as cards enter and leave the screen.
             VStack(spacing: 12) {
                 ForEach(Array(stride(from: 0, to: rows.count, by: columns)), id: \.self) { index in
-                    HStack(alignment: .top, spacing: 12) {
+                    TodaySectorRowLayout(columns: columns, spacing: 12) {
                         sectorCard(rows[index])
                         if columns == 2 {
                             if index + 1 < rows.count {
                                 sectorCard(rows[index + 1])
-                            } else {
-                                Color.clear.frame(maxWidth: .infinity).frame(height: 0)
-                                    .accessibilityHidden(true)
                             }
                         }
                     }
@@ -325,14 +322,16 @@ struct TodayDetailView: View {
                     Text(row.displayName)
                         .font(.body.weight(.medium))
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxHeight: .infinity, alignment: .topLeading)
                     Text(DisplayFormat.money(row.amount, signed: true, fractionDigits: 2))
                         .appNumber(.body, weight: .semibold)
                         .foregroundStyle(row.amount >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
                         .lineLimit(1)
                         .minimumScaleFactor(0.65)
                 }
+                .frame(maxHeight: .infinity, alignment: .topLeading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .modifier(ContentCard())
             .contentShape(RoundedRectangle(cornerRadius: CatfolioStyle.cardRadius))
         }
@@ -398,6 +397,31 @@ struct TodayDetailView: View {
                     .fixedSize(horizontal: true, vertical: false)
                     .frame(minWidth: 62, alignment: .trailing)
             }
+        }
+    }
+}
+
+/// Measure each card at its final column width, then give both cards the taller
+/// height. Localized names can wrap without staggering card edges or amounts.
+struct TodaySectorRowLayout: Layout {
+    var columns: Int
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 0
+        let columnWidth = max(0, (width - spacing * CGFloat(columns - 1)) / CGFloat(columns))
+        let height = subviews.map {
+            $0.sizeThatFits(ProposedViewSize(width: columnWidth, height: nil)).height
+        }.max() ?? 0
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let columnWidth = max(0, (bounds.width - spacing * CGFloat(columns - 1)) / CGFloat(columns))
+        for (index, subview) in subviews.enumerated() {
+            subview.place(at: CGPoint(x: bounds.minX + CGFloat(index) * (columnWidth + spacing), y: bounds.minY),
+                          anchor: .topLeading,
+                          proposal: ProposedViewSize(width: columnWidth, height: bounds.height))
         }
     }
 }

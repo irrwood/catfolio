@@ -207,13 +207,14 @@ actor InsiderTradesClient {
         request.timeoutInterval = 20
         request.setValue("Mozilla/5.0 Catfolio-iOS", forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (bytes, response) = try await session.data(for: request)
+        let (bytes, response) = try await session.recordedData(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw ScreenFailure.message(L10n.text("内部人士交易网络请求失败。"))
         }
         do {
             return try Self.parseRows(bytes)
         } catch {
+            DataSourceHealth.reportUnusable(DataSource.of(url), issue: .invalidFormat)
             throw ScreenFailure.message(L10n.text("Nasdaq 返回的内部人士交易数据无法识别。"))
         }
     }

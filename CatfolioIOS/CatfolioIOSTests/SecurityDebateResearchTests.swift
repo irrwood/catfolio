@@ -60,6 +60,13 @@ final class SecurityDebateResearchTests: XCTestCase {
         XCTAssertTrue(SecurityDebateResearch.parseRSS(Data(), ticker: "X", limit: 5).isEmpty)
     }
 
+    func testEmptyRSSIsDistinctFromAnUnreadableReply() {
+        let empty = Data("<rss><channel></channel></rss>".utf8)
+        XCTAssertEqual(SecurityDebateResearch.parseRSSChecked(empty, ticker: "X", limit: 5)?.count, 0)
+        XCTAssertNil(SecurityDebateResearch.parseRSSChecked(Data("<html></html>".utf8), ticker: "X", limit: 5))
+        XCTAssertNil(SecurityDebateResearch.parseRSSChecked(Data("not xml".utf8), ticker: "X", limit: 5))
+    }
+
     // MARK: SEC
 
     func testCIKIsReadFromTheFilerLabel() {

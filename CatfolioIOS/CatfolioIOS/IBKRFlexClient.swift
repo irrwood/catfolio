@@ -243,7 +243,7 @@ struct IBKRFlexClient {
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("CatfolioIOS/1.0", forHTTPHeaderField: "User-Agent")
         request.setValue("application/xml,text/xml", forHTTPHeaderField: "Accept")
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw IBKRFlexError.invalidResponse
         }

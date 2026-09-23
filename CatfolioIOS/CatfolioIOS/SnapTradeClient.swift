@@ -228,7 +228,7 @@ struct SnapTradeClient {
         let request = try Self.request(path: path, credentials: credentials, body: body)
         let data: Data
         let response: URLResponse
-        do { (data, response) = try await session.data(for: request) }
+        do { (data, response) = try await session.recordedData(for: request) }
         catch { throw SnapTradeError.network }
         guard let http = response as? HTTPURLResponse else { throw SnapTradeError.network }
         guard (200..<300).contains(http.statusCode) else { throw SnapTradeError.http(http.statusCode) }

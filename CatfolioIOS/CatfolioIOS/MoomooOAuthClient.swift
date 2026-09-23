@@ -673,7 +673,7 @@ struct MoomooOpenAPIClient {
     }
 
     private func response(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else { throw MoomooOpenAPIError.invalidResponse }
         return (data, http)
     }

@@ -528,6 +528,7 @@ private struct SettingsCardRows: _VariadicView_MultiViewRoot {
 /// The note under a card. 12pt, quieter than a subtitle, set on 1.4 and inset
 /// to the card's text column.
 struct SettingsFootnote: View {
+    @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
     let text: String
     /// A note that reports a failure takes the danger colour; everything else
@@ -548,7 +549,7 @@ struct SettingsFootnote: View {
     }
 
     var body: some View {
-        Text(text)
+        Text(L10n.message(text))
             .appText(.caption)
             .foregroundStyle(color ?? SettingsTemplate.footnote)
             .lineSpacing(SettingsTemplate.footnoteLineSpacing)

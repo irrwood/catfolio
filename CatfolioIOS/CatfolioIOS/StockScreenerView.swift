@@ -141,7 +141,7 @@ actor StockScreenDataClient {
             url.queryItems = query.merging(["apikey": key]) { _, new in new }.map { URLQueryItem(name: $0.key, value: $0.value) }
             var request = URLRequest(url: url.url!)
             request.timeoutInterval = 25
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.recordedData(for: request)
             guard let response = response as? HTTPURLResponse else { throw ScreenFailure.message(L10n.text("行情响应无效")) }
             if response.statusCode == 429 {
                 // Hold every FMP caller back, not just this one, so the other
@@ -156,7 +156,8 @@ actor StockScreenDataClient {
             guard (200..<300).contains(response.statusCode) else {
                 throw ScreenFailure.message(L10n.text("FMP 请求失败（\(response.statusCode)）。请检查密钥、套餐权限或稍后重试。"))
             }
-            guard let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            guard let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
                 throw ScreenFailure.message(L10n.text("FMP 未返回可用数据，可能缺少接口权限。"))
             }
             return rows
@@ -332,7 +333,7 @@ struct StockScreenerView: View {
             }
 
             if let error {
-                Section { Text(error).foregroundStyle(.secondary) }
+                Section { Text(L10n.message(error)).foregroundStyle(.secondary) }
             }
 
             if let fetchedAt {
@@ -442,7 +443,7 @@ struct StockScreenerView: View {
             }
             .softTopScrollEdge()
             .appPageBackground().navigationTitle(L10n.text("筛选条件")).navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { editing = false } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { AppModalDoneButton { editing = false } } }
         }
     }
     private func clearResults() { candidates = []; results = []; checked = 0; missing = 0; failures = []; fetchedAt = nil; error = nil }

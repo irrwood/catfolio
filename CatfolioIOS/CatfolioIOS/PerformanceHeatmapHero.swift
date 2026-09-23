@@ -34,7 +34,7 @@ struct HeatmapHeroState {
 /// (scale, skew, rotation) and the anchor and fades the repeated copies and
 /// the effects out; at the end the texture is swapped for the live view in
 /// the same pixels.
-struct PerformanceHeatmapHero<Header: View, Heatmap: View>: View {
+struct PerformanceHeatmapHero<Heatmap: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.displayScale) private var displayScale
     @Environment(\.locale) private var locale
@@ -44,12 +44,10 @@ struct PerformanceHeatmapHero<Header: View, Heatmap: View>: View {
     let state: HeatmapHeroState
     /// Changes whenever the heatmap would draw differently.
     let renderKey: Int
-    @ViewBuilder let header: Header
     /// The page's heatmap: live when `false`, for a texture when `true`.
     let heatmap: (_ isSnapshot: Bool) -> Heatmap
 
     @State private var textures: HeatmapHeroTextures?
-    @State private var headerHeight: CGFloat = 40
     @State private var heatmapSize: CGSize = .zero
     @State private var drift = HeatmapHeroDrift()
     @State private var isSettling = false
@@ -71,14 +69,11 @@ struct PerformanceHeatmapHero<Header: View, Heatmap: View>: View {
             progress: progress,
             state: state,
             textures: textures,
-            headerHeight: headerHeight,
             heatmapSize: heatmapSize,
             drift: drift,
             drifts: drifts,
             glows: colorScheme == .dark,
-            header: header,
             heatmap: heatmap(false),
-            onHeaderHeight: { headerHeight = $0 },
             onHeatmapSize: { heatmapSize = $0 }
         )
         .environment(\.assetLogoDidResolve) { url in
@@ -291,24 +286,20 @@ enum HeatmapHeroBlur {
     }
 }
 
-private struct HeatmapHeroMorph<Header: View, Heatmap: View>: View, Animatable {
+private struct HeatmapHeroMorph<Heatmap: View>: View, Animatable {
     /// 0 lying on the plane, 1 standing in its place.
     var progress: Double
     let state: HeatmapHeroState
     let textures: HeatmapHeroTextures?
-    let headerHeight: CGFloat
     let heatmapSize: CGSize
     let drift: HeatmapHeroDrift
     let drifts: Bool
     let glows: Bool
-    let header: Header
     let heatmap: Heatmap
-    let onHeaderHeight: (CGFloat) -> Void
     let onHeatmapSize: (CGSize) -> Void
 
     /// How much of the page the plane takes below the large title.
     static var collapsedHeight: CGFloat { 250 }
-    static var spacing: CGFloat { 14 }
 
     var animatableData: Double {
         get { progress }
@@ -318,21 +309,16 @@ private struct HeatmapHeroMorph<Header: View, Heatmap: View>: View, Animatable {
     var body: some View {
         let e = CGFloat(min(1, max(0, progress)))
         let isUpright = e > 0.999
-        let expandedHeight = headerHeight + Self.spacing + heatmapSize.height
+        let expandedHeight = heatmapSize.height
         let height = Self.collapsedHeight + (expandedHeight - Self.collapsedHeight) * e
 
-        VStack(alignment: .leading, spacing: Self.spacing) {
-            header
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onHeaderHeight($0) }
-                .opacity(IsometricBands.smoothstep(0.7, 1, e))
-                .allowsHitTesting(isUpright)
-                .accessibilityAction(named: L10n.text("收起持仓热力图")) { state.onToggle() }
-            heatmap
-                .onGeometryChange(for: CGSize.self) { $0.size } action: { onHeatmapSize($0) }
-                .opacity(isUpright ? 1 : 0)
-                .allowsHitTesting(isUpright)
-                .accessibilityHidden(!isUpright)
-        }
+        heatmap
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { onHeatmapSize($0) }
+        .opacity(isUpright ? 1 : 0)
+        .allowsHitTesting(isUpright)
+        .accessibilityHidden(!isUpright)
+        .accessibilityAction(named: L10n.text("收起持仓热力图")) { state.onToggle() }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .frame(height: max(0, height), alignment: .top)
         .overlay(alignment: .topLeading) {
@@ -363,7 +349,7 @@ private struct HeatmapHeroMorph<Header: View, Heatmap: View>: View, Animatable {
             e: e,
             canvas: size,
             isometricAnchor: CGPoint(x: size.width / 2, y: top + Self.collapsedHeight * 0.45),
-            uprightOrigin: CGPoint(x: inset, y: top + headerHeight + Self.spacing)
+            uprightOrigin: CGPoint(x: inset, y: top)
         )
         var bands = IsometricBands(
             // Fully blurred through the large title, clear just below it.

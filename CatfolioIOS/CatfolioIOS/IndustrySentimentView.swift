@@ -433,6 +433,6 @@ private struct SentimentGauge: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L10n.text("行业情绪"))
-        .accessibilityValue("\(score.map(String.init) ?? "—") / 100，\(L10n.text(label))")
+        .accessibilityValue(L10n.text("\(score.map(String.init) ?? "—") / 100，\(L10n.text(label))"))
     }
 }

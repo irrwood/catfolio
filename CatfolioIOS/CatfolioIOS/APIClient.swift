@@ -1,6 +1,45 @@
 import Foundation
 import Observation
 
+/// A manual home refresh reports what actually changed, rather than treating
+/// a completed request (or restored presentation cache) as a new quote.
+enum PortfolioRefreshResult: Equatable {
+    case quotesUpdated
+    case portfolioLoaded
+    case portfolioLoadedWithoutNewQuotes
+    case unchangedQuotes
+    case unchangedContent
+    case noHeldQuotes
+    case failed(retainsData: Bool)
+
+    static func acceptedQuoteCount(before: LocalPortfolioDocument, after: LocalPortfolioDocument) -> Int {
+        var previous: [String: Date] = [:]
+        for position in before.positions {
+            guard let observedAt = position.quoteObservedAt else { continue }
+            let key = LocalMarketQuoteKey.make(ticker: position.ticker, currency: position.quoteCurrency)
+            previous[key] = max(previous[key] ?? .distantPast, observedAt)
+        }
+        return Set(after.positions.compactMap { position -> String? in
+            let key = LocalMarketQuoteKey.make(ticker: position.ticker, currency: position.quoteCurrency)
+            guard let observedAt = position.quoteObservedAt,
+                  observedAt > (previous[key] ?? .distantPast) else { return nil }
+            return key
+        }).count
+    }
+
+    static func completed(previous: LocalPortfolioDocument?, loaded: LocalPortfolioDocument,
+                          acceptedQuoteCount: Int, refreshedDisclosure: Bool, tracksQuotes: Bool) -> Self {
+        if acceptedQuoteCount > 0 { return .quotesUpdated }
+        if refreshedDisclosure { return .portfolioLoaded }
+        let changed = previous.map { old in
+            old.source != loaded.source || old.positions != loaded.positions || old.snapshots != loaded.snapshots
+                || old.transactions != loaded.transactions || old.knownAccounts != loaded.knownAccounts
+        } ?? (!loaded.positions.isEmpty || !loaded.snapshots.isEmpty || !(loaded.transactions ?? []).isEmpty)
+        if changed { return tracksQuotes ? .portfolioLoadedWithoutNewQuotes : .portfolioLoaded }
+        return tracksQuotes ? .unchangedQuotes : .unchangedContent
+    }
+}
+
 @Observable
 @MainActor
 final class AppModel {
@@ -24,7 +63,10 @@ final class AppModel {
     var isReturnsLoading = false
     var isReturnsAnalyticsLoading = false
     var returnsAnalyticsPendingParts: Set<ReturnsAnalyticsPart> = []
-    var portfolioError: String?
+    // Keep the error, not its translated snapshot: the home empty state must
+    // follow language changes made in Settings without reloading the portfolio.
+    private var portfolioFailure: Error?
+    var portfolioError: String? { portfolioFailure?.localizedDescription }
     var returnsError: String?
     private var comparisonWarning: String?
     private var analyticsWarning: String?
@@ -67,6 +109,7 @@ final class AppModel {
     @ObservationIgnored private var holdingDetailContent: [HoldingDetailContentKey: HoldingDetailCachedContent] = [:]
     @ObservationIgnored private var holdingDetailContentOrder: [HoldingDetailContentKey] = []
     @ObservationIgnored private var returnsPageTask: Task<Void, Never>?
+    @ObservationIgnored private var detailChartTask: Task<Void, Never>?
     @ObservationIgnored private var portfolioSourceTask: Task<Void, Never>?
     @ObservationIgnored private var portfolioSourceGeneration = 0
     @ObservationIgnored private var presentedSource: PortfolioSource?
@@ -74,6 +117,7 @@ final class AppModel {
     @ObservationIgnored private let modeDefaults: UserDefaults
     @ObservationIgnored private let publicInvestorStore: PublicInvestorSimulationStore
     @ObservationIgnored private let personalDocumentLoader: @Sendable () async throws -> LocalPortfolioDocument
+    @ObservationIgnored private let personalDocumentResetter: @Sendable () async throws -> URL?
     @ObservationIgnored private let presentationCache: PortfolioPresentationCache
     private static let brokerKey = "catfolio.activeBroker"
     private static let selectedAccountsKey = "catfolio.selectedAccounts"
@@ -88,11 +132,15 @@ final class AppModel {
         personalDocumentLoader: @escaping @Sendable () async throws -> LocalPortfolioDocument = {
             try LocalPortfolioStore.shared.load()
         },
+        personalDocumentResetter: @escaping @Sendable () async throws -> URL? = {
+            try LocalPortfolioStore.shared.resetPortfolio()
+        },
         presentationCache: PortfolioPresentationCache = .shared
     ) {
         modeDefaults = defaults
         self.publicInvestorStore = publicInvestorStore
         self.personalDocumentLoader = personalDocumentLoader
+        self.personalDocumentResetter = personalDocumentResetter
         self.presentationCache = presentationCache
         publicInvestorSelection = defaults.string(forKey: PublicInvestorPreferences.selectionKey) ?? PublicInvestorPreferences.defaultSelection
         isFakeDataMode = defaults.bool(forKey: Self.fakeDataModeKey)
@@ -119,12 +167,25 @@ final class AppModel {
     }
 
     func refreshPortfolio(refreshMarketData: Bool = true) async {
-        guard !Task.isCancelled else { return }
+        _ = await refreshPortfolioResult(refreshMarketData: refreshMarketData)
+    }
+
+    /// Only the two explicit home actions use this result. Automatic loads and
+    /// source switches keep using `refreshPortfolio()` without user feedback.
+    func refreshPortfolioReportingResult(refreshMarketData: Bool = true) async -> PortfolioRefreshResult? {
+        await refreshPortfolioResult(refreshMarketData: refreshMarketData)
+    }
+
+    private func refreshPortfolioResult(refreshMarketData: Bool) async -> PortfolioRefreshResult? {
+        guard !Task.isCancelled else { return nil }
         portfolioRequestGeneration &+= 1
         let generation = portfolioRequestGeneration
+        let previousDocument = presentedSource == portfolioSource && overview != nil ? fullDocument : nil
+        var acceptedQuotes = 0
+        var refreshedDisclosure = false
         isPortfolioLoading = true
         isPortfolioChartLoading = !hasUsableHomeChart
-        portfolioError = nil
+        portfolioFailure = nil
         defer {
             if generation == portfolioRequestGeneration {
                 isPortfolioLoading = false
@@ -132,17 +193,17 @@ final class AppModel {
         }
         do {
             var loaded = try await loadActiveDocument()
-            guard generation == portfolioRequestGeneration else { return }
+            guard generation == portfolioRequestGeneration else { return nil }
             // Publish disk data before any network work. Slow/offline quote
             // providers must never hold the entire home screen in a skeleton.
             let restored = await restoreHomePresentation(from: loaded, generation: generation)
-            guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+            guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
             if !restored {
                 let preservesChart = await canPreserveHomeChart(for: loaded)
-                guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+                guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
                 try await apply(loaded, loadsCachedChart: false, preservesChart: preservesChart)
             }
-            guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+            guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
             // Loading the selected source is finished. Public data can update
             // behind the usable cached presentation without locking controls.
             isPortfolioLoading = false
@@ -150,66 +211,74 @@ final class AppModel {
                 isPortfolioChartLoading = false
                 isHoldingDailyChangesLoading = false
                 if !restored { await saveHomePresentation(generation: generation) }
-                return
+                return PortfolioRefreshResult.completed(previous: previousDocument, loaded: loaded,
+                    acceptedQuoteCount: 0, refreshedDisclosure: false, tracksQuotes: false)
             }
             if isPublicInvestorMode {
                 if let fresh = try await publicInvestorStore.refreshIfNeeded(
                     catalog: PublicInvestorCatalog.loaded.get(), selection: publicInvestorSelection
                 ) {
-                    guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+                    guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
                     try await apply(fresh)
-                    guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+                    guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
+                    refreshedDisclosure = true
                 }
                 await enrichPortfolioChart(from: document, generation: generation)
-                guard generation == portfolioRequestGeneration else { return }
+                guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
                 await refreshHoldingDailyChanges()
+                guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
                 await saveHomePresentation(generation: generation)
-                return
+                return PortfolioRefreshResult.completed(previous: previousDocument, loaded: fullDocument,
+                    acceptedQuoteCount: 0, refreshedDisclosure: refreshedDisclosure, tracksQuotes: false)
             }
             if !isFakeDataMode {
                 loaded = try await mergeCachedTrading212History(into: loaded)
-                guard generation == portfolioRequestGeneration else { return }
+                guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
                 if loaded != fullDocument {
                     let preservesChart = await canPreserveHomeChart(for: loaded)
-                    guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+                    guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
                     try await apply(loaded, loadsCachedChart: false, preservesChart: preservesChart)
                 }
-                guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+                guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
             }
-            // Independent work starts together. Capture the ledger before
-            // quote updates mutate the presentation; rebuild the history once.
-            let historyDocument = document
-            async let historyRefresh: Void = refreshHistoricalChart(
-                from: historyDocument, generation: generation)
             guard !loaded.positions.isEmpty else {
                 isHoldingDailyChangesLoading = false
-                await historyRefresh
+                await refreshHistoricalChart(from: document, generation: generation)
+                guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
                 await saveHomePresentation(generation: generation)
-                return
+                return .noHeldQuotes
             }
-            async let dailyRefresh: Void = refreshHoldingDailyChanges()
             if !isFakeDataMode {
                 async let fxRefresh: Void = LocalCurrentFXRefresh.shared.refresh()
-                let quotes = await LocalMarketDataClient().latestQuotes(for: loaded.positions)
+                let quotes = await LocalMarketDataClient().latestQuotes(for: loaded.positions, forceRefresh: true)
                 await fxRefresh
-                guard generation == portfolioRequestGeneration else { return }
+                guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
                 if !quotes.isEmpty {
-                    loaded = try await LocalPortfolioStore.shared.updateMarketQuotes(quotes)
+                    let updated = try await LocalPortfolioStore.shared.updateMarketQuotes(quotes)
+                    acceptedQuotes = PortfolioRefreshResult.acceptedQuoteCount(before: loaded, after: updated)
+                    loaded = updated
                 }
             }
-            await dailyRefresh
-            guard generation == portfolioRequestGeneration else { return }
+            guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
             try await apply(loaded, invalidatesDailyChanges: false, loadsCachedChart: false, preservesChart: true)
-            guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
-            await historyRefresh
+            guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
+            // Both consumers receive the same observed quotes. Rebuilding
+            // before apply() let a stale daily curve win after a live refresh.
+            async let historyRefresh: Void = refreshHistoricalChart(from: document, generation: generation)
+            async let dailyRefresh: Void = refreshHoldingDailyChanges(forceRefresh: true)
+            _ = await (historyRefresh, dailyRefresh)
+            guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
             await saveHomePresentation(generation: generation)
+            return PortfolioRefreshResult.completed(previous: previousDocument, loaded: loaded,
+                acceptedQuoteCount: acceptedQuotes, refreshedDisclosure: false, tracksQuotes: !isFakeDataMode)
         } catch {
-            guard generation == portfolioRequestGeneration else { return }
+            guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
             // Retain the last usable local presentation on refresh failure.
             // An error is not an empty account and must not erase its bars.
             isHoldingDailyChangesLoading = false
             isPortfolioChartLoading = false
-            portfolioError = error.localizedDescription
+            portfolioFailure = error
+            return .failed(retainsData: overview != nil)
         }
     }
 
@@ -591,6 +660,18 @@ final class AppModel {
         overview = presentation.0
         holdings = presentation.2
         applyDetailDailyChanges(now: now)
+        detailChartTask?.cancel()
+        let generation = portfolioRequestGeneration
+        detailChartTask = Task { [weak self] in
+            guard let self else { return }
+            if let chart = try? await LocalMarketDataClient().portfolioChart(document: updated, cachedOnly: true),
+               !Task.isCancelled, generation == self.portfolioRequestGeneration,
+               self.document == updated, chart.currentPoint.marketValue.isFinite {
+                self.portfolioChart = chart
+                self.portfolioChartRevision &+= 1
+                await self.saveHomePresentation(generation: generation)
+            }
+        }
     }
 
     private func quoteDate(_ position: LocalPositionRecord, in document: LocalPortfolioDocument) -> Date {
@@ -630,7 +711,7 @@ final class AppModel {
         }
     }
 
-    func refreshHoldingDailyChanges() async {
+    func refreshHoldingDailyChanges(forceRefresh: Bool = false) async {
         let portfolioGeneration = portfolioRequestGeneration
         let snapshot = holdings
         guard !snapshot.isEmpty else {
@@ -642,7 +723,7 @@ final class AppModel {
         }
 
         let signature = Self.dailyChangesSignature(for: snapshot)
-        guard signature != holdingDailyChangesSignature else { return }
+        guard forceRefresh || signature != holdingDailyChangesSignature else { return }
 
         dailyChangesRequestGeneration &+= 1
         let generation = dailyChangesRequestGeneration
@@ -650,7 +731,7 @@ final class AppModel {
         var holdingsNeedingFetch: [Holding] = []
         for holding in snapshot {
             let key = holding.ticker.uppercased()
-            if let value = holding.todayChangePercent, value.isFinite {
+            if let value = holding.todayChangePercent, value.isFinite, !forceRefresh || isFakeDataMode {
                 changes[key] = value
             } else {
                 // Existing values remain visible while their replacements are
@@ -670,11 +751,12 @@ final class AppModel {
         }
         let client = LocalMarketDataClient()
         let fetchSnapshot = holdingsNeedingFetch
-        async let fetchedChanges = client.dailyChanges(for: fetchSnapshot)
-        async let fetchedBenchmark = client.dailyChange(ticker: "SPY")
+        async let fetchedChanges = client.dailyChanges(for: fetchSnapshot, positions: document.positions, forceRefresh: forceRefresh)
+        async let fetchedBenchmark = client.dailyChange(ticker: "SPY", forceRefresh: forceRefresh)
         let (fetched, benchmark) = await (fetchedChanges, fetchedBenchmark)
         guard !Task.isCancelled,
               generation == dailyChangesRequestGeneration,
+              portfolioGeneration == portfolioRequestGeneration,
               signature == Self.dailyChangesSignature(for: holdings) else { return }
 
         changes.merge(fetched) { _, latest in latest }
@@ -877,7 +959,7 @@ final class AppModel {
         invalidateInFlightRequests()
         returnsPageTask?.cancel()
         returnsPageRequestGeneration &+= 1
-        let backup = try await LocalPortfolioStore.shared.resetPortfolio()
+        let backup = try await personalDocumentResetter()
         await presentationCache.removePersonal()
         // The explicit reset action must not restore an old personal screen.
         // Shared public-data caches and built-in account snapshots stay intact.
@@ -886,10 +968,11 @@ final class AppModel {
         holdingDetailContentOrder.removeAll { $0.source == .personal }
         presentedSource = nil
         isFakeDataMode = false
-        UserDefaults.standard.set(false, forKey: Self.fakeDataModeKey)
-        UserDefaults.standard.removeObject(forKey: Self.selectedAccountsKey)
-        UserDefaults.standard.removeObject(forKey: Self.selectsAllAccountsKey)
+        modeDefaults.set(false, forKey: Self.fakeDataModeKey)
+        modeDefaults.removeObject(forKey: Self.selectedAccountsKey)
+        modeDefaults.removeObject(forKey: Self.selectsAllAccountsKey)
         document = .empty
+        updateRealisedProfit(from: document)
         fullDocument = .empty
         overview = nil
         portfolioChart = nil
@@ -903,7 +986,7 @@ final class AppModel {
         returnsAnalytics = nil
         comparisonWarning = nil
         analyticsWarning = nil
-        portfolioError = nil
+        portfolioFailure = nil
         returnsError = nil
         localSource = "尚未导入"
         localUpdatedAt = nil
@@ -1434,7 +1517,7 @@ final class AppModel {
             modeDefaults.set(true, forKey: "catfolio.publicSelectsAllAccounts")
         }
         fakeDataModeError = nil
-        portfolioError = nil
+        portfolioFailure = nil
         returnsError = nil
         comparisonWarning = nil
         analyticsWarning = nil
@@ -1480,6 +1563,7 @@ final class AppModel {
 
     private func restoreSourcePresentation(_ cached: SourcePresentation) {
         document = cached.document
+        updateRealisedProfit(from: document)
         fullDocument = cached.fullDocument
         overview = cached.overview
         portfolioChart = cached.chart
@@ -1502,6 +1586,7 @@ final class AppModel {
     private func clearSourcePresentation() {
         // Only the outgoing screen state; never a disk-cache deletion.
         document = .empty
+        updateRealisedProfit(from: document)
         fullDocument = .empty
         presentedSource = nil
         holdings = []
@@ -1613,7 +1698,7 @@ final class AppModel {
         invalidateInFlightRequests()
         let generation = portfolioRequestGeneration
         benchmarkDailyChange = benchmark
-        portfolioError = nil
+        portfolioFailure = nil
         do {
             // Re-scope the complete in-memory ledger, reusing quote and history
             // caches. Account visibility never triggers a broker or market refresh.
@@ -1621,7 +1706,7 @@ final class AppModel {
             await saveHomePresentation(generation: generation)
         } catch {
             guard generation == portfolioRequestGeneration else { return }
-            portfolioError = error.localizedDescription
+            portfolioFailure = error
         }
     }
 
@@ -1686,8 +1771,17 @@ final class AppModel {
                 isPortfolioChartLoading = false
             }
         }
-        if let enriched = try? await LocalMarketDataClient().portfolioChart(document: loaded) {
-            guard generation == portfolioRequestGeneration else { return }
+        if var enriched = try? await LocalMarketDataClient().portfolioChart(document: loaded, forceRefresh: true) {
+            guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+            // A detail quote may arrive while history is loading. Reuse the
+            // fetched history and value it with the latest document before publishing.
+            while loaded != document {
+                let latest = document
+                guard let refreshed = try? await LocalMarketDataClient().portfolioChart(document: latest, cachedOnly: true),
+                      generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+                enriched = refreshed
+                if latest == document { break }
+            }
             // A failed/offline rebuild can return an unavailable response.
             // Keep the last valid cached curve and its timestamp in that case.
             guard enriched.currentPoint.marketValue.isFinite || !hasUsableHomeChart else { return }
@@ -1699,6 +1793,7 @@ final class AppModel {
     }
 
     private func invalidateInFlightRequests() {
+        detailChartTask?.cancel()
         returnsPageRequestGeneration &+= 1
         returnsPageTask?.cancel()
         returnsPageTask = nil

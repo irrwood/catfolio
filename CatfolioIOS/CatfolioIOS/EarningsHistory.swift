@@ -166,11 +166,17 @@ actor EarningsHistoryClient {
         request.setValue("Mozilla/5.0 Catfolio-iOS", forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         do {
-            let (bytes, response) = try await session.data(for: request)
+            let (bytes, response) = try await session.recordedData(for: request)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 throw ScreenFailure.message(L10n.text("盈利历史网络请求失败。"))
             }
-            let points = try EarningsObservation.nasdaq(bytes)
+            let points: [EarningsObservation]
+            do {
+                points = try EarningsObservation.nasdaq(bytes)
+            } catch {
+                DataSourceHealth.reportUnusable(DataSource.of(url), issue: .invalidFormat)
+                throw error
+            }
             if points.isEmpty, fmpWasEmpty {
                 // Two successful empty responses are absence, not a network error.
                 // Do not overwrite an older usable history or persist a negative cache.

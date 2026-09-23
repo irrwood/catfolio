@@ -672,7 +672,7 @@ private struct ReturnsPlotPlaceholder: View {
                 .foregroundStyle(.secondary)
             Text(title)
                 .font(ReturnsTypography.semibold(15, relativeTo: .subheadline))
-            Text(message)
+            Text(L10n.message(message))
                 .font(ReturnsTypography.medium(12, relativeTo: .caption))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -686,7 +686,7 @@ private struct ReturnsPlotPlaceholder: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title)，\(message)")
+        .accessibilityLabel(L10n.text("\(title)，\(message)"))
     }
 }
 
@@ -811,7 +811,7 @@ private struct ReturnsChart: View {
 
             if mode == .twr, hasDrawableLine,
                let note = comparison.warnings?.first(where: { $0.hasPrefix("每日 TWR") }) {
-                Text(note)
+                Text(L10n.message(note))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
@@ -819,20 +819,20 @@ private struct ReturnsChart: View {
             }
             if mode == .mwr, hasDrawableLine,
                let note = comparison.warnings?.first(where: { $0.hasPrefix("MWR：") }) {
-                Text(L10n.label(note)).font(.caption).foregroundStyle(.secondary)
+                Text(L10n.message(note)).font(.caption).foregroundStyle(.secondary)
                     .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
                     .padding(.vertical, 8)
             }
             if mode == .cashFlowMatched, hasDrawableLine,
                let note = comparison.warnings?.first(where: { $0.hasPrefix("现金流镜像：") }) {
-                Text(L10n.label(note)).font(.caption).foregroundStyle(.secondary)
+                Text(L10n.message(note)).font(.caption).foregroundStyle(.secondary)
                     .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
                     .padding(.vertical, 8)
             }
             // Whatever the metric: part of the account's cash was implied.
             if hasDrawableLine,
                let note = comparison.warnings?.first(where: { $0.hasPrefix("资金流水不完整") }) {
-                Text(L10n.label(note)).font(.caption).foregroundStyle(.secondary)
+                Text(L10n.message(note)).font(.caption).foregroundStyle(.secondary)
                     .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
                     .padding(.bottom, 8)
             }
@@ -1807,7 +1807,7 @@ private struct ReturnsBenchmarkPicker: View {
             .textInputAutocapitalization(.characters)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.text("完成")) { dismiss() }
+                    AppModalDoneButton { dismiss() }
                 }
             }
             .task(id: searchText) { await search() }

@@ -72,12 +72,12 @@ struct StockChartsRRGResponse: Codable {
     func name(_ symbol: String) -> String {
         guard AppLanguage.currentIdentifier != "en" else { return companies.first { $0.symbol == symbol }?.name ?? symbol }
         switch symbol {
-        case "$INDU": return "道琼斯工业指数"
-        case "$COMPQ": return "纳斯达克综合指数"
-        case "$NYA": return "NYSE 综合指数"
-        case "$XAX": return "AMEX 综合指数"
-        case "$TSX": return "TSX 综合指数"
-        case "$CDNX": return "TSX 创业板指数"
+        case "$INDU": return L10n.text("道琼斯工业指数")
+        case "$COMPQ": return L10n.text("纳斯达克综合指数")
+        case "$NYA": return L10n.text("NYSE 综合指数")
+        case "$XAX": return L10n.text("AMEX 综合指数")
+        case "$TSX": return L10n.text("TSX 综合指数")
+        case "$CDNX": return L10n.text("TSX 创业板指数")
         default: return "S&P 500"
         }
     }

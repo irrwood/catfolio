@@ -189,7 +189,7 @@ struct MoomooOAuthView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.text("完成")) { dismiss() }
+                    AppModalDoneButton { dismiss() }
                 }
             }
             .task { prepareNickname() }
@@ -235,7 +235,7 @@ struct MoomooOAuthView: View {
         case let .working(message):
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text(message)
+                Text(L10n.message(message))
             }
             .appText(.label, weight: .regular)
             .foregroundStyle(SettingsTemplate.secondaryText)

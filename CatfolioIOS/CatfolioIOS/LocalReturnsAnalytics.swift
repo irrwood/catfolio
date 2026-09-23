@@ -174,7 +174,7 @@ struct LocalReturnsAnalyticsClient {
         guard epsGrowth != nil || revenueGrowth != nil else {
             throw LocalServiceError.remote("FMP 未返回 AAPL 的成长数据")
         }
-        return "连接成功，AAPL 的 P/E 与成长数据可用"
+        return L10n.text("连接成功，AAPL 的 P/E 与成长数据可用")
     }
 
     func load(
@@ -369,7 +369,7 @@ struct LocalReturnsAnalyticsClient {
 
         var warnings: [String] = []
         if !missingSymbols.isEmpty {
-            let preview = missingSymbols.prefix(8).joined(separator: "、")
+            let preview = missingSymbols.prefix(8).joined(separator: L10n.listSeparator)
             warnings.append("回撤曲线未计入缺少行情的持仓：\(preview)\(missingSymbols.count > 8 ? "…" : "")")
         }
         return DrawdownSeries(rows: rows, maxDrawdown: maxDrawdown, warnings: warnings)
@@ -567,7 +567,7 @@ struct LocalReturnsAnalyticsClient {
         let missing = seeds.filter { fundamentals[$0.ticker] == nil }.map(\.ticker)
         var combinedWarnings = warnings
         if !missing.isEmpty {
-            let preview = missing.prefix(8).joined(separator: "、")
+            let preview = missing.prefix(8).joined(separator: L10n.listSeparator)
             combinedWarnings.append("暂未读取到估值数据：\(preview)\(missing.count > 8 ? "…" : "")")
         }
         let incomplete = seeds.compactMap { seed -> String? in
@@ -580,7 +580,7 @@ struct LocalReturnsAnalyticsClient {
             return hasPE && hasGrowth ? nil : seed.ticker
         }
         if !incomplete.isEmpty {
-            let preview = incomplete.prefix(8).joined(separator: "、")
+            let preview = incomplete.prefix(8).joined(separator: L10n.listSeparator)
             combinedWarnings.append("缺少 P/E 或成长数据：\(preview)\(incomplete.count > 8 ? "…" : "")")
         }
         return ValuationMatrix(
@@ -696,10 +696,15 @@ struct LocalReturnsAnalyticsClient {
         for attempt in 0..<3 {
             try Task.checkCancellation()
             try await FMPRequestLimiter.shared.waitForTurn()
-            let (data, response) = try await fmpSession.data(for: request)
+            let (data, response) = try await fmpSession.recordedData(for: request)
             guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
             if (200..<300).contains(http.statusCode) {
-                return try JSONSerialization.jsonObject(with: data)
+                do {
+                    return try JSONSerialization.jsonObject(with: data)
+                } catch {
+                    DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
+                    throw error
+                }
             }
             if http.statusCode == 429, attempt < 2 {
                 let retryAfter = http.value(forHTTPHeaderField: "Retry-After")

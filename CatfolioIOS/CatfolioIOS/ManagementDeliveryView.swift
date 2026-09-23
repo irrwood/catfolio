@@ -162,7 +162,7 @@ struct ManagementDeliveryCard: View {
                     Label(modelStatus.message, systemImage: "sparkles").font(.caption).foregroundStyle(.secondary)
                 }
                 if let error = store.error {
-                    Text(error).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("management-delivery-error")
+                    Text(L10n.message(error)).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("management-delivery-error")
                 }
                 if store.busy {
                     HStack {
@@ -302,7 +302,7 @@ private struct ManagementDeliverySourceView: View {
             }
             .appPageBackground().navigationTitle(L10n.text("来源资料"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { AppModalDoneButton { dismiss() } } }
         }
     }
 }

@@ -95,6 +95,7 @@ struct SettingsView: View {
     @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    private let dataSourceHealth = DataSourceHealth.shared
     let showsCloseButton: Bool
     @AppStorage(AppLanguage.preferenceKey) private var languageRawValue = AppLanguage.system.rawValue
     @AppStorage("catfolio.haptics") private var hapticsEnabled = true
@@ -310,6 +311,19 @@ struct SettingsView: View {
                     }
                     .accessibilityIdentifier("settings.data-issues")
                 }
+                SettingsNavigationRow(
+                    icon: .symbol("network"),
+                    title: L10n.text("数据源状态"),
+                    value: dataSourceHealth.statuses.isEmpty
+                        ? L10n.text("尚无记录")
+                        : (dataSourceHealth.failingCount == 0
+                            ? L10n.text("最近正常")
+                            : L10n.text("\(dataSourceHealth.failingCount) 个异常")),
+                    valueColor: dataSourceHealth.failingCount > 0 ? CatfolioTheme.danger : nil
+                ) {
+                    DataSourceStatusView()
+                }
+                .accessibilityIdentifier("settings.data-source-health")
             }
             if let reconciliation, !reconciliation.reconciles {
                 SettingsFootnote(reconciliationDetail(reconciliation))
@@ -407,7 +421,7 @@ struct SettingsView: View {
             )) {
                 Button(L10n.text("好"), role: .cancel) { portfolioResetError = nil }
             } message: {
-                Text(portfolioResetError ?? "")
+                Text(L10n.message(portfolioResetError ?? ""))
             }
             .appSheet(isPresented: $showsCSVImport) {
                 CSVImportView(context: .create).environment(model)
@@ -725,7 +739,7 @@ private struct AccountDetailView: View {
         ) { _ in
             Button(L10n.text("好"), role: .cancel) { notice = nil }
         } message: { notice in
-            Text(notice.message)
+            Text(L10n.message(notice.message))
         }
         .appSheet(item: $activeSheet) { sheet in
             accountSheet(sheet)
@@ -1255,6 +1269,44 @@ private enum LocalServiceStatus: Equatable {
     }
 }
 
+/// Connection state belongs beside the entire provider description, aligned
+/// with the disclosure arrow. At accessibility sizes it gets its own line.
+private struct LocalServiceRowLabel: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let iconName: String
+    let title: String
+    let subtitle: String
+    let status: String
+    let statusColor: Color
+
+    private var statusText: some View {
+        Text(status)
+            .appText(.subheading)
+            .foregroundStyle(statusColor)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: true)
+    }
+
+    var body: some View {
+        SettingsRowContainer {
+            HStack(alignment: .center, spacing: SettingsTemplate.iconSpacing) {
+                VStack(alignment: .leading, spacing: SettingsTemplate.subtitleSpacing) {
+                    SettingsRowLabel(icon: .symbol(iconName), title: title,
+                        subtitle: subtitle, subtitleSpacing: 2)
+                    if dynamicTypeSize.isAccessibilitySize {
+                        statusText.padding(.leading, SettingsTemplate.iconSize + SettingsTemplate.iconSpacing)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if !dynamicTypeSize.isAccessibilitySize {
+                    statusText
+                }
+                SettingsChevron()
+            }
+        }
+    }
+}
+
 private struct LocalServicesSettingsView: View {
     @Environment(\.locale) private var appLocale
     @Environment(\.dismiss) private var dismiss
@@ -1334,7 +1386,7 @@ private struct LocalServicesSettingsView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.text("完成")) { dismiss() }
+                    AppModalDoneButton { dismiss() }
                 }
             }
             .navigationDestination(for: LocalServiceProvider.self) { provider in
@@ -1355,16 +1407,15 @@ private struct LocalServicesSettingsView: View {
     }
 
     private var codexLink: some View {
-        SettingsNavigationRow(
-            icon: .symbol("bubble.left.and.text.bubble.right"),
-            title: "ChatGPT Codex",
-            subtitle: L10n.text("使用 ChatGPT 订阅进行组合问答"),
-            subtitleSpacing: 2,
-            value: codexConnected ? L10n.text("已连接") : L10n.text("未连接"),
-            valueColor: codexConnected ? CatfolioTheme.positive : SettingsTemplate.readOnlyValue
-        ) {
+        NavigationLink {
             CodexOAuthSettingsView()
+        } label: {
+            LocalServiceRowLabel(iconName: "bubble.left.and.text.bubble.right",
+                title: "ChatGPT Codex", subtitle: L10n.text("使用 ChatGPT 订阅进行组合问答"),
+                status: codexConnected ? L10n.text("已连接") : L10n.text("未连接"),
+                statusColor: codexConnected ? CatfolioTheme.positive : SettingsTemplate.readOnlyValue)
         }
+        .buttonStyle(SettingsRowButtonStyle())
         .accessibilityLabel(L10n.text("ChatGPT Codex，使用 ChatGPT 订阅进行组合问答"))
         .accessibilityValue(codexConnected ? L10n.text("已连接") : L10n.text("未连接"))
     }
@@ -1374,24 +1425,14 @@ private struct LocalServicesSettingsView: View {
         // Pushed by value, so a launch argument can route straight to one
         // provider. The row is otherwise the template's navigation row.
         return NavigationLink(value: provider) {
-            SettingsRowContainer {
-                HStack(spacing: SettingsTemplate.iconSpacing) {
-                    SettingsRowLabel(
-                        icon: .symbol(provider.iconName),
-                        title: provider.shortTitle,
-                        subtitle: provider.purpose,
-                        subtitleSpacing: 2,
-                        value: status.title,
-                        valueColor: status == .unconfigured ? SettingsTemplate.readOnlyValue : status.color,
-                        valueIsNumeric: false
-                    )
-                    SettingsChevron()
-                }
-            }
+            LocalServiceRowLabel(iconName: provider.iconName,
+                title: provider.shortTitle, subtitle: provider.purpose,
+                status: status.title,
+                statusColor: status == .unconfigured ? SettingsTemplate.readOnlyValue : status.color)
         }
         .buttonStyle(SettingsRowButtonStyle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(provider.title)，\(provider.purpose)")
+        .accessibilityLabel(L10n.text("\(provider.title)，\(provider.purpose)"))
         .accessibilityValue(status.title)
         .accessibilityHint(L10n.text("打开服务商设置"))
     }
@@ -1941,6 +1982,7 @@ private struct LocalServiceDetailView: View {
 /// What the account rebuild assumed or had to leave out. None of it stops
 /// the home chart; this is where it is said.
 struct AccountDataIssuesView: View {
+    @Environment(\.locale) private var appLocale
     let issues: [String]
 
     var body: some View {
@@ -1949,7 +1991,7 @@ struct AccountDataIssuesView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(issues.enumerated()), id: \.offset) { index, issue in
                         if index > 0 { Divider() }
-                        Text(L10n.label(issue))
+                        Text(L10n.message(issue))
                             .appText(.callout)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)

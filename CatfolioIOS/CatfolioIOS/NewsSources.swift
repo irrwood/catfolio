@@ -200,8 +200,13 @@ struct GoogleNewsProvider: NewsSourceProvider {
                     guard let data = await SecurityDebateResearch.get(search.url, language: query.language) else {
                         return (index, [])
                     }
-                    return (index, SecurityDebateResearch.parseRSS(data, ticker: "\(query.ticker)-\(search.label)",
-                                                                   limit: search.limit))
+                    guard let stories = SecurityDebateResearch.parseRSSChecked(
+                        data, ticker: "\(query.ticker)-\(search.label)", limit: search.limit
+                    ) else {
+                        DataSourceHealth.reportUnusable(DataSource.of(search.url), issue: .invalidFormat)
+                        return (index, [])
+                    }
+                    return (index, stories)
                 }
             }
             var collected: [(Int, [PortfolioAttentionSource])] = []
@@ -282,9 +287,16 @@ struct GDELTProvider: NewsSourceProvider {
                 URLQueryItem(name: "timespan", value: "14d"),
             ]
             guard let url = components.url,
-                  let data = await SecurityDebateResearch.get(url, language: "en"),
-                  let articles = Self.articles(in: data) else {
+                  let data = await SecurityDebateResearch.get(url, language: "en") else {
+                await GDELTGate.shared.backOff()
+                continue
+            }
+            guard let articles = Self.articles(in: data) else {
                 // Over the limit GDELT answers 200 with a plain-text notice.
+                let issue: DataSourceDataIssue =
+                    ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any]) == nil
+                    ? .invalidFormat : .missingRequiredFields
+                DataSourceHealth.reportUnusable(DataSource.of(url), issue: issue)
                 await GDELTGate.shared.backOff()
                 continue
             }
@@ -317,11 +329,12 @@ struct GDELTProvider: NewsSourceProvider {
 
     static func articles(in data: Data) -> [Article]? {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        guard let rows = object["articles"] as? [[String: Any]] else { return nil }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(identifier: "UTC")
         formatter.dateFormat = "yyyyMMdd'T'HHmmss'Z'"
-        return (object["articles"] as? [[String: Any]] ?? []).compactMap { item in
+        return rows.compactMap { item in
             guard let title = (item["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !title.isEmpty,
                   let link = item["url"] as? String, let url = URL(string: link) else { return nil }
@@ -412,11 +425,12 @@ struct FinnhubNewsProvider: NewsSourceProvider {
         request.timeoutInterval = 15
         request.setValue(apiKey, forHTTPHeaderField: "X-Finnhub-Token")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await LocalRequestSessions.ephemeral.data(for: request)
+        let (data, response) = try await LocalRequestSessions.ephemeral.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         switch http.statusCode {
         case 200..<300:
             guard let items = try? JSONDecoder().decode([Item].self, from: data) else {
+                DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
                 throw LocalServiceError.invalidResponse
             }
             return items

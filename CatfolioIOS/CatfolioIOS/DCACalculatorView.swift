@@ -38,7 +38,7 @@ struct DCACalculatorView: View {
           }
           settingsCard.id("dca-settings")
           if let error = store.error {
-            Text(error).font(.footnote).foregroundStyle(.secondary).accessibilityIdentifier(
+            Text(L10n.message(error)).font(.footnote).foregroundStyle(.secondary).accessibilityIdentifier(
               "dca.error")
             Button(L10n.text("重新加载行情")) { Task { await store.load(demo: demo) } }.buttonStyle(
               .bordered)
@@ -189,7 +189,7 @@ struct DCACalculatorView: View {
       heading(L10n.text("回测"))
       dateFields
       if let error = store.settings.validationError {
-        Text(error).font(.caption).foregroundStyle(.secondary)
+        Text(L10n.message(error)).font(.caption).foregroundStyle(.secondary)
       }
       runButton
     }.padding(.top, 10)
@@ -528,10 +528,8 @@ struct DCACalculatorView: View {
       )
       .toolbar {
         ToolbarItem(placement: .confirmationAction) {
-          Button {
+          AppModalDoneButton {
             showsMethod = false
-          } label: {
-            Image(systemName: "checkmark")
           }
         }
       }

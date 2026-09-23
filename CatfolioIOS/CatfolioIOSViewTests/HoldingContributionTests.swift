@@ -4,6 +4,121 @@ import XCTest
 
 /// Losses share the gains' visual surface, but rank by deepest loss in the range.
 final class HoldingLossTests: XCTestCase {
+    func testRangeTransitionsKeepCumulativeLayersOrderedWhenRankingsAndBandCountsChange() throws {
+        let source = history()
+        let recentRow = HoldingValueHistory.Row(dateText: "2026-09-16", cost: 6000,
+            values: ["A": 1100, "E": 900, "C": 700, "B": 1000, "G": 1005, "F": 995], costs: source.costs)
+        let input = HoldingValueHistory(rows: Array(source.rows.dropLast()) + [recentRow, source.rows.last!],
+                                        costs: source.costs, names: source.names)
+        let prepared = try HoldingLossRanges(history: input)
+        let annual = try XCTUnwrap(prepared[.oneYear])
+        let recent = try XCTUnwrap(prepared[.oneWeek])
+        XCTAssertGreaterThan(recent.rows.count, 1, "Both ranges must render an actual chart")
+        XCTAssertNotEqual(annual.bands.map(\.title), recent.bands.map(\.title))
+        XCTAssertNotEqual(annual.bands.count, recent.bands.count)
+        XCTAssertLessThan(try XCTUnwrap(annual.holdingRanks["E"]), try XCTUnwrap(annual.holdingRanks["C"]))
+        XCTAssertLessThan(try XCTUnwrap(recent.holdingRanks["C"]), try XCTUnwrap(recent.holdingRanks["E"]))
+        let annualSeries = LossAnalysisChart.chartSeries(stack: annual, visible: Array(annual.bands.indices), scheme: .light)
+        let recentSeries = LossAnalysisChart.chartSeries(stack: recent, visible: Array(recent.bands.indices), scheme: .light)
+        // Each path is a cumulative boundary, so it must retain its depth in
+        // the paint order when the holdings occupying those layers change.
+        XCTAssertEqual(annualSeries.map(\.id), recentSeries.map(\.id))
+        guard annualSeries.map(\.id) == recentSeries.map(\.id) else { return }
+        for (from, to) in [(annualSeries, recentSeries), (recentSeries, annualSeries)] {
+            let paths = zip(from, to).map { StandardLineChartViewportPath(from: $0.points, to: $1.points) }
+            for frame in 0...60 {
+                let samples = paths.map { $0.samples(progress: CGFloat(frame) / 60) }
+                assertNestedLossBoundaries(samples)
+            }
+            // A second tap must start from the partially drawn shape, too.
+            let interrupted = paths.map { $0.samples(progress: 0.35) }
+            let resumed = zip(interrupted, from).map { StandardLineChartViewportPath(from: $0, to: $1.points) }
+            for frame in 0...60 {
+                assertNestedLossBoundaries(resumed.map { $0.samples(progress: CGFloat(frame) / 60) })
+            }
+        }
+    }
+
+    private func assertNestedLossBoundaries(_ layers: [[StandardLineChartPoint]], file: StaticString = #filePath, line: UInt = #line) {
+        for (outer, inner) in zip(layers, layers.dropFirst()) {
+            XCTAssertEqual(outer.map(\.date), inner.map(\.date), file: file, line: line)
+            for (lower, upper) in zip(outer, inner) {
+                XCTAssertLessThanOrEqual(lower.value, upper.value + 0.000_001, "Loss bands must not cross during zoom", file: file, line: line)
+                XCTAssertLessThanOrEqual(upper.value, 0, file: file, line: line)
+            }
+        }
+    }
+
+    func testStableLossLayersPreserveAmountsAndHiddenOthersAcrossAllRanges() throws {
+        for hidden: Set<String> in [[], ["A", "E"]] {
+            let prepared = try HoldingLossRanges(history: history(), hiding: hidden)
+            for range in ChartTimeRange.allCases {
+                let stack = try XCTUnwrap(prepared[range])
+                for showsOthers in [false, true] {
+                    let visible = stack.bands.indices.filter { showsOthers || stack.bands[$0].kind != .others }
+                    let series = LossAnalysisChart.chartSeries(stack: stack, visible: visible, scheme: .light)
+                    XCTAssertEqual(series.count, HoldingContributionStack.maximumNamed + 1)
+                    for rowIndex in stack.rows.indices {
+                        let row = stack.rows[rowIndex]
+                        XCTAssertEqual(series[0].points[rowIndex].value,
+                                       -visible.reduce(0) { $0 + row.bands[$1] }, accuracy: 0.000_001)
+                        for (depth, band) in visible.filter({ stack.bands[$0].kind != .others }).reversed().enumerated() {
+                            // The visible thickness still represents exactly
+                            // this holding, even with invisible padded layers.
+                            XCTAssertEqual(series[depth + 1].points[rowIndex].value - series[depth].points[rowIndex].value,
+                                           row.bands[band], accuracy: 0.000_001)
+                        }
+                        XCTAssertEqual(series.last?.points[rowIndex].value,
+                                       showsOthers ? -row.bands[0] : 0)
+                    }
+                    assertNestedLossBoundaries(series.map(\.points))
+                }
+            }
+        }
+    }
+
+    @MainActor
+    func testLossRangeMotionFramesIncludingRapidRetargeting() async throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previousWindow = scene.windows.first(where: \.isKeyWindow)
+        let prepared = try HoldingLossRanges(history: LossAnalysisChart.demoHistory())
+        let directory = URL(fileURLWithPath: "/tmp/catfolio-loss-motion", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        for scheme in [ColorScheme.light, .dark] {
+            let state = LossMotionFixtureState()
+            let host = UIHostingController(rootView: LossMotionFixture(state: state, prepared: prepared)
+                .environment(\.colorScheme, scheme))
+            host.safeAreaRegions = []
+            let window = UIWindow(windowScene: scene)
+            window.frame = CGRect(x: 0, y: 0, width: 393, height: 540)
+            window.rootViewController = host
+            window.makeKeyAndVisible()
+            defer { window.isHidden = true; previousWindow?.makeKeyAndVisible() }
+            for (name, range, delay) in [
+                ("start", ChartTimeRange.oneYear, 100),
+                ("week-mid", .oneWeek, 120),
+                ("rapid-max-mid", .maximum, 90),
+                ("rapid-month-mid", .oneMonth, 90),
+                ("month-settled", .oneMonth, 550),
+                ("year-settled", .oneYear, 550)
+            ] {
+                state.range = range
+                try await Task.sleep(for: .milliseconds(delay))
+                host.view.layoutIfNeeded()
+                XCTAssertEqual(host.view.bounds.width, 393, accuracy: 1)
+                let image = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
+                    host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+                }
+                let filename = "\(scheme)-\(name)"
+                let attachment = XCTAttachment(image: image)
+                attachment.name = filename
+                attachment.lifetime = .keepAlways
+                add(attachment)
+                try image.pngData()?.write(to: directory.appendingPathComponent(filename + ".png"))
+            }
+        }
+    }
+
     private func history() -> HoldingValueHistory {
         let costs = Dictionary(uniqueKeysWithValues: ["A", "B", "C", "E", "F", "G"].map { ($0, 1000.0) })
         return HoldingValueHistory(rows: [
@@ -118,9 +233,51 @@ final class HoldingLossTests: XCTestCase {
     }
 }
 
+@Observable private final class LossMotionFixtureState {
+    var range = ChartTimeRange.oneYear
+}
+
+private struct LossMotionFixture: View {
+    @Bindable var state: LossMotionFixtureState
+    let prepared: HoldingLossRanges
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let stack = prepared[state.range]!
+        let series = LossAnalysisChart.chartSeries(stack: stack, visible: Array(stack.bands.indices), scheme: scheme)
+        let bottom = -max(stack.rows.map(\.totalLoss).max() ?? 0, 1) * 1.08
+        ReturnsSourceChartHero(range: $state.range,
+            header: Text("Loss analysis").font(.title2).frame(height: 100),
+            plot: StandardLineChart(series: series, interactionDates: stack.rows.map(\.date),
+                domain: bottom...0, yTicks: [], axisWidth: 0, topInset: 4, bottomHeight: 0,
+                trailingEndpointInset: 0, gridOpacity: 0, transitionKey: state.range.rawValue,
+                dataTransition: .viewportZoom, animatesInitialAppearance: false,
+                yAxisLabel: { _ in "" }, xAxisLabel: { _ in "" }),
+            axis: EmptyView())
+            .background(Color(uiColor: .systemBackground))
+    }
+}
+
 /// The gain-sources chart: principal at the bottom, then the others, then one
 /// band per big gainer, and the stack always adds up to the day's value.
 final class HoldingContributionTests: XCTestCase {
+    private var previousLanguagePreference: Any?
+
+    override func setUp() {
+        super.setUp()
+        previousLanguagePreference = UserDefaults.standard.object(forKey: AppLanguage.preferenceKey)
+        UserDefaults.standard.set(AppLanguage.simplifiedChinese.rawValue, forKey: AppLanguage.preferenceKey)
+    }
+
+    override func tearDown() {
+        if let previousLanguagePreference {
+            UserDefaults.standard.set(previousLanguagePreference, forKey: AppLanguage.preferenceKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: AppLanguage.preferenceKey)
+        }
+        super.tearDown()
+    }
+
     private static let tickers = ["A", "B", "C", "D", "E", "F"]
     private static let costs = Dictionary(uniqueKeysWithValues: tickers.map { ($0, 100.0) })
 
@@ -233,7 +390,7 @@ final class HoldingContributionTests: XCTestCase {
         XCTAssertEqual(last.othersGain, 20 - 10, accuracy: 0.0001)
     }
 
-    func testAHiddenHoldingJoinsTheOthersAndTheNextTakesItsPlace() throws {
+    func testAHiddenHoldingLeavesTheChartAndTheNextTakesItsPlace() throws {
         let stack = HoldingContributionStack(history: history(), hiding: ["A"])
         // Without A: C 200, E 100, B 50, F 20 of 370 gained. F is 5.4%, still
         // under the bar.
@@ -243,8 +400,81 @@ final class HoldingContributionTests: XCTestCase {
         XCTAssertEqual(stack.hidden.map(\.ticker), ["A"])
         XCTAssertEqual(stack.hidden.first?.name, "Alpha")
         let last = try XCTUnwrap(stack.rows.last)
-        XCTAssertEqual(last.othersGain, 300 + 20 - 10, accuracy: 0.0001)
+        XCTAssertEqual(last.othersGain, 20 - 10, accuracy: 0.0001)
+        XCTAssertEqual(last.bands, [600, 10, 50, 100, 200])
+        XCTAssertEqual(last.bands.reduce(0, +), 960, accuracy: 0.0001)
+        XCTAssertEqual(stack.bands[1].subtitle, L10n.text("2 项持仓合计"))
         XCTAssertEqual(last.total, 1260, accuracy: 0.0001)
+    }
+
+    func testHiddenLossAndHiddenSmallGainAreExcludedFromOthers() throws {
+        let hiddenGain = HoldingContributionStack(history: history(), hiding: ["F"])
+        let gainRow = try XCTUnwrap(hiddenGain.rows.last)
+        XCTAssertEqual(gainRow.othersGain, -10)
+        XCTAssertEqual(gainRow.bands.reduce(0, +), 1240)
+        let hiddenLoss = HoldingContributionStack(history: history(), hiding: ["D"])
+        let lossRow = try XCTUnwrap(hiddenLoss.rows.last)
+        XCTAssertEqual(lossRow.othersGain, 20)
+        XCTAssertEqual(lossRow.bands.reduce(0, +), 1270)
+        XCTAssertEqual(lossRow.total, 1260, "Visibility must not change the portfolio header")
+    }
+
+    func testHidingAllHoldingsLeavesNoOtherGainsAndRestoreRecoversBands() throws {
+        let original = HoldingContributionStack(history: history())
+        let hidden = HoldingContributionStack(history: history(), hiding: Set(Self.tickers))
+        XCTAssertEqual(hidden.bands.count, 2)
+        XCTAssertEqual(hidden.hidden.count, 6)
+        XCTAssertEqual(hidden.bands[1].subtitle, L10n.text("0 项持仓合计"))
+        for row in hidden.rows {
+            XCTAssertEqual(row.othersGain, 0)
+            XCTAssertEqual(row.bands, [row.principal, 0])
+        }
+        let restored = HoldingContributionStack(history: history(), hiding: [])
+        XCTAssertEqual(restored.rows.map(\.bands), original.rows.map(\.bands))
+        XCTAssertEqual(restored.bands.map(\.title), original.bands.map(\.title))
+    }
+
+    @MainActor
+    func testOtherGainsLegendMatchesStripedAreaInBothAppearances() async throws {
+        for scheme in [ColorScheme.light, .dark] {
+            let view = VStack(alignment: .leading, spacing: 20) {
+                HStack {
+                    ReturnsSourceLegendSwatch(color: .gray, isOn: true, isOtherGains: true)
+                    Text("其他收益")
+                    Spacer()
+                    Text("+$10")
+                }
+                HStack {
+                    ReturnsSourceLegendSwatch(color: .gray, isOn: false, isOtherGains: true)
+                    Text("其他收益 · 已隐藏")
+                }
+                ForEach([DynamicTypeSize.large, .accessibility1], id: \.self) { size in
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach([1, 9, 10, 11, 99, 100], id: \.self) { rank in
+                            HStack(spacing: 12) {
+                                ReturnsSourceRankLabel(rank: rank, maximumRank: 100)
+                                ReturnsSourceLegendSwatch(color: .blue, isOn: true)
+                                Text("META").lineLimit(1)
+                            }
+                        }
+                        HStack(spacing: 12) {
+                            ReturnsSourceRankLabel(rank: nil, maximumRank: 100)
+                            ReturnsSourceLegendSwatch(color: .gray, isOn: true, isOtherGains: true)
+                            Text("Other").lineLimit(1)
+                        }
+                    }.environment(\.dynamicTypeSize, size)
+                }
+            }.padding(24).frame(width: 350)
+                .foregroundStyle(scheme == .dark ? Color.white : .black)
+                .background(scheme == .dark ? Color.black : .white)
+                .environment(\.colorScheme, scheme)
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 3
+            let attachment = XCTAttachment(image: try XCTUnwrap(renderer.uiImage))
+            attachment.name = "other-gains-legend-\(scheme == .dark ? "dark" : "light")"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
     }
 
     func testAHoldingSteppingInTakesTheFreedColour() {

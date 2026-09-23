@@ -30,14 +30,14 @@ struct LocalAIClient {
         request.timeoutInterval = 20
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await LocalRequestSessions.ephemeral.data(for: request)
+        let (data, response) = try await LocalRequestSessions.ephemeral.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw LocalServiceError.invalidResponse
         }
         guard (200..<300).contains(http.statusCode) else {
             let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let detail = ((object?["error"] as? [String: Any])?["message"] as? String)
-                ?? "DeepSeek 请求失败（\(http.statusCode)）"
+                ?? L10n.text("DeepSeek 请求失败（\(http.statusCode)）")
             throw LocalServiceError.remote(detail)
         }
     }
@@ -794,22 +794,31 @@ struct LocalAIClient {
 
         static func errorMessage(_ data: Data, status: Int) -> String {
             let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            return ((object?["error"] as? [String: Any])?["message"] as? String) ?? "AI 请求失败（\(status)）"
+            return ((object?["error"] as? [String: Any])?["message"] as? String) ?? L10n.text("AI 请求失败（\(status)）")
         }
     }
 
     private func completeChat(_ service: ChatCompletionsService, system: String, user: String) async throws -> String {
-        let (data, response) = try await LocalRequestSessions.ephemeral.data(
-            for: service.request(system: system, user: user, stream: false))
+        let request = try service.request(system: system, user: user, stream: false)
+        let (data, response) = try await LocalRequestSessions.ephemeral.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             throw LocalServiceError.remote(ChatCompletionsService.errorMessage(data, status: http.statusCode))
         }
-        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = object["choices"] as? [[String: Any]],
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
+            throw LocalServiceError.invalidResponse
+        }
+        guard let choices = object["choices"] as? [[String: Any]],
               let message = choices.first?["message"] as? [String: Any],
-              let content = message["content"] as? String,
-              !content.isEmpty else { throw LocalServiceError.invalidResponse }
+              let content = message["content"] as? String else {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .missingRequiredFields)
+            throw LocalServiceError.invalidResponse
+        }
+        guard !content.isEmpty else {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .emptyResult)
+            throw LocalServiceError.invalidResponse
+        }
         return content
     }
 
@@ -819,8 +828,8 @@ struct LocalAIClient {
         user: String,
         emit: @escaping @Sendable (AIStreamEvent) -> Void
     ) async throws {
-        let (bytes, response) = try await LocalRequestSessions.ephemeral.bytes(
-            for: service.request(system: system, user: user, stream: true))
+        let request = try service.request(system: system, user: user, stream: true)
+        let (bytes, response) = try await LocalRequestSessions.ephemeral.recordedBytes(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             var data = Data()
@@ -831,16 +840,29 @@ struct LocalAIClient {
             throw LocalServiceError.remote(ChatCompletionsService.errorMessage(data, status: http.statusCode))
         }
         var wroteAnswer = false
-        for try await line in bytes.lines {
-            try Task.checkCancellation()
-            if AIStreamParsing.isDone(line) { break }
-            if let message = AIStreamParsing.chatCompletionError(line) { throw LocalServiceError.remote(message) }
-            for event in AIStreamParsing.chatCompletionEvents(line) {
-                if case .text = event { wroteAnswer = true }
-                emit(event)
+        var reportedProviderFailure = false
+        do {
+            for try await line in bytes.lines {
+                try Task.checkCancellation()
+                if AIStreamParsing.isDone(line) { break }
+                if let message = AIStreamParsing.chatCompletionError(line) {
+                    reportedProviderFailure = true
+                    DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .providerRejected)
+                    throw LocalServiceError.remote(message)
+                }
+                for event in AIStreamParsing.chatCompletionEvents(line) {
+                    if case .text = event { wroteAnswer = true }
+                    emit(event)
+                }
             }
+        } catch {
+            if !reportedProviderFailure { await DataSourceHealth.record(request.url, error: error) }
+            throw error
         }
-        guard wroteAnswer else { throw LocalServiceError.invalidResponse }
+        guard wroteAnswer else {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .emptyResult)
+            throw LocalServiceError.invalidResponse
+        }
     }
 
     private func streamWithDeepSeek(prompt: String, emit: @escaping @Sendable (AIStreamEvent) -> Void) async throws {
@@ -869,7 +891,7 @@ struct LocalAIClient {
         request.timeoutInterval = 20
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("Catfolio", forHTTPHeaderField: "X-Title")
-        let (data, response) = try await LocalRequestSessions.ephemeral.data(for: request)
+        let (data, response) = try await LocalRequestSessions.ephemeral.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             throw LocalServiceError.remote(ChatCompletionsService.errorMessage(data, status: http.statusCode))

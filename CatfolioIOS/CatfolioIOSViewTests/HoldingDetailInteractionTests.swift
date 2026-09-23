@@ -159,6 +159,44 @@ final class HoldingResearchVisibilityTests: XCTestCase {
 
 final class HoldingDetailInteractionTests: XCTestCase {
     @MainActor
+    func testInitialLoadingSectionsRenderWithoutDataOrPresentationCallbacks() async throws {
+        // Mount only the first-frame sections: no parent appearance callback
+        // or data-loading task can replace the placeholders during capture.
+        let holding = visibilityHolding("NVDA")
+        let content = VStack(spacing: 0) {
+            HoldingDetailPriceSection(holding: holding, marketTodayChange: nil,
+                priceHistory: nil, priceHistoryError: nil, averageCost: nil, selectedAccountKeys: [])
+            HoldingDetailLowerLoadingPlaceholder(ticker: holding.ticker, showsPosition: true)
+        }
+        .frame(width: 402, alignment: .top)
+        .background(SecurityDetailPresentation.ground)
+        .environment(\.locale, Locale(identifier: "zh-Hans"))
+        .environment(\.colorScheme, .dark)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let host = UIHostingController(rootView: content)
+        host.safeAreaRegions = []
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previous?.makeKeyAndVisible() }
+        try await Task.sleep(for: .milliseconds(100))
+        let size = host.sizeThatFits(in: CGSize(width: 402, height: 2400))
+        XCTAssertGreaterThan(size.height, SecurityPriceChartState.fixedHeight + 397,
+                             "Reserve both price and lower-card loading layouts immediately")
+        host.view.bounds = CGRect(origin: .zero, size: size)
+        host.view.layoutIfNeeded()
+        let image = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
+            host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+        }
+        let attachment = XCTAttachment(image: image)
+        attachment.name = "security-detail-first-frame-skeletons"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        try image.pngData()?.write(to: URL(fileURLWithPath: "/tmp/catfolio-detail-first-frame.png"))
+    }
+
+    @MainActor
     func testDetailIsIsolatedOnFirstPresentation() async throws {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let previousWindow = scene.windows.first(where: \.isKeyWindow)
@@ -180,6 +218,13 @@ final class HoldingDetailInteractionTests: XCTestCase {
         let detailController = try XCTUnwrap(controller.presentedViewController)
         try await Task.sleep(for: .milliseconds(400))
         XCTAssertNil(scrollView(in: detailController.view)?.refreshControl)
+        XCTAssertNotNil(scrollView(in: controller.view)?.refreshControl)
+        let sheet = try XCTUnwrap(detailController.sheetPresentationController)
+        XCTAssertNil(sheet.largestUndimmedDetentIdentifier, "Native sheet must dim and block the presenting screen")
+        XCTAssertFalse(detailController.isModalInPresentation, "Keep the native swipe-down dismissal")
+        XCTAssertFalse(SecurityDetailSnapshotTransition.shared.isAnimating)
+        probe.showsDetail = false
+        try await waitUntil { controller.presentedViewController == nil }
         XCTAssertNotNil(scrollView(in: controller.view)?.refreshControl)
     }
 
@@ -267,6 +312,29 @@ final class HoldingDetailInteractionTests: XCTestCase {
 
 final class HoldingResearchCardLayoutTests: XCTestCase {
     @MainActor
+    func testMETAWeeklyBaselineRemainsVisible() async throws {
+        let rows: [(String, Double)] = [("2026-09-14", 665.60), ("2026-09-15", 670.24),
+            ("2026-09-16", 673.31), ("2026-09-17", 682.31), ("2026-09-18", 665.75),
+            ("2026-09-21", 719.25)]
+        let history = SecurityPriceHistory(ticker: "META", currency: "USD",
+            points: rows.map { .init(dateText: $0.0, close: $0.1) }, intradayPoints: [], trades: [])
+        let data = SecurityPriceRangeData(history: history, range: .oneWeek,
+            averageCost: nil, selectedAccountKeys: [])
+        for dark in [false, true] {
+            _ = try await capture(VStack(alignment: .leading, spacing: 12) {
+                Text("META · 1W · 2026-09-14 – 2026-09-21").font(.caption)
+                Text("$719.25  +8.06%").font(.title2)
+                SecurityPricePlot(data: data, currency: "USD", appearanceID: "meta-week",
+                    transitionKey: "week", selectedPoint: data.points.first,
+                    measuredRange: nil, selectionIndicatorLabel: "2026-09-14",
+                    onSelect: { _ in }, onMeasure: { _ in }, onInteractionEnded: { _ in })
+                    .frame(height: 360)
+            }, width: 402, dark: dark,
+                name: "meta-week-baseline-\(dark ? "dark" : "light")", settle: .milliseconds(1200))
+        }
+    }
+
+    @MainActor
     func testTradeReadoutMatchesFigmaInBothAppearances() async throws {
         let trades = SecurityTrade.grouped([
             LocalTransactionRecord(date: "2026-09-10", action: "SELL", ticker: "NVDA",
@@ -316,7 +384,7 @@ final class HoldingResearchCardLayoutTests: XCTestCase {
         ]
         for dark in [false, true] {
             let size = try await capture(HoldingDetailPriceSection(holding: visibilityHolding("NVDA", name: "NVIDIA", shares: 83.4078),
-                marketTodayChange: -2, priceHistory: history, priceHistoryError: nil, presentationReady: true,
+                marketTodayChange: -2, priceHistory: history, priceHistoryError: nil,
                 averageCost: 160, selectedAccountKeys: ["isa", "invest"], accountOptions: accounts)
                 .background(Color(uiColor: .systemGroupedBackground)),
                 width: 402, dark: dark, name: "stock-header-figma-\(dark ? "dark" : "light")", settle: .milliseconds(700))
@@ -587,7 +655,7 @@ private struct DetailRefreshProbeView: View {
                             }
                     }
                 }
-                .presentationDetents([.large])
+                .securityDetailSheet()
                 .sheet(isPresented: $probe.showsChild) {
                     ScrollView { Text("Child").frame(height: 1800) }
                         .refreshable { probe.childRefreshes += 1 }
@@ -1149,5 +1217,35 @@ final class SecurityTradeSelectionTests: XCTestCase {
                                      tradeCount: 1, accountKeys: ["isa"])
         XCTAssertNil(inferred.amountTotals)
         XCTAssertNil(inferred.profitTotals)
+    }
+}
+
+final class SecurityTradeMagnetTests: XCTestCase {
+    private let buy = Date(timeIntervalSince1970: 100)
+    private let sell = Date(timeIntervalSince1970: 200)
+
+    func testOnlyAttractsWithinSmallScreenDistance() {
+        let targets = [(date: buy, x: CGFloat(100))]
+        XCTAssertEqual(ChartMarkerMagnet.date(at: 105, targets: targets, currentDate: nil, radius: 6), buy)
+        XCTAssertNil(ChartMarkerMagnet.date(at: 107, targets: targets, currentDate: nil, radius: 6))
+        XCTAssertNil(ChartMarkerMagnet.date(at: 100, targets: targets, currentDate: nil, radius: 0))
+    }
+
+    func testReleaseMarginPreventsBoundaryJitterButLetsGo() {
+        let targets = [(date: buy, x: CGFloat(100))]
+        XCTAssertEqual(ChartMarkerMagnet.date(at: 107, targets: targets, currentDate: buy, radius: 6), buy)
+        XCTAssertNil(ChartMarkerMagnet.date(at: 109, targets: targets, currentDate: buy, radius: 6))
+        XCTAssertNil(ChartMarkerMagnet.date(at: 107, targets: targets, currentDate: sell, radius: 6))
+    }
+
+    func testNearbyBuyAndSellSelectClosestMarkerInsteadOfStickingToOldOne() {
+        let targets = [(date: buy, x: CGFloat(100)), (date: sell, x: CGFloat(108))]
+        XCTAssertEqual(ChartMarkerMagnet.date(at: 106, targets: targets, currentDate: buy, radius: 6), sell)
+        XCTAssertEqual(ChartMarkerMagnet.date(at: 104, targets: Array(targets.reversed()), currentDate: nil, radius: 6), buy)
+    }
+
+    func testNoTradesOrRemovedAccountMarkerCannotKeepSelectionAttached() {
+        XCTAssertNil(ChartMarkerMagnet.date(at: 100, targets: [], currentDate: buy, radius: 6))
+        XCTAssertNil(ChartMarkerMagnet.date(at: 100, targets: [(date: sell, x: CGFloat(150))], currentDate: buy, radius: 6))
     }
 }

@@ -371,7 +371,7 @@ struct HoldingsHeatmapTile: View {
             return L10n.text("\(holding.shortName)，占组合 \(DisplayFormat.percent(fraction * 100, signed: false))，\(model.performanceTitle) \(changeText)")
         case let .exposure(row, directHolding):
             let name = CompanyNameCatalog.displayName(ticker: row.ticker, fallback: row.name)
-            let source = directHolding == nil ? "ETF 穿透持仓" : "直接与 ETF 合并持仓"
+            let source = directHolding == nil ? L10n.text("ETF 穿透持仓") : L10n.text("直接与 ETF 合并持仓")
             return L10n.text("\(name)，\(source)，占组合 \(DisplayFormat.percent(fraction * 100, signed: false))，\(model.performanceTitle) \(changeText)")
         case let .remainder(count):
             return L10n.text("其他 \(count) 项合并持仓")

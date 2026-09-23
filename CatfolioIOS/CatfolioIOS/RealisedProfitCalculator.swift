@@ -66,8 +66,8 @@ enum TaxYearBasis: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .calendar: "日历年"
-        case .uk: "英国税年 · 4/6–4/5"
+        case .calendar: L10n.text("日历年")
+        case .uk: L10n.text("英国税年 · 4/6–4/5")
         }
     }
 
@@ -155,7 +155,7 @@ enum RealisedProfitCalculator {
         transactions: [LocalTransactionRecord], basis: TaxYearBasis
     ) -> [(label: String, summary: RealisedProfitSummary)] {
         let grouped = Dictionary(grouping: sales(transactions: transactions)) {
-            basis.label(for: $0.date) ?? "日期无法识别"
+            basis.label(for: $0.date) ?? L10n.text("日期无法识别")
         }
         return grouped.keys.sorted(by: >).map { ($0, summarize(sales: grouped[$0] ?? [])) }
     }

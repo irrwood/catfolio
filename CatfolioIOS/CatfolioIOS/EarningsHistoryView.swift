@@ -17,17 +17,11 @@ struct EarningsHistoryView: View {
     }
     @State private var revenue = false
     @State private var snapshot: EarningsSnapshot?
-    @State private var loading = false
+    @State private var loadState = ResearchCardLoadState()
     @State private var errorMessage: String?
     @State private var isExpanded: Bool
     @State private var hasLoaded = false
-
-    private var points: [EarningsObservation] {
-        Array((snapshot?.observations ?? []).filter {
-            let values = $0.values(revenue: revenue)
-            return values.actual != nil || values.estimate != nil
-        }.suffix(16))
-    }
+    private var loading: Bool { loadState.isLoading }
 
     var body: some View {
         Group {
@@ -38,13 +32,21 @@ struct EarningsHistoryView: View {
                     isExpanded: $isExpanded,
                     isLoading: loading
                 ) {
-                    content
+                    EarningsHistoryContent(symbol: symbol, snapshot: snapshot, revenue: $revenue,
+                        loading: loading, errorMessage: errorMessage,
+                        onRefresh: { Task { await load(force: true) } })
                 }
                 .accessibilityIdentifier("earnings-history")
             }
         }
         .task(id: symbol) {
-            if snapshot == nil { snapshot = await EarningsHistoryClient.shared.cached(symbol: symbol) }
+            let revision = loadState.revision
+            if snapshot == nil {
+                let cached = await EarningsHistoryClient.shared.cached(symbol: symbol)
+                guard loadState.canPublish(revision) else { return }
+                snapshot = cached
+            }
+            guard loadState.canPublish(revision) else { return }
             if let snapshot { onAvailability(snapshot.hasUsableObservations ? .available : .empty) }
         }
         // Once per visit: the client answers from its day-old cache when it
@@ -55,7 +57,47 @@ struct EarningsHistoryView: View {
         }
     }
 
-    private var content: some View {
+    @MainActor private func load(force: Bool) async {
+        guard !Task.isCancelled else { return }
+        errorMessage = nil
+        await loadState.load {
+            try await EarningsHistoryClient.shared.load(symbol: symbol, forceRefresh: force)
+        } onSuccess: { value in
+            snapshot = value
+            hasLoaded = true
+            onAvailability(value.hasUsableObservations ? .available : .empty)
+        } onFailure: { failure, _ in
+            errorMessage = failure.localizedDescription
+            // Keep the chart and cached values when a refresh fails.
+            onAvailability(snapshot?.hasUsableObservations == true ? .available : .failed)
+        }
+    }
+}
+
+/// The displayed earnings comparison, without cache or network lifecycle.
+struct EarningsHistoryContent: View {
+    @ScaledMetric(relativeTo: .caption2) private var legendFontSize = 10.0
+    @ScaledMetric(relativeTo: .caption2) private var legendMarkerSize = 7.0
+    @ScaledMetric(relativeTo: .caption2) private var quarterFontSize = 11.0
+    @ScaledMetric(relativeTo: .caption2) private var columnWidth = 44.0
+    @ScaledMetric(relativeTo: .caption2) private var axisRowHeight = 14.0
+    @ScaledMetric(relativeTo: .caption2) private var chartSpacing = 20.0
+    let symbol: String
+    let snapshot: EarningsSnapshot?
+    @Binding var revenue: Bool
+    let loading: Bool
+    let errorMessage: String?
+    var onRefresh: () -> Void = {}
+    private var chartHeight: CGFloat { 190 + chartSpacing + axisRowHeight }
+
+    private var points: [EarningsObservation] {
+        Array((snapshot?.observations ?? []).filter {
+            let values = $0.values(revenue: revenue)
+            return values.actual != nil || values.estimate != nil
+        }.suffix(16))
+    }
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             selector
             VStack(alignment: .leading, spacing: 18) {
@@ -63,22 +105,22 @@ struct EarningsHistoryView: View {
                 if !points.isEmpty {
                     GeometryReader { geometry in
                         ScrollView(.horizontal, showsIndicators: false) {
-                            chart.frame(width: max(geometry.size.width, CGFloat(points.count) * 44))
+                            chart.frame(width: max(geometry.size.width, CGFloat(points.count) * columnWidth))
                         }
                     }
-                    .frame(height: 222)
+                    .frame(height: chartHeight)
                     .onAppear { ChartAppearanceHistory.record("earnings|\(symbol)") }
                 } else if loading {
                     ChartShapeSkeleton(layout: .columns, appearanceID: "earnings|\(symbol)")
-                        .frame(height: 222)
+                        .frame(height: chartHeight)
                 } else {
-                    Text(errorMessage ?? L10n.text(revenue ? "暂无收入数据" : "暂无盈利历史。"))
+                    Text(L10n.message(errorMessage ?? L10n.text(revenue ? "暂无收入数据" : "暂无盈利历史。")))
                         .font(.subheadline).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, minHeight: 200)
                 }
                 HStack {
                     Spacer()
-                    Button { Task { await load(force: true) } } label: {
+                    Button(action: onRefresh) {
                         Text(L10n.text("刷新"))
                             .redacted(reason: loading ? .placeholder : [])
                             .chartLoadingShimmer(active: loading)
@@ -115,8 +157,9 @@ struct EarningsHistoryView: View {
         HStack(spacing: 4) {
             Circle().fill(hollow ? Color(uiColor: .systemBackground) : color)
                 .overlay { Circle().stroke(color, lineWidth: hollow ? 1.3 : 0) }
-                .frame(width: 7, height: 7)
-            Text(L10n.label(title)).font(.system(size: 10)).foregroundStyle(.secondary)
+                .frame(width: legendMarkerSize, height: legendMarkerSize)
+            Text(L10n.label(title)).font(.system(size: legendFontSize)).foregroundStyle(.secondary)
+                .researchLayoutFrame("earnings.legend.\(title)")
         }.fixedSize()
     }
 
@@ -136,7 +179,7 @@ struct EarningsHistoryView: View {
         let span = max(high - low, max(abs(high), 1) * 0.1)
         let lower = low - span * 0.3
         let upper = high + span * 0.3
-        return VStack(spacing: 20) {
+        return VStack(spacing: chartSpacing) {
             GeometryReader { geometry in
                 HStack(spacing: 0) {
                     ForEach(points) { point in
@@ -170,14 +213,17 @@ struct EarningsHistoryView: View {
             }.frame(height: 190)
             HStack(spacing: 0) {
                 ForEach(points) { point in
-                    Color.clear.frame(height: 12).overlay {
+                    Color.clear.frame(height: axisRowHeight).overlay {
                         Text(point.quarterLabel)
-                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                            .font(.system(size: quarterFontSize)).foregroundStyle(.secondary)
                             .fixedSize()
+                            .researchLayoutFrame("earnings.quarter.label.\(point.id)")
                     }
+                    .researchLayoutFrame("earnings.quarter.cell.\(point.id)")
                 }
             }.accessibilityHidden(true)
         }
+        .researchLayoutFrame("earnings.chart")
     }
 
     private func formatted(_ value: Double?) -> String {
@@ -196,23 +242,4 @@ struct EarningsHistoryView: View {
         return "\(point.date), \(L10n.text("估计")) \(formatted(values.estimate)), \(L10n.text("实际")) \(formatted(values.actual))"
     }
 
-    @MainActor private func load(force: Bool) async {
-        // No `guard !loading`: folding and reopening restarts the task, and
-        // bailing out while the superseded run unwound left an empty chart.
-        loading = true
-        errorMessage = nil
-        defer { loading = false }
-        do {
-            let value = try await EarningsHistoryClient.shared.load(symbol: symbol, forceRefresh: force)
-            try Task.checkCancellation()
-            snapshot = value
-            hasLoaded = true
-            onAvailability(value.hasUsableObservations ? .available : .empty)
-        } catch {
-            guard !Task.isCancelled else { return }
-            errorMessage = error.localizedDescription
-            // Keep the chart and cached values when a refresh fails.
-            onAvailability(snapshot?.hasUsableObservations == true ? .available : .failed)
-        }
-    }
 }

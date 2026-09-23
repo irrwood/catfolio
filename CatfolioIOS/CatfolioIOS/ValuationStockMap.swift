@@ -207,10 +207,10 @@ struct ValuationStockMap: View {
             }
             ForEach(matrix.unavailable) { row in
                 Divider()
-                Text("\(row.ticker) · \(L10n.label(row.reason))")
+                Text("\(row.ticker) · \(L10n.message(row.reason))")
             }
             ForEach(Array(matrix.warnings.enumerated()), id: \.offset) { _, warning in
-                Text(L10n.label(warning))
+                Text(L10n.message(warning))
             }
         }.font(.caption2).foregroundStyle(.secondary).padding(.top, 10)
     }

@@ -39,6 +39,8 @@ struct PortfolioChartResponse: Codable {
     /// What the rebuild assumed or could not use, for Settings to list. The
     /// chart is drawn regardless.
     var dataIssues: [String]? = nil
+    /// Actual quote sessions, excluding calendar days carried forward by the ledger.
+    var marketDates: [String]? = nil
 
     enum CodingKeys: String, CodingKey {
         case warning
@@ -47,6 +49,7 @@ struct PortfolioChartResponse: Codable {
         case currentPoint = "current_point"
         case accountNAV = "account_nav"
         case dataIssues = "data_issues"
+        case marketDates = "market_dates"
     }
 
     static func unavailableAccountHistory(positionCount: Int, reason: String) -> Self {
@@ -74,7 +77,7 @@ struct PortfolioChartResponse: Codable {
         return Self(positionCount: positionCount, positionHistory: .init(available: points.count > 1, rows: points),
             currentPoint: points.last!,
             warning: (assumptions.isEmpty ? "" : LocalMarketDataClient.impliedFundingNote + "\n\n" + "每条推算和数据问题列在 设置 → 本机数据 → 数据问题。" + "\n\n")
-                + "账户资产包含持仓和现金，按历史日线及汇率重建；净入金为累计入金减累计出金。金额显示扣除外部资金流后的盈亏，百分比为区间 TWR。股息按到账日计入，现金余额尚未与券商核对；不是实时账户余额。",
+                + "账户资产包含持仓和现金，按历史日线及汇率重建，最新持仓估值接入有效报价。1 日显示最近交易日相对前一交易日的估值变化，不是分钟线。净入金为累计入金减累计出金；盈亏扣除外部资金流，百分比为区间 TWR。股息按到账日计入，现金余额尚未与券商核对。",
             accountNAV: units,
             dataIssues: assumptions.isEmpty ? nil : assumptions)
     }
@@ -931,27 +934,27 @@ struct PortfolioAttentionReport: Codable, Sendable {
 
     var contextSummary: String {
         let rows = attentionRows.map { row in
-            let signals = row.signals.map(\.label).joined(separator: "、")
+            let signals = row.signals.map { L10n.message($0.label) }.joined(separator: L10n.listSeparator)
             return "\(row.ticker) | \(row.attention.rawValue) | \(row.thesis.stance.rawValue) | \(row.thesis.confidence.rawValue) | \(signals) | \(row.thesis.whyItMatters)"
         }.joined(separator: "\n")
-        return "Portfolio Attention 扫描了 \(holdingsCount) 只持仓，\(attentionRows.count) 只需要关注。\n\(rows)"
+        return L10n.text("Portfolio Attention 扫描了 \(holdingsCount) 只持仓，\(attentionRows.count) 只需要关注。\n\(rows)")
     }
 
     var markdownFallback: String {
-        var blocks = ["## 今天", "**\(holdingsCount) 只持仓中有 \(attentionRows.count) 只需要关注**"]
+        var blocks = [L10n.text("## 今天"), L10n.text("**\(holdingsCount) 只持仓中有 \(attentionRows.count) 只需要关注**")]
         for row in attentionRows {
             blocks.append("""
             ### \(row.ticker)
             \(row.attention.rawValue.capitalized) attention · \(row.thesis.stance.rawValue)
 
-            \(row.signals.map(\.label).joined(separator: " · "))
+            \(row.signals.map { L10n.message($0.label) }.joined(separator: " · "))
 
             \(row.thesis.whyItMatters)
 
-            **主要风险：** \(row.thesis.risks.first ?? "暂无已确认的公司级风险")
+            **\(L10n.text("主要风险："))** \(row.thesis.risks.first ?? L10n.text("暂无已确认的公司级风险"))
             """)
         }
-        blocks.append("**其他持仓**\n\(noMaterialChangeCount) 只 · 无重大变化")
+        blocks.append(L10n.text("**其他持仓**\n\(noMaterialChangeCount) 只 · 无重大变化"))
         return blocks.joined(separator: "\n\n")
     }
 }
@@ -985,13 +988,13 @@ enum BrokerProvider: String, CaseIterable, Codable, Identifiable {
     var setupHint: String {
         switch self {
         case .trading212:
-            "支持 iPhone 直连并合并两个账户。"
+            L10n.text("支持 iPhone 直连并合并两个账户。")
         case .moomoo:
-            "支持 iPhone OAuth 2.1 + PKCE 直连。"
+            L10n.text("支持 iPhone OAuth 2.1 + PKCE 直连。")
         case .ibkr:
-            "支持 iPhone 直连 IBKR Flex Web Service。"
+            L10n.text("支持 iPhone 直连 IBKR Flex Web Service。")
         case .snaptrade:
-            "使用个人 API 连接券商账户"
+            L10n.text("使用个人 API 连接券商账户")
         }
     }
 }
@@ -1054,7 +1057,7 @@ enum ETFLookThroughBasis: String, CaseIterable, Identifiable {
     case cost
 
     var id: String { rawValue }
-    var title: String { self == .market ? "ETF 市值" : "ETF 成本" }
+    var title: String { self == .market ? L10n.text("ETF 市值") : L10n.text("ETF 成本") }
 }
 
 struct ETFLookThroughResponse: Decodable {
@@ -1092,12 +1095,18 @@ struct ETFLookThroughRow: Decodable, Identifiable {
     let etfWeightPercent: Double
     let sector: String?
     var estimatedHoldingPeriodPercent: Double? = nil
+    /// Direct cost plus each fund's cost allocated with the same weights as value.
+    var allocatedCostUSD: Double? = nil
+    /// Fund ticker -> allocated market value; preserves each fund's own daily P/L.
+    var fundMarketValues: [String: Double]? = nil
 
     var id: String { ticker }
 
     enum CodingKeys: String, CodingKey {
         case ticker, name, sector
         case estimatedHoldingPeriodPercent = "estimated_holding_period_percent"
+        case allocatedCostUSD = "allocated_cost_usd"
+        case fundMarketValues = "fund_market_values"
         case logoSymbol = "logo_symbol"
         case directUSD = "direct_usd"
         case fromETFUSD = "from_etf_usd"

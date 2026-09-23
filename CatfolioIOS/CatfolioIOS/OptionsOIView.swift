@@ -403,7 +403,7 @@ actor OptionsOIClient {
         var request = URLRequest(url: url)
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         if http.statusCode == 429 {
             // Stop immediately, do not switch hosts or retry around Yahoo's limit.
@@ -533,7 +533,7 @@ struct OptionsOIView: View {
                 .padding(.bottom, 8)
             plotCard
             if supported, snapshot != nil, let error {
-                Text(error).appText(.caption).foregroundStyle(.secondary)
+                Text(L10n.message(error)).appText(.caption).foregroundStyle(.secondary)
                     .padding([.horizontal, .bottom], HoldingDetailCardStyle.contentInset)
             }
         }
@@ -609,18 +609,31 @@ struct OptionsOIView: View {
                 .foregroundStyle(.primary.opacity(0.20))
                 .accessibilityLabel(L10n.text("计算说明"))
             }
-            HStack(spacing: 16) {
-                Picker(L10n.text("到期范围"), selection: $days) {
-                    Text("7D").tag(7).accessibilityLabel(L10n.text("7 天内"))
-                    Text("30D").tag(30).accessibilityLabel(L10n.text("30 天内"))
-                    Text("90D").tag(90).accessibilityLabel(L10n.text("90 天内"))
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 16) {
+                    expiryPicker.fixedSize(horizontal: true, vertical: false)
+                    rangeToggle.fixedSize(horizontal: true, vertical: false)
                 }
-                .pickerStyle(.segmented).labelsHidden()
-                .disabled(loading || !supported)
-                .sensoryFeedback(.selection, trigger: days) { _, _ in hapticsEnabled }
-                rangeToggle
+                VStack(alignment: .leading, spacing: 12) {
+                    expiryPicker
+                    HStack {
+                        Spacer()
+                        rangeToggle.fixedSize(horizontal: true, vertical: false)
+                    }
+                }
             }
         }
+    }
+
+    private var expiryPicker: some View {
+        Picker(L10n.text("到期范围"), selection: $days) {
+            Text("7D").tag(7).accessibilityLabel(L10n.text("7 天内"))
+            Text("30D").tag(30).accessibilityLabel(L10n.text("30 天内"))
+            Text("90D").tag(90).accessibilityLabel(L10n.text("90 天内"))
+        }
+        .pickerStyle(.segmented).labelsHidden()
+        .disabled(loading || !supported)
+        .sensoryFeedback(.selection, trigger: days) { _, _ in hapticsEnabled }
     }
 
     #if DEBUG
@@ -826,7 +839,7 @@ struct OptionsOIView: View {
                     }
                 }
             }.softTopScrollEdge().appPageBackground().navigationTitle(L10n.text("全部墙位"))
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { showsWalls = false } } }
+                .toolbar { ToolbarItem(placement: .confirmationAction) { AppModalDoneButton { showsWalls = false } } }
         }
     }
 

@@ -100,10 +100,8 @@ struct CostMarketCard: View {
             if let measurement = measuredPoints {
                 return response.accountPerformance(from: measurement.start.dateText, to: measurement.end.dateText)
             }
-            guard let first = rangeData.rows.first, let end = selectedPoint,
-                  let index = response.positionHistory.rows.firstIndex(where: { $0.dateText == first.dateText }) else { return (.nan, .nan) }
-            let opening = response.positionHistory.rows[max(0, index - 1)].dateText
-            return response.accountPerformance(from: opening, to: end.dateText)
+            guard let first = rangeData.rows.first, let end = selectedPoint else { return (.nan, .nan) }
+            return response.accountPerformance(from: first.dateText, to: end.dateText)
         }
         if let measurement = measuredPoints {
             return costMarketChange(from: measurement.start, to: measurement.end)
@@ -334,7 +332,7 @@ struct CostMarketCard: View {
             Button(L10n.text("知道了"), role: .cancel) { }
         } message: {
             // Paragraph by paragraph, so each is found in the catalogue.
-            Text(warning.map { $0.components(separatedBy: "\n\n").map { L10n.label($0) }.joined(separator: "\n\n") }
+            Text(warning.map { $0.components(separatedBy: "\n\n").map { L10n.message($0) }.joined(separator: "\n\n") }
                  ?? L10n.text("账户历史暂不可用。"))
         }
         .task(id: "\(model.portfolioChartRevision)-\(isAwaitingEnrichedHistory)") {
@@ -477,9 +475,6 @@ struct CostMarketCard: View {
             return rangeDateText(from: measurement.start.date, to: measurement.end.date)
         }
         guard selectedDate != nil, let selectedPoint else { return nil }
-        if range == .oneDay && response.accountNAV == nil {
-            return selectedPoint.date.formatted(.dateTime.hour().minute())
-        }
         return selectedPoint.date.formatted(.dateTime.year().month(.abbreviated).day())
     }
 
@@ -592,9 +587,13 @@ final class CostMarketPreparedSource: @unchecked Sendable {
     let previousTradingDate: Date?
 
     init(response: PortfolioChartResponse) {
-        let source = response.positionHistory.rows.isEmpty
-            ? [response.currentPoint]
-            : response.positionHistory.rows
+        // The latest observation may replace a same-day historical point or
+        // extend it. Never let a nonempty history hide the current endpoint.
+        var source = response.positionHistory.rows
+        if response.currentPoint.marketValue.isFinite, response.currentPoint.cost.isFinite {
+            source.removeAll { $0.dateText == response.currentPoint.dateText }
+            source.append(response.currentPoint)
+        }
         points = source.compactMap { row -> CostMarketPlotPoint? in
             guard row.marketValue.isFinite, row.cost.isFinite,
                   let date = DayDateCodec.date(from: row.dateText) else { return nil }
@@ -606,7 +605,13 @@ final class CostMarketPreparedSource: @unchecked Sendable {
             )
         }.sorted { $0.date < $1.date }
         lastDate = points.last?.date
-        previousTradingDate = points.dropLast().last?.date
+        if let sessions = response.marketDates?.sorted(), sessions.count >= 2 {
+            let baseline = sessions[sessions.count - 2]
+            previousTradingDate = points.last(where: { $0.dateText <= baseline })?.date
+                ?? points.first?.date
+        } else {
+            previousTradingDate = points.dropLast().last?.date
+        }
     }
 }
 
@@ -630,13 +635,18 @@ final class CostMarketPreparedData: @unchecked Sendable {
             // Portfolio history is daily rather than intraday. Use the latest
             // two trading snapshots so 1D still shows the day-over-day move
             // instead of collapsing to an unhelpful single point.
-            let filtered = points.filter {
+            var filtered = points.filter {
                 range.includes(
                     $0.date,
                     through: last,
                     previousTradingDate: source.previousTradingDate,
                     calendar: calendar
                 )
+            }
+            // YTD starts at the prior year-end closing valuation.
+            if range == .yearToDate, let first = filtered.first,
+               let prior = points.last(where: { $0.date < first.date }) {
+                filtered.insert(prior, at: 0)
             }
             return (range, Self.prepare(filtered))
         })

@@ -45,7 +45,7 @@ struct DCAAIConditionsView: View {
                     Text(L10n.text("使用当前 AI 服务，仅发送这段描述与已有规则；不发送账户或持仓。整理后由你检查，再应用到回测。"))
                 }
                 if let error = editor.error {
-                    Section { Text(error).foregroundStyle(.secondary) }
+                    Section { Text(L10n.message(error)).foregroundStyle(.secondary) }
                 }
                 if !editor.issues.isEmpty {
                     Section(L10n.text("还需要补充")) {
@@ -99,7 +99,7 @@ struct DCAAIConditionsView: View {
                                 Text(value == 0 ? L10n.text("暂停本期买入") : "\(value.formatted())×").tag(Optional(value))
                             }
                         }.disabled(editor.isGenerating)
-                        if let error = editor.draft.validationError { Text(error).font(.footnote).foregroundStyle(.secondary) }
+                        if let error = editor.draft.validationError { Text(L10n.message(error)).font(.footnote).foregroundStyle(.secondary) }
                     } footer: {
                         Text(L10n.text("条件只读取买入前的收盘数据；历史不足时暂停本期。每期直接投入并买入基础金额乘以所选倍数，暂停时不投入。"))
                     }

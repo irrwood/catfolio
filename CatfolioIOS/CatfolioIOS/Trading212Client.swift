@@ -836,7 +836,7 @@ struct Trading212Client {
             request.setValue("CatfolioIOS/1.0", forHTTPHeaderField: "User-Agent")
             let token = Data("\(credentials.apiKey):\(credentials.apiSecret)".utf8).base64EncodedString()
             request.setValue("Basic \(token)", forHTTPHeaderField: "Authorization")
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await session.recordedData(for: request)
             guard let http = response as? HTTPURLResponse else { throw Trading212Error.invalidResponse }
             if http.statusCode == 401 || http.statusCode == 403 { throw Trading212Error.authorizationFailed }
             guard (200..<300).contains(http.statusCode) else {
@@ -1147,7 +1147,7 @@ struct Trading212Client {
                   let url = URL(string: link), url.scheme?.lowercased() == "https" else {
                 throw Trading212Error.invalidResponse
             }
-            let (data, response) = try await session.data(from: url)
+            let (data, response) = try await session.recordedData(from: url)
             guard let http = response as? HTTPURLResponse,
                   (200..<300).contains(http.statusCode) else {
                 throw Trading212Error.invalidResponse
@@ -1240,7 +1240,7 @@ struct Trading212Client {
         request.setValue("CatfolioIOS/1.0", forHTTPHeaderField: "User-Agent")
         let token = Data("\(credentials.apiKey):\(credentials.apiSecret)".utf8).base64EncodedString()
         request.setValue("Basic \(token)", forHTTPHeaderField: "Authorization")
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else { throw Trading212Error.invalidResponse }
         if http.statusCode == 401 || http.statusCode == 403 { throw Trading212Error.authorizationFailed }
         guard (200..<300).contains(http.statusCode) else {
@@ -1471,7 +1471,7 @@ struct Trading212Client {
         request.setValue("CatfolioIOS/1.0", forHTTPHeaderField: "User-Agent")
         let token = Data("\(credentials.apiKey):\(credentials.apiSecret)".utf8).base64EncodedString()
         request.setValue("Basic \(token)", forHTTPHeaderField: "Authorization")
-        return try await session.data(for: request)
+        return try await session.recordedData(for: request)
     }
 
     private static func historyCheckpointKey(
@@ -1581,7 +1581,7 @@ struct Trading212Client {
         let token = Data("\(credentials.apiKey):\(credentials.apiSecret)".utf8).base64EncodedString()
         request.setValue("Basic \(token)", forHTTPHeaderField: "Authorization")
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else { throw Trading212Error.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             throw Trading212Error.http(http.statusCode, Self.serviceMessage(from: data))
@@ -1606,7 +1606,7 @@ struct Trading212Client {
         let token = Data("\(credentials.apiKey):\(credentials.apiSecret)".utf8).base64EncodedString()
         request.setValue("Basic \(token)", forHTTPHeaderField: "Authorization")
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else { throw Trading212Error.invalidResponse }
         if http.statusCode == 401 || http.statusCode == 403 {
             throw Trading212Error.authorizationFailed

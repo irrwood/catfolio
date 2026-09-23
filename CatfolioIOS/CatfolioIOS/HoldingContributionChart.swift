@@ -2,12 +2,12 @@ import SwiftUI
 
 /// Where the portfolio's value came from, over time. The principal is the
 /// band at the bottom; on top of it sit the gains, the biggest contributors
-/// each as their own band and the rest together, so the top of the stack is
-/// the day's value. How many holdings get a band is decided from the gains
+/// each as their own band and the rest together. With every gain visible,
+/// the top is the day's value. How many holdings get a band is decided from the gains
 /// themselves (`HoldingContributionStack.namedCount`).
 ///
 /// Each day is today's share counts at that day's close — for a personal
-/// portfolio the home chart's own method, so the stack's top is its value line.
+/// portfolio the home chart's own method. Hidden gains leave the plot only.
 /// The design's dotted field: 3pt dots on a 10pt grid, barely there.
 private struct HeroDotField: View {
     let color: Color
@@ -42,6 +42,65 @@ enum ReturnsSourceChartStyle {
 
     static func secondary(for scheme: ColorScheme) -> Color {
         scheme == .dark ? Color.white.opacity(0.72) : Color.black.opacity(0.55)
+    }
+}
+
+/// Every legend row reserves the same digit width, including hidden holdings
+/// and unranked aggregates. The column also follows the reader's text size.
+struct ReturnsSourceRankLabel: View {
+    let rank: Int?
+    let maximumRank: Int
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            Text(String(repeating: "8", count: max(2, String(maximumRank).count)))
+                .hidden()
+            Text(rank.map(String.init) ?? "")
+        }
+        .appNumber(.callout, weight: .semibold)
+        .monospacedDigit()
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: true)
+        .foregroundStyle(.secondary)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(rank.map(String.init) ?? "")
+        .accessibilityHidden(rank == nil)
+    }
+}
+
+/// The aggregate key uses the same white ground and diagonal paint as its area.
+struct ReturnsSourceLegendSwatch: View {
+    let color: Color
+    let isOn: Bool
+    var isOtherGains = false
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(isOn ? (isOtherGains ? .white : color) : .clear)
+            .overlay {
+                if isOn && isOtherGains {
+                    Canvas { context, size in
+                        var stripes = Path()
+                        for x in stride(from: -size.height, through: size.width, by: 7) {
+                            // Keep stroke caps outside the key; only the mask
+                            // should define where a stripe meets its edge.
+                            stripes.move(to: CGPoint(x: x - 4, y: size.height + 4))
+                            stripes.addLine(to: CGPoint(x: x + size.height + 4, y: -4))
+                        }
+                        context.stroke(stripes, with: .color(ReturnsSourceChartStyle.stripeColor), lineWidth: 2.6)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous).inset(by: 0.75))
+                }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(isOn ? (isOtherGains ? Color.secondary.opacity(0.2) : .clear) : .secondary,
+                                  lineWidth: isOn ? 0.5 : 1.5)
+            }
+            .frame(width: 20, height: 20)
+            .compositingGroup()
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .accessibilityHidden(true)
     }
 }
 
@@ -181,7 +240,7 @@ struct HoldingContributionChart: View {
                                        axis: axisLabels(top: top))
                 Group {
                     legend(stack: stack, row: shown)
-                    Text(L10n.text("按当前持仓的股数回推每天的市值，所以已卖出的持仓不在图中。收益最多的几只各占一层：按盈利从高到低，直到下一只不到全部盈利的 6%，最多 6 只。其他持仓整体亏损时，亏损从本金层里扣除，本金层会低于本金线。轻点下方任意一行可以隐藏或显示；隐藏的持仓并入其他，由下一只补上。"))
+                    Text(L10n.text("按当前持仓的股数回推每天的市值，所以已卖出的持仓不在图中。收益最多的几只各占一层：按盈利从高到低，直到下一只不到全部盈利的 6%，最多 6 只。其他持仓整体亏损时，亏损从本金层里扣除，本金层会低于本金线。其他收益只包含未单独列出且未隐藏的持仓。轻点下方任意一行可以隐藏或显示；隐藏的收益从图中移除，由下一只补上。顶部组合总额与本金不受隐藏影响。"))
                         .appText(.micro, weight: .regular)
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -398,8 +457,8 @@ struct HoldingContributionChart: View {
         .allowsHitTesting(false)
     }
 
-    /// Every row turns its band on and off. A holding turned off joins the
-    /// others and the next one by gain takes its band; it waits, dimmed, at
+    /// Every row turns its band on and off. A holding turned off leaves the
+    /// plot and the next one by gain takes its band; it waits, dimmed, at
     /// the foot of the list to be turned back on.
     private func legend(stack: HoldingContributionStack, row: HoldingContributionStack.Row) -> some View {
         VStack(spacing: 0) {
@@ -408,8 +467,9 @@ struct HoldingContributionChart: View {
                 let item = stack.bands[band]
                 let isOn = isShown(item.kind)
                 Button { toggle(item) } label: {
-                    legendRow(rank: stack.rank(for: item),
+                    legendRow(rank: stack.rank(for: item), maximumRank: stack.holdingRanks.count,
                               swatch: Self.color(for: item.kind, scheme: colorScheme), isOn: isOn,
+                              isOtherGains: item.kind == .others,
                               title: item.title, subtitle: item.subtitle) {
                         legendAmount(item.kind, row: row, band: band)
                     }
@@ -422,7 +482,8 @@ struct HoldingContributionChart: View {
                 Button {
                     withAnimation(.snappy) { _ = hiddenTickers.remove(holding.ticker) }
                 } label: {
-                    legendRow(rank: stack.holdingRanks[holding.ticker], swatch: .secondary, isOn: false,
+                    legendRow(rank: stack.holdingRanks[holding.ticker], maximumRank: stack.holdingRanks.count,
+                              swatch: .secondary, isOn: false,
                               title: holding.ticker, subtitle: holding.name) {
                         Text(L10n.text("已隐藏")).appText(.caption).foregroundStyle(.secondary)
                     }
@@ -433,22 +494,13 @@ struct HoldingContributionChart: View {
         }
     }
 
-    private func legendRow<Trailing: View>(rank: Int?, swatch: Color, isOn: Bool, title: String, subtitle: String,
+    private func legendRow<Trailing: View>(rank: Int?, maximumRank: Int,
+                                           swatch: Color, isOn: Bool, isOtherGains: Bool = false,
+                                           title: String, subtitle: String,
                                            @ViewBuilder trailing: () -> Trailing) -> some View {
         HStack(alignment: .center, spacing: 12) {
-            // The same width with or without a number, so every swatch
-            // lines up.
-            Text(rank.map(String.init) ?? "")
-                .appNumber(.callout, weight: .semibold)
-                .foregroundStyle(.secondary)
-                .frame(width: 18, alignment: .leading)
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(isOn ? swatch : .clear)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(isOn ? .clear : Color.secondary, lineWidth: 1.5)
-                }
-                .frame(width: 20, height: 20)
+            ReturnsSourceRankLabel(rank: rank, maximumRank: maximumRank)
+            ReturnsSourceLegendSwatch(color: swatch, isOn: isOn, isOtherGains: isOtherGains)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).appText(.subheading, weight: .semibold).lineLimit(1)
                 Text(subtitle).appText(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -555,8 +607,8 @@ struct HoldingContributionChart: View {
 
 /// The history cut into the chart's bands, bottom to top: the principal, the
 /// others' gain, then the named holdings' gains from the smallest of them to
-/// the largest, so the largest is on top and the stack's top is the day's
-/// value.
+/// the largest, so the largest is on top. Hidden gains are excluded; portfolio
+/// totals remain available separately for the header.
 struct HoldingContributionStack {
     struct Band {
         enum Kind: Equatable {
@@ -583,7 +635,9 @@ struct HoldingContributionStack {
         /// One height per band, in `bands` order, never below nothing. The
         /// others' losses come out of the principal band.
         let bands: [Double]
-        var total: Double { bands.reduce(0, +) }
+        /// Full portfolio value for the header; hiding a chart layer does not
+        /// alter the holdings or their principal.
+        let total: Double
     }
 
     struct Window {
@@ -606,8 +660,8 @@ struct HoldingContributionStack {
     /// Rank all holdings by gain before filtering visibility, so a number
     /// stays with its holding when it is hidden, restored, or promoted.
     let holdingRanks: [String: Int]
-    /// Holdings the reader turned off, with their names: they count in the
-    /// others and are listed so they can be turned back on.
+    /// Holdings the reader turned off, excluded from the gain bands and listed
+    /// separately so they can be turned back on.
     let hidden: [(ticker: String, name: String)]
 
     /// How many of the gains, largest first, get their own band: while each
@@ -650,7 +704,7 @@ struct HoldingContributionStack {
         var free = (0..<Self.maximumNamed).filter { !colours.values.contains($0) }.makeIterator()
         for ticker in named where colours[ticker] == nil { colours[ticker] = free.next() ?? 0 }
         let present = Set(history.rows.flatMap(\.values.keys))
-        let others = present.subtracting(named)
+        let others = present.subtracting(named).subtracting(hiding)
         hidden = hiding.intersection(present).sorted {
             let left = ranks[$0] ?? Int.max, right = ranks[$1] ?? Int.max
             return left == right ? $0 < $1 : left < right
@@ -669,14 +723,16 @@ struct HoldingContributionStack {
             // Named gains are drawn from nothing up; an early stretch below
             // cost counts in with the rest instead of as a negative band.
             let namedGains = named.reversed().map { max(0, row.gain($0)) }
-            let remainder = row.total - row.cost - namedGains.reduce(0, +)
             let othersGain = others.reduce(0) { $0 + row.gain($1) }
+            let namedLosses = named.reduce(0) { $0 + min(0, row.gain($1)) }
+            let remainder = othersGain + namedLosses
             return Row(
                 dateText: row.dateText,
                 date: row.date,
                 principal: row.cost,
                 othersGain: othersGain,
-                bands: [row.cost + min(0, remainder), max(0, remainder)] + namedGains
+                bands: [row.cost + min(0, remainder), max(0, remainder)] + namedGains,
+                total: row.total
             )
         }
     }

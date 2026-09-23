@@ -4,6 +4,117 @@ import XCTest
 @testable import CatfolioIOS
 
 final class LocalizationTests: XCTestCase {
+    @MainActor
+    func testCachedDataIssuesRenderAfterLiveLanguageSwitch() async throws {
+        let defaults = UserDefaults.standard
+        let previousLanguage = defaults.object(forKey: AppLanguage.preferenceKey)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previousWindow = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        defer {
+            window.isHidden = true
+            previousWindow?.makeKeyAndVisible()
+            defaults.set(previousLanguage, forKey: AppLanguage.preferenceKey)
+        }
+        let host = UIHostingController(rootView: CachedDataIssuesLocalizationPreview())
+        window.frame = CGRect(x: 0, y: 0, width: 393, height: 720)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        let directory = URL(fileURLWithPath: "/tmp/catfolio-language-switch", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        for language in ["zh-Hans", "en", "zh-Hans"] {
+            defaults.set(language, forKey: AppLanguage.preferenceKey)
+            try await Task.sleep(for: .milliseconds(250))
+            host.view.layoutIfNeeded()
+            let image = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
+                host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+            }
+            let attachment = XCTAttachment(image: image)
+            attachment.name = "cached-data-issues-\(language)"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            try image.pngData()?.write(to: directory.appendingPathComponent(language + ".png"))
+        }
+    }
+
+    func testCachedStatusMessagesTranslateInBothDirectionsWithoutChangingArguments() {
+        let chinese = L10n.render("已达到 FMP 的请求频率上限（429）。这不是密钥或权限问题——同时打开多张数据卡片会更快触顶。约 \(17) 秒后可重试。", language: "zh-Hans")
+        let english = L10n.message(chinese, language: "en")
+        XCTAssertTrue(english.contains("17 seconds"))
+        XCTAssertNil(english.range(of: "[一-鿿。；、，：！？（）]", options: .regularExpression))
+        XCTAssertEqual(L10n.message(english, language: "zh-Hans"), chinese)
+        XCTAssertEqual(L10n.message(chinese, language: "zh-Hans"), chinese)
+        let userValue = "我的账户 %@ 100% AAPL"
+        let status = L10n.render("不计入\(userValue)", language: "zh-Hans")
+        // Very short generic formats deliberately do not match arbitrary text.
+        XCTAssertEqual(L10n.message(status, language: "en"), status)
+        let detailed = L10n.render("\(userValue) 估值数据读取失败：\("HTTP 429")", language: "zh-Hans")
+        XCTAssertEqual(L10n.message(detailed, language: "en"), "Valuation data for \(userValue) could not be loaded: HTTP 429")
+        XCTAssertEqual(L10n.message("我的退休账户 NVDA 100%", language: "en"), "我的退休账户 NVDA 100%")
+        XCTAssertEqual(L10n.message("Unrecognized external error: 原始内容", language: "en"), "Unrecognized external error: 原始内容")
+    }
+
+    func testCachedReturnWarningsPreserveRoutingAndLocalizeTheirPresentation() {
+        let warning = "现金流镜像：TWR：2026-09-21 缺少 NVDA 价格。"
+        XCTAssertEqual(L10n.message(warning, language: "en"), "Cash-flow matching: TWR: 2026-09-21 is missing a price for NVDA.")
+        XCTAssertTrue(warning.hasPrefix("现金流镜像："), "Stored warning routing must remain language independent")
+        let paragraphs = "账户账本与净值日期不完整。\n\n缺少完整入金和出金金额。"
+        XCTAssertEqual(L10n.message(paragraphs, language: "en"),
+                       "Account ledger and valuation dates are incomplete.\n\nComplete deposit and withdrawal amounts are missing.")
+        XCTAssertEqual(L10n.message("FY2026 Q3 营收指引", language: "en"), "FY2026 Q3 revenue guidance")
+        XCTAssertEqual(L10n.message("成交量 1.9×", language: "en"), "Volume 1.9×")
+    }
+
+    func testFinancialServiceAndBrokerMessagesHaveEnglishCoverage() {
+        ContentLanguage.$requested.withValue("en") {
+            let messages = [FMPFailure.missingKey.localizedDescription,
+                            FMPFailure.rateLimited(retryAfterSeconds: 12).localizedDescription,
+                            CompanyFinancialsError.unsupportedTicker.localizedDescription,
+                            CompanyFinancialsError.invalidResponse.localizedDescription,
+                            CompanyFinancialsError.noStatements.localizedDescription,
+                            NasdaqAnalystError.unknownSymbol.localizedDescription,
+                            NasdaqAnalystError.noCoverage.localizedDescription,
+                            LocalServiceError.remote("Yahoo 历史行情请求失败（429）").localizedDescription,
+                            L10n.text("FY\(2026) \("Q3") 营收指引"),
+                            L10n.text("正在读取行情、期权与估值…"),
+                            L10n.text("10 年期")]
+                + BrokerProvider.allCases.map(\.setupHint)
+            for message in messages {
+                XCTAssertNil(message.range(of: "[一-鿿。；、，：！？（）]", options: .regularExpression), message)
+            }
+        }
+    }
+
+    @MainActor
+    func testHomeEmptyStateFollowsLanguageChangesWithoutReloadingPortfolio() async throws {
+        let defaults = UserDefaults.standard
+        let previousLanguage = defaults.object(forKey: AppLanguage.preferenceKey)
+        let suite = "HomeEmptyStateLocalization.\(UUID().uuidString)"
+        let modelDefaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.set(previousLanguage, forKey: AppLanguage.preferenceKey)
+            modelDefaults.removePersistentDomain(forName: suite)
+        }
+        modelDefaults.set(false, forKey: "catfolio.fakeDataMode")
+        modelDefaults.set(false, forKey: PublicInvestorPreferences.enabledKey)
+        defaults.set("zh-Hans", forKey: AppLanguage.preferenceKey)
+        let model = AppModel(defaults: modelDefaults, personalDocumentLoader: {
+            throw LocalPortfolioError.noPortfolio
+        })
+        await model.refreshPortfolio(refreshMarketData: false)
+        XCTAssertTrue(model.holdings.isEmpty)
+        XCTAssertFalse(model.isPortfolioLoading)
+        XCTAssertEqual(model.portfolioError, "手机中还没有组合数据，请先直连券商或导入 CSV")
+
+        // Returning from Settings must update the existing empty state, with
+        // no retry, portfolio reload or navigation reset.
+        defaults.set("en", forKey: AppLanguage.preferenceKey)
+        XCTAssertEqual(model.portfolioError,
+                       "No portfolio data on this phone yet. Connect a broker or import a CSV first.")
+        defaults.set("zh-Hans", forKey: AppLanguage.preferenceKey)
+        XCTAssertEqual(model.portfolioError, "手机中还没有组合数据，请先直连券商或导入 CSV")
+    }
+
     func testCompanyNamesUseFamiliarBrandsAndPreserveListingIdentity() {
         let cases = [
             ("nvda", "NVIDIA Corporation", "NVIDIA"),
@@ -246,6 +357,22 @@ final class LocalizationTests: XCTestCase {
         XCTAssertEqual(reloaded.string(forKey: DisplayCurrency.preferenceKey), "GBP")
         XCTAssertEqual(CompanyNameDisplay.original.rawValue, "原始名称")
         XCTAssertEqual(ChartTimeRange.oneMonth.rawValue, "1M")
+    }
+}
+
+private struct CachedDataIssuesLocalizationPreview: View {
+    @AppStorage(AppLanguage.preferenceKey) private var language = "system"
+    private let cachedIssues = [
+        "现金流镜像：TWR：2026-09-21 缺少 NVDA 价格。",
+        "Yahoo 历史行情请求失败（429）",
+        "账户账本与净值日期不完整。",
+        "部分报表在 SEC Company Facts 中缺失，已用 FMP 补充。"
+    ]
+
+    var body: some View {
+        NavigationStack { AccountDataIssuesView(issues: cachedIssues) }
+            .environment(\.locale, Locale(identifier: AppLanguage.resolvedIdentifier(language)))
+            .preferredColorScheme(.light)
     }
 }
 
