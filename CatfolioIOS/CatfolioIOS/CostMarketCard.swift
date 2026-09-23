@@ -544,6 +544,7 @@ struct FastCostMarketPlot: View {
             gridOpacity: 0,
             transitionKey: "\(transitionKey)-\(colorScheme == .light ? "light" : "dark")-\(showsNetDeposit)",
             rangeTransitionKey: transitionKey,
+            staggeredRangeSeriesID: "cost",
             appearanceID: "portfolio-assets",
             dataTransition: .viewportZoom,
             seriesChangeBounce: 12,
