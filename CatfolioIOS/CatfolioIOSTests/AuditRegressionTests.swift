@@ -389,7 +389,7 @@ final class DetailMarketSyncTests: XCTestCase {
         let now = Date()
         let model = try await model(now: now)
         let cost = model.overview?.summary.totalCost
-        try model.publishSecurityPriceHistory(history(at: now), source: model.portfolioSource, now: now)
+        try await model.publishSecurityPriceHistory(history(at: now), source: model.portfolioSource, now: now)
         XCTAssertEqual(model.holdings.first?.quotePrice, 130)
         XCTAssertEqual(model.holdings.first?.marketValue, 1300)
         XCTAssertEqual(model.overview?.summary.marketValue, 1300)
@@ -400,7 +400,7 @@ final class DetailMarketSyncTests: XCTestCase {
     func testDiskRefreshCannotUndoTheDetailQuote() async throws {
         let now = Date()
         let model = try await model(now: now)
-        try model.publishSecurityPriceHistory(history(at: now), source: model.portfolioSource, now: now)
+        try await model.publishSecurityPriceHistory(history(at: now), source: model.portfolioSource, now: now)
         await model.refreshPortfolio(refreshMarketData: false)
         XCTAssertEqual(model.holdings.first?.quotePrice, 130)
         XCTAssertEqual(try XCTUnwrap(model.holdingDailyChanges["TEST"]), 30, accuracy: 1e-9)
@@ -409,12 +409,12 @@ final class DetailMarketSyncTests: XCTestCase {
     func testOutOfOrderAndOlderBrokerObservationsAreIgnored() async throws {
         let now = Date()
         let model = try await model(now: now, observedAt: now.addingTimeInterval(-60))
-        try model.publishSecurityPriceHistory(history(price: 80, at: now.addingTimeInterval(-120)),
+        try await model.publishSecurityPriceHistory(history(price: 80, at: now.addingTimeInterval(-120)),
                                              source: model.portfolioSource, now: now)
         XCTAssertEqual(model.holdings.first?.quotePrice, 120)
         XCTAssertNil(model.holdingDailyChanges["TEST"])
-        try model.publishSecurityPriceHistory(history(at: now), source: model.portfolioSource, now: now)
-        try model.publishSecurityPriceHistory(history(price: 90, at: now.addingTimeInterval(-30)),
+        try await model.publishSecurityPriceHistory(history(at: now), source: model.portfolioSource, now: now)
+        try await model.publishSecurityPriceHistory(history(price: 90, at: now.addingTimeInterval(-30)),
                                              source: model.portfolioSource, now: now)
         XCTAssertEqual(model.holdings.first?.quotePrice, 130)
         XCTAssertEqual(try XCTUnwrap(model.holdingDailyChanges["TEST"]), 30, accuracy: 1e-9)
@@ -423,10 +423,10 @@ final class DetailMarketSyncTests: XCTestCase {
     func testDifferentSourceCurrencyAndExpiredQuotesDoNotChangeHoldings() async throws {
         let now = Date()
         let model = try await model(now: now)
-        try model.publishSecurityPriceHistory(history(at: now), source: .demo, now: now)
-        try model.publishSecurityPriceHistory(history(at: now, currency: "EUR"), source: .personal, now: now)
-        try model.publishSecurityPriceHistory(history(at: now.addingTimeInterval(-8 * 86_400)), source: .personal, now: now)
-        try model.publishSecurityPriceHistory(history(at: now.addingTimeInterval(120)), source: .personal, now: now)
+        try await model.publishSecurityPriceHistory(history(at: now), source: .demo, now: now)
+        try await model.publishSecurityPriceHistory(history(at: now, currency: "EUR"), source: .personal, now: now)
+        try await model.publishSecurityPriceHistory(history(at: now.addingTimeInterval(-8 * 86_400)), source: .personal, now: now)
+        try await model.publishSecurityPriceHistory(history(at: now.addingTimeInterval(120)), source: .personal, now: now)
         XCTAssertEqual(model.holdings.first?.quotePrice, 120)
         XCTAssertTrue(model.holdingDailyChanges.isEmpty)
     }
@@ -437,7 +437,7 @@ final class DetailMarketSyncTests: XCTestCase {
         let value = history(at: now)
         let task = Task {
             withUnsafeCurrentTask { $0?.cancel() }
-            try model.publishSecurityPriceHistory(value, source: .personal, now: now)
+            try await model.publishSecurityPriceHistory(value, source: .personal, now: now)
         }
         try await task.value
         XCTAssertEqual(model.holdings.first?.quotePrice, 120)
@@ -450,7 +450,7 @@ final class DetailMarketSyncTests: XCTestCase {
         let prices = history(at: now)
         let constituent = SecurityPriceHistory(ticker: "OTHER", currency: "USD", points: prices.points,
                                                intradayPoints: prices.intradayPoints, trades: [])
-        try model.publishSecurityPriceHistory(constituent, source: .personal, now: now)
+        try await model.publishSecurityPriceHistory(constituent, source: .personal, now: now)
         XCTAssertEqual(try XCTUnwrap(model.holdingDailyChanges["OTHER"]), 30, accuracy: 1e-9)
         XCTAssertEqual(model.holdings.map(\.ticker), ["TEST"])
         XCTAssertEqual(model.overview?.summary.marketValue, original)

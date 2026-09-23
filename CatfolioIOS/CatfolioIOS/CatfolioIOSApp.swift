@@ -43,6 +43,9 @@ struct CatfolioIOSApp: App {
             RootTabView()
                 .fontDesign(.rounded)
                 .task { ReferenceCatalogs.warm() }
+                .task {
+                    if model.isPublicInvestorMode { PublicInvestorCatalogState.shared.loadIfNeeded() }
+                }
                 .task { CloudPreferences.start() }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .active { CloudPreferences.shared.refresh() }

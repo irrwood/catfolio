@@ -195,9 +195,21 @@ enum L10n {
 
     private static let storedMessages = StoredMessageCatalog()
 
+    // View bodies can request hundreds of labels during one scroll update.
+    // Recreating a Bundle from its path for every label repeatedly hits the
+    // bundle resource machinery even though the app has only two UI locales.
+    private static let mainLanguageBundles: [String: Bundle] = {
+        Dictionary(uniqueKeysWithValues: ["en", "zh-Hans"].compactMap { language in
+            Bundle.main.path(forResource: language, ofType: "lproj")
+                .flatMap(Bundle.init(path:))
+                .map { (language, $0) }
+        })
+    }()
+
     static func render(_ message: Message, language: String, bundle: Bundle = .main) -> String {
-        let resource = bundle.path(forResource: language, ofType: "lproj")
-            .flatMap(Bundle.init(path:)) ?? bundle
+        let resource = (bundle === Bundle.main ? mainLanguageBundles[language] : nil)
+            ?? bundle.path(forResource: language, ofType: "lproj")
+                .flatMap(Bundle.init(path:)) ?? bundle
         let template = resource.localizedString(forKey: message.key, value: message.key, table: nil)
         // Substitute only catalog placeholders, never values containing '%' or other keys.
         // Avoid printf so literal financial percentages require no escaping.

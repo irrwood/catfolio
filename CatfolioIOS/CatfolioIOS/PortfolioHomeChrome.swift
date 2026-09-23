@@ -104,7 +104,9 @@ struct PortfolioNightGlow: View {
                 // Static: flattened once.
                 .drawingGroup()
 
-                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isAnimating || reduceMotion)) { context in
+                // These blurred shapes move only about a point between ticks.
+                // A slower clock avoids competing with scroll rendering.
+                TimelineView(.animation(minimumInterval: 1.0 / 15, paused: !isAnimating || reduceMotion)) { context in
                     let drift = reduceMotion ? Self.still : Self.drift(at: context.date.timeIntervalSinceReferenceDate)
                     ZStack(alignment: .topLeading) {
                         // The top of the page goes black.

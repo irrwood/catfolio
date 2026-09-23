@@ -438,7 +438,7 @@ final class HomeLiveValuationTests: XCTestCase {
         let history = SecurityPriceHistory(ticker: "HOME_REFRESH_TEST", currency: "USD",
             points: [.init(dateText: DayDateCodec.string(from: now.addingTimeInterval(-86_400)), close: 100)],
             intradayPoints: [.init(dateText: "minute", close: 140, timestamp: now)], trades: [])
-        try model.publishSecurityPriceHistory(history, source: .personal, now: now)
+        try await model.publishSecurityPriceHistory(history, source: .personal, now: now)
         for _ in 0..<100 where model.portfolioChartRevision == revision {
             try await Task.sleep(for: .milliseconds(20))
         }

@@ -106,6 +106,7 @@ final class AppModel {
     @ObservationIgnored private var dailyChangesRequestGeneration = 0
     @ObservationIgnored private var holdingDailyChangesSignature = ""
     @ObservationIgnored private var detailMarketObservations: [PortfolioSource: [String: SecurityMarketObservation]] = [:]
+    @ObservationIgnored private var detailQuoteGeneration = 0
     @ObservationIgnored private var holdingDetailContent: [HoldingDetailContentKey: HoldingDetailCachedContent] = [:]
     @ObservationIgnored private var holdingDetailContentOrder: [HoldingDetailContentKey] = []
     @ObservationIgnored private var returnsPageTask: Task<Void, Never>?
@@ -215,8 +216,9 @@ final class AppModel {
                     acceptedQuoteCount: 0, refreshedDisclosure: false, tracksQuotes: false)
             }
             if isPublicInvestorMode {
+                let catalog = try await PublicInvestorCatalogState.shared.get()
                 if let fresh = try await publicInvestorStore.refreshIfNeeded(
-                    catalog: PublicInvestorCatalog.loaded.get(), selection: publicInvestorSelection
+                    catalog: catalog, selection: publicInvestorSelection
                 ) {
                     guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
                     try await apply(fresh)
@@ -518,7 +520,7 @@ final class AppModel {
             referencePrice: holding?.quotePrice.isFinite == true ? holding?.quotePrice : nil,
             document: scoped
         )
-        try publishSecurityPriceHistory(history, source: source)
+        try await publishSecurityPriceHistory(history, source: source)
         return history
     }
 
@@ -534,7 +536,7 @@ final class AppModel {
             forceRefresh: forceRefresh,
             cachedOnly: cachedOnly
         )
-        try publishSecurityPriceHistory(history, source: source)
+        try await publishSecurityPriceHistory(history, source: source)
         return history
     }
 
@@ -625,7 +627,7 @@ final class AppModel {
             forceRefresh: forceRefresh,
             cachedOnly: cachedOnly
         )
-        try publishSecurityPriceHistory(history, source: source)
+        try await publishSecurityPriceHistory(history, source: source)
         return history
     }
 
@@ -633,7 +635,7 @@ final class AppModel {
     /// overlays through background portfolio/daily-change refreshes, which
     /// may have started before the detail request finished.
     func publishSecurityPriceHistory(_ history: SecurityPriceHistory, source: PortfolioSource,
-                                     now: Date = .now) throws {
+                                     now: Date = .now) async throws {
         guard !Task.isCancelled, source == portfolioSource,
               let observation = history.latestMarketObservation,
               observation.observedAt <= now.addingTimeInterval(60),
@@ -654,8 +656,21 @@ final class AppModel {
         }
         guard matching.allSatisfy({ observation.observedAt >= quoteDate($0, in: document) }) else { return }
         detailMarketObservations[source, default: [:]][key] = observation
-        let updated = applyingDetailQuotes(to: document, now: now)
-        let presentation = try LocalPortfolioEngine.presentation(for: updated)
+        detailQuoteGeneration &+= 1
+        let quoteGeneration = detailQuoteGeneration
+        let requestGeneration = portfolioRequestGeneration
+        let originalDocument = document
+        let updated = applyingDetailQuotes(to: originalDocument, now: now)
+        // This derives FX impact for every holding from the entire trade
+        // ledger. Running it on the main actor stalls scrolling and the
+        // detail-to-home transition for large portfolios.
+        let presentation = try await Task.detached(priority: .userInitiated) {
+            try LocalPortfolioEngine.presentation(for: updated)
+        }.value
+        guard !Task.isCancelled, source == portfolioSource,
+              quoteGeneration == detailQuoteGeneration,
+              requestGeneration == portfolioRequestGeneration,
+              document == originalDocument else { return }
         document = updated
         overview = presentation.0
         holdings = presentation.2
@@ -1409,8 +1424,10 @@ final class AppModel {
         let previousDailyChanges = holdingDailyChanges
         let accountKeys = resolvedAccountKeys(in: loaded)
         let scoped = selectedDocument(from: loaded)
+        let initialDocument = applyingDetailQuotes(to: scoped)
+        var calculatedDocument = initialDocument
         var presentation = try await Task.detached(priority: .userInitiated) {
-            try LocalPortfolioEngine.presentation(for: scoped)
+            try LocalPortfolioEngine.presentation(for: initialDocument)
         }.value
         let cachedChart: PortfolioChartResponse?
         if loadsCachedChart && !preservesChart && !isFakeDataMode && !isPublicInvestorMode && (!scoped.positions.isEmpty || !(scoped.transactions ?? []).isEmpty) {
@@ -1424,11 +1441,27 @@ final class AppModel {
         guard generation == portfolioRequestGeneration else { return }
         // Read the overlay after suspension so an in-flight disk refresh
         // cannot replace a quote the detail has just published.
-        fullDocument = applyingDetailQuotes(to: loaded)
-        document = applyingDetailQuotes(to: scoped)
-        if detailMarketObservations[portfolioSource]?.isEmpty == false {
-            presentation = try LocalPortfolioEngine.presentation(for: document)
+        // A quote may arrive while the initial calculation or chart cache is
+        // loading. Recalculate the overlaid document off-main and retry if a
+        // newer quote arrives during that calculation.
+        var overlaidFullDocument: LocalPortfolioDocument
+        var overlaidScopedDocument: LocalPortfolioDocument
+        while true {
+            let quoteGeneration = detailQuoteGeneration
+            overlaidFullDocument = applyingDetailQuotes(to: loaded)
+            overlaidScopedDocument = applyingDetailQuotes(to: scoped)
+            if overlaidScopedDocument.positions != calculatedDocument.positions {
+                let snapshot = overlaidScopedDocument
+                presentation = try await Task.detached(priority: .userInitiated) {
+                    try LocalPortfolioEngine.presentation(for: snapshot)
+                }.value
+                calculatedDocument = snapshot
+            }
+            guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+            if quoteGeneration == detailQuoteGeneration { break }
         }
+        fullDocument = overlaidFullDocument
+        document = overlaidScopedDocument
         presentedSource = portfolioSource
         updateRealisedProfit(from: document)
         accounts = fullDocument.accounts
@@ -1651,7 +1684,8 @@ final class AppModel {
 
     private func loadActiveDocument() async throws -> LocalPortfolioDocument {
         if isPublicInvestorMode {
-            return try await publicInvestorStore.load(catalog: PublicInvestorCatalog.loaded.get(), selection: publicInvestorSelection)
+            let catalog = try await PublicInvestorCatalogState.shared.get()
+            return try await publicInvestorStore.load(catalog: catalog, selection: publicInvestorSelection)
         }
         #if DEBUG
         if LaunchArguments.contains("--verify-empty-account") { return FoundationRegressionChecks.emptyFixture }

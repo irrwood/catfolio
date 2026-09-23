@@ -45,7 +45,10 @@ struct RefreshGlow: ViewModifier {
             light.opacity(0.5)
         } else {
             GeometryReader { geometry in
-                TimelineView(.animation) { timeline in
+                // The sheen moves over small text for 1.1 seconds at a time.
+                // Thirty samples are visually smooth without waking SwiftUI
+                // at the display's full rate throughout a network refresh.
+                TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
                     let width = max(geometry.size.width, 1)
                     let band = max(60, width * 0.4)
                     let elapsed = timeline.date.timeIntervalSinceReferenceDate

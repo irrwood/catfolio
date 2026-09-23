@@ -94,7 +94,7 @@ final class AccountVisibilityTests: XCTestCase {
             points: [.init(dateText: DayDateCodec.string(from: now.addingTimeInterval(-86400)), close: 150),
                      .init(dateText: DayDateCodec.string(from: now), close: 180)],
             intradayPoints: [.init(dateText: "minute", close: 180, timestamp: now)], trades: [])
-        try model.publishSecurityPriceHistory(history, source: .personal, now: now)
+        try await model.publishSecurityPriceHistory(history, source: .personal, now: now)
         await model.toggleAccount("CSV|B")
         XCTAssertEqual(model.overview?.summary.marketValue, 1800)
         XCTAssertEqual(try XCTUnwrap(model.holdingDailyChanges["SCOPE_TEST"]), 20, accuracy: 0.0001)
@@ -257,7 +257,7 @@ final class PublicInvestorSelectionTests: XCTestCase {
         let suite = "PublicInvestorSwitchTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        let catalog = try PublicInvestorCatalog.loaded.get()
+        let catalog = try await PublicInvestorCatalogState.shared.get()
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let previousWindow = scene.windows.first(where: \.isKeyWindow)
 

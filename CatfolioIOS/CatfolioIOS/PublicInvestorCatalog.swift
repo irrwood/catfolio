@@ -1,6 +1,7 @@
 import Foundation
+import Observation
 
-struct PublicInvestorCatalog: Decodable {
+struct PublicInvestorCatalog: Decodable, Sendable {
     let schemaVersion: Int
     let releaseId: String
     let asOf: String
@@ -20,6 +21,39 @@ struct PublicInvestorCatalog: Decodable {
             throw CocoaError(.coderReadCorrupt)
         }
         return catalog
+    }
+}
+
+/// A light observable handle for the bundled disclosure directory. The JSON
+/// is decoded once off the main actor; headers and Settings can show a
+/// loading state instead of blocking a scroll or navigation transition.
+@MainActor @Observable
+final class PublicInvestorCatalogState {
+    static let shared = PublicInvestorCatalogState()
+
+    private(set) var result: Result<PublicInvestorCatalog, Error>?
+    @ObservationIgnored private var loadTask: Task<Void, Never>?
+
+    func loadIfNeeded() {
+        guard result == nil, loadTask == nil else { return }
+        loadTask = Task(priority: .utility) {
+            do {
+                let catalog = try await Task.detached(priority: .utility) {
+                    try PublicInvestorCatalog.loaded.get()
+                }.value
+                result = .success(catalog)
+            } catch {
+                result = .failure(error)
+            }
+            loadTask = nil
+        }
+    }
+
+    func get() async throws -> PublicInvestorCatalog {
+        loadIfNeeded()
+        await loadTask?.value
+        guard let result else { throw CocoaError(.fileReadUnknown) }
+        return try result.get()
     }
 }
 
@@ -93,7 +127,7 @@ enum PublicInvestorPreferences {
     }
 }
 
-struct PublicInvestor: Decodable, Identifiable {
+struct PublicInvestor: Decodable, Identifiable, Sendable {
     let investorId: String
     let displayName: String
     let managerName: String
@@ -140,7 +174,7 @@ struct PublicInvestor: Decodable, Identifiable {
     }
 }
 
-struct PublicInvestorSnapshot: Decodable {
+struct PublicInvestorSnapshot: Decodable, Sendable {
     let snapshotId: String?
     let completeReport: Bool?
     let confidentialOmitted: Bool?
@@ -152,13 +186,13 @@ struct PublicInvestorSnapshot: Decodable {
     let positions: [PublicInvestorPosition]
 }
 
-struct PublicInvestorOption: Decodable {
+struct PublicInvestorOption: Decodable, Sendable {
     let putCall: String?
     let strike: Double?
     let expiry: String?
 }
 
-struct PublicInvestorPosition: Decodable, Identifiable {
+struct PublicInvestorPosition: Decodable, Identifiable, Sendable {
     let positionId: String
     let issuerName: String?
     let ticker: String?
@@ -174,7 +208,7 @@ struct PublicInvestorPosition: Decodable, Identifiable {
     var title: String { ticker ?? issuerName ?? cusip ?? L10n.text("未匹配证券") }
 }
 
-struct PublicInvestorActivity: Decodable, Identifiable {
+struct PublicInvestorActivity: Decodable, Identifiable, Sendable {
     let activityId: String
     let type: String
     let exactDate: String?

@@ -98,10 +98,10 @@ struct CostMarketCard: View {
     private var rangePerformance: (amount: Double, percentage: Double) {
         if response.accountNAV != nil {
             if let measurement = measuredPoints {
-                return response.accountPerformance(from: measurement.start.dateText, to: measurement.end.dateText)
+                return accountPerformance(from: measurement.start.dateText, to: measurement.end.dateText)
             }
             guard let first = rangeData.rows.first, let end = selectedPoint else { return (.nan, .nan) }
-            return response.accountPerformance(from: first.dateText, to: end.dateText)
+            return accountPerformance(from: first.dateText, to: end.dateText)
         }
         if let measurement = measuredPoints {
             return costMarketChange(from: measurement.start, to: measurement.end)
@@ -119,6 +119,14 @@ struct CostMarketCard: View {
         // the header describes investment performance for the visible window,
         // rather than mistaking a contribution for a gain.
         return costMarketChange(from: start, to: end)
+    }
+
+    private func accountPerformance(from startDate: String, to endDate: String) -> (amount: Double, percentage: Double) {
+        // The prepared source indexes the first occurrence of each date, just
+        // as PortfolioChartResponse.accountPerformance does. Scrubbing must
+        // not linearly scan the entire account history on every selected day.
+        prepared?.accountPerformance(from: startDate, to: endDate)
+            ?? response.accountPerformance(from: startDate, to: endDate)
     }
 
     private var displayedPrimaryAmount: Double {
@@ -510,44 +518,23 @@ struct FastCostMarketPlot: View {
     let onMeasure: (ChartDateRange) -> Void
     let onInteractionEnded: (Int) -> Void
     @Environment(\.colorScheme) private var colorScheme
+    @State private var seriesCache = CostMarketPlotSeriesCache()
     private let bottomHeight: CGFloat = 0
 
     var body: some View {
-        let marketSeries = StandardLineChartSeries(
-            id: "market",
-            points: data.plottedRows.map {
-                StandardLineChartPoint(id: $0.id, date: $0.date, value: $0.marketValue)
-            },
-            color: colorScheme == .light
-                ? Color.white
-                : CatfolioTheme.gain(for: .dark),
-            lineWidth: 2.5,
-            latestPointRadius: showsLatestPoint ? 5 : 0,
-            latestPointColor: colorScheme == .light ? .black : nil,
-            latestPointUsesGlass: false
-        )
-        let costSeries = StandardLineChartSeries(
-            id: "cost",
-            points: data.plottedRows.map {
-                StandardLineChartPoint(id: "cost|\($0.id)", date: $0.date, value: $0.cost)
-            },
-            color: Color(red: 0.204, green: 0.459, blue: 1),
-            lineWidth: 2.5,
-            latestPointRadius: showsLatestPoint ? 5 : 0,
-            latestPointUsesGlass: false
-        )
+        // A selection changes this view every time the finger crosses a day.
+        // Rebuilding both point arrays and sorting them in Series.init on
+        // every move makes a long portfolio history compete with scrolling.
+        let prepared = seriesCache.prepared(for: data, scheme: colorScheme,
+                                            showsLatestPoint: showsLatestPoint)
         StandardLineChart(
             // Canvas paints later series above earlier ones. Keep the blue
             // net-deposit line underneath the adaptive white/green market
             // line so their crossings preserve the portfolio-value signal.
-            series: showsNetDeposit ? [costSeries, marketSeries] : [marketSeries],
-            interactionDates: data.rows.map(\.date),
+            series: showsNetDeposit ? [prepared.cost, prepared.market] : [prepared.market],
+            interactionDates: prepared.interactionDates,
             domain: data.domain,
-            yTicks: (0..<5).map { index in
-                let fraction = Double(index) / 4
-                return data.domain.upperBound
-                    - (data.domain.upperBound - data.domain.lowerBound) * fraction
-            },
+            yTicks: prepared.yTicks,
             axisWidth: 0,
             topInset: 0,
             bottomHeight: bottomHeight,
@@ -581,12 +568,81 @@ struct FastCostMarketPlot: View {
     }
 }
 
+/// Keeps the immutable chart geometry across selection-only body updates.
+/// Every prepared range has a new identity, including a refreshed account or
+/// currency response, so stale points cannot leak into a new portfolio.
+@MainActor
+final class CostMarketPlotSeriesCache {
+    struct Prepared {
+        let market: StandardLineChartSeries
+        let cost: StandardLineChartSeries
+        let interactionDates: [Date]
+        let yTicks: [Double]
+    }
+
+    private struct Key: Equatable {
+        let dataID: UUID
+        let scheme: ColorScheme
+        let showsLatestPoint: Bool
+    }
+
+    private var cachedKey: Key?
+    private var cachedValue: Prepared?
+    private(set) var rebuildCount = 0
+
+    func prepared(for data: CostMarketRangeData, scheme: ColorScheme,
+                  showsLatestPoint: Bool) -> Prepared {
+        let key = Key(dataID: data.id, scheme: scheme, showsLatestPoint: showsLatestPoint)
+        if key == cachedKey, let cachedValue { return cachedValue }
+
+        let market = StandardLineChartSeries(
+            id: "market",
+            points: data.plottedRows.map {
+                StandardLineChartPoint(id: $0.id, date: $0.date, value: $0.marketValue)
+            },
+            color: scheme == .light ? .white : CatfolioTheme.gain(for: .dark),
+            lineWidth: 2.5,
+            latestPointRadius: showsLatestPoint ? 5 : 0,
+            latestPointColor: scheme == .light ? .black : nil,
+            latestPointUsesGlass: false
+        )
+        let cost = StandardLineChartSeries(
+            id: "cost",
+            points: data.plottedRows.map {
+                StandardLineChartPoint(id: "cost|\($0.id)", date: $0.date, value: $0.cost)
+            },
+            color: Color(red: 0.204, green: 0.459, blue: 1),
+            lineWidth: 2.5,
+            latestPointRadius: showsLatestPoint ? 5 : 0,
+            latestPointUsesGlass: false
+        )
+        let ticks = (0..<5).map { index in
+            let fraction = Double(index) / 4
+            return data.domain.upperBound
+                - (data.domain.upperBound - data.domain.lowerBound) * fraction
+        }
+        let value = Prepared(market: market, cost: cost,
+                             interactionDates: data.rows.map(\.date), yTicks: ticks)
+        cachedKey = key
+        cachedValue = value
+        rebuildCount &+= 1
+        return value
+    }
+}
+
 final class CostMarketPreparedSource: @unchecked Sendable {
     let points: [CostMarketPlotPoint]
     let lastDate: Date?
     let previousTradingDate: Date?
+    let accountRowsByDate: [String: ChartPoint]
+    let accountNAV: [String: Double]?
 
     init(response: PortfolioChartResponse) {
+        accountNAV = response.accountNAV
+        accountRowsByDate = response.accountNAV == nil ? [:] : Dictionary(
+            response.positionHistory.rows.map { ($0.dateText, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
         // The latest observation may replace a same-day historical point or
         // extend it. Never let a nonempty history hide the current endpoint.
         var source = response.positionHistory.rows
@@ -617,12 +673,16 @@ final class CostMarketPreparedSource: @unchecked Sendable {
 
 final class CostMarketPreparedData: @unchecked Sendable {
     private let ranges: [ChartTimeRange: CostMarketRangeData]
+    private let accountRowsByDate: [String: ChartPoint]
+    private let accountNAV: [String: Double]?
 
     init(
         source: CostMarketPreparedSource,
         requestedRanges: [ChartTimeRange] = ChartTimeRange.allCases
     ) {
         let points = source.points
+        accountRowsByDate = source.accountRowsByDate
+        accountNAV = source.accountNAV
 
         guard let last = source.lastDate else {
             ranges = [:]
@@ -656,6 +716,14 @@ final class CostMarketPreparedData: @unchecked Sendable {
         ranges[range] ?? ranges[.maximum] ?? .empty
     }
 
+    func accountPerformance(from startDate: String, to endDate: String) -> (amount: Double, percentage: Double) {
+        guard let accountNAV, let start = accountRowsByDate[startDate],
+              let end = accountRowsByDate[endDate], startDate <= endDate,
+              let base = accountNAV[startDate], base > 0,
+              let last = accountNAV[endDate] else { return (.nan, .nan) }
+        return ((end.marketValue - start.marketValue) - (end.cost - start.cost), (last / base - 1) * 100)
+    }
+
     private static func prepare(_ points: [CostMarketPlotPoint]) -> CostMarketRangeData {
         guard !points.isEmpty else { return .empty }
         // Range-dependent decimation changes the curve at shared dates. Keep
@@ -679,6 +747,9 @@ final class CostMarketPreparedData: @unchecked Sendable {
 }
 
 struct CostMarketRangeData {
+    /// A freshly prepared range gets a fresh identity, while copies of that
+    /// range keep it so chart-only state changes reuse its geometry.
+    let id = UUID()
     let rows: [CostMarketPlotPoint]
     let plottedRows: [CostMarketPlotPoint]
     let domain: ClosedRange<Double>

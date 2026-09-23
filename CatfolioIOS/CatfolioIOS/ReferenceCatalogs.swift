@@ -17,7 +17,9 @@ enum ReferenceCatalogs {
     /// carries, so a missing or malformed package surfaces where it is used
     /// rather than as a crash at launch.
     static func warm() {
-        Task.detached(priority: .userInitiated) {
+        // This is opportunistic cache warming. Utility QoS keeps its 13 MB of
+        // JSON parsing from competing with the first screen's animation.
+        Task.detached(priority: .utility) {
             _ = try? FundFeeCatalog.bundled.get()
             _ = try? CompanyReferenceCatalog.bundled.get()
             _ = try? StockSplitCatalog.bundled.get()

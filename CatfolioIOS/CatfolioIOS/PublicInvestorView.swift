@@ -31,6 +31,7 @@ struct PublicInvestorSettingsSection: View {
                 SettingsFootnote(error, color: CatfolioTheme.danger)
             }
         }
+        .task { PublicInvestorCatalogState.shared.loadIfNeeded() }
     }
 
     private var selectionSummary: String {
@@ -69,8 +70,8 @@ struct PublicInvestorSelectionView: View {
             }
             SettingsFootnote(L10n.text("完全虚构的持仓、交易与收益，用于演示和截图。不会与真实数据混合，也不会同步到其他设备。"))
 
-            switch PublicInvestorCatalog.loaded {
-            case .success(let catalog):
+            switch PublicInvestorCatalogState.shared.result {
+            case .some(.success(let catalog)):
                 SettingsCard {
                     ForEach(catalog.investors) { investor in
                         SettingsToggleRow(
@@ -83,10 +84,13 @@ struct PublicInvestorSelectionView: View {
                     }
                 }
                 SettingsFootnote(L10n.text("可选择多个。选择后会取消测试数据。"))
-            case .failure:
+            case .some(.failure):
                 SettingsFootnote(L10n.text("账户数据暂时无法读取。"))
+            case .none:
+                SettingsFootnote(L10n.text("加载中…"))
             }
         }
+        .task { PublicInvestorCatalogState.shared.loadIfNeeded() }
     }
 
     private func selectionBinding(for id: String) -> Binding<Bool> {
@@ -120,11 +124,13 @@ enum PublicInvestorDemo {
 /// Shared so the settings row and the home header cannot drift: a header
 /// still reading "CATFOLIO" over someone else's holdings is the specific
 /// confusion this exists to prevent.
-enum PublicInvestorNaming {
+@MainActor enum PublicInvestorNaming {
     /// Nil when the reader is looking at their own portfolio.
     static func title(selection: String, isDemo: Bool, isInvestorMode: Bool) -> String? {
         if isDemo { return PublicInvestorDemo.title }
-        guard isInvestorMode, case .success(let catalog) = PublicInvestorCatalog.loaded else { return nil }
+        guard isInvestorMode else { return nil }
+        guard let result = PublicInvestorCatalogState.shared.result else { return L10n.text("加载中…") }
+        guard case .success(let catalog) = result else { return nil }
         let chosen = PublicInvestorPreferences.selectedIDs(selection)
         let names = catalog.investors.filter { chosen.contains($0.id) }
         switch names.count {
