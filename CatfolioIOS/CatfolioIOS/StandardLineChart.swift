@@ -485,8 +485,6 @@ struct StandardLineChart: View {
     let transitionKey: String
     /// Identifies a selected time window independently of theme and line visibility.
     let rangeTransitionKey: String?
-    /// A second series whose visual recoil follows the primary series on range changes.
-    let staggeredRangeSeriesID: String?
     let appearanceID: String
     let dataTransition: StandardLineChartDataTransition
     /// Optional vertical travel for a series entering or leaving this chart.
@@ -523,9 +521,8 @@ struct StandardLineChart: View {
     @State private var presentedDomain: ClosedRange<Double>
     @State private var outgoingDomain: ClosedRange<Double>
     @State private var transitionProgress: CGFloat = 1
-    @State private var staggeredRangeProgress: CGFloat = 1
     @State private var bouncesSeriesChange = false
-    @State private var bouncesRangeTransition = false
+    @State private var usesRangeHistory = false
     @State private var unchangedSeriesDuringBounce: Set<String> = []
     @State private var transitionGeneration = 0
     @State private var viewportPaths: [String: StandardLineChartViewportPath] = [:]
@@ -557,7 +554,6 @@ struct StandardLineChart: View {
         gridOpacity: Double = 0.12,
         transitionKey: String,
         rangeTransitionKey: String? = nil,
-        staggeredRangeSeriesID: String? = nil,
         appearanceID: String = #fileID,
         dataTransition: StandardLineChartDataTransition = .morph,
         seriesChangeBounce: CGFloat = 0,
@@ -598,7 +594,6 @@ struct StandardLineChart: View {
         self.gridOpacity = gridOpacity
         self.transitionKey = transitionKey
         self.rangeTransitionKey = rangeTransitionKey
-        self.staggeredRangeSeriesID = staggeredRangeSeriesID
         self.appearanceID = appearanceID
         self.dataTransition = dataTransition
         self.seriesChangeBounce = seriesChangeBounce
@@ -664,52 +659,46 @@ struct StandardLineChart: View {
                     let reveal = reduceMotion || initialRevealCancelled ? CGFloat(1) : Self.easeOutQuart(rawReveal)
                     ZStack(alignment: .topLeading) {
                         StandardLineChartTransitionDriver(progress: transitionProgress) { progress in
-                            StandardLineChartTransitionDriver(progress: staggeredRangeProgress) { delayedProgress in
-                                Canvas { context, _ in
-                                    let settledProgress = min(1, max(0, progress))
-                                    let viewportProgress = bouncesRangeTransition ? progress : settledProgress
-                                    presentationProgress.value = viewportProgress
-                                    var lineContext = context
-                                    lineContext.translateBy(x: lineLayerBleed, y: 0)
+                            Canvas { context, _ in
+                                let settledProgress = min(1, max(0, progress))
+                                let viewportProgress = settledProgress
+                                presentationProgress.value = viewportProgress
+                                var lineContext = context
+                                lineContext.translateBy(x: lineLayerBleed, y: 0)
+                                lineContext.clip(to: Path(CGRect(
+                                    x: plot.minX - lineLayerBleed,
+                                    y: plot.minY,
+                                    width: plot.width + lineLayerBleed,
+                                    height: plot.height
+                                )))
+                                if reveal < 1 {
                                     lineContext.clip(to: Path(CGRect(
                                         x: plot.minX - lineLayerBleed,
                                         y: plot.minY,
-                                        width: plot.width + lineLayerBleed,
+                                        width: max(0, (plot.width - trailingEndpointInset) * reveal + lineLayerBleed),
                                         height: plot.height
                                     )))
-                                    if reveal < 1 {
-                                        lineContext.clip(to: Path(CGRect(
-                                            x: plot.minX - lineLayerBleed,
-                                            y: plot.minY,
-                                            width: max(0, (plot.width - trailingEndpointInset) * reveal + lineLayerBleed),
-                                            height: plot.height
-                                        )))
-                                    }
-                                    if !outgoingSeries.isEmpty,
-                                       settledProgress < 1 || (bouncesSeriesChange && progress > 1)
-                                           || (bouncesRangeTransition && progress > 1) {
-                                        drawMorphedBase(
-                                            progress: settledProgress,
-                                            viewportProgress: viewportProgress,
-                                            bounceProgress: progress,
-                                            delayedProgress: delayedProgress,
-                                            context: &lineContext,
-                                            plot: plot
-                                        )
-                                    } else {
-                                        drawBase(
-                                            series: presentedSeries,
-                                            markers: presentedMarkers,
-                                            dates: presentedDates,
-                                            valueDomain: presentedDomain,
-                                            xOffset: 0,
-                                            opacity: 1,
-                                            primaryProgress: progress,
-                                            delayedProgress: delayedProgress,
-                                            context: &lineContext,
-                                            plot: plot
-                                        )
-                                    }
+                                }
+                                if !outgoingSeries.isEmpty,
+                                   settledProgress < 1 || (bouncesSeriesChange && progress > 1) {
+                                    drawMorphedBase(
+                                        progress: settledProgress,
+                                        viewportProgress: viewportProgress,
+                                        bounceProgress: progress,
+                                        context: &lineContext,
+                                        plot: plot
+                                    )
+                                } else {
+                                    drawBase(
+                                        series: presentedSeries,
+                                        markers: presentedMarkers,
+                                        dates: presentedDates,
+                                        valueDomain: presentedDomain,
+                                        xOffset: 0,
+                                        opacity: 1,
+                                        context: &lineContext,
+                                        plot: plot
+                                    )
                                 }
                             }
                         }
@@ -717,16 +706,12 @@ struct StandardLineChart: View {
                         .offset(x: -lineLayerBleed)
 
                         StandardLineChartTransitionDriver(progress: transitionProgress) { progress in
-                            StandardLineChartTransitionDriver(progress: staggeredRangeProgress) { delayedProgress in
-                                if reveal < 1 {
-                                    revealingEndpoints(plot: plot, progress: reveal)
-                                } else {
-                                    endpointLayer(plot: plot, progress: min(1, max(0, progress)),
-                                                  viewportProgress: bouncesRangeTransition
-                                                      ? progress : min(1, max(0, progress)),
-                                                  bounceProgress: progress,
-                                                  delayedProgress: delayedProgress)
-                                }
+                            if reveal < 1 {
+                                revealingEndpoints(plot: plot, progress: reveal)
+                            } else {
+                                endpointLayer(plot: plot, progress: min(1, max(0, progress)),
+                                              viewportProgress: min(1, max(0, progress)),
+                                              bounceProgress: progress)
                             }
                         }
 
@@ -795,7 +780,7 @@ struct StandardLineChart: View {
         }
         .onChange(of: revision) { previous, latest in
             if previous.transitionKey != latest.transitionKey {
-                transitionToLatestData(bouncesRange: previous.rangeTransitionKey != nil
+                transitionToLatestData(rangeChanged: previous.rangeTransitionKey != nil
                     && previous.rangeTransitionKey != latest.rangeTransitionKey)
             } else if previous.contentFingerprint != latest.contentFingerprint {
                 // Background refreshes replace data without replaying loading.
@@ -853,7 +838,7 @@ struct StandardLineChart: View {
         )
     }
 
-    private func transitionToLatestData(bouncesRange: Bool = false) {
+    private func transitionToLatestData(rangeChanged: Bool = false) {
         if revealsInitialAppearance {
             var transaction = Transaction(animation: nil)
             transaction.disablesAnimations = true
@@ -872,12 +857,9 @@ struct StandardLineChart: View {
         // target (which may still be 400 ms away during rapid range taps).
         let current = currentPresentation(progress: presentationProgress.value)
         let changesSeries = Set(current.series.map(\.id)) != Set(series.map(\.id))
-        let shouldBounce = seriesChangeBounce > 0 && changesSeries
-        let shouldBounceRange = bouncesRange && dataTransition == .viewportZoom
+        let shouldBounce = seriesChangeBounce > 0 && changesSeries && !rangeChanged
+        let shouldUseRangeHistory = rangeChanged && dataTransition == .viewportZoom
             && current.dates != interactionDates
-        let shouldStagger = shouldBounceRange && staggeredRangeSeriesID.map { id in
-            series.contains(where: { $0.id == id })
-        } == true
         let unchangedIDs = shouldBounce && current.dates == interactionDates && current.domain == domain
             ? Set(series.compactMap { incoming -> String? in
                 guard let previous = current.series.first(where: { $0.id == incoming.id }),
@@ -892,7 +874,7 @@ struct StandardLineChart: View {
         withTransaction(resetTransaction) {
             transitionGeneration &+= 1
             bouncesSeriesChange = shouldBounce
-            bouncesRangeTransition = shouldBounceRange
+            usesRangeHistory = shouldUseRangeHistory
             unchangedSeriesDuringBounce = unchangedIDs
             outgoingSeries = current.series
             outgoingMarkers = current.markers
@@ -902,18 +884,18 @@ struct StandardLineChart: View {
             presentedMarkers = markers
             presentedDates = interactionDates
             presentedDomain = domain
-            viewportPaths = shouldBounceRange ? [:]
+            viewportPaths = shouldUseRangeHistory ? [:]
                 : Dictionary(uniqueKeysWithValues: series.compactMap { incoming in
                     guard !unchangedIDs.contains(incoming.id) else { return nil }
                     guard let old = outgoingSeries.first(where: { $0.id == incoming.id }) else { return nil }
                     return (incoming.id, StandardLineChartViewportPath(from: old.points, to: incoming.points))
                 })
-            rangeHistories = shouldBounceRange
+            rangeHistories = shouldUseRangeHistory
                 ? Dictionary(uniqueKeysWithValues: series.compactMap { incoming in
                     guard let old = outgoingSeries.first(where: { $0.id == incoming.id }) else { return nil }
                     return (incoming.id, StandardLineChartRangeHistory(from: old.points, to: incoming.points))
                 }) : [:]
-            morphPairs = shouldBounceRange ? [:]
+            morphPairs = shouldUseRangeHistory ? [:]
                 : Dictionary(uniqueKeysWithValues: series.compactMap { incoming in
                     guard !unchangedIDs.contains(incoming.id) else { return nil }
                     guard let old = outgoingSeries.first(where: { $0.id == incoming.id }) else { return nil }
@@ -921,26 +903,16 @@ struct StandardLineChart: View {
                 })
             presentationProgress.value = 0
             transitionProgress = 0
-            staggeredRangeProgress = shouldStagger ? 0 : 1
         }
         let generation = transitionGeneration
         Task { @MainActor in
             await Task.yield()
             guard generation == transitionGeneration else { return }
-            let animation: Animation = shouldBounceRange
-                ? .spring(response: 0.52, dampingFraction: 0.62)
-                : (shouldBounce
-                    ? .spring(response: 0.42, dampingFraction: 0.58)
-                    : StandardLineChartTransition.zoom)
+            let animation: Animation = shouldBounce
+                ? .spring(response: 0.42, dampingFraction: 0.58)
+                : StandardLineChartTransition.zoom
             withAnimation(animation) {
                 transitionProgress = 1
-            }
-            if shouldStagger {
-                try? await Task.sleep(for: .milliseconds(115))
-                guard generation == transitionGeneration else { return }
-                withAnimation(.spring(response: 0.48, dampingFraction: 0.68)) {
-                    staggeredRangeProgress = 1
-                }
             }
         }
     }
@@ -1010,11 +982,10 @@ struct StandardLineChart: View {
         rangeHistories = [:]
         morphPairs = [:]
         bouncesSeriesChange = false
-        bouncesRangeTransition = false
+        usesRangeHistory = false
         unchangedSeriesDuringBounce = []
         presentationProgress.value = 1
         transitionProgress = 1
-        staggeredRangeProgress = 1
     }
 
     private func syncWithoutAnimation() {
@@ -1035,37 +1006,12 @@ struct StandardLineChart: View {
             latestPointUsesGlass: source.latestPointUsesGlass)
     }
 
-    /// Stagger the material response while both series keep one date/value camera.
-    /// Separate cameras would briefly make their on-screen gap mean different dates.
-    private func rangeEmphasis(for seriesID: String,
-                               primaryProgress: CGFloat,
-                               delayedProgress: CGFloat) -> CGFloat {
-        guard bouncesRangeTransition, let staggeredRangeSeriesID else { return 0 }
-        let progress = seriesID == staggeredRangeSeriesID ? delayedProgress : primaryProgress
-        let settled = min(1, max(0, progress))
-        let swell = sin(.pi * settled) * 0.72
-        let rebound = min(1, max(0, (progress - 1) / 0.06)) * 0.72
-        return min(1, max(swell, rebound))
-    }
-
     private func transitionDates(_ raw: CGFloat) -> [Date] {
         guard let oldFirst = outgoingDates.first, let oldLast = outgoingDates.last,
               let newFirst = presentedDates.first, let newLast = presentedDates.last else { return presentedDates }
         let progress = min(1, max(0, raw))
-        guard bouncesRangeTransition, raw > 1 else {
-            return [interpolatedDate(from: oldFirst, to: newFirst, progress: progress),
-                    interpolatedDate(from: oldLast, to: newLast, progress: progress)]
-        }
-        // Only the camera springs. The curve stays on real history, the latest
-        // date remains at the right edge, and the value domain is already final.
-        let span = newLast.timeIntervalSince(newFirst)
-        guard span > 0, newFirst != oldFirst else { return [newFirst, newLast] }
-        // A wider target may already begin at the first recorded day. Recoil
-        // inward instead of exposing blank space before real history.
-        let reboundFraction = newFirst > oldFirst ? 0.06 : 0.035
-        let excess = Double(raw - 1)
-        let travel = span * reboundFraction * (1 - exp(-excess / 0.035))
-        return [newFirst.addingTimeInterval(travel), newLast]
+        return [interpolatedDate(from: oldFirst, to: newFirst, progress: progress),
+                interpolatedDate(from: oldLast, to: newLast, progress: progress)]
     }
 
     private func currentPresentation(progress raw: CGFloat) -> (
@@ -1073,10 +1019,10 @@ struct StandardLineChart: View {
         dates: [Date], domain: ClosedRange<Double>
     ) {
         let progress = min(1, max(0, raw))
-        guard (progress < 1 || (bouncesRangeTransition && raw > 1)), !outgoingSeries.isEmpty else {
+        guard progress < 1, !outgoingSeries.isEmpty else {
             return (presentedSeries, presentedMarkers, presentedDates, presentedDomain)
         }
-        let dates = transitionDates(bouncesRangeTransition ? raw : progress)
+        let dates = transitionDates(progress)
         let domain = interpolatedDomain(from: outgoingDomain, to: presentedDomain, progress: progress)
         guard let first = dates.first, let last = dates.last else {
             return (presentedSeries, presentedMarkers, presentedDates, presentedDomain)
@@ -1088,7 +1034,7 @@ struct StandardLineChart: View {
         }
         let visible = presentedSeries.map { incoming in
             guard let old = outgoingSeries.first(where: { $0.id == incoming.id }) else { return incoming }
-            if bouncesRangeTransition, let history = rangeHistories[incoming.id] {
+            if usesRangeHistory, let history = rangeHistories[incoming.id] {
                 return copySeries(incoming, points: history.samples(from: first, to: last))
             }
             if dataTransition == .viewportZoom && !old.isLoadingPlaceholder,
@@ -1175,8 +1121,6 @@ struct StandardLineChart: View {
         xOffset: CGFloat,
         yOffset: CGFloat = 0,
         opacity: Double,
-        primaryProgress: CGFloat = 1,
-        delayedProgress: CGFloat = 1,
         context: inout GraphicsContext,
         plot: CGRect
     ) {
@@ -1188,8 +1132,6 @@ struct StandardLineChart: View {
             markers: markers,
             dates: dates,
             valueDomain: valueDomain,
-            primaryProgress: primaryProgress,
-            delayedProgress: delayedProgress,
             context: &layer,
             plot: plot
         )
@@ -1200,8 +1142,6 @@ struct StandardLineChart: View {
         markers: [StandardLineChartMarker],
         dates: [Date],
         valueDomain: ClosedRange<Double>,
-        primaryProgress: CGFloat,
-        delayedProgress: CGFloat,
         context: inout GraphicsContext,
         plot: CGRect
     ) {
@@ -1233,8 +1173,6 @@ struct StandardLineChart: View {
                     item.points,
                     series: item,
                     opacity: 1,
-                    emphasis: rangeEmphasis(for: item.id, primaryProgress: primaryProgress,
-                                            delayedProgress: delayedProgress),
                     dates: dates,
                     valueDomain: valueDomain,
                     context: &context,
@@ -1257,7 +1195,6 @@ struct StandardLineChart: View {
         progress: CGFloat,
         viewportProgress: CGFloat,
         bounceProgress: CGFloat,
-        delayedProgress: CGFloat,
         context: inout GraphicsContext,
         plot: CGRect
     ) {
@@ -1278,8 +1215,6 @@ struct StandardLineChart: View {
                         from: outgoing,
                         to: incoming,
                         progress: viewportProgress,
-                        emphasis: rangeEmphasis(for: incoming.id, primaryProgress: bounceProgress,
-                                                delayedProgress: delayedProgress),
                         context: &context,
                         plot: plot
                     )
@@ -1333,7 +1268,6 @@ struct StandardLineChart: View {
         from outgoing: StandardLineChartSeries,
         to incoming: StandardLineChartSeries,
         progress: CGFloat,
-        emphasis: CGFloat,
         context: inout GraphicsContext,
         plot: CGRect
     ) {
@@ -1342,7 +1276,7 @@ struct StandardLineChart: View {
               let newStart = presentedDates.first,
               let newEnd = presentedDates.last else { return }
 
-        let dates = bouncesRangeTransition
+        let dates = usesRangeHistory
             ? transitionDates(progress)
             : [interpolatedDate(from: oldStart, to: newStart, progress: progress),
                interpolatedDate(from: oldEnd, to: newEnd, progress: progress)]
@@ -1355,7 +1289,7 @@ struct StandardLineChart: View {
             progress: min(1, max(0, progress))
         )
         let samples: [StandardLineChartPoint]
-        if bouncesRangeTransition, let history = rangeHistories[incoming.id] {
+        if usesRangeHistory, let history = rangeHistories[incoming.id] {
             samples = history.samples(from: visibleStart, to: visibleEnd)
         } else {
             samples = viewportPaths[incoming.id]?.samples(progress: progress)
@@ -1367,7 +1301,6 @@ struct StandardLineChart: View {
             samples,
             series: incoming,
             opacity: 1,
-            emphasis: emphasis,
             dates: [visibleStart, visibleEnd],
             valueDomain: visibleDomain,
             context: &context,
@@ -1688,7 +1621,6 @@ struct StandardLineChart: View {
         _ points: [StandardLineChartPoint],
         series: StandardLineChartSeries,
         opacity: Double,
-        emphasis: CGFloat = 0,
         dates: [Date],
         valueDomain: ClosedRange<Double>,
         context: inout GraphicsContext,
@@ -1720,20 +1652,18 @@ struct StandardLineChart: View {
             drawAreaStripes(in: area, color: series.areaStripeColor,
                             spacing: series.areaStripeSpacing, width: series.areaStripeWidth, context: &fillContext, plot: plot)
         }
-        stroke(path, series: series, opacity: opacity, emphasis: emphasis, context: &context)
+        stroke(path, series: series, opacity: opacity, context: &context)
     }
 
     private func stroke(
         _ path: Path,
         series: StandardLineChartSeries,
         opacity: Double,
-        emphasis: CGFloat = 0,
         color: Color? = nil,
         context: inout GraphicsContext
     ) {
         var strokeContext = context
-        if let endpoint = path.currentPoint, let baseRadius = series.latestPointRadius {
-            let radius = baseRadius * (1 + 0.28 * emphasis)
+        if let endpoint = path.currentPoint, let radius = series.latestPointRadius {
             // Geometry, not the ring's opacity, hides the line head. This
             // remains hollow during shimmer, fades and on gradient surfaces.
             strokeContext.clip(to: Path(ellipseIn: CGRect(
@@ -1745,7 +1675,7 @@ struct StandardLineChart: View {
             path,
             with: .color((color ?? series.color).opacity(opacity)),
             style: StrokeStyle(
-                lineWidth: series.lineWidth * (1 + 0.65 * emphasis),
+                lineWidth: series.lineWidth,
                 lineCap: .round,
                 lineJoin: .round,
                 dash: series.dash
@@ -1755,26 +1685,23 @@ struct StandardLineChart: View {
 
     @ViewBuilder
     private func endpointLayer(
-        plot: CGRect, progress: CGFloat, viewportProgress: CGFloat,
-        bounceProgress: CGFloat, delayedProgress: CGFloat
+        plot: CGRect, progress: CGFloat, viewportProgress: CGFloat, bounceProgress: CGFloat
     ) -> some View {
         let outgoingByID = Dictionary(uniqueKeysWithValues: outgoingSeries.map { ($0.id, $0) })
         let presentedIDs = Set(presentedSeries.map(\.id))
         ZStack(alignment: .topLeading) {
             ForEach(presentedSeries.filter { $0.latestPointRadius != nil }) { item in
-                let emphasis = rangeEmphasis(for: item.id, primaryProgress: bounceProgress,
-                                             delayedProgress: delayedProgress)
                 if unchangedSeriesDuringBounce.contains(item.id) {
                     endpoint(for: item, dates: presentedDates,
-                             valueDomain: presentedDomain, plot: plot, emphasis: emphasis)
-                } else if progress < 1 || (bouncesRangeTransition && viewportProgress > 1),
+                             valueDomain: presentedDomain, plot: plot)
+                } else if progress < 1,
                           let outgoing = outgoingByID[item.id] {
                     if dataTransition == .viewportZoom,
                        !outgoing.isLoadingPlaceholder {
                         // The stroke projects values through the animated
                         // domain. Interpolating screen positions instead takes
                         // a different path as the domain's span changes.
-                        let endpointSeries = bouncesRangeTransition ? item : copySeries(item,
+                        let endpointSeries = usesRangeHistory ? item : copySeries(item,
                             points: viewportPaths[item.id]?.samples(progress: viewportProgress) ?? item.points)
                         endpoint(
                             for: endpointSeries,
@@ -1784,8 +1711,7 @@ struct StandardLineChart: View {
                                 to: presentedDomain,
                                 progress: progress
                             ),
-                            plot: plot,
-                            emphasis: emphasis
+                            plot: plot
                         )
                     } else {
                         morphedEndpoint(
@@ -1800,8 +1726,7 @@ struct StandardLineChart: View {
                         for: item,
                         dates: presentedDates,
                         valueDomain: presentedDomain,
-                        plot: plot,
-                        emphasis: emphasis
+                        plot: plot
                     )
                     .offset(y: outgoingByID[item.id] == nil
                         ? seriesBounceOffset(entering: true, progress: bounceProgress) : 0)
@@ -1900,12 +1825,10 @@ struct StandardLineChart: View {
         for item: StandardLineChartSeries,
         dates: [Date],
         valueDomain: ClosedRange<Double>,
-        plot: CGRect,
-        emphasis: CGFloat = 0
+        plot: CGRect
     ) -> some View {
         if let point = item.points.last,
-           let baseRadius = item.latestPointRadius {
-            let radius = baseRadius * (1 + 0.28 * emphasis)
+           let radius = item.latestPointRadius {
             if item.latestPointUsesGlass {
                 StandardLineChartGlassEndpoint(
                     color: item.latestPointColor ?? item.color,
