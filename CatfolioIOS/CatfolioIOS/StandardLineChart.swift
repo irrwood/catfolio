@@ -484,6 +484,9 @@ struct StandardLineChart: View {
     let transitionKey: String
     let appearanceID: String
     let dataTransition: StandardLineChartDataTransition
+    /// Optional vertical travel for a series entering or leaving this chart.
+    /// Only the portfolio's net-deposit toggle uses it; range zooms stay put.
+    let seriesChangeBounce: CGFloat
     let animatesInitialAppearance: Bool
     let revealsInitialAppearance: Bool
     let markers: [StandardLineChartMarker]
@@ -515,6 +518,8 @@ struct StandardLineChart: View {
     @State private var presentedDomain: ClosedRange<Double>
     @State private var outgoingDomain: ClosedRange<Double>
     @State private var transitionProgress: CGFloat = 1
+    @State private var bouncesSeriesChange = false
+    @State private var unchangedSeriesDuringBounce: Set<String> = []
     @State private var transitionGeneration = 0
     @State private var viewportPaths: [String: StandardLineChartViewportPath] = [:]
     @State private var morphPairs: [String: [(CGPoint, CGPoint)]] = [:]
@@ -545,6 +550,7 @@ struct StandardLineChart: View {
         transitionKey: String,
         appearanceID: String = #fileID,
         dataTransition: StandardLineChartDataTransition = .morph,
+        seriesChangeBounce: CGFloat = 0,
         animatesInitialAppearance: Bool = true,
         revealsInitialAppearance: Bool = false,
         markers: [StandardLineChartMarker] = [],
@@ -583,6 +589,7 @@ struct StandardLineChart: View {
         self.transitionKey = transitionKey
         self.appearanceID = appearanceID
         self.dataTransition = dataTransition
+        self.seriesChangeBounce = seriesChangeBounce
         self.animatesInitialAppearance = animatesInitialAppearance
         self.revealsInitialAppearance = revealsInitialAppearance
         self.markers = markers
@@ -646,8 +653,8 @@ struct StandardLineChart: View {
                     ZStack(alignment: .topLeading) {
                         StandardLineChartTransitionDriver(progress: transitionProgress) { progress in
                             Canvas { context, _ in
-                                let progress = min(1, max(0, progress))
-                                presentationProgress.value = progress
+                                let settledProgress = min(1, max(0, progress))
+                                presentationProgress.value = settledProgress
                                 var lineContext = context
                                 lineContext.translateBy(x: lineLayerBleed, y: 0)
                                 lineContext.clip(to: Path(CGRect(
@@ -664,9 +671,11 @@ struct StandardLineChart: View {
                                         height: plot.height
                                     )))
                                 }
-                                if !outgoingSeries.isEmpty, progress < 1 {
+                                if !outgoingSeries.isEmpty,
+                                   settledProgress < 1 || (bouncesSeriesChange && progress > 1) {
                                     drawMorphedBase(
-                                        progress: progress,
+                                        progress: settledProgress,
+                                        bounceProgress: progress,
                                         context: &lineContext,
                                         plot: plot
                                     )
@@ -691,7 +700,8 @@ struct StandardLineChart: View {
                             if reveal < 1 {
                                 revealingEndpoints(plot: plot, progress: reveal)
                             } else {
-                                endpointLayer(plot: plot, progress: progress)
+                                endpointLayer(plot: plot, progress: min(1, max(0, progress)),
+                                              bounceProgress: progress)
                             }
                         }
 
@@ -834,10 +844,23 @@ struct StandardLineChart: View {
         // Interrupt from the last actually drawn shape, not the previous
         // target (which may still be 400 ms away during rapid range taps).
         let current = currentPresentation(progress: presentationProgress.value)
+        let changesSeries = Set(current.series.map(\.id)) != Set(series.map(\.id))
+        let shouldBounce = seriesChangeBounce > 0 && changesSeries
+        let unchangedIDs = shouldBounce && current.dates == interactionDates && current.domain == domain
+            ? Set(series.compactMap { incoming -> String? in
+                guard let previous = current.series.first(where: { $0.id == incoming.id }),
+                      previous.points.count == incoming.points.count,
+                      zip(previous.points, incoming.points).allSatisfy({ pair in
+                          pair.0.date == pair.1.date && pair.0.value == pair.1.value
+                      }) else { return nil }
+                return incoming.id
+            }) : []
         var resetTransaction = Transaction(animation: nil)
         resetTransaction.disablesAnimations = true
         withTransaction(resetTransaction) {
             transitionGeneration &+= 1
+            bouncesSeriesChange = shouldBounce
+            unchangedSeriesDuringBounce = unchangedIDs
             outgoingSeries = current.series
             outgoingMarkers = current.markers
             outgoingDates = current.dates
@@ -847,10 +870,12 @@ struct StandardLineChart: View {
             presentedDates = interactionDates
             presentedDomain = domain
             viewportPaths = Dictionary(uniqueKeysWithValues: series.compactMap { incoming in
+                guard !unchangedIDs.contains(incoming.id) else { return nil }
                 guard let old = outgoingSeries.first(where: { $0.id == incoming.id }) else { return nil }
                 return (incoming.id, StandardLineChartViewportPath(from: old.points, to: incoming.points))
             })
             morphPairs = Dictionary(uniqueKeysWithValues: series.compactMap { incoming in
+                guard !unchangedIDs.contains(incoming.id) else { return nil }
                 guard let old = outgoingSeries.first(where: { $0.id == incoming.id }) else { return nil }
                 return (incoming.id, pairedMorphSamples(from: old, to: incoming))
             })
@@ -861,7 +886,9 @@ struct StandardLineChart: View {
         Task { @MainActor in
             await Task.yield()
             guard generation == transitionGeneration else { return }
-            withAnimation(StandardLineChartTransition.zoom) {
+            withAnimation(shouldBounce
+                ? .spring(response: 0.42, dampingFraction: 0.58)
+                : StandardLineChartTransition.zoom) {
                 transitionProgress = 1
             }
         }
@@ -930,6 +957,8 @@ struct StandardLineChart: View {
         outgoingDates = []
         viewportPaths = [:]
         morphPairs = [:]
+        bouncesSeriesChange = false
+        unchangedSeriesDuringBounce = []
         presentationProgress.value = 1
         transitionProgress = 1
     }
@@ -1061,12 +1090,13 @@ struct StandardLineChart: View {
         dates: [Date],
         valueDomain: ClosedRange<Double>,
         xOffset: CGFloat,
+        yOffset: CGFloat = 0,
         opacity: Double,
         context: inout GraphicsContext,
         plot: CGRect
     ) {
         var layer = context
-        layer.translateBy(x: xOffset, y: 0)
+        layer.translateBy(x: xOffset, y: yOffset)
         layer.opacity = opacity
         drawBaseContent(
             series: series,
@@ -1134,6 +1164,7 @@ struct StandardLineChart: View {
 
     private func drawMorphedBase(
         progress: CGFloat,
+        bounceProgress: CGFloat,
         context: inout GraphicsContext,
         plot: CGRect
     ) {
@@ -1143,7 +1174,13 @@ struct StandardLineChart: View {
         for incoming in presentedSeries where !incoming.points.isEmpty {
             if let outgoing = outgoingByID[incoming.id],
                !outgoing.points.isEmpty {
-                if dataTransition == .viewportZoom && !outgoing.isLoadingPlaceholder {
+                if unchangedSeriesDuringBounce.contains(incoming.id) {
+                    drawBase(
+                        series: [incoming], markers: [], dates: presentedDates,
+                        valueDomain: presentedDomain, xOffset: 0, opacity: 1,
+                        context: &context, plot: plot
+                    )
+                } else if dataTransition == .viewportZoom && !outgoing.isLoadingPlaceholder {
                     drawViewportZoomedSeries(
                         from: outgoing,
                         to: incoming,
@@ -1167,6 +1204,7 @@ struct StandardLineChart: View {
                     dates: presentedDates,
                     valueDomain: presentedDomain,
                     xOffset: 0,
+                    yOffset: seriesBounceOffset(entering: true, progress: bounceProgress),
                     opacity: Double(progress),
                     context: &context,
                     plot: plot
@@ -1181,6 +1219,7 @@ struct StandardLineChart: View {
                 dates: outgoingDates,
                 valueDomain: outgoingDomain,
                 xOffset: 0,
+                yOffset: seriesBounceOffset(entering: false, progress: bounceProgress),
                 opacity: 1 - Double(progress),
                 context: &context,
                 plot: plot
@@ -1188,6 +1227,11 @@ struct StandardLineChart: View {
         }
 
         drawMorphedMarkers(progress: progress, context: &context, plot: plot)
+    }
+
+    private func seriesBounceOffset(entering: Bool, progress: CGFloat) -> CGFloat {
+        guard bouncesSeriesChange else { return 0 }
+        return entering ? seriesChangeBounce * (1 - progress) : -seriesChangeBounce * progress
     }
 
     private func drawViewportZoomedSeries(
@@ -1601,12 +1645,15 @@ struct StandardLineChart: View {
     }
 
     @ViewBuilder
-    private func endpointLayer(plot: CGRect, progress: CGFloat) -> some View {
+    private func endpointLayer(plot: CGRect, progress: CGFloat, bounceProgress: CGFloat) -> some View {
         let outgoingByID = Dictionary(uniqueKeysWithValues: outgoingSeries.map { ($0.id, $0) })
         let presentedIDs = Set(presentedSeries.map(\.id))
         ZStack(alignment: .topLeading) {
             ForEach(presentedSeries.filter { $0.latestPointRadius != nil }) { item in
-                if progress < 1, let outgoing = outgoingByID[item.id] {
+                if unchangedSeriesDuringBounce.contains(item.id) {
+                    endpoint(for: item, dates: presentedDates,
+                             valueDomain: presentedDomain, plot: plot)
+                } else if progress < 1, let outgoing = outgoingByID[item.id] {
                     if dataTransition == .viewportZoom,
                        !outgoing.isLoadingPlaceholder,
                        let oldStart = outgoingDates.first,
@@ -1646,6 +1693,8 @@ struct StandardLineChart: View {
                         valueDomain: presentedDomain,
                         plot: plot
                     )
+                    .offset(y: outgoingByID[item.id] == nil
+                        ? seriesBounceOffset(entering: true, progress: bounceProgress) : 0)
                     .opacity(progress < 1 ? progress : 1)
                 }
             }
@@ -1657,6 +1706,7 @@ struct StandardLineChart: View {
                     valueDomain: outgoingDomain,
                     plot: plot
                 )
+                .offset(y: seriesBounceOffset(entering: false, progress: bounceProgress))
                 .opacity(1 - progress)
             }
         }
