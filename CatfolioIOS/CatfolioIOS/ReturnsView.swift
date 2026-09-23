@@ -759,9 +759,7 @@ private struct ReturnsChart: View {
                 .padding(.trailing, ReturnsChartLayout.contentHorizontalInset)
             } else {
                 FastReturnsPlot(
-                    grouped: displayData.grouped,
-                    dates: chartDates,
-                    domain: displayData.domain,
+                    data: displayData,
                     transitionKey: "\(mode.rawValue)|\(timeRange.rawValue)|\(visibleSeries.sorted().joined(separator: ","))",
                     selectedDate: selectedDate == nil && measuredRange == nil ? nil : chartDate,
                     measuredRange: measuredRange,
@@ -1087,9 +1085,7 @@ enum ReturnsAxisLabels {
 
 private struct FastReturnsPlot: View {
     @Environment(\.locale) private var appLocale
-    let grouped: [String: [ReturnsSeriesPoint]]
-    let dates: [Date]
-    let domain: ClosedRange<Double>
+    let data: ReturnsDisplayData
     let transitionKey: String
     let selectedDate: Date?
     let measuredRange: ChartDateRange?
@@ -1098,40 +1094,22 @@ private struct FastReturnsPlot: View {
     let onMeasure: (ChartDateRange) -> Void
     let onInteractionEnded: (Int) -> Void
     @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
+    @State private var seriesCache = ReturnsPlotSeriesCache()
 
     private let axisWidth: CGFloat = 33
     private let bottomHeight: CGFloat = 0
     private let endpointInset: CGFloat = 9
 
+    private var grouped: [String: [ReturnsSeriesPoint]] { data.grouped }
+    private var domain: ClosedRange<Double> { data.domain }
+
     var body: some View {
-        let standardSeries = ReturnsSeriesStyle.order.compactMap { series -> StandardLineChartSeries? in
-            guard let values = grouped[series], !values.isEmpty else { return nil }
-            return StandardLineChartSeries(
-                id: series,
-                points: values.map {
-                    StandardLineChartPoint(
-                        id: "\(series)|\($0.id)",
-                        date: $0.date,
-                        value: $0.value
-                    )
-                },
-                color: ReturnsSeriesStyle.color(for: series),
-                lineWidth: 2,
-                dash: dashPattern(for: series),
-                selectionRadius: series == ReturnsSeriesStyle.portfolio ? 3.6 : 2.8,
-                // The home chart's ring, in place of a connector to the label.
-                latestPointRadius: series == ReturnsSeriesStyle.portfolio ? 5 : 4,
-                latestPointUsesGlass: false
-            )
-        }
+        let prepared = seriesCache.prepared(for: data, differentiateWithoutColor: differentiateWithoutColor)
         StandardLineChart(
-            series: standardSeries,
-            interactionDates: dates,
+            series: prepared.series,
+            interactionDates: prepared.interactionDates,
             domain: domain,
-            yTicks: (0..<6).map { index in
-                let fraction = Double(index) / 5
-                return domain.upperBound - (domain.upperBound - domain.lowerBound) * fraction
-            },
+            yTicks: prepared.yTicks,
             axisWidth: axisWidth,
             topInset: 0,
             bottomHeight: bottomHeight,
@@ -1224,17 +1202,6 @@ private struct FastReturnsPlot: View {
         return result
     }
 
-    private func dashPattern(for series: String) -> [CGFloat] {
-        guard differentiateWithoutColor,
-              series != ReturnsSeriesStyle.portfolio,
-              let index = ReturnsSeriesStyle.order.firstIndex(of: series) else { return [] }
-        let patterns: [[CGFloat]] = [
-            [8, 4], [2, 3], [10, 3, 2, 3], [5, 3],
-            [12, 4], [3, 2, 1, 2], [7, 2], [1, 3],
-        ]
-        return patterns[(index - 1) % patterns.count]
-    }
-
     private func axisLabel(_ value: Double) -> String {
         if mode == .cashFlowMatched {
             let converted = DisplayCurrency.current.fromUSD(value)
@@ -1267,6 +1234,63 @@ private struct FastReturnsPlot: View {
     }
 }
 
+/// A selection changes only the crosshair and readouts. Keep line geometry
+/// until the prepared mode/range/visible series or accessibility style changes.
+@MainActor
+private final class ReturnsPlotSeriesCache {
+    struct Prepared {
+        let series: [StandardLineChartSeries]
+        let interactionDates: [Date]
+        let yTicks: [Double]
+    }
+
+    private var cachedDataID: UUID?
+    private var cachedDifferentiatesWithoutColor = false
+    private var cachedValue: Prepared?
+
+    func prepared(for data: ReturnsDisplayData, differentiateWithoutColor: Bool) -> Prepared {
+        if cachedDataID == data.id,
+           cachedDifferentiatesWithoutColor == differentiateWithoutColor,
+           let cachedValue { return cachedValue }
+
+        let order = ReturnsSeriesStyle.order
+        let series = order.compactMap { name -> StandardLineChartSeries? in
+            guard let values = data.grouped[name], !values.isEmpty else { return nil }
+            return StandardLineChartSeries(
+                id: name,
+                points: values.map {
+                    StandardLineChartPoint(id: "\(name)|\($0.id)", date: $0.date, value: $0.value)
+                },
+                color: ReturnsSeriesStyle.color(for: name),
+                lineWidth: 2,
+                dash: Self.dashPattern(for: name, in: order, enabled: differentiateWithoutColor),
+                selectionRadius: name == ReturnsSeriesStyle.portfolio ? 3.6 : 2.8,
+                latestPointRadius: name == ReturnsSeriesStyle.portfolio ? 5 : 4,
+                latestPointUsesGlass: false
+            )
+        }
+        let ticks = (0..<6).map { index in
+            let fraction = Double(index) / 5
+            return data.domain.upperBound - (data.domain.upperBound - data.domain.lowerBound) * fraction
+        }
+        let value = Prepared(series: series, interactionDates: data.dates, yTicks: ticks)
+        cachedDataID = data.id
+        cachedDifferentiatesWithoutColor = differentiateWithoutColor
+        cachedValue = value
+        return value
+    }
+
+    private static func dashPattern(for series: String, in order: [String], enabled: Bool) -> [CGFloat] {
+        guard enabled, series != ReturnsSeriesStyle.portfolio,
+              let index = order.firstIndex(of: series) else { return [] }
+        let patterns: [[CGFloat]] = [
+            [8, 4], [2, 3], [10, 3, 2, 3], [5, 3],
+            [12, 4], [3, 2, 1, 2], [7, 2], [1, 3],
+        ]
+        return patterns[(index - 1) % patterns.count]
+    }
+}
+
 private struct ReturnsEndpointLabelLayout: Identifiable {
     let id: String
     let text: String
@@ -1275,6 +1299,7 @@ private struct ReturnsEndpointLabelLayout: Identifiable {
 }
 
 private struct ReturnsDisplayData {
+    let id = UUID()
     let points: [ReturnsSeriesPoint]
     let grouped: [String: [ReturnsSeriesPoint]]
     let dates: [Date]
@@ -1317,6 +1342,7 @@ private final class ReturnsPreparedData: @unchecked Sendable {
     private let twrRanges: [ChartTimeRange: ReturnsPreparedRange]
     private let mwrRanges: [ChartTimeRange: ReturnsPreparedRange]
     private let cashFlowValuesByDate: [Date: [String: Double]]
+    private let cashFlowDates: [Date]
 
     init(comparison: ComparisonResponse) {
         let cashFlowMatchedPoints = Self.makePoints(
@@ -1342,6 +1368,7 @@ private final class ReturnsPreparedData: @unchecked Sendable {
             valuesByDate[point.date, default: [:]][point.series] = point.value
         }
         cashFlowValuesByDate = valuesByDate
+        cashFlowDates = valuesByDate.keys.sorted()
         cashFlowMatchedRanges = Self.makeRanges(
             from: cashFlowMatchedPoints,
             suppliedReturns: cashFlowReturnPoints,
@@ -1356,9 +1383,24 @@ private final class ReturnsPreparedData: @unchecked Sendable {
         if let exactValue = cashFlowValuesByDate[date]?[series] {
             return exactValue
         }
-        guard let nearestDate = cashFlowValuesByDate.keys.min(by: {
-            abs($0.timeIntervalSince(date)) < abs($1.timeIntervalSince(date))
-        }) else { return nil }
+        guard !cashFlowDates.isEmpty else { return nil }
+        var lower = 0
+        var upper = cashFlowDates.count
+        while lower < upper {
+            let middle = (lower + upper) / 2
+            if cashFlowDates[middle] < date { lower = middle + 1 } else { upper = middle }
+        }
+        let nearestDate: Date
+        if lower == 0 {
+            nearestDate = cashFlowDates[0]
+        } else if lower == cashFlowDates.count {
+            nearestDate = cashFlowDates[cashFlowDates.count - 1]
+        } else {
+            let before = cashFlowDates[lower - 1]
+            let after = cashFlowDates[lower]
+            nearestDate = abs(before.timeIntervalSince(date)) <= abs(after.timeIntervalSince(date))
+                ? before : after
+        }
         return cashFlowValuesByDate[nearestDate]?[series]
     }
 

@@ -779,7 +779,14 @@ extension LocalPortfolioDocument {
     }
 
     func scoped(to selectedAccountKeys: Set<String>) -> LocalPortfolioDocument {
-        let availableKeys = Set(accounts.map(\.id))
+        scoped(to: selectedAccountKeys, availableAccounts: accounts)
+    }
+
+    /// Reuse an account index already prepared for this document. Building
+    /// `accounts` groups the complete transaction history, so callers that
+    /// also need the account list should do that work only once.
+    func scoped(to selectedAccountKeys: Set<String>, availableAccounts: [PortfolioAccount]) -> LocalPortfolioDocument {
+        let availableKeys = Set(availableAccounts.map(\.id))
         let effectiveKeys = selectedAccountKeys.intersection(availableKeys)
         let selectedPositions = positions.filter { effectiveKeys.contains($0.accountKey) }
         let selectedTransactions = transactions?.filter { effectiveKeys.contains($0.accountKey) }
@@ -812,7 +819,7 @@ extension LocalPortfolioDocument {
             positions: selectedPositions,
             snapshots: selectedSnapshots,
             transactions: selectedTransactions,
-            knownAccounts: accounts.filter { effectiveKeys.contains($0.id) },
+            knownAccounts: availableAccounts.filter { effectiveKeys.contains($0.id) },
             isSynthetic: isSynthetic
         )
     }

@@ -394,6 +394,7 @@ struct SecurityPriceChart: View {
 struct SecurityPricePlot: View {
     @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
+    @State private var seriesCache = SecurityPricePlotSeriesCache()
 
     let data: SecurityPriceRangeData
     let currency: String
@@ -407,18 +408,7 @@ struct SecurityPricePlot: View {
     let onInteractionEnded: (Int) -> Void
 
     var body: some View {
-        let priceSeries = StandardLineChartSeries(
-            id: "price",
-            points: data.sampledPoints.map {
-                StandardLineChartPoint(id: $0.id, date: $0.date, value: $0.price)
-            },
-            color: CatfolioPalette.securityPriceLine,
-            lineWidth: 2.5,
-            selectionRadius: 4,
-            latestPointRadius: 5,
-            latestPointColor: colorScheme == .dark ? .white : Color(red: 10 / 255, green: 11 / 255, blue: 12 / 255),
-            latestPointUsesGlass: false
-        )
+        let prepared = seriesCache.prepared(for: data, scheme: colorScheme)
         let costReference = data.averageCost.map {
             StandardLineChartReferenceLine(
                 id: "cost",
@@ -430,14 +420,10 @@ struct SecurityPricePlot: View {
             )
         }
         StandardLineChart(
-            series: [priceSeries],
-            interactionDates: data.points.map(\.date),
+            series: [prepared.priceSeries],
+            interactionDates: prepared.interactionDates,
             domain: data.domain,
-            yTicks: (0..<4).map { index in
-                let fraction = Double(index) / 3
-                return data.domain.upperBound
-                    - (data.domain.upperBound - data.domain.lowerBound) * fraction
-            },
+            yTicks: prepared.yTicks,
             axisWidth: 49,
             topInset: 15,
             bottomHeight: 0,
@@ -448,26 +434,7 @@ struct SecurityPricePlot: View {
             appearanceID: appearanceID,
             dataTransition: .viewportZoom,
             animatesInitialAppearance: true,
-            markers: data.trades.map { trade in
-                StandardLineChartMarker(
-                    id: trade.id,
-                    point: StandardLineChartPoint(
-                        id: trade.id,
-                        date: trade.point.date,
-                        value: trade.point.price
-                    ),
-                    color: trade.trade.isBuy
-                        ? CatfolioPalette.tradeBuy
-                        : (colorScheme == .dark
-                            ? CatfolioPalette.tradeSellDark
-                            : CatfolioPalette.tradeSellLight),
-                    radius: 4,
-                    outlineColor: nil,
-                    outlineWidth: 2,
-                    style: .ring,
-                    seriesID: "price"
-                )
-            },
+            markers: prepared.markers,
             markerMagnetRadius: 6,
             referenceLines: [costReference].compactMap { $0 },
             selectedDate: selectedPoint?.date,
@@ -503,6 +470,73 @@ struct SecurityPricePlot: View {
     }
 }
 
+/// A scrubbing selection changes the crosshair and readout, not the price
+/// vertices, trade marks, or axis geometry. A new prepared range has a new id.
+@MainActor
+final class SecurityPricePlotSeriesCache {
+    struct Prepared {
+        let priceSeries: StandardLineChartSeries
+        let interactionDates: [Date]
+        let yTicks: [Double]
+        let markers: [StandardLineChartMarker]
+    }
+
+    private struct Key: Equatable {
+        let dataID: UUID
+        let scheme: ColorScheme
+    }
+
+    private var cachedKey: Key?
+    private var cachedValue: Prepared?
+    private(set) var rebuildCount = 0
+
+    func prepared(for data: SecurityPriceRangeData, scheme: ColorScheme) -> Prepared {
+        let key = Key(dataID: data.id, scheme: scheme)
+        if cachedKey == key, let cachedValue { return cachedValue }
+
+        let priceSeries = StandardLineChartSeries(
+            id: "price",
+            points: data.sampledPoints.map {
+                StandardLineChartPoint(id: $0.id, date: $0.date, value: $0.price)
+            },
+            color: CatfolioPalette.securityPriceLine,
+            lineWidth: 2.5,
+            selectionRadius: 4,
+            latestPointRadius: 5,
+            latestPointColor: scheme == .dark ? .white : Color(red: 10 / 255, green: 11 / 255, blue: 12 / 255),
+            latestPointUsesGlass: false
+        )
+        let markers = data.trades.map { trade in
+            StandardLineChartMarker(
+                id: trade.id,
+                point: StandardLineChartPoint(
+                    id: trade.id,
+                    date: trade.point.date,
+                    value: trade.point.price
+                ),
+                color: trade.trade.isBuy
+                    ? CatfolioPalette.tradeBuy
+                    : (scheme == .dark ? CatfolioPalette.tradeSellDark : CatfolioPalette.tradeSellLight),
+                radius: 4,
+                outlineColor: nil,
+                outlineWidth: 2,
+                style: .ring,
+                seriesID: "price"
+            )
+        }
+        let ticks = (0..<4).map { index in
+            let fraction = Double(index) / 3
+            return data.domain.upperBound - (data.domain.upperBound - data.domain.lowerBound) * fraction
+        }
+        let value = Prepared(priceSeries: priceSeries, interactionDates: data.points.map(\.date),
+                             yTicks: ticks, markers: markers)
+        cachedKey = key
+        cachedValue = value
+        rebuildCount &+= 1
+        return value
+    }
+}
+
 final class SecurityPricePreparedData: @unchecked Sendable {
     private let ranges: [ChartTimeRange: SecurityPriceRangeData]
 
@@ -533,6 +567,7 @@ struct SecurityPriceRangeData: @unchecked Sendable {
         var id: String { trade.id }
     }
 
+    let id = UUID()
     let points: [SecurityPricePlotPoint]
     let sampledPoints: [SecurityPricePlotPoint]
     let trades: [TradePoint]

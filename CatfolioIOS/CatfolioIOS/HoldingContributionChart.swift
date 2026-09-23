@@ -220,26 +220,30 @@ struct HoldingContributionChart: View {
     @State private var hiddenTickers: Set<String> = []
     @State private var showsPrincipal = false
     @State private var showsOthers = true
+    @State private var preparedCache = HoldingContributionPreparedCache()
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
 
     var body: some View {
-        let stack = loading.history.map { HoldingContributionStack(history: $0, holdings: model.holdings, hiding: hiddenTickers) }
-        let window = stack?.window(for: range)
+        let prepared = loading.history.map {
+            preparedCache.prepared(history: $0, historyRevision: loading.revision,
+                                   holdings: model.holdings, hiding: hiddenTickers,
+                                   locale: appLocale, language: ContentLanguage.current,
+                                   range: range, showsPrincipal: showsPrincipal,
+                                   showsOthers: showsOthers, scheme: colorScheme)
+        }
 
         VStack(alignment: .leading, spacing: 18) {
-            if let stack, let window, window.rows.count > 1 {
-                let shown = window.row(nearest: selectedDate) ?? window.rows.last!
-                let visible = visibleBands(stack)
-                let top = maximum(window, visible: visible) * 1.06
+            if let prepared, prepared.window.rows.count > 1 {
+                let shown = prepared.window.row(nearest: selectedDate) ?? prepared.window.rows.last!
                 // Figma 357:2257 / 362:14796: the figures, the chart and the
                 // range strip share one tinted field that runs to all three
                 // screen edges; the holdings list sits on the page's own
                 // surface below it.
-                let chart = plot(stack: stack, window: window, visible: visible, top: top)
+                let chart = plot(prepared: prepared)
                 ReturnsSourceChartHero(range: $range, header: header(shown), plot: chart,
-                                       axis: axisLabels(top: top))
+                                       axis: axisLabels(top: prepared.top))
                 Group {
-                    legend(stack: stack, row: shown)
+                    legend(stack: prepared.stack, row: shown)
                     Text(L10n.text("按当前持仓的股数回推每天的市值，所以已卖出的持仓不在图中。收益最多的几只各占一层：按盈利从高到低，直到下一只不到全部盈利的 6%，最多 6 只。其他持仓整体亏损时，亏损从本金层里扣除，本金层会低于本金线。其他收益只包含未单独列出且未隐藏的持仓。轻点下方任意一行可以隐藏或显示；隐藏的收益从图中移除，由下一只补上。顶部组合总额与本金不受隐藏影响。"))
                         .appText(.micro, weight: .regular)
                         .foregroundStyle(.tertiary)
@@ -284,24 +288,6 @@ struct HoldingContributionChart: View {
         }
         .onChange(of: range) { _, _ in selectedDate = nil }
         .sensoryFeedback(.selection, trigger: "\(hiddenTickers.sorted())|\(showsPrincipal)|\(showsOthers)") { _, _ in hapticsEnabled }
-    }
-
-    /// Band indices to draw, bottom to top. Each keeps its place in the
-    /// stack; a hidden one simply is not added in.
-    private func visibleBands(_ stack: HoldingContributionStack) -> [Int] {
-        stack.bands.indices.filter { index in
-            switch stack.bands[index].kind {
-            case .principal: showsPrincipal
-            case .others: showsOthers
-            case .holding: true
-            }
-        }
-    }
-
-    private func maximum(_ window: HoldingContributionStack.Window, visible: [Int]) -> Double {
-        window.rows.map { row in
-            max(visible.reduce(0) { $0 + row.bands[$1] }, showsPrincipal ? row.principal : 0)
-        }.max() ?? 0
     }
 
     private func header(_ row: HoldingContributionStack.Row) -> some View {
@@ -350,57 +336,12 @@ struct HoldingContributionChart: View {
         ReturnsSourceChartStyle.secondary(for: colorScheme)
     }
 
-    private func plot(stack: HoldingContributionStack, window: HoldingContributionStack.Window,
-                      visible: [Int], top: Double) -> some View {
-        // Painted from the top of the stack down: each band's area reaches
-        // the axis and the next one paints over its lower part, leaving the
-        // band between them. The principal line goes on last, so where the
-        // principal band has been eaten into, the line still shows the sum.
-        var series: [StandardLineChartSeries] = []
-        for (position, band) in visible.enumerated().reversed() {
-            let color = Self.fillColor(for: stack.bands[band].kind, scheme: colorScheme)
-            let below = visible[...position]
-            let id = Self.seriesID(stack.bands[band])
-            series.append(StandardLineChartSeries(
-                id: id,
-                points: window.rows.map { row in
-                    StandardLineChartPoint(id: "\(id)|\(row.dateText)", date: row.date,
-                                           value: below.reduce(0) { $0 + row.bands[$1] })
-                },
-                color: color,
-                // No outline: the design lets the fills meet directly, and a
-                // band that is zero across the range would otherwise stroke a
-                // line along the bottom of the chart.
-                lineWidth: 0,
-                areaFill: stack.bands[band].kind == .others ? .white : color,
-                areaFillEndColor: Self.fillEndColor(for: stack.bands[band].kind),
-                areaBaseline: 0,
-                areaStripeColor: stack.bands[band].kind == .others
-                    ? ReturnsSourceChartStyle.stripeColor : nil,
-                areaStripeSpacing: 35.5,
-                areaStripeWidth: 13,
-                latestPointRadius: 0,
-                latestPointUsesGlass: false
-            ))
-        }
-        if showsPrincipal {
-            series.append(StandardLineChartSeries(
-                id: "principal",
-                points: window.rows.map { StandardLineChartPoint(id: "principal|\($0.dateText)", date: $0.date, value: $0.principal) },
-                color: Self.principalLine,
-                lineWidth: 2.5,
-                // No endpoint dot: the line ends at the screen edge, where a
-                // dot would be cut in half.
-                latestPointRadius: 0,
-                latestPointUsesGlass: false
-            ))
-        }
-        let topSeries = visible.last.map { Self.seriesID(stack.bands[$0]) }
+    private func plot(prepared: HoldingContributionPreparedCache.Prepared) -> some View {
         return StandardLineChart(
-            series: series,
-            interactionDates: window.rows.map(\.date),
-            domain: 0...max(top, 1),
-            yTicks: [top, top / 2, 0],
+            series: prepared.series,
+            interactionDates: prepared.interactionDates,
+            domain: 0...max(prepared.top, 1),
+            yTicks: prepared.yTicks,
             axisWidth: 0,
             topInset: 4,
             bottomHeight: 0,
@@ -415,7 +356,7 @@ struct HoldingContributionChart: View {
             selectionIndicatorLabel: selectedDate.map {
                 $0.formatted(.dateTime.year().month(.abbreviated).day())
             },
-            selectionSeriesIDs: Set([topSeries, showsPrincipal ? "principal" : nil].compactMap { $0 }),
+            selectionSeriesIDs: prepared.selectionSeriesIDs,
             dimsFutureDuringSelection: true,
             // The header carries the values; the date shows while scrubbing.
             yAxisLabel: { _ in "" },
@@ -431,7 +372,7 @@ struct HoldingContributionChart: View {
     }
 
     /// Stable per band, so turning one off morphs the rest into place.
-    private static func seriesID(_ band: HoldingContributionStack.Band) -> String {
+    static func seriesID(_ band: HoldingContributionStack.Band) -> String {
         switch band.kind {
         case .principal: "band-principal"
         case .others: "band-others"
@@ -605,6 +546,153 @@ struct HoldingContributionChart: View {
     }
 }
 
+/// Scrubbing changes only the selection. Keep the ranked stack, filtered
+/// window, and sorted chart points until an input that affects them changes.
+@MainActor
+final class HoldingContributionPreparedCache {
+    struct Prepared {
+        let stack: HoldingContributionStack
+        let window: HoldingContributionStack.Window
+        let series: [StandardLineChartSeries]
+        let interactionDates: [Date]
+        let top: Double
+        let yTicks: [Double]
+        let selectionSeriesIDs: Set<String>
+    }
+
+    private struct HoldingName: Equatable {
+        let ticker: String
+        let displayName: String
+        let hasPublicDisclosure: Bool
+        let underlyingTicker: String?
+    }
+
+    private struct StackKey: Equatable {
+        let historyRevision: Int
+        let names: [HoldingName]
+        let hiding: Set<String>
+        let localeIdentifier: String
+        let language: String
+    }
+
+    private struct PlotKey: Equatable {
+        let stackGeneration: Int
+        let range: ChartTimeRange
+        let showsPrincipal: Bool
+        let showsOthers: Bool
+        let scheme: ColorScheme
+    }
+
+    private var stackKey: StackKey?
+    private var cachedStack: HoldingContributionStack?
+    private var plotKey: PlotKey?
+    private var cachedPlot: Prepared?
+    private var stackGeneration = 0
+    private(set) var stackRebuildCount = 0
+    private(set) var plotRebuildCount = 0
+
+    func prepared(history: HoldingValueHistory, historyRevision: Int,
+                  holdings: [Holding], hiding: Set<String>, locale: Locale,
+                  language: String, range: ChartTimeRange,
+                  showsPrincipal: Bool, showsOthers: Bool,
+                  scheme: ColorScheme) -> Prepared {
+        // Names can change without a history refresh, for example after an
+        // account edit. Compare the source fields rather than resolving the
+        // display catalog on every selection tick.
+        let names = holdings.map {
+            HoldingName(ticker: $0.ticker.uppercased(), displayName: $0.displayName,
+                        hasPublicDisclosure: $0.publicDisclosure != nil,
+                        underlyingTicker: $0.publicDisclosure?.underlyingTicker)
+        }
+        let nextStackKey = StackKey(historyRevision: historyRevision, names: names,
+                                    hiding: hiding, localeIdentifier: locale.identifier,
+                                    language: language)
+        if stackKey != nextStackKey || cachedStack == nil {
+            cachedStack = HoldingContributionStack(history: history, holdings: holdings, hiding: hiding)
+            stackKey = nextStackKey
+            stackGeneration &+= 1
+            stackRebuildCount &+= 1
+            cachedPlot = nil
+        }
+        let stack = cachedStack!
+        let nextPlotKey = PlotKey(stackGeneration: stackGeneration, range: range,
+                                  showsPrincipal: showsPrincipal, showsOthers: showsOthers,
+                                  scheme: scheme)
+        if plotKey == nextPlotKey, let cachedPlot { return cachedPlot }
+
+        let window = stack.window(for: range)
+        // Band indices are bottom to top. Only visible gains take part in a
+        // boundary, exactly as before a band was hidden.
+        let visible = stack.bands.indices.filter { index in
+            switch stack.bands[index].kind {
+            case .principal: showsPrincipal
+            case .others: showsOthers
+            case .holding: true
+            }
+        }
+        let boundaries = window.rows.map { row in
+            var cumulative = 0.0
+            return visible.map { band in
+                cumulative += row.bands[band]
+                return cumulative
+            }
+        }
+        let maximum = window.rows.indices.map { index in
+            max(boundaries[index].last ?? 0,
+                showsPrincipal ? window.rows[index].principal : 0)
+        }.max() ?? 0
+        let top = maximum * 1.06
+
+        // Paint the outermost cumulative area first, then successively cover
+        // its lower part. The principal outline remains the final series.
+        var series: [StandardLineChartSeries] = []
+        for (position, band) in visible.enumerated().reversed() {
+            let kind = stack.bands[band].kind
+            let color = HoldingContributionChart.fillColor(for: kind, scheme: scheme)
+            let id = HoldingContributionChart.seriesID(stack.bands[band])
+            series.append(StandardLineChartSeries(
+                id: id,
+                points: window.rows.indices.map { index in
+                    let row = window.rows[index]
+                    return StandardLineChartPoint(id: "\(id)|\(row.dateText)", date: row.date,
+                                                  value: boundaries[index][position])
+                },
+                color: color,
+                lineWidth: 0,
+                areaFill: kind == .others ? .white : color,
+                areaFillEndColor: HoldingContributionChart.fillEndColor(for: kind),
+                areaBaseline: 0,
+                areaStripeColor: kind == .others ? ReturnsSourceChartStyle.stripeColor : nil,
+                areaStripeSpacing: 35.5,
+                areaStripeWidth: 13,
+                latestPointRadius: 0,
+                latestPointUsesGlass: false
+            ))
+        }
+        if showsPrincipal {
+            series.append(StandardLineChartSeries(
+                id: "principal",
+                points: window.rows.map {
+                    StandardLineChartPoint(id: "principal|\($0.dateText)", date: $0.date, value: $0.principal)
+                },
+                color: HoldingContributionChart.principalLine,
+                lineWidth: 2.5,
+                latestPointRadius: 0,
+                latestPointUsesGlass: false
+            ))
+        }
+        let topSeries = visible.last.map { HoldingContributionChart.seriesID(stack.bands[$0]) }
+        let value = Prepared(stack: stack, window: window, series: series,
+                             interactionDates: window.rows.map(\.date), top: top,
+                             yTicks: [top, top / 2, 0],
+                             selectionSeriesIDs: Set([topSeries, showsPrincipal ? "principal" : nil].compactMap { $0 }))
+        plotKey = nextPlotKey
+        cachedPlot = value
+        plotRebuildCount &+= 1
+        return value
+    }
+}
+
 /// The history cut into the chart's bands, bottom to top: the principal, the
 /// others' gain, then the named holdings' gains from the smallest of them to
 /// the largest, so the largest is on top. Hidden gains are excluded; portfolio
@@ -642,9 +730,23 @@ struct HoldingContributionStack {
 
     struct Window {
         let rows: [Row]
+        private let firstRowByDate: [Date: Int]
+
+        init(rows: [Row]) {
+            self.rows = rows
+            var first: [Date: Int] = [:]
+            for (index, row) in rows.enumerated() where first[row.date] == nil {
+                first[row.date] = index
+            }
+            firstRowByDate = first
+        }
 
         func row(nearest date: Date?) -> Row? {
             guard let date else { return nil }
+            // Chart selection comes from interactionDates, so this is the
+            // usual path while the reader drags. Keep the prior nearest-row
+            // behavior for an arbitrary date between samples.
+            if let index = firstRowByDate[date] { return rows[index] }
             return rows.min { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) }
         }
     }

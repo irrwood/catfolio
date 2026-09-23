@@ -168,16 +168,25 @@ final class AppModel {
     }
 
     func refreshPortfolio(refreshMarketData: Bool = true) async {
-        _ = await refreshPortfolioResult(refreshMarketData: refreshMarketData)
+        _ = await refreshPortfolioResult(refreshMarketData: refreshMarketData, policy: .automatic)
     }
 
     /// Only the two explicit home actions use this result. Automatic loads and
     /// source switches keep using `refreshPortfolio()` without user feedback.
     func refreshPortfolioReportingResult(refreshMarketData: Bool = true) async -> PortfolioRefreshResult? {
-        await refreshPortfolioResult(refreshMarketData: refreshMarketData)
+        await refreshPortfolioResult(refreshMarketData: refreshMarketData, policy: .userInitiated)
     }
 
-    private func refreshPortfolioResult(refreshMarketData: Bool) async -> PortfolioRefreshResult? {
+    private enum PortfolioRefreshPolicy {
+        case automatic
+        case userInitiated
+
+        var forcesProviderRefresh: Bool { self == .userInitiated }
+    }
+
+    private func refreshPortfolioResult(
+        refreshMarketData: Bool, policy: PortfolioRefreshPolicy
+    ) async -> PortfolioRefreshResult? {
         guard !Task.isCancelled else { return nil }
         portfolioRequestGeneration &+= 1
         let generation = portfolioRequestGeneration
@@ -195,14 +204,17 @@ final class AppModel {
         do {
             var loaded = try await loadActiveDocument()
             guard generation == portfolioRequestGeneration else { return nil }
+            let initialScope = await prepareAccountScope(for: loaded)
+            guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
             // Publish disk data before any network work. Slow/offline quote
             // providers must never hold the entire home screen in a skeleton.
-            let restored = await restoreHomePresentation(from: loaded, generation: generation)
+            let restored = await restoreHomePresentation(from: loaded, scope: initialScope, generation: generation)
             guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
             if !restored {
-                let preservesChart = await canPreserveHomeChart(for: loaded)
+                let preservesChart = await canPreserveHomeChart(for: loaded, accountKeys: initialScope.keys)
                 guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
-                try await apply(loaded, loadsCachedChart: false, preservesChart: preservesChart)
+                try await apply(loaded, loadsCachedChart: false, preservesChart: preservesChart,
+                    preparedScope: initialScope)
             }
             guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
             // Loading the selected source is finished. Public data can update
@@ -237,22 +249,27 @@ final class AppModel {
                 loaded = try await mergeCachedTrading212History(into: loaded)
                 guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
                 if loaded != fullDocument {
-                    let preservesChart = await canPreserveHomeChart(for: loaded)
+                    let updatedScope = await prepareAccountScope(for: loaded)
                     guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
-                    try await apply(loaded, loadsCachedChart: false, preservesChart: preservesChart)
+                    let preservesChart = await canPreserveHomeChart(for: loaded, accountKeys: updatedScope.keys)
+                    guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
+                    try await apply(loaded, loadsCachedChart: false, preservesChart: preservesChart,
+                        preparedScope: updatedScope)
                 }
                 guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
             }
             guard !loaded.positions.isEmpty else {
                 isHoldingDailyChangesLoading = false
-                await refreshHistoricalChart(from: document, generation: generation)
+                await refreshHistoricalChart(from: document, generation: generation,
+                    forceRefresh: policy.forcesProviderRefresh)
                 guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
                 await saveHomePresentation(generation: generation)
                 return .noHeldQuotes
             }
             if !isFakeDataMode {
                 async let fxRefresh: Void = LocalCurrentFXRefresh.shared.refresh()
-                let quotes = await LocalMarketDataClient().latestQuotes(for: loaded.positions, forceRefresh: true)
+                let quotes = await LocalMarketDataClient().latestQuotes(for: loaded.positions,
+                    forceRefresh: policy.forcesProviderRefresh)
                 await fxRefresh
                 guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
                 if !quotes.isEmpty {
@@ -266,8 +283,10 @@ final class AppModel {
             guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
             // Both consumers receive the same observed quotes. Rebuilding
             // before apply() let a stale daily curve win after a live refresh.
-            async let historyRefresh: Void = refreshHistoricalChart(from: document, generation: generation)
-            async let dailyRefresh: Void = refreshHoldingDailyChanges(forceRefresh: true)
+            async let historyRefresh: Void = refreshHistoricalChart(from: document, generation: generation,
+                forceRefresh: policy.forcesProviderRefresh)
+            async let dailyRefresh: Void = refreshHoldingDailyChanges(
+                forceRefresh: policy.forcesProviderRefresh)
             _ = await (historyRefresh, dailyRefresh)
             guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
             await saveHomePresentation(generation: generation)
@@ -350,7 +369,8 @@ final class AppModel {
         do {
             let loaded = try await loadActiveDocument()
             guard generation == returnsRequestGeneration else { return }
-            let scoped = selectedDocument(from: loaded)
+            let scoped = await selectedDocument(from: loaded)
+            guard generation == returnsRequestGeneration, !Task.isCancelled else { return }
             document = scoped
             // The saved comparison is drawn at once. When nothing it was
             // computed from has changed today, it is the answer; otherwise
@@ -447,7 +467,8 @@ final class AppModel {
         do {
             let loaded = try await loadActiveDocument()
             guard generation == returnsAnalyticsRequestGeneration else { return }
-            let scoped = selectedDocument(from: loaded)
+            let scoped = await selectedDocument(from: loaded)
+            guard generation == returnsAnalyticsRequestGeneration, !Task.isCancelled else { return }
             document = scoped
             let response = await LocalReturnsAnalyticsClient().load(document: scoped) {
                 [weak self] completedPart, partialResponse in
@@ -512,7 +533,7 @@ final class AppModel {
     func securityPriceHistory(for ticker: String) async throws -> SecurityPriceHistory {
         let source = portfolioSource
         let loaded = try await loadActiveDocument()
-        let scoped = selectedDocument(from: loaded)
+        let scoped = await selectedDocument(from: loaded)
         let holding = holdings.first { $0.ticker.caseInsensitiveCompare(ticker) == .orderedSame }
         let history = try await LocalMarketDataClient().securityPriceHistory(
             ticker: ticker,
@@ -767,7 +788,10 @@ final class AppModel {
         let client = LocalMarketDataClient()
         let fetchSnapshot = holdingsNeedingFetch
         async let fetchedChanges = client.dailyChanges(for: fetchSnapshot, positions: document.positions, forceRefresh: forceRefresh)
-        async let fetchedBenchmark = client.dailyChange(ticker: "SPY", forceRefresh: forceRefresh)
+        // Holdings can combine a fresh quote with saved daily closes. SPY has
+        // no portfolio quote overlay, so fetch its current daily point even
+        // when the wider history refresh is allowed to use its cache.
+        async let fetchedBenchmark = client.dailyChange(ticker: "SPY", forceRefresh: true)
         let (fetched, benchmark) = await (fetchedChanges, fetchedBenchmark)
         guard !Task.isCancelled,
               generation == dailyChangesRequestGeneration,
@@ -786,14 +810,16 @@ final class AppModel {
 
     func loadBriefing() async throws -> String {
         let loaded = try await loadActiveDocument()
-        return try await LocalAIClient().briefing(document: selectedDocument(from: loaded))
+        let scoped = await selectedDocument(from: loaded)
+        return try await LocalAIClient().briefing(document: scoped)
     }
 
     func askAI(_ question: String, attentionContext: String? = nil) async throws -> String {
         let loaded = try await loadActiveDocument()
+        let scoped = await selectedDocument(from: loaded)
         return try await LocalAIClient().answer(
             question,
-            document: selectedDocument(from: loaded),
+            document: scoped,
             additionalContext: attentionContext
         )
     }
@@ -801,9 +827,10 @@ final class AppModel {
     /// `askAI`, delivered as the model writes it.
     func streamAI(_ question: String, attentionContext: String? = nil) async throws -> AsyncThrowingStream<AIStreamEvent, Error> {
         let loaded = try await loadActiveDocument()
+        let scoped = await selectedDocument(from: loaded)
         return LocalAIClient().streamAnswer(
             question,
-            document: selectedDocument(from: loaded),
+            document: scoped,
             additionalContext: attentionContext
         )
     }
@@ -820,7 +847,8 @@ final class AppModel {
 
     func portfolioAttention() async throws -> PortfolioAttentionReport {
         let loaded = try await loadActiveDocument()
-        return try await LocalAIClient().portfolioAttention(document: selectedDocument(from: loaded))
+        let scoped = await selectedDocument(from: loaded)
+        return try await LocalAIClient().portfolioAttention(document: scoped)
     }
 
     func selectBroker(_ provider: BrokerProvider) {
@@ -833,7 +861,7 @@ final class AppModel {
         if presentedSource == portfolioSource {
             snapshot = document
         } else {
-            snapshot = selectedDocument(from: try await loadActiveDocument())
+            snapshot = await selectedDocument(from: try await loadActiveDocument())
         }
         let preparation = Task.detached(priority: .userInitiated) {
             try Task.checkCancellation()
@@ -853,7 +881,9 @@ final class AppModel {
     }
 
     func toggleAccount(_ accountID: String) async {
-        var next = resolvedAccountKeys(in: fullDocument)
+        // Read the latest requested keys: a second tap can arrive before the
+        // first selection has finished publishing its new presentation.
+        var next = requestedAccountKeysFromDisplayedAccounts()
         if next.contains(accountID) {
             guard next.count > 1 else { return }
             next.remove(accountID)
@@ -1417,13 +1447,42 @@ final class AppModel {
         realisedProfit = summary.usdTotal() ?? .nan
     }
 
+    private struct PreparedAccountScope {
+        let accounts: [PortfolioAccount]
+        let keys: Set<String>
+        let document: LocalPortfolioDocument
+    }
+
+    /// Account discovery groups the entire transaction ledger. Prepare it and
+    /// the selected document together, away from the actor that handles taps.
+    private func prepareAccountScope(for loaded: LocalPortfolioDocument) async -> PreparedAccountScope {
+        let savedKeys = Self.savedAccountKeys(forKey: selectedAccountsStorageKey, defaults: modeDefaults)
+        let selectsAll = modeDefaults.bool(forKey: selectsAllAccountsStorageKey)
+        return await Task.detached(priority: .userInitiated) {
+            let accounts = loaded.accounts
+            let availableKeys = Set(accounts.map(\.id))
+            let selected = savedKeys.intersection(availableKeys)
+            let keys = selectsAll || selected.isEmpty ? availableKeys : selected
+            return PreparedAccountScope(accounts: accounts, keys: keys,
+                document: loaded.scoped(to: keys, availableAccounts: accounts))
+        }.value
+    }
+
     private func apply(_ loaded: LocalPortfolioDocument, invalidatesDailyChanges: Bool = true,
                        loadsCachedChart: Bool = true, preservesChart: Bool = false,
-                       localSelectionOnly: Bool = false) async throws {
+                       localSelectionOnly: Bool = false,
+                       preparedScope suppliedScope: PreparedAccountScope? = nil) async throws {
         let generation = portfolioRequestGeneration
         let previousDailyChanges = holdingDailyChanges
-        let accountKeys = resolvedAccountKeys(in: loaded)
-        let scoped = selectedDocument(from: loaded)
+        let preparedScope: PreparedAccountScope
+        if let suppliedScope {
+            preparedScope = suppliedScope
+        } else {
+            preparedScope = await prepareAccountScope(for: loaded)
+        }
+        guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+        let accountKeys = preparedScope.keys
+        let scoped = preparedScope.document
         let initialDocument = applyingDetailQuotes(to: scoped)
         var calculatedDocument = initialDocument
         var presentation = try await Task.detached(priority: .userInitiated) {
@@ -1446,6 +1505,7 @@ final class AppModel {
         // newer quote arrives during that calculation.
         var overlaidFullDocument: LocalPortfolioDocument
         var overlaidScopedDocument: LocalPortfolioDocument
+        var presentedAccounts = preparedScope.accounts
         while true {
             let quoteGeneration = detailQuoteGeneration
             overlaidFullDocument = applyingDetailQuotes(to: loaded)
@@ -1457,6 +1517,14 @@ final class AppModel {
                 }.value
                 calculatedDocument = snapshot
             }
+            if overlaidFullDocument.positions != loaded.positions {
+                let snapshot = overlaidFullDocument
+                presentedAccounts = await Task.detached(priority: .userInitiated) {
+                    snapshot.accounts
+                }.value
+            } else {
+                presentedAccounts = preparedScope.accounts
+            }
             guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
             if quoteGeneration == detailQuoteGeneration { break }
         }
@@ -1464,7 +1532,7 @@ final class AppModel {
         document = overlaidScopedDocument
         presentedSource = portfolioSource
         updateRealisedProfit(from: document)
-        accounts = fullDocument.accounts
+        accounts = presentedAccounts
         selectedAccountKeys = accountKeys
         overview = presentation.0
         if !preservesChart {
@@ -1642,26 +1710,28 @@ final class AppModel {
         presentedSource == portfolioSource && portfolioChart?.currentPoint.marketValue.isFinite == true
     }
 
-    private func homeCacheContext(for loaded: LocalPortfolioDocument) -> PortfolioPresentationCache.Context {
-        .init(source: portfolioSource, accountKeys: resolvedAccountKeys(in: loaded), language: ContentLanguage.current)
+    private func homeCacheContext(accountKeys: Set<String>) -> PortfolioPresentationCache.Context {
+        .init(source: portfolioSource, accountKeys: accountKeys, language: ContentLanguage.current)
     }
 
-    private func canPreserveHomeChart(for loaded: LocalPortfolioDocument) async -> Bool {
-        guard hasUsableHomeChart, selectedAccountKeys == resolvedAccountKeys(in: loaded) else { return false }
+    private func canPreserveHomeChart(for loaded: LocalPortfolioDocument, accountKeys: Set<String>) async -> Bool {
+        guard hasUsableHomeChart, selectedAccountKeys == accountKeys else { return false }
         return await presentationCache.sameLedger(fullDocument, loaded)
     }
 
-    private func restoreHomePresentation(from loaded: LocalPortfolioDocument, generation: Int) async -> Bool {
+    private func restoreHomePresentation(
+        from loaded: LocalPortfolioDocument, scope preparedScope: PreparedAccountScope, generation: Int
+    ) async -> Bool {
         // An already visible presentation can contain newer detail-page quotes.
         guard overview == nil || presentedSource != portfolioSource,
               detailMarketObservations[portfolioSource]?.isEmpty != false else { return false }
-        let context = homeCacheContext(for: loaded)
+        let context = homeCacheContext(accountKeys: preparedScope.keys)
         guard let cached = await presentationCache.load(document: loaded, context: context),
               generation == portfolioRequestGeneration, !Task.isCancelled else { return false }
-        let scoped = selectedDocument(from: loaded)
+        let scoped = preparedScope.document
         restoreSourcePresentation(SourcePresentation(
             document: scoped, fullDocument: loaded, overview: cached.overview, chart: cached.chart,
-            holdings: cached.holdings, accounts: loaded.accounts, accountKeys: resolvedAccountKeys(in: loaded),
+            holdings: cached.holdings, accounts: preparedScope.accounts, accountKeys: preparedScope.keys,
             dailyChanges: cached.dailyChanges, benchmark: cached.benchmark, comparison: nil, analytics: nil,
             source: isPublicInvestorMode ? scoped.accounts.map(\.displayName).joined(separator: "、") : scoped.source,
             updatedAt: cached.updatedAt, cachedAt: cached.savedAt))
@@ -1679,7 +1749,8 @@ final class AppModel {
             dailyChanges: holdingDailyChanges, benchmark: benchmarkDailyChange,
             updatedAt: localUpdatedAt, savedAt: Date())
         // Failure to write a disposable result cache must not fail a refresh.
-        try? await presentationCache.save(snapshot, document: fullDocument, context: homeCacheContext(for: fullDocument))
+        try? await presentationCache.save(snapshot, document: fullDocument,
+            context: homeCacheContext(accountKeys: selectedAccountKeys))
     }
 
     private func loadActiveDocument() async throws -> LocalPortfolioDocument {
@@ -1714,15 +1785,26 @@ final class AppModel {
         return selectsAll || savedKeys.isEmpty ? availableKeys : savedKeys
     }
 
-    private func selectedDocument(from loaded: LocalPortfolioDocument) -> LocalPortfolioDocument {
-        loaded.scoped(to: resolvedAccountKeys(in: loaded))
+    /// Resolve a pending account tap against the already published account
+    /// list, without regrouping the full ledger on the main actor.
+    private func requestedAccountKeysFromDisplayedAccounts() -> Set<String> {
+        let availableKeys = Set(accounts.map(\.id))
+        let savedKeys = Self.savedAccountKeys(forKey: selectedAccountsStorageKey, defaults: modeDefaults)
+            .intersection(availableKeys)
+        let selectsAll = modeDefaults.bool(forKey: selectsAllAccountsStorageKey)
+        return selectsAll || savedKeys.isEmpty ? availableKeys : savedKeys
+    }
+
+    private func selectedDocument(from loaded: LocalPortfolioDocument) async -> LocalPortfolioDocument {
+        let prepared = await prepareAccountScope(for: loaded)
+        return prepared.document
     }
 
     private func updateAccountSelection(_ keys: Set<String>, selectsAll: Bool) async {
         let availableKeys = Set(accounts.map(\.id))
         let next = keys.intersection(availableKeys)
         guard !next.isEmpty, presentedSource == portfolioSource else { return }
-        let previousRequest = resolvedAccountKeys(in: fullDocument)
+        let previousRequest = requestedAccountKeysFromDisplayedAccounts()
         Self.saveAccountKeys(next, forKey: selectedAccountsStorageKey, defaults: modeDefaults)
         modeDefaults.set(selectsAll, forKey: selectsAllAccountsStorageKey)
         guard next != previousRequest else { return }
@@ -1782,7 +1864,9 @@ final class AppModel {
         return "橘子 \(index)"
     }
 
-    private func refreshHistoricalChart(from loaded: LocalPortfolioDocument, generation: Int) async {
+    private func refreshHistoricalChart(
+        from loaded: LocalPortfolioDocument, generation: Int, forceRefresh: Bool = true
+    ) async {
         guard !isFakeDataMode else { return }
         // A new/invalid result cache should still try existing price history
         // locally before entering the slow provider refresh/fallback pipeline.
@@ -1796,16 +1880,20 @@ final class AppModel {
             await saveHomePresentation(generation: generation)
         }
         guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
-        await enrichPortfolioChart(from: loaded, generation: generation)
+        await enrichPortfolioChart(from: loaded, generation: generation, forceRefresh: forceRefresh)
     }
 
-    private func enrichPortfolioChart(from loaded: LocalPortfolioDocument, generation: Int) async {
+    private func enrichPortfolioChart(
+        from loaded: LocalPortfolioDocument, generation: Int, forceRefresh: Bool = true
+    ) async {
         defer {
             if generation == portfolioRequestGeneration {
                 isPortfolioChartLoading = false
             }
         }
-        if var enriched = try? await LocalMarketDataClient().portfolioChart(document: loaded, forceRefresh: true) {
+        if var enriched = try? await LocalMarketDataClient().portfolioChart(
+            document: loaded, forceRefresh: forceRefresh
+        ) {
             guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
             // A detail quote may arrive while history is loading. Reuse the
             // fetched history and value it with the latest document before publishing.

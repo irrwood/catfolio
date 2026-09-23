@@ -603,13 +603,19 @@ struct StandardLineChart: View {
         self.onSelect = onSelect
         self.onMeasure = onMeasure
         self.onInteractionEnded = onInteractionEnded
-        let sortedDates = interactionDates.sorted()
-        let loadingSeries = Self.loadingSeries(
-            matching: series,
-            dates: sortedDates,
-            domain: domain
-        )
+        // Prepared plots already provide chronological dates. Keep their
+        // shared array instead of sorting a full history on every crosshair
+        // update; still accept unordered dates from other chart consumers.
+        let datesAreSorted = zip(interactionDates, interactionDates.dropFirst())
+            .allSatisfy { $0.0 <= $0.1 }
+        let sortedDates = datesAreSorted ? interactionDates : interactionDates.sorted()
         let firstAppearance = !ChartAppearanceHistory.hasDisplayed(appearanceID)
+        // Once a chart has appeared, its loading geometry is discarded. Avoid
+        // rebuilding those placeholder series on every selection update.
+        let needsLoadingSeries = firstAppearance && animatesInitialAppearance && !revealsInitialAppearance
+        let loadingSeries = needsLoadingSeries
+            ? Self.loadingSeries(matching: series, dates: sortedDates, domain: domain)
+            : []
         let startsFromLoading = firstAppearance && animatesInitialAppearance && !revealsInitialAppearance && !loadingSeries.isEmpty
         _presentedSeries = State(initialValue: startsFromLoading ? loadingSeries : series)
         _presentedMarkers = State(initialValue: startsFromLoading ? [] : markers)
