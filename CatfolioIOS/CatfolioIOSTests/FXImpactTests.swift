@@ -6,21 +6,23 @@ final class FXImpactTests: XCTestCase {
 
     private func rates() throws -> GBPFXRates { try GBPFXRates.bundled.get() }
 
-    private func buy(_ ticker: String, _ date: String, qty: Double, price: Double, currency: String)
+    private func buy(_ ticker: String, _ date: String, qty: Double, price: Double, currency: String,
+                     account: String? = nil)
         -> LocalTransactionRecord {
         LocalTransactionRecord(
             date: date, action: "BUY", ticker: ticker, quantity: qty,
             price: price, currency: currency, source: "test",
-            accountID: nil, accountName: nil
+            accountID: account, accountName: nil
         )
     }
 
-    private func sell(_ ticker: String, _ date: String, qty: Double, price: Double, currency: String)
+    private func sell(_ ticker: String, _ date: String, qty: Double, price: Double, currency: String,
+                      account: String? = nil)
         -> LocalTransactionRecord {
         LocalTransactionRecord(
             date: date, action: "SELL", ticker: ticker, quantity: qty,
             price: price, currency: currency, source: "test",
-            accountID: nil, accountName: nil
+            accountID: account, accountName: nil
         )
     }
 
@@ -180,5 +182,56 @@ final class FXImpactTests: XCTestCase {
             rates: try rates(), asOf: DayDateCodec.date(from: "2024-01-08")!
         ))
         XCTAssertFalse(result.isExact)
+    }
+
+    func testPreparedLedgerPreservesAccountFIFOAndSplitsAcrossTickers() throws {
+        let splits = StockSplitCatalog(schemaVersion: 1,
+            splits: ["TEST": [.init(d: "2024-01-08", f: 1, t: 10)]])
+        let rows = [
+            buy(" test ", "2024-01-05", qty: 10, price: 100, currency: "USD", account: "A"),
+            buy("TEST", "2024-01-09", qty: 5, price: 12, currency: "USD", account: "B"),
+            sell("Test", "2024-01-09", qty: 40, price: 15, currency: "USD", account: "A"),
+            sell("TEST", "2024-01-09", qty: 2, price: 15, currency: "USD", account: "B"),
+            buy("OTHER", "2024-01-05", qty: 3, price: 20, currency: "GBP", account: "A"),
+            sell("OTHER", "2024-01-09", qty: 1, price: 20, currency: "GBP", account: "A")
+        ]
+        let asOf = try XCTUnwrap(DayDateCodec.date(from: "2024-01-10"))
+        let rates = try rates()
+        let prepared = FXImpactCalculator.prepare(transactions: rows, splits: splits)
+
+        let preparedTest = try XCTUnwrap(FXImpactCalculator.impact(
+            ticker: " TEST ", prepared: prepared, rates: rates, asOf: asOf))
+        let directTest = try XCTUnwrap(FXImpactCalculator.impact(
+            ticker: "TEST", transactions: rows, rates: rates, asOf: asOf, splits: splits))
+        // The pre-split buy becomes 100 shares at 10, of which account A
+        // retains 60. Account B separately retains 3 shares at 12.
+        XCTAssertEqual(preparedTest.cost, 636, accuracy: 1e-9)
+        XCTAssertEqual(preparedTest.amount, directTest.amount, accuracy: 1e-9)
+        XCTAssertEqual(preparedTest.isExact, directTest.isExact)
+
+        let preparedOther = try XCTUnwrap(FXImpactCalculator.impact(
+            ticker: "OTHER", prepared: prepared, rates: rates, asOf: asOf))
+        XCTAssertEqual(preparedOther.cost, 40, accuracy: 1e-9)
+        XCTAssertEqual(preparedOther.amount, 0)
+
+        let selected = FXImpactCalculator.prepare(transactions: rows, tickers: [" test "], splits: splits)
+        XCTAssertEqual(FXImpactCalculator.impact(ticker: "TEST", prepared: selected, rates: rates, asOf: asOf)?.cost, 636)
+        XCTAssertNil(FXImpactCalculator.impact(ticker: "OTHER", prepared: selected, rates: rates, asOf: asOf))
+    }
+
+    func testPreparedFIFODropsManyClosedLotsWithoutChangingLastCost() throws {
+        let buys = (0..<300).map { index in
+            LocalTransactionRecord(
+                date: "2024-01-05", action: "BUY", ticker: "FIFO", quantity: 1,
+                price: Double(index + 1), currency: "GBP", source: "test",
+                accountID: nil, accountName: nil, tradeID: String(format: "%03d", index)
+            )
+        }
+        let rows = buys + [sell("FIFO", "2024-01-08", qty: 299, price: 300, currency: "GBP")]
+        let prepared = FXImpactCalculator.prepare(transactions: rows)
+        let result = try XCTUnwrap(FXImpactCalculator.impact(
+            ticker: "FIFO", prepared: prepared, rates: rates()))
+        XCTAssertEqual(result.cost, 300)
+        XCTAssertEqual(result.amount, 0)
     }
 }

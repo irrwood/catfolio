@@ -25,11 +25,61 @@ enum FXImpactCalculator {
     }
 
     /// A buy that has not been sold yet, after FIFO matching.
-    private struct OpenLot {
+    fileprivate struct OpenLot {
         let quantity: Double
         let price: Double
         let currency: String
         let date: String
+    }
+
+    /// Open lots for a ledger, prepared once for all of its holdings. A
+    /// presentation can ask for many tickers without repeatedly scanning and
+    /// sorting the complete transaction history.
+    struct PreparedTransactions {
+        fileprivate let lotsByTicker: [String: [OpenLot]]
+    }
+
+    private struct LotQueue {
+        var lots: [OpenLot] = []
+        var firstOpenIndex = 0
+
+        mutating func sell(_ quantity: Double) {
+            var remaining = quantity
+            while remaining > 0, firstOpenIndex < lots.count {
+                let first = lots[firstOpenIndex]
+                if first.quantity > remaining {
+                    lots[firstOpenIndex] = OpenLot(
+                        quantity: first.quantity - remaining,
+                        price: first.price,
+                        currency: first.currency,
+                        date: first.date
+                    )
+                    remaining = 0
+                } else {
+                    remaining -= first.quantity
+                    firstOpenIndex += 1
+                }
+            }
+        }
+
+        var remainingLots: [OpenLot] { Array(lots.dropFirst(firstOpenIndex)) }
+    }
+
+    static func prepare(
+        transactions: [LocalTransactionRecord],
+        tickers: Set<String>? = nil,
+        splits: StockSplitCatalog? = nil
+    ) -> PreparedTransactions {
+        let selected = tickers.map { Set($0.map(normalized)) }
+        var byTicker: [String: [LocalTransactionRecord]] = [:]
+        for transaction in transactions {
+            let symbol = normalized(transaction.ticker)
+            guard selected?.contains(symbol) ?? true else { continue }
+            byTicker[symbol, default: []].append(transaction)
+        }
+        return PreparedTransactions(lotsByTicker: byTicker.mapValues {
+            openLots(transactions: $0, splits: splits)
+        })
     }
 
     /// FX impact on the lots still held.
@@ -52,7 +102,21 @@ enum FXImpactCalculator {
         asOf: Date = Date(),
         splits: StockSplitCatalog? = nil
     ) -> Result? {
-        let lots = openLots(ticker: ticker, transactions: transactions, splits: splits)
+        let symbol = normalized(ticker)
+        let rows = transactions.filter { normalized($0.ticker) == symbol }
+        return impact(openLots: openLots(transactions: rows, splits: splits), rates: rates, asOf: asOf)
+    }
+
+    static func impact(
+        ticker: String,
+        prepared: PreparedTransactions,
+        rates: GBPFXRates,
+        asOf: Date = Date()
+    ) -> Result? {
+        impact(openLots: prepared.lotsByTicker[normalized(ticker)] ?? [], rates: rates, asOf: asOf)
+    }
+
+    private static func impact(openLots lots: [OpenLot], rates: GBPFXRates, asOf: Date) -> Result? {
         guard !lots.isEmpty else { return nil }
 
         // Mixed-currency lots on one ticker would need a separate answer per
@@ -85,24 +149,24 @@ enum FXImpactCalculator {
         return Result(amount: amount, cost: cost, isExact: isExact)
     }
 
+    private static func normalized(_ ticker: String) -> String {
+        ticker.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    }
+
     /// Buys still open after sells are matched against them, oldest first.
     ///
     /// FIFO, matching the app's realised-profit engine. It is not the UK's
     /// tax matching, and is not used for tax anywhere — this is a display
     /// figure about the money currently invested.
     private static func openLots(
-        ticker: String,
         transactions: [LocalTransactionRecord],
         splits: StockSplitCatalog?
     ) -> [OpenLot] {
-        let symbol = ticker.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        let ordered = LocalTransactionRecord.orderedForLotMatching(transactions
-            .filter { $0.ticker.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == symbol })
+        let ordered = LocalTransactionRecord.orderedForLotMatching(transactions)
 
-        var byAccount: [String: [OpenLot]] = [:]
+        var byAccount: [String: LotQueue] = [:]
         for transaction in ordered {
             let key = "\(transaction.accountKey)|\(transaction.currency.uppercased())"
-            var open = byAccount[key] ?? []
             let split = splits?.adjustment(ticker: transaction.ticker, from: transaction.date) ?? 1
             guard split > 0 else { continue }
             let quantity = abs(transaction.quantity) * split
@@ -111,33 +175,18 @@ enum FXImpactCalculator {
 
             switch transaction.action.uppercased() {
             case "BUY":
-                open.append(OpenLot(
+                byAccount[key, default: LotQueue()].lots.append(OpenLot(
                     quantity: quantity,
                     price: price,
                     currency: transaction.currency,
                     date: String(transaction.date.prefix(10))
                 ))
             case "SELL":
-                var remaining = quantity
-                while remaining > 0, let first = open.first {
-                    if first.quantity > remaining {
-                        open[0] = OpenLot(
-                            quantity: first.quantity - remaining,
-                            price: first.price,
-                            currency: first.currency,
-                            date: first.date
-                        )
-                        remaining = 0
-                    } else {
-                        remaining -= first.quantity
-                        open.removeFirst()
-                    }
-                }
+                byAccount[key, default: LotQueue()].sell(quantity)
             default:
                 continue
             }
-            byAccount[key] = open
         }
-        return byAccount.keys.sorted().flatMap { byAccount[$0] ?? [] }
+        return byAccount.keys.sorted().flatMap { byAccount[$0]?.remainingLots ?? [] }
     }
 }

@@ -73,6 +73,7 @@ final class DataSourceHealthTests: XCTestCase {
         let source = try XCTUnwrap(DataSource.of(sourceURL))
 
         let (data, response) = try await session.recordedData(from: sourceURL)
+        DataSourceHealth.flushPendingReports()
         XCTAssertEqual(String(decoding: data, as: UTF8.self), "ok")
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
         XCTAssertEqual(DataSourceHealth.shared.statuses[source]?.lastEvent?.outcome, .success)
@@ -80,10 +81,12 @@ final class DataSourceHealthTests: XCTestCase {
         var uploadRequest = URLRequest(url: sourceURL)
         uploadRequest.httpMethod = "POST"
         let (_, uploadResponse) = try await session.recordedUpload(for: uploadRequest, from: Data("body".utf8))
+        DataSourceHealth.flushPendingReports()
         XCTAssertEqual((uploadResponse as? HTTPURLResponse)?.statusCode, 200)
 
         var failureURL = try XCTUnwrap(URL(string: "https://health-wrapper-test.invalid/server-error?token=secret"))
         let (_, failureResponse) = try await session.recordedData(from: failureURL)
+        DataSourceHealth.flushPendingReports()
         XCTAssertEqual((failureResponse as? HTTPURLResponse)?.statusCode, 503)
         XCTAssertEqual(DataSourceHealth.shared.statuses[source]?.lastEvent?.outcome, .httpStatus(503))
 
@@ -92,11 +95,81 @@ final class DataSourceHealthTests: XCTestCase {
             _ = try await session.recordedData(from: failureURL)
             XCTFail("The URL protocol should fail this request")
         } catch {
+            DataSourceHealth.flushPendingReports()
             XCTAssertEqual(DataSourceHealth.shared.statuses[source]?.lastEvent?.outcome, .timedOut)
         }
         XCTAssertEqual(DataSourceHealth.shared.statuses[source]?.successCount, 2)
         XCTAssertEqual(DataSourceHealth.shared.statuses[source]?.failureCount, 2)
         XCTAssertEqual(source.title, "health-wrapper-test.invalid")
+    }
+
+    @MainActor func testDeferredReportsRetainCountsAndOnlyAuditedDetails() throws {
+        let source = try XCTUnwrap(DataSource.of(URL(string: "https://health-burst.invalid/private?token=secret")))
+        for _ in 0..<30 {
+            DataSourceHealth.reportUnusable(source, "https://private.example/?api_key=secret")
+        }
+        DataSourceHealth.flushPendingReports()
+
+        let status = try XCTUnwrap(DataSourceHealth.shared.statuses[source])
+        XCTAssertEqual(status.failureCount, 30)
+        XCTAssertEqual(status.recentFailures.count, 12)
+        XCTAssertEqual(status.lastEvent?.outcome, .unusable("返回格式无法识别"))
+        XCTAssertNil(status.lastEvent?.subject)
+    }
+
+    @MainActor func testDeferredAndDirectReportsMergeByCompletionTime() throws {
+        let url = try XCTUnwrap(URL(string: "https://health-interleave.invalid/quote"))
+        let source = try XCTUnwrap(DataSource.of(url))
+        let response = try XCTUnwrap(HTTPURLResponse(url: url, statusCode: 503,
+                                                     httpVersion: "HTTP/1.1", headerFields: nil))
+
+        DataSourceHealth.enqueue(url, response: response)
+        let later = Date().addingTimeInterval(60)
+        DataSourceHealth.shared.apply(.success, for: source, at: later)
+        DataSourceHealth.flushPendingReports()
+
+        let status = try XCTUnwrap(DataSourceHealth.shared.statuses[source])
+        XCTAssertEqual(status.successCount, 1)
+        XCTAssertEqual(status.failureCount, 1)
+        XCTAssertEqual(status.lastEvent?.outcome, .success)
+        XCTAssertEqual(status.lastSuccess, later)
+    }
+
+    @MainActor func testDeferredCancellationDoesNotCreateStatus() throws {
+        let url = try XCTUnwrap(URL(string: "https://health-cancel.invalid/quote"))
+        let source = try XCTUnwrap(DataSource.of(url))
+        DataSourceHealth.enqueue(url, error: CancellationError())
+        DataSourceHealth.enqueue(url, error: URLError(.cancelled))
+        DataSourceHealth.flushPendingReports()
+        XCTAssertNil(DataSourceHealth.shared.statuses[source])
+    }
+
+    @MainActor func testDeferredSourcesStayBoundedAndKnownProvidersSurvive() throws {
+        let known = try XCTUnwrap(DataSource.named("sec"))
+        DataSourceHealth.shared.apply(.success, for: known)
+        for index in 0..<105 {
+            let url = try XCTUnwrap(URL(string: "https://health-bounded-\(index).invalid/private?token=secret"))
+            let response = try XCTUnwrap(HTTPURLResponse(url: url, statusCode: 200,
+                                                         httpVersion: "HTTP/1.1", headerFields: nil))
+            DataSourceHealth.enqueue(url, response: response)
+        }
+        DataSourceHealth.flushPendingReports()
+
+        let newest = try XCTUnwrap(DataSource.of(URL(string: "https://health-bounded-104.invalid/")))
+        XCTAssertEqual(DataSourceHealth.shared.statuses.count, 100)
+        XCTAssertNotNil(DataSourceHealth.shared.statuses[known])
+        XCTAssertNotNil(DataSourceHealth.shared.statuses[newest])
+    }
+
+    @MainActor func testDeferredReportsPublishWithoutExplicitFlush() async throws {
+        let source = try XCTUnwrap(DataSource.of(URL(string: "https://health-ui-update.invalid/quote")))
+        DataSourceHealth.reportUnusable(source, issue: .emptyResult)
+        let deadline = Date().addingTimeInterval(1)
+        while DataSourceHealth.shared.statuses[source] == nil && Date() < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(DataSourceHealth.shared.statuses[source]?.lastEvent?.outcome,
+                       .unusable(DataSourceDataIssue.emptyResult.description))
     }
 
     private struct PrivateError: Error {

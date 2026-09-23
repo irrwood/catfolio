@@ -246,7 +246,8 @@ final class AppModel {
                     acceptedQuoteCount: 0, refreshedDisclosure: refreshedDisclosure, tracksQuotes: false)
             }
             if !isFakeDataMode {
-                loaded = try await mergeCachedTrading212History(into: loaded)
+                loaded = try await mergeCachedTrading212History(into: loaded,
+                    accounts: initialScope.accounts)
                 guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
                 if loaded != fullDocument {
                     let updatedScope = await prepareAccountScope(for: loaded)
@@ -304,9 +305,9 @@ final class AppModel {
     }
 
     private func mergeCachedTrading212History(
-        into loaded: LocalPortfolioDocument
+        into loaded: LocalPortfolioDocument, accounts: [PortfolioAccount]
     ) async throws -> LocalPortfolioDocument {
-        let slots = Set(loaded.accounts.compactMap { account -> Int? in
+        let slots = Set(accounts.compactMap { account -> Int? in
             guard account.source == "Trading 212", let accountID = account.accountID else { return nil }
             return Int(accountID.replacingOccurrences(of: "account-", with: ""))
         })
@@ -327,7 +328,7 @@ final class AppModel {
         )
         guard !cached.isEmpty else { return loaded }
         var accountNames: [String: String] = [:]
-        for account in loaded.accounts where account.source == "Trading 212" {
+        for account in accounts where account.source == "Trading 212" {
             if let accountID = account.accountID {
                 accountNames[accountID] = account.name
             }
@@ -728,8 +729,11 @@ final class AppModel {
     }
 
     private func applyDetailDailyChanges(now: Date = .now) {
-        guard let observations = detailMarketObservations[portfolioSource] else { return }
+        guard let observations = detailMarketObservations[portfolioSource], !observations.isEmpty else { return }
         let heldTickers = Set(holdings.map { $0.ticker.uppercased() })
+        let positionsByQuoteKey = Dictionary(grouping: document.positions) {
+            LocalMarketQuoteKey.make(ticker: $0.ticker, currency: $0.quoteCurrency)
+        }
         for observation in observations.values where !heldTickers.contains(observation.ticker) {
             guard observation.currency.uppercased() == "USD", let change = observation.changePercent,
                   observation.observedAt >= now.addingTimeInterval(-7 * 86_400) else { continue }
@@ -739,9 +743,7 @@ final class AppModel {
             let key = LocalMarketQuoteKey.make(ticker: holding.ticker, currency: holding.quoteCurrency ?? "USD")
             guard let observation = observations[key], let change = observation.changePercent,
                   observation.observedAt >= now.addingTimeInterval(-7 * 86_400) else { continue }
-            let matching = document.positions.filter {
-                LocalMarketQuoteKey.make(ticker: $0.ticker, currency: $0.quoteCurrency) == key
-            }
+            let matching = positionsByQuoteKey[key] ?? []
             guard matching.allSatisfy({ observation.observedAt >= quoteDate($0, in: document) }) else { continue }
             holdingDailyChanges[holding.ticker.uppercased()] = change
         }
@@ -1451,6 +1453,8 @@ final class AppModel {
         let accounts: [PortfolioAccount]
         let keys: Set<String>
         let document: LocalPortfolioDocument
+        let realisedProfit: Double
+        let realisedProfitGaps: Int
     }
 
     /// Account discovery groups the entire transaction ledger. Prepare it and
@@ -1463,8 +1467,11 @@ final class AppModel {
             let availableKeys = Set(accounts.map(\.id))
             let selected = savedKeys.intersection(availableKeys)
             let keys = selectsAll || selected.isEmpty ? availableKeys : selected
+            let scoped = loaded.scoped(to: keys, availableAccounts: accounts)
+            let realised = LocalBrokerResultSummary(transactions: scoped.transactions ?? [])
             return PreparedAccountScope(accounts: accounts, keys: keys,
-                document: loaded.scoped(to: keys, availableAccounts: accounts))
+                document: scoped, realisedProfit: realised.usdTotal() ?? .nan,
+                realisedProfitGaps: realised.missingCount)
         }.value
     }
 
@@ -1531,7 +1538,8 @@ final class AppModel {
         fullDocument = overlaidFullDocument
         document = overlaidScopedDocument
         presentedSource = portfolioSource
-        updateRealisedProfit(from: document)
+        realisedProfit = preparedScope.realisedProfit
+        realisedProfitGaps = preparedScope.realisedProfitGaps
         accounts = presentedAccounts
         selectedAccountKeys = accountKeys
         overview = presentation.0
@@ -1662,9 +1670,17 @@ final class AppModel {
             cachedAt: portfolioCachedAt)
     }
 
-    private func restoreSourcePresentation(_ cached: SourcePresentation) {
+    private func restoreSourcePresentation(
+        _ cached: SourcePresentation, preparedScope: PreparedAccountScope? = nil
+    ) {
         document = cached.document
-        updateRealisedProfit(from: document)
+        if let preparedScope {
+            realisedProfit = preparedScope.realisedProfit
+            realisedProfitGaps = preparedScope.realisedProfitGaps
+        } else {
+            // An in-memory source can be restored after FX rates changed.
+            updateRealisedProfit(from: document)
+        }
         fullDocument = cached.fullDocument
         overview = cached.overview
         portfolioChart = cached.chart
@@ -1734,7 +1750,7 @@ final class AppModel {
             holdings: cached.holdings, accounts: preparedScope.accounts, accountKeys: preparedScope.keys,
             dailyChanges: cached.dailyChanges, benchmark: cached.benchmark, comparison: nil, analytics: nil,
             source: isPublicInvestorMode ? scoped.accounts.map(\.displayName).joined(separator: "、") : scoped.source,
-            updatedAt: cached.updatedAt, cachedAt: cached.savedAt))
+            updatedAt: cached.updatedAt, cachedAt: cached.savedAt), preparedScope: preparedScope)
         isPortfolioChartLoading = !hasUsableHomeChart
         isHoldingDailyChangesLoading = false
         // Keep refreshing in the background; restoration is not a fresh quote.

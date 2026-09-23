@@ -3,6 +3,24 @@ import CryptoKit
 import FoundationModels
 import OSLog
 
+/// Market data can be fetched again, so coalesce bursts of updates and keep
+/// JSON encoding and the atomic file replacement off the cache actor.
+private func writeMarketCache<Value: Encodable & Sendable>(
+    _ snapshot: Value,
+    to url: URL,
+    writeData: @escaping @Sendable (Data, URL) async throws -> Void
+) async -> Bool {
+    await Task.detached(priority: .utility) {
+        do {
+            let data = try JSONEncoder().encode(snapshot)
+            try await writeData(data, url)
+            return true
+        } catch {
+            return false
+        }
+    }.value
+}
+
 actor LocalHistoricalPriceCache {
     struct Hit: Sendable {
         let values: [String: Double]
@@ -13,7 +31,7 @@ actor LocalHistoricalPriceCache {
         let lastDate: String?
     }
 
-    private struct Entry: Codable {
+    private struct Entry: Codable, Sendable {
         var fetchedAt: Date
         var values: [String: Double]
         var requestedFrom: String?
@@ -25,6 +43,22 @@ actor LocalHistoricalPriceCache {
     private var entries: [String: Entry] = [:]
     private var hasLoaded = false
     private var isWriteScheduled = false
+    private var writeGeneration: UInt64 = 0
+    private let cacheURLOverride: URL?
+    private let writeDelay: Duration
+    private let writeData: @Sendable (Data, URL) async throws -> Void
+
+    init(
+        cacheURL: URL? = nil,
+        writeDelay: Duration = .seconds(1),
+        writeData: @escaping @Sendable (Data, URL) async throws -> Void = { data, url in
+            try data.write(to: url, options: .atomic)
+        }
+    ) {
+        cacheURLOverride = cacheURL
+        self.writeDelay = writeDelay
+        self.writeData = writeData
+    }
 
     func lookup(symbol: String, from: String, to: String) -> Hit? {
         loadIfNeeded()
@@ -81,20 +115,27 @@ actor LocalHistoricalPriceCache {
 
     /// The file holds every symbol's whole history. Writing it after each
     /// save made a rebuild fetching hundreds of symbols re-encode the file
-    /// hundreds of times; saves close together now share one write.
+    /// hundreds of times; saves close together now share one write. A process
+    /// killed during the short delay may lose this disposable market cache.
     private func scheduleWrite() {
+        writeGeneration &+= 1
         guard !isWriteScheduled else { return }
         isWriteScheduled = true
         Task {
-            try? await Task.sleep(for: .seconds(1))
-            await LocalHistoricalPriceCache.shared.flush()
+            try? await Task.sleep(for: writeDelay)
+            await flush()
         }
     }
 
-    private func flush() {
+    private func flush() async {
+        let generation = writeGeneration
+        let snapshot = entries
+        let url = cacheURL
+        _ = await writeMarketCache(snapshot, to: url, writeData: writeData)
         isWriteScheduled = false
-        guard let data = try? JSONEncoder().encode(entries) else { return }
-        try? data.write(to: cacheURL, options: .atomic)
+        if writeGeneration != generation {
+            scheduleWrite()
+        }
     }
 
     private func loadIfNeeded() {
@@ -106,6 +147,7 @@ actor LocalHistoricalPriceCache {
     }
 
     private var cacheURL: URL {
+        if let cacheURLOverride { return cacheURLOverride }
         let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         return root.appendingPathComponent("catfolio-market-history-units-v2.json")
     }
@@ -126,7 +168,7 @@ actor LocalIntradayPriceCache {
         let isFresh: Bool
     }
 
-    private struct Entry: Codable {
+    private struct Entry: Codable, Sendable {
         let fetchedAt: Date
         let bars: [MarketIntradayBar]
     }
@@ -135,6 +177,23 @@ actor LocalIntradayPriceCache {
 
     private var entries: [String: Entry] = [:]
     private var hasLoaded = false
+    private var isWriteScheduled = false
+    private var writeGeneration: UInt64 = 0
+    private let cacheURLOverride: URL?
+    private let writeDelay: Duration
+    private let writeData: @Sendable (Data, URL) async throws -> Void
+
+    init(
+        cacheURL: URL? = nil,
+        writeDelay: Duration = .seconds(1),
+        writeData: @escaping @Sendable (Data, URL) async throws -> Void = { data, url in
+            try data.write(to: url, options: .atomic)
+        }
+    ) {
+        cacheURLOverride = cacheURL
+        self.writeDelay = writeDelay
+        self.writeData = writeData
+    }
 
     func lookup(symbol: String) -> Hit? {
         loadIfNeeded()
@@ -149,8 +208,28 @@ actor LocalIntradayPriceCache {
         guard bars.count > 1 else { return }
         loadIfNeeded()
         entries[symbol.uppercased()] = Entry(fetchedAt: Date(), bars: bars)
-        guard let data = try? JSONEncoder().encode(entries) else { return }
-        try? data.write(to: cacheURL, options: .atomic)
+        scheduleWrite()
+    }
+
+    private func scheduleWrite() {
+        writeGeneration &+= 1
+        guard !isWriteScheduled else { return }
+        isWriteScheduled = true
+        Task {
+            try? await Task.sleep(for: writeDelay)
+            await flush()
+        }
+    }
+
+    private func flush() async {
+        let generation = writeGeneration
+        let snapshot = entries
+        let url = cacheURL
+        _ = await writeMarketCache(snapshot, to: url, writeData: writeData)
+        isWriteScheduled = false
+        if writeGeneration != generation {
+            scheduleWrite()
+        }
     }
 
     private func loadIfNeeded() {
@@ -162,6 +241,7 @@ actor LocalIntradayPriceCache {
     }
 
     private var cacheURL: URL {
+        if let cacheURLOverride { return cacheURLOverride }
         let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         return root.appendingPathComponent("catfolio-intraday-history-units-v2.json")
     }
@@ -188,7 +268,7 @@ actor LocalVolumeBarCache {
         let isFresh: Bool
     }
 
-    private struct Entry: Codable {
+    private struct Entry: Codable, Sendable {
         let fetchedAt: Date
         let bars: [MarketDailyBar]
     }
@@ -197,6 +277,23 @@ actor LocalVolumeBarCache {
 
     private var entries: [String: Entry] = [:]
     private var hasLoaded = false
+    private var isWriteScheduled = false
+    private var writeGeneration: UInt64 = 0
+    private let cacheURLOverride: URL?
+    private let writeDelay: Duration
+    private let writeData: @Sendable (Data, URL) async throws -> Void
+
+    init(
+        cacheURL: URL? = nil,
+        writeDelay: Duration = .seconds(1),
+        writeData: @escaping @Sendable (Data, URL) async throws -> Void = { data, url in
+            try data.write(to: url, options: .atomic)
+        }
+    ) {
+        cacheURLOverride = cacheURL
+        self.writeDelay = writeDelay
+        self.writeData = writeData
+    }
 
     func lookup(symbol: String) -> Hit? {
         loadIfNeeded()
@@ -211,8 +308,28 @@ actor LocalVolumeBarCache {
         guard !bars.isEmpty else { return }
         loadIfNeeded()
         entries[symbol.uppercased()] = Entry(fetchedAt: Date(), bars: bars)
-        guard let data = try? JSONEncoder().encode(entries) else { return }
-        try? data.write(to: cacheURL, options: .atomic)
+        scheduleWrite()
+    }
+
+    private func scheduleWrite() {
+        writeGeneration &+= 1
+        guard !isWriteScheduled else { return }
+        isWriteScheduled = true
+        Task {
+            try? await Task.sleep(for: writeDelay)
+            await flush()
+        }
+    }
+
+    private func flush() async {
+        let generation = writeGeneration
+        let snapshot = entries
+        let url = cacheURL
+        _ = await writeMarketCache(snapshot, to: url, writeData: writeData)
+        isWriteScheduled = false
+        if writeGeneration != generation {
+            scheduleWrite()
+        }
     }
 
     private func loadIfNeeded() {
@@ -224,6 +341,7 @@ actor LocalVolumeBarCache {
     }
 
     private var cacheURL: URL {
+        if let cacheURLOverride { return cacheURLOverride }
         let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         return root.appendingPathComponent("catfolio-volume-bars-units-v2.json")
     }

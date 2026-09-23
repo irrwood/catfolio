@@ -1941,6 +1941,11 @@ enum LocalPortfolioEngine {
         // for them 135 times.
         let fxRates = try? GBPFXRates.bundled.get()
         let splitCatalog = try? StockSplitCatalog.bundled.get()
+        let fxTickers = Set(displayPositions.filter { $0.fxPnl == nil && $0.brokerPnl == nil }.map(\.ticker))
+        let fxPrepared = fxRates != nil && !fxTickers.isEmpty
+            ? FXImpactCalculator.prepare(transactions: document.transactions ?? [], tickers: fxTickers, splits: splitCatalog)
+            : nil
+        let fxAsOf = Date()
 
         let rows = try displayPositions.map { position -> Holding in
             let costUSD = try usd(position.shares * position.averageCost, currency: position.currency)
@@ -1965,11 +1970,11 @@ enum LocalPortfolioEngine {
                 fxPnlUSD = brokerPnlUSD - pnl
                 fxPnlStatus = "estimated"
                 fxPnlSource = "broker_total_pnl_residual"
-            } else if let fxRates, let reconstructed = FXImpactCalculator.impact(
+            } else if let fxRates, let fxPrepared, let reconstructed = FXImpactCalculator.impact(
                 ticker: position.ticker,
-                transactions: document.transactions ?? [],
+                prepared: fxPrepared,
                 rates: fxRates,
-                splits: splitCatalog
+                asOf: fxAsOf
             ) {
                 // No broker in this ledger reports an FX component, so
                 // without this every position showed "—". Rebuilt from the

@@ -103,6 +103,70 @@ struct DataSourceStatus: Sendable {
     var isFailing: Bool { lastEvent?.outcome.isFailure ?? false }
 }
 
+/// The request path accumulates only the small status snapshot that the UI can
+/// display. This bounds memory even when many requests finish before the main
+/// actor has a chance to publish an update.
+private enum DataSourceStatusAccumulator {
+    static let failuresKept = 12
+    static let sourcesKept = 100
+
+    static func record(_ event: DataSourceEvent, for source: DataSource,
+                       into statuses: inout [DataSource: DataSourceStatus]) {
+        var status = statuses[source] ?? DataSourceStatus()
+        if status.lastEvent == nil || event.date >= status.lastEvent!.date {
+            status.lastEvent = event
+        }
+        if event.outcome.isFailure {
+            status.failureCount += 1
+            status.recentFailures.append(event)
+            status.recentFailures.sort { $0.date > $1.date }
+            status.recentFailures = Array(status.recentFailures.prefix(failuresKept))
+        } else {
+            status.successCount += 1
+            if status.lastSuccess == nil || event.date > status.lastSuccess! {
+                status.lastSuccess = event.date
+            }
+        }
+        statuses[source] = status
+        prune(&statuses)
+    }
+
+    static func merge(_ updates: [DataSource: DataSourceStatus],
+                      into statuses: inout [DataSource: DataSourceStatus]) {
+        for (source, update) in updates {
+            var status = statuses[source] ?? DataSourceStatus()
+            status.successCount += update.successCount
+            status.failureCount += update.failureCount
+            if let event = update.lastEvent,
+               status.lastEvent == nil || event.date >= status.lastEvent!.date {
+                status.lastEvent = event
+            }
+            if let date = update.lastSuccess,
+               status.lastSuccess == nil || date > status.lastSuccess! {
+                status.lastSuccess = date
+            }
+            status.recentFailures = Array((status.recentFailures + update.recentFailures)
+                .sorted { $0.date > $1.date }.prefix(failuresKept))
+            statuses[source] = status
+        }
+        prune(&statuses)
+    }
+
+    private static func prune(_ statuses: inout [DataSource: DataSourceStatus]) {
+        while statuses.count > sourcesKept {
+            // Keep known providers in preference to unknown, older hosts.
+            let victim = statuses.keys.min { lhs, rhs in
+                let lhsKnown = !lhs.id.hasPrefix("host:")
+                let rhsKnown = !rhs.id.hasPrefix("host:")
+                if lhsKnown != rhsKnown { return !lhsKnown }
+                return (statuses[lhs]?.lastEvent?.date ?? .distantPast)
+                    < (statuses[rhs]?.lastEvent?.date ?? .distantPast)
+            }
+            if let victim { statuses.removeValue(forKey: victim) }
+        }
+    }
+}
+
 /// Every source's last word, this launch. Only the source, outcome and time
 /// are kept — never a URL, query, subject or response body, which may
 /// contain the reader's API key or portfolio data.
@@ -115,12 +179,9 @@ final class DataSourceHealth {
     static let shared = DataSourceHealth()
 
     private(set) var statuses: [DataSource: DataSourceStatus] = [:]
-    private static let failuresKept = 12
-    private static let sourcesKept = 100
-
     /// Only fixed, audited labels may reach the UI. This also protects direct
     /// `apply` calls, not only the request wrapper.
-    private static func safeOutcome(_ outcome: DataSourceOutcome) -> DataSourceOutcome {
+    nonisolated fileprivate static func safeOutcome(_ outcome: DataSourceOutcome) -> DataSourceOutcome {
         switch outcome {
         case .transport(let detail):
             if detail == "非 HTTP 响应" { return outcome }
@@ -148,35 +209,26 @@ final class DataSourceHealth {
 
     func apply(_ outcome: DataSourceOutcome, for source: DataSource, subject: String? = nil, at date: Date = Date()) {
         let outcome = Self.safeOutcome(outcome)
-        var status = statuses[source] ?? DataSourceStatus()
         let event = DataSourceEvent(date: date, outcome: outcome, subject: nil)
         // Recording can arrive on the main actor in a different order from
         // network completion. Older events still count, but cannot overwrite
         // the newest result or make a recovered source look broken again.
-        if status.lastEvent == nil || date >= status.lastEvent!.date {
-            status.lastEvent = event
-        }
-        if outcome.isFailure {
-            status.failureCount += 1
-            status.recentFailures.append(event)
-            status.recentFailures.sort { $0.date > $1.date }
-            status.recentFailures = Array(status.recentFailures.prefix(Self.failuresKept))
-        } else {
-            status.successCount += 1
-            if status.lastSuccess == nil || date > status.lastSuccess! { status.lastSuccess = date }
-        }
-        statuses[source] = status
-        if statuses.count > Self.sourcesKept {
-            // Keep known providers in preference to unknown, older hosts.
-            let victim = statuses.keys.min { lhs, rhs in
-                let lhsKnown = !lhs.id.hasPrefix("host:")
-                let rhsKnown = !rhs.id.hasPrefix("host:")
-                if lhsKnown != rhsKnown { return !lhsKnown }
-                return (statuses[lhs]?.lastEvent?.date ?? .distantPast)
-                    < (statuses[rhs]?.lastEvent?.date ?? .distantPast)
-            }
-            if let victim { statuses.removeValue(forKey: victim) }
-        }
+        var updated = statuses
+        DataSourceStatusAccumulator.record(event, for: source, into: &updated)
+        statuses = updated
+    }
+
+    fileprivate func applyBatch(_ updates: [DataSource: DataSourceStatus]) {
+        var updated = statuses
+        DataSourceStatusAccumulator.merge(updates, into: &updated)
+        // A burst of replies invalidates the Settings page only once.
+        statuses = updated
+    }
+
+    /// Makes deferred request reports visible before a deterministic read,
+    /// such as an integration test. Normal UI observation updates on its own.
+    static func flushPendingReports() {
+        DataSourceReportQueue.shared.flush()
     }
 
     /// Sources that have been used this launch, failing first.
@@ -196,35 +248,47 @@ final class DataSourceHealth {
     /// could not be used.
     nonisolated static func reportUnusable(_ source: DataSource?, issue: DataSourceDataIssue, subject: String? = nil) {
         guard let source else { return }
-        let date = Date()
-        Task { @MainActor in shared.apply(.unusable(issue.description), for: source, at: date) }
+        DataSourceReportQueue.shared.enqueue(.unusable(issue.description), for: source, at: Date())
     }
 
     /// Compatibility for fixed messages already used by financial parsers.
     /// Unknown strings become a generic issue so response text cannot leak.
     nonisolated static func reportUnusable(_ source: DataSource?, _ reason: String, subject: String? = nil) {
         guard let source else { return }
-        let date = Date()
-        Task { @MainActor in shared.apply(.unusable(reason), for: source, at: date) }
+        DataSourceReportQueue.shared.enqueue(.unusable(reason), for: source, at: Date())
     }
 
     nonisolated static func record(_ url: URL?, response: URLResponse) async {
         guard let source = DataSource.of(url) else { return }
-        let outcome: DataSourceOutcome
-        switch (response as? HTTPURLResponse)?.statusCode {
-        case .none: outcome = .transport("非 HTTP 响应")
-        case .some(200...299), .some(304): outcome = .success
-        case .some(429): outcome = .rateLimited
-        case .some(let status): outcome = .httpStatus(status)
-        }
         let date = Date()
-        await shared.apply(outcome, for: source, at: date)
+        await shared.apply(outcome(for: response), for: source, at: date)
     }
 
     nonisolated static func record(_ url: URL?, error: Error) async {
         guard let source = DataSource.of(url), let outcome = outcome(for: error) else { return }
         let date = Date()
         await shared.apply(outcome, for: source, at: date)
+    }
+
+    /// Request wrappers enqueue a bounded status update and return the reply
+    /// without waiting for the Settings model to run on the main actor.
+    nonisolated static func enqueue(_ url: URL?, response: URLResponse) {
+        guard let source = DataSource.of(url) else { return }
+        DataSourceReportQueue.shared.enqueue(outcome(for: response), for: source, at: Date())
+    }
+
+    nonisolated static func enqueue(_ url: URL?, error: Error) {
+        guard let source = DataSource.of(url), let outcome = outcome(for: error) else { return }
+        DataSourceReportQueue.shared.enqueue(outcome, for: source, at: Date())
+    }
+
+    nonisolated private static func outcome(for response: URLResponse) -> DataSourceOutcome {
+        switch (response as? HTTPURLResponse)?.statusCode {
+        case .none: .transport("非 HTTP 响应")
+        case .some(200...299), .some(304): .success
+        case .some(429): .rateLimited
+        case .some(let status): .httpStatus(status)
+        }
     }
 
     /// Cancellation is not a failure: a page that closes cancels its requests.
@@ -241,6 +305,56 @@ final class DataSourceHealth {
     }
 }
 
+/// Exactly one scheduled main-actor drain serves a bounded, per-source
+/// accumulator. Request completion does not create one Task per reply, and
+/// events keep their original completion timestamps across actor scheduling.
+private final class DataSourceReportQueue: @unchecked Sendable {
+    static let shared = DataSourceReportQueue()
+
+    private let lock = NSLock()
+    private var pending: [DataSource: DataSourceStatus] = [:]
+    private var drainScheduled = false
+
+    func enqueue(_ outcome: DataSourceOutcome, for source: DataSource, at date: Date) {
+        let event = DataSourceEvent(date: date, outcome: DataSourceHealth.safeOutcome(outcome), subject: nil)
+        lock.lock()
+        DataSourceStatusAccumulator.record(event, for: source, into: &pending)
+        let shouldSchedule = !drainScheduled
+        if shouldSchedule { drainScheduled = true }
+        lock.unlock()
+
+        if shouldSchedule {
+            Task { @MainActor in await self.drain() }
+        }
+    }
+
+    @MainActor func flush() {
+        while let batch = takePending(releaseScheduleOnEmpty: false) {
+            DataSourceHealth.shared.applyBatch(batch)
+        }
+    }
+
+    @MainActor private func drain() async {
+        while let batch = takePending(releaseScheduleOnEmpty: true) {
+            DataSourceHealth.shared.applyBatch(batch)
+            // A sustained stream of replies must not monopolize the UI actor.
+            await Task.yield()
+        }
+    }
+
+    private func takePending(releaseScheduleOnEmpty: Bool) -> [DataSource: DataSourceStatus]? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !pending.isEmpty else {
+            if releaseScheduleOnEmpty { drainScheduled = false }
+            return nil
+        }
+        let batch = pending
+        pending = [:]
+        return batch
+    }
+}
+
 extension URLSession {
     /// `data(for:)`, with the outcome recorded against its source. The reply
     /// and any error are passed through unchanged; callers still decide what
@@ -248,10 +362,10 @@ extension URLSession {
     func recordedData(for request: URLRequest) async throws -> (Data, URLResponse) {
         do {
             let result = try await data(for: request)
-            await DataSourceHealth.record(request.url, response: result.1)
+            DataSourceHealth.enqueue(request.url, response: result.1)
             return result
         } catch {
-            await DataSourceHealth.record(request.url, error: error)
+            DataSourceHealth.enqueue(request.url, error: error)
             throw error
         }
     }
@@ -263,10 +377,10 @@ extension URLSession {
     func recordedUpload(for request: URLRequest, from bodyData: Data) async throws -> (Data, URLResponse) {
         do {
             let result = try await upload(for: request, from: bodyData)
-            await DataSourceHealth.record(request.url, response: result.1)
+            DataSourceHealth.enqueue(request.url, response: result.1)
             return result
         } catch {
-            await DataSourceHealth.record(request.url, error: error)
+            DataSourceHealth.enqueue(request.url, error: error)
             throw error
         }
     }
@@ -274,10 +388,10 @@ extension URLSession {
     func recordedUpload(for request: URLRequest, fromFile fileURL: URL) async throws -> (Data, URLResponse) {
         do {
             let result = try await upload(for: request, fromFile: fileURL)
-            await DataSourceHealth.record(request.url, response: result.1)
+            DataSourceHealth.enqueue(request.url, response: result.1)
             return result
         } catch {
-            await DataSourceHealth.record(request.url, error: error)
+            DataSourceHealth.enqueue(request.url, error: error)
             throw error
         }
     }
@@ -286,10 +400,10 @@ extension URLSession {
     func recordedBytes(for request: URLRequest) async throws -> (URLSession.AsyncBytes, URLResponse) {
         do {
             let result = try await bytes(for: request)
-            await DataSourceHealth.record(request.url, response: result.1)
+            DataSourceHealth.enqueue(request.url, response: result.1)
             return result
         } catch {
-            await DataSourceHealth.record(request.url, error: error)
+            DataSourceHealth.enqueue(request.url, error: error)
             throw error
         }
     }
