@@ -293,10 +293,10 @@ struct StandardLineChartViewportPath {
         newValues = dates.map { Self.value(at: $0, in: new) }
     }
 
-    func samples(progress raw: CGFloat) -> [StandardLineChartPoint] {
+    func samples(progress raw: CGFloat, allowingOvershoot: Bool = false) -> [StandardLineChartPoint] {
         guard let oldFirst = oldPoints.first, let oldLast = oldPoints.last,
               let newFirst = newPoints.first, let newLast = newPoints.last else { return [] }
-        let t = Double(min(1, max(0, raw)))
+        let t = Double(min(allowingOvershoot ? 1.08 : 1, max(0, raw)))
         if t == 0 { return oldPoints }
         if t == 1 { return newPoints }
         let first = oldFirst.date.addingTimeInterval(newFirst.date.timeIntervalSince(oldFirst.date) * t)
@@ -402,6 +402,7 @@ enum StandardLineChartDataTransition: Equatable {
 
 private struct StandardLineChartRevision: Equatable {
     let transitionKey: String
+    let rangeTransitionKey: String?
     let contentFingerprint: String
 }
 
@@ -482,6 +483,8 @@ struct StandardLineChart: View {
     let gridDash: [CGFloat]
     let gridOpacity: Double
     let transitionKey: String
+    /// Identifies a selected time window independently of theme and line visibility.
+    let rangeTransitionKey: String?
     let appearanceID: String
     let dataTransition: StandardLineChartDataTransition
     /// Optional vertical travel for a series entering or leaving this chart.
@@ -519,6 +522,7 @@ struct StandardLineChart: View {
     @State private var outgoingDomain: ClosedRange<Double>
     @State private var transitionProgress: CGFloat = 1
     @State private var bouncesSeriesChange = false
+    @State private var bouncesRangeTransition = false
     @State private var unchangedSeriesDuringBounce: Set<String> = []
     @State private var transitionGeneration = 0
     @State private var viewportPaths: [String: StandardLineChartViewportPath] = [:]
@@ -548,6 +552,7 @@ struct StandardLineChart: View {
         gridDash: [CGFloat] = [],
         gridOpacity: Double = 0.12,
         transitionKey: String,
+        rangeTransitionKey: String? = nil,
         appearanceID: String = #fileID,
         dataTransition: StandardLineChartDataTransition = .morph,
         seriesChangeBounce: CGFloat = 0,
@@ -587,6 +592,7 @@ struct StandardLineChart: View {
         self.gridDash = gridDash
         self.gridOpacity = gridOpacity
         self.transitionKey = transitionKey
+        self.rangeTransitionKey = rangeTransitionKey
         self.appearanceID = appearanceID
         self.dataTransition = dataTransition
         self.seriesChangeBounce = seriesChangeBounce
@@ -654,6 +660,8 @@ struct StandardLineChart: View {
                         StandardLineChartTransitionDriver(progress: transitionProgress) { progress in
                             Canvas { context, _ in
                                 let settledProgress = min(1, max(0, progress))
+                                let viewportProgress = bouncesRangeTransition
+                                    ? rangeViewportProgress(progress) : settledProgress
                                 presentationProgress.value = settledProgress
                                 var lineContext = context
                                 lineContext.translateBy(x: lineLayerBleed, y: 0)
@@ -671,10 +679,16 @@ struct StandardLineChart: View {
                                         height: plot.height
                                     )))
                                 }
+                                // The viewport overshoot can be imperceptible on a nearly
+                                // flat range. Move the plotted lines a few points past their
+                                // resting position so the rebound is visible in every range.
+                                lineContext.translateBy(x: rangeReboundOffset(progress), y: 0)
                                 if !outgoingSeries.isEmpty,
-                                   settledProgress < 1 || (bouncesSeriesChange && progress > 1) {
+                                   settledProgress < 1 || (bouncesSeriesChange && progress > 1)
+                                       || (bouncesRangeTransition && viewportProgress > 1) {
                                     drawMorphedBase(
                                         progress: settledProgress,
+                                        viewportProgress: viewportProgress,
                                         bounceProgress: progress,
                                         context: &lineContext,
                                         plot: plot
@@ -701,7 +715,10 @@ struct StandardLineChart: View {
                                 revealingEndpoints(plot: plot, progress: reveal)
                             } else {
                                 endpointLayer(plot: plot, progress: min(1, max(0, progress)),
+                                              viewportProgress: bouncesRangeTransition
+                                                  ? rangeViewportProgress(progress) : min(1, max(0, progress)),
                                               bounceProgress: progress)
+                                    .offset(x: rangeReboundOffset(progress))
                             }
                         }
 
@@ -770,7 +787,8 @@ struct StandardLineChart: View {
         }
         .onChange(of: revision) { previous, latest in
             if previous.transitionKey != latest.transitionKey {
-                transitionToLatestData()
+                transitionToLatestData(bouncesRange: previous.rangeTransitionKey != nil
+                    && previous.rangeTransitionKey != latest.rangeTransitionKey)
             } else if previous.contentFingerprint != latest.contentFingerprint {
                 // Background refreshes replace data without replaying loading.
                 syncWithoutAnimation()
@@ -811,6 +829,7 @@ struct StandardLineChart: View {
         let scalePart = "\(interactionDates.count):\(interactionDates.first?.timeIntervalSinceReferenceDate ?? 0):\(interactionDates.last?.timeIntervalSinceReferenceDate ?? 0):\(domain.lowerBound):\(domain.upperBound)"
         return StandardLineChartRevision(
             transitionKey: transitionKey,
+            rangeTransitionKey: rangeTransitionKey,
             contentFingerprint: ([scalePart] + seriesParts + markerParts).joined(separator: "|")
         )
     }
@@ -826,7 +845,7 @@ struct StandardLineChart: View {
         )
     }
 
-    private func transitionToLatestData() {
+    private func transitionToLatestData(bouncesRange: Bool = false) {
         if revealsInitialAppearance {
             var transaction = Transaction(animation: nil)
             transaction.disablesAnimations = true
@@ -846,6 +865,7 @@ struct StandardLineChart: View {
         let current = currentPresentation(progress: presentationProgress.value)
         let changesSeries = Set(current.series.map(\.id)) != Set(series.map(\.id))
         let shouldBounce = seriesChangeBounce > 0 && changesSeries
+        let shouldBounceRange = bouncesRange && dataTransition == .viewportZoom
         let unchangedIDs = shouldBounce && current.dates == interactionDates && current.domain == domain
             ? Set(series.compactMap { incoming -> String? in
                 guard let previous = current.series.first(where: { $0.id == incoming.id }),
@@ -860,6 +880,7 @@ struct StandardLineChart: View {
         withTransaction(resetTransaction) {
             transitionGeneration &+= 1
             bouncesSeriesChange = shouldBounce
+            bouncesRangeTransition = shouldBounceRange
             unchangedSeriesDuringBounce = unchangedIDs
             outgoingSeries = current.series
             outgoingMarkers = current.markers
@@ -886,9 +907,12 @@ struct StandardLineChart: View {
         Task { @MainActor in
             await Task.yield()
             guard generation == transitionGeneration else { return }
-            withAnimation(shouldBounce
-                ? .spring(response: 0.42, dampingFraction: 0.58)
-                : StandardLineChartTransition.zoom) {
+            let animation: Animation = shouldBounceRange
+                ? .spring(response: 0.52, dampingFraction: 0.62)
+                : (shouldBounce
+                    ? .spring(response: 0.42, dampingFraction: 0.58)
+                    : StandardLineChartTransition.zoom)
+            withAnimation(animation) {
                 transitionProgress = 1
             }
         }
@@ -958,6 +982,7 @@ struct StandardLineChart: View {
         viewportPaths = [:]
         morphPairs = [:]
         bouncesSeriesChange = false
+        bouncesRangeTransition = false
         unchangedSeriesDuringBounce = []
         presentationProgress.value = 1
         transitionProgress = 1
@@ -1164,6 +1189,7 @@ struct StandardLineChart: View {
 
     private func drawMorphedBase(
         progress: CGFloat,
+        viewportProgress: CGFloat,
         bounceProgress: CGFloat,
         context: inout GraphicsContext,
         plot: CGRect
@@ -1184,7 +1210,7 @@ struct StandardLineChart: View {
                     drawViewportZoomedSeries(
                         from: outgoing,
                         to: incoming,
-                        progress: progress,
+                        progress: viewportProgress,
                         context: &context,
                         plot: plot
                     )
@@ -1234,6 +1260,38 @@ struct StandardLineChart: View {
         return entering ? seriesChangeBounce * (1 - progress) : -seriesChangeBounce * progress
     }
 
+    /// Let the camera pass the new range briefly, then settle back. Limit its
+    /// travel relative to the destination window so a jump from ALL to 1W
+    /// cannot overshoot past the week's final date and blank the plot.
+    private func rangeViewportProgress(_ raw: CGFloat) -> CGFloat {
+        let progress = max(0, raw)
+        guard progress > 1,
+              let oldStart = outgoingDates.first, let oldEnd = outgoingDates.last,
+              let newStart = presentedDates.first, let newEnd = presentedDates.last else {
+            return min(1, progress)
+        }
+        let destinationSpan = newEnd.timeIntervalSince(newStart)
+        let changedBy = max(abs(newStart.timeIntervalSince(oldStart)),
+                            abs(newEnd.timeIntervalSince(oldEnd)))
+        guard destinationSpan > 0 else { return 1 }
+        let limit = min(0.08, 0.08 * destinationSpan / max(changedBy, 1))
+        return min(progress, CGFloat(1 + limit))
+    }
+
+    /// The endpoint is anchored during a viewport zoom, so its date/value
+    /// overshoot alone barely moves on screen. A short horizontal spring keeps
+    /// the entire curve and its endpoint together while leaving the data and
+    /// final geometry untouched.
+    private func rangeReboundOffset(_ raw: CGFloat) -> CGFloat {
+        guard bouncesRangeTransition, raw > 1,
+              let oldStart = outgoingDates.first, let oldEnd = outgoingDates.last,
+              let newStart = presentedDates.first, let newEnd = presentedDates.last else { return 0 }
+        let oldSpan = oldEnd.timeIntervalSince(oldStart)
+        let newSpan = newEnd.timeIntervalSince(newStart)
+        let direction: CGFloat = newSpan < oldSpan ? -1 : 1
+        return direction * min(12, (raw - 1) * 170)
+    }
+
     private func drawViewportZoomedSeries(
         from outgoing: StandardLineChartSeries,
         to incoming: StandardLineChartSeries,
@@ -1255,8 +1313,10 @@ struct StandardLineChart: View {
             to: presentedDomain,
             progress: progress
         )
-        let samples = viewportPaths[incoming.id]?.samples(progress: progress)
-            ?? StandardLineChartViewportPath(from: outgoing.points, to: incoming.points).samples(progress: progress)
+        let samples = viewportPaths[incoming.id]?.samples(
+            progress: progress, allowingOvershoot: bouncesRangeTransition)
+            ?? StandardLineChartViewportPath(from: outgoing.points, to: incoming.points)
+                .samples(progress: progress, allowingOvershoot: bouncesRangeTransition)
 
         drawPath(
             samples,
@@ -1645,7 +1705,9 @@ struct StandardLineChart: View {
     }
 
     @ViewBuilder
-    private func endpointLayer(plot: CGRect, progress: CGFloat, bounceProgress: CGFloat) -> some View {
+    private func endpointLayer(
+        plot: CGRect, progress: CGFloat, viewportProgress: CGFloat, bounceProgress: CGFloat
+    ) -> some View {
         let outgoingByID = Dictionary(uniqueKeysWithValues: outgoingSeries.map { ($0.id, $0) })
         let presentedIDs = Set(presentedSeries.map(\.id))
         ZStack(alignment: .topLeading) {
@@ -1653,7 +1715,8 @@ struct StandardLineChart: View {
                 if unchangedSeriesDuringBounce.contains(item.id) {
                     endpoint(for: item, dates: presentedDates,
                              valueDomain: presentedDomain, plot: plot)
-                } else if progress < 1, let outgoing = outgoingByID[item.id] {
+                } else if progress < 1 || (bouncesRangeTransition && viewportProgress > 1),
+                          let outgoing = outgoingByID[item.id] {
                     if dataTransition == .viewportZoom,
                        !outgoing.isLoadingPlaceholder,
                        let oldStart = outgoingDates.first,
@@ -1664,17 +1727,18 @@ struct StandardLineChart: View {
                         // domain. Interpolating screen positions instead takes
                         // a different path as the domain's span changes.
                         let endpointSeries = copySeries(item,
-                            points: viewportPaths[item.id]?.samples(progress: progress) ?? item.points)
+                            points: viewportPaths[item.id]?.samples(
+                                progress: viewportProgress, allowingOvershoot: bouncesRangeTransition) ?? item.points)
                         endpoint(
                             for: endpointSeries,
                             dates: [
-                                interpolatedDate(from: oldStart, to: newStart, progress: progress),
-                                interpolatedDate(from: oldEnd, to: newEnd, progress: progress),
+                                interpolatedDate(from: oldStart, to: newStart, progress: viewportProgress),
+                                interpolatedDate(from: oldEnd, to: newEnd, progress: viewportProgress),
                             ],
                             valueDomain: interpolatedDomain(
                                 from: outgoingDomain,
                                 to: presentedDomain,
-                                progress: progress
+                                progress: viewportProgress
                             ),
                             plot: plot
                         )

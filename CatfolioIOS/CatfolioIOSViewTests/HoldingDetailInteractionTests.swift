@@ -698,6 +698,20 @@ final class LineChartMotionTests: XCTestCase {
         }
     }
 
+    func testRangeBounceCanPassViewportThenSettleAtExactTarget() throws {
+        let old = points([0, 2, 4, 6, 8, 10]) { 100 + $0 }
+        let new = points([4, 5, 6, 8, 10]) { 150 + $0 }
+        let path = StandardLineChartViewportPath(from: old, to: new)
+        let bounced = path.samples(progress: 1.06, allowingOvershoot: true)
+
+        XCTAssertGreaterThan(try XCTUnwrap(bounced.first?.date), new[0].date)
+        XCTAssertEqual(bounced.map(\.date), bounced.map(\.date).sorted())
+        XCTAssertTrue(bounced.allSatisfy { $0.value.isFinite })
+        XCTAssertEqual(path.samples(progress: 1.06).map(\.date), new.map(\.date))
+        XCTAssertEqual(path.samples(progress: 1).map(\.date), new.map(\.date))
+        XCTAssertEqual(path.samples(progress: 1).map(\.value), new.map(\.value))
+    }
+
     func testRapidRetargetStartsAtCurrentGeometryNotPreviousDestination() {
         let a = points([0, 2, 4, 6, 8, 10]) { 100 + $0 }
         let b = points([1, 3, 5, 7, 9, 10]) { 10 - $0 }
