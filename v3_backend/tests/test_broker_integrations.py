@@ -72,6 +72,18 @@ def test_moomoo_adapter_normalizes_opend_positions():
     assert snapshot["account_cash"]["Moomoo · 42"]["total"] == 55
 
 
+@pytest.mark.parametrize(("code", "expected"), [
+    ("HK.00700", "0700.HK"),
+    ("HK.09988", "9988.HK"),
+    ("HK.00005", "0005.HK"),
+    ("SZ.000001", "000001.SZ"),
+])
+def test_moomoo_symbols_use_yahoo_hk_format(code, expected):
+    from app.brokers.moomoo import _symbols
+
+    assert _symbols(code) == (expected, expected)
+
+
 def test_ibkr_adapter_normalizes_client_portal_positions():
     from app.brokers.ibkr import IBKRAdapter, IBKRConfig
 

@@ -252,6 +252,43 @@ def test_current_open_positions_history_never_uses_account_cash():
     assert "999999" not in str(result)
 
 
+def test_current_open_positions_history_converts_hkd_to_usd():
+    from app import lab
+
+    snapshot = {
+        "portfolio": {
+            "holdings_by_account": [{
+                "account": "Primary",
+                "api_ticker": "TEST_HK_EQ",
+                "yahoo_symbol": "0700.HK",
+                "shares": 100,
+                "cost_usd_standard": 3825,
+                "cost_currency": "HKD",
+            }],
+        },
+        "trading212": {
+            "positions": [{
+                "account": "Primary",
+                "ticker": "TEST_HK_EQ",
+                "initial_fill_date": "2026-01-02T01:30:00Z",
+            }],
+        },
+    }
+    history = {
+        "prices": {
+            "0700.HK": [
+                {"date": "2026-01-02", "close": 300},
+                {"date": "2026-01-03", "close": 320},
+            ],
+        },
+    }
+
+    result = lab.current_open_positions_history(snapshot=snapshot, history=history)
+
+    # 100 shares x HKD close x 0.1275 USD per HKD, not HKD treated as USD.
+    assert [round(row["market_value_usd"], 2) for row in result["rows"]] == [3825.0, 4080.0]
+
+
 def test_cash_flow_history_does_not_claim_to_be_current_position_cost(monkeypatch):
     from datetime import datetime
     from app import lab
@@ -285,4 +322,35 @@ def test_cash_flow_history_does_not_claim_to_be_current_position_cost(monkeypatc
     assert all("open_position_cost_usd" not in row for row in result["rows"])
     assert round(result["rows"][-1]["portfolio_value"], 2) == 270.0
     assert round(result["rows"][-1]["adjusted_portfolio_value"], 2) == 345.0
+    lab.cash_flow_mirror_vs_benchmark.cache_clear()
+
+
+def test_cash_flow_mirror_values_hkd_trades_in_usd(monkeypatch):
+    from datetime import datetime
+    from app import lab
+
+    trades = [
+        {"date": "2026-01-02", "dt": datetime(2026, 1, 2), "Action": "Market buy", "Ticker": "0700.HK", "Currency (Total)": "HKD", "Total": "30000", "No. of shares": "100", "Account": "A"},
+    ]
+    history = {
+        "prices": {
+            "SPY": [
+                {"date": "2026-01-02", "close": 100},
+                {"date": "2026-01-03", "close": 101},
+            ],
+            "0700.HK": [
+                {"date": "2026-01-02", "close": 300},
+                {"date": "2026-01-03", "close": 320},
+            ],
+        }
+    }
+    monkeypatch.setattr(lab, "demo_mode", lambda: False)
+    monkeypatch.setattr(lab, "_read_trade_transactions", lambda: trades)
+    monkeypatch.setattr(lab, "ensure_history_symbols", lambda symbols: history)
+    lab.cash_flow_mirror_vs_benchmark.cache_clear()
+
+    result = lab.cash_flow_mirror_vs_benchmark("SPY")
+
+    assert round(result["stats"]["buy_total_usd"], 2) == 3825.0
+    assert round(result["rows"][-1]["portfolio_value"], 2) == 4080.0
     lab.cash_flow_mirror_vs_benchmark.cache_clear()

@@ -92,7 +92,7 @@ def import_page(request: Request):
           <tr><td class="font-mono">Ticker</td><td>✅</td><td>交易代码（如 AAPL, LLOY.L）</td></tr>
           <tr><td class="font-mono">Quantity</td><td>✅</td><td>股数（正数）</td></tr>
           <tr><td class="font-mono">Price</td><td>✅</td><td>每股价格</td></tr>
-          <tr><td class="font-mono">Currency</td><td>—</td><td>USD / GBP / GBX / EUR（默认 USD）</td></tr>
+          <tr><td class="font-mono">Currency</td><td>—</td><td>USD / GBP / GBX / EUR / HKD（默认 USD）</td></tr>
           <tr><td class="font-mono">Name</td><td>—</td><td>公司名称</td></tr>
         </tbody>
       </table>

@@ -92,6 +92,7 @@ REPORT_FX_TO_USD = {
     "GBP": Decimal("1.3460"),
     "GBX": Decimal("0.013460"),
     "EUR": Decimal("1.1630"),
+    "HKD": Decimal("0.1275"),  # same default as data_store.FX_TO_USD
 }
 
 
@@ -1293,6 +1294,7 @@ def cash_flow_mirror_vs_benchmark(symbol="SPY"):
         "GBP": float(REPORT_FX_TO_USD["GBP"]),
         "GBX": float(REPORT_FX_TO_USD["GBX"]),
         "EUR": float(REPORT_FX_TO_USD["EUR"]),
+        "HKD": float(REPORT_FX_TO_USD["HKD"]),
     }
 
     for date in dates:

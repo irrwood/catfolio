@@ -6,6 +6,10 @@ SAMPLE_CSV = """Date,Action,Ticker,Quantity,Price,Currency,Name
 2025-02-03,SELL,AAPL,1,220,USD,Apple Inc.
 """
 
+HKD_CSV = """Date,Action,Ticker,Quantity,Price,Currency,Name
+2025-01-02,BUY,0700.HK,100,300,HKD,Tencent
+"""
+
 
 def test_csv_import_accepts_valid_file(monkeypatch, tmp_path):
     from app.main import app
@@ -87,3 +91,16 @@ def test_csv_import_backs_up_existing_portfolio(monkeypatch, tmp_path):
     assert len(backup_dirs) == 1
     assert (backup_dirs[0] / "portfolio_analysis.json").read_text(encoding="utf-8") == original_portfolio
     assert (backup_dirs[0] / "trading212_data.json").read_text(encoding="utf-8") == original_broker
+
+
+def test_csv_import_converts_hkd_cost_to_usd():
+    from app import csv_import
+
+    transactions, warnings = csv_import.parse_transactions(HKD_CSV)
+    portfolio = csv_import.holdings_to_portfolio_json(csv_import.compute_holdings(transactions))
+
+    assert warnings == []
+    assert portfolio["holdings"][0]["cost_currency"] == "HKD"
+    # 100 shares x HKD 300 x 0.1275 USD per HKD, not HKD treated as USD.
+    assert portfolio["holdings"][0]["cost_usd_standard"] == 3825.0
+    assert portfolio["summary"]["total_cost_usd_standard"] == 3825.0

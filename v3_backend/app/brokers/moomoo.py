@@ -69,6 +69,10 @@ def _symbols(code: str) -> tuple[str, str]:
         "SG": ".SI",
         "JP": ".T",
     }
+    if market == "HK" and symbol.isdigit():
+        # OpenD reports five-digit HK codes (00700); Yahoo only resolves the
+        # four-digit zero-padded form (0700.HK), not 00700.HK or 700.HK.
+        symbol = symbol.lstrip("0").zfill(4)
     yahoo = symbol + suffixes.get(market, "")
     ticker = yahoo if market != "US" else symbol
     return ticker, yahoo

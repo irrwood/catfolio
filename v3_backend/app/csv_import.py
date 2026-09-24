@@ -9,7 +9,7 @@ Accepts transaction-based CSV exports from any broker with these columns
   Ticker     stock symbol (e.g. AAPL, LLOY.L)
   Quantity   number of shares (positive)
   Price      price per share in the stated currency
-  Currency   USD / GBP / GBX / EUR  (optional, default USD)
+  Currency   USD / GBP / GBX / EUR / HKD  (optional, default USD)
   Name       human-readable name  (optional)
 
 Computes weighted-average cost (WAC) per position and writes the result to
@@ -24,7 +24,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-_FX = {"USD": 1.0, "GBP": 1.346, "GBX": 0.01346, "EUR": 1.163}
+_FX = {"USD": 1.0, "GBP": 1.346, "GBX": 0.01346, "EUR": 1.163, "HKD": 0.1275}  # HKD: same default as data_store.FX_TO_USD
 
 # Normalise common column name variants to canonical names
 _COL_ALIASES = {

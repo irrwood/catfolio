@@ -484,7 +484,7 @@ EN = {
     "YYYY-MM-DD 或 MM/DD/YYYY": "YYYY-MM-DD or MM/DD/YYYY",
     "Shares（正数）": "Shares (positive number)",
     "股数（正数）": "Shares (positive number)",
-    "USD / GBP / GBX / EUR（默认 USD）": "USD / GBP / GBX / EUR (default USD)",
+    "USD / GBP / GBX / EUR / HKD（默认 USD）": "USD / GBP / GBX / EUR / HKD (default USD)",
     "示例": "Example",
     "下载示例 CSV": "Download Sample CSV",
     "平均成本": "Average Cost",
