@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-24T14:12:27.857710+00:00",
+  "generatedAt": "2026-09-24T15:38:19.132271+00:00",
   "canvasSize": 192,
   "opticalMethod": "alpha-bounds-plus-ink-centroid-50-percent-x-20-percent-y; solid-plate-as-background; equal-area-56-percent-side-with-density; up-to-80-percent-ink-box; 10-percent-min-margin",
   "logos": {
@@ -3168,24 +3168,23 @@
       "sourceId": "0001075531",
       "themeColor": "#000000",
       "darkBackgroundColor": "#000000",
-      "lightBackgroundColor": "#000000",
-      "selectionOrigin": "manual_default",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "7cc4d59e5521b1f9020437ec8d1b7376d6d6ead4eb2468fe46d2333788de254a",
-        "dark": "7cc4d59e5521b1f9020437ec8d1b7376d6d6ead4eb2468fe46d2333788de254a"
+        "light": "f75fbd8915d63c2d4b7fc204e4afdd8bb1f94a35811268a74a3be6c6cae1f079",
+        "dark": "6356a5d4c71a76f381736e92561601dabaf987fc1f31dc2bdaf100a3e85a9431"
       },
       "files": {
         "light": {
           "svg": "BKNG.light.svg",
           "png": "BKNG.light.png",
-          "svgSha256": "a4382dcf60d374e44cf40330a5bbd510250c83d9c9cb2c93a17bca3809711ff0",
-          "pngSha256": "b55a1856af2dd80d68f48ff924bdd062fcc945cb9e1d91815b4d393abe23c946"
+          "svgSha256": "038aa13530667e3e8afdb08fd8935776bf3c40eac17a327997896df3a46f75d9",
+          "pngSha256": "ff770c5652f619c5c31f99669e84cc07ee1f97ab2b6e9e20438607084647d9cf"
         },
         "dark": {
           "svg": "BKNG.dark.svg",
           "png": "BKNG.dark.png",
-          "svgSha256": "a4382dcf60d374e44cf40330a5bbd510250c83d9c9cb2c93a17bca3809711ff0",
-          "pngSha256": "b55a1856af2dd80d68f48ff924bdd062fcc945cb9e1d91815b4d393abe23c946"
+          "svgSha256": "99e70cdad71d39ffc7fe2444a7a4449e9fc2128587920aff892b966e2615b02a",
+          "pngSha256": "c23e9b51cec3b5a615eca815a5761ef68548540f952211d529d296c7cb56220e"
         }
       }
     },
@@ -3697,11 +3696,11 @@
       "kind": "stock",
       "sourceId": "0000831001",
       "themeColor": "#255BE3",
-      "darkBackgroundColor": "#1B42A6",
-      "selectionOrigin": "manual_default",
+      "darkBackgroundColor": "#042748",
+      "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "d1fa5e79206d5c71f2122d63becb44fa56bb40ec2b2cec441d0be276b8a5ffa6",
-        "dark": "5cc78754eb91bb9c17eb04d323161539538e3ebbc13e018a8136294927f1060a"
+        "dark": "ac395999bcb124962ab898630c5ebb1ae22c7981d42541af663fdd50ff80932e"
       },
       "files": {
         "light": {
@@ -3713,8 +3712,8 @@
         "dark": {
           "svg": "C.dark.svg",
           "png": "C.dark.png",
-          "svgSha256": "43792451aa0b0811eea1afe51ba4c452308944cfd7a922b1510c8683d580251b",
-          "pngSha256": "34356d5ee670e954a4de85ee07e9cdf9a611596bc653c9feff910eeb48a9da2f"
+          "svgSha256": "14def5ea1f1b607eb1ba013f7f1410515014d535cbb90f17c711fc94bbfd9c9f",
+          "pngSha256": "774671ccafbd4f2bdc9c45fc8c311d0c91bb593bb1e63f14d5eb1e87182d88cf"
         }
       }
     },
@@ -4302,24 +4301,24 @@
       "kind": "stock",
       "sourceId": "0000313927",
       "themeColor": "#C9234B",
-      "darkBackgroundColor": "#141414",
-      "selectionOrigin": "manual_default",
+      "darkBackgroundColor": "#084A78",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "6ef5099745920061673d09a1771a583e4ce929717aca496f74030ed2e636b335",
-        "dark": "ecd3c7efd408e5d46fa1efc862f770d157a54b7961a6ba6ee50e38b1fe6cf6f2"
+        "light": "4b4e290428f5f86c7bbb3b84ba297e741dfa8191cf3be1550c3d2e90ab7ebdff",
+        "dark": "4b4e290428f5f86c7bbb3b84ba297e741dfa8191cf3be1550c3d2e90ab7ebdff"
       },
       "files": {
         "light": {
           "svg": "CHD.light.svg",
           "png": "CHD.light.png",
-          "svgSha256": "c9d8c17f784ac9fda39146e3c9f18d3000f547586abfde63ea2ec0dcf6d2f571",
-          "pngSha256": "204946f1f628783450db26910cafca9bae8666b0f414619c3ec1160b8884f460"
+          "svgSha256": "88829af6ddca43172b6f297b38bcd373c72b0849093b6c5e4294ca524c81019f",
+          "pngSha256": "bd241c37bdb31e39f8f0f2af33c7cb9f625e6edc0d5ec5f61c59e8a20de0e511"
         },
         "dark": {
           "svg": "CHD.dark.svg",
           "png": "CHD.dark.png",
-          "svgSha256": "66e319a792fa458465add1d0873a0b5bd7e8f31593d4efd946eeb4de9ced71b2",
-          "pngSha256": "e90d4c9151fc6163c7527ffa762ccba82e4ee2f43c2eb7cf6cc0e8793881c49f"
+          "svgSha256": "e97fd8a0eaba0870f301cc44000128c243c448f37ca148610c47e6ea5a6023e6",
+          "pngSha256": "d2518f086ffe2251b206d49ba24220eebec0c759d7aa7eaeb478ff97bb497705"
         }
       }
     },
@@ -4327,24 +4326,24 @@
       "kind": "stock",
       "sourceId": "0000020212",
       "themeColor": "#000000",
-      "darkBackgroundColor": "#000000",
-      "selectionOrigin": "auto_russell1000",
+      "darkBackgroundColor": "#303030",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "d41e65592dde77ab48103dcc275abebee89d62ad639767c5ca656cf324433fd2",
-        "dark": "08ca5c3ab6247b0473505b4e4f1e3fe68f763e8fc241bf528b606563a6853e29"
+        "light": "b7dc8d65bb14716348ef2cd5e3ba0f99177fee11e2cad97c2578d9e5bdff5b93",
+        "dark": "5a80d1a2b4946a26db31585efb1b340e2653a2faeaaf947e91c8ebd0b1a7f150"
       },
       "files": {
         "light": {
           "svg": "CHDN.light.svg",
           "png": "CHDN.light.png",
-          "svgSha256": "92d67926d4908a9b36f529b40e206faa4b617648a27f85ca4c7f6fa527d99e7d",
-          "pngSha256": "8782dc0cca03824748256b483ed68d84ddc86776250ca0ca711f2d93da64d2ce"
+          "svgSha256": "3e8ebaf60ccf0e56e7a01acc48a9085416048e1fc60550bde85743f37af49e44",
+          "pngSha256": "51d8b0a5426ec14e3ede29db79f2fa4a74268224edf42520e2270eee4733cc83"
         },
         "dark": {
           "svg": "CHDN.dark.svg",
           "png": "CHDN.dark.png",
-          "svgSha256": "44a55ae79e9c82616caf2bd57e90b3dcfdc48d4de59b72612bf2c73ab8bb19a9",
-          "pngSha256": "37efcf34b72975e4fb35b3b4eb97ce38ad45ba32f8a7ec478fac5ea70335c759"
+          "svgSha256": "3f8631b9787f7d9063bdd6a753a97a76408710cb79e934dc8608e59cb4107ddd",
+          "pngSha256": "b464d8c983b93672d24322be140d2e603907ec110f07f9976ed8a5bb99a4d7fb"
         }
       }
     },
@@ -4428,24 +4427,25 @@
       "kind": "stock",
       "sourceId": "0001091667",
       "themeColor": "#1B619A",
-      "darkBackgroundColor": "#154D7A",
-      "selectionOrigin": "manual",
+      "darkBackgroundColor": "#1B619A",
+      "darkInkTint": "#F4F7FA",
+      "selectionOrigin": "manual_svg_edit",
       "sourceSha256": {
-        "light": "415b4d2ab9b21d308d01b730400872096bc45bc4eb0c5376098a4e99f04d2627",
-        "dark": "49c1a3f0f5f64834b74a55ddfde3b4bee02575ceb9cc11c81fa857ba3fccb07c"
+        "light": "8bf72e422baca4a75c204848c33468aa2625b1af9fd862a604dd62b7d59eb32b",
+        "dark": "0ad670344bcb08c15b6f132433cc5955ddc2fd107484be38d692628d38b8131b"
       },
       "files": {
         "light": {
           "svg": "CHTR.light.svg",
           "png": "CHTR.light.png",
-          "svgSha256": "6a37b3937bbea75890cd474ffde9200b4898e0310f0e420e7bb7f591060cda6d",
-          "pngSha256": "a270f4f124338963c495d8fbc0ba2cf19f2dfbe9495222ee808f72fc273fd50b"
+          "svgSha256": "913ba67be1c8f53b1e59c08fe3fa707ff57d19d296ff967576b066caed1ffaa5",
+          "pngSha256": "d3f0e1c4c4df2bd2f75bb4f39ce62a93b9bfd1a8dc15e492ff9707512b0f18f8"
         },
         "dark": {
           "svg": "CHTR.dark.svg",
           "png": "CHTR.dark.png",
-          "svgSha256": "61e0c55936ce759af1f52f447781b8bf5a97cdb687f92c27febe44dee339e669",
-          "pngSha256": "e6ea7c1921e5b8de63ac7aa9eef213990ffa557e44735da6df755d0fb91012d7"
+          "svgSha256": "20917d0f55e2d5ee1b0073b9c3e66d979a36c7cbccb724f7fef0cb94a815f7ad",
+          "pngSha256": "36eddfd8f4934ceba8037b67d76cecee4b885b7a4dd7a75ba6b758a2b8e19c8c"
         }
       }
     },
@@ -4477,25 +4477,25 @@
     "CI": {
       "kind": "stock",
       "sourceId": "0001739940",
-      "themeColor": "#0033FF",
-      "darkBackgroundColor": "#000000",
-      "selectionOrigin": "auto_neutral_multicolor",
+      "themeColor": "#03CC54",
+      "darkBackgroundColor": "#1B2755",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "ffd39ea3fd2330058cf6bdbf5c0674ca85d9d27d2d2e00942f5026287fce5e67",
-        "dark": "ffd39ea3fd2330058cf6bdbf5c0674ca85d9d27d2d2e00942f5026287fce5e67"
+        "light": "8cf12b9128379583f6fd07c105cfa63c068e6db06e2473772b44c44499d3eb20",
+        "dark": "8cf12b9128379583f6fd07c105cfa63c068e6db06e2473772b44c44499d3eb20"
       },
       "files": {
         "light": {
           "svg": "CI.light.svg",
           "png": "CI.light.png",
-          "svgSha256": "64924d80c3d49c1d256ae6138aea61387ff55f13a77b3edc390cd7885f134673",
-          "pngSha256": "a8d56686270a0dce34e3a8e2bd8f419aee2fad9f63fcc92c0e01087d61a0b889"
+          "svgSha256": "64c8debb5a9e9179542d19abca6f5e4c8674606dbfae721fa3a2dc709c4188af",
+          "pngSha256": "ee2329b6802927f996b06183894b6a5fb6dc3d603a3568dd5f1ef475c7742215"
         },
         "dark": {
           "svg": "CI.dark.svg",
           "png": "CI.dark.png",
-          "svgSha256": "4cfee5eeca279ca107544d87e04e3a93ce28b3c7037fdcd1f496e8938e19e85c",
-          "pngSha256": "303632ffd7d6f870d76a9ead2204f6dd6b71f36fc616c4051a0e4cb105b4bfc3"
+          "svgSha256": "0f41f5945a964c1024a3dc090c616f64f150a5c9c576cca502dfa2f353bdc59d",
+          "pngSha256": "e4d38c3d8167e72361545bfa3283a104dd2918c0999ee265123ed039e223afcd"
         }
       }
     },
@@ -4529,24 +4529,25 @@
       "kind": "stock",
       "sourceId": "0000020286",
       "themeColor": "#004D99",
-      "darkBackgroundColor": "#004991",
+      "darkBackgroundColor": "#004D99",
+      "darkInkTint": "#F2F6FA",
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "5827d58252826e3cf6bf0992018100229c725c9fb569ae8f5bb45da99985b111",
-        "dark": "90d604f04a090022f1685fd13d029451caf0d09b47a0acba2beec21b82d1b560"
+        "light": "8b08d8530f4861af4bbda22523b61d8bd43d7763131c5fb7e596272d9b18b2f5",
+        "dark": "21d54c91b569f1a3f4010fba4ecf0cd61183fa7d10fde158d9b6d291fe14a21d"
       },
       "files": {
         "light": {
           "svg": "CINF.light.svg",
           "png": "CINF.light.png",
-          "svgSha256": "8d239865a7de3b0b26864b637838941d0fca781ef79e4d33c8fd85c0007fd6a2",
-          "pngSha256": "9bab3d9a4603fb02cb26e207520c1015d0f5ec8b6c54a6e733f3d467ce81a276"
+          "svgSha256": "5cd331edcbb1042ae68d80ec6e250ec71b57c97c261a3f1ec6ed2ba9a3c806da",
+          "pngSha256": "e571b945e9ed763ee239d1beede70ab9491c04fe5a48260fa78036503581d718"
         },
         "dark": {
           "svg": "CINF.dark.svg",
           "png": "CINF.dark.png",
-          "svgSha256": "904187bad5e7f6d2345a06e128da568785c66c7b3b764b3fa4c5a6983b0cce8b",
-          "pngSha256": "e1a8580f4ba3e0b5d844f408f746bb17c22e899c872744533411fa9630233c5f"
+          "svgSha256": "c74a59637298bf24c1be3eaf127f74a5ac3cb44a9faa9876ae3b1736ab2b21e5",
+          "pngSha256": "c4e3dba952163539bcbc6f1166723b54da7fb9712b4a96efab4d98d7ecde0010"
         }
       }
     },
@@ -4832,23 +4833,24 @@
       "sourceId": "0001071739",
       "themeColor": "#084168",
       "darkBackgroundColor": "#084168",
+      "darkInkTint": "#F3F6F7",
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "16be3f96bffffa625d4d8043a5eb73f11032c950da23df35e62576f7fff8c96b",
-        "dark": "16ff8c0341d38b4f559d8a5996bddbb843dac6b0eacbdff7b73a656bdbdb7c16"
+        "light": "0ae16a1fca2fe26ea87421874cdd91ed2e5fe6219444a72dce07965e4cf033fa",
+        "dark": "6b1d3c4ff83e35a4adb3eef6b3f9b186079f1dbe73047d471bca6a865398abee"
       },
       "files": {
         "light": {
           "svg": "CNC.light.svg",
           "png": "CNC.light.png",
-          "svgSha256": "5e813dc705e4e4d8cab371617eb570a1932d3930754cc167705d86478348f23b",
-          "pngSha256": "1e07449f1845153f6e231a75502041c2221f40de268ec9ce435f32fe1aae8174"
+          "svgSha256": "500bbff38cacc47821ccf5f351d9a484769d86afedd413fae4dac991b52575ba",
+          "pngSha256": "831d6dc922519c7211552c2ff74578df5fcf33a7fbd68888e8acd6ee7cb29144"
         },
         "dark": {
           "svg": "CNC.dark.svg",
           "png": "CNC.dark.png",
-          "svgSha256": "e7387cbc6125f8ddeed15e1f3a0b119b55b715eff2210ed08cc5696c41ad45cc",
-          "pngSha256": "51fd4bd4653b8930708a7f9a93fac6d1a2ef633656fed941d17dbc309a298c48"
+          "svgSha256": "4c9dbd57139a0d710cee08c5cef2623e6804541d00fea830e52e684eecf61490",
+          "pngSha256": "1f1ee42fbd773ec11642a096eeb0fc839ff5da182ff1b81efdae95f279007181"
         }
       }
     },
@@ -5360,23 +5362,23 @@
       "sourceId": "0000858877",
       "themeColor": "#1BA0D7",
       "darkBackgroundColor": "#1BA0D7",
-      "selectionOrigin": "manual",
+      "selectionOrigin": "manual_svg_edit",
       "sourceSha256": {
-        "light": "9b68428fc61f780caf3474e29568591189cb166018cf33e590284d8e9b4f0fa7",
-        "dark": "043643a3c4c17f2960bd51c44323fee34aac22437e71d952d5a94de9875f557b"
+        "light": "2d1918c3a0b8beede9bf6e108b05c72d45803be9760c1b499c11c3a632b2895b",
+        "dark": "a5697c774bc09d60ee604440877e8c0f38f948a3e6a0080247833ba0e472c632"
       },
       "files": {
         "light": {
           "svg": "CSCO.light.svg",
           "png": "CSCO.light.png",
-          "svgSha256": "467ba74ade2cd4e6398b12b5a828af573df0caa4e92db33c5c2f436cf6c4fb04",
-          "pngSha256": "e7a48f8ec41b9d03e2a330c75ea17bfb844bdffd038ef9cbdfb81ee4ad8f469c"
+          "svgSha256": "deae222664398887adc28ece57965de706ebb2384ae202e883bdc799809bbb63",
+          "pngSha256": "ba8a94b96cf35ea9dd71aa4d18f98342d08946c055cda27974e0d16fb91bafd0"
         },
         "dark": {
           "svg": "CSCO.dark.svg",
           "png": "CSCO.dark.png",
-          "svgSha256": "1c3e72de587ba5b96f72b2739657489b53eeb72806a45a0aa757412f2cec2144",
-          "pngSha256": "835f573c115855a31072314303e08ade4ed32a3c5576bcf518130d3bf50f8416"
+          "svgSha256": "82b56498de762bd88e98c877ad463fc60238b4368a2c5848c9ddf2676f900346",
+          "pngSha256": "d0cbfbf395aec3bae3a3378d717013d4ab7840adaa03c889849df45ab60cd706"
         }
       }
     },
@@ -5684,24 +5686,24 @@
       "kind": "stock",
       "sourceId": "0000027904",
       "themeColor": "#003366",
-      "darkBackgroundColor": "#003366",
+      "darkBackgroundColor": "#0B2A4C",
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "a91fb964147bd3a65c44f47ca54cc95025a0e6c34d0d9befc54eb8cae0035dde",
-        "dark": "0e0cfa73dd427cabbe6f932d91a67610ab4a37b7a5b990daf200f86244710caf"
+        "light": "3e670c2f500a4b842f36b80f001693bdcbbf23635b602f049b5e41c46a02e369",
+        "dark": "3e670c2f500a4b842f36b80f001693bdcbbf23635b602f049b5e41c46a02e369"
       },
       "files": {
         "light": {
           "svg": "DAL.light.svg",
           "png": "DAL.light.png",
-          "svgSha256": "e0188d7afea21b2af5857aef4103304e3d6b8189209495676f1d8de0b190d693",
-          "pngSha256": "150a0dca1fc16b1e431428f1429862d74e028507fcd526347f770d346a294de1"
+          "svgSha256": "f3ef90e7c42ead1e0eaac722b1ba3d534ffff175523feea6bb7ceb1aac9ab9a4",
+          "pngSha256": "0aa88a1b673dd4df965e92b7cd6474e7c071487787fe0b64fedd0f9ac5b53d7e"
         },
         "dark": {
           "svg": "DAL.dark.svg",
           "png": "DAL.dark.png",
-          "svgSha256": "52c828f6b4f21fd122e72bc78b43f4c5edc952a7daf3912c30f105790a2ba3b2",
-          "pngSha256": "83bf8bef71baf1db05a29f5bd5fc3a3de7e5e7411eddcb0e0380d361734e9dce"
+          "svgSha256": "ac045bdeeb42435bb866422d52726e6dd70c1fd52b826ca3396d9a06112a0496",
+          "pngSha256": "82a5562aa64bd8b66377bb20866c478cb8b8dec288554ae2f8f0ecc2a2be4cd5"
         }
       }
     },
@@ -6889,7 +6891,7 @@
       "kind": "stock",
       "sourceId": "0000821189",
       "themeColor": "#E43539",
-      "darkBackgroundColor": "#4F0808",
+      "darkBackgroundColor": "#220202",
       "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "18a34b7c2bc7cd16cb5de0b2b15d7e495c75c78f4af1186542e2cb273469dff7",
@@ -6905,8 +6907,8 @@
         "dark": {
           "svg": "EOG.dark.svg",
           "png": "EOG.dark.png",
-          "svgSha256": "6a61d56681829a4c9af261a7d47296cae907fcb7ede305c21ac7d8433901a871",
-          "pngSha256": "152a0af156b7839c902f57b5e8ca8c165298279d98fa49c2cfe0baab75779ffd"
+          "svgSha256": "adbd5a58e56dda55e843574e16f58e9e921b9e942fb418b261cd7cf46e411fdc",
+          "pngSha256": "c369a1fa223c339ac87ee68ff1e97879c35a02f8c448e2416b3fbb4d9e5735af"
         }
       }
     },
@@ -6964,11 +6966,11 @@
       "kind": "stock",
       "sourceId": "0000033213",
       "themeColor": "#001446",
-      "darkBackgroundColor": "#000000",
-      "selectionOrigin": "auto_neutral_multicolor",
+      "darkBackgroundColor": "#001446",
+      "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "c875a467703943ebb0393e156e03b15178bfcf167316abba948e7b1b7ce2f179",
-        "dark": "c875a467703943ebb0393e156e03b15178bfcf167316abba948e7b1b7ce2f179"
+        "dark": "806c170505657f7681e90a012c4197053a569e7d075019f5b44bf27cf4e757a0"
       },
       "files": {
         "light": {
@@ -6980,8 +6982,8 @@
         "dark": {
           "svg": "EQT.dark.svg",
           "png": "EQT.dark.png",
-          "svgSha256": "589d865674fb374665409bbbf54b2faead8068f7fe0a0751e2fcea4caff33f92",
-          "pngSha256": "53ec228685976dd4a2f2b03159913cbc3713ca42fb9c927ed96ba23f6c6e021c"
+          "svgSha256": "da883a398cb7bf97ee2ff5a8ff71a2d3a346306b5eb4cbee9bbab8376a160996",
+          "pngSha256": "924246421724d4aaddc21403188e5f2fbf7f58910a0ab1edf40d17ae0b39bc84"
         }
       }
     },
@@ -7668,7 +7670,7 @@
       "sourceId": "0001031296",
       "themeColor": "#1A5DAD",
       "darkBackgroundColor": "#154A8A",
-      "selectionOrigin": "manual_default",
+      "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "cca6e1ddd2ecb982976a1138ee0a0d417ae542bebceb4709103e7d550e10d410",
         "dark": "a480181eab87fbad72111df920f8a126a76468e3ca39af939e3a1fcacd755e40"
@@ -8770,24 +8772,24 @@
       "kind": "stock",
       "sourceId": "0000040987",
       "themeColor": "#FFCA38",
-      "darkBackgroundColor": "#594714",
+      "darkBackgroundColor": "#FFCA38",
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "50c5dbe4268dc6af79c28d343294d79cce7240c0b59ad7260ae1c7e0a6c0fff3",
-        "dark": "879adcc19c51d1ad6184b7f8e1600895310a14c313bfb3ccd28f3b7d57967fe3"
+        "light": "bf6ef0ed6a450deb3d42ad661a79aa5fff369e311525b41ca6f6d71ad2127d4b",
+        "dark": "1c2b20d0f30f42fd63e9b2b0dc21100c9f2d29a843ffb1491f8f276e36ac43dd"
       },
       "files": {
         "light": {
           "svg": "GPC.light.svg",
           "png": "GPC.light.png",
-          "svgSha256": "0e51707f4819ffaa9ff216f831df61ef576072fe8758a97ef0be57ff5a8c0584",
-          "pngSha256": "f15524ed0fb8f5ce9093ba009b09c19e4c3ae48d4fa2a08dc385722804478518"
+          "svgSha256": "ff6e8ce3c45c4245d3e9551685bff45b6eb95e79cc0cefb013fc8f1b5e04cff3",
+          "pngSha256": "d926770529abf1a1b40b8253501834a3e8ec228feda60a8d30bd4b6f8c1ff114"
         },
         "dark": {
           "svg": "GPC.dark.svg",
           "png": "GPC.dark.png",
-          "svgSha256": "ca7091345717bd47cddc2f1b05b8095616408b2d4b515cff2605ac679099de73",
-          "pngSha256": "e7b50740debf009d62b726f8c679a8d19ab09aa7442b774987968cef785f5cd7"
+          "svgSha256": "325aabdf1274b3605c6ff837dae4fe94ab0a7a7c6b9fe12b05ae9e4ddabdeb88",
+          "pngSha256": "cf6aa4b0e272fcc57b1084880e470aa665f3fc7e6cc10144c5216abd86f2569b"
         }
       }
     },
@@ -9675,11 +9677,11 @@
       "kind": "stock",
       "sourceId": "0000004281",
       "themeColor": "#00ABC8",
-      "darkBackgroundColor": "#003038",
-      "selectionOrigin": "manual_default",
+      "darkBackgroundColor": "#002329",
+      "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "55fa71165a4348f4302d9ca48cc3820b141998813b5f6e8bdfb6d91fb7017f99",
-        "dark": "d2620451d27b7f9b6a1cad90795ec9da72d2bcc769d2577a82ccc6cb7ece9f69"
+        "dark": "1d2e372f793fb5b1f542e5aea0a0719e3f9559fee01bebc3beb714f5f89c3cf0"
       },
       "files": {
         "light": {
@@ -9691,8 +9693,8 @@
         "dark": {
           "svg": "HWM.dark.svg",
           "png": "HWM.dark.png",
-          "svgSha256": "1edfe8eb08728d8fbf5674fdc9f0c19a73ae77be4097d30bc9add58a9255a836",
-          "pngSha256": "1102499368de87d6bdcb19e0ba948892b36f9395b41f58269df24da16f948e17"
+          "svgSha256": "962e9d439e9bf1f8ee7c311112fb5d3d07cafee5f687ebfcba801b8b1634a57c",
+          "pngSha256": "7a29cb101b4027028e40e1545fe9a6a25ecbc5d36b4918590ed61fb44d1eb786"
         }
       }
     },
@@ -10458,21 +10460,21 @@
       "darkBackgroundColor": "#0D4C83",
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "4c4b0efde827332ea90cc449ed0d6a0decbac738cc91e24a096063c062140744",
-        "dark": "c0c2b767a20a737c9ab711a8d7cbeb0f483b42f2d385b129304a6cddea6350d5"
+        "light": "4e71b74a821acae0f8a8e809335724b12c2bb8251ad92397db1c6073972f0e0c",
+        "dark": "173a0374450fc5798e871127cb3cefbd0a0777e73f260f0462860b48d58555af"
       },
       "files": {
         "light": {
           "svg": "JBL.light.svg",
           "png": "JBL.light.png",
-          "svgSha256": "407bdf25e9971a4112f1635e47897072b3856af6198c1f2c9063162e85a29742",
-          "pngSha256": "301a7ff55f69911bc3ac01f2eca526d1fe13aa359444a84e832e946b41b7c36c"
+          "svgSha256": "1db429c8a8010d18553dff0185ba3f680023b6134b62560f1138705e97d7823e",
+          "pngSha256": "669becf36311f09f04b4f237e0a8e85d40426010c1d512b4ed4fb9d06a9cd792"
         },
         "dark": {
           "svg": "JBL.dark.svg",
           "png": "JBL.dark.png",
-          "svgSha256": "231898cd7573218cda8f7a1ae9fb046aae6edb1558d369d14e9283d5f543bdb1",
-          "pngSha256": "fc28f61dd47c5801735e222352333eee612beebda3ef5e45d11f999fb291eb23"
+          "svgSha256": "88bbb3b1ac0810db749bc3c05d1003908cb845f22bd2e6f646c59b13bf248a8d",
+          "pngSha256": "9b48c8d658e885c917ebcb8e697ece80752a2094f5c92f040b31c70a7ab457c6"
         }
       }
     },
@@ -12138,24 +12140,24 @@
       "kind": "stock",
       "sourceId": "0000063754",
       "themeColor": "#0D2F8B",
-      "darkBackgroundColor": "#0A256C",
-      "selectionOrigin": "manual_default",
+      "darkBackgroundColor": "#02539B",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "1643f1142be97465fd7469cfe3573c22e114f626d7a9d2842eff5e3dda30379b",
-        "dark": "195bce3d73159e4e731bb1bf49f97dddf90a94094f63dff02dd942ef44a08a62"
+        "light": "4099c06235a993afc9af9b31585dac0797a6d30d59bfb7033a7bd054ffa31ced",
+        "dark": "4099c06235a993afc9af9b31585dac0797a6d30d59bfb7033a7bd054ffa31ced"
       },
       "files": {
         "light": {
           "svg": "MKC.light.svg",
           "png": "MKC.light.png",
-          "svgSha256": "656cf6541c4b2c5bf204ffabba3da2be3b12be967b7ea356a6ba607e8be3c3ce",
-          "pngSha256": "3d2ce129750e681df2e4cc6a1a0fe3c4c3af3dcd5f506ba23dddee23b13b0241"
+          "svgSha256": "1558436a18b9f5715ca4e95f11913158460952f29dc2d280904955a7d8412c4e",
+          "pngSha256": "3905242cf6da1c1e4f2cfda4c0e23ffd05381209526aa17a2fcfb26532995f2d"
         },
         "dark": {
           "svg": "MKC.dark.svg",
           "png": "MKC.dark.png",
-          "svgSha256": "8b41d515bcffa267dc05ac83a73ec372c99f03c170fa5235780f12c9eb01ebab",
-          "pngSha256": "003217b5a3430c0f63883721c75b83a548d3ad5f6e3ef81df67eaf02b7c279e4"
+          "svgSha256": "5d3cf8c9284b33457f7d0f0bf4259d41abb54552b1b09a4bd15622b705a66cb8",
+          "pngSha256": "bcdbf897a6ed45faa6bb88a157ed78f57bbd083e6be70fc187f4f6ca3348e369"
         }
       }
     },
@@ -12919,24 +12921,24 @@
       "kind": "stock",
       "sourceId": "0001513761",
       "themeColor": "#000000",
-      "darkBackgroundColor": "#000000",
-      "selectionOrigin": "auto_svg_favicon",
+      "darkBackgroundColor": "#34A3DA",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "efa0bf81392b302ca567b704542801916186b3b0cd6239d7c334f6d1f2568127",
-        "dark": "fde93ffa0b6768d220e3df608c98953210f250770407a6df759262b22d700458"
+        "light": "868fb1703e0acd2f2ef34ba02181eec3a06573217c8aae7f977b7137c39c7c0d",
+        "dark": "868fb1703e0acd2f2ef34ba02181eec3a06573217c8aae7f977b7137c39c7c0d"
       },
       "files": {
         "light": {
           "svg": "NCLH.light.svg",
           "png": "NCLH.light.png",
-          "svgSha256": "5d15ecf4eef7adfc78ef041e073a8f086442c71e28edeeb08aa10ac45d41ae60",
-          "pngSha256": "80c12231c0cc5a74d59e1b2ce756d25eb7d5365e53cf48086cda7650f5d1edd9"
+          "svgSha256": "e01ccb8f0c147ba4db97facb5a30ed7597ecc7fca91e4d56610e9420f2cde593",
+          "pngSha256": "6e8202e710fcdbca34d9a4dfd09fa974a04ecf94bbab4ab4ad4ff2c2a9b7993d"
         },
         "dark": {
           "svg": "NCLH.dark.svg",
           "png": "NCLH.dark.png",
-          "svgSha256": "a7e4592e95e62f2c0c7d1be5f2a74778854a7233766ccb4721e2968b94d6a3ae",
-          "pngSha256": "a657e2d7c5fd5f004dbb09266be5791a9d418ff69af295190541dd04ca2cee6a"
+          "svgSha256": "bbf3f17c60c20c7d4b3f06e787eaf3bc4cbba6d6171ceecb3715c0894d52b9e3",
+          "pngSha256": "6f366bb22d5e9fd7e59a648195534a11a4126f83389aef2695638727fa6d3b9d"
         }
       }
     },
@@ -14073,11 +14075,11 @@
       "kind": "stock",
       "sourceId": "0000797468",
       "themeColor": "#005BAB",
-      "darkBackgroundColor": "#004B8C",
+      "darkBackgroundColor": "#06223C",
       "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "a030717cb3e60a3f6aee9d9d5ebc4f81faf8cabee003af86f29dec49be280faf",
-        "dark": "a79aeb503a6198ee79048c8e2d78473532549e7367621c7e944ce4eb741561ed"
+        "dark": "7dbf8450b42b6820b1a53a67b92acb027a2cf21705a07ec59d8e27e8c7493a1f"
       },
       "files": {
         "light": {
@@ -14089,8 +14091,8 @@
         "dark": {
           "svg": "OXY.dark.svg",
           "png": "OXY.dark.png",
-          "svgSha256": "30bf6e4bc2d60e2c6fbafe30490e936e59ed67f0451f5e97b9bd79b9c45481b3",
-          "pngSha256": "6f5e16195313270d224452b111cc037b2e1cc3ef2856d01ba439b9573cd8da4d"
+          "svgSha256": "e7dc3a09586be3822010738e1ecbb53a29115af112d503871ff7c10ab5085fdb",
+          "pngSha256": "7ca298e00e0ddc3fc1486442354719bed5501c14b50a1bb08cf8516168570872"
         }
       }
     },
@@ -14224,23 +14226,23 @@
       "sourceId": "0001734722",
       "themeColor": "#FA4616",
       "darkBackgroundColor": "#FA4616",
-      "selectionOrigin": "auto_russell1000",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "a53f4cf2d5ed0e2b10cc123e6a09d6a24b84baeb3202ead5478afb743c526aae",
-        "dark": "846e845e5dff9bc1ced3057f4d2ebeae12812695c8b8a1d6ec2128d1cfcd1994"
+        "light": "6f0f371a9ab0b4b39dcf18d7a5f2f6ee4ddc1e8f7d87475b0e08d1d3da6c0312",
+        "dark": "fdfc966dfc12b97c7c982ca00f171ea63d6a078cdf1e80139840e760aa7bf451"
       },
       "files": {
         "light": {
           "svg": "PATH.light.svg",
           "png": "PATH.light.png",
-          "svgSha256": "ea78f4dd527cb63f88ae631e48acd2f4e56e6cef83d6eb95f5b5a8788a3c6085",
-          "pngSha256": "929fe00424de1a9e662890dfd7febeeb7519af6b95c75d7840e3c82993e9309a"
+          "svgSha256": "6f35dca652b92d6a707469b361a66f3cec61262e93f18d198f0904c57202d4a8",
+          "pngSha256": "d563663077d417d3c048c1f1ee77fe4c5ce38aa415313f85eaf0b817d2c1a09c"
         },
         "dark": {
           "svg": "PATH.dark.svg",
           "png": "PATH.dark.png",
-          "svgSha256": "14c8955c98a1d0e325d1d581842f07026ace20a27601422d1379463d36252e8e",
-          "pngSha256": "b8a3916156289525fce981695d19799ab118146a49a91781506d8092454222b2"
+          "svgSha256": "9f80ec66b3568d6f1955982cae5f33fa6a893ea20df84845e02b676c4be20f9d",
+          "pngSha256": "6b6aebfb5e61ddbdf5163ced924f69afab2589af1d480463455025a40fceacb0"
         }
       }
     },
@@ -15156,24 +15158,24 @@
       "kind": "stock",
       "sourceId": "0000085961",
       "themeColor": "#E41937",
-      "darkBackgroundColor": "#000000",
-      "selectionOrigin": "auto_neutral_multicolor",
+      "darkBackgroundColor": "#141414",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "0f2b13a10e81c7d932a0ff33793417dbcc1dba5e918f5427d943f5dd8d5e54f4",
-        "dark": "0f2b13a10e81c7d932a0ff33793417dbcc1dba5e918f5427d943f5dd8d5e54f4"
+        "light": "d3040f18cdfa3acef2b9a890f16c26e66ec5e78b8a4ba8e9413b51eb6db02168",
+        "dark": "1d541b730426dc7a89efc8400ef6a609ef05635b47089fcc6d662859c88150c0"
       },
       "files": {
         "light": {
           "svg": "R.light.svg",
           "png": "R.light.png",
-          "svgSha256": "c9282abb995d9703ed538cb1f7b6a6c65d52f36df11b5b28d1fd0ea1f16d7e2c",
-          "pngSha256": "efaf88dea1df9c50cb292611ccb7945a03f57621ebab71366ff32741698efa28"
+          "svgSha256": "215208d763b789e6b298d05c9b8c381407dc3b73cae7493a8778056f6668c946",
+          "pngSha256": "7bb0e710daa61230a9ea6bc76a290020499e36e98e470c82994321e1c3891da7"
         },
         "dark": {
           "svg": "R.dark.svg",
           "png": "R.dark.png",
-          "svgSha256": "5e00968aed4ed2733a587ce27c48dacbc1d39b9ea7705954936f304bdf5333fa",
-          "pngSha256": "ec1b43d3faf13f4e3263ac662806150986644179ce44dc5a3d7f269caabde417"
+          "svgSha256": "8b9313945d06df82126ac96c3fc1415ee2928ac5b00435061775308bb930a337",
+          "pngSha256": "452d6aceddf824835f11512f1a231da751304a785379d7fc19a43c2fb3947640"
         }
       }
     },
@@ -15958,25 +15960,25 @@
     "SEIC": {
       "kind": "stock",
       "sourceId": "0000350894",
-      "themeColor": "#000000",
-      "darkBackgroundColor": "#000000",
-      "selectionOrigin": "auto_us_popular",
+      "themeColor": "#383838",
+      "darkBackgroundColor": "#383838",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "f27ff7a1960cd6a3f8161bcd0159ea3bce711212b6d58b40fa520abab01055b8",
-        "dark": "816057d1a1d3e8f2326698aa509966a45ea4a46ec98490d1257d20d6a9812812"
+        "light": "2b994fc5c21845d0dac6f43230b986c4710b187f8f81d292cbb1b6b5fdaef2cd",
+        "dark": "926224258bebef6d23078045f896fcccfb1f319b11a1c9e9f994e49a7f3736cd"
       },
       "files": {
         "light": {
           "svg": "SEIC.light.svg",
           "png": "SEIC.light.png",
-          "svgSha256": "1cada756b389b02543404ebc53038f49ab2f5f2a2a3d899fa9979088033e1a2b",
-          "pngSha256": "a565af9dbddf192e03271e91aae6b2695a570242a0b8ecf21bcc8b9314846304"
+          "svgSha256": "35d367e15b635dc70f2febc075fec4f37ea3194a7af1759a9bc449eef94a818c",
+          "pngSha256": "25d3478e103c0c08ed5fd67f6cf702b963f607a0999119c33b2a405e146d2092"
         },
         "dark": {
           "svg": "SEIC.dark.svg",
           "png": "SEIC.dark.png",
-          "svgSha256": "81d9c15fe11659da2547a4d00da9cd0200dc473a7782558ac1ee0da6d51df7d6",
-          "pngSha256": "cb3f38250c20888ad827872a7d4854d9abd1cc23f0de7077a974b55d40ccb445"
+          "svgSha256": "9c5074e756c50e6fda93586e0a5480512baf8354015baa52c72a41dba8934a13",
+          "pngSha256": "6ca9826c1028f42e0c51eca939d01eb681b8d25aa64948b5ce27a22e794aa131"
         }
       }
     },
@@ -16211,23 +16213,23 @@
       "sourceId": "0000849869",
       "themeColor": "#747B82",
       "darkBackgroundColor": "#747B82",
-      "selectionOrigin": "auto_russell1000",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "b06c44990265d5f54c266f6c0c145099e8a9524766401c94f09e659d0aed1cca",
-        "dark": "c46e7144d7a64e056788430d190f8c2f3fe098738193ce5724ddfc8f791f82a2"
+        "light": "a5c34d49039250d6f894da3cc5d6041c91863e9265c859b01ddced38c02aba16",
+        "dark": "67aa50a7fd5134efe357a64c799c60fc4c4f3dc56f151b9566b636e91d9162a8"
       },
       "files": {
         "light": {
           "svg": "SLGN.light.svg",
           "png": "SLGN.light.png",
-          "svgSha256": "f78e23f48863163359690cd1d39038a0f4083fdd9270041922422fbb11d309f9",
-          "pngSha256": "e04061a48d7b246b50fbb623c86001a74b9bdd619c0995e26f421d08272a3381"
+          "svgSha256": "3fe4046d01ebc4c65337c048bb79c26523f44d64f3cb5105bc58464f1f571ca0",
+          "pngSha256": "e780f0305e46ff2a37e92ceecb2dcf0a7b56bf8b2ab08fff70eea70e5ce090fc"
         },
         "dark": {
           "svg": "SLGN.dark.svg",
           "png": "SLGN.dark.png",
-          "svgSha256": "6964cff1488074f696c708998933663e5244b587010a0fe74bb332c0a7ddb57d",
-          "pngSha256": "3265780533b12934e2db799cdb9220148d7a93963d570f20fca52670bd0cd4b0"
+          "svgSha256": "d80e2ec4a5aeca1a7ce601779787278bdd0c5d76e28bae2aeb9b619c4a4e5e32",
+          "pngSha256": "761feabd2fe61fd9d34d8ef957304b10cade93b41f00151bc94eadfa213592e8"
         }
       }
     },
@@ -16686,23 +16688,24 @@
       "sourceId": "0000064040",
       "themeColor": "#D6002A",
       "darkBackgroundColor": "#D6002A",
+      "darkInkTint": "#FDF2F4",
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "c84b270f8e8469b224f184d699430c22ccf94a38439703d96b93ee8e615a7f6c",
-        "dark": "ac22c668717c5ae4052ccd318077b58fa0f7c736f5b4e45147120a8f05a6f569"
+        "light": "e90a479dde49508093c30fe5f311a701aaaa40a552a7d8fca5061ea4475ea633",
+        "dark": "894dc49497b91547193ea1d495ac9107f060d3e4a9d0dc753ce199b92f12c29f"
       },
       "files": {
         "light": {
           "svg": "SPGI.light.svg",
           "png": "SPGI.light.png",
-          "svgSha256": "b7abe906d7644a97b66343071947997a7b30f37a71de6dfcd3c8b24159df358e",
-          "pngSha256": "2c069431069799837142260f03c77636be9fa6ecc10b30383b771a078814f0d3"
+          "svgSha256": "e49eb13a0d689bd85ea2fae975986536f0fbce03952bb7d5ac4f3dceae4571c7",
+          "pngSha256": "c9ebadb2f79d0ec3e08e9de4cc5d61a0030f236c3a5f3a6446b7801babe21b71"
         },
         "dark": {
           "svg": "SPGI.dark.svg",
           "png": "SPGI.dark.png",
-          "svgSha256": "7ef05ff02d401f80e730fd6fce8e9c80b24a59a4adb35222f61100d936b002da",
-          "pngSha256": "bf818ba9a654c12933a2efdecfaeb229f58e7e11f1dc4cf180807f669c1b78e4"
+          "svgSha256": "c9623d6af478bce299e2571d9ed8acf23cf52826fef4488cc1c757b6a0507f7f",
+          "pngSha256": "974bc1ac0f4c24a4113e405e0e9976af0e2402ef69ed8d5c90b57ecd4d21aff5"
         }
       }
     },
@@ -16785,25 +16788,25 @@
     "SSTK": {
       "kind": "stock",
       "sourceId": "0001549346",
-      "themeColor": "#F12815",
-      "darkBackgroundColor": "#000000",
-      "selectionOrigin": "auto_local_collection",
+      "themeColor": "#FF1A03",
+      "darkBackgroundColor": "#FF1A03",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "a2ca931b272600687c1e5c4644f87df5617234694b8ca24e1d6c850ee265b2bf",
-        "dark": "a2ca931b272600687c1e5c4644f87df5617234694b8ca24e1d6c850ee265b2bf"
+        "light": "5cfd4a979ba9864f113ac2bb04cf98536f82473fedc94bc4d4142c9c51be1d61",
+        "dark": "2d20ee7d153e665372d8f02ef4b4f7c2d87a1235212c9e3464b7ba133de70ef9"
       },
       "files": {
         "light": {
           "svg": "SSTK.light.svg",
           "png": "SSTK.light.png",
-          "svgSha256": "fd47503624eec75e98d147e4a067e8f7aa0891d5b85d1bb642607c6138860f5e",
-          "pngSha256": "f331a24c4bd7d04f6e6bcbc2b7c8aa698a58a5c999b99af28d551aa58eeabfc2"
+          "svgSha256": "965c04e4eda0c20e0da2fa24f4d7803e5074c0a109ac0f7c0aa8191008e7790c",
+          "pngSha256": "d897a6fdf77be2bf006d0abee4ce2b109e3df1bd3c7d1cf730539b8849289e69"
         },
         "dark": {
           "svg": "SSTK.dark.svg",
           "png": "SSTK.dark.png",
-          "svgSha256": "332ebb0d1b6fc3dd6633f1cc7e9e7a70135bf10d11a0732481574c846df6b30c",
-          "pngSha256": "ebe3ea8f3d6f3cad941f813cad96063f73ae662bcb31f0245498f2fc65c21634"
+          "svgSha256": "b125a5c03a57e17e4ccd6e58b2b5633b8a2f7385e2c557aa727f3165e26a2ccb",
+          "pngSha256": "00e0dfd4bc0cc5ac68d4e2a49610ad81f9f46e8d1425d13f31003fe2912906e5"
         }
       }
     },
@@ -16861,11 +16864,11 @@
       "kind": "stock",
       "sourceId": "0001022671",
       "themeColor": "#D7283F",
-      "darkBackgroundColor": "#000000",
-      "selectionOrigin": "auto_neutral_multicolor",
+      "darkBackgroundColor": "#141414",
+      "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "331329d18afcc480b35220367b91c6c0e7557d7f5cf8a11306ad73ed1a374440",
-        "dark": "331329d18afcc480b35220367b91c6c0e7557d7f5cf8a11306ad73ed1a374440"
+        "dark": "fa2bb01866670403b3466de891b6b5b2c6d1f972b0787c368c6dbc93a11bf4e8"
       },
       "files": {
         "light": {
@@ -16877,8 +16880,8 @@
         "dark": {
           "svg": "STLD.dark.svg",
           "png": "STLD.dark.png",
-          "svgSha256": "c3b69c2d2cfa9796f2f09bfdaaa688aab6df7c601b637b35479febe62358b31b",
-          "pngSha256": "70b650c5ba4f58ecaebfdf073d8c330d88b7edd053dbb90f307df0568a4684ad"
+          "svgSha256": "7bbf3c412d88e6b97d17140397b8398149787b4b33c9f901f13ed0e569655167",
+          "pngSha256": "e11991bb4258036374f62e4c53565d872fe066b5b30ec24dc395f28146ffd6aa"
         }
       }
     },
@@ -17665,25 +17668,26 @@
     "TOL": {
       "kind": "stock",
       "sourceId": "0000794170",
-      "themeColor": "#0C2140",
+      "themeColor": "#000000",
       "darkBackgroundColor": "#0C2140",
-      "selectionOrigin": "auto_us_popular",
+      "darkInkTint": "#F3F4F5",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "16fa99b8fd12c31fcf5430b9022aa66533de04209f8b46d31470fb5d91da60e3",
-        "dark": "e08f17b7e5ee776f6cb14298a9b5cae36996e98501b861e446e1db2ce42937d0"
+        "light": "0cdd4defa1157e86f42698e4a5d178854fff70daeba46afa3cdebbc10c38059e",
+        "dark": "6d2fe69c34b60b816b1c46e026e7cb904dc332884df41954c87e5e42b9963543"
       },
       "files": {
         "light": {
           "svg": "TOL.light.svg",
           "png": "TOL.light.png",
-          "svgSha256": "2ffb9f0ad4d03d2abfbe7c100c31d7423c3ce5a2cb5ccd9d546023ea3496d4fb",
-          "pngSha256": "87710ca9fc5e4201cd2106f55a807acd9efcccf9a3b2b062affad3e178934879"
+          "svgSha256": "12222c7c5892ad120866a5446dfce5f9ce0a0f11360caeab239708ae08cc871b",
+          "pngSha256": "aef8dbdd26218b6c1574426edddb79a0a14255435105a48c9392a9a441c33781"
         },
         "dark": {
           "svg": "TOL.dark.svg",
           "png": "TOL.dark.png",
-          "svgSha256": "2ffceaca2297a9d0df1bf33fcc3a073ece8d8c95b5247c8f633266892b11b6dd",
-          "pngSha256": "5e02476c194a9fb399991a68bdb36a9033567bcf8500673a7ee03d5bc851a764"
+          "svgSha256": "43deb3b98540c8cadfe93ea91758e0878da3d7861d9c46f497d75e333925d5e4",
+          "pngSha256": "348d2f441c80b1f69df9f79f4de5a32b33625f603871fc0f94ee94e3c4f6642f"
         }
       }
     },
@@ -17765,25 +17769,25 @@
     "TRIP": {
       "kind": "stock",
       "sourceId": "0001526520",
-      "themeColor": "#34E0A1",
-      "darkBackgroundColor": "#000000",
-      "selectionOrigin": "auto_local_collection",
+      "themeColor": "#000000",
+      "darkBackgroundColor": "#34E0A1",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "383b25b516dabad26649dc218c19cca332dea7f2937f36a9fcb7abb2117e2b86",
-        "dark": "383b25b516dabad26649dc218c19cca332dea7f2937f36a9fcb7abb2117e2b86"
+        "light": "d79c60403ac075efcda757c32d85a5cb829bf592cb1805d9bae53245c1f3fcea",
+        "dark": "3e3ec8811bc812b164c8a5b56e293e881a6787377d61c1e67ec8c30cfdb41bfb"
       },
       "files": {
         "light": {
           "svg": "TRIP.light.svg",
           "png": "TRIP.light.png",
-          "svgSha256": "c02971784391ceeb942f78d6effe5849701ec124b9a14b48265682811839757b",
-          "pngSha256": "7e0cd2d7139a3e622f1921e01929b004471008ca3784e6126501d49f53456e4a"
+          "svgSha256": "bcdb68317cb2bd9a51341bb7381adc9a3e1cc6be7434b711d7fa6ecb3bbbb80e",
+          "pngSha256": "ec4f68be6110c89b41547d4ba8890cace396b31b05acb2a9e94a7c65ff809f89"
         },
         "dark": {
           "svg": "TRIP.dark.svg",
           "png": "TRIP.dark.png",
-          "svgSha256": "fe85a27c0499758ef4d7206ca4ef76d3ad7549b1257a908ac8031acf0fb2c5ed",
-          "pngSha256": "c9f042da89599f9b678d3c0d9d60fb0ad994388a39aa6ecb51764719c941eceb"
+          "svgSha256": "49c26fcadd74c17ad305fabec0286122919cdff72ce1a4f66c8574863d0f9290",
+          "pngSha256": "547fa4d867c83a5d67d5d5b9ef287572a1f07f212ade3915ffb503a37ced37f0"
         }
       }
     },
@@ -18369,11 +18373,11 @@
       "kind": "stock",
       "sourceId": "0000101382",
       "themeColor": "#003264",
-      "darkBackgroundColor": "#000000",
-      "selectionOrigin": "auto_neutral_multicolor",
+      "darkBackgroundColor": "#00608A",
+      "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "4fd2a01da7f213a5fba92bca17fc31d0746b5bcdb7bea7462201736064212d5b",
-        "dark": "4fd2a01da7f213a5fba92bca17fc31d0746b5bcdb7bea7462201736064212d5b"
+        "dark": "5f86a78026571525ee462f01dc994c59fb8691a134c1d73350b9d7b3392be720"
       },
       "files": {
         "light": {
@@ -18385,8 +18389,8 @@
         "dark": {
           "svg": "UMBF.dark.svg",
           "png": "UMBF.dark.png",
-          "svgSha256": "0c4ac90759385f563110d958171852eab3424e790290c13de12f8f6217b684cf",
-          "pngSha256": "43a9b9b742d12591b692c76ac9546526e29e896dc2608d69f428d4ad69912b63"
+          "svgSha256": "182b8395b9c4949720302e56cec08c0fca37420d1e9ccf06e31c41e0b5878a45",
+          "pngSha256": "68a65ec314ab50b499b47ea005dcd125f27b1c1197d3b29e73b993b188cddf89"
         }
       }
     },
@@ -19296,25 +19300,26 @@
     "WELL": {
       "kind": "stock",
       "sourceId": "0000766704",
-      "themeColor": "#27628E",
-      "darkBackgroundColor": "#000000",
-      "selectionOrigin": "auto_neutral_multicolor",
+      "themeColor": "#3797B6",
+      "darkBackgroundColor": "#3797B6",
+      "darkInkTint": "#F5FAFB",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "4f811c9a9b88d89df82c7207adb2e68b7437ab9c4ee5859e183a4b279eaa9ff3",
-        "dark": "4f811c9a9b88d89df82c7207adb2e68b7437ab9c4ee5859e183a4b279eaa9ff3"
+        "light": "a9648c183af12bec36f4600114a593b058eceea372ca9fa839e4e73e3d128392",
+        "dark": "47752d3cef4fadf0d6eca04c79b28a0f800e97b51057a55cc9839ea7a738d86d"
       },
       "files": {
         "light": {
           "svg": "WELL.light.svg",
           "png": "WELL.light.png",
-          "svgSha256": "c6dee1d7ecb9ceb99869cd7027de7ad6e9876ae9cbf9fc660e0ee016eec1d5e6",
-          "pngSha256": "1f9ee5000a7e8dbaf5a8b5d6b34676dc3795fdc5d584163409584af0229f2b43"
+          "svgSha256": "94ed02a660359655e7b9723b1b9b4a3adcf22a465840580372fd7d9ff8730d3e",
+          "pngSha256": "1d0d9df7cf6b37a472591cdf1bc59b3ca2f836f4365538d74f7b0bec00d09912"
         },
         "dark": {
           "svg": "WELL.dark.svg",
           "png": "WELL.dark.png",
-          "svgSha256": "6a32e7970a72fe6633d8b23a52a3215934f334552e4b63b82d4375637c47298a",
-          "pngSha256": "d8a49e346686497978f785bd4084ceacec3e4f45486d7eebb2325d5b25f487f6"
+          "svgSha256": "ee3becb9e822b10db4c483dc67333fbb817456d0420d9ccea098576d1c3dc31e",
+          "pngSha256": "a018dab209ac3e0b5185a4910e7aaef65990fd414964bf59a717cc7666645bfb"
         }
       }
     },
