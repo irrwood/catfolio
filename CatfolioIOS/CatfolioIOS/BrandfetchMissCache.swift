@@ -27,8 +27,8 @@ final class BrandfetchMissCache: @unchecked Sendable {
     }
 
     func recordMissing(_ ticker: String, now: Date = Date()) {
-        lock.lock(); defer { lock.unlock() }
         let time = now.timeIntervalSince1970
+        lock.lock()
         misses = misses.filter { time - $0.value < Self.lifetime }
         misses[Self.key(ticker)] = time
         if misses.count > Self.capacity {
@@ -37,13 +37,25 @@ final class BrandfetchMissCache: @unchecked Sendable {
                 misses[key] = nil
             }
         }
-        defaults.set(misses, forKey: Self.storageKey)
+        let snapshot = misses
+        lock.unlock()
+        persist(snapshot)
     }
 
     func clear(_ ticker: String) {
-        lock.lock(); defer { lock.unlock() }
-        guard misses.removeValue(forKey: Self.key(ticker)) != nil else { return }
-        defaults.set(misses, forKey: Self.storageKey)
+        lock.lock()
+        let removed = misses.removeValue(forKey: Self.key(ticker)) != nil
+        let snapshot = misses
+        lock.unlock()
+        if removed { persist(snapshot) }
+    }
+
+    /// Never write defaults while holding `lock`: the write posts a change
+    /// notification synchronously, `@AppStorage` answers it on the main
+    /// thread, and redrawing a logo calls `isMissing` — which would wait on
+    /// this non-reentrant lock forever (a full app freeze).
+    private func persist(_ snapshot: [String: TimeInterval]) {
+        defaults.set(snapshot, forKey: Self.storageKey)
     }
 
     private static func key(_ ticker: String) -> String {

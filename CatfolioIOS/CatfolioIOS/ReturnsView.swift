@@ -131,7 +131,7 @@ private extension ReturnsView {
 }
 
 enum ReturnsChartDestination: String, CaseIterable, Identifiable {
-    case heatmap, contributors, losses, comparison, drawdown, underwater, valuation
+    case heatmap, contributors, losses, comparison, valuation
 
     var id: String { rawValue }
 
@@ -141,8 +141,6 @@ enum ReturnsChartDestination: String, CaseIterable, Identifiable {
         case .contributors: L10n.text("收益来源")
         case .losses: L10n.text("亏损分析")
         case .comparison: L10n.text("收益对比")
-        case .drawdown: L10n.text("回撤水下曲线")
-        case .underwater: L10n.text("水下分析")
         case .valuation: L10n.text("估值 · 成长 · 质量")
         }
     }
@@ -153,8 +151,6 @@ enum ReturnsChartDestination: String, CaseIterable, Identifiable {
         case .contributors: "square.stack.3d.up"
         case .losses: "chart.line.downtrend.xyaxis"
         case .comparison: "chart.line.uptrend.xyaxis"
-        case .drawdown: "water.waves"
-        case .underwater: "water.waves.and.arrow.down"
         case .valuation: "chart.dots.scatter"
         }
     }
@@ -193,10 +189,6 @@ struct ReturnsChartPage: View {
                     LossAnalysisChart(refreshRevision: holdingHistoryRefreshRevision)
                 case .comparison:
                     ReturnsComparisonPanel()
-                case .drawdown:
-                    analytics(.drawdown)
-                case .underwater:
-                    UnderwaterAnalysisChart(refreshRevision: holdingHistoryRefreshRevision)
                 case .valuation:
                     analytics(.valuation)
                 }
@@ -211,7 +203,7 @@ struct ReturnsChartPage: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
         .refreshable {
-            if chart == .underwater || chart == .contributors || chart == .losses {
+            if chart == .contributors || chart == .losses {
                 holdingHistoryRefreshRevision &+= 1
             } else {
                 await model.refreshReturnsPage()
@@ -226,7 +218,7 @@ struct ReturnsChartPage: View {
         .task {
             // This page owns its history request; unrelated valuation and
             // comparison fetches compete with it for the same price feed.
-            guard chart != .underwater, chart != .contributors, chart != .losses else { return }
+            guard chart != .contributors, chart != .losses else { return }
             guard !model.isReturnsLoading, !model.isReturnsAnalyticsLoading else { return }
             // Each part is fetched only when it is missing: analytics that
             // failed must not send the comparison through a full rebuild on

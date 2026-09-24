@@ -359,17 +359,9 @@ struct SettingsView: View {
                     .textSelection(.enabled)
             }
 
-            SettingsSection(L10n.text("实验")) {
-                SettingsNavigationRow(
-                    icon: .symbol("square.3.layers.3d"),
-                    title: L10n.text("等距热力图"),
-                    subtitle: L10n.text("渐进模糊与缓慢平移"),
-                    subtitleSpacing: 2
-                ) {
-                    IsometricHeatmapLabView().environment(model)
-                }
-                .accessibilityIdentifier("settings.isometric-heatmap")
-            }
+            // 实验 · 等距热力图 was removed from Settings (2026-09-24). The page
+            // is kept in IsometricHeatmapLab.swift; DEBUG builds still open it
+            // with --show-isometric-heatmap.
 
             SettingsSection(L10n.text("关于")) {
                 SettingsValueRow(

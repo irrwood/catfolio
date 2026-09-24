@@ -2320,11 +2320,7 @@ private final class AssetLogoImageCache: @unchecked Sendable {
 
     private final class Entry {
         let image: UIImage
-        let layout: AssetLogoLayout
-        init(_ image: UIImage) {
-            self.image = image
-            self.layout = AssetLogoLayout.resolve(image)
-        }
+        init(_ image: UIImage) { self.image = image }
     }
 
     private init() {
@@ -2342,10 +2338,6 @@ private final class AssetLogoImageCache: @unchecked Sendable {
     func insert(_ image: UIImage, for url: URL) {
         let cost = Int(image.size.width * image.size.height * image.scale * image.scale * 4)
         images.setObject(Entry(image), forKey: url as NSURL, cost: cost)
-    }
-
-    func layout(for url: URL) -> AssetLogoLayout? {
-        images.object(forKey: url as NSURL)?.layout
     }
 }
 
@@ -2410,23 +2402,28 @@ struct AssetLogo: View {
     var cornerRadius: CGFloat? = nil
     var onBrandColorResolved: ((Color) -> Void)? = nil
     @State private var loadedImage: UIImage?
-    @State private var loadedLayout: AssetLogoLayout?
     @State private var brandfetchLoaded = false
     @State private var brandfetchMissing = false
 
     var body: some View {
         Group {
             if let image = displayedImage {
+                // Both bundled sets (the reviewed export and the older logos
+                // filling its gaps) are finished 192 px tiles, laid out by
+                // the export's optical centre and size: draw them as they are.
                 AssetLogoArtwork(image: image,
-                    layout: exportedLogoURL == nil
-                        ? (loadedLayout ?? logoURL.flatMap { AssetLogoImageCache.shared.layout(for: $0) }
-                            ?? AssetLogoLayout.resolve(image))
-                        : AssetLogoLayout(insetFraction: 0, usesWhiteCanvas: false),
+                    layout: AssetLogoLayout(insetFraction: 0, usesWhiteCanvas: false),
                     size: size)
             } else if let brandfetchURL {
                 ZStack {
                     fallback
+                    // Keep the web view visible while its transparent image is
+                    // loading. A fully transparent WKWebView can be deferred
+                    // among the many logo views in the holdings list.
+                    Color(uiColor: .secondarySystemGroupedBackground)
+                        .opacity(brandfetchLoaded ? 1 : 0)
                     BrandfetchLogoImage(url: brandfetchURL) {
+                        BrandfetchMissCache.shared.clear(logoSymbol ?? ticker)
                         brandfetchLoaded = true
                     } onMissing: {
                         // Remembered for a week; the letter tile stays and the
@@ -2434,7 +2431,6 @@ struct AssetLogo: View {
                         BrandfetchMissCache.shared.recordMissing(logoSymbol ?? ticker)
                         brandfetchMissing = true
                     }
-                    .opacity(brandfetchLoaded ? 1 : 0)
                 }
             } else {
                 fallback
@@ -2452,7 +2448,6 @@ struct AssetLogo: View {
             // SwiftUI may reuse this view when a ranked chart slot changes
             // ticker. Clear the old decoded image before resolving the new URL.
             loadedImage = nil
-            loadedLayout = nil
             brandfetchLoaded = false
             brandfetchMissing = false
             await loadLogo()
@@ -2474,7 +2469,6 @@ struct AssetLogo: View {
             return
         }
         if let cached = AssetLogoImageCache.shared.image(for: logoURL) {
-            loadedLayout = AssetLogoImageCache.shared.layout(for: logoURL) ?? AssetLogoLayout.resolve(cached)
             loadedImage = cached
             didResolve(logoURL)
             onBrandColorResolved?(exportedThemeColor ?? AssetBrandColor.resolved(from: cached, fallbackKey: logoSymbol ?? ticker))
@@ -2485,7 +2479,6 @@ struct AssetLogo: View {
             onBrandColorResolved?(exportedThemeColor ?? AssetBrandColor.fallback(for: logoSymbol ?? ticker))
             return
         }
-        loadedLayout = AssetLogoImageCache.shared.layout(for: logoURL) ?? AssetLogoLayout.resolve(decoded.value)
         loadedImage = decoded.value
         didResolve(logoURL)
         onBrandColorResolved?(exportedThemeColor ?? AssetBrandColor.resolved(from: decoded.value, fallbackKey: logoSymbol ?? ticker))

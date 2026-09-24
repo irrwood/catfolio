@@ -1,2 +1,44 @@
 <?xml version='1.0' encoding='utf-8'?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192"><rect width="192" height="192" fill="#0078D2" /><svg role="img" viewBox="0 0 24 24" fill="#000508" x="36.5151" y="35.1665" width="119.1574" height="119.1574"><title>American Airlines</title><path d="M0 .244h3.264c1.377 0 1.942.563 2.499 1.116.637.58 2.57 3.196 6.657 8.303H7.997c-1.809 0-2.38-.308-3.08-1.375zm10.424 17.072l-2.427-4.013c-.292-.455-.372-.854-.372-1.318 0-.51.217-.79 1.053-1.233.973-.466 2.933-.67 4.954-.67 3.283 0 4.07 1.055 4.405 2.192 0 0-.464-.185-1.554-.185-3.459 0-6.223 1.68-6.223 4.221 0 .534.164 1.006.164 1.006zm4.936-3.417c-2.547.089-5.032 1.869-4.936 3.416l2.7 4.486c.836 1.344 2.215 1.955 3.932 1.955H24l-8.13-9.852a5.55 5.55 0 0 0-.51-.005Z" /></svg></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192"><rect width="192" height="192" fill="#1B1B1B" /><svg viewBox="412.798 -3.24158 84.4708 87.5228" fill="none" x="32.1841" y="31.9269" width="127.6433" height="132.2943">
+<g clip-path="url(#clip0_39_339)">
+<path d="M450.065 55.9742C448.734 52.695 455.195 44.8378 467.468 44.3184L493.994 76.5911H471.494C469.643 76.5911 462.63 76.721 458.247 69.5132L450.065 55.9742Z" fill="url(#paint0_linear_39_339)" />
+<path d="M450.065 56.0067C450.032 55.9417 449.351 54.3184 449.351 52.3703C449.351 45.0002 455.877 40.7794 463.247 39.2534L467.467 44.3508C455.195 44.8378 448.734 52.695 450.065 56.0067Z" fill="url(#paint1_linear_39_339)" />
+<path d="M474.611 39.1558C473.28 38.6688 471.591 38.5714 469.773 38.5714C467.63 38.5714 465.422 38.7987 463.247 39.2207C455.877 40.7467 449.351 44.9675 449.351 52.3376C449.351 54.3181 450.033 55.9415 450.065 55.974L442.63 43.7662C441.267 41.2987 440.747 39.9026 440.747 38.2792C440.747 33.8961 449.091 32.0454 460.293 32.0454C471.786 32.0454 473.832 36.3311 474.611 39.1558Z" fill="url(#paint2_linear_39_339)" />
+<path d="M416.039 0.0322266H426.494C430.39 0.0971616 432.857 1.07119 437.11 6.33093L456.396 30.7465H442.403C435.065 30.7465 433.929 29.4803 430.877 24.4153L416.039 0.0322266Z" fill="url(#paint3_linear_39_339)" />
+</g>
+<defs>
+<linearGradient id="paint0_linear_39_339" x1="471.948" y1="43.4742" x2="471.948" y2="93.182" gradientUnits="userSpaceOnUse">
+<stop stop-color="#ED1C24" />
+<stop offset="0.1" stop-color="#E81B23" />
+<stop offset="0.3" stop-color="#DB1A21" />
+<stop offset="0.4" stop-color="#C4171D" />
+<stop offset="0.6" stop-color="#A41317" />
+<stop offset="0.7" stop-color="#7B0E10" />
+<stop offset="0.8" stop-color="#780E0F" />
+</linearGradient>
+<linearGradient id="paint1_linear_39_339" x1="449.318" y1="47.63" x2="467.435" y2="47.63" gradientUnits="userSpaceOnUse">
+<stop stop-color="#69231D" />
+<stop offset="0.3" stop-color="#8D2922" />
+<stop offset="0.6" stop-color="#B22F26" />
+<stop offset="0.8" stop-color="#C93329" />
+<stop offset="1" stop-color="#D1342A" />
+</linearGradient>
+<linearGradient id="paint2_linear_39_339" x1="447.338" y1="44.9675" x2="467.533" y2="32.8246" gradientUnits="userSpaceOnUse">
+<stop offset="0.1" stop-color="#E7EBEE" />
+<stop offset="0.4" stop-color="#D5DCE0" />
+<stop offset="0.9" stop-color="#A5B4BB" />
+<stop offset="1" stop-color="#96A7B0" />
+</linearGradient>
+<linearGradient id="paint3_linear_39_339" x1="436.201" y1="34.74" x2="436.201" y2="0.389369" gradientUnits="userSpaceOnUse">
+<stop stop-color="#1C2F72" />
+<stop offset="0.1" stop-color="#174687" />
+<stop offset="0.4" stop-color="#0D72AF" />
+<stop offset="0.7" stop-color="#0692CC" />
+<stop offset="0.9" stop-color="#02A6DE" />
+<stop offset="1" stop-color="#00ADE4" />
+</linearGradient>
+<clipPath id="clip0_39_339">
+<rect width="500" height="76.6234" fill="white" />
+</clipPath>
+</defs>
+</svg></svg>

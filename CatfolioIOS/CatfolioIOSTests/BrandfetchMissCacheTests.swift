@@ -27,6 +27,28 @@ final class BrandfetchMissCacheTests: XCTestCase {
         XCTAssertFalse(BrandfetchMissCache(defaults: defaults).isMissing("ZZZQ", now: start))
     }
 
+    /// Regression: recordMissing wrote UserDefaults while holding its lock; the
+    /// change notification redrew logos (via @AppStorage), which called
+    /// isMissing on the same non-reentrant lock and froze the app.
+    func testReadingDuringTheDefaultsChangeNotificationDoesNotDeadlock() {
+        let cache = BrandfetchMissCache(defaults: defaults)
+        var sawMiss = false
+        let observer = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: defaults, queue: nil
+        ) { _ in
+            sawMiss = cache.isMissing("ZZZQ") || sawMiss
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+        let done = expectation(description: "recordMissing returns")
+        DispatchQueue.global().async {
+            cache.recordMissing("ZZZQ")
+            cache.clear("ZZZQ")
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 5)
+        XCTAssertTrue(sawMiss)
+    }
+
     func testOldestEntriesAreDroppedPastCapacity() {
         let cache = BrandfetchMissCache(defaults: defaults)
         let start = Date(timeIntervalSince1970: 2_000_000)

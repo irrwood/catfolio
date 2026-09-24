@@ -26,6 +26,10 @@ struct LossAnalysisChart: View {
     /// Holdings the reader turned off; the next ones by loss take their place.
     @State private var hiddenTickers: Set<String> = []
     @State private var showsOthers = true
+    /// Today's share counts held through the whole window (a buy never reads
+    /// as a rise), for the drawdown tiles moved here from the underwater page.
+    @State private var drawdownLoading = HoldingHistoryState()
+    @State private var drawdown: UnderwaterSeries?
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
 
     var body: some View {
@@ -39,6 +43,11 @@ struct LossAnalysisChart: View {
                 ReturnsSourceChartHero(range: $range, header: header(shown),
                                        plot: plot(stack: stack, visible: visible, bottom: bottom),
                                        axis: axisLabels(bottom: bottom))
+                if let drawdown, drawdown.points.count > 1 {
+                    DrawdownStatistics(series: drawdown)
+                        .padding(.horizontal, ReturnsSourceChartStyle.inset)
+                        .padding(.top, 6)
+                }
                 Group {
                     if stack.bands.count > 1 || !stack.hidden.isEmpty {
                         legend(stack: stack, row: shown)
@@ -80,6 +89,24 @@ struct LossAnalysisChart: View {
                 #endif
                 return try await model.holdingValueHistory(cachedOnly: cachedOnly)
             }
+        }
+        .task(id: "\(model.portfolioChartRevision)|\(model.holdings.count)|\(refreshRevision)|\(retryRevision)") {
+            await drawdownLoading.load { cachedOnly in
+                #if DEBUG
+                if LaunchArguments.contains("--demo-loss-history") { return Self.demoHistory() }
+                #endif
+                return try await model.fixedShareHistory(cachedOnly: cachedOnly)
+            }
+        }
+        // Windowing five years of rows stays off the main thread too.
+        .task(id: "\(drawdownLoading.revision)|\(range)") {
+            guard let history = drawdownLoading.history else { drawdown = nil; return }
+            let shown = range
+            let series = await Task.detached(priority: .userInitiated) {
+                UnderwaterSeries.portfolio(history, range: shown)
+            }.value
+            guard !Task.isCancelled else { return }
+            drawdown = series
         }
         .onChange(of: range) { _, _ in selectedDate = nil }
         // Range taps and chart selection only read prepared values. They must

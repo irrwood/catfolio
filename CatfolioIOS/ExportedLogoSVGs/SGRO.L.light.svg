@@ -1,0 +1,21 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:ns1="http://www.w3.org/1999/xlink" viewBox="0 0 192 192" width="192" height="192"><rect width="192" height="192" fill="#FFFFFF" /><svg version="1.0" viewBox="49.7371 -0.717937 17.821 17.8333" id="svg2248" x="37.8336" y="38.2372" width="115.9579" height="115.9579">
+  <defs id="defs2250">
+    <clipPath id="SVGID_2_">
+		<use id="use2227" x="0" y="0" width="744.09448" height="1052.3622" ns1:href="#SVGID_1_" overflow="visible" />
+
+	</clipPath>
+  </defs>
+  <g transform="translate(-0.419,-0.527)" id="layer1">
+    <g transform="translate(0.419,0.527)" id="g2221">
+      <defs id="defs2223">
+        <polyline id="SVGID_1_" points="0,0 0,22.854 66.848,22.854 66.848,0   " />
+      </defs>
+      <clipPath id="clipPath2273">
+		<use id="use2275" x="0" y="0" width="744.09448" height="1052.3622" ns1:href="#SVGID_1_" overflow="visible" />
+
+	</clipPath>
+      <path d="M 53.536,8.171 C 53.536,11.01 55.838,13.311 58.676,13.311 C 61.515,13.311 63.816,11.01 63.816,8.171 C 63.816,5.333 61.515,3.032 58.676,3.032 C 55.838,3.032 53.536,5.333 53.536,8.171 M 50.505,8.171 C 50.505,3.658 54.163,0 58.676,0 C 63.189,0 66.848,3.658 66.848,8.171 C 66.848,12.685 63.189,16.343 58.676,16.343 C 54.163,16.343 50.505,12.685 50.505,8.171 z " clip-path="url(#SVGID_2_)" id="path2229" fill="#cc171e" />
+      </g>
+  </g>
+</svg></svg>

@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192"><rect width="192" height="192" fill="#000000" /><svg id="Layer_1" data-name="Layer 1" viewBox="0 0 512 512" x="47.6160" y="47.6160" width="96.7680" height="96.7680">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192"><rect width="192" height="192" fill="#1B1B1B" /><svg id="Layer_1" data-name="Layer 1" viewBox="0 0 512 512" x="47.6160" y="47.6160" width="96.7680" height="96.7680">
   <defs>
     <linearGradient id="linear-gradient" x1="-179.51" y1="762.04" x2="2022.24" y2="-188.58" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#fff" />

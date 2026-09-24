@@ -84,7 +84,24 @@ struct UnderwaterSeries: Sendable {
 /// the rest are one band together. Bands only ever show a pull downward; a
 /// holding that rose since the high offsets the others, which is why the
 /// portfolio's line can sit above the bands.
+extension UnderwaterSeries {
+    /// The whole portfolio's underwater curve over `range`: the total of a
+    /// fixed-share history, windowed the same way as `UnderwaterStack`.
+    static func portfolio(_ history: HoldingValueHistory, range: ChartTimeRange) -> UnderwaterSeries {
+        let window = UnderwaterStack.window(history.rows, range: range)
+        return UnderwaterSeries(dates: window.map { (text: $0.dateText, date: $0.date) },
+                                values: window.map(\.total))
+    }
+}
+
 struct UnderwaterStack: Sendable {
+    /// The rows inside `range`, measured back from the latest day.
+    static func window(_ all: [HoldingValueHistory.Row], range: ChartTimeRange) -> [HoldingValueHistory.Row] {
+        guard let last = all.last?.date else { return [] }
+        let previous = all.dropLast().last?.date
+        return all.filter { range.includes($0.date, through: last, previousTradingDate: previous) }
+    }
+
     struct Band: Sendable, Equatable {
         /// Nil for the others together.
         let ticker: String?
@@ -127,14 +144,7 @@ struct UnderwaterStack: Sendable {
         for (ticker, name) in extra { names[ticker] = name }
         self.names = names
 
-        let all = history.rows
-        let window: [HoldingValueHistory.Row]
-        if let last = all.last?.date {
-            let previous = all.dropLast().last?.date
-            window = all.filter { range.includes($0.date, through: last, previousTradingDate: previous) }
-        } else {
-            window = []
-        }
+        let window = Self.window(history.rows, range: range)
         let dates = window.map { (text: $0.dateText, date: $0.date) }
         let tickers = Set(window.flatMap(\.values.keys)).sorted()
         let total = UnderwaterSeries(dates: dates, values: window.map(\.total))

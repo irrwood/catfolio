@@ -116,6 +116,21 @@ final class UnderwaterAnalysisTests: XCTestCase {
         XCTAssertEqual(UnderwaterSeries.gainToRecover(-0.2), 0.25, accuracy: 1e-12)
     }
 
+    /// The loss page's drawdown tiles must read the same curve the removed
+    /// underwater page showed them from.
+    func testPortfolioSeriesMatchesTheStacksTotal() {
+        let history = history(["A": [60, 80, 40, 50, 80, 70], "B": [40, 40, 50, 46, 40, 40]])
+        for range in ChartTimeRange.allCases {
+            let expected = UnderwaterStack(history: history, range: range).total
+            let series = UnderwaterSeries.portfolio(history, range: range)
+            XCTAssertEqual(series.points.map(\.dateText), expected.points.map(\.dateText), "\(range)")
+            XCTAssertEqual(series.maxDrawdown, expected.maxDrawdown, accuracy: 1e-12)
+            XCTAssertEqual(series.recovery?.dateText, expected.recovery?.dateText)
+            XCTAssertEqual(series.longestUnderwaterDays, expected.longestUnderwaterDays)
+            XCTAssertEqual(series.daysUnderwater, expected.daysUnderwater)
+        }
+    }
+
     func testThePartsAddUpToThePortfolioDrawdown() {
         // A falls hard, B a little, C rises: the parts are exact.
         let stack = UnderwaterStack(history: history([

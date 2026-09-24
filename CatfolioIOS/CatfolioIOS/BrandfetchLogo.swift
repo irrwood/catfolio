@@ -45,6 +45,7 @@ struct BrandfetchLogoImage: UIViewRepresentable {
         configuration.userContentController.add(context.coordinator, name: "logoLoaded")
         configuration.userContentController.add(context.coordinator, name: "logoMissing")
         let view = WKWebView(frame: .zero, configuration: configuration)
+        view.navigationDelegate = context.coordinator
         view.isOpaque = false
         view.backgroundColor = .clear
         view.scrollView.isScrollEnabled = false
@@ -57,6 +58,7 @@ struct BrandfetchLogoImage: UIViewRepresentable {
         context.coordinator.onMissing = onMissing
         guard context.coordinator.currentURL != url else { return }
         context.coordinator.currentURL = url
+        context.coordinator.retriedAfterTermination = false
         let source = url.absoluteString.replacingOccurrences(of: "&", with: "&amp;")
         // `onerror` also fires offline; only a failure while online counts as
         // "Brandfetch has no logo" (the URL asks for a 404 in that case).
@@ -75,8 +77,9 @@ struct BrandfetchLogoImage: UIViewRepresentable {
         view.configuration.userContentController.removeAllScriptMessageHandlers()
     }
 
-    final class Coordinator: NSObject, WKScriptMessageHandler {
+    final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         var currentURL: URL?
+        var retriedAfterTermination = false
         var onLoad: () -> Void
         var onMissing: () -> Void
 
@@ -94,6 +97,12 @@ struct BrandfetchLogoImage: UIViewRepresentable {
             case "logoMissing": onMissing()
             default: break
             }
+        }
+
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            guard !retriedAfterTermination else { return }
+            retriedAfterTermination = true
+            webView.reload()
         }
     }
 }
