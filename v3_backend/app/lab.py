@@ -1385,33 +1385,6 @@ def cash_flow_mirror_vs_benchmark(symbol="SPY"):
            "这是按买卖流水重建的近似交易路径，不含未投资现金余额、真实日内成交时点和可能缺失的历史行情。",
        ] + ([f"缺少历史行情的交易标的：{', '.join(missing_symbols[:12])}" + ("..." if len(missing_symbols) > 12 else "")] if missing_symbols else []),
     }
-    return {
-        "benchmark": symbol,
-        "available": bool(rows),
-        "status": "available" if rows else "no_rows",
-        "basis": "buy trades are treated as cash invested; sell trades are treated as cash withdrawn; the same cash flows are mirrored into the benchmark",
-        "label": "现金流镜像",
-        "note": "复制你的买入和卖出节奏，用于比较真实交易路径。",
-                "message": "主图使用\"当前持仓价值 + 累计卖出现金\"，避免卖出动作在曲线上显示成闪跌；下方柱状图保留每日买入/卖出现金流。",
-        "date_range": {"start": rows[0]["date"], "end": rows[-1]["date"]} if rows else None,
-        "rows": rows,
-        "stats": {
-            "trade_count": len(trade_rows),
-            "buy_total_usd": buy_total,
-            "sell_total_usd": sell_total,
-            "net_cash_flow_usd": net_cash_flow,
-            "final_portfolio_value_usd": rows[-1]["portfolio_value"] if rows else 0.0,
-            "final_benchmark_value_usd": rows[-1]["benchmark_value"] if rows else 0.0,
-            "final_adjusted_portfolio_value_usd": rows[-1]["adjusted_portfolio_value"] if rows else 0.0,
-            "final_adjusted_benchmark_value_usd": rows[-1]["adjusted_benchmark_value"] if rows else 0.0,
-            "final_gap_usd": (rows[-1]["portfolio_value"] - rows[-1]["benchmark_value"]) if rows else 0.0,
-            "covered_symbols": len(available_symbols),
-            "missing_symbols": missing_symbols,
-        },
-        "warnings": [
-            "这是按买卖流水重建的近似交易路径，不含未投资现金余额、真实日内成交时点和可能缺失的历史行情。",
-        ] + ([f"缺少历史行情的交易标的：{', '.join(missing_symbols[:12])}" + ("..." if len(missing_symbols) > 12 else "")] if missing_symbols else []),
-    }
 
 
 @cached(ttl=60 * 60 * 12)

@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 from starlette.requests import Request
 
@@ -136,6 +137,36 @@ def test_standalone_holdings_page_is_removed_but_api_remains():
     html = lab_route.lab_page(_request()).body.decode("utf-8")
     assert 'href="/holdings' not in html
     assert 'id="portfolioHoldingsRows"' in html
+
+
+def test_sidebar_links_point_to_registered_routes():
+    from app.components import _V5_NAV_GROUPS
+    from app.main import app
+    from conftest import app_route_paths
+
+    paths = app_route_paths(app)
+    hrefs = [href for _, items in _V5_NAV_GROUPS for href, _, _ in items]
+
+    assert [href for href in hrefs if href not in paths] == []
+
+
+def test_lab_page_has_no_dead_links_or_missing_assets():
+    from app.routes import lab as lab_route
+
+    html = lab_route.lab_page(_request()).body.decode("utf-8")
+    static_dir = Path(__file__).parents[1] / "app" / "static"
+    assets = set(re.findall(r'(?:src|href)="/static/([\w./-]+)(?=["?])', html))
+
+    assert "portfolio-holdings.js" in assets
+    assert sorted(asset for asset in assets if not (static_dir / asset).is_file()) == []
+    assert 'href="/sentiment"' not in html
+
+
+def test_holdings_rows_do_not_link_to_removed_price_target_history_page():
+    script = (Path(__file__).parents[1] / "app" / "static" / "portfolio-holdings.js").read_text(encoding="utf-8")
+
+    assert "/price-target-history" not in script
+    assert '<span class="portfolio-holding-identity">' in script
 
 
 def test_portfolio_card_radii_match_figma():

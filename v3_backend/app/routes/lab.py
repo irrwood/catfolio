@@ -12,7 +12,6 @@ _HEAD = '<link rel="stylesheet" href="/static/portfolio.css" />'
 _SCRIPTS = (
     '<script src="/static/vendor/echarts.min.js"></script>'
     '<script src="/static/portfolio.js"></script>'
-    '<script src="/static/volatility.js"></script>'
     '<script src="/static/portfolio-calendar.js"></script>'
     '<script src="/static/portfolio-holdings.js"></script>'
 )
@@ -186,7 +185,6 @@ _BODY = r"""
   </section>
 
   <section class="v4-card"><h2>板块轮动</h2><p>观察 11 个美股板块的中期相对强弱与近月动量。</p><a href="/rotation">查看四象限与历史轨迹 →</a></section>
-<section class="v4-card" aria-labelledby="todayInsightTitle"><h2 id="todayInsightTitle">Today Insight</h2><p id="today-volatility-insight" aria-live="polite">正在读取行业情绪…</p><a href="/sentiment">查看半导体 Fear &amp; Greed →</a></section>
   <div class="portfolio-insights-row">
     <section class="portfolio-value-card" aria-labelledby="costValueTitle">
       <div class="portfolio-chart-head">

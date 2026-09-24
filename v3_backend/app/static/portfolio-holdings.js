@@ -200,7 +200,7 @@
       ? `<img class="portfolio-holding-logo-image" src="/api/asset-logo/${encodeURIComponent(logoSymbol)}" alt="" loading="lazy" decoding="async" />`
       : "";
     return `<td class="portfolio-holding-logo"><span class="portfolio-holding-badge" style="--asset-hue:${tickerHue(row.ticker)}"><span class="portfolio-holding-initial">${initial}</span>${logoImage}</span></td>
-      <td class="portfolio-holding-asset"><a class="portfolio-holding-identity portfolio-history-link" href="/price-target-history?symbol=${encodeURIComponent(row.ticker || '')}&currency=${encodeURIComponent(row.quote_currency || row.cost_currency || '')}" aria-label="${name} · 历史分析"><strong title="${name}">${name}</strong><small>${shareLabel ? `<span>${shareLabel}</span>` : ""}<span>${ticker}</span></small></a></td>`;
+      <td class="portfolio-holding-asset"><span class="portfolio-holding-identity"><strong title="${name}">${name}</strong><small>${shareLabel ? `<span>${shareLabel}</span>` : ""}<span>${ticker}</span></small></span></td>`;
   }
 
   function bindAssetLogos() {
