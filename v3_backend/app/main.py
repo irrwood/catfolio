@@ -116,3 +116,6 @@ app.include_router(sector_rotation.router)
 
 from app.routes import accounts
 app.include_router(accounts.router)
+
+from app.routes import call_tracker
+app.include_router(call_tracker.router)

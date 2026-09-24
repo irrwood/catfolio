@@ -125,15 +125,20 @@
     return out;
   }
 
+  // User data (names, notes) can be Chinese on the English UI; translate="no" opts it out.
+  const KEEP = "[translate='no']";
+
   function translateNode(root) {
     if (!root || root.nodeType === 8) return;
     if (root.nodeType === 3) {
+      if (root.parentElement && root.parentElement.closest(KEEP)) return;
       const next = translateText(root.nodeValue);
       if (next !== root.nodeValue) root.nodeValue = next;
       return;
     }
     if (root.nodeType !== 1) return;
     if (root.matches && root.matches("script,style,code,pre,textarea")) return;
+    if (root.closest && root.closest(KEEP)) return;
     ["title", "placeholder", "aria-label"].forEach((attr) => {
       if (root.hasAttribute && root.hasAttribute(attr)) {
         const value = root.getAttribute(attr);
@@ -145,7 +150,7 @@
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
         const parent = node.parentElement;
-        if (parent && parent.matches("script,style,code,pre,textarea,input")) return NodeFilter.FILTER_REJECT;
+        if (parent && (parent.matches("script,style,code,pre,textarea,input") || parent.closest(KEEP))) return NodeFilter.FILTER_REJECT;
         return /[\u4e00-\u9fff]/.test(node.nodeValue || "") ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
       }
     });

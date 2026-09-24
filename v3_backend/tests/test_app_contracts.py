@@ -26,6 +26,7 @@ def public_demo_client(monkeypatch, tmp_path):
         "/returns",
         "/analytics",
         "/strategy",
+        "/calls",
         "/heatmap",
         "/ai",
         "/bank",

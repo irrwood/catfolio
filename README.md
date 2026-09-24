@@ -18,6 +18,7 @@ Project repository: [github.com/irrwood/catfolio](https://github.com/irrwood/cat
 - **Returns workspace**: portfolio returns against benchmarks such as SPY, QQQ, and IWM, with monthly heatmaps.
 - **Analysis charts**: monthly return heatmaps, drawdown curves, holding correlations, valuation matrices, and return distributions.
 - **Strategy Lab**: write Python allocation strategies, rebalance over historical prices, compare CAGR/volatility/Sharpe/max drawdown, save runs, and optionally ask an AI provider to critique the result.
+- **Call tracker**: import dated bullish/bearish stock calls from any source and score them 5, 21 and 63 trading days later against SPY, with hit rates per source, a follow-every-call curve and monthly hit rates.
 - **AI analysis**: portfolio briefing, risk diagnosis, performance explanation, overlap analysis, what-if scenarios, returns explanation, and free-form portfolio Q&A.
 - **Local-first bank and email analytics**: connect Plaid through the existing FastAPI app, keep normalized transactions in local SQLite, encrypt access tokens with AES-256-GCM and a Keychain-backed key, and scan authorised mailboxes directly over read-only IMAP for refund opportunities.
 - **Provider choices**: DeepSeek, Grok/xAI, OpenAI, Gemini, Moonshot Kimi, Zhipu GLM, Qwen, and OpenRouter are supported through one provider registry.
@@ -167,6 +168,7 @@ security add-generic-password -a DEEPSEEK_API_KEY -s com.catfolio.portfolio -w "
 - **Analysis Charts**: monthly return heatmaps, drawdowns, holding correlations, valuation, distributions, and attribution views.
 - **Backtest**: predefined multi-asset experiments and optimizer-style workflows.
 - **Strategy Lab**: custom Python strategy research with historical rebalancing, saved run history, performance metrics, and optional AI evaluation.
+- **Call tracker**: a cross-source table of hit rates and excess returns for imported stock calls, and a per-source view with a follow-every-call curve, monthly hit rates, and every call with its entry and exit.
 - **Heatmap**: short-term performance grid across the current universe.
 - **AI Analyst**: a chat-oriented portfolio assistant with a preset question library for briefing, risk, overlap, what-if, performance, and free-form Q&A.
 - **Bank**: local SQLite account and transaction storage, Plaid Link and incremental sync, subscription detection, refund matching, and opt-in direct IMAP analysis. Mail credentials stay in the OS Keychain; raw message bodies are not persisted.
@@ -197,6 +199,21 @@ def strategy(ctx):
 ```
 
 Results include equity curve, CAGR, volatility, Sharpe ratio, max drawdown, turnover-style diagnostics, saved run history, and optional AI critique. This makes Catfolio useful both as a personal portfolio tracker and as a lightweight quant strategy sandbox.
+
+## Call Tracker
+
+The Call tracker (`/calls`) keeps score of dated stock calls from any source: a blogger, a newsletter, an analyst note or your own journal. Import a JSONL file with one call per line, either by uploading it on the page or by entering a local path:
+
+```json
+{"date": "2026-09-22", "source": "My journal", "symbol": "NVDA", "stance": "bullish", "reason": "Supply still tight", "url": "https://example.com/note"}
+```
+
+- Required fields: `date` (YYYY-MM-DD), `source` (or `channel`), `symbol` (or `ticker`) and `stance` (`bullish`, `bearish` or `neutral`; the Chinese labels 看多, 看空 and 中性 also work). Optional: `name`, `reason`, and `url` or a YouTube `video_id`. The `calls.jsonl` written by [finfluencer-digest](https://github.com/jackieyangjq/finfluencer-digest) imports as is.
+- Only the first call per source, day and ticker is kept, so re-importing a growing file adds just the new lines. Hong Kong codes such as `700.HK` become Yahoo's `0700.HK`, and bare crypto tickers (`BTC`, `ETH`, `SOL`, `DOGE`, `XRP`) become Yahoo's `-USD` pairs, because Yahoo's `BTC` is a bitcoin fund, not bitcoin.
+- Scoring: the entry is the first close after the call date and the exit is 5, 21 or 63 trading days later. Bearish calls count the negated return, and excess return is measured against SPY held in the same direction. Calls still inside their window, and calls without prices, stay out of every denominator; sources with fewer than 10 scored calls are marked as too early to judge.
+- Prices are Yahoo daily closes from the cache Strategy Lab uses. Calls, prices and results stay in `CATFOLIO_DATA_DIR`. Demo mode shows four fictional sources with generated prices and never fetches data.
+
+The Call tracker is for reviewing past calls, not investment advice.
 
 ## Roadmap
 

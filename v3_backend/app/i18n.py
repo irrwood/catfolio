@@ -1278,6 +1278,73 @@ EN.update({'板块轮动': 'Sector Rotation',
  '无法读取快照，请稍后重试。': 'Unable to read snapshots. Please try again.'})
 
 
+# Call tracker (/calls): full phrases only; dynamic labels live in static/call-tracker.js.
+EN.update({
+    '观点记分牌': 'Call tracker',
+    '任何来源的个股观点 · 基准 SPY': 'Stock calls from any source · Benchmark: SPY',
+    '正在读取观点数据…': 'Loading calls…',
+    '仅供复盘，不构成投资建议。': 'For review only. Not investment advice.',
+    '来源对比': 'Sources compared',
+    '如果每次都跟': 'If you followed every call',
+    '每条已到期观点在起点投入等额资金、持有到期（看空按做空计），按日汇总；虚线为同期同方向持有 SPY。':
+        'Equal money goes into each scored call at entry and is held to the exit (bearish calls as shorts), '
+        'combined daily. The dashed line holds SPY in the same direction over the same windows.',
+    '逐月命中率': 'Hit rate by month',
+    '按观点日所在月份；柱顶数字为已到期条数，虚线为 50%。':
+        'Grouped by the month of the call. Numbers above the bars count scored calls; the dashed line marks 50%.',
+    '逐条观点': 'Every call',
+    '观点记分牌的统计口径': 'How the call tracker scores calls',
+    '一条观点 = 来源、日期、代码、方向（看多、看空、中性），可附理由和链接。同一来源、同一天、同一代码只算一次。':
+        'A call = source, date, ticker and stance (bullish, bearish or neutral), with an optional reason and '
+        'link. The same source, day and ticker count once.',
+    '起点：观点日之后第一个交易日的收盘价（观点只有日期没有时刻，这样不会用到发布时还不知道的价格）。终点：起点之后第 5、21、63 个交易日的收盘价；当天没有收盘价时取之前最近的一个。':
+        'Entry: the close of the first trading day after the call date. Calls have a date but no time, so this '
+        'avoids prices that were not yet known. Exit: the close 5, 21 or 63 trading days after entry, or the '
+        'latest earlier close if that day has none.',
+    '命中：看多时终点高于起点，看空时终点低于起点；持平算未命中。中性观点只显示股价变化，不计入命中率和超额。':
+        'Hit: the exit is above the entry for a bullish call, or below it for a bearish call; unchanged counts '
+        'as a miss. Neutral calls show the price change only and are left out of hit rates and excess returns.',
+    '超额按方向计算：看多为股票收益减去 SPY 同期收益，看空为 SPY 同期收益减去股票收益。非美股的 SPY 取同日或之前最近一个交易日的收盘。':
+        'Excess return follows the call: stock minus SPY for bullish calls, SPY minus stock for bearish calls. '
+        'For non-US stocks, SPY uses the close on the same day or the nearest earlier trading day.',
+    '还没到期的观点显示“待观察”，缺少价格的显示“缺价”，两者都不进分母。已到期不足 10 条的来源标“待观察”，排在已达门槛的来源之后。':
+        'Calls whose window has not ended show “Pending” and calls without prices show “No price”; neither '
+        'enters any denominator. Sources with fewer than 10 scored calls show “Too early” and rank after the rest.',
+    '来源按 63 日命中率排序（63 日结果相同或还没有时，再按当前观察期的命中率）。':
+        'Sources are ranked by 63-day hit rate, then by the hit rate of the selected horizon when 63-day '
+        'results tie or are not available yet.',
+    '“每次都跟”：每条已到期的看多或看空观点在起点投入等额资金、持有到终点（看空按做空计），按日汇总成净值；对照线是同期、同方向持有 SPY。':
+        '“Follow every call”: equal money goes into each scored bullish or bearish call at entry and is held '
+        'to the exit (bearish calls as shorts), combined into a daily value; the comparison line holds SPY in '
+        'the same direction over the same windows.',
+    '最大单笔贡献：最赚钱的一条观点占全部盈利观点收益之和的比例。比例越高，结果越依赖单笔。':
+        'Top call share: the best call’s gain as a share of the total gain from all profitable calls. The '
+        'higher it is, the more the record depends on a single call.',
+    '价格为雅虎日线复权收盘价（含分红和拆股调整），显示的价格可能与当日报价略有不同。未计交易成本、税费和做空成本；只统计导入的观点，可能存在幸存者偏差。':
+        'Prices are Yahoo daily adjusted closes (dividends and splits included), so they can differ slightly '
+        'from quotes on the day. Trading, tax and borrowing costs are ignored; only imported calls are '
+        'counted, which can add survivorship bias.',
+    '导入观点文件': 'Import calls',
+    'JSONL 文件，每行一条观点；导入后自动联网取价并计算。':
+        'A JSONL file with one call per line. After import, prices are fetched and results calculated automatically.',
+    '重新计算': 'Recalculate',
+    '上传 JSONL 文件': 'Upload a JSONL file',
+    '或填写本机路径': 'or enter a local path',
+    '导入并计算': 'Import and calculate',
+    '字段：date（YYYY-MM-DD）、source 或 channel、symbol 或 ticker、stance（看多／看空／中性，或 bullish／bearish／neutral），可选 name、reason、url 或 video_id。同一来源、同一天、同一代码只保留第一条；港股代码自动转成 0700.HK 格式。':
+        'Fields: date (YYYY-MM-DD), source or channel, symbol or ticker, stance (bullish, bearish or neutral, '
+        'in English or Chinese), plus optional name, reason, and url or video_id. Only the first call per '
+        'source, day and ticker is kept; Hong Kong codes become the 0700.HK form.',
+    '观点只存在本机数据目录。计算时读取雅虎日线，与策略回测共用本机行情缓存（最长 12 小时更新一次）；“重新计算”会先重新读取上次导入的本机文件。':
+        'Calls stay in the local data folder. Calculation reads Yahoo daily prices through the price cache '
+        'shared with Strategy Lab (refreshed at most every 12 hours). Recalculate first re-reads the last '
+        'imported local file.',
+    '来源、观点和价格都是虚构的：由固定随机种子生成，不联网，不代表任何真实博主或机构。关闭演示模式后，可以在这里导入自己的观点文件。':
+        'Sources, calls and prices are fictional: generated offline from a fixed random seed and not based on '
+        'any real creator or institution. Turn off demo mode to import your own calls here.',
+})
+
+
 from .account_i18n import EN as ACCOUNT_EN
 EN.update(ACCOUNT_EN)
 
