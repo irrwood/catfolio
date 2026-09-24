@@ -1,0 +1,19 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192"><rect width="192" height="192" fill="#FFFFFF" /><svg viewBox="-6.03022 -1.60484 42.8522 43.4152" fill="#372406" x="31.3964" y="34.5451" width="129.0805" height="130.8698">
+  <defs>
+    <clipPath id="clip-path">
+      <rect width="172.317" height="35.732" fill="none" />
+    </clipPath>
+  </defs>
+  <g id="Alamos_Logo_Horizonatal" data-name="Alamos Logo Horizonatal" transform="translate(0.001)" clip-path="url(#clip-path)">
+    <g id="Group_1043" data-name="Group 1043" transform="translate(34.023 16.775)">
+      </g>
+    <g id="Group_1044" data-name="Group 1044" transform="translate(0.196 -0.871)">
+      <path id="Path_2875" data-name="Path 2875" d="M.973,16.5H24.995V40.9" transform="translate(-0.38 -5.081)" fill="#FFEDD1" />
+      <g id="Group_1043-2" data-name="Group 1043" transform="translate(-0.196 0.871)">
+        <path id="Path_2876" data-name="Path 2876" d="M11.214,36.809,5.959,31.554l4.058-3.514L-.2,17.667v24.4H23.825L14.509,32.6Z" transform="translate(0.196 -6.331)" fill="#372406" />
+        <path id="Path_2877" data-name="Path 2877" d="M40.005.871,14.937,22.58l4.492,4.562Z" transform="translate(-4.723 -0.871)" fill="#372406" />
+      </g>
+    </g>
+  </g>
+</svg></svg>

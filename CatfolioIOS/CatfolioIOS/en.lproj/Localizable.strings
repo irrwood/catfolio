@@ -3364,3 +3364,7 @@
 "当前没有持仓报价可刷新" = "No held securities to refresh quotes for";
 "刷新失败，继续显示已有数据" = "Refresh failed; showing existing data";
 "刷新失败，请稍后重试" = "Refresh failed; please try again later";
+"Logo 样式" = "Logo style";
+"跟随外观" = "Match appearance";
+"浅色 Logo" = "Light logo";
+"深色 Logo" = "Dark logo";

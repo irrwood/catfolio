@@ -1,0 +1,23 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:ns1="http://www.inkscape.org/namespaces/inkscape" xmlns:ns2="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" viewBox="0 0 192 192" width="192" height="192"><rect width="192" height="192" fill="#0B3865" /><svg viewBox="55.837 -0.50479 18.3833 18.4016" version="1.1" id="svg8831" ns1:version="0.92.0 r15299" ns2:docname="ameriprise financial.svg" fill="#F3F5F7" x="39.7345" y="39.8467" width="111.9814" height="112.2006">
+  <defs id="defs8825">
+    <clipPath id="clipPath5106" clipPathUnits="userSpaceOnUse">
+      <path ns1:connector-curvature="0" id="path5104" d="M 0,0 H 594 V 774 H 0 Z" />
+    </clipPath>
+    <clipPath id="clipPath5082" clipPathUnits="userSpaceOnUse">
+      <path ns1:connector-curvature="0" id="path5080" d="M 0,0 H 594 V 774 H 0 Z" />
+    </clipPath>
+    <clipPath id="clipPath5026" clipPathUnits="userSpaceOnUse">
+      <path ns1:connector-curvature="0" id="path5024" d="M 0,0 H 594 V 774 H 0 Z" />
+    </clipPath>
+    <clipPath id="clipPath5010" clipPathUnits="userSpaceOnUse">
+      <path ns1:connector-curvature="0" id="path5008" d="M 0,0 H 594 V 774 H 0 Z" />
+    </clipPath>
+  </defs>
+  <g ns1:label="Layer 1" ns1:groupmode="layer" id="layer1" transform="translate(31.304179,56.733782)">
+    <g id="g9081" transform="translate(0.26458523,-0.26458826)">
+      <path d="m 38.543173,-42.624783 -3.618442,-1.496483 -1.503538,3.624439 -1.500364,-3.624439 -3.620911,1.496483 1.503186,-3.619147 -3.626203,-1.502481 3.626203,-1.501422 -1.503186,-3.6195 3.620911,1.496131 1.500364,-3.619147 1.503538,3.619147 -0.01834,0.0095 3.636786,-1.505656 -1.497542,3.6195 3.623734,1.501422 -3.624792,1.502481 z m -5.12198,-13.579827 c -4.674659,0 -8.466314,3.790597 -8.466314,8.466313 0,4.677128 3.791655,8.467372 8.466314,8.467372 4.675716,0 8.466313,-3.790244 8.466313,-8.467372 0,-4.675716 -3.790597,-8.466313 -8.466313,-8.466313" id="path5014" ns1:connector-curvature="0" fill="#F3F5F7" fill-opacity="1" fill-rule="nonzero" stroke="none" stroke-width="0.35277778" />
+      <path d="m 37.777928,-52.101604 -7.436203,3.080103 3.07975,1.275291 1.275292,3.076928 z" id="path5018" ns1:connector-curvature="0" fill="#F3F5F7" fill-opacity="1" fill-rule="nonzero" stroke="none" stroke-width="0.35277778" />
+      </g>
+  </g>
+</svg></svg>

@@ -102,6 +102,7 @@ struct SettingsView: View {
     @AppStorage(AppAppearance.preferenceKey) private var appearanceRawValue = AppAppearance.system.rawValue
     @AppStorage(DisplayCurrency.preferenceKey) private var displayCurrencyRawValue = DisplayCurrency.usd.rawValue
     @AppStorage(CompanyNameDisplay.preferenceKey) private var companyNameDisplayRawValue = CompanyNameDisplay.original.rawValue
+    @AppStorage(AssetLogoStyle.preferenceKey) private var assetLogoStyleRawValue = AssetLogoStyle.automatic.rawValue
     @State private var showsCSVImport = false
     @State private var showsTrading212 = false
     @State private var showsIBKRFlex = false
@@ -239,6 +240,18 @@ struct SettingsView: View {
                         Text(L10n.label(appearance.title)).tag(appearance.rawValue)
                     }
                 }
+
+                SettingsMenuRow(
+                    icon: .symbol("square.on.square"),
+                    title: L10n.text("Logo 样式"),
+                    value: AssetLogoStyle(rawValue: assetLogoStyleRawValue)?.title ?? AssetLogoStyle.automatic.title,
+                    selection: $assetLogoStyleRawValue
+                ) {
+                    ForEach(AssetLogoStyle.allCases) { style in
+                        Text(style.title).tag(style.rawValue)
+                    }
+                }
+                .accessibilityIdentifier("settings.logoStyle")
 
                 SettingsMenuRow(
                     icon: .symbol("character.bubble"),

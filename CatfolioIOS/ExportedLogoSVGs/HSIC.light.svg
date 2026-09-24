@@ -1,0 +1,18 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192"><rect width="192" height="192" fill="#FFFFFF" /><svg version="1.2" viewBox="0 0 1571 1527" width="98.1188" height="95.4358" x="46.9492" y="48.2701">
+	<title>henry-schein-logo-global-svg</title>
+	<defs>
+		<clipPath clipPathUnits="userSpaceOnUse" id="cp1">
+			<path d="m-38.09-16.03h21984.82v9129.71h-21984.82z" />
+		</clipPath>
+		<clipPath clipPathUnits="userSpaceOnUse" id="cp2">
+			<path d="m-38.09-16.03h21984.82v9129.71h-21984.82z" />
+		</clipPath>
+	</defs>
+	<g id="Clip-Path" clip-path="url(#cp1)">
+		<path id="Layer" d="m1570.3 114.6v-114.2h-1570.2v1194.2c219.9 0 459.5-142.9 698.4-517.9 240.1-377 589.5-562.1 871.8-562.1z" fill="#eb0029" />
+	</g>
+	<g id="Clip-Path" clip-path="url(#cp2)">
+		<path id="Layer" d="m0.2 1412.2v114.5h1570.2v-1194.3c-219.9 0-459.6 142.9-698.4 517.9-240.1 377.1-589.5 561.9-871.8 561.9z" fill="#0067b1" />
+	</g>
+</svg></svg>

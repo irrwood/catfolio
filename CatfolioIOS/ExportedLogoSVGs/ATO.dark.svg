@@ -1,0 +1,47 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192"><rect width="192" height="192" fill="#007CC2" /><svg version="1.1" id="svg13359" viewBox="-5.17587 -5.26298 216.75 209.944" fill="#00070C" x="35.5555" y="39.6521" width="120.5413" height="116.7744">
+  <defs id="defs3">
+    <radialGradient cx="0" cy="0" r="1" fx="0" fy="0" id="radialGradient11473" gradientUnits="userSpaceOnUse" gradientTransform="matrix(15.293304,0,0,-15.293304,333.98331,64.129211)" spreadMethod="pad">
+      <stop id="stop11475" offset="0" stop-color="#00070C" stop-opacity="1" />
+      <stop id="stop11477" offset="0.53932202" stop-color="#00070C" stop-opacity="1" />
+      <stop id="stop11479" offset="1" stop-color="#00070C" stop-opacity="1" />
+    </radialGradient>
+    <clipPath id="clipPath11487">
+      <path d="M 0,0 612,0 612,792 0,792 0,0 z" id="path11489" />
+    </clipPath>
+    <clipPath id="clipPath11515">
+      <path d="M 0,0 612,0 612,792 0,792 0,0 z" id="path11517" />
+    </clipPath>
+    <clipPath id="clipPath11535">
+      <path d="M 0,0 612,0 612,792 0,792 0,0 z" id="path11537" />
+    </clipPath>
+  </defs>
+  <g transform="translate(-28.967477,-355.47428)" id="layer1">
+    <g transform="matrix(6.575104,0,0,6.575104,-3670.937,-2350.4097)" id="g13559">
+      <g transform="matrix(1.25,0,0,-1.25,645.45636,431.91608)" id="g11917" fill="#00070C" fill-opacity="1">
+        <g transform="translate(-62.0707,5.7409)" id="g11921" fill="#00070C" fill-opacity="1">
+          <path d="M 0,0 16.242,-0.752 15.687,0.784 0,0.027 0,0 z" id="path11923" fill="#00070C" fill-opacity="1" fill-rule="nonzero" stroke="none" />
+          <g transform="translate(-0.6503,-1.841)" id="g11925" fill="#00070C" fill-opacity="1">
+            <path d="M 0,0 17.558,-0.752 17.004,0.782 0,0.027 0,0 z" id="path11927" fill="#00070C" fill-opacity="1" fill-rule="nonzero" stroke="none" />
+            <g transform="translate(-0.6393,-1.8456)" id="g11929" fill="#00070C" fill-opacity="1">
+              <path d="M 0,0 18.864,-0.752 18.309,0.785 0,0.027 0,0 z" id="path11931" fill="#00070C" fill-opacity="1" fill-rule="nonzero" stroke="none" />
+              <g transform="translate(2.3722,5.0853)" id="g11933" fill="#00070C" fill-opacity="1">
+                <path d="m 0,0 3.159,8.73 8.066,0 L 14.5,-0.311 0,0 z" id="path11935" fill="#00070C" fill-opacity="1" fill-rule="nonzero" stroke="none" />
+                <g transform="translate(-2.3355,-6.4078)" id="g11937" fill="#00070C" fill-opacity="1">
+                  <path d="m 0,0 -2.439,-6.756 9.467,0 2.314,6.89 L 0,0 z" id="path11939" fill="#00070C" fill-opacity="1" fill-rule="nonzero" stroke="none" />
+                  <g transform="translate(18.9145,0.2711)" id="g11941" fill="#00070C" fill-opacity="1">
+                    <path d="m 0,0 2.536,-7.027 -9.467,0 -2.323,6.891 L 0,0 z" id="path11943" fill="#00070C" fill-opacity="1" fill-rule="nonzero" stroke="none" />
+                    <g transform="translate(56.8389,-2.3923)" id="g11945" fill="#00070C" fill-opacity="1">
+                      <g transform="translate(6.9792,-15.0449)" id="g11949" fill="#00070C" fill-opacity="1">
+                        </g>
+                    </g>
+                  </g>
+                </g>
+              </g>
+            </g>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg></svg>

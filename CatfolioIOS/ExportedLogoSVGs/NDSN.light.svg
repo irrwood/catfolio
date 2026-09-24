@@ -1,0 +1,47 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192"><rect width="192" height="192" fill="#FFFFFF" /><svg version="1.1" id="svg3415" viewBox="-78.0195 -10.5533 616.702 264.551" x="32.0248" y="64.3791" width="146.2007" height="62.8206">
+  <defs id="defs3417">
+    <clipPath id="clipPath3329">
+      <path d="m 0.22,660 300,0 0,132 -300,0 0,-132 z" id="path3331" />
+    </clipPath>
+    <clipPath id="clipPath3313">
+      <path d="m 60.799,690.811 103.971,0 0,35.428 -103.971,0 0,-35.428 z" id="path3315" />
+    </clipPath>
+    <clipPath id="clipPath3301">
+      <path d="m 0.22,660 300,0 0,132 -300,0 0,-132 z" id="path3303" />
+    </clipPath>
+  </defs>
+  <g transform="translate(-9.9327865,-387.53406)" id="layer1">
+    <g transform="matrix(5.4528513,0,0,5.4528513,-2164.8461,-2976.226)" id="g3484">
+      <g transform="matrix(1.25,0,0,-1.25,427.93077,661.49653)" id="g3293">
+        </g>
+      <g transform="matrix(1.25,0,0,-1.25,323.48402,1525.3127)" id="g3297">
+        <g clip-path="url(#clipPath3301)" id="g3299">
+          <g transform="translate(104.6769,700.5511)" id="g3305">
+            </g>
+        </g>
+      </g>
+      <g transform="matrix(1.25,0,0,-1.25,323.48402,1525.3127)" id="g3309">
+        <g clip-path="url(#clipPath3313)" id="g3311">
+          <g transform="translate(116.7025,703.9669)" id="g3317">
+            </g>
+          <g transform="translate(124.4605,700.4522)" id="g3321">
+            </g>
+        </g>
+      </g>
+      <g transform="matrix(1.25,0,0,-1.25,323.48402,1525.3127)" id="g3325">
+        <g clip-path="url(#clipPath3329)" id="g3327">
+          <g transform="translate(146.9248,700.5511)" id="g3333">
+            </g>
+          <g transform="translate(158.4236,691.0529)" id="g3337">
+            </g>
+          <g transform="translate(135.8773,725.1644)" id="g3341">
+            <path d="m 0,0 c -5.216,0.691 -10.727,1.074 -16.437,1.074 -32.387,0 -58.641,-11.934 -58.641,-26.657 0,-2.982 1.096,-5.849 3.085,-8.528 l 10.685,0 c -2.008,2.671 -3.108,5.538 -3.108,8.528 0,14.134 24.345,25.591 54.378,25.591 3.399,0 6.718,-0.155 9.946,-0.436 L 0,0 z" id="path3343" fill="#0081c6" fill-opacity="1" fill-rule="nonzero" stroke="none" />
+          </g>
+          <g transform="translate(140.5358,703.5222)" id="g3345">
+            </g>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg></svg>

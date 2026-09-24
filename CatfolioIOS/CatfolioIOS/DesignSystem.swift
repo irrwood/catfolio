@@ -2287,6 +2287,7 @@ struct AssetLogoArtwork: View {
             else if layout.usesWhiteCanvas { Color.white }
             Image(uiImage: image)
                 .resizable()
+                .interpolation(.high)
                 .scaledToFit()
                 // Matched tiles can carry white pixels outside their own
                 // rounded corners. Let the matching canvas show there too.
@@ -2327,11 +2328,11 @@ private final class AssetLogoImageCache: @unchecked Sendable {
     }
 
     private init() {
-        // Asset logos are bundled at 96 px and decoded only when visible.
+        // Asset logos are decoded at up to 192 px, and only when visible.
         // Keeping roughly two long scrolling screens avoids churn without
         // allowing the full logo library to become resident at once.
         images.countLimit = 120
-        images.totalCostLimit = 6 * 1_024 * 1_024
+        images.totalCostLimit = 18 * 1_024 * 1_024
     }
 
     func image(for url: URL) -> UIImage? {
@@ -2355,49 +2356,12 @@ private actor AssetLogoRepository {
 
     static let shared = AssetLogoRepository()
 
-    private let session: URLSession
-    private var requests: [URL: Task<Data, Error>] = [:]
-
-    private init() {
-        let configuration = URLSessionConfiguration.default
-        configuration.requestCachePolicy = .returnCacheDataElseLoad
-        configuration.urlCache = URLCache(
-            memoryCapacity: 4 * 1_024 * 1_024,
-            diskCapacity: 32 * 1_024 * 1_024
-        )
-        session = URLSession(configuration: configuration)
-    }
-
-    func data(for url: URL) async throws -> Data {
-        if url.isFileURL {
-            return try Data(contentsOf: url, options: [.mappedIfSafe])
-        }
-        if let request = requests[url] {
-            return try await request.value
-        }
-
-        var urlRequest = URLRequest(url: url)
-        urlRequest.timeoutInterval = 15
-        let session = session
-        let request = Task<Data, Error> {
-            let (data, response) = try await session.data(for: urlRequest)
-            guard let http = response as? HTTPURLResponse,
-                  (200..<300).contains(http.statusCode),
-                  !data.isEmpty else {
-                throw URLError(.badServerResponse)
-            }
-            return data
-        }
-        requests[url] = request
-        defer { requests[url] = nil }
-        return try await request.value
-    }
-
     func image(for url: URL) async throws -> DecodedImage {
         if let cached = AssetLogoImageCache.shared.image(for: url) {
             return DecodedImage(value: cached)
         }
-        let data = try await data(for: url)
+        guard url.isFileURL else { throw URLError(.unsupportedURL) }
+        let data = try Data(contentsOf: url, options: [.mappedIfSafe])
         if let cached = AssetLogoImageCache.shared.image(for: url) {
             return DecodedImage(value: cached)
         }
@@ -2408,7 +2372,10 @@ private actor AssetLogoRepository {
                   [
                       kCGImageSourceCreateThumbnailFromImageAlways: true,
                       kCGImageSourceCreateThumbnailWithTransform: true,
-                      kCGImageSourceThumbnailMaxPixelSize: 96,
+                      // The export's canvas. 96 px was below what a 36–44 pt
+                      // tile needs on a 3× screen (108–132 px), so logos
+                      // were upscaled and looked soft.
+                      kCGImageSourceThumbnailMaxPixelSize: 192,
                       kCGImageSourceShouldCacheImmediately: true,
                   ] as CFDictionary
               ) else {
@@ -2434,40 +2401,66 @@ extension EnvironmentValues {
 
 struct AssetLogo: View {
     @Environment(\.locale) private var appLocale
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.assetLogoDidResolve) private var didResolve
+    @AppStorage(AssetLogoStyle.preferenceKey) private var logoStyleRaw = AssetLogoStyle.automatic.rawValue
     let ticker: String
     let logoSymbol: String?
     var size: CGFloat = 28
+    var cornerRadius: CGFloat? = nil
     var onBrandColorResolved: ((Color) -> Void)? = nil
     @State private var loadedImage: UIImage?
     @State private var loadedLayout: AssetLogoLayout?
+    @State private var brandfetchLoaded = false
+    @State private var brandfetchMissing = false
 
     var body: some View {
         Group {
             if let image = displayedImage {
                 AssetLogoArtwork(image: image,
-                    layout: loadedLayout ?? logoURL.flatMap { AssetLogoImageCache.shared.layout(for: $0) }
-                        ?? AssetLogoLayout.resolve(image),
+                    layout: exportedLogoURL == nil
+                        ? (loadedLayout ?? logoURL.flatMap { AssetLogoImageCache.shared.layout(for: $0) }
+                            ?? AssetLogoLayout.resolve(image))
+                        : AssetLogoLayout(insetFraction: 0, usesWhiteCanvas: false),
                     size: size)
+            } else if let brandfetchURL {
+                ZStack {
+                    fallback
+                    BrandfetchLogoImage(url: brandfetchURL) {
+                        brandfetchLoaded = true
+                    } onMissing: {
+                        // Remembered for a week; the letter tile stays and the
+                        // next appearance skips the web view entirely.
+                        BrandfetchMissCache.shared.recordMissing(logoSymbol ?? ticker)
+                        brandfetchMissing = true
+                    }
+                    .opacity(brandfetchLoaded ? 1 : 0)
+                }
             } else {
                 fallback
             }
         }
         .frame(width: size, height: size)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: size * 2 / 7, style: .continuous))
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: size * 2 / 7, style: .continuous)
+            RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous)
                 .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
         }
-        .clipShape(RoundedRectangle(cornerRadius: size * 2 / 7, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
         .accessibilityHidden(true)
-        .task(id: logoURL) {
+        .task(id: logoURL ?? brandfetchURL) {
             // SwiftUI may reuse this view when a ranked chart slot changes
             // ticker. Clear the old decoded image before resolving the new URL.
             loadedImage = nil
             loadedLayout = nil
+            brandfetchLoaded = false
+            brandfetchMissing = false
             await loadLogo()
         }
+    }
+
+    private var resolvedCornerRadius: CGFloat {
+        cornerRadius ?? size * 2 / 7
     }
 
     private var displayedImage: UIImage? {
@@ -2477,25 +2470,25 @@ struct AssetLogo: View {
     @MainActor
     private func loadLogo() async {
         guard loadedImage == nil, let logoURL else {
-            onBrandColorResolved?(AssetBrandColor.fallback(for: logoSymbol ?? ticker))
+            onBrandColorResolved?(exportedThemeColor ?? AssetBrandColor.fallback(for: logoSymbol ?? ticker))
             return
         }
         if let cached = AssetLogoImageCache.shared.image(for: logoURL) {
             loadedLayout = AssetLogoImageCache.shared.layout(for: logoURL) ?? AssetLogoLayout.resolve(cached)
             loadedImage = cached
             didResolve(logoURL)
-            onBrandColorResolved?(AssetBrandColor.resolved(from: cached, fallbackKey: logoSymbol ?? ticker))
+            onBrandColorResolved?(exportedThemeColor ?? AssetBrandColor.resolved(from: cached, fallbackKey: logoSymbol ?? ticker))
             return
         }
         guard let decoded = try? await AssetLogoRepository.shared.image(for: logoURL),
               !Task.isCancelled else {
-            onBrandColorResolved?(AssetBrandColor.fallback(for: logoSymbol ?? ticker))
+            onBrandColorResolved?(exportedThemeColor ?? AssetBrandColor.fallback(for: logoSymbol ?? ticker))
             return
         }
         loadedLayout = AssetLogoImageCache.shared.layout(for: logoURL) ?? AssetLogoLayout.resolve(decoded.value)
         loadedImage = decoded.value
         didResolve(logoURL)
-        onBrandColorResolved?(AssetBrandColor.resolved(from: decoded.value, fallbackKey: logoSymbol ?? ticker))
+        onBrandColorResolved?(exportedThemeColor ?? AssetBrandColor.resolved(from: decoded.value, fallbackKey: logoSymbol ?? ticker))
     }
 
     private var fallback: some View {
@@ -2511,19 +2504,39 @@ struct AssetLogo: View {
         AssetBrandColor.fallback(for: logoSymbol ?? ticker)
     }
 
+    /// Reviewed export first, then the older built-in logo set, then Brandfetch.
     private var logoURL: URL? {
+        exportedLogoURL ?? legacyLogoURL
+    }
+
+    private var symbol: String? {
         let symbol = (logoSymbol ?? ticker).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !symbol.isEmpty, symbol != "ETF 其他" else { return nil }
-        if let bundled = Bundle.main.url(
-            forResource: symbol.uppercased(),
-            withExtension: "png",
-            subdirectory: "AssetLogos"
-        ) {
-            return bundled
-        }
-        return URL(string: "https://financialmodelingprep.com")?
-            .appendingPathComponent("image-stock")
-            .appendingPathComponent("\(symbol).png")
+        return symbol.isEmpty || symbol == "ETF 其他" ? nil : symbol
+    }
+
+    private var exportedLogoURL: URL? {
+        guard let symbol else { return nil }
+        let style = AssetLogoStyle(rawValue: logoStyleRaw) ?? .automatic
+        return AssetLogoExportCatalog.imageURL(
+            for: symbol, dark: style.usesDarkLogo(darkAppearance: colorScheme == .dark))
+    }
+
+    /// The pre-export logo set (`AssetLogos/<TICKER>.png`) covers tickers the
+    /// reviewed export doesn't. It has one version, so the style doesn't apply.
+    private var legacyLogoURL: URL? {
+        guard let symbol else { return nil }
+        return Bundle.main.url(
+            forResource: symbol.uppercased(), withExtension: "png", subdirectory: "AssetLogos")
+    }
+
+    private var exportedThemeColor: Color? {
+        guard exportedLogoURL != nil else { return nil }
+        return AssetLogoExportCatalog.themeColor(for: logoSymbol ?? ticker)
+    }
+
+    private var brandfetchURL: URL? {
+        guard logoURL == nil, !brandfetchMissing else { return nil }
+        return BrandfetchLogoURL.icon(for: logoSymbol ?? ticker)
     }
 }
 

@@ -1,0 +1,52 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192"><rect width="192" height="192" fill="#FFFFFF" /><svg version="1.1" viewBox="-13.6322 65.7864 367.535 326.008" x="40.2518" y="46.6012" width="111.4077" height="98.7873">
+
+  <title>Chevron Logo</title>
+
+  <defs>
+    <linearGradient id="ub" x1="1" y1=".5" x2="0" y2="-.5">
+      <stop offset="0" stop-color="rgb(6,84,155)" />
+      <stop offset=".55" stop-color="rgb(47,161,211)" />
+      <stop offset=".9" stop-color="rgb(47,161,211)" />
+    </linearGradient>
+
+    <linearGradient id="lb" x1="0" y1=".6" x2="1" y2="-.75">
+      <stop offset="0" stop-color="rgb(19,113,177)" />
+      <stop offset=".05" stop-color="rgb(47,161,211)" />
+      <stop offset=".45" stop-color="rgb(47,161,211)" />
+      <stop offset=".6" stop-color="rgb(6,86,156)" />
+    </linearGradient>
+
+    <linearGradient id="ur" x1="1" y1=".5" x2="0" y2="-.1">
+      <stop offset="0" stop-color="rgb(157,26,54)" />
+      <stop offset=".4" stop-color="rgb(157,26,54)" />
+      <stop offset=".6" stop-color="rgb(230,25,47)" />
+    </linearGradient>
+
+    <linearGradient id="lr" x1="0" y1=".6" x2="1" y2="-.75">
+      <stop offset="0" stop-color="rgb(162,28,56)" />
+      <stop offset=".13" stop-color="rgb(230,25,47)" />
+      <stop offset=".45" stop-color="rgb(230,25,47)" />
+      <stop offset=".6" stop-color="rgb(167,28,55)" />
+    </linearGradient>
+
+  </defs>
+
+  
+  
+  
+  <g transform="translate(-39.7899,-39.8076)">
+    <g transform="scale(1.043997,1.043997)">
+
+      <g fill="#0056a2">
+        <title>Chevron</title>
+        </g>
+
+      <polygon points="38.608,221.484 38.608,113.014 201.354,167.252 38.608,221.484 " fill="url(#ub)" />
+      <polygon points="38.649,221.492 201.354,275.724 364.05,221.492 364.05,113.027 201.354,167.252 38.649,221.492 " fill="url(#lb)" />
+      <polygon points="38.618,347.568 38.604,239.063 201.339,293.298 38.618,347.568 " fill="url(#ur)" />
+      <polygon points="364.058,239.063 201.308,293.281 38.636,347.548 201.339,401.794 364.058,347.531 364.058,239.063 " fill="url(#lr)" />
+
+    </g>
+  </g>
+</svg></svg>

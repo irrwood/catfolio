@@ -1,0 +1,33 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192"><rect width="192" height="192" fill="#D02144" /><svg id="Carpenter_Technology_RGB_NO_TECH" data-name="Carpenter_Technology_RGB NO TECH" viewBox="-1.64789 -2.36539 40.5684 42.1113" fill="#6C1123" x="33.8538" y="30.8928" width="125.0026" height="129.8201">
+  <defs>
+    <clipPath id="clip-path">
+      <path id="Clip_3" data-name="Clip 3" d="M0,0H16.881V6.77H0Z" transform="translate(0.026 0.17)" fill="none" />
+    </clipPath>
+    <clipPath id="clip-path-2">
+      <path id="Clip_8" data-name="Clip 8" d="M0,0H91.677V30.961H0Z" transform="translate(0 0.979)" fill="none" />
+    </clipPath>
+    <clipPath id="clip-path-3">
+      <path id="Clip_26" data-name="Clip 26" d="M0,0H37.363V37.424H0Z" transform="translate(0.06 0.616)" fill="none" />
+    </clipPath>
+  </defs>
+  <g id="Carpenter_Technology_RGB">
+    <g id="Group_5" data-name="Group 5" transform="translate(76 34)">
+      <g id="Group_5-2" data-name="Group 5" clip-path="url(#clip-path)">
+        </g>
+    </g>
+    <g id="Group_15" data-name="Group 15" transform="translate(114 9)">
+      <g id="Group_15-2" data-name="Group 15" clip-path="url(#clip-path-2)">
+        </g>
+    </g>
+    <path id="Fill_24" data-name="Fill 24" d="M14.51,14.522a6.918,6.918,0,1,1,0-9.783L16.431,2.82a9.626,9.626,0,1,0-.006,13.621L14.51,14.522" transform="translate(9.083 9.677)" fill="#6C1123" />
+    <g id="Group_28" data-name="Group 28">
+      <path id="Clip_26-2" data-name="Clip 26" d="M0,0H37.363V37.424H0Z" transform="translate(0.06 0.616)" fill="none" />
+      <g id="Group_28-2" data-name="Group 28" clip-path="url(#clip-path-3)">
+        <path id="Fill_25" data-name="Fill 25" d="M12.826,25.527V23.392A10.629,10.629,0,1,1,23.393,12.774H25.53a12.767,12.767,0,1,0-12.7,12.753" transform="translate(5.894 6.473)" fill="#6C1123" />
+        <path id="Fill_27" data-name="Fill 27" d="M1.193,18.655A17.519,17.519,0,1,1,18.6,36.228l0,1.195A18.712,18.712,0,1,0,0,18.651l1.193,0" transform="translate(0 0.616)" fill="#6C1123" />
+      </g>
+    </g>
+    <path id="Fill_29" data-name="Fill 29" d="M0,15.739A15.691,15.691,0,0,0,4.624,26.89L5.814,25.7a14.062,14.062,0,1,1,19.9-.049l1.187,1.186A15.741,15.741,0,1,0,0,15.739" transform="translate(2.914 3.494)" fill="#6C1123" />
+    </g>
+</svg></svg>

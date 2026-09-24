@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:ns1="http://www.inkscape.org/namespaces/inkscape" xmlns:ns2="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" viewBox="0 0 192 192" width="192" height="192"><rect width="192" height="192" fill="#141414" /><svg id="svg3057" version="1.1" ns1:version="0.47 r22583" ns2:docname="New document 3" viewBox="-0.207219 0.475444 34.1759 34.805" x="34.6053" y="34.0252" width="122.2221" height="124.4090">
+  <defs id="defs3059">
+    <clipPath clipPathUnits="userSpaceOnUse" id="clipPath50">
+      <path d="m 533.05,245.88 149.94,0 0,-24.84 -149.94,0 0,24.84 z" id="path52" />
+    </clipPath>
+  </defs>
+  <g ns1:label="Layer 1" ns1:groupmode="layer" id="layer1" transform="translate(-203.76324,-512.09379)">
+    <g transform="matrix(1.25,0,0,-1.25,-462.54926,821.33379)" id="g46">
+      <g id="g48" clip-path="url(#clipPath50)">
+        <path d="m 537.78338,229.49459 7.937,0 -4.094,-7.771 -7.812,0 3.969,7.771" id="path58" fill="#ed1c24" fill-opacity="1" fill-rule="evenodd" stroke="none" />
+        <path d="m 546.04438,246.29959 12.809,-24.546 -8.96,0 -8.351,15.878 4.502,8.668" id="path60" fill="#F2F2F2" fill-opacity="1" fill-rule="evenodd" stroke="none" />
+        </g>
+    </g>
+  </g>
+</svg></svg>
