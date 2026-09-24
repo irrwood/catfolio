@@ -47,6 +47,7 @@ a = Analysis(
         "app.mail_service",
         "app.lab",
         "app.telegram_notify",
+        "longbridge",  # optional: bundled only if requirements-longbridge.txt is installed
         # ── scripts imported at runtime via sys.path ──
         "build_trading212_v2",
         "enrich_trading212_data",

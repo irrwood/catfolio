@@ -12,7 +12,7 @@ Project repository: [github.com/irrwood/catfolio](https://github.com/irrwood/cat
 
 - **Local-first by default**: portfolio files, imported CSVs, caches, saved strategy runs, and API keys stay on your machine.
 - **Demo-safe for open source**: `CATFOLIO_DEMO=1` uses bundled sample data and does not read local private account files.
-- **Broker sync or CSV import**: connect Trading 212 for live holdings, or upload broker transaction CSVs to calculate weighted-average cost and current positions.
+- **Broker sync or CSV import**: connect Trading 212, Longbridge, Moomoo OpenD, or IBKR Client Portal Gateway in Settings → Accounts for live holdings, or upload broker transaction CSVs to calculate weighted-average cost and current positions.
 - **Portfolio overview**: total value, P&L, breadth, concentration, sector exposure, and the largest positions at a glance.
 - **Detailed holdings**: full position detail with cost basis, quote currency, market value, P&L, account, and raw-versus-ETF-look-through views.
 - **Returns workspace**: portfolio returns against benchmarks such as SPY, QQQ, and IWM, with monthly heatmaps.
@@ -62,6 +62,8 @@ cd catfolio/v3_backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+# Optional, only for Longbridge account sync (Linux needs glibc 2.39+):
+# pip install -r requirements-longbridge.txt
 
 CATFOLIO_DEMO=1 uvicorn app.main:app --host 127.0.0.1 --port 8787
 ```
@@ -141,6 +143,8 @@ Catfolio works in demo mode without any keys. For live data or AI analysis, use 
 | `TELEGRAM_BOT_TOKEN` | Optional Telegram alert bot | [Telegram BotFather tutorial](https://core.telegram.org/bots/tutorial) |
 | `TELEGRAM_CHAT_ID` | Optional Telegram alert destination | [Telegram Bot API docs](https://core.telegram.org/bots/api) |
 
+Longbridge credentials are not environment variables. Install the optional SDK first (`pip install -r requirements-longbridge.txt` in `v3_backend/`), then create an app on the [Longbridge OpenAPI portal](https://open.longbridge.com/) and paste its App Key, App Secret and Access Token into Settings → Accounts. See [docs/web-account-sync.md](docs/web-account-sync.md#longbridge).
+
 Keep provider keys out of git. Use `.env`, macOS Keychain, or another local secret store, and prefer separate keys with spending limits where providers support them.
 
 Run without `CATFOLIO_DEMO=1` when you are ready to use real data:
@@ -210,7 +214,7 @@ Results include equity curve, CAGR, volatility, Sharpe ratio, max drawdown, turn
 - `CATFOLIO_DATA_DIR` lets you keep private data outside the repository.
 - Demo mode uses static sample holdings and market content.
 - Demo-mode bank and email examples are generated from bundled fictional records. In real mode, Plaid access tokens are encrypted locally and bank transactions remain in the configured `CATFOLIO_DATA_DIR`.
-- External network calls happen only when you configure and use providers such as Trading 212, Yahoo Finance, FMP, Finnhub, Massive, FRED, Plaid, IMAP, Telegram, or an AI provider.
+- External network calls happen only when you configure and use providers such as Trading 212, Longbridge, Yahoo Finance, FMP, Finnhub, Massive, FRED, Plaid, IMAP, Telegram, or an AI provider.
 
 This is not financial advice. Catfolio is a personal analysis tool; verify all numbers before making investment decisions.
 

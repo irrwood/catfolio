@@ -10,7 +10,7 @@
   const pageStatus = document.getElementById('accountStatus');
   const previewSection = document.getElementById('accountPreview');
   const fields = document.getElementById('accountConnectionFields');
-  const labels = {trading212: 'Trading 212', moomoo: 'Moomoo', ibkr: 'Interactive Brokers', csv: 'CSV 导入'};
+  const labels = {trading212: 'Trading 212', moomoo: 'Moomoo', ibkr: 'Interactive Brokers', longbridge: 'Longbridge', csv: 'CSV 导入'};
   let state = {accounts: [], legacy: []};
   let active = null;
   let token = null;
@@ -19,13 +19,15 @@
     csv: [],
     trading212: [['api_key', 'API Key', 'password', '粘贴 API Key'], ['api_secret', 'API Secret', 'password', '粘贴对应的 API Secret']],
     moomoo: [['host', 'OpenD Host', 'text', '127.0.0.1'], ['port', 'OpenD Port', 'number', '11111'], ['markets', '市场', 'text', 'US,HK'], ['account_id', '账户 ID', 'text', '填写需同步的账户 ID']],
-    ibkr: [['base_url', 'Gateway URL', 'url', 'https://localhost:5000/v1/api'], ['account_id', '账户 ID', 'text', '例如 U1234567']]
+    ibkr: [['base_url', 'Gateway URL', 'url', 'https://localhost:5000/v1/api'], ['account_id', '账户 ID', 'text', '例如 U1234567']],
+    longbridge: [['app_key', 'App Key', 'password', '粘贴 App Key'], ['app_secret', 'App Secret', 'password', '粘贴 App Secret'], ['access_token', 'Access Token', 'password', '粘贴 Access Token'], ['account_id', '账户 ID', 'text', '可留空，默认使用长桥会员 ID']]
   };
   const hints = {
     csv: '上传此账户的完整交易 CSV（Date、Action、Ticker、Quantity、Price、Currency）。预览后确认替换本账户的 CSV 记录，其他账户不受影响。导入后可刷新行情。',
     trading212: '使用只读 API Key 和对应 Secret。凭证保存在服务器所在设备的系统凭证库。当前同步持仓与现金，完整交易流水仍需 CSV 补充。',
     moomoo: '先在运行 Catfolio 的设备上启动并登录 OpenD。每个连接对应一个账户；多账户请分别添加。',
-    ibkr: '先在运行 Catfolio 的设备上启动并登录 Client Portal Gateway。每个连接对应一个账户。'
+    ibkr: '先在运行 Catfolio 的设备上启动并登录 Client Portal Gateway。每个连接对应一个账户。',
+    longbridge: '在长桥开放平台获取 App Key、App Secret 和 Access Token。Catfolio 只读取持仓、资金和行情，不会下单；但这组凭证本身可以交易，请妥善保管。访问令牌过期后需重新生成。'
   };
   function element(tag, text, className) {
     const el = document.createElement(tag);
@@ -123,7 +125,7 @@
   async function operation(fn) {
     if (busy) return;
     setBusy(true);
-    try { await fn(); } catch (error) { status.textContent = error.message; }
+    try { await fn(); } catch (error) { status.textContent = tr(error.message); }
     finally { setBusy(false); if (token) document.getElementById('confirmAccountSync').focus(); }
   }
   async function save() {

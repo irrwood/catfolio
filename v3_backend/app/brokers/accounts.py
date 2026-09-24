@@ -18,8 +18,9 @@ import urllib.request
 from app import data_store
 from app.cache import clear_all
 from app.settings import ROOT, V2_DIR
-from .service import SUPPORTED_BROKERS, _atomic_json, _broker_portfolio
+from .service import _atomic_json, _broker_portfolio
 from .ibkr import IBKRAdapter, IBKRConfig
+from .longbridge import LongbridgeAdapter, LongbridgeConfig, LongbridgeError
 from .moomoo import MoomooAdapter, MoomooConfig
 
 STORE = V2_DIR / 'accounts.json'
@@ -29,7 +30,17 @@ FIELDS = {
     'trading212': ('api_key', 'api_secret'),
     'moomoo': ('host', 'port', 'markets', 'account_id'),
     'ibkr': ('base_url', 'account_id'),
+    'longbridge': ('app_key', 'app_secret', 'access_token', 'account_id'),
     'csv': (),
+}
+# Display names for account connections. The legacy single-broker flow keeps
+# its own SUPPORTED_BROKERS list, which cannot sync every provider here.
+ACCOUNT_PROVIDER_LABELS = {
+    'trading212': 'Trading 212',
+    'moomoo': 'Moomoo',
+    'ibkr': 'Interactive Brokers',
+    'longbridge': 'Longbridge',
+    'csv': 'CSV',
 }
 
 
@@ -103,6 +114,8 @@ def save_connection(account_id, name, provider, config, replaces_account=None):
             IBKRConfig(base_url=config.get('base_url') or 'https://localhost:5000/v1/api', account_id=config.get('account_id', ''))
         if provider == 'moomoo':
             MoomooConfig(host=config.get('host') or '127.0.0.1', port=int(config.get('port') or 11111))
+        if provider == 'longbridge':
+            LongbridgeConfig(**{key: config.get(key, '') for key in FIELDS[provider]})
         if provider != 'csv' and not data_store.save_secret(_secret_name(account_id), json.dumps(config)):
             raise ValueError('无法保存到系统凭证库；账户未保存。')
         account = old | {'id': account_id, 'name': name, 'provider': provider, 'configured': True,
@@ -118,6 +131,8 @@ def _fetch(provider, config):
     if provider == 'moomoo':
         return MoomooAdapter(MoomooConfig(host=config.get('host') or '127.0.0.1', port=int(config.get('port') or 11111),
             markets=tuple((config.get('markets') or 'US,HK').upper().split(',')), account_id=int(config.get('account_id') or 0))).fetch_snapshot()
+    if provider == 'longbridge':
+        return LongbridgeAdapter(LongbridgeConfig(**{key: config.get(key, '') for key in FIELDS[provider]})).fetch_snapshot()
     # Use the same normalization as the existing pipeline, without its writes or
     # process-global credential environment mutations.
     scripts = str(ROOT / 'scripts')
@@ -153,6 +168,10 @@ def preview(account_id, csv_text=None):
     try:
         if raw is None:
             raw = _fetch(account['provider'], config)
+    except LongbridgeError as exc:
+        # Its message is chosen from fixed texts by failure reason and never
+        # includes SDK error text.
+        raise ValueError(str(exc)) from None
     except Exception:
         # Provider exceptions can contain URLs or credential material.
         raise ValueError('连接失败，请检查凭证和本机网关后重试。现有数据已保留。') from None
@@ -170,7 +189,7 @@ def preview(account_id, csv_text=None):
         raise ValueError('连接返回了另一个券商账户；请通过添加账户导入。')
     raw = deepcopy(raw)
     raw['provider'] = account['provider']
-    raw['label'] = SUPPORTED_BROKERS.get(account['provider'], 'CSV')
+    raw['label'] = ACCOUNT_PROVIDER_LABELS.get(account['provider'], 'CSV')
     raw['as_of_unix'] = int(time.time())
     _build(raw)  # Validate normalization before offering confirmation.
     token = secrets.token_urlsafe(32)

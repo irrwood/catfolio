@@ -1,0 +1,6 @@
+# Optional: Longbridge account sync (Settings -> Accounts -> Longbridge).
+# The longbridge SDK ships compiled extensions only, and its Linux wheels need
+# glibc 2.39 or newer, so it is installed on demand instead of with requirements.txt.
+# Run in v3_backend/ after installing requirements.txt:
+#   pip install -r requirements-longbridge.txt
+longbridge>=5.1,<6

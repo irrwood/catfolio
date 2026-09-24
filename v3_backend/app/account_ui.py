@@ -36,7 +36,7 @@ def render_accounts(demo):
       <header class="account-dialog-header"><div><h2 id="accountDialogTitle">添加账户</h2><p id="accountDialogSubtitle">配置连接后预览持仓</p></div><button type="button" class="settings-button" id="closeAccount" aria-label="关闭账户窗口">×</button></header>
       <form id="accountForm">
         <label>账户名称<input class="settings-input" name="name" required maxlength="80" autocomplete="off" placeholder="例如：长期投资" /></label>
-        <label>券商<select class="settings-input" name="provider"><option value="trading212">Trading 212</option><option value="moomoo">Moomoo / Futu OpenD</option><option value="ibkr">Interactive Brokers</option><option value="csv">CSV 文件</option></select></label>
+        <label>券商<select class="settings-input" name="provider"><option value="trading212">Trading 212</option><option value="moomoo">Moomoo / Futu OpenD</option><option value="ibkr">Interactive Brokers</option><option value="longbridge">Longbridge 长桥</option><option value="csv">CSV 文件</option></select></label>
         <div id="accountConnectionFields"></div>
         <label id="accountLegacyLabel">关联已有持仓<select class="settings-input" name="replaces_account"><option value="">新账户</option></select></label>
         <p class="settings-notice" id="accountConnectionHint"></p>
