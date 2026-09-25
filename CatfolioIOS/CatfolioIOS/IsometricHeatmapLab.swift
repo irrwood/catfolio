@@ -462,7 +462,7 @@ private struct IsometricHeatmapTile: View {
             }
         }
         .lineLimit(1)
-        .foregroundStyle(.black)
+        .foregroundStyle(CatfolioTheme.blackTextOnColor)
         .padding(padding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(IsometricHeatmapLabStyle.fill(for: tile), in: shape)

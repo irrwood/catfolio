@@ -371,7 +371,7 @@ struct StockScreenerView: View {
                 ForEach(templates) { template in
                     Button { apply(template) } label: {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(template.title).foregroundStyle(.primary)
+                            Text(template.title).foregroundStyle(CatfolioTheme.primaryText)
                             Text(template.detail).font(.caption).foregroundStyle(.secondary)
                         }.padding(.vertical, 2)
                     }.disabled(busy)

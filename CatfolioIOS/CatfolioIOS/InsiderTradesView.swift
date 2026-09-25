@@ -159,7 +159,7 @@ struct InsiderTradesSummaryCard: View {
             }
         }
         .padding(.horizontal, 16)
-        .holdingDetailGlassCard()
+        .holdingDetailCard()
     }
 
     private func comparisonTable(recent: InsiderTradesSnapshot.Summary,

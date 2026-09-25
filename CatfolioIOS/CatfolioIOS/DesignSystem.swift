@@ -233,7 +233,7 @@ enum SecurityDetailPresentation {
     /// home page turned it a dirty grey; in light mode it is kept light enough
     /// to read as depth rather than a stain.
     static let backdropColor = UIColor { trait in
-        UIColor.black.withAlphaComponent(trait.userInterfaceStyle == .dark ? 0.28 : 0.10)
+        UIColor.black.withAlphaComponent(trait.userInterfaceStyle == .dark ? 0.5 : 0.35)
     }
 
     /// The top of the designed ground. Figma paints `rgba(45,50,57,0.5)` over a
@@ -538,9 +538,12 @@ private struct HoldingDetailPreviewModifier: ViewModifier {
                         cornerRadius: 12,
                         actionTitle: L10n.text("打开个股"),
                         actionImage: "arrow.up.forward.app",
+                        // The page's top down to the end of its price chart:
+                        // enough to recognise the security, small enough to
+                        // stay a glance.
                         previewSize: {
                             let screen = UIScreen.main.bounds.size
-                            return CGSize(width: min(390, screen.width - 48), height: min(640, screen.height * 0.66))
+                            return CGSize(width: min(390, screen.width - 48), height: min(450, screen.height * 0.55))
                         },
                         preview: {
                             // The actual detail page shares its cache with a
@@ -749,6 +752,13 @@ extension View {
             .presentationDragIndicator(.hidden)
             .presentationCornerRadius(SecurityDetailPresentation.cornerRadius)
             .presentationBackground { SecurityDetailPresentation.ground }
+    }
+
+    /// For a presenter that opens and closes through the snapshot transition:
+    /// the backdrop that lets the transition hold the sheet and its shade
+    /// back until the flying card lands, and hand them over when it does.
+    func securityDetailSnapshotBackdrop() -> some View {
+        background(SecurityDetailBackdrop().allowsHitTesting(false).accessibilityHidden(true))
     }
 
     /// The same ground for a security page pushed onto a navigation stack,
@@ -1057,6 +1067,17 @@ enum CatfolioTheme {
     // Figma 241:45228: white stationery on a black backdrop.
     static let paperFold = Color(white: 239.0 / 255.0)
     static let accent = CatfolioPalette.blue500
+    /// Apply to primary lettering at the text site; a root foreground style also recolors tinted buttons.
+    static let primaryTextUIColor = UIColor { trait in
+        trait.userInterfaceStyle == .dark
+            ? UIColor.label.resolvedColor(with: trait)
+            : UIColor(red: 30 / 255, green: 30 / 255, blue: 32 / 255, alpha: 1)
+    }
+    static let primaryText = Color(uiColor: primaryTextUIColor)
+    /// Black lettering on bright colored surfaces stays black in dark mode.
+    static let blackTextOnColor = Color(uiColor: UIColor { trait in
+        trait.userInterfaceStyle == .dark ? .black : primaryTextUIColor.resolvedColor(with: trait)
+    })
     static let positive = CatfolioPalette.green500
     static let danger = CatfolioPalette.rose500
     static let warning = CatfolioPalette.orange500
@@ -1119,7 +1140,7 @@ enum CatfolioTheme {
     }
 
     static func surface(for colorScheme: ColorScheme) -> Color {
-        Color(uiColor: .secondarySystemGroupedBackground)
+        SettingsTemplate.card
     }
 }
 
@@ -1232,11 +1253,11 @@ enum CompanyNameCatalog {
     // Match exact listings; stripping arbitrary exchange suffixes can alias another company.
     private static let commonNames: [String: String] = [
         "AAPL": "Apple", "ADBE": "Adobe", "AMD": "AMD", "AMZN": "Amazon",
-        "ARM": "Arm", "ASML": "ASML", "AVGO": "Broadcom", "BABA": "Alibaba",
+        "ARM": "Arm", "ASML": "ASML", "AVGO": "Broadcom", "AXP": "American Express", "BABA": "Alibaba",
         "BAC": "Bank of America", "BIDU": "Baidu", "BRK-A": "Berkshire Hathaway",
         "BRK-B": "Berkshire Hathaway", "BRK.A": "Berkshire Hathaway", "BRK.B": "Berkshire Hathaway",
         "COST": "Costco", "CSCO": "Cisco", "CVX": "Chevron", "DIS": "Disney",
-        "GOOG": "Alphabet", "GOOGL": "Alphabet", "GS": "Goldman Sachs", "IBM": "IBM",
+        "GOOG": "Alphabet", "GOOGL": "Alphabet", "GS": "Goldman Sachs", "IBM": "IBM", "IBKR": "Interactive Brokers",
         "INTC": "Intel", "JD": "JD.com", "JNJ": "Johnson & Johnson", "JPM": "JPMorgan Chase",
         "KO": "Coca-Cola", "LLY": "Eli Lilly", "MA": "Mastercard", "MCD": "McDonald’s",
         "META": "Meta", "MS": "Morgan Stanley", "MSFT": "Microsoft", "MU": "Micron",
@@ -1247,7 +1268,11 @@ enum CompanyNameCatalog {
     ]
 
     private static let legalSuffix = try! NSRegularExpression(
-        pattern: #"[\s,]+(?:incorporated|corporation|limited|inc|corp|ltd|plc|co)\.?$"#,
+        pattern: #"[\s,]+(?:incorporated|corporation|limited|holdings?|inc|corp|ltd|plc|co)\.?$"#,
+        options: [.caseInsensitive]
+    )
+    private static let stockDescriptor = try! NSRegularExpression(
+        pattern: #"\s+(?:-\s+)?(?:common stock|common shares|ordinary shares)$"#,
         options: [.caseInsensitive]
     )
     private static let fundDescriptor = try! NSRegularExpression(
@@ -1255,16 +1280,23 @@ enum CompanyNameCatalog {
     )
 
     private static func removingLegalSuffixes(_ source: String) -> String {
-        var name = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        let original = source.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: ",")))
         // Fund names carry product, share-class and distribution information.
-        guard fundDescriptor.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) == nil else { return name }
+        guard fundDescriptor.firstMatch(in: original, range: NSRange(original.startIndex..., in: original)) == nil else { return original }
+        let parts = SecurityNameParts(original)
+        let classSuffix = String(original.dropFirst(parts.primary.count))
+        var name = parts.primary
+        if let match = stockDescriptor.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)),
+           let range = Range(match.range, in: name) {
+            name = String(name[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         while let match = legalSuffix.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)),
               let range = Range(match.range, in: name) {
             let shortened = String(name[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !shortened.isEmpty else { break }
             name = shortened
         }
-        return name
+        return name + classSuffix
     }
 
     // Only include established everyday names. An unknown symbol keeps the broker name
@@ -1724,7 +1756,7 @@ struct ContentCard: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(20)
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: CatfolioStyle.cardRadius, style: .continuous))
+            .background(SettingsTemplate.card, in: RoundedRectangle(cornerRadius: CatfolioStyle.cardRadius, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: CatfolioStyle.cardRadius, style: .continuous)
                     .stroke(Color.primary.opacity(0.055), lineWidth: 1)
@@ -1752,7 +1784,7 @@ struct StatusNotice: View {
 
             Text(L10n.message(text))
                 .font(.footnote)
-                .foregroundStyle(.primary)
+                .foregroundStyle(CatfolioTheme.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
@@ -1859,13 +1891,13 @@ private enum ChartTimeRangePickerMetrics {
 }
 
 /// The single time-window vocabulary used by every chart in the app.
-/// The picker presents these eight ranges in five stable slots; tapping an
-/// already-selected slot advances to the next value in that slot.
+/// Tapping a selected grouped slot advances to its next range.
 enum ChartTimeRange: String, CaseIterable, Identifiable {
     case oneDay = "1D"
     case oneWeek = "1W"
     case oneMonth = "1M"
     case twoMonths = "2M"
+    case threeMonths = "3M"
     case yearToDate = "YTD"
     case sixMonths = "6M"
     case oneYear = "1Y"
@@ -1886,6 +1918,14 @@ enum ChartTimeRange: String, CaseIterable, Identifiable {
         [.maximum, .fiveYears],
     ]
 
+    /// The comparison's seven visible slots from Figma 437:11904. Paired
+    /// ranges preserve every interval available in the original chart.
+    static let comparisonChoiceGroups: [[ChartTimeRange]] = [
+        [.oneDay], [.oneWeek], [.oneMonth, .twoMonths],
+        [.threeMonths, .sixMonths], [.yearToDate],
+        [.oneYear, .twoYears], [.maximum, .fiveYears],
+    ]
+
     func includes(
         _ date: Date,
         through lastDate: Date,
@@ -1902,6 +1942,8 @@ enum ChartTimeRange: String, CaseIterable, Identifiable {
             start = calendar.date(byAdding: .month, value: -1, to: lastDate)
         case .twoMonths:
             start = calendar.date(byAdding: .month, value: -2, to: lastDate)
+        case .threeMonths:
+            start = calendar.date(byAdding: .month, value: -3, to: lastDate)
         case .yearToDate:
             start = calendar.date(from: calendar.dateComponents([.year], from: lastDate))
         case .sixMonths:
@@ -1970,24 +2012,27 @@ struct ChartTimeRangePicker: View {
     @Environment(\.locale) private var appLocale
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @Binding var selection: ChartTimeRange
+    var choiceGroups = ChartTimeRange.choiceGroups
     var isDisabled = false
     var usesBrightSelectedBackground = false
     /// On a tinted field — the gain-sources hero — the strip carries the
     /// field's colour, so the selected range is a white pill with dark text
     /// in both schemes rather than the page's own fill.
     var isOnTintedField = false
+    var isOnDarkCanvas = false
+    var usesRawRangeLabels = false
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(ChartTimeRange.choiceGroups.indices, id: \.self) { index in
-                let group = ChartTimeRange.choiceGroups[index]
+            ForEach(choiceGroups.indices, id: \.self) { index in
+                let group = choiceGroups[index]
                 let choice = displayedChoice(in: group)
                 let isSelected = group.contains(selection)
                 Button {
                     select(group)
                 } label: {
-                    ChartTimeRangeMorphingLabel(text: choice.title)
+                    ChartTimeRangeMorphingLabel(text: usesRawRangeLabels ? choice.rawValue : choice.title)
                         .appText(.footnote, weight: isSelected ? .semibold : .medium)
                         .foregroundStyle(textColor(isSelected: isSelected))
                         .lineLimit(1)
@@ -2049,6 +2094,9 @@ struct ChartTimeRangePicker: View {
     }
 
     private func textColor(isSelected: Bool) -> Color {
+        if isOnDarkCanvas {
+            return .white.opacity(isSelected ? 1 : 0.5)
+        }
         if isOnTintedField {
             if isSelected { return Color(red: 0.10, green: 0.10, blue: 0.10) }
             return colorScheme == .dark ? Color.white.opacity(0.82) : Color.black.opacity(0.58)
@@ -2060,6 +2108,7 @@ struct ChartTimeRangePicker: View {
     }
 
     private var selectedBackgroundColor: Color {
+        if isOnDarkCanvas { return .white.opacity(0.10) }
         if isOnTintedField { return .white }
         if usesBrightSelectedBackground, colorScheme == .light {
             return .white
@@ -2313,6 +2362,24 @@ private struct AssetLogoTileMask: Shape {
     }
 }
 
+/// The logo image each ticker is showing right now. The security page's
+/// flying logo is built from it: already decoded, nothing redrawn at the tap.
+@MainActor
+final class AssetLogoShownImages {
+    static let shared = AssetLogoShownImages()
+    private let images = NSCache<NSString, UIImage>()
+
+    private init() { images.countLimit = 200 }
+
+    func record(_ image: UIImage, for ticker: String) {
+        images.setObject(image, forKey: ticker.uppercased() as NSString)
+    }
+
+    func image(for ticker: String) -> UIImage? {
+        images.object(forKey: ticker.uppercased() as NSString)
+    }
+}
+
 private final class AssetLogoImageCache: @unchecked Sendable {
     static let shared = AssetLogoImageCache()
 
@@ -2404,6 +2471,7 @@ struct AssetLogo: View {
     @State private var loadedImage: UIImage?
     @State private var brandfetchLoaded = false
     @State private var brandfetchMissing = false
+    @State private var brandfetchDarkMissing = false
 
     var body: some View {
         Group {
@@ -2416,20 +2484,28 @@ struct AssetLogo: View {
                     size: size)
             } else if let brandfetchURL {
                 ZStack {
-                    fallback
-                    // Keep the web view visible while its transparent image is
-                    // loading. A fully transparent WKWebView can be deferred
-                    // among the many logo views in the holdings list.
-                    Color(uiColor: .secondarySystemGroupedBackground)
-                        .opacity(brandfetchLoaded ? 1 : 0)
+                    // A plain tile while the icon loads, not the coloured
+                    // letter: every new logo view — the security page's own
+                    // on each open — flashed the letter before the brand's
+                    // icon arrived. The letter is for a confirmed miss, which
+                    // clears `brandfetchURL` and lands in `fallback` below.
+                    SettingsTemplate.card
                     BrandfetchLogoImage(url: brandfetchURL) {
                         BrandfetchMissCache.shared.clear(logoSymbol ?? ticker)
                         brandfetchLoaded = true
                     } onMissing: {
-                        // Remembered for a week; the letter tile stays and the
-                        // next appearance skips the web view entirely.
-                        BrandfetchMissCache.shared.recordMissing(logoSymbol ?? ticker)
-                        brandfetchMissing = true
+                        if BrandfetchLogoURL.isDark(brandfetchURL) {
+                            // No dark icon: remembered for a week, and the
+                            // default icon is requested instead.
+                            BrandfetchMissCache.shared.recordMissing(
+                                BrandfetchLogoURL.darkMissKey(logoSymbol ?? ticker))
+                            brandfetchDarkMissing = true
+                        } else {
+                            // Remembered for a week; the letter tile stays and the
+                            // next appearance skips the web view entirely.
+                            BrandfetchMissCache.shared.recordMissing(logoSymbol ?? ticker)
+                            brandfetchMissing = true
+                        }
                     }
                 }
             } else {
@@ -2437,25 +2513,36 @@ struct AssetLogo: View {
             }
         }
         .frame(width: size, height: size)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
+        .background(SettingsTemplate.card, in: RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
+                .stroke(
+                    colorScheme == .dark ? Color.white.opacity(0.05) : Color.black.opacity(0.05),
+                    lineWidth: 0.5
+                )
         }
         .clipShape(RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
         .accessibilityHidden(true)
+        .onChange(of: displayedImage, initial: true) { _, image in recordShownImage(image) }
         .task(id: logoURL ?? brandfetchURL) {
             // SwiftUI may reuse this view when a ranked chart slot changes
             // ticker. Clear the old decoded image before resolving the new URL.
             loadedImage = nil
             brandfetchLoaded = false
             brandfetchMissing = false
+            brandfetchDarkMissing = false
             await loadLogo()
         }
     }
 
     private var resolvedCornerRadius: CGFloat {
         cornerRadius ?? size * 2 / 7
+    }
+
+    /// The artwork on screen, for a transition to fly without redrawing it.
+    private func recordShownImage(_ image: UIImage?) {
+        guard let image else { return }
+        AssetLogoShownImages.shared.record(image, for: ticker)
     }
 
     private var displayedImage: UIImage? {
@@ -2529,7 +2616,12 @@ struct AssetLogo: View {
 
     private var brandfetchURL: URL? {
         guard logoURL == nil, !brandfetchMissing else { return nil }
-        return BrandfetchLogoURL.icon(for: logoSymbol ?? ticker)
+        // At night (or with 深色 Logo chosen) ask for the brand's dark icon,
+        // which WebKit then caches as its own URL; fall back to the default.
+        let style = AssetLogoStyle(rawValue: logoStyleRaw) ?? .automatic
+        let wantsDark = !brandfetchDarkMissing && style.usesDarkLogo(darkAppearance: colorScheme == .dark)
+        return (wantsDark ? BrandfetchLogoURL.icon(for: logoSymbol ?? ticker, dark: true) : nil)
+            ?? BrandfetchLogoURL.icon(for: logoSymbol ?? ticker)
     }
 }
 
@@ -2729,6 +2821,29 @@ enum DisplayFormat {
         )
     }
 
+    static func listShares(_ value: Double, compact: Bool = true, locale: Locale = .current) -> String {
+        guard value.isFinite else { return "—" }
+        var displayed = value
+        var suffix = ""
+        if compact && abs(value) >= 1_000 {
+            let suffixes = ["K", "M", "B"]
+            var unitIndex = 0
+            displayed /= 1_000
+            // Promote values that would round to 1000.00 of the smaller unit.
+            while abs(displayed) >= 999.995 && unitIndex < suffixes.count - 1 {
+                displayed /= 1_000
+                unitIndex += 1
+            }
+            suffix = suffixes[unitIndex]
+        }
+        return displayed.formatted(
+            .number
+                .grouping(.never)
+                .precision(.fractionLength(2))
+                .locale(locale)
+        ) + suffix
+    }
+
     static func money(
         _ value: Double,
         currency: String? = nil,
@@ -2887,43 +3002,3 @@ struct ContributionStripePattern: View {
     }
 }
 
-/// A card's surface drawn by the app rather than by Liquid Glass.
-///
-/// On an iPhone with an HDR screen the system glass lights its rim and body
-/// above normal white, so every glass card glowed brighter than the page and
-/// its shadow read as heavy against it; the simulator and screenshots, being
-/// standard range, never show it. There is no public switch to hold the glass
-/// to standard range, so cards draw the parts of it they used — a pale body,
-/// a lit top edge and a short shadow — in ordinary colours.
-struct CardSurface<S: InsettableShape>: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
-    let shape: S
-
-    private var isDark: Bool { colorScheme == .dark }
-
-    func body(content: Content) -> some View {
-        content.background {
-            shape
-                .fill(Color.white.opacity(isDark ? 0.06 : 0.55))
-                .overlay {
-                    shape.strokeBorder(
-                        LinearGradient(
-                            colors: isDark
-                                ? [.white.opacity(0.16), .white.opacity(0.04)]
-                                : [.white.opacity(0.95), .white.opacity(0.4)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 1
-                    )
-                }
-                .shadow(color: .black.opacity(isDark ? 0.3 : 0.05), radius: 10, y: 3)
-        }
-    }
-}
-
-extension View {
-    func cardSurface<S: InsettableShape>(in shape: S) -> some View {
-        modifier(CardSurface(shape: shape))
-    }
-}

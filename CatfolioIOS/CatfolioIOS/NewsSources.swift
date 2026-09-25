@@ -24,16 +24,6 @@ enum NewsProvider: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    var detail: String {
-        switch self {
-        case .googleNews: L10n.text("按公司名搜索新闻标题，覆盖面最广")
-        case .yahooFinance: L10n.text("Yahoo 标注了相关代码的财经新闻")
-        case .secEdgar: L10n.text("8-K、10-Q、10-K 等公司申报文件")
-        case .gdelt: L10n.text("全球新闻监测，补充小众和海外报道")
-        case .finnhub: L10n.text("美股公司新闻，附发布方摘要")
-        }
-    }
-
     var iconName: String {
         switch self {
         case .googleNews: "magnifyingglass"

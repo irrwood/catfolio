@@ -17,6 +17,10 @@ struct AIView: View {
     @State private var conversations: [AIConversation] = []
     @State private var activeConversationID: UUID?
     @State private var showsSidebar = false
+    /// How far the peeking conversation card is being dragged, negative up.
+    @State private var conversationCardDrag: CGFloat = 0
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var lastAttentionContext: String?
     @State private var question = ""
     @State private var isSending = false
@@ -39,8 +43,9 @@ struct AIView: View {
     @FocusState private var isComposerFocused: Bool
 
     private static let conversationBottomID = "ai-conversation-bottom"
-    /// Messages built at a time; earlier ones wait behind a button.
-    private static let messagePage = 40
+    /// Messages built at a time; earlier ones wait behind a button. Replies
+    /// run long, so a page is a screen or two, not the whole history.
+    private static let messagePage = 10
     @State private var visibleMessageLimit = AIView.messagePage
 
     private var hiddenMessageCount: Int { max(0, messages.count - visibleMessageLimit) }
@@ -61,13 +66,15 @@ struct AIView: View {
     var body: some View {
         Group {
             if isEmbedded {
-                conversation
-                    .overlay { AIConversationTopFade() }
-                    .overlay { sidebarDrawer }
+                embeddedConversation
                     .overlay(alignment: .top) {
                         AIConversationHeader(
-                            showsConversationButton: !showsSidebar,
-                            onShowConversations: showSidebar,
+                            showsConversations: showsSidebar,
+                            onToggleConversations: { showsSidebar ? dismissSidebar() : showSidebar() },
+                            onNewConversation: {
+                                startNewConversation()
+                                dismissSidebar()
+                            },
                             onClose: onClose
                         )
                     }
@@ -198,10 +205,12 @@ struct AIView: View {
                     }
 
                     // Debates started from a security sheet finish in
-                    // SecurityDebateStore, not in this conversation, so they
-                    // are listed rather than folded into the message history —
-                    // which also leaves the chat document's schema alone.
-                    SecurityDebateInbox()
+                    // SecurityDebateStore, not in any conversation: they are
+                    // listed on the new-chat page only, beside the presets,
+                    // rather than atop every conversation.
+                    if messages.isEmpty {
+                        SecurityDebateInbox()
+                    }
 
                     if hiddenMessageCount > 0 {
                         Button {
@@ -289,56 +298,96 @@ struct AIView: View {
         }
     }
 
-    @ViewBuilder
-    private var sidebarDrawer: some View {
-        if showsSidebar {
-            ZStack(alignment: .leading) {
-                // The scrim is what closes the drawer, so it has to cover the
-                // whole page rather than only the uncovered strip.
-                Color.black.opacity(0.45)
-                    .ignoresSafeArea()
-                    .contentShape(Rectangle())
-                    .onTapGesture(perform: dismissSidebar)
-                    .transition(.opacity)
-                    .accessibilityLabel(L10n.text("关闭对话列表"))
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityAction(.default, dismissSidebar)
+    /// How much of the open conversation stays on screen, as a card, while
+    /// the list is up.
+    private static let conversationPeekHeight: CGFloat = 120
+    private static let conversationCardRadius: CGFloat = 40
 
-                sidebarPanel
-                    .transition(.move(edge: .leading))
+    /// The conversation list sits behind the open conversation. Showing it
+    /// drops the conversation to a card peeking up from the bottom; tapping
+    /// or swiping the card up brings the conversation back.
+    private var embeddedConversation: some View {
+        GeometryReader { geometry in
+            let card = UnevenRoundedRectangle(
+                topLeadingRadius: showsSidebar ? Self.conversationCardRadius : 0,
+                topTrailingRadius: showsSidebar ? Self.conversationCardRadius : 0,
+                style: .continuous
+            )
+            ZStack(alignment: .top) {
+                if showsSidebar {
+                    conversationList
+                        .transition(.opacity)
+                }
+                conversation
+                    .overlay { AIConversationTopFade().opacity(showsSidebar ? 0 : 1) }
+                    .background {
+                        if showsSidebar { card.fill(SettingsTemplate.card) }
+                    }
+                    .clipShape(card)
+                    // Outside the clip: the card casts upwards onto the list,
+                    // so it reads as the conversation lifted off it.
+                    .background {
+                        if showsSidebar {
+                            card.fill(SettingsTemplate.card)
+                                .shadow(color: .black.opacity(colorScheme == .dark ? 0.7 : 0.22), radius: 28, y: -10)
+                        }
+                    }
+                    .allowsHitTesting(!showsSidebar)
+                    .overlay(alignment: .top) {
+                        if showsSidebar { conversationCardHandle }
+                    }
+                    .offset(y: showsSidebar
+                        ? max(0, geometry.size.height - Self.conversationPeekHeight + conversationCardDrag)
+                        : 0)
             }
-            .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: showsSidebar)
         }
+        .animation(reduceMotion ? nil : .snappy(duration: 0.35), value: showsSidebar)
+        .sensoryFeedback(.impact(weight: .medium), trigger: showsSidebar) { _, _ in hapticsEnabled }
     }
 
-    private var sidebarPanel: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text(L10n.text("对话"))
-                    .appText(.heading, weight: .semibold)
-                Spacer()
-                Button {
-                    startNewConversation()
-                    dismissSidebar()
-                } label: {
-                    Image(systemName: "square.and.pencil")
-                        .font(.body.weight(.medium))
-                        .frame(width: 40, height: 40)
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.text("新对话"))
+    /// The whole peeking card is the control; the chevron above says which
+    /// way it goes.
+    private var conversationCardHandle: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "chevron.compact.up")
+                .font(.system(size: 30, weight: .medium))
+                .foregroundStyle(.secondary)
+                .offset(y: -30)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: Self.conversationPeekHeight)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: dismissSidebar)
+        // The card follows the finger up, with some give downwards; a
+        // short or slow drag springs back.
+        .gesture(DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                let y = value.translation.height
+                conversationCardDrag = y < 0 ? y : y * 0.25
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 10)
+            .onEnded { value in
+                let opens = value.translation.height < -80 || value.predictedEndTranslation.height < -240
+                if opens {
+                    dismissSidebar()
+                } else {
+                    withAnimation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.25)) {
+                        conversationCardDrag = 0
+                    }
+                }
+            })
+        .accessibilityElement()
+        .accessibilityLabel(L10n.text("回到对话"))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction(.default, dismissSidebar)
+    }
 
+    private var conversationList: some View {
+        Group {
             if sidebarConversations.isEmpty {
                 Text(L10n.text("还没有对话"))
                     .appText(.footnote)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 18)
-                    .padding(.top, 18)
-                Spacer()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
                     ForEach(sidebarConversations) { conversation in
@@ -349,13 +398,24 @@ struct AIView: View {
                             sidebarRow(conversation)
                         }
                         .buttonStyle(.plain)
+                        // The open conversation — the card peeking below — is
+                        // outlined; a fill a shade lighter was lost on the
+                        // dark card.
                         .listRowBackground(
-                            conversation.id == activeConversationID
-                                ? Color.primary.opacity(0.10)
-                                : Color.clear
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .fill(SettingsTemplate.card)
+                                .overlay {
+                                    if conversation.id == activeConversationID {
+                                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                            .strokeBorder(CatfolioTheme.primaryText, lineWidth: 2)
+                                    }
+                                }
+                                .padding(.vertical, 5)
+                                .padding(.horizontal, 20)
                         )
+                        .accessibilityAddTraits(conversation.id == activeConversationID ? .isSelected : [])
                         .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10))
+                        .listRowInsets(EdgeInsets(top: 5, leading: 20, bottom: 5, trailing: 20))
                         .swipeActions(edge: .trailing) {
                             Button(L10n.text("删除"), systemImage: "trash", role: .destructive) {
                                 deleteConversation(conversation.id)
@@ -366,37 +426,30 @@ struct AIView: View {
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
                 .scrollIndicators(.hidden)
-                .padding(.top, 6)
+                .contentMargins(.top, 72, for: .scrollContent)
+                .contentMargins(.bottom, Self.conversationPeekHeight + 24, for: .scrollContent)
             }
         }
-        .frame(maxHeight: .infinity, alignment: .topLeading)
-        // Measured against the container rather than the screen, so a split
-        // view or a Stage Manager window gets a drawer proportional to the
-        // window it is actually in.
-        .containerRelativeFrame(.horizontal) { width, _ in
-            min(320, width * 0.82)
-        }
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .trailing) {
-            Rectangle()
-                .fill(Color.primary.opacity(0.12))
-                .frame(width: 0.5)
-        }
-        .ignoresSafeArea(edges: .bottom)
     }
 
     private func sidebarRow(_ conversation: AIConversation) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(conversation.title ?? L10n.text("新对话"))
                 .appText(.body)
                 .lineLimit(1)
-            Text(Self.relativeDate.localizedString(for: conversation.updatedAt, relativeTo: .now))
-                .appText(.caption)
-                .foregroundStyle(.secondary)
+            Group {
+                if conversation.id == activeConversationID {
+                    Text(L10n.text("当前对话")).fontWeight(.semibold).foregroundStyle(CatfolioTheme.primaryText)
+                        + Text(" · " + Self.relativeDate.localizedString(for: conversation.updatedAt, relativeTo: .now))
+                } else {
+                    Text(Self.relativeDate.localizedString(for: conversation.updatedAt, relativeTo: .now))
+                }
+            }
+            .appText(.caption)
+            .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 6)
-        .padding(.horizontal, 8)
+        .padding(20)
         .contentShape(Rectangle())
     }
 
@@ -427,8 +480,9 @@ struct AIView: View {
     }
 
     private func dismissSidebar() {
-        withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.35)) {
             showsSidebar = false
+            conversationCardDrag = 0
         }
     }
 
@@ -1022,7 +1076,7 @@ private struct ChatBubble: View {
             messageContent
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
-                .foregroundStyle(Color.primary)
+                .foregroundStyle(CatfolioTheme.primaryText)
         } else {
             HStack {
                 Spacer(minLength: 54)
@@ -1394,7 +1448,7 @@ private struct PortfolioAttentionDetail: View {
                 axis: .vertical
             )
             .appText(.subheading)
-            .foregroundStyle(.primary)
+            .foregroundStyle(CatfolioTheme.primaryText)
             .lineLimit(1...4)
             .focused($isAsking)
             .submitLabel(.send)
@@ -2224,16 +2278,8 @@ private struct AIComposer: View {
                 .submitLabel(.send)
                 .onSubmit(onSend)
 
-            Button(action: onSend) {
-                Image(systemName: "arrow.up")
-                    .font(.body.weight(.bold))
-                    .frame(width: 34, height: 34)
-                    .foregroundStyle(.white)
-                    .background(CatfolioStyle.blue, in: Circle())
-            }
-            .disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
-            .padding(5)
-            .accessibilityLabel(L10n.text("发送"))
+            composerActionButton
+                .padding(6)
         }
     }
 
@@ -2314,40 +2360,13 @@ private struct AIComposer: View {
                 // The app's own face, not the system body font the field
                 // otherwise takes.
                 .appText(.subheading)
-                .foregroundStyle(.primary)
+                .foregroundStyle(CatfolioTheme.primaryText)
                 .lineLimit(1...3)
                 .focused(focus)
                 .submitLabel(.send)
                 .onSubmit(onSend)
 
-            if let onStop {
-                Button(action: onStop) {
-                    Image(systemName: "stop.fill")
-                        .font(.subheadline.weight(.bold))
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.text("停止生成"))
-            } else if isSending {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(.primary)
-            } else {
-                Button(action: onSend) {
-                    Image(systemName: "arrow.up")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(canSend ? Color(uiColor: .systemBackground) : Color.primary.opacity(0.42))
-                        .frame(width: 32, height: 32)
-                        .background(
-                            canSend ? Color.primary : Color.primary.opacity(0.10),
-                            in: Circle()
-                        )
-                }
-                .buttonStyle(.plain)
-                .disabled(!canSend)
-                .accessibilityLabel(L10n.text("发送"))
-            }
+            composerActionButton
         }
         // Clear of the capsule's curve on the left; on the right the send
         // button sits 8pt in all round, concentric with the capsule's end.
@@ -2369,15 +2388,57 @@ private struct AIComposer: View {
     private var canSend: Bool {
         !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSending
     }
+
+    private enum ComposerAction { case empty, send, stop, busy }
+
+    private var composerAction: ComposerAction {
+        if onStop != nil { return .stop }
+        if isSending { return .busy }
+        return canSend ? .send : .empty
+    }
+
+    /// One circle in every state: black by day, white at night, with its
+    /// glyph in the page colour; only an empty field leaves it faint.
+    private var composerActionButton: some View {
+        let action = composerAction
+        let isFilled = action != .empty
+        return Button {
+            switch action {
+            case .send: onSend()
+            case .stop: onStop?()
+            case .empty, .busy: break
+            }
+        } label: {
+            ZStack {
+                Circle().fill(isFilled ? Color.primary : Color.primary.opacity(0.10))
+                if action == .busy {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .tint(Color(uiColor: .systemBackground))
+                } else {
+                    Image(systemName: action == .stop ? "stop.fill" : "arrow.up")
+                        .font(.system(size: action == .stop ? 12 : 15, weight: .bold))
+                        .foregroundStyle(isFilled ? Color(uiColor: .systemBackground) : Color.primary.opacity(0.42))
+                        .contentTransition(.symbolEffect(.replace))
+                }
+            }
+            .frame(width: 32, height: 32)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(action == .empty || action == .busy)
+        .animation(.easeOut(duration: 0.15), value: isFilled)
+        .accessibilityLabel(L10n.text(action == .stop ? "停止生成" : "发送"))
+    }
 }
 
 /// The presentation host owns the zoom geometry and interactive dismissal.
 struct AIAssistantPage: View {
     @Environment(\.locale) private var appLocale
-    @Environment(\.dismiss) private var dismiss
 
+    /// A root tab: nothing to close back to, so no close control.
     var body: some View {
-        AIView(isEmbedded: true, onClose: { dismiss() })
+        AIView(isEmbedded: true, onClose: nil)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background {
                 AIConversationGlowBackground()
@@ -2440,24 +2501,32 @@ private struct AIConversationGlowBackground: View {
 private struct AIConversationHeader: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isKeyboardVisible = false
-    let showsConversationButton: Bool
-    let onShowConversations: () -> Void
+    let showsConversations: Bool
+    let onToggleConversations: () -> Void
+    let onNewConversation: () -> Void
     let onClose: (() -> Void)?
 
     private var diameter: CGFloat { isKeyboardVisible ? 56 : 48 }
 
     var body: some View {
         HStack {
-            control("line.3.horizontal", action: onShowConversations)
-                .accessibilityLabel(L10n.text("对话列表"))
-                .opacity(showsConversationButton ? 1 : 0)
-                .allowsHitTesting(showsConversationButton)
-                .accessibilityHidden(!showsConversationButton)
+            control(showsConversations ? "chevron.down" : "line.3.horizontal", action: onToggleConversations)
+                .accessibilityLabel(L10n.text(showsConversations ? "回到对话" : "对话列表"))
             Spacer(minLength: 0)
-            if let onClose {
+            if showsConversations {
+                control("square.and.pencil", action: onNewConversation)
+                    .accessibilityLabel(L10n.text("新对话"))
+            } else if let onClose {
                 control("xmark", action: onClose)
                     .keyboardShortcut(.cancelAction)
                     .accessibilityLabel(L10n.text("关闭 AI 投资助手"))
+            }
+        }
+        .overlay {
+            if showsConversations {
+                Text(L10n.text("对话"))
+                    .appText(.body, weight: .semibold)
+                    .accessibilityAddTraits(.isHeader)
             }
         }
         .padding(.horizontal, 12)
@@ -2476,7 +2545,7 @@ private struct AIConversationHeader: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 18, weight: .regular))
-                .foregroundStyle(.primary)
+                .foregroundStyle(CatfolioTheme.primaryText)
                 .scaleEffect(isKeyboardVisible ? 1.1 : 1)
                 .frame(width: diameter, height: diameter)
                 .contentShape(Circle())
@@ -2680,7 +2749,7 @@ private struct StreamingAnswerView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .foregroundStyle(Color.primary)
+        .foregroundStyle(CatfolioTheme.primaryText)
         .accessibilityElement(children: .combine)
     }
 }

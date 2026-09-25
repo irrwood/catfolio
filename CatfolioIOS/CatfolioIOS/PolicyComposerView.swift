@@ -1123,7 +1123,7 @@ private struct PolicyActionLibrary: View {
             HStack(spacing: 12) {
                 PolicyActionIcon(type: action.type, size: 32)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(action.title).appText(.body, weight: .medium).foregroundStyle(.primary)
+                    Text(action.title).appText(.body, weight: .medium).foregroundStyle(CatfolioTheme.primaryText)
                     Text(action.subtitle).appText(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -1151,7 +1151,7 @@ private struct PolicyLibrarySheet: View {
                         HStack(spacing: 12) {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(entry.title.isEmpty ? L10n.text("未命名策略") : entry.title)
-                                    .appText(.body, weight: .medium).foregroundStyle(.primary)
+                                    .appText(.body, weight: .medium).foregroundStyle(CatfolioTheme.primaryText)
                                 Text(subtitle(entry)).appText(.caption).foregroundStyle(.secondary).lineLimit(1)
                             }
                             Spacer()
@@ -1228,7 +1228,7 @@ private struct PolicyHistorySheet: View {
                         } label: {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(record.updatedAt.formatted(date: .abbreviated, time: .shortened))
-                                    .appText(.body, weight: .medium).foregroundStyle(.primary)
+                                    .appText(.body, weight: .medium).foregroundStyle(CatfolioTheme.primaryText)
                                 Text(L10n.text("版本 \(Int(record.strategy["revision"].number ?? 0)) · \(status(record))"))
                                     .appText(.caption).foregroundStyle(.secondary)
                             }
@@ -1240,7 +1240,7 @@ private struct PolicyHistorySheet: View {
                         Button { pendingRestore = revision } label: {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(L10n.text("版本 \(Int(revision["revision"].number ?? 0))"))
-                                    .appText(.body, weight: .medium).foregroundStyle(.primary)
+                                    .appText(.body, weight: .medium).foregroundStyle(CatfolioTheme.primaryText)
                                 Text(revision["nodes"].array.map { PolicyShortcut.action($0["type"].string).title }.joined(separator: " → "))
                                     .appText(.caption).foregroundStyle(.secondary).lineLimit(2)
                             }

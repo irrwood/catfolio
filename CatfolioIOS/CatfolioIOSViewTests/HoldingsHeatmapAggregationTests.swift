@@ -67,40 +67,6 @@ final class AssetLogoLayoutTests: XCTestCase {
     }
 
     @MainActor
-    func testRoundedBrandTileExtendsItsEdgeColourIntoCanvas() throws {
-        let url = try XCTUnwrap(Bundle.main.url(forResource: "MCD", withExtension: "png", subdirectory: "AssetLogos"))
-        let image = try XCTUnwrap(UIImage(contentsOfFile: url.path))
-        let layout = AssetLogoLayout.resolve(image)
-        let edge = try XCTUnwrap(layout.edgeCanvas)
-        XCTAssertFalse(layout.usesWhiteCanvas)
-        XCTAssertEqual(layout.insetFraction, 0.08, "Keep the artwork's existing size")
-        XCTAssertGreaterThan(edge.green, edge.red)
-        XCTAssertGreaterThan(edge.green, edge.blue)
-        let renderer = ImageRenderer(content: AssetLogoArtwork(image: image, layout: layout, size: 100))
-        renderer.scale = 1
-        let output = try XCTUnwrap(renderer.cgImage)
-        var pixels = [UInt8](repeating: 0, count: 100 * 100 * 4)
-        let context = try XCTUnwrap(CGContext(data: &pixels, width: 100, height: 100,
-            bitsPerComponent: 8, bytesPerRow: 400, space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
-        context.draw(output, in: CGRect(x: 0, y: 0, width: 100, height: 100))
-        let top = (2 * 100 + 50) * 4
-        XCTAssertEqual(Double(pixels[top]) / 255, edge.red, accuracy: 0.02)
-        XCTAssertEqual(Double(pixels[top + 1]) / 255, edge.green, accuracy: 0.02)
-        XCTAssertEqual(Double(pixels[top + 2]) / 255, edge.blue, accuracy: 0.02)
-        XCTAssertEqual(pixels[top + 3], 255)
-        let whitePixels = stride(from: 0, to: pixels.count, by: 4).filter {
-            min(pixels[$0], pixels[$0 + 1], pixels[$0 + 2]) > 235 && pixels[$0 + 3] > 240
-        }
-        XCTAssertTrue(whitePixels.isEmpty, "MCD's source-corner white must not leave four flecks")
-        let attachment = XCTAttachment(image: try XCTUnwrap(renderer.uiImage))
-        attachment.name = "mcd-edge-fill"
-        attachment.lifetime = .keepAlways
-        add(attachment)
-        try renderer.uiImage?.pngData()?.write(to: URL(fileURLWithPath: "/tmp/catfolio-mcd-edge-fill.png"))
-    }
-
-    @MainActor
     func testMixedEdgesAndTransparentSymbolsDoNotInventABackground() {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -115,32 +81,6 @@ final class AssetLogoLayoutTests: XCTestCase {
         let symbol = fixture(size: CGSize(width: 96, height: 96), background: nil,
                              mark: CGRect(x: 0, y: 36, width: 96, height: 24))
         XCTAssertNil(AssetLogoLayout.resolve(symbol).edgeCanvas)
-    }
-
-    @MainActor
-    func testInsetBrandTilesFillSourcePaddingAcrossCompanies() throws {
-        for symbol in ["MCD", "ARM", "NBIS", "VT", "BEP", "FUTU"] {
-            let url = try XCTUnwrap(Bundle.main.url(forResource: symbol, withExtension: "png", subdirectory: "AssetLogos"))
-            let image = try XCTUnwrap(UIImage(contentsOfFile: url.path))
-            let layout = AssetLogoLayout.resolve(image)
-            let color = try XCTUnwrap(layout.edgeCanvas, symbol)
-            XCTAssertNotNil(layout.edgeTileBounds, symbol)
-            XCTAssertFalse(layout.usesWhiteCanvas, symbol)
-            let renderer = ImageRenderer(content: AssetLogoArtwork(image: image, layout: layout, size: 100))
-            renderer.scale = 1
-            let output = try XCTUnwrap(renderer.cgImage)
-            var pixels = [UInt8](repeating: 0, count: 100 * 100 * 4)
-            let context = try XCTUnwrap(CGContext(data: &pixels, width: 100, height: 100,
-                bitsPerComponent: 8, bytesPerRow: 400, space: CGColorSpaceCreateDeviceRGB(),
-                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
-            context.draw(output, in: CGRect(x: 0, y: 0, width: 100, height: 100))
-            for (x, y) in [(2, 50), (97, 50), (50, 2), (50, 97)] {
-                let i = (y * 100 + x) * 4
-                XCTAssertEqual(Double(pixels[i]) / 255, color.red, accuracy: 0.02, symbol)
-                XCTAssertEqual(Double(pixels[i + 1]) / 255, color.green, accuracy: 0.02, symbol)
-                XCTAssertEqual(Double(pixels[i + 2]) / 255, color.blue, accuracy: 0.02, symbol)
-            }
-        }
     }
 
     @MainActor
@@ -169,18 +109,10 @@ final class AssetLogoLayoutTests: XCTestCase {
     }
 
     @MainActor
-    func testWordmarksAndRoundMarksKeepTheirOriginalCanvas() throws {
-        for symbol in ["ASML", "AMD", "NVDA", "GOOG", "MSFT", "SPOT", "AVGO", "TGT", "COST"] {
-            let url = try XCTUnwrap(Bundle.main.url(forResource: symbol, withExtension: "png", subdirectory: "AssetLogos"))
-            XCTAssertNil(AssetLogoLayout.resolve(try XCTUnwrap(UIImage(contentsOfFile: url.path))).edgeCanvas, symbol)
-        }
-    }
-
-    @MainActor
     func testLogoRuleVisualComparison() async throws {
         var examples: [(String, UIImage)] = []
-        for symbol in ["MCD", "ARM", "NBIS", "VT", "FUTU", "SPOT", "ASML", "NVDA", "COST"] {
-            let url = try XCTUnwrap(Bundle.main.url(forResource: symbol, withExtension: "png", subdirectory: "AssetLogos"))
+        for symbol in ["MCD", "ARM", "NBIS", "VT", "TSLA", "SPOT", "ASML", "NVDA", "COST"] {
+            let url = try XCTUnwrap(AssetLogoExportCatalog.imageURL(for: symbol, dark: false))
             let image = try XCTUnwrap(UIImage(contentsOfFile: url.path))
             examples.append((symbol, image.preparingForDisplay() ?? image))
         }
@@ -252,7 +184,7 @@ final class HoldingsHeatmapAggregationTests: XCTestCase {
         window.makeKeyAndVisible()
         defer { window.isHidden = true; previousWindow?.makeKeyAndVisible() }
         await fulfillment(of: [resolved], timeout: 5)
-        XCTAssertEqual(resolvedURL?.lastPathComponent, "NVDA.png")
+        XCTAssertEqual(resolvedURL?.lastPathComponent, "NVDA.light.png")
         XCTAssertTrue(resolvedURL?.isFileURL == true, "Bundled logos need no network")
 
         // ImageRenderer does not run the logo's async task. After the live

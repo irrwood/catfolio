@@ -137,7 +137,7 @@ struct ResearchMetricCard: View {
                  : value.formatted(.number.precision(.fractionLength(2))))
                 .font(.system(size: valueSize, weight: .semibold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(.primary)
+                .foregroundStyle(CatfolioTheme.primaryText)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         } else if showsSkeleton {
@@ -226,8 +226,13 @@ struct MarketSecurityResult: Identifiable, Equatable, Sendable {
         return isFund ? "ETF · \(place)" : place
     }
 
-    static func search(_ query: String, in catalog: CompanyReferenceCatalog, limit: Int = 40) -> [Self] {
-        catalog.search(query, limit: limit).map { entry in
+    static func search(
+        _ query: String,
+        in catalog: CompanyReferenceCatalog,
+        limit: Int = 40,
+        shouldCancel: () -> Bool = { false }
+    ) -> [Self] {
+        catalog.search(query, limit: limit, shouldCancel: shouldCancel).map { entry in
             Self(
                 ticker: catalog.brokerSymbol(for: entry),
                 name: entry.name ?? entry.symbol,
@@ -381,15 +386,26 @@ struct TodayAttentionPreview: View {
     }
 }
 
+/// The system search field for both pages. Research keeps it under the
+/// large title, where tapping it collapses the title and moves the glass
+/// field to the top; the attention page filters with the default placement.
 private struct ResearchSystemSearch: ViewModifier {
-    let enabled: Bool
+    let showsAttention: Bool
     @Binding var query: String
+    @Binding var isPresented: Bool
+    var isFocused: FocusState<Bool>.Binding
 
     func body(content: Content) -> some View {
-        if enabled {
+        if showsAttention {
             content.searchable(text: $query, prompt: L10n.text("搜索持仓"))
         } else {
             content
+                .searchable(text: $query, isPresented: $isPresented,
+                            placement: .navigationBarDrawer(displayMode: .always),
+                            prompt: L10n.text("搜索股票、ETF 或公司名"))
+                .searchFocused(isFocused)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
         }
     }
 }
@@ -411,6 +427,7 @@ struct ResearchView: View {
     var showsAttention = false
     @Environment(\.locale) private var appLocale
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(AppModel.self) private var model
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var query = ""
@@ -418,8 +435,15 @@ struct ResearchView: View {
     /// The query `searchResults` answer, so a stale list is not mistaken
     /// for an empty one while the next search runs.
     @State private var searchedQuery = ""
+    /// Whether the directory has more matches than `searchResults` shows.
+    @State private var hasMoreSearchResults = false
+    /// A query the reader asked to see more of, and how many rows it shows.
+    /// Any other query starts from one page, so a keystroke never builds
+    /// more rows than a screen holds.
+    @State private var expandedSearch: ExpandedSearch?
     @State private var selectedSecurity: Holding?
     @FocusState private var isSearchFocused: Bool
+    @State private var isSearchPresented = false
     @State private var markets: [ResearchMarketSnapshot] = []
     @State private var isLoading = false
     @State private var report: PortfolioAttentionReport?
@@ -450,6 +474,12 @@ struct ResearchView: View {
     /// Research searches the whole directory; the attention page still
     /// filters its own results with the same field.
     private var isSearchingMarket: Bool { !showsAttention && !searchText.isEmpty }
+    private struct ExpandedSearch: Equatable { let query: String; let limit: Int }
+    private static let searchPageSize = 15
+    private static let searchPageStep = 25
+    private var searchLimit: Int {
+        expandedSearch.flatMap { $0.query == searchText ? $0.limit : nil } ?? Self.searchPageSize
+    }
 
     private var analysisRows: [PortfolioAttentionHolding] {
         Array((report?.attentionRows ?? []).filter {
@@ -480,9 +510,10 @@ struct ResearchView: View {
         .navigationTitle(L10n.text(showsAttention ? "今天值得关注" : "研究"))
         .navigationBarTitleDisplayMode(.large)
         .toolbarVisibility(.visible, for: .navigationBar)
-        // Market search stays in the page; the pushed attention page uses
-        // its own navigation search and rule controls.
-        .modifier(ResearchSystemSearch(enabled: showsAttention, query: $query))
+        // Research searches the market from the bar; the pushed attention
+        // page filters its own results and keeps its rule controls.
+        .modifier(ResearchSystemSearch(showsAttention: showsAttention, query: $query,
+                                       isPresented: $isSearchPresented, isFocused: $isSearchFocused))
         .scrollDismissesKeyboard(.immediately)
         .toolbar {
             if showsAttention {
@@ -539,7 +570,15 @@ struct ResearchView: View {
                 .securityDetailSheet()
         }
         .securityDetailOpenFeedback(trigger: selectedSecurity?.ticker, enabled: hapticsEnabled)
-        .task(id: showsAttention ? "" : searchText) { await searchMarket() }
+        .task(id: showsAttention ? "" : "\(searchLimit)|\(searchText)") { await searchMarket() }
+        .task {
+            // The first keystroke would otherwise wait on folding every name
+            // in the directory.
+            guard !showsAttention else { return }
+            await Task.detached(priority: .utility) {
+                (try? CompanyReferenceCatalog.bundled.get())?.prepareSearch()
+            }.value
+        }
         .task { if !showsAttention { await refreshMarkets() } }
         #if DEBUG
         .task {
@@ -584,9 +623,12 @@ struct ResearchView: View {
 
     private var researchPage: some View {
         SettingsPage {
-            marketSearchField
             if isSearchingMarket {
-                searchResultsSection
+                // Until the first answer for this query, nothing: a
+                // "searching" row there lasted a frame and read as a flash.
+                if !searchResults.isEmpty || searchedQuery == searchText {
+                    searchResultsSection
+                }
             } else {
                 SettingsSectionHeader(L10n.text("关键指标"))
                 LazyVGrid(
@@ -632,6 +674,23 @@ struct ResearchView: View {
                 }
             }
         }
+        // Search open with nothing typed: the page frosts behind the field,
+        // as the system search does, and a tap on it closes the search.
+        .overlay {
+            if isSearchPresented && searchText.isEmpty {
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { isSearchPresented = false }
+                    .accessibilityHidden(true)
+                    .transition(.opacity)
+            }
+        }
+        // Fades as search opens and closes only. The first letter swaps the
+        // page for results at once; fading the frost out over that swap
+        // flashed the metrics through it.
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: isSearchPresented)
     }
 
     private var attentionList: some View {
@@ -737,51 +796,12 @@ struct ResearchView: View {
         return change >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger
     }
 
-    /// The system search bar's shape, in the page: a filled capsule with the
-    /// glass, the clear button and, while typing, Cancel.
-    private var marketSearchField: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField(L10n.text("搜索股票、ETF 或公司名"), text: $query)
-                    .focused($isSearchFocused)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .submitLabel(.search)
-                    .accessibilityIdentifier("research.search")
-                if !query.isEmpty {
-                    Button { query = "" } label: {
-                        Image(systemName: "xmark.circle.fill")
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel(L10n.text("清除"))
-                }
-            }
-            .appText(.body)
-            .padding(.horizontal, 14)
-            .frame(height: 44)
-            .background(Capsule().fill(Color(uiColor: .tertiarySystemFill)))
-            if isSearchFocused || !query.isEmpty {
-                Button(L10n.text("取消")) {
-                    query = ""
-                    isSearchFocused = false
-                }
-                .buttonStyle(.plain)
-                .appText(.body)
-                .transition(.move(edge: .trailing).combined(with: .opacity))
-            }
-        }
-        .animation(.snappy(duration: 0.25), value: isSearchFocused || !query.isEmpty)
-    }
-
     private var searchResultsSection: some View {
         Group {
             SettingsSection(L10n.text("证券")) {
                 if searchResults.isEmpty {
                     SettingsRowContainer {
-                        Text(L10n.text(searchedQuery == searchText ? "没有找到匹配的证券" : "正在搜索…"))
+                        Text(L10n.text("没有找到匹配的证券"))
                             .appText(.subheading)
                             .foregroundStyle(SettingsTemplate.secondaryText)
                     }
@@ -792,6 +812,21 @@ struct ResearchView: View {
                         }
                         .buttonStyle(SettingsRowButtonStyle())
                         .accessibilityIdentifier("research.search.\(result.ticker)")
+                    }
+                    if hasMoreSearchResults {
+                        Button {
+                            expandedSearch = ExpandedSearch(query: searchText,
+                                                            limit: searchLimit + Self.searchPageStep)
+                        } label: {
+                            SettingsRowContainer {
+                                Text(L10n.text("显示更多"))
+                                    .appText(.subheading)
+                                    .foregroundStyle(SettingsTemplate.secondaryText)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                        .buttonStyle(SettingsRowButtonStyle())
+                        .accessibilityIdentifier("research.search.more")
                     }
                 }
             }
@@ -852,17 +887,30 @@ struct ResearchView: View {
         guard !text.isEmpty else {
             searchResults = []
             searchedQuery = ""
+            hasMoreSearchResults = false
+            expandedSearch = nil
             return
         }
+        let limit = searchLimit
         try? await Task.sleep(for: .milliseconds(120))
         guard !Task.isCancelled else { return }
-        let results = await Task.detached(priority: .userInitiated) { () -> [MarketSecurityResult] in
+        let worker = Task.detached(priority: .userInitiated) { () -> [MarketSecurityResult] in
             guard let catalog = try? CompanyReferenceCatalog.bundled.get() else { return [] }
-            return MarketSecurityResult.search(text, in: catalog)
-        }.value
+            // One past the page says whether "more" has anything to show.
+            return MarketSecurityResult.search(text, in: catalog, limit: limit + 1,
+                                               shouldCancel: { Task.isCancelled })
+        }
+        let results = await withTaskCancellationHandler {
+            await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
         guard !Task.isCancelled else { return }
-        searchResults = results
+        let applying = CompanyReferenceCatalog.searchSignposter.beginInterval("search.apply")
+        searchResults = Array(results.prefix(limit))
+        hasMoreSearchResults = results.count > limit
         searchedQuery = text
+        CompanyReferenceCatalog.searchSignposter.endInterval("search.apply", applying)
     }
 
     @MainActor private func refreshMarkets() async {

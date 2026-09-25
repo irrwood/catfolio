@@ -525,7 +525,7 @@ struct CycleComparisonView: View {
                     .lineLimit(1)
                     .fixedSize()
             }
-            .foregroundStyle(isShown ? Color.primary : Color.secondary)
+            .foregroundStyle(isShown ? CatfolioTheme.primaryText : Color.secondary)
             .padding(.horizontal, 10)
             .frame(height: 32)
             .background(Capsule().fill(Color.primary.opacity(isShown ? 0.07 : 0.03)))

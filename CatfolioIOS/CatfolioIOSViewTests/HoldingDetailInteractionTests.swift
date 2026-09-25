@@ -164,7 +164,7 @@ final class HoldingDetailInteractionTests: XCTestCase {
         // or data-loading task can replace the placeholders during capture.
         let holding = visibilityHolding("NVDA")
         let content = VStack(spacing: 0) {
-            HoldingDetailPriceSection(holding: holding, marketTodayChange: nil,
+            HoldingDetailPriceSection(holding: holding,
                 priceHistory: nil, priceHistoryError: nil, averageCost: nil, selectedAccountKeys: [])
             HoldingDetailLowerLoadingPlaceholder(ticker: holding.ticker, showsPosition: true)
         }
@@ -384,7 +384,7 @@ final class HoldingResearchCardLayoutTests: XCTestCase {
         ]
         for dark in [false, true] {
             let size = try await capture(HoldingDetailPriceSection(holding: visibilityHolding("NVDA", name: "NVIDIA", shares: 83.4078),
-                marketTodayChange: -2, priceHistory: history, priceHistoryError: nil,
+                priceHistory: history, priceHistoryError: nil,
                 averageCost: 160, selectedAccountKeys: ["isa", "invest"], accountOptions: accounts)
                 .background(Color(uiColor: .systemGroupedBackground)),
                 width: 402, dark: dark, name: "stock-header-figma-\(dark ? "dark" : "light")", settle: .milliseconds(700))

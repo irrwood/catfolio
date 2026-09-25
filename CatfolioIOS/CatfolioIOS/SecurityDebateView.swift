@@ -416,7 +416,7 @@ struct SecurityDebateCardContent: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(question.question)
                                 .appText(.footnote, weight: .semibold)
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(CatfolioTheme.primaryText)
                                 .fixedSize(horizontal: false, vertical: true)
                             Text(question.whatChanged)
                                 .appText(.caption)
@@ -696,7 +696,7 @@ struct SecurityDailyMovePaper: View {
                         Image(systemName: "xmark").font(.body.weight(.medium))
                             .frame(width: 48, height: 48)
                     }
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(CatfolioTheme.primaryText)
                     .modifier(SecurityPaperCloseGlass())
                     .accessibilityLabel(L10n.text("关闭"))
                     .accessibilityIdentifier("daily-move-close")
@@ -849,7 +849,7 @@ struct SecurityDailyMovePaper: View {
         .compositingGroup()
         .shadow(color: .black.opacity(0.13), radius: 16, x: 0, y: 12)
         .font(.system(.body, design: .rounded))
-        .foregroundStyle(.black)
+        .foregroundStyle(CatfolioTheme.blackTextOnColor)
         .accessibilityIdentifier("daily-move-paper")
     }
 

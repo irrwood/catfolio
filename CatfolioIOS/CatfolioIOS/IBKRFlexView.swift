@@ -84,7 +84,6 @@ struct IBKRFlexView: View {
                         AccountNicknameField(nickname: $nickname, edited: $nicknameEdited)
                             .disabled(isWorking)
                     }
-                    SettingsFootnote(L10n.text("用于区分多个 Interactive Brokers 账户，创建后仍可在账户详情中修改。"))
                 }
 
                 SettingsSectionHeader(L10n.text("Flex 凭证"))
@@ -99,22 +98,13 @@ struct IBKRFlexView: View {
                         .keyboardType(.numberPad)
 
                     SettingsRowContainer {
-                        Text(L10n.text("凭证仅存于此 iPhone Keychain，不会发送到 Catfolio 服务端。"))
+                        Text(L10n.text("凭证仅存于此 iPhone。"))
                             .appText(.label, weight: .regular)
                             .foregroundStyle(SettingsTemplate.secondaryText)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                // The two credentials come from different halves of the same
-                // screen, and IBKR's own instructions for creating a query
-                // never mention the ID — it only appears in the list
-                // afterwards. Saying so here saves a hunt.
-                SettingsFootnote([
-                    L10n.text("两个凭证都在 Client Portal → Performance & Reports → Flex Queries 这一页。"),
-                    L10n.text("Token：该页 Flex Web Service Configuration 区域 → 齿轮图标 → 启用后点 Generate A New Token。"),
-                    L10n.text("Query ID：建好查询后回到列表，数字在查询名称旁；创建向导里不显示。"),
-                    L10n.text("查询怎么配，用下面的「复制配置提示词」交给 IBKR 的助手即可。持仓超过一年的话，把 Period 改到覆盖最早的建仓日。"),
-                ])
+                SettingsFootnote(L10n.text("Query ID 在 Flex Queries 列表的查询名称旁。持仓超过一年时，请将 Period 扩至最早建仓日。"))
 
                 SettingsSectionHeader(L10n.text("连接"))
                 SettingsCard {
@@ -228,7 +218,7 @@ struct IBKRFlexView: View {
                         }
                     }
                     if snapshot.positions.count > 10 {
-                        SettingsFootnote(L10n.text("仅预览前 10 项；同步会处理全部可导入股票持仓。"))
+                        SettingsFootnote(L10n.text("仅显示前 10 项；同步处理全部可导入股票持仓。"))
                     }
                 }
 

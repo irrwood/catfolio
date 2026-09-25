@@ -153,6 +153,14 @@ struct PortfolioActivity: Identifiable {
         }
     }
 
+    var displayTitle: String {
+        guard usesAssetLogo else { return title }
+        if transaction.source == PublicInvestorAccountAdapter.source {
+            return PublicDisclosureFormat.securityName(ticker: transaction.ticker, name: title)
+        }
+        return CompanyNameCatalog.displayName(ticker: transaction.ticker, fallback: title)
+    }
+
     var usesAssetLogo: Bool {
         [.buy, .sell, .dividend].contains(kind)
             && !transaction.ticker.isEmpty
@@ -697,9 +705,7 @@ struct HistoryView: View {
             activityIcon(activity)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(activity.usesAssetLogo
-                     ? CompanyNameCatalog.displayName(ticker: activity.transaction.ticker, fallback: activity.title)
-                     : activity.title)
+                Text(activity.displayTitle)
                     .font(.body.weight(.semibold))
                     .lineLimit(1)
 
@@ -732,7 +738,7 @@ struct HistoryView: View {
                     signed: !isOrder
                 ))
                 .appNumber(.subheading, weight: .semibold)
-                .foregroundStyle(isOrder ? Color.primary : amountColor(activity.nativeAmount))
+                .foregroundStyle(isOrder ? CatfolioTheme.primaryText : amountColor(activity.nativeAmount))
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
 
@@ -1218,7 +1224,7 @@ struct HistoryDividendCard: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
         }
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 24))
+        .background(SettingsTemplate.card, in: RoundedRectangle(cornerRadius: 24))
     }
 
     private func percentage(_ row: HistoryDividendBreakdown.Row) -> String {
@@ -1273,7 +1279,7 @@ struct HistoryDividendBreakdown {
             let amounts = entries.map(\.amountUSD)
             let sum = amounts.reduce(0, +)
             let amount = amounts.allSatisfy(\.isFinite) && sum.isFinite ? sum : nil
-            let name = ticker == "CASH" ? L10n.text("未识别标的") : (entries.first?.title ?? ticker)
+            let name = ticker == "CASH" ? L10n.text("未识别标的") : (entries.first?.displayTitle ?? ticker)
             return Row(ticker: ticker, name: name, amountUSD: amount)
         }.sorted {
             if $0.amountUSD != $1.amountUSD {

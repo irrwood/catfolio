@@ -21,7 +21,7 @@ struct HoldingDetailActionCardLabel: View {
     var body: some View {
         HoldingDetailCardHeader(title: title, subtitle: subtitle, symbol: symbol, isLoading: isLoading)
             .contentShape(RoundedRectangle(cornerRadius: HoldingDetailCardStyle.cornerRadius, style: .continuous))
-            .holdingDetailGlassCard()
+            .holdingDetailCard()
     }
 }
 
@@ -59,7 +59,7 @@ struct HoldingDetailDisclosureCard<Content: View>: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .holdingDetailGlassCard()
+        .holdingDetailCard()
         .sensoryFeedback(.selection, trigger: isExpanded) { _, _ in hapticsEnabled }
     }
 }
@@ -75,7 +75,7 @@ struct HoldingDetailCardTitle: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .appText(.subheading, weight: .medium)
-                .foregroundStyle(.primary)
+                .foregroundStyle(CatfolioTheme.primaryText)
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
                     .appText(.label, weight: .medium)
@@ -117,28 +117,18 @@ struct HoldingDetailCardHeader: View {
     }
 }
 
-struct HoldingDetailGlassCardModifier: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
-
+/// A plain card: the settings card's fill, no shadow or glass, so the
+/// sheet's ground does not show through as a gradient in tall cards. By day
+/// card and sheet are both white, so a 5% black hairline marks the edge.
+struct HoldingDetailCardModifier: ViewModifier {
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: HoldingDetailCardStyle.cornerRadius, style: .continuous)
     }
 
-    /// One even colour under the card. The sheet's ground runs from
-    /// blue-grey to black down the screen; the card's translucent surface
-    /// laid straight on it carried that into every tall card as a gradient
-    /// that also shifted as the page scrolled.
-    private var backdrop: Color {
-        colorScheme == .dark
-            ? Color(red: 10 / 255, green: 11 / 255, blue: 13 / 255)
-            : Color(red: 0xF6 / 255, green: 0xF7 / 255, blue: 0xF8 / 255)
-    }
-
-    @ViewBuilder
     func body(content: Content) -> some View {
         content
-            .cardSurface(in: shape)
-            .background(backdrop, in: shape)
+            .background(SettingsTemplate.card, in: shape)
+            .overlay { shape.strokeBorder(Color.black.opacity(0.05), lineWidth: 1) }
     }
 }
 
@@ -158,7 +148,7 @@ struct HoldingDetailSectionCard<Trailing: View, Content: View>: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(title)
                         .appText(.subheading, weight: .medium)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(CatfolioTheme.primaryText)
                     if let subtitle {
                         Text(subtitle)
                             .appText(.label, weight: .medium)
@@ -173,7 +163,7 @@ struct HoldingDetailSectionCard<Trailing: View, Content: View>: View {
         }
         .padding(HoldingDetailCardStyle.contentInset)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .holdingDetailGlassCard()
+        .holdingDetailCard()
     }
 }
 
@@ -261,9 +251,9 @@ struct SecurityCardInsightRequest: Identifiable {
 }
 
 /// One shell for the holding detail's research entries and expanded cards.
-/// Keep glass, radius and border shared across every section and state.
+/// Keep fill and radius shared across every section and state.
 extension View {
-    func holdingDetailGlassCard() -> some View {
-        modifier(HoldingDetailGlassCardModifier())
+    func holdingDetailCard() -> some View {
+        modifier(HoldingDetailCardModifier())
     }
 }

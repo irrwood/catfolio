@@ -254,7 +254,7 @@ struct ManagementDeliveryResults: View {
                     }.padding(.vertical, 12)
                 } label: {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(assessment.promise.title).font(.subheadline).foregroundStyle(.primary)
+                        Text(assessment.promise.title).font(.subheadline).foregroundStyle(CatfolioTheme.primaryText)
                         Text(assessment.status.title).font(.caption).foregroundStyle(.secondary)
                     }.padding(.vertical, 6)
                 }.tint(.primary)

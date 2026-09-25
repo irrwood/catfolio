@@ -420,7 +420,7 @@ struct PolymarketEventCard: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(event.title)
                     .appText(.footnote, weight: .semibold)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(CatfolioTheme.primaryText)
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -446,7 +446,7 @@ struct PolymarketEventCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(optionTitle(market))
                         .appText(.footnote)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(CatfolioTheme.primaryText)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(L10n.text("\(DisplayFormat.compactMoney(market.totalVolume, currency: "USD")) volume"))
@@ -458,7 +458,7 @@ struct PolymarketEventCard: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(market.probabilityText(locale: locale))
                         .appNumber(.subheading, weight: .semibold)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(CatfolioTheme.primaryText)
                     change(market.oneDayPriceChange)
                 }
                 .fixedSize()

@@ -14,6 +14,13 @@ final class BrandfetchLogoTests: XCTestCase {
         XCTAssertNil(BrandfetchLogoURL.icon(for: "../AAPL"))
     }
 
+    func testDarkIconURLAsksForTheDarkTheme() throws {
+        let url = try XCTUnwrap(BrandfetchLogoURL.icon(for: "brk.b", dark: true))
+        XCTAssertEqual(url.path, "/ticker/BRK.B/w/96/h/96/theme/dark/fallback/404/icon.png")
+        XCTAssertTrue(BrandfetchLogoURL.isDark(url))
+        XCTAssertEqual(BrandfetchLogoURL.darkMissKey(" brk.b "), "BRK.B@DARK")
+    }
+
     @MainActor
     func testBrandfetchLogoLoadsInEmbeddedImage() async throws {
         let url = try XCTUnwrap(BrandfetchLogoURL.icon(for: "AAPL"))

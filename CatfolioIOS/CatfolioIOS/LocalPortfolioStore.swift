@@ -1903,9 +1903,9 @@ enum LocalPortfolioEngine {
 
     static var fxStatus: String {
         if let record = LocalCurrentFXCache.shared.record(DisplayCurrency.current == .usd ? "GBP" : DisplayCurrency.current.rawValue) {
-            return L10n.text("汇率缓存 · \(record.date)；缺失币种使用离线估值。历史快照保留原记录汇率。")
+            return L10n.text("汇率缓存：\(record.date)。")
         }
-        return L10n.text("汇率未更新 · 使用离线估值，不适用于历史成交对账。")
+        return L10n.text("汇率使用离线估值。")
     }
 
     static func totals(for positions: [LocalPositionRecord]) throws -> Totals {

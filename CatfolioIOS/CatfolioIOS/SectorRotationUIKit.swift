@@ -357,7 +357,7 @@ final class SectorRotationChartView: UIView, UIGestureRecognizerDelegate {
         }
     }
     private func drawLabels(_ snapshot: SectorRotationSnapshot) {
-        let attributes: [NSAttributedString.Key: Any] = [.font: tickerFont, .foregroundColor: UIColor.label]
+        let attributes: [NSAttributedString.Key: Any] = [.font: tickerFont, .foregroundColor: CatfolioTheme.primaryTextUIColor]
         var occupied: [CGRect] = []
         let sectors = snapshot.sectors.filter { snapshot.labeledSymbols.contains($0.symbol) || $0.symbol == selected }
         for sector in sectors.sorted(by: { $0.symbol == selected && $1.symbol != selected }) {

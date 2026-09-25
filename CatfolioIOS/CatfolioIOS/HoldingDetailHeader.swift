@@ -6,6 +6,8 @@ struct HoldingDetailHeader: View {
     @Environment(\.locale) private var appLocale
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .title2) private var priceSize = 22.0
+    /// Drawn on the opening card, whose logo is the one flying in.
+    @Environment(\.securityDetailOpeningPlaceholder) private var isOpeningPlaceholder
     @ScaledMetric(relativeTo: .headline) private var nameSize = 18.0
     @ScaledMetric(relativeTo: .title2) private var quoteColumnWidth = 130.0
     let holding: Holding
@@ -30,8 +32,9 @@ struct HoldingDetailHeader: View {
         selectedPrice ?? holding.quotePrice
     }
 
+    /// The share class leaves the title for a badge beside the ticker.
     private var displayName: String {
-        holding.shortName
+        SecurityNameParts(holding.shortName).primary
     }
 
     var body: some View {
@@ -89,23 +92,33 @@ struct HoldingDetailHeader: View {
                 identity
             }
         } else {
+            // The row is the logo's height whatever the name: the text centres
+            // on the logo and a second line of name spills evenly above and
+            // below it, so the price and chart sit in the same place on every
+            // security.
             HStack(spacing: 12) {
                 logo
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(displayName)
                         .font(Typography.text(size: nameSize, weight: .semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.76)
+                        .lineLimit(2)
+                        .lineSpacing(-3)
                     identity
                 }
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxHeight: 56)
                 Spacer(minLength: 8)
                 closeReservation
             }
+            .frame(height: 56)
         }
     }
 
     private var logo: some View {
-        AssetLogo(ticker: holding.ticker, logoSymbol: holding.logoSymbol, size: 44)
+        AssetLogo(ticker: holding.ticker, logoSymbol: holding.logoSymbol, size: 56)
+            .securityDetailLogoTarget()
+            // The opening card's copy leaves the logo to the one flying in.
+            .opacity(isOpeningPlaceholder ? 0 : 1)
     }
 
     private var closeReservation: some View {
@@ -128,6 +141,8 @@ struct HoldingDetailHeader: View {
             Text(DisplayFormat.shares(holding.shares)).appNumber(.label, monospaced: false)
         }
         Text(holding.ticker.uppercased()).appCaps(.label)
+        // The home list's badges, written out: "Acc", "Class A".
+        SecurityClassBadges(markers: holding.classLabels)
     }
 
     private var quote: some View {
@@ -143,21 +158,19 @@ struct HoldingDetailHeader: View {
                         ChartSkeletonShape(width: 16, height: 16, cornerRadius: 8).chartLoadingShimmer()
                     }
                 }
-                if let todayChangePercent = todayChange {
-                    Text(DisplayFormat.percent(todayChangePercent))
-                        .appNumber(.heading)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .foregroundStyle(
-                            todayChangePercent >= 0
-                                ? CatfolioTheme.gainDefault
-                                : CatfolioTheme.lossDefault
-                        )
-                } else {
-                    Text(L10n.text("Return —"))
-                        .font(HoldingDetailTypography.medium(13, relativeTo: .caption))
-                        .foregroundStyle(.secondary)
-                }
+                // 0 until the day's move is known, then counts to it in place:
+                // the line never appears, disappears or changes size.
+                let change = todayChange ?? 0
+                Text(DisplayFormat.percent(change))
+                    .appNumber(.heading)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .foregroundStyle(
+                        todayChange == nil ? Color.secondary
+                            : change >= 0 ? CatfolioTheme.gainDefault : CatfolioTheme.lossDefault
+                    )
+                    .contentTransition(.numericText(value: change))
+                    .animation(.snappy(duration: 0.3), value: change)
             }
             .contentShape(Rectangle())
     }
@@ -492,27 +505,27 @@ struct HoldingPositionDetails: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .clipShape(RoundedRectangle(cornerRadius: HoldingDetailCardStyle.cornerRadius, style: .continuous))
-        .holdingDetailGlassCard()
+        .holdingDetailCard()
         .animation(.snappy(duration: 0.2), value: expenseRatio)
         .task(id: holding.ticker) { await loadExpenseRatio() }
     }
 
+    /// Marked only when the figure is not the broker's own: a broker-reported
+    /// value is the normal case and needs no label.
     private var fxTitle: String {
         let suffix: String
         switch holding.fxPnlStatus {
-        case "estimated": suffix = " · EST."
-        case "reconstructed": suffix = " · CALC."
-        case "broker_reported": suffix = " · REPORTED"
-        case "unavailable": suffix = " · UNAVAILABLE"
-        case "mixed": suffix = " · MIXED"
+        case "estimated", "reconstructed": suffix = " · " + L10n.text("估算")
+        case "unavailable": suffix = " · " + L10n.text("不可算")
+        case "mixed": suffix = " · " + L10n.text("部分估算")
         default: suffix = ""
         }
-        return "FX Impact\(suffix)"
+        return L10n.text("汇率影响") + suffix
     }
 
     private var fxValue: String {
         guard let value = holding.fxPnl else {
-            return holding.fxPnlStatus == "unavailable" ? "Missing data" : "—"
+            return holding.fxPnlStatus == "unavailable" ? L10n.text("缺少数据") : "—"
         }
         let amount = DisplayFormat.money(value, signed: true)
         guard let percent = holding.fxPnlPercent else { return amount }
@@ -657,4 +670,10 @@ struct HoldingDataRow: View {
         guard isAlternating else { return .clear }
         return colorScheme == .dark ? .white.opacity(0.05) : .black.opacity(0.03)
     }
+}
+
+extension EnvironmentValues {
+    /// The security page's first screen drawn on the opening card, before
+    /// the page itself exists.
+    @Entry var securityDetailOpeningPlaceholder = false
 }

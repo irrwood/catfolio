@@ -73,7 +73,11 @@ struct HoldingDetailContentView: View {
         get { cachedContent.realisedProfit }
         nonmutating set { cachedContent.realisedProfit = newValue }
     }
-    @State private var lowerContentReady = false
+    /// How many of the lower cards are built. Opening builds only the first
+    /// screen; once the open has settled the heavy cards arrive one by one,
+    /// each in its own frame, instead of all together with the first screen.
+    @State private var lowerStage = 0
+    @Environment(\.accessibilityReduceMotion) private var lowerStagesReduceMotion
     @State private var cardInsight: SecurityCardInsightRequest?
     @State private var marketDataRevision = 0
     @State private var completedMarketDataRevision: Int?
@@ -100,9 +104,25 @@ struct HoldingDetailContentView: View {
         hasSelectedDetailAccounts && hasPosition
     }
 
-    /// A preview has no presentation to wait for.
+    /// A preview ends at the price chart, so it never builds the cards below.
     private var showsLowerSections: Bool {
-        lowerContentReady || isPreview || showsVolumeFocusedPreview
+        (lowerStage > 0 && !isPreview) || showsVolumeFocusedPreview
+    }
+
+    private func showsLowerStage(_ stage: Int) -> Bool {
+        lowerStage >= stage || showsVolumeFocusedPreview
+    }
+
+    private static let lowerStageCount = 4
+
+    private func startLowerStages() {
+        guard lowerStage == 0, !isPreview else { return }
+        Task { @MainActor in
+            for stage in 1...Self.lowerStageCount {
+                withAnimation(lowerStagesReduceMotion ? nil : .easeOut(duration: 0.25)) { lowerStage = stage }
+                try? await Task.sleep(for: .milliseconds(140))
+            }
+        }
     }
 
     private var showsInitialLoadingPlaceholder: Bool {
@@ -148,7 +168,6 @@ struct HoldingDetailContentView: View {
                         VStack(spacing: 0) {
                             HoldingDetailPriceSection(
                                 holding: displayedHolding,
-                                marketTodayChange: profile?.todayChangePercent,
                                 priceHistory: priceHistory,
                                 priceHistoryError: priceHistoryError,
                                 averageCost: averageCostInQuoteCurrency,
@@ -201,16 +220,23 @@ struct HoldingDetailContentView: View {
                                     HoldingVolumeProfileLoadingPlaceholder(ticker: holding.ticker)
                                 }
 
-                                OptionsOIView(symbol: holding.ticker, currency: holding.quoteCurrency,
-                                    price: priceHistory?.latestAvailablePrice ?? holding.quotePrice,
-                                    costUSD: showsPosition ? VolumeProfileInterpretation.convertedPrice(
-                                        displayedHolding.averageCost, from: displayedHolding.costCurrency, to: "USD",
-                                        usdRate: LocalPortfolioEngine.usdRate(for:)) : nil,
-                                    refreshRevision: marketDataRevision,
-                                    initialSnapshots: cachedContent.optionsSnapshots,
-                                    onSnapshot: { days, snapshot in cachedContent.optionsSnapshots[days] = snapshot })
+                                // Left out for a security with no options: one
+                                // the panel cannot read, or whose chain lists
+                                // no expiry at all.
+                                if showsLowerStage(2),
+                                   OptionsOIView.supports(symbol: holding.ticker, currency: holding.quoteCurrency),
+                                   !cachedContent.optionsSnapshots.values.contains(where: { $0.listsOptions == false }) {
+                                    OptionsOIView(symbol: holding.ticker, currency: holding.quoteCurrency,
+                                        price: priceHistory?.latestAvailablePrice ?? holding.quotePrice,
+                                        costUSD: showsPosition ? VolumeProfileInterpretation.convertedPrice(
+                                            displayedHolding.averageCost, from: displayedHolding.costCurrency, to: "USD",
+                                            usdRate: LocalPortfolioEngine.usdRate(for:)) : nil,
+                                        refreshRevision: marketDataRevision,
+                                        initialSnapshots: cachedContent.optionsSnapshots,
+                                        onSnapshot: { days, snapshot in cachedContent.optionsSnapshots[days] = snapshot })
+                                }
 
-                                if showsPosition {
+                                if showsPosition, showsLowerStage(3) {
                                     HoldingPositionDetails(holding: displayedHolding, realisedProfit: realisedProfit)
                                 }
                             }
@@ -219,11 +245,15 @@ struct HoldingDetailContentView: View {
                             .padding(.horizontal, HoldingDetailCardStyle.pageInset)
                             .padding(.top, showsVolumeFocusedPreview ? 28 : 24)
 
-                            HoldingResearchSection(holding: holding,
-                                price: priceHistory?.latestAvailablePrice ?? holding.quotePrice,
-                                cachedContent: cachedContent)
-                            .id("\(holding.ticker)|\(appLocale.identifier)")
-                            .padding(.bottom, 72)
+                            if showsLowerStage(4) {
+                                HoldingResearchSection(holding: holding,
+                                    price: priceHistory?.latestAvailablePrice ?? holding.quotePrice,
+                                    cachedContent: cachedContent)
+                                .id("\(holding.ticker)|\(appLocale.identifier)")
+                                .padding(.bottom, 72)
+                            } else {
+                                Color.clear.frame(height: 72)
+                            }
                         }
                     } else {
                         HoldingDetailLowerLoadingPlaceholder(ticker: holding.ticker, showsPosition: showsPosition)
@@ -235,6 +265,10 @@ struct HoldingDetailContentView: View {
                 // view loses inherited refresh, never its presenting page or
                 // the independently refreshable analyst/financial sheets.
                 .background(HoldingDetailScrollBoundary())
+                // Built under the landed card, which then fades off it.
+                .onAppear {
+                    if !isPreview { SecurityDetailSnapshotTransition.shared.contentDidAppear() }
+                }
             }
             .accessibilityIdentifier("holding-detail-scroll")
             // A long press on a card's title reads that card aloud, so to
@@ -269,9 +303,9 @@ struct HoldingDetailContentView: View {
             // background there is is the one the system rounds.
             .background {
                 PresentationDidAppearReader {
-                    var transaction = Transaction(animation: nil)
-                    transaction.disablesAnimations = true
-                    withTransaction(transaction) { lowerContentReady = true }
+                    // After the open has landed and faded, not when the sheet
+                    // first appears under the card.
+                    SecurityDetailSnapshotTransition.shared.whenOpenSettles { startLowerStages() }
                 }
             }
             // Start cache-backed work as soon as SwiftUI inserts the sheet,
@@ -455,6 +489,14 @@ struct HoldingDetailScrollBoundary: UIViewRepresentable {
                     if scrollView.refreshControl != nil {
                         scrollView.refreshControl = nil
                     }
+                    // The page stops dead at its top: a fast flick into it
+                    // pulled a screen of empty ground down above the header.
+                    // A pull from the top moves the sheet itself instead.
+                    if #available(iOS 17.4, *) {
+                        if scrollView.bouncesVertically { scrollView.bouncesVertically = false }
+                    } else if scrollView.bounces {
+                        scrollView.bounces = false
+                    }
                     return
                 }
                 ancestor = view.superview
@@ -485,7 +527,7 @@ struct HoldingDetailCloseButton: View {
         Button(action: action) {
             Image(systemName: "xmark")
                 .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(.primary)
+                .foregroundStyle(CatfolioTheme.primaryText)
                 .frame(width: 48, height: 48)
                 .background {
                     // Glass is decoration inside the label, never a separate
@@ -513,10 +555,10 @@ struct HoldingDetailCloseButton: View {
 struct HoldingHeaderButtonStyle: ViewModifier {
     @ViewBuilder func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.buttonStyle(.plain).foregroundStyle(.primary)
+            content.buttonStyle(.plain).foregroundStyle(CatfolioTheme.primaryText)
                 .glassEffect(.regular.tint(Color.primary.opacity(0.06)).interactive(), in: Capsule())
         } else {
-            content.buttonStyle(.plain).foregroundStyle(.primary)
+            content.buttonStyle(.plain).foregroundStyle(CatfolioTheme.primaryText)
                 .background(.regularMaterial, in: Capsule())
         }
     }
@@ -614,7 +656,7 @@ struct HoldingDetailAccountSelector: View {
                 .font(Typography.number(size: labelSize, weight: .medium))
             }
             .textCase(.uppercase)
-            .foregroundStyle(Color.primary)
+            .foregroundStyle(CatfolioTheme.primaryText)
             .fixedSize(horizontal: true, vertical: false)
             .padding(.leading, 16)
             .padding(.trailing, 58)
@@ -629,6 +671,28 @@ struct HoldingDetailAccountSelector: View {
         )
         .accessibilityValue(L10n.text("未实现盈亏") + " " + (unrealized.map { DisplayFormat.money($0, currency: currency, signed: true) } ?? "—"))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    /// The selector's place before the accounts are read: two empty cards of
+    /// the same size and surface, so the figures fill in without a jump.
+    static var shells: some View { Shells() }
+
+    private struct Shells: View {
+        @Environment(\.colorScheme) private var colorScheme
+
+        var body: some View {
+            HStack(spacing: 12) {
+                ForEach(0..<2, id: \.self) { index in
+                    Color.clear
+                        .frame(width: 128, height: 74)
+                        .modifier(AccountGlassSurface(isSelected: index == 0, colorScheme: colorScheme))
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .accessibilityHidden(true)
+        }
     }
 
     private func conciseAccountName(_ value: String) -> String {
@@ -687,12 +751,48 @@ struct HoldingVolumeProfileLoadingPlaceholder: View {
             ChartSkeletonShape(height: 12)
         }
         .padding(HoldingDetailCardStyle.contentInset)
-        .holdingDetailGlassCard()
+        .holdingDetailCard()
     }
 }
 
 /// Only cheap shapes during the native slide. No research initializers,
 /// disk reads or chart preparation are needed to show that content is coming.
+/// The page's first screen before the page exists, for the opening card:
+/// the same views in the same layout as the page's own first frame — header,
+/// line-only chart, time picker, account shells, the AI button, the ✕ and
+/// the lower placeholders — without the figures only the page can know. On
+/// landing the page appears under it identical, so the crossing cannot be
+/// seen; only the figures and the chart arrive.
+struct HoldingDetailOpeningScreen: View {
+    let holding: Holding
+
+    var body: some View {
+        // In a scroll view like the page's, so it is laid out from the top
+        // exactly as the page is, however far below the screen it runs.
+        ScrollView {
+            VStack(spacing: 0) {
+                HoldingDetailPriceSection(
+                    holding: holding,
+                    priceHistory: nil,
+                    priceHistoryError: nil,
+                    averageCost: nil,
+                    selectedAccountKeys: []
+                )
+                HoldingDetailLowerLoadingPlaceholder(ticker: holding.ticker, showsPosition: holding.shares > 0)
+            }
+        }
+        .scrollDisabled(true)
+        .scrollIndicators(.hidden)
+        .overlay(alignment: .topTrailing) {
+            HoldingDetailCloseButton(action: {})
+                .padding(20)
+        }
+        .environment(\.securityDetailOpeningPlaceholder, true)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
 struct HoldingDetailLowerLoadingPlaceholder: View {
     let ticker: String
     let showsPosition: Bool
@@ -707,7 +807,7 @@ struct HoldingDetailLowerLoadingPlaceholder: View {
                     .padding(.horizontal, 20)
                     .frame(height: 397)
             }
-            .holdingDetailGlassCard()
+            .holdingDetailCard()
             if showsPosition {
                 VStack(alignment: .leading, spacing: 20) {
                     ChartSkeletonShape(width: 100, height: 19)
@@ -720,7 +820,7 @@ struct HoldingDetailLowerLoadingPlaceholder: View {
                     }
                 }
                 .padding(HoldingDetailCardStyle.contentInset)
-                .holdingDetailGlassCard()
+                .holdingDetailCard()
             }
         }
         .padding(.horizontal, HoldingDetailCardStyle.pageInset)

@@ -1,5 +1,62 @@
 import Foundation
 
+/// Separates trailing distribution and share classes from a security's display name.
+struct SecurityNameParts: Equatable {
+    let primary: String
+    /// Compact badges for a list row: "A" (Acc), "D" (Dist), a class letter.
+    let classMarkers: [String]
+    /// The same, written out for a page with room: "Acc", "Dist", "Class A".
+    let classLabels: [String]
+
+    private static let trailingDistributionClass = try! NSRegularExpression(
+        pattern: #"\s+(?:\((Acc|Dist|Accumulating|Distributing)\)(?:\s+([A-Z]))?|(Acc|Dist|Accumulating|Distributing))$"#,
+        options: [.caseInsensitive]
+    )
+    private static let trailingShareClass = try! NSRegularExpression(
+        pattern: #"\s+(?:-\s*)?(?:\((?:Class|Cl|Series)\s+([A-Z])\)|(?:Class|Cl|Series)\s+([A-Z])(?:\s+(?:Common Stock|Ordinary Shares?|Shares?))?)$"#,
+        options: [.caseInsensitive]
+    )
+
+    init(_ name: String) {
+        var remaining = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        var markers: [String] = []
+        var labels: [String] = []
+
+        // Work from the end so "ETF (Acc) Class B" and "ETF Class B (Acc)"
+        // both leave the base name intact and keep the badges in source order.
+        for _ in 0..<3 {
+            let range = NSRange(remaining.startIndex..., in: remaining)
+            if let match = Self.trailingShareClass.firstMatch(in: remaining, range: range),
+               let suffix = Range(match.range, in: remaining) {
+                let base = String(remaining[..<suffix.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+                let group = match.range(at: 1).location == NSNotFound ? 2 : 1
+                guard !base.isEmpty, let letter = Range(match.range(at: group), in: remaining) else { break }
+                markers.append(String(remaining[letter]).uppercased())
+                labels.append("Class \(remaining[letter].uppercased())")
+                remaining = base
+                continue
+            }
+            if let match = Self.trailingDistributionClass.firstMatch(in: remaining, range: range),
+               let suffix = Range(match.range, in: remaining) {
+                let base = String(remaining[..<suffix.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+                let group = match.range(at: 1).location == NSNotFound ? 3 : 1
+                guard !base.isEmpty, let token = Range(match.range(at: group), in: remaining) else { break }
+                let marker = remaining[token].lowercased().hasPrefix("acc") ? "A" : "D"
+                let classLetter = Range(match.range(at: 2), in: remaining)
+                    .map { " \(remaining[$0].uppercased())" } ?? ""
+                markers.append(marker + classLetter)
+                labels.append((marker == "A" ? "Acc" : "Dist") + classLetter)
+                remaining = base
+                continue
+            }
+            break
+        }
+        primary = remaining
+        classMarkers = Array(markers.reversed())
+        classLabels = Array(labels.reversed())
+    }
+}
+
 struct PortfolioSummary: Codable, Equatable {
     let totalCost: Double
     let openPositions: Int
@@ -143,7 +200,24 @@ struct Holding: Codable, Identifiable, Equatable {
             return PublicDisclosureFormat.securityName(
                 ticker: disclosure.underlyingTicker ?? ticker, name: original)
         }
+        if source == PublicInvestorAccountAdapter.source {
+            return PublicDisclosureFormat.securityName(ticker: ticker, name: original)
+        }
         return CompanyNameCatalog.displayName(ticker: ticker, fallback: original)
+    }
+
+    var classMarkers: [String] { classParts.classMarkers }
+
+    /// Share class written out — "Acc", "Class A" — for the security page.
+    var classLabels: [String] { classParts.classLabels }
+
+    private var classParts: SecurityNameParts {
+        let original = displayName.components(separatedBy: " / ").first ?? displayName
+        let displaySource = (publicDisclosure != nil || source == PublicInvestorAccountAdapter.source)
+            ? PublicDisclosureFormat.sourceName(ticker: publicDisclosure?.underlyingTicker ?? ticker, name: original).cleanName
+            : original
+        let sourceParts = SecurityNameParts(displaySource)
+        return sourceParts.classMarkers.isEmpty ? SecurityNameParts(shortName) : sourceParts
     }
 
     /// The company's own name, whatever 公司名称 is set to: what a news
@@ -153,6 +227,9 @@ struct Holding: Codable, Identifiable, Equatable {
         if let disclosure = publicDisclosure {
             return PublicDisclosureFormat.securityName(
                 ticker: disclosure.underlyingTicker ?? ticker, name: original)
+        }
+        if source == PublicInvestorAccountAdapter.source {
+            return PublicDisclosureFormat.securityName(ticker: ticker, name: original, mode: .original)
         }
         return CompanyNameCatalog.displayName(ticker: ticker, fallback: original, mode: .original)
     }

@@ -33,7 +33,6 @@ import SwiftUI
                     }
                 }
             }
-            SettingsFootnote(L10n.text("仅在本次启动中记录来源、结果和时间；不记录网址、参数、密钥或证券代码。连接成功后仍可能发现数据格式问题；取消的请求不算失败。"))
         }
         .navigationTitle(L10n.text("数据源状态"))
         .navigationBarTitleDisplayMode(.inline)

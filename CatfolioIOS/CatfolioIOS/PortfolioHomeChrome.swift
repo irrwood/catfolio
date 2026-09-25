@@ -25,8 +25,6 @@ struct PortfolioHomeTopBackground: View {
 
 struct PortfolioHomePageBackdrop: View {
     @Environment(\.locale) private var appLocale
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var isOnScreen = false
     let colorScheme: ColorScheme
     let scrollState: PortfolioHomeScrollState
 
@@ -40,12 +38,7 @@ struct PortfolioHomePageBackdrop: View {
             // background instead of a separate pale-blue extension band.
             Group {
                 if colorScheme == .dark {
-                    PortfolioNightGlow(
-                        cardTop: scrollState.restingSheetTop,
-                        // Nothing moves once the glow has faded out, while
-                        // another tab is up, or with the app in the background.
-                        isAnimating: isOnScreen && scenePhase == .active && scrollState.backdropProgress < 1
-                    )
+                    PortfolioNightGlow(cardTop: scrollState.restingSheetTop, scrollState: scrollState)
                 } else {
                     PortfolioHomeTopBackground(colorScheme: colorScheme)
                 }
@@ -55,8 +48,6 @@ struct PortfolioHomePageBackdrop: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea()
-        .onAppear { isOnScreen = true }
-        .onDisappear { isOnScreen = false }
     }
 }
 
@@ -70,11 +61,9 @@ struct PortfolioHomePageBackdrop: View {
 /// screen, so the band sits behind the card whatever height the hero above
 /// it takes (Figma has the card at 398pt with no chart; here it rests lower).
 struct PortfolioNightGlow: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The sheet's top in the backdrop's space with the page at rest.
     let cardTop: CGFloat?
-    /// False while the glow is off screen or faded out: nothing to move.
-    var isAnimating = true
+    let scrollState: PortfolioHomeScrollState
 
     static let canvas = Color(red: 0x7D / 255, green: 0xA7 / 255, blue: 0xEC / 255)
     /// Figma's card top in its 402pt frame; every shape is placed from it.
@@ -89,34 +78,9 @@ struct PortfolioNightGlow: View {
             let scale = geometry.size.width / 402
             let shift = (cardTop ?? Self.figmaCardTop) - Self.figmaCardTop
             ZStack(alignment: .topLeading) {
-                ZStack(alignment: .topLeading) {
-                    Self.canvas
-                    // Figma's top shape starts 275pt above the screen. Moved
-                    // down to this card it would let blue in at the status
-                    // bar, so everything above its centre is held black —
-                    // which also covers the top shape's drift.
-                    Rectangle()
-                        .fill(.black)
-                        .frame(width: geometry.size.width + 400, height: 400 + (-275 + 365.5 + shift))
-                        .blur(radius: Self.blur)
-                        .offset(x: -200, y: -400)
-                }
-                // Static: flattened once.
-                .drawingGroup()
-
-                // These blurred shapes move only about a point between ticks.
-                // A slower clock avoids competing with scroll rendering.
-                TimelineView(.animation(minimumInterval: 1.0 / 15, paused: !isAnimating || reduceMotion)) { context in
-                    let drift = reduceMotion ? Self.still : Self.drift(at: context.date.timeIntervalSinceReferenceDate)
-                    ZStack(alignment: .topLeading) {
-                        // The top of the page goes black.
-                        shape(width: 736 * scale, height: 731)
-                            .offset(x: -159 * scale + drift.top.width, y: -275 + shift + drift.top.height)
-                        // The right side stays dark longer, so the glow leans left.
-                        shape(width: 246 * scale, height: 709)
-                            .offset(x: 235 * scale + drift.right.width, y: -278 + shift + drift.right.height)
-                    }
-                }
+                Self.canvas
+                PortfolioNightShades(scale: scale, shift: shift, width: geometry.size.width,
+                                     scrollState: scrollState)
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
             .clipped()
@@ -126,30 +90,14 @@ struct PortfolioNightGlow: View {
     }
 
     /// A blurred black ellipse, rendered once and then only moved. Blurring
-    /// two screen-sized shapes by 100pt every frame to animate them would cost
-    /// the GPU far more than the drift is worth; translating a finished
-    /// texture costs nothing.
-    private func shape(width: CGFloat, height: CGFloat) -> some View {
+    /// two screen-sized shapes by 100pt on every scroll frame would cost the
+    /// GPU far more than the motion is worth; translating a finished texture
+    /// costs nothing.
+    static func shape(width: CGFloat, height: CGFloat) -> some View {
         Image(uiImage: Self.blurredEllipse(width: width, height: height))
             .resizable()
             .frame(width: width + 2 * Self.bleed, height: height + 2 * Self.bleed)
             .offset(x: -Self.bleed, y: -Self.bleed)
-    }
-
-    /// The glow drifts: each shape wanders a few points on two slow sines
-    /// with unrelated periods, so the light never visibly repeats or pulses.
-    /// Offsets stay small — the band moves, the composition does not.
-    /// Figma's own placement, for Reduce Motion.
-    static let still = (top: CGSize.zero, right: CGSize.zero)
-
-    static func drift(at time: TimeInterval) -> (top: CGSize, right: CGSize) {
-        func wave(_ amplitude: Double, _ period: Double, _ phase: Double) -> CGFloat {
-            CGFloat(amplitude * sin(2 * .pi * time / period + phase))
-        }
-        return (
-            CGSize(width: wave(22, 17, 0), height: wave(16, 13, 1.1)),
-            CGSize(width: wave(30, 11, 2.3), height: wave(22, 19, 0.4))
-        )
     }
 
     @MainActor private static var cache: [String: UIImage] = [:]
@@ -173,20 +121,57 @@ struct PortfolioNightGlow: View {
     }
 }
 
+/// The two black shapes over the blue, which rise as the page scrolls up —
+/// each at its own rate, so the light opens unevenly rather than as one
+/// sliding sheet. Its own view, so a scroll sample moves these and redraws
+/// nothing else.
+private struct PortfolioNightShades: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let scale: CGFloat
+    let shift: CGFloat
+    let width: CGFloat
+    let scrollState: PortfolioHomeScrollState
+
+    private static let topRate: CGFloat = 0.8
+    private static let rightRate: CGFloat = 1.4
+
+    var body: some View {
+        let scroll = reduceMotion ? 0 : scrollState.heroOffset
+        ZStack(alignment: .topLeading) {
+            // Figma's top shape starts 275pt above the screen. Moved down to
+            // this card it would let blue in at the status bar, so everything
+            // above its centre is held black; it rises with the top shape.
+            Rectangle()
+                .fill(.black)
+                .frame(width: width + 400, height: 400 + (-275 + 365.5 + shift))
+                .blur(radius: 100)
+                .drawingGroup()
+                .offset(x: -200, y: -400 - scroll * Self.topRate)
+            // The top of the page goes black.
+            PortfolioNightGlow.shape(width: 736 * scale, height: 731)
+                .offset(x: -159 * scale, y: -275 + shift - scroll * Self.topRate)
+            // The right side stays dark longer, so the glow leans left.
+            PortfolioNightGlow.shape(width: 246 * scale, height: 709)
+                .offset(x: 235 * scale, y: -278 + shift - scroll * Self.rightRate)
+        }
+    }
+}
+
 /// The black slab under the night card, Figma's `Rectangle 34625532`. It
 /// starts one corner radius below the card's top, so the glass's top edge
 /// still has the blue behind it and the body below has black. Drawn behind
 /// the sheet and not clipped to it: its blur is what shades the gutters
 /// either side of the card.
-struct PortfolioNightCardSlab: View {
+struct PortfolioCardSlab: View {
     static let inset: CGFloat = 53
     static let cornerRadius: CGFloat = 53
     /// How far the sheet has opened towards the full width, 0…1.
     let widthProgress: CGFloat
+    var fill: Color = .black
 
     var body: some View {
         RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-            .fill(.black)
+            .fill(fill)
             .padding(.top, Self.inset)
             // At rest the blurred sides are Figma's blue gutters. Once the
             // sheet reaches the screen edges there are no gutters, and a blur
@@ -386,7 +371,11 @@ struct PortfolioContentSheet<Content: View>: View {
             // Behind the glass and outside its clip, so the glass takes its
             // colour from it and its blur reaches the gutters.
             .background {
-                if colorScheme == .dark { PortfolioNightCardSlab(widthProgress: widthProgress) }
+                // Both appearances: a black slab at night, a white one by
+                // day, so the light card has the night card's solid body and
+                // lit rim instead of dissolving into the blue page.
+                PortfolioCardSlab(widthProgress: widthProgress,
+                                       fill: colorScheme == .dark ? .black : .white)
             }
             .padding(.horizontal, horizontalInset)
             .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { _, top in
@@ -454,11 +443,12 @@ struct PortfolioContentSheetBackground: View {
                         endPoint: .bottom
                     )
                 } else {
+                    // The white slab behind gives the body its white, as the
+                    // black one does at night; only the end fades to solid.
                     LinearGradient(
                         stops: [
                             .init(color: .white.opacity(0), location: 0),
-                            .init(color: .white.opacity(0.03), location: 0.28),
-                            .init(color: .white.opacity(0.30), location: 0.62),
+                            .init(color: .white.opacity(0), location: 0.72),
                             .init(color: .white, location: 1),
                         ],
                         startPoint: .top,

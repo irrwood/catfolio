@@ -174,34 +174,41 @@ struct ReturnsChartPage: View {
     }
 
     private var page: some View {
-        ScrollView {
-            Group {
-                switch chart {
-                case .heatmap:
-                    PortfolioDetailsCard(
-                        holdings: model.holdings,
-                        onSelect: { selectedHolding = $0 },
-                        showsHeatmap: true
-                    )
-                case .contributors:
-                    HoldingContributionChart(refreshRevision: holdingHistoryRefreshRevision)
-                case .losses:
-                    LossAnalysisChart(refreshRevision: holdingHistoryRefreshRevision)
-                case .comparison:
-                    ReturnsComparisonPanel()
-                case .valuation:
-                    analytics(.valuation)
+        Group {
+            if chart == .comparison {
+                ReturnsComparisonPanel()
+            } else {
+                ScrollView {
+                    Group {
+                        switch chart {
+                        case .heatmap:
+                            PortfolioDetailsCard(
+                                holdings: model.holdings,
+                                onSelect: { selectedHolding = $0 },
+                                showsHeatmap: true
+                            )
+                        case .contributors:
+                            HoldingContributionChart(refreshRevision: holdingHistoryRefreshRevision)
+                        case .losses:
+                            LossAnalysisChart(refreshRevision: holdingHistoryRefreshRevision)
+                        case .comparison:
+                            EmptyView()
+                        case .valuation:
+                            analytics(.valuation)
+                        }
+                    }
+                    .id("chart-page-top")
+                    .padding(.top, 20)
+                    .padding(.bottom, 72)
                 }
             }
-            .id("chart-page-top")
-            .padding(.top, 20)
-            .padding(.bottom, 72)
         }
         .background(Color(uiColor: .systemBackground))
         .softTopScrollEdge()
         .navigationTitle(chart.title)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarVisibility(.visible, for: .navigationBar)
+        .toolbarVisibility(chart == .comparison ? .hidden : .visible, for: .navigationBar)
+        .preferredColorScheme(chart == .comparison ? .dark : nil)
         .refreshable {
             if chart == .contributors || chart == .losses {
                 holdingHistoryRefreshRevision &+= 1
@@ -252,7 +259,9 @@ struct ReturnsChartPage: View {
 
 struct ReturnsComparisonPanel: View {
     @Environment(\.locale) private var appLocale
+    @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var chartMode: ReturnsChartMode = {
         let arguments = LaunchArguments.all
         if arguments.contains("--show-cash-flow") { return .cashFlowMatched }
@@ -264,52 +273,68 @@ struct ReturnsComparisonPanel: View {
         if arguments.contains("--show-returns-1d") { return .oneDay }
         if arguments.contains("--show-returns-1w") { return .oneWeek }
         if arguments.contains("--show-returns-1m") { return .oneMonth }
-        if arguments.contains("--show-returns-2m")
-            || arguments.contains("--show-returns-3m") { return .twoMonths }
+        if arguments.contains("--show-returns-2m") { return .twoMonths }
+        if arguments.contains("--show-returns-3m") { return .threeMonths }
         if arguments.contains("--show-returns-ytd") { return .yearToDate }
         if arguments.contains("--show-returns-6m") { return .sixMonths }
         if arguments.contains("--show-returns-2y") { return .twoYears }
         if arguments.contains("--show-returns-all")
             || arguments.contains("--show-returns-max") { return .maximum }
-        return .oneMonth
+        return .threeMonths
     }()
     @State private var selectedDate: Date?
+    @State private var isModeSwitcherExpanded = LaunchArguments.contains("--show-returns-mode-expanded")
     @AppStorage(ComparisonBenchmarkCatalog.preferenceKey) private var storedBenchmarks: String?
     @State private var showsBenchmarkPicker = false
     /// The list the comparison on screen was computed for.
     @State private var computedBenchmarks = ComparisonBenchmarkCatalog.symbols
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if let comparison = model.comparison {
-                ReturnsChart(
-                    comparison: comparison,
-                    mode: $chartMode,
-                    timeRange: $timeRange,
-                    selectedDate: $selectedDate
-                )
-                // A removed symbol leaves at once; an added one arrives with
-                // the recomputed comparison.
-                .id("\(model.comparisonRevision)|\(storedBenchmarks ?? "")")
-            } else if model.isReturnsLoading {
-                ReturnsComparisonPlaceholder(
-                    mode: $chartMode,
-                    timeRange: $timeRange,
-                    title: L10n.text("正在加载收益数据"),
-                    message: L10n.text("正在整理组合与基准的历史记录"),
-                    isLoading: true
-                )
-            } else if let error = model.returnsError {
-                ReturnsComparisonPlaceholder(
-                    mode: $chartMode,
-                    timeRange: $timeRange,
-                    title: L10n.text("暂无收益记录"),
-                    message: error,
-                    isLoading: false
-                )
+        VStack(spacing: 0) {
+            header
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if let comparison = model.comparison {
+                        ReturnsChart(
+                            comparison: comparison,
+                            mode: $chartMode,
+                            timeRange: $timeRange,
+                            selectedDate: $selectedDate,
+                            onAddBenchmark: { showsBenchmarkPicker = true }
+                        )
+                        // A removed symbol leaves at once; an added one arrives
+                        // with the recomputed comparison.
+                        .id("\(model.comparisonRevision)|\(storedBenchmarks ?? "")")
+                    } else {
+                        ReturnsComparisonPlaceholder(
+                            timeRange: $timeRange,
+                            title: model.returnsError == nil
+                                ? L10n.text("正在加载收益数据") : L10n.text("暂无收益记录"),
+                            message: model.returnsError
+                                ?? L10n.text("正在整理组合与基准的历史记录"),
+                            isLoading: model.returnsError == nil
+                        )
+                    }
+                }
+                .padding(.bottom, 34)
             }
+            .scrollIndicators(.hidden)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .foregroundStyle(.white)
+        .background {
+            LinearGradient(
+                stops: [
+                    .init(color: Color(red: 0.360386, green: 0.194594, blue: 0.834078), location: 0),
+                    .init(color: Color(red: 30 / 255, green: 16 / 255, blue: 69 / 255), location: 0.66),
+                    .init(color: Color(red: 13 / 255, green: 7 / 255, blue: 32 / 255), location: 0.85),
+                    .init(color: .black, location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+        }
         .task { selectDrawableModeIfNeeded() }
         .onChange(of: model.comparisonRevision) { _, _ in
             computedBenchmarks = ComparisonBenchmarkCatalog.symbols
@@ -321,22 +346,104 @@ struct ReturnsComparisonPanel: View {
             // Recompute once for everything added while searching.
             if !isShowing { Task { await recomputeIfAdded() } }
         }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showsBenchmarkPicker = true
-                } label: {
-                    Image(systemName: "magnifyingglass")
-                }
-                .accessibilityLabel(L10n.text("添加对比"))
-            }
-        }
         .appSheet(isPresented: $showsBenchmarkPicker) {
             ReturnsBenchmarkPicker()
                 .environment(model)
         }
         .onChange(of: storedBenchmarks) { _, _ in
             Task { await recomputeIfAdded() }
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            backButton.modifier(ReturnsHeaderCircleGlass())
+
+            Spacer(minLength: 8)
+            if !isModeSwitcherExpanded {
+                addBenchmarkButton
+                    .modifier(ReturnsHeaderCircleGlass())
+                    .transition(.opacity)
+            }
+            modeSwitcher
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 56)
+    }
+
+    private var backButton: some View {
+        Button { dismiss() } label: {
+            Image(systemName: "chevron.left")
+                .font(.system(size: 19, weight: .regular))
+                .frame(width: 48, height: 48)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.text("返回"))
+    }
+
+    private var addBenchmarkButton: some View {
+        Button { showsBenchmarkPicker = true } label: {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 18, weight: .medium))
+                .frame(width: 48, height: 48)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.text("添加对比"))
+    }
+
+    private var modeSwitcher: some View {
+        Group {
+            if isModeSwitcherExpanded {
+                HStack(spacing: 0) {
+                    ForEach(ReturnsChartMode.displayOrder, id: \.self) { mode in
+                        let isSelected = chartMode == mode
+                        Button {
+                            chartMode = mode
+                            setSwitcherExpanded(false)
+                        } label: {
+                            Text(mode == .cashFlowMatched ? "Mirror" : mode.displayTitle)
+                                .font(.system(size: 15, weight: isSelected ? .semibold : .medium))
+                                .foregroundStyle(.white)
+                                .frame(width: 90, height: 48)
+                                .background {
+                                    if isSelected {
+                                        Capsule()
+                                            .fill(.white.opacity(0.22))
+                                            .overlay { Capsule().strokeBorder(.white.opacity(0.33), lineWidth: 1) }
+                                    }
+                                }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
+                    }
+                }
+                .frame(width: 270, height: 48)
+                .modifier(ReturnsSwitcherGlass())
+                .accessibilityIdentifier("comparison.mode.expanded")
+                .transition(.opacity.combined(with: .scale(scale: 0.88, anchor: .trailing)))
+            } else {
+                Button { setSwitcherExpanded(true) } label: {
+                    HStack(spacing: 9) {
+                        Text(chartMode == .cashFlowMatched ? "Mirror" : chartMode.displayTitle)
+                            .font(.system(size: 15, weight: .semibold))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .frame(width: 110, height: 48)
+                }
+                .buttonStyle(.plain)
+                .modifier(ReturnsSwitcherGlass())
+                .accessibilityLabel(L10n.text("收益图表口径，当前 \(chartMode.displayTitle)，展开选项"))
+                .accessibilityIdentifier("comparison.mode.collapsed")
+                .transition(.opacity.combined(with: .scale(scale: 0.88, anchor: .trailing)))
+            }
+        }
+    }
+
+    private func setSwitcherExpanded(_ expanded: Bool) {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.26)) {
+            isModeSwitcherExpanded = expanded
         }
     }
 
@@ -373,6 +480,42 @@ struct ReturnsComparisonPanel: View {
     }
 }
 
+private struct ReturnsHeaderCircleGlass: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.background {
+                ZStack {
+                    Circle().fill(.white.opacity(0.025))
+                    Color.clear.glassEffect(.regular.interactive(), in: Circle()).opacity(0.16)
+                    Circle().strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                }
+            }
+        } else {
+            content.background(.ultraThinMaterial, in: Circle())
+        }
+    }
+}
+
+private struct ReturnsSwitcherGlass: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+                .background {
+                    ZStack {
+                        Capsule().fill(.white.opacity(0.03))
+                        Color.clear.glassEffect(.regular.interactive(), in: Capsule()).opacity(0.70)
+                        Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                    }
+                }
+        } else {
+            content.background(.ultraThinMaterial, in: Capsule())
+                .overlay { Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1) }
+        }
+    }
+}
+
 private enum ReturnsChartMode: String, CaseIterable {
     case cashFlowMatched = "现金流镜像"
     case twr = "TWR"
@@ -393,30 +536,23 @@ private typealias ReturnsTypography = LegacyType
 
 private enum ReturnsChartLayout {
     static let contentHorizontalInset: CGFloat = 20
-    static let chipSpacing: CGFloat = 8
-    static let chipHeight: CGFloat = 40
-    static let chipRowCount = 3
-    static let valuesHeight: CGFloat = 136
-    static let plotHeight: CGFloat = 426
-    static let plotTopSpacing: CGFloat = 10
+    static let plotHeight: CGFloat = 371
     static let rangePickerHeight: CGFloat = 44
-    static let pickerTopSpacing: CGFloat = 20
-    static let modePickerHeight: CGFloat = 50
-    static let modePickerHorizontalInset: CGFloat = 20
 }
 
 private struct ReturnsTimeRangeControl: View {
-    @Environment(\.locale) private var appLocale
     @Binding var selection: ChartTimeRange
     var isDisabled = false
 
     var body: some View {
         ChartTimeRangePicker(
             selection: $selection,
-            isDisabled: isDisabled
+            choiceGroups: ChartTimeRange.comparisonChoiceGroups,
+            isDisabled: isDisabled,
+            isOnDarkCanvas: true,
+            usesRawRangeLabels: true
         )
         .frame(height: ReturnsChartLayout.rangePickerHeight)
-        .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
         .accessibilityLabel(L10n.text("收益图表时间范围"))
     }
 }
@@ -425,35 +561,20 @@ private enum ReturnsSeriesStyle {
     static let portfolio = "组合"
     static var order: [String] { [portfolio] + ComparisonBenchmarkCatalog.symbols }
     static var displayOrder: [String] { order }
-    // LazyHGrid fills a column before moving horizontally. Keep VOO and VTI in
-    // the final column so the broader comparison set appears before them.
-    // A list the reader has changed keeps the order they built it in.
-    static var selectorOrder: [String] {
-        guard ComparisonBenchmarkCatalog.symbols == ComparisonBenchmarkCatalog.defaults else { return order }
-        return [
-            portfolio, "QQQ", "SPY",
-            "DIA", "IWM", "VEU",
-            "GLD", "VOO", "VTI",
-        ]
-    }
-    /// One colour per series, used by the line and by the chip above it.
+    /// One colour per series, used by the line, endpoint and ranking badge.
     ///
-    /// Where a series has an obvious colour, it gets it: gold is gold, and
-    /// the reader's own portfolio is the same green the app uses for a gain
-    /// everywhere else. The rest are chosen to stay apart from each other and
-    /// from those two.
+    /// Figma 437:11904's line palette stays consistent across the plot,
+    /// endpoint labels and ranking badges.
     static let colors: [String: Color] = [
-        portfolio: Color(red: 0.004, green: 0.722, blue: 0.004),
+        portfolio: Color(red: 0.204, green: 0.780, blue: 0.349),
         "SPY": Color(red: 1.000, green: 0.584, blue: 0.000),
         "QQQ": Color(red: 0.204, green: 0.459, blue: 1.000),
         "VTI": Color(red: 0.890, green: 0.000, blue: 0.271),
         "VOO": Color(red: 0.780, green: 0.000, blue: 0.910),
         "DIA": Color(red: 0.627, green: 0.804, blue: 1.000),
         "IWM": Color(red: 1.000, green: 0.824, blue: 0.741),
-        // Freed by the portfolio moving to green, and far enough from the
-        // gold below to stay separable.
         "VEU": Color(red: 0.000, green: 0.882, blue: 0.698),
-        "GLD": Color(red: 1.000, green: 0.769, blue: 0.169),
+        "GLD": Color(red: 0.784, green: 0.804, blue: 0.000),
     ]
 
     /// For symbols the reader added: light enough to carry the black label
@@ -481,18 +602,9 @@ private enum ReturnsSeriesStyle {
     static func title(for series: String) -> String {
         series == portfolio ? L10n.text("MY") : series
     }
-
-    /// The chip takes the line's colour. It used to hold its own value for
-    /// the portfolio, so the line was teal and the chip above it green — two
-    /// colours for one series, which is the one thing a legend must not do.
-    static func chipColor(for series: String) -> Color {
-        color(for: series)
-    }
 }
 
 private struct ReturnsComparisonPlaceholder: View {
-    @Environment(\.locale) private var appLocale
-    @Binding var mode: ReturnsChartMode
     @Binding var timeRange: ChartTimeRange
     let title: String
     let message: String
@@ -500,9 +612,6 @@ private struct ReturnsComparisonPlaceholder: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ReturnsSeriesPlaceholderGrid(mode: mode)
-                .frame(height: ReturnsChartLayout.valuesHeight, alignment: .top)
-
             if isLoading {
                 StandardLineChartSkeleton(
                     axisWidth: 33,
@@ -514,7 +623,6 @@ private struct ReturnsComparisonPlaceholder: View {
                     appearanceID: "returns-comparison"
                 )
                 .frame(height: ReturnsChartLayout.plotHeight)
-                .padding(.top, ReturnsChartLayout.plotTopSpacing)
                 .padding(.trailing, ReturnsChartLayout.contentHorizontalInset)
             } else {
                 ReturnsPlotPlaceholder(
@@ -524,129 +632,31 @@ private struct ReturnsComparisonPlaceholder: View {
                     maximumLines: 3
                 )
                 .frame(height: ReturnsChartLayout.plotHeight)
-                .padding(.top, ReturnsChartLayout.plotTopSpacing)
                 .padding(.trailing, ReturnsChartLayout.contentHorizontalInset)
             }
 
-            if isLoading {
-                ChartTimeRangePickerSkeleton()
-                    .frame(height: ReturnsChartLayout.rangePickerHeight)
-                    .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
-            } else {
-                ReturnsTimeRangeControl(selection: $timeRange, isDisabled: true)
-            }
+            ReturnsTimeRangeControl(selection: $timeRange, isDisabled: true)
 
-            Group {
-                if isLoading {
-                    ReturnsModePickerSkeleton()
-                } else {
-                    Picker(L10n.text("图表口径"), selection: $mode) {
-                        ForEach(ReturnsChartMode.displayOrder, id: \.self) { chartMode in
-                            Text(chartMode.displayTitle).tag(chartMode)
-                        }
+            VStack(spacing: 12) {
+                ForEach(0..<4, id: \.self) { index in
+                    HStack {
+                        Circle().fill(ReturnsSeriesStyle.color(for: ReturnsSeriesStyle.order[index]))
+                            .frame(width: 24, height: 24)
+                        Text(index == 0 ? "MY Portfolio" : ReturnsSeriesStyle.order[index])
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        Spacer()
+                        Text("—")
                     }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .disabled(true)
+                    .padding(.horizontal, 16)
+                    .frame(height: 65)
+                    .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 16))
+                    .opacity(isLoading ? 0.5 : 1)
                 }
             }
-            .frame(height: ReturnsChartLayout.modePickerHeight)
-            .padding(.horizontal, ReturnsChartLayout.modePickerHorizontalInset)
-            .padding(.top, ReturnsChartLayout.pickerTopSpacing)
+            .padding(.horizontal, 20)
+            .padding(.top, 23)
         }
         .accessibilityElement(children: .contain)
-    }
-}
-
-private struct ReturnsModePickerSkeleton: View {
-    @Environment(\.locale) private var appLocale
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var skeletonColor: Color {
-        CatfolioTheme.skeletonFill
-    }
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(0..<3, id: \.self) { index in
-                Capsule()
-                    .fill(index == 0 ? skeletonColor.opacity(1.25) : skeletonColor)
-                    .frame(width: index == 2 ? 58 : 42, height: 9)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .background(skeletonColor.opacity(0.72), in: Capsule())
-        .accessibilityHidden(true)
-    }
-}
-
-private struct ReturnsSeriesPlaceholderGrid: View {
-    @Environment(\.locale) private var appLocale
-    let mode: ReturnsChartMode
-
-    var body: some View {
-        GeometryReader { geometry in
-            let cardWidth = max(
-                148,
-                (geometry.size.width
-                    - ReturnsChartLayout.contentHorizontalInset * 2
-                    - ReturnsChartLayout.chipSpacing) / 2
-            )
-
-            ScrollView(.horizontal) {
-                LazyHGrid(
-                    rows: Array(
-                        repeating: GridItem(.fixed(ReturnsChartLayout.chipHeight), spacing: ReturnsChartLayout.chipSpacing),
-                        count: ReturnsChartLayout.chipRowCount
-                    ),
-                    alignment: .top,
-                    spacing: ReturnsChartLayout.chipSpacing
-                ) {
-                    ForEach(ReturnsSeriesStyle.selectorOrder, id: \.self) { series in
-                        ReturnsSeriesPlaceholderCard(
-                            title: ReturnsSeriesStyle.title(for: series),
-                            color: ReturnsSeriesStyle.chipColor(for: series),
-                            mode: mode
-                        )
-                        .frame(width: cardWidth)
-                    }
-                }
-                .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
-            }
-            .scrollIndicators(.hidden)
-            .scrollClipDisabled()
-        }
-    }
-}
-
-private struct ReturnsSeriesPlaceholderCard: View {
-    @Environment(\.locale) private var appLocale
-    let title: String
-    let color: Color
-    let mode: ReturnsChartMode
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(title)
-                .appCaps(.micro, weight: .semibold)
-                .lineLimit(1)
-            Spacer(minLength: 0)
-            Capsule()
-                .fill(Color.primary.opacity(0.14))
-                .frame(width: 42, height: 10)
-            Capsule()
-                .fill(Color.primary.opacity(0.14))
-                .frame(width: 46, height: 10)
-        }
-        .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity, minHeight: ReturnsChartLayout.chipHeight, maxHeight: ReturnsChartLayout.chipHeight)
-        .redacted(reason: .placeholder)
-        .chartLoadingShimmer(appearanceID: "returns-comparison")
-        .opacity(0.28)
-        .background {
-            ReturnsSeriesCardSurface(color: color, isVisible: false)
-        }
-        .accessibilityHidden(true)
     }
 }
 
@@ -688,6 +698,7 @@ private struct ReturnsChart: View {
     @Binding var mode: ReturnsChartMode
     @Binding var timeRange: ChartTimeRange
     @Binding var selectedDate: Date?
+    let onAddBenchmark: () -> Void
     @State private var visibleSeries = Set(ReturnsSeriesStyle.displayOrder)
     @State private var measuredRange: ChartDateRange?
     @State private var prepared: ReturnsPreparedData?
@@ -698,12 +709,14 @@ private struct ReturnsChart: View {
         comparison: ComparisonResponse,
         mode: Binding<ReturnsChartMode>,
         timeRange: Binding<ChartTimeRange>,
-        selectedDate: Binding<Date?>
+        selectedDate: Binding<Date?>,
+        onAddBenchmark: @escaping () -> Void
     ) {
         self.comparison = comparison
         _mode = mode
         _timeRange = timeRange
         _selectedDate = selectedDate
+        self.onAddBenchmark = onAddBenchmark
     }
 
     private var isChartLoading: Bool {
@@ -718,15 +731,6 @@ private struct ReturnsChart: View {
         let measurement = rangeMeasurement()
 
         VStack(alignment: .leading, spacing: 0) {
-            Group {
-                if isChartLoading {
-                    ReturnsSeriesPlaceholderGrid(mode: mode)
-                } else {
-                    seriesCards(valuesAtDate)
-                }
-            }
-            .frame(height: ReturnsChartLayout.valuesHeight, alignment: .top)
-
             if isChartLoading {
                 StandardLineChartSkeleton(
                     axisWidth: 33,
@@ -738,7 +742,6 @@ private struct ReturnsChart: View {
                     appearanceID: "returns-comparison"
                 )
                 .frame(height: ReturnsChartLayout.plotHeight)
-                .padding(.top, ReturnsChartLayout.plotTopSpacing)
                 .padding(.trailing, ReturnsChartLayout.contentHorizontalInset)
             } else if !hasDrawableLine {
                 ReturnsPlotPlaceholder(
@@ -747,12 +750,12 @@ private struct ReturnsChart: View {
                     isLoading: false
                 )
                 .frame(height: ReturnsChartLayout.plotHeight)
-                .padding(.top, ReturnsChartLayout.plotTopSpacing)
                 .padding(.trailing, ReturnsChartLayout.contentHorizontalInset)
             } else {
                 FastReturnsPlot(
                     data: displayData,
-                    transitionKey: "\(mode.rawValue)|\(timeRange.rawValue)|\(visibleSeries.sorted().joined(separator: ","))",
+                    transitionKey: displayData.transitionKey,
+                    rangeTransitionKey: displayData.rangeTransitionKey,
                     selectedDate: selectedDate == nil && measuredRange == nil ? nil : chartDate,
                     measuredRange: measuredRange,
                     mode: mode,
@@ -772,7 +775,6 @@ private struct ReturnsChart: View {
                     }
                 )
                 .frame(height: ReturnsChartLayout.plotHeight)
-                .padding(.top, ReturnsChartLayout.plotTopSpacing)
                 .padding(.trailing, ReturnsChartLayout.contentHorizontalInset)
                 .accessibilityLabel(L10n.text("组合与基准的 \(timeRange.rawValue) \(mode.displayTitle) 对比图，长按后单指拖动查看单日，保持第一指并加入第二指测量区间"))
                 .overlay(alignment: .topLeading) {
@@ -791,13 +793,9 @@ private struct ReturnsChart: View {
                 }
             }
 
-            if isChartLoading {
-                ChartTimeRangePickerSkeleton()
-                    .frame(height: ReturnsChartLayout.rangePickerHeight)
-                    .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
-            } else {
-                ReturnsTimeRangeControl(selection: $timeRange)
-            }
+            ReturnsTimeRangeControl(selection: $timeRange)
+
+            seriesCards(valuesAtDate)
 
             if mode == .twr, hasDrawableLine,
                let note = comparison.warnings?.first(where: { $0.hasPrefix("每日 TWR") }) {
@@ -827,23 +825,6 @@ private struct ReturnsChart: View {
                     .padding(.bottom, 8)
             }
 
-            Group {
-                if isChartLoading {
-                    ReturnsModePickerSkeleton()
-                } else {
-                    Picker(L10n.text("图表口径"), selection: $mode) {
-                        ForEach(ReturnsChartMode.displayOrder, id: \.self) { chartMode in
-                            Text(chartMode.displayTitle).tag(chartMode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .accessibilityLabel(L10n.text("收益图表口径"))
-                }
-            }
-            .frame(height: ReturnsChartLayout.modePickerHeight)
-            .padding(.horizontal, ReturnsChartLayout.modePickerHorizontalInset)
-            .padding(.top, ReturnsChartLayout.pickerTopSpacing)
         }
         .onChange(of: mode) { _, _ in
             measuredRange = nil
@@ -859,57 +840,42 @@ private struct ReturnsChart: View {
     }
 
     private func seriesCards(_ values: [ReturnsSelectedValue]) -> some View {
-        GeometryReader { geometry in
-            let cardWidth = max(
-                148,
-                (geometry.size.width
-                    - ReturnsChartLayout.contentHorizontalInset * 2
-                    - ReturnsChartLayout.chipSpacing) / 2
-            )
-            let valuesBySeries = Dictionary(uniqueKeysWithValues: values.map { ($0.series, $0) })
-
-            ScrollView(.horizontal) {
-                LazyHGrid(
-                    rows: Array(
-                        repeating: GridItem(.fixed(ReturnsChartLayout.chipHeight), spacing: ReturnsChartLayout.chipSpacing),
-                        count: ReturnsChartLayout.chipRowCount
-                    ),
-                    alignment: .top,
-                    spacing: ReturnsChartLayout.chipSpacing
-                ) {
-                    ForEach(ReturnsSeriesStyle.selectorOrder.compactMap { valuesBySeries[$0] }) { item in
-                        Button {
-                            toggleSeries(item.series)
+        let ranked = values.sorted { lhs, rhs in
+            let left = lhs.returnValue ?? -.infinity
+            let right = rhs.returnValue ?? -.infinity
+            return left == right
+                ? (ReturnsSeriesStyle.order.firstIndex(of: lhs.series) ?? .max)
+                    < (ReturnsSeriesStyle.order.firstIndex(of: rhs.series) ?? .max)
+                : left > right
+        }
+        return VStack(spacing: 12) {
+            ForEach(Array(ranked.enumerated()), id: \.element.id) { index, item in
+                Button { toggleSeries(item.series) } label: {
+                    ReturnsRankingRow(item: item, rank: index + 1)
+                }
+                .buttonStyle(.plain)
+                .accessibilityValue(item.isVisible ? L10n.text("已显示") : L10n.text("已隐藏"))
+                .contextMenu {
+                    if item.series != ReturnsSeriesStyle.portfolio {
+                        Button(role: .destructive) {
+                            ComparisonBenchmarkCatalog.remove(item.series)
                         } label: {
-                            CompactSeriesValue(
-                                title: ReturnsSeriesStyle.title(for: item.series),
-                                value: item.value,
-                                amountValue: item.amountValue,
-                                color: ReturnsSeriesStyle.chipColor(for: item.series),
-                                mode: mode,
-                                returnValue: item.returnValue,
-                                isVisible: item.isVisible
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .frame(width: cardWidth)
-                        .accessibilityValue(item.isVisible ? L10n.text("已显示") : L10n.text("已隐藏"))
-                        .contextMenu {
-                            if item.series != ReturnsSeriesStyle.portfolio {
-                                Button(role: .destructive) {
-                                    ComparisonBenchmarkCatalog.remove(item.series)
-                                } label: {
-                                    Label(L10n.text("移除对比"), systemImage: "minus.circle")
-                                }
-                            }
+                            Label(L10n.text("移除对比"), systemImage: "minus.circle")
                         }
                     }
                 }
-                .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
             }
-            .scrollIndicators(.hidden)
-            .scrollClipDisabled()
+            Button(action: onAddBenchmark) {
+                Label(L10n.text("添加对比"), systemImage: "plus")
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background { ReturnsGlassCardSurface() }
+            }
+            .buttonStyle(.plain)
         }
+        .padding(.horizontal, 20)
+        .padding(.top, 23)
     }
 
     private func nearestDate(in dates: [Date]) -> Date? {
@@ -1079,6 +1045,7 @@ private struct FastReturnsPlot: View {
     @Environment(\.locale) private var appLocale
     let data: ReturnsDisplayData
     let transitionKey: String
+    let rangeTransitionKey: String
     let selectedDate: Date?
     let measuredRange: ChartDateRange?
     let mode: ReturnsChartMode
@@ -1108,7 +1075,9 @@ private struct FastReturnsPlot: View {
             // Keep the range's actual baseline visible and reachable by touch.
             leadingLineOverflow: 0,
             trailingEndpointInset: endpointInset,
+            gridOpacity: 0,
             transitionKey: transitionKey,
+            rangeTransitionKey: rangeTransitionKey,
             appearanceID: "returns-comparison",
             dataTransition: .viewportZoom,
             animatesInitialAppearance: true,
@@ -1121,8 +1090,8 @@ private struct FastReturnsPlot: View {
                 : nil,
             rangeSeriesIDs: [ReturnsSeriesStyle.portfolio],
             rangePrimarySeriesID: ReturnsSeriesStyle.portfolio,
-            yAxisFont: Typography.number(.micro),
-            yAxisColor: Color.secondary.opacity(0.48),
+            yAxisFont: .system(size: 14, weight: .regular, design: .rounded).italic(),
+            yAxisColor: .white.opacity(0.20),
             yAxisLabel: axisLabel,
             xAxisLabel: shortDate,
             onSelect: onSelect,
@@ -1136,7 +1105,7 @@ private struct FastReturnsPlot: View {
                 ForEach(endpointLayouts(height: geometry.size.height)) { endpoint in
                     Text(endpoint.text)
                         .font(Typography.text(size: 10, weight: .bold))
-                        .foregroundStyle(Color.black)
+                        .foregroundStyle(CatfolioTheme.blackTextOnColor)
                         .lineLimit(1)
                         .minimumScaleFactor(0.72)
                         .frame(width: axisWidth, height: 18)
@@ -1292,6 +1261,10 @@ private struct ReturnsEndpointLabelLayout: Identifiable {
 
 private struct ReturnsDisplayData {
     let id = UUID()
+    // Keep the animation revision with the plotted points. A picker change can
+    // render before the new range's points have been prepared.
+    let transitionKey: String
+    let rangeTransitionKey: String
     let points: [ReturnsSeriesPoint]
     let grouped: [String: [ReturnsSeriesPoint]]
     let dates: [Date]
@@ -1306,6 +1279,8 @@ private struct ReturnsDisplayData {
     }
 
     static let empty = ReturnsDisplayData(
+        transitionKey: "",
+        rangeTransitionKey: "",
         points: [],
         grouped: [:],
         dates: [],
@@ -1442,6 +1417,8 @@ private final class ReturnsPreparedData: @unchecked Sendable {
         }
 
         return ReturnsDisplayData(
+            transitionKey: "\(mode.rawValue)|\(range.rawValue)|\(visibleSeries.sorted().joined(separator: ","))",
+            rangeTransitionKey: range.rawValue,
             points: points,
             grouped: grouped,
             dates: dates,
@@ -1638,171 +1615,127 @@ private struct ReturnsSelectedValue: Identifiable {
     var id: String { series }
 }
 
-private struct CompactSeriesValue: View {
-    @Environment(\.locale) private var appLocale
-    let title: String
-    let value: Double?
-    let amountValue: Double?
-    let color: Color
-    let mode: ReturnsChartMode
-    let returnValue: Double?
-    let isVisible: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorScheme) private var colorScheme
+private struct ReturnsRankingRow: View {
+    let item: ReturnsSelectedValue
+    let rank: Int
+
+    private var color: Color { ReturnsSeriesStyle.color(for: item.series) }
+    private var isPortfolio: Bool { item.series == ReturnsSeriesStyle.portfolio }
 
     var body: some View {
-        HStack(spacing: 3) {
-            Text(title)
-                .font(ReturnsTypography.semibold(11, relativeTo: .caption))
-                .tracking(2)
-                .foregroundStyle(primaryTextColor)
-                .lineLimit(1)
-                .layoutPriority(2)
+        HStack(spacing: 16) {
+            ReturnsRankBadge(rank: rank, color: color, isPortfolio: isPortfolio)
 
-            Text(formattedAmount)
-                .appNumber(.caption)
-                .foregroundStyle(secondaryValueColor)
-                .contentTransition(.numericText(value: amountValue ?? 0))
-                .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: amountValue)
-                .lineLimit(1)
-                .minimumScaleFactor(0.50)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(isPortfolio ? "MY Portfolio" : item.series)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                Text(item.amountValue.map { DisplayFormat.money($0) } ?? "—")
+                    .font(.system(size: 15, weight: .regular, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .lineLimit(1)
+            }
 
-            Text(formattedReturn)
-                .appNumber(.micro)
+            Spacer(minLength: 8)
+
+            if let value = item.returnValue {
+                HStack(spacing: 0) {
+                    Text("\(value >= 0 ? "+" : "")\((value * 100).formatted(.number.precision(.fractionLength(1))))")
+                    Text("%")
+                        .foregroundStyle(.white.opacity(0.3))
+                }
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(primaryTextColor)
-                .contentTransition(.numericText(value: returnValue ?? 0))
-                .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: returnValue)
-                .lineLimit(1)
-                .minimumScaleFactor(0.56)
-                .fixedSize(horizontal: true, vertical: false)
-                .layoutPriority(2)
+            } else {
+                Text("—")
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+            }
         }
-        .padding(.horizontal, 14)
-        .frame(maxWidth: .infinity, minHeight: ReturnsChartLayout.chipHeight, maxHeight: ReturnsChartLayout.chipHeight)
-        .background {
-            ReturnsSeriesCardSurface(color: color, isVisible: isVisible)
-        }
+        .padding(.horizontal, 16)
+        .frame(height: 65)
+        .background { ReturnsGlassCardSurface(glow: isPortfolio ? color : nil) }
+        .opacity(item.isVisible ? 1 : 0.20)
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .opacity(isVisible ? 1 : 0.42)
-        .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: isVisible)
-    }
-
-    private var primaryTextColor: Color {
-        colorScheme == .dark ? Color.white : Color.black
-    }
-
-    private var secondaryValueColor: Color {
-        colorScheme == .dark ? .secondary : .primary
-    }
-
-    private var formattedAmount: String {
-        amountValue.map { DisplayFormat.money($0) } ?? "—"
-    }
-
-    private var formattedReturn: String {
-        if let returnValue {
-            return DisplayFormat.ratioPercent(returnValue)
-        }
-        guard let value else { return "—" }
-        return mode == .cashFlowMatched ? "—" : DisplayFormat.percent(value)
     }
 }
 
-private struct ReturnsSeriesCardSurface: View {
-    @Environment(\.locale) private var appLocale
+private struct ReturnsRankBadge: View {
+    let rank: Int
     let color: Color
-    let isVisible: Bool
-    @Environment(\.colorScheme) private var colorScheme
+    let isPortfolio: Bool
+
+    var body: some View {
+        ZStack {
+            if isPortfolio {
+                Circle().fill(
+                    RadialGradient(
+                        stops: [
+                            .init(color: Color(red: 52 / 255, green: 199 / 255, blue: 89 / 255), location: 0),
+                            .init(color: Color(red: 39 / 255, green: 148 / 255, blue: 66 / 255), location: 0.5),
+                            .init(color: Color(red: 25 / 255, green: 97 / 255, blue: 43 / 255), location: 1),
+                        ],
+                        center: .bottom,
+                        startRadius: 0,
+                        endRadius: 24
+                    )
+                )
+                // Figma's 16 × 11 ellipse starts 1.5 pt below the ball's top.
+                Ellipse()
+                    .fill(LinearGradient(colors: [.white.opacity(0.6), .clear],
+                                         startPoint: .top, endPoint: .bottom))
+                    .frame(width: 16, height: 11)
+                    .offset(y: -5)
+            } else {
+                Circle().fill(color.opacity(0.88))
+                if #available(iOS 26.0, *) {
+                    Color.clear
+                        .glassEffect(.clear.tint(color.opacity(0.28)), in: Circle())
+                } else {
+                    Circle().fill(.ultraThinMaterial).opacity(0.30)
+                }
+                Ellipse()
+                    .fill(LinearGradient(colors: [.white.opacity(0.52), .clear],
+                                         startPoint: .top, endPoint: .bottom))
+                    .frame(width: 16, height: 9)
+                    .offset(y: -6)
+            }
+
+            Text("\(rank)")
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundStyle(isPortfolio ? .white : Color(red: 0.004, green: 0.004, blue: 0.008))
+        }
+        .frame(width: 24, height: 24)
+        .overlay { Circle().strokeBorder(isPortfolio ? .black.opacity(0.1) : .white.opacity(0.06), lineWidth: 1) }
+        .shadow(color: .black.opacity(isPortfolio ? 0.25 : 0), radius: 7, y: 4)
+        .shadow(color: .black.opacity(isPortfolio ? 0.20 : 0), radius: 1.5, y: 2)
+    }
+}
+
+private struct ReturnsGlassCardSurface: View {
+    var glow: Color?
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
-        let visibility = isVisible ? 1.0 : 0.34
-
         ZStack {
-            // Treat the tint as a light source behind the glass. The blur is
-            // deliberately allowed to escape the chip bounds so neighbouring
-            // glass surfaces pick up a restrained ambient reflection.
-            shape
-                .fill(color.opacity((colorScheme == .dark ? 0.026 : 0.008) * visibility))
-                .scaleEffect(x: 1.08, y: 1.22)
-                .blur(radius: 20)
-                .blendMode(colorScheme == .dark ? .plusLighter : .normal)
-
-            shape
-                .fill(color.opacity((colorScheme == .dark ? 0.060 : 0.020) * visibility))
-                .scaleEffect(x: 1.025, y: 1.09)
-                .blur(radius: 8)
-                .blendMode(colorScheme == .dark ? .plusLighter : .normal)
-
-            glassShell(shape: shape, visibility: visibility)
-
-            shape
-                .fill(
-                    LinearGradient(
-                        colors: colorScheme == .dark
-                            ? [
-                                color.opacity(0.20 * visibility),
-                                color.opacity(0.08 * visibility),
-                                Color.black.opacity(0.13),
-                            ]
-                            : [
-                                color.opacity(0.10 * visibility),
-                                color.opacity(0.035 * visibility),
-                                Color.white.opacity(0.16),
-                            ],
-                        startPoint: .bottomLeading,
-                        endPoint: .topTrailing
-                    )
-                )
-
-            shape
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(colorScheme == .dark ? 0.20 : 0.46),
-                            color.opacity(colorScheme == .dark ? 0.18 : 0.10),
-                            Color.white.opacity(colorScheme == .dark ? 0.05 : 0.20),
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 0.75
-                )
+            if #available(iOS 26.0, *) {
+                Color.clear
+                    .glassEffect(.clear.tint(.white.opacity(0.035)), in: shape)
+                    .opacity(0.25)
+            } else {
+                shape.fill(.ultraThinMaterial)
+            }
+            shape.fill(.white.opacity(0.08))
+            if let glow {
+                RadialGradient(colors: [glow.opacity(0.30), .clear],
+                               center: .leading, startRadius: 0, endRadius: 110)
+                    .clipShape(shape)
+            }
+            shape.strokeBorder(.white.opacity(0.05), lineWidth: 1)
         }
         .allowsHitTesting(false)
     }
-
-    @ViewBuilder
-    private func glassShell(
-        shape: RoundedRectangle,
-        visibility: Double
-    ) -> some View {
-        if #available(iOS 26.0, *) {
-            if colorScheme == .dark {
-                Color.clear
-                    .glassEffect(
-                        .regular.tint(color.opacity(0.12 * visibility)),
-                        in: shape
-                    )
-            } else {
-                Color.clear
-                    .glassEffect(
-                        .clear.tint(color.opacity(0.06 * visibility)),
-                        in: shape
-                    )
-            }
-        } else {
-            shape
-                .fill(.ultraThinMaterial)
-        }
-    }
 }
 
-/// What the comparison measures against: the list as it stands, the index
-/// funds it starts with, and a search of the whole market for any index
-/// fund or stock to add.
 private struct ReturnsBenchmarkPicker: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var appLocale

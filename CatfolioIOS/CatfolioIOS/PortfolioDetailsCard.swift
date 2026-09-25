@@ -195,16 +195,21 @@ struct PortfolioDetailsCard: View {
                     Label(L10n.text("ETF 穿透"), systemImage: tableMode == "ETF 穿透" ? "checkmark" : "square.3.layers.3d")
                 }
             } label: {
-                HStack(spacing: 0) {
-                    Text(tableTitle)
-                    Image("PortfolioHeaderDisclosure")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 24, height: 24)
+                // The list's name, then its count with the day in small
+                // type — the title no longer carries the app's name.
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 2) {
+                        Text(tableTitle)
+                            .font(Typography.text(size: 22, weight: .semibold))
+                        Image("PortfolioHeaderDisclosure")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 20, height: 20)
+                    }
+                    .foregroundStyle(CatfolioTheme.primaryText)
+                    headerSubtitle
                 }
-                .font(Typography.number(size: colorScheme == .light ? 28 : 32))
-                .foregroundStyle(.primary)
             }
             .buttonStyle(.plain)
 
@@ -223,7 +228,9 @@ struct PortfolioDetailsCard: View {
             return geometry.frame(in: .global).midY <= threshold
         } action: { _, usesGlass in
             guard usesGlass != headerUsesGlass else { return }
-            withAnimation(.easeOut(duration: 0.18)) { headerUsesGlass = usesGlass }
+            // Not animated: glass animated in from nothing drew for a frame
+            // as a grey square before settling into its capsule.
+            headerUsesGlass = usesGlass
         }
     }
 
@@ -258,8 +265,38 @@ struct PortfolioDetailsCard: View {
         switch tableMode {
         case "ETF 穿透": L10n.text("ETF 穿透")
         case "热力图": L10n.text("持仓热力图")
-        default: showsMergedHoldings ? L10n.text("合并穿透") : "Catfolio"
+        default: showsMergedHoldings ? L10n.text("ETF 穿透") : L10n.text("持仓列表")
         }
+    }
+
+    /// Rows in the list on screen; nil until an ETF breakdown has loaded.
+    private var tableCount: Int? {
+        switch tableMode {
+        case "热力图": return nil
+        case "ETF 穿透": break
+        default: if !showsMergedHoldings { return holdings.count }
+        }
+        guard loadedETFHoldingsKey == etfHoldingsKey, let rows = etfResponse?.rows, !rows.isEmpty else { return nil }
+        return rows.count
+    }
+
+    /// "111  9月25日 / 周四": the count in a light weight, the day small.
+    private var headerSubtitle: some View {
+        let date = model.localUpdatedAt ?? Date()
+        let day = date.formatted(.dateTime.month(.abbreviated).day().locale(appLocale))
+        let weekday = date.formatted(.dateTime.weekday(.abbreviated).locale(appLocale))
+        return HStack(alignment: .firstTextBaseline, spacing: 8) {
+            if let tableCount {
+                Text("\(tableCount)")
+                    .font(Typography.number(size: 17, weight: .light))
+                    .monospacedDigit()
+                    .foregroundStyle(CatfolioTheme.primaryText)
+            }
+            Text("\(day) / \(weekday)")
+                .appText(.caption, weight: .medium)
+                .foregroundStyle(.secondary)
+        }
+        .lineLimit(1)
     }
 
     private var holdingsTable: some View {
@@ -277,6 +314,7 @@ struct PortfolioDetailsCard: View {
                 .buttonStyle(HoldingPressButtonStyle())
                 .holdingDetailPreview(holding) { onSelect(holding) }
                 .holdingZoomSource(holding.ticker, in: zoomNamespace)
+                .environment(\.securityDetailZoomOrigin, zoomNamespace)
             }
         }
     }
@@ -323,9 +361,6 @@ struct PortfolioDetailsCard: View {
             }
             holdingsTable
         } else {
-            Text(L10n.text("ETF 已拆分并合并到同名股票。盈亏按基金成分权重分摊估算，点按可看金额来源；未覆盖部分保留为 ETF 其他。"))
-                .appText(.caption).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
             LazyVStack(spacing: 4) {
                 ForEach(mergedEntries, id: \.row.id) { entry in
                     if entry.row.fromETFUSD == 0, let direct = directHolding(for: entry.row.ticker) {
@@ -475,19 +510,9 @@ struct PortfolioDetailsCard: View {
             }
             .padding(.vertical, 10)
 
-            Text(L10n.text("\(response.etfTickers.joined(separator: " · ")) 按当前市值和基金权重拆开，再与相同股票的直接持仓合并。"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.bottom, 10)
-
             VStack(spacing: 0) {
                 ForEach(visibleETFRows) { row in
-                    ETFExposureRow(
-                        row: row,
-                        directHolding: directHolding(for: row.ticker),
-                        portfolioTotal: etfPortfolioTotal
-                    )
+                    ETFExposureRow(row: row, portfolioTotal: etfPortfolioTotal)
                 }
             }
 
@@ -868,19 +893,24 @@ struct PortfolioHeaderMaterialControl: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
     let usesGlass: Bool
 
+    private var fill: Color {
+        colorScheme == .light
+            ? Color(red: 244 / 255, green: 244 / 255, blue: 244 / 255)
+            : Color.white.opacity(0.12)
+    }
+
+    /// One structure in both states, switched without animation. Swapping a
+    /// filled view for a glass one rebuilt the control, and glass animated in
+    /// drew for a frame as a grey square before becoming a capsule.
     @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *), usesGlass {
+        if #available(iOS 26.0, *) {
             content
-                .glassEffect(.regular.interactive(), in: Capsule())
+                .background(fill.opacity(usesGlass ? 0 : 1), in: Capsule())
+                .glassEffect(usesGlass ? .regular.interactive() : .identity, in: Capsule())
+                .animation(nil, value: usesGlass)
         } else {
-            content
-                .background(
-                    colorScheme == .light
-                        ? Color(red: 244 / 255, green: 244 / 255, blue: 244 / 255)
-                        : Color.white.opacity(0.12),
-                    in: Capsule()
-                )
+            content.background(fill, in: Capsule())
         }
     }
 }
@@ -958,9 +988,7 @@ struct ETFSummaryMetric: View {
 }
 
 struct ETFExposureRow: View {
-    @Environment(\.locale) private var appLocale
     let row: ETFLookThroughRow
-    let directHolding: Holding?
     let portfolioTotal: Double
 
     private var portfolioWeight: Double {
@@ -968,87 +996,57 @@ struct ETFExposureRow: View {
         return row.totalUSD / portfolioTotal
     }
 
+    /// The holdings list's row: name and amount, then ticker and share of
+    /// the portfolio against where the amount comes from.
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                AssetLogo(ticker: row.ticker, logoSymbol: row.logoSymbol)
+        HStack(alignment: .center, spacing: 10) {
+            AssetLogo(ticker: row.ticker, logoSymbol: row.logoSymbol, size: 44, cornerRadius: 12)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(CompanyNameCatalog.displayName(ticker: row.ticker, fallback: row.name))
-                        .font(.subheadline.weight(.bold))
-                        .lineLimit(1)
-                    HStack(spacing: 5) {
-                        Text(row.ticker)
-                        if let directHolding {
-                            Text("·")
-                            Text(L10n.text("\(formattedShares(directHolding.shares)) 股"))
-                        }
-                    }
-                    .appNumber(.caption, weight: .semibold)
-                    .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                VStack(alignment: .trailing, spacing: 3) {
-                    Text(DisplayFormat.money(row.totalUSD, fractionDigits: 2))
-                        .appNumber(.callout, weight: .bold)
-                    Text(DisplayFormat.percent(portfolioWeight * 100, signed: false))
-                        .appNumber(.caption, weight: .semibold)
-                        .foregroundStyle(.secondary)
-                }
-                .layoutPriority(2)
-            }
-
-            HStack(spacing: 12) {
-                exposureLabel(L10n.text("直接"), value: row.directUSD, color: CatfolioPalette.blue500)
-                exposureLabel("ETF", value: row.fromETFUSD, color: CatfolioPalette.green500)
-                Spacer(minLength: 4)
-                if row.directUSD > 0, row.fromETFUSD > 0 {
-                    Text(L10n.text("重叠持仓"))
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(Color.orange)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(Color.orange.opacity(0.1), in: Capsule())
-                }
-            }
-
-            if let directHolding {
-                HStack(spacing: 6) {
-                    Text(L10n.text("现价 \(DisplayFormat.money(directHolding.quotePrice, currency: directHolding.quoteCurrency))"))
-                    Text("·")
-                    Text(
-                        L10n.text("盈亏 \(DisplayFormat.money(directHolding.unrealized, signed: true, fractionDigits: 2)) ")
-                            + "(\(DisplayFormat.percent(directHolding.unrealizedPercent)))"
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    SecurityDisplayName(
+                        name: CompanyNameCatalog.displayName(ticker: row.ticker, fallback: row.name),
+                        scale: .body,
+                        weight: .semibold
                     )
-                    .foregroundStyle(directHolding.unrealized >= 0 ? CatfolioPalette.green500 : CatfolioPalette.rose500)
+                    .layoutPriority(1)
+                    Spacer(minLength: 4)
+                    Text(DisplayFormat.money(row.totalUSD, fractionDigits: 2))
+                        .appNumber(.callout, weight: .semibold)
+                        .foregroundStyle(CatfolioTheme.primaryText)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
-                .appNumber(.micro, weight: .semibold)
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text("\(row.ticker) · \(DisplayFormat.percent(portfolioWeight * 100, signed: false))")
+                        .appText(.footnote, weight: .medium)
+                        .lineLimit(1)
+                    Spacer(minLength: 2)
+                    sourceDetail
+                }
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.68)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 9)
-        .frame(minHeight: 76)
+        .frame(minHeight: 64)
         .accessibilityElement(children: .combine)
     }
 
-    private func exposureLabel(_ title: String, value: Double, color: Color) -> some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(color)
-                .frame(width: 7, height: 7)
-            Text("\(title) \(DisplayFormat.money(value))")
-                .appNumber(.micro, weight: .semibold)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+    /// "直接 $1,200 · ETF $340": held outright, and through funds.
+    @ViewBuilder private var sourceDetail: some View {
+        HStack(spacing: 4) {
+            if row.directUSD > 0 {
+                Text(L10n.text("直接")) + Text(" \(DisplayFormat.money(row.directUSD))")
+            }
+            if row.directUSD > 0, row.fromETFUSD > 0 { Text("·") }
+            if row.fromETFUSD > 0 {
+                Text("ETF \(DisplayFormat.money(row.fromETFUSD))")
+            }
         }
+        .appNumber(.caption, weight: .medium)
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
-    private func formattedShares(_ value: Double) -> String {
-        DisplayFormat.shares(value)
-    }
 }
 
 struct HoldingPerformanceValues {
@@ -1077,6 +1075,8 @@ extension Holding {
 struct HoldingRow: View {
     @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
+    /// The list's zoom namespace, so the row's logo can fly to the page's.
+    @Environment(\.securityDetailZoomOrigin) private var zoomOrigin
     let holding: Holding
     let performancePeriod: HoldingPerformancePeriod
     let dailyChangePercent: Double?
@@ -1094,7 +1094,7 @@ struct HoldingRow: View {
             if dynamicTypeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 12) {
-                        AssetLogo(ticker: holding.ticker, logoSymbol: holding.logoSymbol, size: 40)
+                        AssetLogo(ticker: holding.ticker, logoSymbol: holding.logoSymbol, size: 44, cornerRadius: 12)
                         HoldingIdentity(holding: holding, compact: false)
                     }
                     HoldingMetrics(
@@ -1106,35 +1106,40 @@ struct HoldingRow: View {
                     )
                 }
             } else {
-                HStack(alignment: .center, spacing: 8) {
-                    AssetLogo(ticker: holding.ticker, logoSymbol: holding.logoSymbol, size: 40)
+                HStack(alignment: .center, spacing: 10) {
+                    AssetLogo(ticker: holding.ticker, logoSymbol: holding.logoSymbol, size: 44, cornerRadius: 12)
+                        .securityDetailLogoSource(holding.ticker, in: zoomOrigin)
 
-                    VStack(alignment: .leading, spacing: 5) {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(holding.shortName)
-                                .appText(.body, weight: .medium)
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
+                    // Figma trims font boxes; 2pt here gives the visible text 16pt top/bottom in this 64pt cell.
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(alignment: .center, spacing: 8) {
+                            SecurityDisplayName(
+                                name: holding.shortName, scale: .body, weight: .semibold,
+                                showsClassMarkers: false
+                            )
                                 .layoutPriority(1)
 
                             Spacer(minLength: 4)
 
                             Text(holding.displayedMarketValue)
-                                .appNumber(.body)
+                                .appNumber(.callout, weight: .semibold)
+                                .foregroundStyle(CatfolioTheme.primaryText)
                                 .numericTransition(holding.marketValue)
                                 .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
+                                // Figma cap trims both strings; SwiftUI's number line box sits 1pt low.
+                                .offset(y: -1)
                         }
 
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        HStack(alignment: .center, spacing: 5) {
                             HStack(spacing: 2) {
-                                Text(DisplayFormat.shares(holding.shares))
-                                    .appNumber(.caption, monospaced: false)
+                                Text(DisplayFormat.listShares(holding.shares, locale: appLocale))
+                                    .appNumber(.footnote, weight: .medium, monospaced: false)
                                 Text(holding.ticker)
-                                    .appText(.caption, weight: .medium)
+                                    .appText(.footnote, weight: .medium)
+                                SecurityClassBadges(markers: holding.classMarkers)
                             }
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color(red: 142 / 255, green: 142 / 255, blue: 147 / 255))
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                                 .layoutPriority(0)
@@ -1157,7 +1162,7 @@ struct HoldingRow: View {
     }
 
     private var formattedShares: String {
-        DisplayFormat.shares(holding.shares)
+        DisplayFormat.listShares(holding.shares, compact: false, locale: appLocale)
     }
 
     private var profitDescription: String {
@@ -1168,18 +1173,19 @@ struct HoldingRow: View {
     @ViewBuilder
     private var performanceLabel: some View {
         if let performance {
-            HStack(spacing: 2) {
+            HStack(spacing: 4) {
                 Text(DisplayFormat.money(performance.amount, signed: true, fractionDigits: 2))
+                    .appNumber(.footnote, weight: .medium)
+                    .foregroundStyle(rowAccent)
                     .numericTransition(performance.amount)
-                Circle()
-                    .fill(.secondary)
-                    .frame(width: 2, height: 2)
-                    .accessibilityHidden(true)
-                Text(DisplayFormat.percent(performance.percent))
+                Text(DisplayFormat.percent(performance.percent, signed: false))
+                    .appNumber(.caption, weight: .semibold, monospaced: false)
+                    .foregroundStyle(rowAccent)
                     .numericTransition(performance.percent)
+                    .padding(.horizontal, 5)
+                    .frame(minHeight: 17)
+                    .background(badgeColor, in: RoundedRectangle(cornerRadius: 4))
             }
-            .appNumber(.caption, weight: .medium)
-            .foregroundStyle(rowAccent)
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
             .layoutPriority(2)
@@ -1195,9 +1201,78 @@ struct HoldingRow: View {
 
     private var rowAccent: Color {
         if (performance?.amount ?? 0) >= 0 {
-            return CatfolioTheme.gain(for: colorScheme)
+            return colorScheme == .light
+                ? Color(red: 1 / 255, green: 184 / 255, blue: 1 / 255)
+                : CatfolioTheme.gain(for: colorScheme)
         }
-        return CatfolioPalette.rose500
+        return CatfolioTheme.loss(for: colorScheme)
+    }
+
+    private var badgeColor: Color {
+        if (performance?.amount ?? 0) >= 0 {
+            return colorScheme == .light
+                ? Color(red: 220 / 255, green: 247 / 255, blue: 220 / 255)
+                : rowAccent.opacity(0.18)
+        }
+        return CatfolioTheme.loss(for: colorScheme).opacity(0.18)
+    }
+}
+
+private struct SecurityDisplayName: View {
+    let name: String
+    let scale: TypeScale
+    let weight: Font.Weight
+    var singleLine = true
+    var showsClassMarkers = true
+
+    private var parts: SecurityNameParts { SecurityNameParts(name) }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 1) {
+            Text(parts.primary)
+                .appText(scale, weight: weight)
+                .foregroundStyle(CatfolioTheme.primaryText)
+                .lineLimit(singleLine ? 1 : nil)
+                .truncationMode(.tail)
+
+            if showsClassMarkers {
+                SecurityClassBadges(markers: parts.classMarkers)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(name)
+    }
+}
+
+struct SecurityClassBadges: View {
+    let markers: [String]
+
+    var body: some View {
+        ForEach(markers.indices, id: \.self) { index in
+            SecurityClassBadge(marker: markers[index])
+        }
+    }
+}
+
+struct SecurityClassBadge: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let marker: String
+    @ScaledMetric(relativeTo: .caption) private var badgeHeight: CGFloat = 18
+
+    private let gray = Color(red: 142 / 255, green: 142 / 255, blue: 147 / 255)
+
+    var body: some View {
+        Text(marker)
+            .appText(.caption, weight: .medium)
+            .foregroundStyle(gray)
+            .padding(.horizontal, 3)
+            // Align the visible capital, not the font's descender space.
+            .offset(y: -0.5)
+            .frame(height: badgeHeight)
+            .background(gray.opacity(colorScheme == .dark ? 0.24 : 0.1),
+                        in: RoundedRectangle(cornerRadius: 3))
+            .fixedSize(horizontal: true, vertical: false)
+            .accessibilityHidden(true)
     }
 }
 
@@ -1208,16 +1283,15 @@ struct HoldingIdentity: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(holding.shortName)
-                .appText(.body, weight: .medium)
-                .foregroundStyle(.primary)
-                .lineLimit(compact ? 1 : nil)
+            SecurityDisplayName(name: holding.shortName, scale: .body, weight: .medium,
+                                singleLine: compact, showsClassMarkers: false)
 
             HStack(spacing: 2) {
-                Text(DisplayFormat.shares(holding.shares))
+                Text(DisplayFormat.listShares(holding.shares, locale: appLocale))
                     .appNumber(.caption, monospaced: false)
                 Text(holding.ticker)
                     .appText(.caption, weight: .medium)
+                SecurityClassBadges(markers: holding.classMarkers)
             }
                 .foregroundStyle(.secondary)
                 .lineLimit(compact ? 1 : nil)
@@ -1238,6 +1312,7 @@ struct HoldingMetrics: View {
         VStack(alignment: alignment, spacing: 5) {
             Text(holding.displayedMarketValue)
                 .appNumber(.body)
+                .foregroundStyle(CatfolioTheme.primaryText)
                 .lineLimit(compact ? 1 : nil)
             // The separator is punctuation, not data. Carrying the gain or
             // loss colour it reads as part of the figure, and a row of red
@@ -1315,27 +1390,34 @@ private struct ETFMergedHoldingRow: View {
     }
 
     private var name: some View {
-        Text(row.ticker == "ETF 其他" ? L10n.text("ETF 其他") : CompanyNameCatalog.displayName(ticker: row.ticker, fallback: row.name))
-            .appText(.body, weight: .medium).foregroundStyle(.primary)
-            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+        SecurityDisplayName(
+            name: row.ticker == "ETF 其他" ? L10n.text("ETF 其他") : CompanyNameCatalog.displayName(ticker: row.ticker, fallback: row.name),
+            scale: .body,
+            weight: .medium,
+            singleLine: !dynamicTypeSize.isAccessibilitySize
+        )
     }
 
     private var amount: some View {
         Text(DisplayFormat.money(row.totalUSD, fractionDigits: 2))
-            .appNumber(.body).foregroundStyle(.primary)
+            .appNumber(.body).foregroundStyle(CatfolioTheme.primaryText)
             .fixedSize(horizontal: true, vertical: false)
     }
 
     private var subtitle: some View {
-        Text("\(row.ticker == "ETF 其他" ? L10n.text("ETF 其他") : row.ticker) · \(portfolioWeightText)")
-            .appText(.caption, weight: .medium).foregroundStyle(.secondary).lineLimit(1)
+        HStack(spacing: 4) {
+            Text("\(row.ticker == "ETF 其他" ? L10n.text("ETF 其他") : row.ticker) · \(portfolioWeightText)")
+                .appText(.caption, weight: .medium).foregroundStyle(.secondary).lineLimit(1)
+            // Figures with an ETF share in them are apportioned estimates.
+            if row.fromETFUSD > 0 { SecurityClassBadge(marker: "≈") }
+        }
             .accessibilityLabel(L10n.text("\(row.ticker == "ETF 其他" ? L10n.text("ETF 其他") : row.ticker)，")
                 + L10n.text("\(portfolioWeightText) · 组合占比"))
     }
 
     @ViewBuilder private var profit: some View {
         if let performance {
-            Text("≈\(DisplayFormat.money(performance.amount, signed: true, fractionDigits: 2)) · \(DisplayFormat.percent(performance.percent))")
+            Text("\(DisplayFormat.money(performance.amount, signed: true, fractionDigits: 2)) · \(DisplayFormat.percent(performance.percent))")
                 .appNumber(.caption, weight: .medium)
                 .foregroundStyle(performance.amount >= 0 ? CatfolioTheme.gain(for: colorScheme) : CatfolioTheme.loss(for: colorScheme))
                 .fixedSize(horizontal: true, vertical: false)

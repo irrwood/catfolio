@@ -632,7 +632,7 @@ private struct DCASecurityPicker: View {
         } else if let venue {
           Text(venue).appText(.micro).foregroundStyle(.secondary).lineLimit(1)
         }
-      }.foregroundStyle(.primary).frame(minHeight: 48).contentShape(Rectangle())
+      }.foregroundStyle(CatfolioTheme.primaryText).frame(minHeight: 48).contentShape(Rectangle())
     }.buttonStyle(.plain).accessibilityIdentifier("dca.symbol.\(symbol)")
       .accessibilityAddTraits(selectedSymbol == symbol ? .isSelected : [])
   }

@@ -31,7 +31,6 @@ struct MoomooOAuthView: View {
                         AccountNicknameField(nickname: $nickname, edited: $nicknameEdited)
                             .disabled(isWorking)
                     }
-                    SettingsFootnote(L10n.text("用于区分多个 Moomoo 账户，创建后仍可在账户详情中修改。"))
                 }
 
                 SettingsSectionHeader("Moomoo OAuth")
@@ -43,18 +42,8 @@ struct MoomooOAuthView: View {
                             titleColor: isConnected ? CatfolioTheme.positive : SettingsTemplate.secondaryText
                         )
                     }
-
-                    SettingsRowContainer {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(L10n.text("通过系统浏览器完成 OAuth 2.1 + PKCE 授权。无需 OpenD，也不需要输入 API Key。"))
-                            Text(L10n.text("授权页只需允许 trade:read，用于读取账户、持仓与历史成交。"))
-                            Text(L10n.text("Access Token 与 Refresh Token 仅保存在此 iPhone Keychain。"))
-                        }
-                        .appText(.label, weight: .regular)
-                        .foregroundStyle(SettingsTemplate.secondaryText)
-                        .fixedSize(horizontal: false, vertical: true)
-                    }
                 }
+                SettingsFootnote(L10n.text("授权时仅允许 trade:read；令牌仅存于此 iPhone。"))
 
                 SettingsSectionHeader(L10n.text("连接"))
                 SettingsCard {
@@ -160,15 +149,15 @@ struct MoomooOAuthView: View {
                             }
                         }
                     }
-                    SettingsFootnote({
-                        let preview = snapshot.positions.count > 10
-                            ? L10n.text("仅预览前 10 项；同步会处理全部账户。")
-                            : L10n.text("已读取全部授权账户。")
-                        let warning = snapshot.historyWarnings.isEmpty
-                            ? ""
-                            : " \(snapshot.historyWarnings.joined(separator: L10n.clauseSeparator))"
-                        return preview + warning
-                    }())
+                    if snapshot.positions.count > 10 || !snapshot.historyWarnings.isEmpty {
+                        SettingsFootnote({
+                            let preview = snapshot.positions.count > 10
+                                ? L10n.text("仅显示前 10 项；同步处理全部持仓。")
+                                : ""
+                            let warnings = snapshot.historyWarnings.joined(separator: L10n.clauseSeparator)
+                            return [preview, warnings].filter { !$0.isEmpty }.joined(separator: " ")
+                        }())
+                    }
                 }
 
                 if isConnected && !context.isCreating {

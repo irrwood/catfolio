@@ -3,6 +3,18 @@ import XCTest
 @testable import CatfolioIOS
 
 final class HistoryInteractionTests: XCTestCase {
+    func testPublicInvestorHistoryCleansDisplayedNameWithoutChangingSource() {
+        let source = "Morningstar, Inc. (MORN) [ST]"
+        let transaction = LocalTransactionRecord(
+            date: "2026-04-06", action: "BUY", ticker: "MORN", quantity: 1, price: 100,
+            currency: "USD", source: PublicInvestorAccountAdapter.source,
+            accountID: "pelosi", accountName: "Pelosi"
+        )
+        let activity = PortfolioActivity(transaction: transaction, securityName: source)
+        XCTAssertEqual(activity.title, source)
+        XCTAssertEqual(activity.displayTitle, "Morningstar")
+    }
+
     private func entry(_ action: String, date: String = "2026-04-06", account: String = "one",
                        id: String = UUID().uuidString, price: Double = 100,
                        ticker: String = "TEST", currency: String = "USD") -> LocalTransactionRecord {

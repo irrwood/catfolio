@@ -20,6 +20,10 @@ struct OISnapshot: Codable {
     let from: String
     let through: String
     let excluded: Int
+    /// Whether Yahoo lists any expiry at all for the symbol. False means it
+    /// has no options, and the security page leaves the panel out. Nil in
+    /// snapshots cached before this was recorded.
+    var listsOptions: Bool? = nil
 }
 
 struct OIDistribution {
@@ -478,7 +482,8 @@ actor OptionsOIClient {
         }
         guard Self.day(Date()) == from else { throw LocalServiceError.remote(L10n.text("请求跨越纽约日期，请重新刷新。")) }
         try Task.checkCancellation()
-        let snapshot = OISnapshot(contracts: contracts, fetchedAt: Date(), from: from, through: through, excluded: excluded)
+        let snapshot = OISnapshot(contracts: contracts, fetchedAt: Date(), from: from, through: through, excluded: excluded,
+                                  listsOptions: !inventory.expirationDates.isEmpty)
         try FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
         try JSONEncoder().encode(snapshot).write(to: file(symbol, days), options: [.atomic, .completeFileProtectionUnlessOpen])
         return snapshot
@@ -520,7 +525,10 @@ struct OptionsOIView: View {
         _snapshot = State(initialValue: initialSnapshots[30])
         _snapshotKey = State(initialValue: "\(symbol.uppercased())|30")
     }
-    private var supported: Bool {
+    private var supported: Bool { Self.supports(symbol: symbol, currency: currency) }
+
+    /// US-listed symbols only: Yahoo's chain is read in dollars.
+    static func supports(symbol: String, currency: String?) -> Bool {
         currency?.uppercased() == "USD" && symbol.range(of: "^[A-Za-z][A-Za-z0-9.-]{0,14}$", options: .regularExpression) != nil
             && !symbol.uppercased().hasSuffix(".L")
     }
@@ -538,7 +546,7 @@ struct OptionsOIView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .holdingDetailGlassCard()
+        .holdingDetailCard()
         .transaction { $0.animation = nil }
         .onChange(of: plotRange) { _, _ in selectedStrike = nil }
         // The page's own refresh is this section's refresh: the design has no
@@ -578,7 +586,9 @@ struct OptionsOIView: View {
                 snapshot = cached
                 onSnapshot(days, cached)
             }
-            let current = cached?.from == OptionsOIClient.day(Date())
+            // A snapshot cached before `listsOptions` was recorded is read
+            // once more, so a symbol with no options can drop the panel.
+            let current = cached?.from == OptionsOIClient.day(Date()) && cached?.listsOptions != nil
             guard forced || !current else { return }
             loading = true
             do {
@@ -721,7 +731,7 @@ struct OptionsOIView: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.primary)
+        .foregroundStyle(CatfolioTheme.primaryText)
         .disabled(!hasWalls)
         .sensoryFeedback(.selection, trigger: plotRange) { _, _ in hapticsEnabled }
         .accessibilityLabel(L10n.text(zoomsIn ? "主要分布" : "全部"))
@@ -807,7 +817,7 @@ struct OptionsOIView: View {
                 .foregroundStyle(call ? CatfolioTheme.gain(for: colorScheme) : CatfolioTheme.loss(for: colorScheme))
             Text(rows.first.map { money($0.strike) } ?? "—")
                 .font(Typography.number(size: 18))
-                .foregroundStyle(.primary)
+                .foregroundStyle(CatfolioTheme.primaryText)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text((rows.first.map { oiText(call ? $0.call : $0.put) } ?? "—") + " " + L10n.text("张"))
                 // Tied peaks are all walls; the count opens the full list.

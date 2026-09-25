@@ -138,15 +138,15 @@ enum AIProviderPreference: String, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .automatic:
-            L10n.text("优先使用 Apple 本地模型；不可用时依次使用已连接的 Codex、已填 Key 的 OpenRouter 和 DeepSeek。")
+            L10n.text("自动使用本地或已连接的 Codex、OpenRouter、DeepSeek。")
         case .apple:
-            L10n.text("组合摘要只在设备上处理，可离线使用；需要 Apple Intelligence 已开启且模型就绪。")
+            L10n.text("仅在本机处理，可离线使用。")
         case .codex:
-            L10n.text("在此 iPhone 上登录 ChatGPT，直接使用你的 Codex 订阅进行分析。")
+            L10n.text("使用已连接的 ChatGPT。")
         case .deepSeek:
-            L10n.text("组合摘要会直接发送给 DeepSeek，需要 API Key 和网络连接。")
+            L10n.text("组合摘要和问题会发送给 DeepSeek。")
         case .openRouter:
-            L10n.text("组合摘要会直接发送给 OpenRouter，由你在设置里选的模型回答；需要 API Key 和网络连接。")
+            L10n.text("组合摘要和问题会经 OpenRouter 发送给所选模型。")
         }
     }
 }
@@ -237,4 +237,3 @@ extension Array where Element: Hashable {
         return filter { seen.insert($0).inserted }
     }
 }
-

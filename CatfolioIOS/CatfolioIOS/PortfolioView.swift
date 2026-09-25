@@ -92,7 +92,8 @@ struct PortfolioView: View {
                                             onTitleBottomPositionChange: { titleBottomY in
                                                 homeScrollState.titleMoved(to: titleBottomY)
                                             },
-                                            zoomNamespace: todayBarZoom
+                                            zoomNamespace: todayBarZoom,
+                                            onRefresh: { Task { await model.refreshHoldingDailyChanges(forceRefresh: true) } }
                                         ) { holding in
                                             openHolding(holding, from: todayBarZoom)
                                         }
@@ -207,10 +208,18 @@ struct PortfolioView: View {
                 }
                 .modifier(PortfolioFloatingFilterOverlay())
                 .securityDetailZoomHost(holdingZoomState, in: holdingPresentationZoom)
-                .sheet(item: $selectedHolding, onDismiss: { holdingZoomState.didDismiss() }) { holding in
-                    HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
+                .sheet(item: $selectedHolding, onDismiss: {
+                    holdingZoomState.didDismiss()
+                    SecurityDetailSnapshotTransition.shared.presentationDidEnd()
+                }) { holding in
+                    HoldingDetailView(holding: holding, onClose: {
+                        SecurityDetailSnapshotTransition.shared.close { selectedHolding = nil }
+                    })
+                        // A swipe in from the edge closes it the same way.
+                        .onAppear { SecurityDetailSnapshotTransition.shared.dismissAction = { selectedHolding = nil } }
                         .environment(model)
                         .securityDetailSheet()
+                        .securityDetailSnapshotBackdrop()
                         .securityDetailZoomTransition(holdingZoomState.activeSource, in: holdingPresentationZoom)
                 }
                 .securityDetailOpenFeedback(trigger: selectedHolding?.ticker, enabled: hapticsEnabled)
@@ -235,8 +244,22 @@ struct PortfolioView: View {
     private func openHolding(_ holding: Holding, from namespace: Namespace.ID) {
         guard selectedHolding == nil, holdingZoomState.activeSource == nil,
               !homeScrollController.touchCaughtMotion else { return }
+        // From a row on screen, a card and the row's logo fly to the sheet's
+        // place first; the sheet is presented under them when they land.
         holdingZoomState.prepare(id: holding.ticker, namespace: namespace) {
-            selectedHolding = holding
+            switch SecurityDetailSnapshotTransition.shared.beginOpen(
+                id: holding.ticker, namespace: namespace,
+                opening: {
+                    AnyView(HoldingDetailOpeningScreen(holding: holding)
+                        .environment(model)
+                        .environment(\.locale, appLocale)
+                        .fontDesign(.rounded))
+                },
+                present: { selectedHolding = holding }) {
+            case .snapshot: break
+            case .plain: selectedHolding = holding
+            case .busy: holdingZoomState.didDismiss()
+            }
         }
     }
 

@@ -19,8 +19,9 @@ enum SettingsTemplate {
     /// Page edge. The cards start here; the large navigation title above them
     /// keeps the system's own inset.
     static let pageInset: CGFloat = 16
-    /// Scrollable breathing room above the floating controls on root tabs.
-    static let rootTabBottomInset: CGFloat = 96
+    /// Breathing room under the last card on root tabs. The system tab bar
+    /// already insets the scroll view by its own height.
+    static let rootTabBottomInset: CGFloat = 24
     /// The single vertical rhythm of the page: title to card, header to card,
     /// card to the next header.
     static let sectionSpacing: CGFloat = 16
@@ -85,7 +86,7 @@ enum SettingsTemplate {
     static func segmentTitleColor(weight: CGFloat) -> UIColor {
         UIColor { trait in
             let from = uiSecondaryText.resolvedColor(with: trait)
-            let to = UIColor.label.resolvedColor(with: trait)
+            let to = CatfolioTheme.primaryTextUIColor.resolvedColor(with: trait)
             var fr: CGFloat = 0, fg: CGFloat = 0, fb: CGFloat = 0, fa: CGFloat = 0
             var tr: CGFloat = 0, tg: CGFloat = 0, tb: CGFloat = 0, ta: CGFloat = 0
             from.getRed(&fr, green: &fg, blue: &fb, alpha: &fa)
@@ -127,11 +128,15 @@ enum SettingsTemplate {
     }
     static let pageBackground = Color(uiColor: uiPageBackground)
 
-    /// The card fill: white, and the system's own grouped-row grey in the dark.
+    /// The card fill: white, and at night #151517 — a step under the system's
+    /// grouped-row grey (#1C1C1E), which read too light on the black page.
+    /// Every card surface in the app uses this, so the two stay one colour.
     /// Also the selected chip in the category bar, which is a card the size of
     /// a word.
     static let uiCard = UIColor { trait in
-        trait.userInterfaceStyle == .dark ? .secondarySystemGroupedBackground : .white
+        trait.userInterfaceStyle == .dark
+            ? UIColor(red: 21 / 255, green: 21 / 255, blue: 23 / 255, alpha: 1)
+            : .white
     }
     static let card = Color(uiColor: uiCard)
 
@@ -237,7 +242,7 @@ struct SettingsRowIcon: View {
             }
         }
         .frame(width: SettingsTemplate.iconSize, height: SettingsTemplate.iconSize)
-        .foregroundStyle(.primary)
+        .foregroundStyle(CatfolioTheme.primaryText)
         .accessibilityHidden(true)
     }
 }
@@ -993,7 +998,7 @@ struct SettingsMenuRow<SelectionValue: Hashable, Options: View>: View {
                     HStack(spacing: SettingsTemplate.valueSpacing) {
                         Text(value)
                             .appText(.subheading)
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(CatfolioTheme.primaryText)
                             .lineLimit(1)
                         SettingsCaret()
                     }
@@ -1093,7 +1098,7 @@ struct SettingsSelectionRow<Destination: View>: View {
         VStack(alignment: .leading, spacing: SettingsTemplate.subtitleSpacing) {
             Text(title)
                 .appText(.subheading)
-                .foregroundStyle(.primary)
+                .foregroundStyle(CatfolioTheme.primaryText)
                 .lineLimit(1)
             if let subtitle {
                 Text(subtitle)

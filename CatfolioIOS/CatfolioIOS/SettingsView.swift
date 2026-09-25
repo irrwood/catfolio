@@ -28,9 +28,9 @@ struct CloudPreferencesSettingsSection: View {
             }
         }
         SettingsFootnote([
-            L10n.text("同步显示货币、外观、公司名称、触控反馈、税年、持仓排序和筛选偏好。账户、持仓、交易记录和密钥仅保留在本机。"),
+            L10n.text("仅同步偏好；账户、持仓、交易和密钥留在本机。"),
             detailText
-        ])
+        ].compactMap { $0 }.joined(separator: "\n"))
     }
 
     private var statusText: String {
@@ -43,18 +43,18 @@ struct CloudPreferencesSettingsSection: View {
         }
     }
 
-    private var detailText: String {
+    private var detailText: String? {
         switch sync.status {
         case .off:
-            L10n.text("在每台设备上分别开启。开启时采用云端已有偏好，云端没有的项目保留本机设置。关闭不会删除本机或云端已有设置。")
+            L10n.text("开启时优先使用已有的 iCloud 偏好。")
         case .automatic:
-            L10n.text("请在设备上登录同一 Apple 账户，并允许 Catfolio 使用 iCloud。更新由系统安排，可能延迟；此状态不表示其他设备已经收到。")
+            nil
         case .unavailable:
-            L10n.text("请检查系统设置中的 Apple 账户、Catfolio 的 iCloud 权限及网络连接。本机设置仍可使用。")
+            L10n.text("检查 iCloud 权限和网络后重试。")
         case .quotaExceeded:
-            L10n.text("iCloud 偏好存储已达到限额。请缩短筛选规则或提示词后重试，本机设置仍会保留。")
+            L10n.text("iCloud 空间不足；缩短筛选规则或提示词后重试。")
         case .valueTooLarge:
-            L10n.text("部分筛选规则或提示词过长，仅保留在本机。缩短内容后会继续同步。")
+            L10n.text("部分设置过大；缩短筛选规则或提示词后重试。")
         }
     }
 }
@@ -98,6 +98,7 @@ struct SettingsView: View {
     private let dataSourceHealth = DataSourceHealth.shared
     let showsCloseButton: Bool
     @AppStorage(AppLanguage.preferenceKey) private var languageRawValue = AppLanguage.system.rawValue
+    @State private var toastSampleIndex = 0
     @AppStorage("catfolio.haptics") private var hapticsEnabled = true
     @AppStorage(AppAppearance.preferenceKey) private var appearanceRawValue = AppAppearance.system.rawValue
     @AppStorage(DisplayCurrency.preferenceKey) private var displayCurrencyRawValue = DisplayCurrency.usd.rawValue
@@ -141,13 +142,8 @@ struct SettingsView: View {
 
                 SettingsSection(L10n.text("账户活动")) {
                     SettingsNavigationRow(
-                        // The drawing's 账单 row, down to the 2pt between its
-                        // two lines: an icon, what the page is, and what it
-                        // tracks.
                         icon: .asset("SettingsInvoice"),
-                        title: L10n.text("History"),
-                        subtitle: L10n.text("跨账户资产活动流水"),
-                        subtitleSpacing: 2
+                        title: L10n.text("History")
                     ) {
                         HistoryView().environment(model)
                     }
@@ -156,37 +152,24 @@ struct SettingsView: View {
             }
 
             SettingsSection(L10n.text("新建账户")) {
-                connector("Trading 212", detail: L10n.text("使用只读 API 创建账户"), icon: "chart.line.uptrend.xyaxis") {
+                connector("Trading 212", icon: "chart.line.uptrend.xyaxis") {
                     showsTrading212 = true
                 }
-                connector("Moomoo", detail: L10n.text("通过 OAuth 授权创建账户"), icon: "person.badge.key") {
+                connector("Moomoo", icon: "person.badge.key") {
                     showsMoomooOAuth = true
                 }
-                connector("Interactive Brokers", detail: L10n.text("使用 Flex Web Service 创建账户"), icon: "doc.text") {
+                connector("Interactive Brokers", icon: "doc.text") {
                     showsIBKRFlex = true
                 }
-                connector("SnapTrade", detail: L10n.text("使用个人 API 连接券商账户"), icon: "link") {
+                connector("SnapTrade", icon: "link") {
                     showsSnapTrade = true
                 }
-                connector(L10n.text("CSV 导入"), detail: L10n.text("从交易记录创建账户"), icon: "doc.badge.plus") {
+                connector(L10n.text("CSV 导入"), icon: "doc.badge.plus") {
                     showsCSVImport = true
                 }
-                // An entry only for now: shown so the direction is visible,
-                // disabled like the photo row below until it is built.
-                SettingsButtonRow(
-                    icon: .symbol("link"),
-                    title: L10n.text("连接交易所账户"),
-                    subtitle: L10n.text("支持 2000+ 家交易所，即将开放"),
-                    subtitleSpacing: 2,
-                    action: {}
-                )
-                .disabled(true)
-                .accessibilityHint(L10n.text("功能暂未开放"))
                 SettingsButtonRow(
                     icon: .symbol("camera"),
                     title: L10n.text("拍照 AI 添加持仓"),
-                    subtitle: L10n.text("本地模型识别添加，需 iOS 27 支持"),
-                    subtitleSpacing: 2,
                     action: {}
                 )
                 .disabled(true)
@@ -194,14 +177,12 @@ struct SettingsView: View {
             }
 
             SettingsSection(L10n.text("行情与 AI")) {
-                connector(L10n.text("服务商"), detail: L10n.text("行情、估值与 AI 密钥"), icon: "key") {
-                    showsLocalServices = true
+                SettingsNavigationRow(icon: .symbol("key"), title: L10n.text("服务商")) {
+                    LocalServicesSettingsView()
                 }
                 SettingsNavigationRow(
                     icon: .symbol("newspaper"),
-                    title: L10n.text("新闻"),
-                    subtitle: L10n.text("新闻来源、屏蔽网站与搜索方式"),
-                    subtitleSpacing: 2
+                    title: L10n.text("新闻")
                 ) {
                     NewsSettingsView()
                 }
@@ -370,6 +351,16 @@ struct SettingsView: View {
                     value: appVersion,
                     valueIsNumeric: true
                 )
+                // Each tap shows the next kind, so all three can be checked.
+                SettingsButtonRow(icon: .symbol("bubble.left"), title: L10n.text("测试提示"), showsChevron: false) {
+                    let samples: [(String, AppToast.Kind)] = [
+                        (L10n.text("已保存"), .success), (L10n.text("已复制"), .info), (L10n.text("网络不可用"), .error),
+                    ]
+                    let sample = samples[toastSampleIndex % samples.count]
+                    toastSampleIndex += 1
+                    ToastCenter.shared.show(sample.0, kind: sample.1)
+                }
+                .accessibilityIdentifier("settings.test-toast")
             }
         }
         .tracksRootTabBarScroll()
@@ -448,10 +439,8 @@ struct SettingsView: View {
                 MoomooOAuthView(context: .create).environment(model)
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
             }
-        .appSheet(isPresented: $showsLocalServices) {
-            LocalServicesSettingsView()
-                .presentationDetents([.large]).presentationDragIndicator(.visible)
-        }
+        // A launch argument opens the providers as if their row were tapped.
+        .navigationDestination(isPresented: $showsLocalServices) { LocalServicesSettingsView() }
         .tint(CatfolioTheme.accent)
     }
 
@@ -578,21 +567,15 @@ struct SettingsView: View {
         }
     }
 
-    /// A row that opens a broker flow in a sheet. The subtitle stacks at 2
-    /// rather than 4 — the drawing sets a one-line explanation that tight, and
-    /// reserves 4 for the two-line account rows where the second line is a
-    /// figure.
+    /// A row that opens a broker flow in a sheet.
     private func connector(
         _ title: String,
-        detail: String,
         icon: String,
         action: @escaping () -> Void
     ) -> some View {
         SettingsButtonRow(
             icon: .symbol(icon),
             title: title,
-            subtitle: detail,
-            subtitleSpacing: 2,
             action: action
         )
     }
@@ -1159,17 +1142,17 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
     var detail: String {
         switch self {
         case .massive:
-            L10n.text("读取美股日线价格与成交量，用于计算成交量分布、VAH、POC 和 VAL。")
+            L10n.text("读取美股价格和成交量。")
         case .fmp:
-            L10n.text("读取估值矩阵需要的 P/E、EPS 与营收成长数据，并作为历史行情备用。")
+            L10n.text("读取估值数据，备用历史行情。")
         case .deepSeek:
-            L10n.text("选择 DeepSeek 或自动模式需要回退时，组合摘要和问题会直接发送给 DeepSeek，不经过 Mac 或 Catfolio 服务端。")
+            L10n.text("组合摘要和问题会发送给 DeepSeek。")
         case .openRouter:
-            L10n.text("选择 OpenRouter 或自动模式需要回退时，组合摘要和问题会直接发送给 OpenRouter，再由它转给你选的模型，不经过 Mac 或 Catfolio 服务端。")
+            L10n.text("组合摘要和问题会经 OpenRouter 发送给所选模型。")
         case .finnhub:
-            L10n.text("读取美股公司新闻和发布方摘要，作为今天值得关注、个股动态和今日异动的新闻来源之一。请求只带股票代码，不含持仓数量或金额。")
+            L10n.text("仅发送股票代码，读取公司新闻。")
         case .jev:
-            L10n.text("通过你的 Cloudflare 账户调用 TypeSafe 的 Jev 模型（Workers AI 的 typesafe/jev），为 JEV 今日关注判断每只持仓该买入、持有还是卖出。发送的是行情指标、仓位占比和浮动盈亏百分比，不含账户、股数或金额。需要 Account ID 和一个有 Workers AI 权限的 API Token。")
+            L10n.text("发送行情、仓位占比和盈亏比例；不发送账户、股数或金额。")
         }
     }
 
@@ -1314,32 +1297,27 @@ private struct LocalServiceRowLabel: View {
 
 private struct LocalServicesSettingsView: View {
     @Environment(\.locale) private var appLocale
-    @Environment(\.dismiss) private var dismiss
     @AppStorage(AIProviderPreference.storageKey) private var aiProviderRaw = AIProviderPreference.automatic.rawValue
     @AppStorage(CodexOAuthClient.connectedStorageKey) private var codexConnected = false
-    @State private var path: [LocalServiceProvider] = []
+    /// A provider opened by launch argument rather than a tap.
+    @State private var routedProvider: LocalServiceProvider?
     @State private var statuses: [LocalServiceProvider: LocalServiceStatus] = [:]
     @State private var hasAppliedLaunchRoute = false
 
+    /// A page of Settings' own stack, not a modal with a stack of its own.
     var body: some View {
-        NavigationStack(path: $path) {
             SettingsPage(
                 title: L10n.text("服务商"),
-                subtitle: L10n.text("行情、估值与 AI 密钥"),
                 bottomInset: 32
             ) {
-                SettingsFootnote(L10n.text("行情密钥和 ChatGPT 登录都只保存在此 iPhone。"))
-
                 SettingsSection(L10n.text("行情与估值")) {
                     providerLink(.massive)
                     providerLink(.fmp)
                 }
-                SettingsFootnote(L10n.text("Yahoo Finance 无需密钥；自动用于回撤与历史价格，也会在 Massive 不可用时补充成交量行情。"))
 
                 SettingsSection(L10n.text("新闻")) {
                     providerLink(.finnhub)
                 }
-                SettingsFootnote(L10n.text("Google News、Yahoo Finance、SEC EDGAR 和 GDELT 无需密钥。在 设置 › 新闻 中选择使用哪些来源。"))
 
                 SettingsSectionHeader("AI")
                 SettingsCard {
@@ -1389,22 +1367,18 @@ private struct LocalServicesSettingsView: View {
                     providerLink(.jev)
                 }
             }
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    AppModalDoneButton { dismiss() }
-                }
-            }
-            .navigationDestination(for: LocalServiceProvider.self) { provider in
-                LocalServiceDetailView(provider: provider) { status in
-                    statuses[provider] = status
-                }
-            }
+            .navigationDestination(item: $routedProvider) { provider in detail(provider) }
             .onAppear {
                 refreshStatuses()
                 applyLaunchRouteIfNeeded()
             }
+            .tint(CatfolioTheme.accent)
+    }
+
+    private func detail(_ provider: LocalServiceProvider) -> some View {
+        LocalServiceDetailView(provider: provider) { status in
+            statuses[provider] = status
         }
-        .tint(CatfolioTheme.accent)
     }
 
     private var selectedAIProvider: AIProviderPreference {
@@ -1427,9 +1401,9 @@ private struct LocalServicesSettingsView: View {
 
     private func providerLink(_ provider: LocalServiceProvider) -> some View {
         let status = statuses[provider] ?? .unconfigured
-        // Pushed by value, so a launch argument can route straight to one
-        // provider. The row is otherwise the template's navigation row.
-        return NavigationLink(value: provider) {
+        return NavigationLink {
+            detail(provider)
+        } label: {
             LocalServiceRowLabel(iconName: provider.iconName,
                 title: provider.shortTitle, subtitle: provider.purpose,
                 status: status.title,
@@ -1457,17 +1431,17 @@ private struct LocalServicesSettingsView: View {
         hasAppliedLaunchRoute = true
         let arguments = LaunchArguments.all
         if arguments.contains("--show-local-service-massive") {
-            path = [.massive]
+            routedProvider = .massive
         } else if arguments.contains("--show-local-service-fmp") {
-            path = [.fmp]
+            routedProvider = .fmp
         } else if arguments.contains("--show-local-service-deepseek") {
-            path = [.deepSeek]
+            routedProvider = .deepSeek
         } else if arguments.contains("--show-local-service-openrouter") {
-            path = [.openRouter]
+            routedProvider = .openRouter
         } else if arguments.contains("--show-local-service-finnhub") {
-            path = [.finnhub]
+            routedProvider = .finnhub
         } else if arguments.contains("--show-local-service-jev") {
-            path = [.jev]
+            routedProvider = .jev
         }
     }
 }
@@ -1489,7 +1463,6 @@ private struct CodexOAuthSettingsView: View {
     var body: some View {
         SettingsPage(
             title: "ChatGPT Codex",
-            subtitle: connected ? L10n.text("已连接 ChatGPT") : L10n.text("尚未连接"),
             bottomInset: 32
         ) {
             SettingsSectionHeader(L10n.text("连接状态"))
@@ -1500,13 +1473,13 @@ private struct CodexOAuthSettingsView: View {
                         VStack(alignment: .leading, spacing: SettingsTemplate.subtitleSpacing) {
                             Text(connected ? L10n.text("已连接 ChatGPT") : L10n.text("尚未连接"))
                                 .appText(.subheading)
-                                .foregroundStyle(.primary)
-                            Text(connected
-                                ? [accountEmail, planLabel].filter { !$0.isEmpty }.joined(separator: " · ")
-                                : L10n.text("授权令牌保存在此 iPhone 的 Keychain 中。"))
-                                .appText(.label, weight: .regular)
-                                .foregroundStyle(SettingsTemplate.secondaryText)
-                                .fixedSize(horizontal: false, vertical: true)
+                                .foregroundStyle(CatfolioTheme.primaryText)
+                            if connected && (!accountEmail.isEmpty || !planLabel.isEmpty) {
+                                Text([accountEmail, planLabel].filter { !$0.isEmpty }.joined(separator: " · "))
+                                    .appText(.label, weight: .regular)
+                                    .foregroundStyle(SettingsTemplate.secondaryText)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                         Spacer(minLength: 0)
                     }
@@ -1723,7 +1696,7 @@ private struct LocalServiceDetailView: View {
     }
 
     var body: some View {
-        SettingsPage(title: provider.shortTitle, subtitle: provider.purpose, bottomInset: 32) {
+        SettingsPage(title: provider.shortTitle, bottomInset: 32) {
             SettingsSectionHeader(L10n.text("服务用途"))
             SettingsCard {
                 SettingsRowContainer {
@@ -1732,7 +1705,7 @@ private struct LocalServiceDetailView: View {
                         VStack(alignment: .leading, spacing: SettingsTemplate.subtitleSpacing) {
                             Text(provider.title)
                                 .appText(.subheading)
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(CatfolioTheme.primaryText)
                             Text(provider.detail)
                                 .appText(.label, weight: .regular)
                                 .foregroundStyle(SettingsTemplate.secondaryText)
@@ -1791,7 +1764,7 @@ private struct LocalServiceDetailView: View {
                             .submitLabel(.done)
                     }
                 }
-                SettingsFootnote(L10n.text("在 Cloudflare 控制台 › Workers AI 页面右侧可以复制 Account ID；API Token 在 My Profile › API Tokens 创建，模板选 Workers AI。"))
+                SettingsFootnote(L10n.text("Account ID 和 API Token 可在 Cloudflare 控制台获取。"))
             }
 
             if provider == .openRouter {
@@ -1806,7 +1779,7 @@ private struct LocalServiceDetailView: View {
                             .submitLabel(.done)
                     }
                 }
-                SettingsFootnote(L10n.text("填写 OpenRouter 的模型 ID，如 anthropic/claude-sonnet-5 或 openai/gpt-5；留空时由 openrouter/auto 为每个问题挑选模型。"))
+                SettingsFootnote(L10n.text("填写模型 ID；留空自动选择。"))
             }
 
             if let feedback {
@@ -1920,6 +1893,7 @@ private struct LocalServiceDetailView: View {
             feedback = LocalServiceFeedback(text: message, kind: .success)
             onStatusChanged(.verified)
             announce(message)
+            ToastCenter.shared.show(L10n.text("已验证并保存"))
         } catch is CancellationError {
             return
         } catch {
@@ -1927,6 +1901,7 @@ private struct LocalServiceDetailView: View {
             let message = "\(error.localizedDescription) \(suffix)"
             feedback = LocalServiceFeedback(text: message, kind: .error)
             announce(L10n.text("验证失败。\(message)"))
+            ToastCenter.shared.show(L10n.text("验证失败"), kind: .error)
         }
     }
 
@@ -1946,10 +1921,11 @@ private struct LocalServiceDetailView: View {
             if provider == .fmp {
                 Task { await LocalReturnsAnalyticsClient.resetFailedFundamentalAttempts() }
             }
-            announce(L10n.text("密钥已保存"))
+            ToastCenter.shared.show(L10n.text("密钥已保存"))
         } catch {
             feedback = LocalServiceFeedback(text: error.localizedDescription, kind: .error)
             announce(L10n.text("保存失败。\(error.localizedDescription)"))
+            ToastCenter.shared.show(L10n.text("保存失败"), kind: .error)
         }
     }
 
@@ -1964,7 +1940,7 @@ private struct LocalServiceDetailView: View {
             if provider == .fmp {
                 Task { await LocalReturnsAnalyticsClient.resetFailedFundamentalAttempts() }
             }
-            announce(L10n.text("密钥已移除"))
+            ToastCenter.shared.show(L10n.text("密钥已移除"), kind: .info)
         } catch {
             feedback = LocalServiceFeedback(text: error.localizedDescription, kind: .error)
             announce(L10n.text("移除失败。\(error.localizedDescription)"))
@@ -2006,7 +1982,7 @@ struct AccountDataIssuesView: View {
                     }
                 }
             }
-            SettingsFootnote(L10n.text("首页和收益页照常绘制，上面每一条是重建账户历史时做的推算或跳过的数据。导入券商的完整活动记录（带现金金额）后，这些推算会换成真实数据。"))
+            SettingsFootnote(L10n.text("图表仍可查看；补充完整交易记录可提高准确性。"))
         }
         .navigationTitle(L10n.text("数据问题"))
         .navigationBarTitleDisplayMode(.inline)
@@ -2035,7 +2011,7 @@ private struct NewsSettingsView: View {
     private var blockedSites: [String] { NewsSettings.sites(from: blockedSitesText) }
 
     var body: some View {
-        SettingsPage(title: L10n.text("新闻"), subtitle: L10n.text("新闻来源、屏蔽网站与搜索方式"), bottomInset: 32) {
+        SettingsPage(title: L10n.text("新闻"), bottomInset: 32) {
             SettingsSection(L10n.text("新闻来源")) {
                 toggle(.googleNews, isOn: $googleNews)
                 toggle(.yahooFinance, isOn: $yahooFinance)
@@ -2047,8 +2023,6 @@ private struct NewsSettingsView: View {
                     SettingsNavigationRow(
                         icon: .symbol(NewsProvider.finnhub.iconName),
                         title: NewsProvider.finnhub.title,
-                        subtitle: NewsProvider.finnhub.detail,
-                        subtitleSpacing: 2,
                         value: L10n.text("需要密钥"),
                         valueColor: SettingsTemplate.readOnlyValue
                     ) {
@@ -2058,29 +2032,23 @@ private struct NewsSettingsView: View {
                     }
                 }
             }
-            SettingsFootnote(L10n.text("关闭的来源不会被请求。GDELT 每 5 秒只接受一次请求，一次分析会把所有持仓合并成一次搜索。Finnhub 只覆盖美股，密钥在 服务商 中设置。"))
-
             SettingsSection(L10n.text("搜索方式")) {
                 SettingsToggleRow(
                     icon: .symbol("list.bullet.indent"),
                     title: L10n.text("补充诉讼与财报搜索"),
-                    subtitle: L10n.text("每只持仓另搜诉讼、调查，以及财报与指引"),
                     isOn: $usesQueryPlan
                 )
                 SettingsToggleRow(
                     icon: .symbol("doc.text.magnifyingglass"),
                     title: L10n.text("分析时阅读正文"),
-                    subtitle: L10n.text("今天值得关注读取每只持仓最可靠的两篇文章"),
                     isOn: $readsArticles
                 )
             }
-            SettingsFootnote(L10n.text("搜索词由代码固定生成，同一只持仓每次都按同样的方式搜索。阅读正文会让分析多花几秒，但判断不再只看标题。"))
 
             SettingsSection(L10n.text("屏蔽网站")) {
                 SettingsToggleRow(
                     icon: .symbol("arrow.triangle.2.circlepath"),
                     title: L10n.text("排除转述网站"),
-                    subtitle: L10n.text("StockStory、StockTitan、Simply Wall St 等"),
                     isOn: $excludesAggregators
                 )
                 ForEach(blockedSites, id: \.self) { site in
@@ -2090,7 +2058,7 @@ private struct NewsSettingsView: View {
                                 .foregroundStyle(SettingsTemplate.secondaryText)
                             Text(site)
                                 .appText(.subheading)
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(CatfolioTheme.primaryText)
                                 .lineLimit(1)
                             Spacer(minLength: 8)
                             Button {
@@ -2125,7 +2093,7 @@ private struct NewsSettingsView: View {
                     }
                 }
             }
-            SettingsFootnote(L10n.text("按发布方名称或域名匹配，屏蔽的网站不会出现在任何证据里。下次刷新分析时生效。"))
+            SettingsFootnote(L10n.text("下次刷新分析时生效。"))
         }
         .scrollDismissesKeyboard(.interactively)
         .onAppear { hasFinnhubKey = LocalServiceKeys.hasFinnhubKey }
@@ -2135,7 +2103,6 @@ private struct NewsSettingsView: View {
         SettingsToggleRow(
             icon: .symbol(provider.iconName),
             title: provider.title,
-            subtitle: provider.detail,
             isOn: isOn
         )
     }

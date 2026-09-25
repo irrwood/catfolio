@@ -45,15 +45,8 @@ struct Trading212View: View {
                         .pickerStyle(.segmented)
                         .labelsHidden()
                     }
-
-                    SettingsRowContainer {
-                        Text(L10n.text("API Key 与 Secret 仅存于此 iPhone Keychain，不会发送到 Catfolio 服务端。"))
-                            .appText(.label, weight: .regular)
-                            .foregroundStyle(SettingsTemplate.secondaryText)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
                 }
-                SettingsFootnote(L10n.text("只使用账户、持仓和历史数据的读取权限。建议创建专用的只读 Key。"))
+                SettingsFootnote(L10n.text("请使用只读 Key；凭证仅存于此 iPhone。"))
 
                 if context.isCreating, snapshot != nil {
                     SettingsSectionHeader(L10n.text("账户昵称"))
@@ -61,7 +54,6 @@ struct Trading212View: View {
                         AccountNicknameField(nickname: $nickname, edited: $nicknameEdited)
                             .disabled(isWorking)
                     }
-                    SettingsFootnote(L10n.text("用于区分多个 Trading 212 账户，创建后仍可在账户详情中修改。"))
                 }
 
                 credentialsSection
@@ -157,9 +149,9 @@ struct Trading212View: View {
                             }
                         }
                     }
-                    SettingsFootnote(snapshot.positions.count > 10
-                        ? L10n.text("仅预览前 10 项；保存时会处理该账户的全部可导入持仓。")
-                        : L10n.text("只处理当前 Trading 212 账户。"))
+                    if snapshot.positions.count > 10 {
+                        SettingsFootnote(L10n.text("仅显示前 10 项；保存全部可导入持仓。"))
+                    }
                 }
 
                 if hasCredentials && !context.isCreating {
@@ -231,7 +223,6 @@ struct Trading212View: View {
                 .autocorrectionDisabled()
                 .privacySensitive()
         }
-        SettingsFootnote(L10n.text("每次只创建或更新一个 Trading 212 账户。"))
     }
 
     @ViewBuilder

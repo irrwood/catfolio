@@ -210,13 +210,8 @@ struct CostMarketCard: View {
                 // labels someone else's holdings with the reader's own app
                 // name, which is exactly the wrong thing to say above a
                 // total that is not theirs.
-                if let owner = portfolioOwnerName {
-                    Text(owner)
-                        .appText(.caption, weight: .semibold)
-                } else {
-                    Text("CATFOLIO")
-                        .appCaps(.caption, weight: .semibold)
-                }
+                Text(portfolioOwnerName ?? "CATFOLIO")
+                    .appCaps(.caption, weight: .semibold)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 6, weight: .bold))
                 if response.accountNAV != nil {
@@ -228,7 +223,7 @@ struct CostMarketCard: View {
                 }
             }
             .lineLimit(1)
-            .foregroundStyle(.primary)
+            .foregroundStyle(CatfolioTheme.primaryText)
             .offset(x: CatfolioStyle.pageHorizontalInset, y: 15)
 
             CatfolioDisplayAmountText(

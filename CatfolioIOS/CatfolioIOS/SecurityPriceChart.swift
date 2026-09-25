@@ -6,8 +6,8 @@ import Observation
 /// volume profile, 52-week range, financials and analyst sections below it.
 struct HoldingDetailPriceSection: View {
     @Environment(\.locale) private var appLocale
+    @Environment(AppModel.self) private var model: AppModel?
     let holding: Holding
-    let marketTodayChange: Double?
     let priceHistory: SecurityPriceHistory?
     let priceHistoryError: String?
     let averageCost: Double?
@@ -36,7 +36,10 @@ struct HoldingDetailPriceSection: View {
         VStack(spacing: 0) {
             HoldingDetailHeader(
                 holding: holding,
-                marketTodayChange: priceHistory?.latestMarketObservation?.changePercent ?? marketTodayChange,
+                // One source for the day's move, the home list's: known at
+                // once, and the page's own fresher quote is written back into
+                // it, so the page and the list never show two numbers.
+                marketTodayChange: model?.holdingDailyChanges[holding.ticker.uppercased()],
                 selectedPrice: priceSelection?.price ?? priceHistory?.latestAvailablePrice,
                 selectedReturn: priceSelection?.returnPercent,
                 selectedTrades: priceSelection?.trades ?? [],
@@ -71,9 +74,16 @@ struct HoldingDetailPriceSection: View {
                 )
             }
 
+            // A held security keeps the accounts' place from the first frame:
+            // empty shells of the same size until the accounts are read.
+            // Swapped in place, not cross-faded: glass drawn through an
+            // opacity transition vanished for its duration, and the row went
+            // blank between the shells and the cards.
             if !accountOptions.isEmpty {
                 HoldingDetailAccountSelector(options: accountOptions, selectedAccountKeys: selectedAccountKeys,
                     onSelectAll: onSelectAll, onToggleAccount: onToggleAccount)
+            } else if holding.shares > 0 {
+                HoldingDetailAccountSelector.shells
             }
 
             HStack(spacing: 12) {
@@ -88,6 +98,8 @@ struct HoldingDetailPriceSection: View {
                 } label: {
                     HoldingHeaderActionLabel(title: movement?.noteTitle ?? L10n.text("今天有什么动静？"),
                         asset: "HoldingWhyMove")
+                        // There from the first frame; its dated title fades in.
+                        .animation(.easeOut(duration: 0.25), value: movement?.noteTitle)
                 }
                 .modifier(HoldingHeaderButtonStyle())
                 .disabled(movement == nil)
@@ -126,7 +138,8 @@ struct HoldingDetailPriceSection: View {
 
 struct SecurityPriceChartState: View {
     @Environment(\.locale) private var appLocale
-    static let plotHeight: CGFloat = 293
+    /// Figma 455:5530: the chart is 330pt from under the price to the picker.
+    static let plotHeight: CGFloat = 330
     static let fixedHeight: CGFloat = plotHeight + 62
 
     let title: String
@@ -138,17 +151,21 @@ struct SecurityPriceChartState: View {
         Group {
             if isLoading {
                 VStack(spacing: 0) {
+                    // The line alone, in the plot's own frame; the time picker
+                    // is the real one from the start. Nothing here is swapped
+                    // for something of another size when the data arrives.
                     StandardLineChartSkeleton(
                         leadingLineOverflow: 30,
                         trailingEndpointInset: 9,
                         lineWidths: [2.5],
-                        appearanceID: appearanceID
+                        appearanceID: appearanceID,
+                        showsAxis: false
                     )
                         .frame(height: Self.plotHeight)
 
-                    ChartTimeRangePickerSkeleton()
+                    ChartTimeRangePicker(selection: .constant(.oneDay))
                         .frame(height: 62)
-                        .chartLoadingShimmer(appearanceID: appearanceID)
+                        .allowsHitTesting(false)
                 }
             } else {
                 VStack(spacing: 0) {
@@ -245,7 +262,8 @@ struct SecurityPriceChart: View {
                 // chart needs the geometry-matched loading placeholder.
                 if isPreparing && prepared == nil {
                     StandardLineChartSkeleton(leadingLineOverflow: 0, trailingEndpointInset: 9,
-                        lineWidths: [2.5], appearanceID: "security-price|\(history.ticker)|\(history.currency)")
+                        lineWidths: [2.5], appearanceID: "security-price|\(history.ticker)|\(history.currency)",
+                        showsAxis: false)
                 } else if data.points.count > 1 {
                     SecurityPricePlot(
                         data: data,
@@ -281,8 +299,9 @@ struct SecurityPriceChart: View {
             .frame(height: SecurityPriceChartState.plotHeight)
             .accessibilityLabel(L10n.text("\(history.ticker) 价格走势，买入点为绿色圆环，卖出点为黄色圆环，横向玻璃线为持仓成本"))
 
-            ChartTimeRangePicker(selection: $range, isDisabled: isPreparing)
+            ChartTimeRangePicker(selection: $range)
             .frame(height: 62)
+            .allowsHitTesting(!isPreparing)
             .accessibilityLabel(L10n.text("价格走势时间范围"))
         }
         .frame(height: SecurityPriceChartState.fixedHeight, alignment: .top)
@@ -453,10 +472,23 @@ struct SecurityPricePlot: View {
             onMeasure: onMeasure,
             onInteractionEnded: onInteractionEnded
         )
+        .overlay(alignment: data.offscaleCost?.isAbove == true ? .topTrailing : .bottomTrailing) {
+            if let cost = data.offscaleCost {
+                // Past the edge the arrow points to: above the top, or below.
+                Text(axisPriceLabel(cost.value))
+                    .font(Typography.number(.footnote, weight: .semibold))
+                    .foregroundStyle(CatfolioPalette.tradeBuy)
+                    .lineLimit(1)
+                    .frame(width: 49)
+                    .allowsHitTesting(false)
+                    .accessibilityLabel(L10n.text("持仓成本 \(axisPriceLabel(cost.value))，不在当前价格范围内"))
+            }
+        }
     }
 
     private func axisPriceLabel(_ value: Double) -> String {
-        value.formatted(.number.precision(.fractionLength(0)))
+        let decimals = seriesCache.prepared(for: data, scheme: colorScheme).yTickDecimals
+        return value.formatted(.number.precision(.fractionLength(decimals)))
     }
 
     private func shortDate(_ date: Date) -> String {
@@ -478,6 +510,8 @@ final class SecurityPricePlotSeriesCache {
         let priceSeries: StandardLineChartSeries
         let interactionDates: [Date]
         let yTicks: [Double]
+        /// Decimals the axis labels need so that no two read the same.
+        let yTickDecimals: Int
         let markers: [StandardLineChartMarker]
     }
 
@@ -489,6 +523,39 @@ final class SecurityPricePlotSeriesCache {
     private var cachedKey: Key?
     private var cachedValue: Prepared?
     private(set) var rebuildCount = 0
+
+    /// Round prices inside the scale — up to four, as few as one — at the
+    /// smallest round step that fits: 1, 2, 5, 10, 20, 50… Whole numbers from
+    /// $10 up; decimals only below that, or when no whole number falls inside.
+    /// Four evenly spaced edges rounded to whole numbers read "23, 23, 23, 22".
+    nonisolated static func axisTicks(for domain: ClosedRange<Double>) -> (ticks: [Double], decimals: Int) {
+        let low = domain.lowerBound, high = domain.upperBound
+        guard high > low, high.isFinite, low.isFinite else { return ([], 0) }
+        let allowsDecimals = high < 10
+        func ticks(step: Double) -> [Double] {
+            let first = (low / step).rounded(.up), last = (high / step).rounded(.down)
+            guard last >= first else { return [] }
+            return stride(from: last, through: first, by: -1).map { $0 * step }
+        }
+        func decimals(for step: Double) -> Int { step >= 1 ? 0 : Int((-log10(step)).rounded(.up)) }
+        for exponent in -4...8 {
+            for mantissa in [1.0, 2.0, 5.0] {
+                let step = mantissa * pow(10, Double(exponent))
+                if step < 1, !allowsDecimals { continue }
+                let found = ticks(step: step)
+                if !found.isEmpty, found.count <= 4 { return (found, decimals(for: step)) }
+            }
+        }
+        // A range too narrow for any whole number: finer steps, then one label.
+        for exponent in stride(from: -1, through: -4, by: -1) {
+            for mantissa in [5.0, 2.0, 1.0] {
+                let step = mantissa * pow(10, Double(exponent))
+                let found = ticks(step: step)
+                if !found.isEmpty, found.count <= 4 { return (found, decimals(for: step)) }
+            }
+        }
+        return ([(low + high) / 2], 2)
+    }
 
     func prepared(for data: SecurityPriceRangeData, scheme: ColorScheme) -> Prepared {
         let key = Key(dataID: data.id, scheme: scheme)
@@ -524,12 +591,9 @@ final class SecurityPricePlotSeriesCache {
                 seriesID: "price"
             )
         }
-        let ticks = (0..<4).map { index in
-            let fraction = Double(index) / 3
-            return data.domain.upperBound - (data.domain.upperBound - data.domain.lowerBound) * fraction
-        }
+        let axis = Self.axisTicks(for: data.domain)
         let value = Prepared(priceSeries: priceSeries, interactionDates: data.points.map(\.date),
-                             yTicks: ticks, markers: markers)
+                             yTicks: axis.ticks, yTickDecimals: axis.decimals, markers: markers)
         cachedKey = key
         cachedValue = value
         rebuildCount &+= 1
@@ -573,6 +637,9 @@ struct SecurityPriceRangeData: @unchecked Sendable {
     let trades: [TradePoint]
     let domain: ClosedRange<Double>
     let averageCost: Double?
+    /// The cost when it lies outside the price's scale: no line, only its
+    /// figure pinned to the top or bottom of the axis.
+    private(set) var offscaleCost: (value: Double, isAbove: Bool)? = nil
     let isIntraday: Bool
     let isMaximumRange: Bool
 
@@ -657,16 +724,24 @@ struct SecurityPriceRangeData: @unchecked Sendable {
             return TradePoint(trade: trade, point: point)
         }
 
-        let visibleCost = averageCost.flatMap { cost -> Double? in
-            guard cost.isFinite, cost > 0 else { return nil }
-            return cost
-        }
-        let values = normalizedPoints.map(\.price) + [visibleCost].compactMap { $0 }
+        // The price alone sets the scale, so the line fills the chart the
+        // same way on every security. Folding in a cost far from the price
+        // pressed the line flat against the top or bottom by an amount that
+        // differed from stock to stock. The cost line shows only when it
+        // falls inside that scale.
+        let values = normalizedPoints.map(\.price)
         let minimum = values.min() ?? 0
         let maximum = values.max() ?? 1
         let minimumSpan = max(abs(maximum) * 0.02, 0.01)
         let span = max(maximum - minimum, minimumSpan)
         let padding = span * 0.12
+        let validCost = averageCost.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+        let visibleCost = validCost.flatMap { cost -> Double? in
+            cost >= minimum - padding && cost <= maximum + padding ? cost : nil
+        }
+        if let cost = validCost, visibleCost == nil {
+            offscaleCost = (cost, cost > maximum)
+        }
         points = normalizedPoints
         // Keep every annotated vertex in the rendered polyline. Otherwise an
         // exact trade-day quote can float off a downsampled line even at rest.
@@ -701,6 +776,7 @@ struct SecurityPriceRangeData: @unchecked Sendable {
         case .oneWeek: start = calendar.date(byAdding: .day, value: -7, to: last)
         case .oneMonth: start = calendar.date(byAdding: .month, value: -1, to: last)
         case .twoMonths: start = calendar.date(byAdding: .month, value: -2, to: last)
+        case .threeMonths: start = calendar.date(byAdding: .month, value: -3, to: last)
         case .yearToDate:
             start = calendar.date(from: DateComponents(
                 year: calendar.component(.year, from: last), month: 1, day: 1

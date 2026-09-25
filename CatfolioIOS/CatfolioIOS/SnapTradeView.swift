@@ -52,7 +52,7 @@ struct SnapTradeView: View {
                             }
                         }.disabled(!hasCredentials)
                     }
-                    SettingsFootnote(L10n.text("在 SnapTrade Dashboard 开启双重验证并创建个人 API Key。凭证仅保存在此 iPhone 的 Keychain。"))
+                    SettingsFootnote(L10n.text("在 Dashboard 开启双重验证并创建个人 API Key；凭证仅存于此 iPhone。"))
                     SettingsCard {
                         Link(destination: URL(string: "https://dashboard.snaptrade.com")!) {
                             SettingsRowContainer {
@@ -79,7 +79,7 @@ struct SnapTradeView: View {
                             perform { try await loadAccounts() }
                         }.disabled(!hasCredentials)
                     }
-                    SettingsFootnote(L10n.text("授权完成后关闭网页，再读取账户列表。每次选择一个账户；可重复添加多个账户。"))
+                    SettingsFootnote(L10n.text("授权后关闭网页并读取账户；仅同步股票和基金持仓，不含现金或交易流水。"))
 
                     if !allowedAccounts.isEmpty {
                         SettingsSectionHeader(L10n.text("选择账户"))
@@ -116,14 +116,10 @@ struct SnapTradeView: View {
                                     isBusy: busy) { confirmsSync = true }
                             }
                         }
-                        if preview.positions.isEmpty {
-                            SettingsFootnote(L10n.text("此账户当前没有持仓。确认后将清空此账户的旧持仓，保留历史记录。"))
-                        }
                     }
-                    SettingsFootnote(L10n.text("同步股票及基金持仓、成本与报价，暂不导入现金或交易流水。数据时间以 SnapTrade 返回为准；预览保留 15 分钟。"))
                     if busy {
                         ProgressView().frame(maxWidth: .infinity).accessibilityLabel(L10n.text("正在读取"))
-                        SettingsFootnote(L10n.text("停止等待不会撤销已确认的本地持仓更新。"))
+                        SettingsFootnote(L10n.text("停止等待不会撤销已确认的更新。"))
                     }
                     if !status.isEmpty { StatusNotice(text: status) }
                     if !context.isCreating {

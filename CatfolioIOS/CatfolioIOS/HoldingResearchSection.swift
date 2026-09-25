@@ -257,7 +257,7 @@ struct HoldingPredictionMarketsCard: View {
             // Its caveat is in the page's footer with the others.
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .holdingDetailGlassCard()
+        .holdingDetailCard()
         .task(id: taskID) {
             if usesCachedContentOnlyInitially {
                 isLoading = false

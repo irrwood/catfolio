@@ -15,7 +15,7 @@ final class HoldingDetailLayoutAuditTests: XCTestCase {
         }, intradayPoints: [], trades: [])
         let accounts = [HoldingDetailAccountOption(id: "isa", displayName: "Investment ISA",
             marketValue: 1_234_567, currency: "USD", marketValueUSD: 1_234_567, unrealized: 12_345)]
-        _ = try await capture(HoldingDetailPriceSection(holding: h, marketTodayChange: 12.34,
+        _ = try await capture(HoldingDetailPriceSection(holding: h,
             priceHistory: history, priceHistoryError: nil, averageCost: 100,
             selectedAccountKeys: ["isa"], accountOptions: accounts),
             language: "en", width: 320, large: true, dark: true, name: "detail-chart-accounts-large")

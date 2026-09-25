@@ -143,18 +143,26 @@ struct SectorGlassCard: View {
                     .font(.title3.weight(.semibold))
                     .accessibilityHidden(true)
                 Spacer(minLength: 0)
+                // One line: an English caption ("This year ~£14") wrapped
+                // and pushed this card's title and value out of line with
+                // its neighbour's.
                 Text(caption)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 Image(systemName: "chevron.right")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 8) {
+                // Two lines reserved either way, so a card whose title wraps
+                // in English keeps its value level with the one beside it.
                 Text(title)
                     .font(.body.weight(.medium))
-                    .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
+                    .lineLimit(typeSize.isAccessibilitySize ? 8 : 2,
+                               reservesSpace: !typeSize.isAccessibilitySize)
                 Text(value)
                     .font(.body.weight(.bold))
                     .monospacedDigit()
@@ -164,7 +172,7 @@ struct SectorGlassCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .foregroundStyle(Color.primary)
+        .foregroundStyle(CatfolioTheme.primaryText)
         .padding(16)
         .frame(maxWidth: .infinity, minHeight: 132, alignment: .leading)
     }
@@ -173,7 +181,7 @@ struct SectorGlassCard: View {
         if !usesGlass {
             content.background(SettingsTemplate.card, in: shape)
         } else if reduceTransparency {
-            content.background(Color(uiColor: .secondarySystemGroupedBackground), in: shape)
+            content.background(SettingsTemplate.card, in: shape)
                 .overlay(shape.strokeBorder(tint, lineWidth: 1))
         } else if #available(iOS 26.0, *) {
             content.glassEffect(.regular.tint(tint.opacity(0.35)).interactive(), in: shape)

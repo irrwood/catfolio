@@ -93,10 +93,8 @@
 "AI 投资助手" = "AI investment assistant";
 "AI 持仓分析" = "AI holding analysis";
 "AI 解读" = "AI Explanation";
-"API Key 与 Secret 仅存于此 iPhone Keychain，不会发送到 Catfolio 服务端。" = "API key and secret stay in this iPhone’s Keychain and are never sent to Catfolio servers.";
 "API 密钥" = "API key";
 "AUD · 澳元" = "AUD · Australian dollar";
-"Access Token 与 Refresh Token 仅保存在此 iPhone Keychain。" = "Access and refresh tokens are stored only in this iPhone’s Keychain.";
 "Account activity" = "Account activity";
 "Account filter" = "Account filter";
 "Accounts" = "Accounts";
@@ -144,7 +142,7 @@
 "ETF 市值" = "ETF market value";
 "ETF 权重 %@" = "ETF weight %@";
 "ETF 概览" = "ETF overview";
-"ETF 穿透" = "ETF Look-Through";
+"ETF 穿透" = "Look-through";
 "ETF 穿透排序：%@，%@" = "ETF look-through sort: %@, %@";
 "ETF 间接" = "Indirect ETF";
 "EUR · 欧元" = "EUR · Euro";
@@ -207,7 +205,7 @@
 "Put OI 墙" = "Put OI wall";
 "Put ← OI 合约张数 → Call" = "Put ← OI contracts → Call";
 "Put 墙" = "Put wall";
-"Query ID：建好查询后回到列表，数字在查询名称旁；创建向导里不显示。" = "Query ID: after creating a query, find the number beside its name in the list. It is not shown in the wizard.";
+"Query ID 在 Flex Queries 列表的查询名称旁。持仓超过一年时，请将 Period 扩至最早建仓日。" = "Find the Query ID beside its name in the Flex Queries list. If you have held positions over a year, extend Period back to the earliest purchase.";
 "Refresh predicting markets" = "Refresh predicting markets";
 "Return —" = "Return —";
 "Return" = "Return";
@@ -220,7 +218,6 @@
 "Shares" = "Shares";
 "TODAY" = "TODAY";
 "Today" = "Today";
-"Token：该页 Flex Web Service Configuration 区域 → 齿轮图标 → 启用后点 Generate A New Token。" = "Token: open the gear in Flex Web Service Configuration, enable it, then select Generate A New Token.";
 "Total dividends" = "Total dividends";
 "Total interest" = "Total interest";
 "Trading 212 同步" = "Trading 212 Sync";
@@ -237,7 +234,6 @@
 "Withdrawal" = "Withdrawal";
 "YTD" = "YTD";
 "Yahoo Finance · OI 日期未提供\n获取于 %@" = "Yahoo Finance · OI date unavailable\nRetrieved %@";
-"Yahoo Finance 无需密钥；自动用于回撤与历史价格，也会在 Massive 不可用时补充成交量行情。" = "Yahoo Finance needs no key. It supplies drawdown and price history, and fills in volume data when Massive is unavailable.";
 "Yahoo 仍在限流冷却期，请稍后再刷新。" = "Yahoo is still in a rate-limit cooldown. Refresh later.";
 "Yahoo 会话暂不可用，未更新持仓墙。" = "Yahoo session unavailable. OI walls were not updated.";
 "Yahoo 暂不允许读取期权数据，请稍后再试。" = "Yahoo is not allowing option data requests right now. Try again later.";
@@ -256,7 +252,6 @@
 "下跌贡献" = "Negative contributions";
 "不计入%@" = "Exclude %@";
 "不超过" = "At most";
-"两个凭证都在 Client Portal → Performance & Reports → Flex Queries 这一页。" = "Both credentials are on the Client Portal → Performance & Reports → Flex Queries page.";
 "中关注" = "Medium attention";
 "中心" = "Center";
 "中性" = "Hold";
@@ -276,9 +271,9 @@
 "仅发送这家公司的公开指标给已选择的 AI 服务，可能消耗额度。财务指标并非实时行情。" = "Only this company’s public metrics are sent to your selected AI service. Usage may count toward your allowance. Financial metrics are not live quotes.";
 "仅当前账户持仓，不代表全市场；沿用持仓行情更新时间。" = "Current accounts’ holdings only, not the whole market. Uses the holdings’ quote update time.";
 "仅显示高关注" = "High attention only";
-"仅预览前 10 项；保存时会处理该账户的全部可导入持仓。" = "Showing the first 10 items. Saving processes all eligible holdings in this account.";
-"仅预览前 10 项；同步会处理全部可导入股票持仓。" = "Showing the first 10 items. Sync processes all eligible stock holdings.";
-"仅预览前 10 项；同步会处理全部账户。" = "Showing the first 10 items. Sync processes all accounts.";
+"仅显示前 10 项；保存全部可导入持仓。" = "First 10 shown; all eligible holdings will be saved.";
+"仅显示前 10 项；同步处理全部可导入股票持仓。" = "First 10 shown; all eligible stock holdings will be synced.";
+"仅显示前 10 项；同步处理全部持仓。" = "First 10 shown; all holdings will be synced.";
 "今天" = "Today";
 "今天哪些持仓值得我关注？" = "Which holdings need my attention today?";
 "今天暂无上涨持仓" = "No gaining holdings today";
@@ -347,8 +342,6 @@
 "该时间范围内没有足够的市值记录。" = "Not enough value history in this range.";
 "收益来源堆叠图，长按后拖动查看单日" = "Gain sources stacked chart; press and hold, then drag to read a day";
 "%@ 项持仓合计" = "%@ holdings combined";
-"连接交易所账户" = "Connect exchange accounts";
-"支持 2000+ 家交易所，即将开放" = "2,000+ exchanges · coming soon";
 "收入构成" = "Revenue mix";
 "产品与业务" = "Products & business";
 "地区" = "Regions";
@@ -394,7 +387,6 @@
 "收起持仓热力图" = "Lay the holdings heatmap down";
 "实验" = "Experiments";
 "等距热力图" = "Isometric Heatmap";
-"渐进模糊与缓慢平移" = "Progressive blur and a slow drift";
 "关注半导体板块相对强弱" = "Watch relative semiconductor-sector strength";
 "关注回撤是否跌破短期趋势" = "Watch for a break below the short-term trend";
 "关注成交量是否恢复正常" = "Watch whether volume returns to normal";
@@ -410,7 +402,7 @@
 "净入金线" = "Net deposits line";
 "净利润" = "Net income";
 "净利率" = "Net margin";
-"凭证仅存于此 iPhone Keychain，不会发送到 Catfolio 服务端。" = "Credentials stay in this iPhone’s Keychain and are never sent to Catfolio servers.";
+"凭证仅存于此 iPhone。" = "Credentials stay on this iPhone.";
 "凭证已保存。" = "Credentials saved.";
 "分析于 %@" = "Analyzed %@";
 "分析师一致预期" = "Analyst consensus";
@@ -470,8 +462,7 @@
 "口径与数据来源" = "Definitions & sources";
 "只会删除当前账户保存在此 iPhone Keychain 中的 API Key 与 Secret。" = "Only this account’s API key and secret in this iPhone’s Keychain will be deleted.";
 "只会删除此 iPhone Keychain 中的 Token 和 Query ID。" = "Only the Token and Query ID in this iPhone’s Keychain will be deleted.";
-"只使用账户、持仓和历史数据的读取权限。建议创建专用的只读 Key。" = "Uses read-only access to accounts, holdings and history. A dedicated read-only key is recommended.";
-"只处理当前 Trading 212 账户。" = "Only this Trading 212 account is processed.";
+"请使用只读 Key；凭证仅存于此 iPhone。" = "Use a read-only key. Credentials stay on this iPhone.";
 "只更改全局组合的账户范围" = "Only changes the accounts included in the combined portfolio";
 "只覆盖已核验的范围，不是全市场排名。读取于 %@。" = "Covers verified candidates only, not a whole-market ranking. Retrieved %@.";
 "只读凭证" = "Read-only credentials";
@@ -497,7 +488,6 @@
 "回撤水下曲线" = "Drawdown Underwater Curve";
 "回撤水下曲线。%@。最大回撤 %@" = "Drawdown underwater chart. %@. Max drawdown %@";
 "图表口径" = "Chart basis";
-"在此 iPhone 上登录 ChatGPT，直接使用你的 Codex 订阅进行分析。" = "Sign in to ChatGPT on this iPhone to analyze with your Codex subscription.";
 "在美国普通股中查找同时满足以上全部条件的公司，按市值从大到小分批核验。" = "Find US common stocks matching all conditions above. Verify in batches from largest to smallest market cap.";
 "均价 " = "Average ";
 "均价 %@" = "Average price %@";
@@ -519,8 +509,6 @@
 "密钥已从此 iPhone 移除" = "Key removed from this iPhone";
 "密钥已保存" = "Key saved";
 "密钥已移除" = "Key removed";
-"导入会按交易日期重算加权平均成本，只更新当前账户。" = "Import recalculates weighted average cost by trade date and updates only this account.";
-"导入会按交易日期重算加权平均成本，并创建一个新账户。" = "Import recalculates weighted average cost by trade date and creates a new account.";
 "导入完成" = "Import complete";
 "导入并创建" = "Import and create";
 "导入并更新" = "Import and update";
@@ -553,7 +541,6 @@
 "已核验的 %@ 家里没有符合的，可以继续核验或放宽条件。" = "No matches among %@ verified companies. Continue checking or relax the conditions.";
 "已移除 %@ 笔重复交易。" = "Removed %@ duplicate transactions.";
 "已穿透 ETF" = "ETF look-through enabled";
-"已读取全部授权账户。" = "All authorized accounts loaded.";
 "已连接 ChatGPT" = "Connected to ChatGPT";
 "已连接" = "Connected";
 "已退出 ChatGPT" = "Signed out of ChatGPT";
@@ -639,7 +626,6 @@
 "拍照 AI 添加持仓" = "Add holdings with AI camera";
 "拖累下跌 · %@ 项" = "Decliners · %@ items";
 "持仓" = "Holding";
-"持仓已保存到此 iPhone" = "Holdings saved on this iPhone";
 "持仓成本 %@" = "Holding cost %@";
 "持仓成本" = "Holdings Cost";
 "持仓日期" = "Holdings date";
@@ -661,11 +647,10 @@
 "按板块分组" = "Group by sector";
 "按行业" = "By sector";
 "按行权价排列的 Call 与 Put 未平仓合约分布，下方提供峰值和集中区数值" = "Call and put open interest by strike. Peak and concentration values are provided below.";
-"授权令牌保存在此 iPhone 的 Keychain 中。" = "Authorization tokens are stored in this iPhone’s Keychain.";
 "授权成功" = "Authorized";
 "授权成功；请确认已授予 trade:read" = "Authorized. Make sure trade:read permission was granted.";
 "授权账户" = "Authorized accounts";
-"授权页只需允许 trade:read，用于读取账户、持仓与历史成交。" = "Only trade:read permission is needed to read accounts, holdings and historical trades.";
+"授权时仅允许 trade:read；令牌仅存于此 iPhone。" = "Allow only trade:read; tokens stay on this iPhone.";
 "排序方式" = "Sort by";
 "接下来关注" = "What to watch";
 "接近 52 周低点" = "Near 52-week lows";
@@ -700,7 +685,7 @@
 "数据货币" = "Display currency";
 "数量" = "Quantity";
 "文件" = "File";
-"文件只在此 iPhone 内解析和保存，不会上传。最大 50 MB。" = "Files are parsed and saved only on this iPhone, never uploaded. Maximum 50 MB.";
+"本机处理，不上传；最大 50 MB。" = "Processed on this iPhone, not uploaded. Maximum 50 MB.";
 "断开 Moomoo" = "Disconnect Moomoo";
 "断开 Moomoo？" = "Disconnect Moomoo?";
 "断开" = "Disconnect";
@@ -780,7 +765,6 @@
 "未选择" = "Not selected";
 "未配置" = "Not configured";
 "本地估算 · %@/%@ 笔 · 按当前汇率" = "Local estimate · %@/%@ trades · Current FX";
-"本地模型识别添加，需 iOS 27 支持" = "Recognize holdings locally. Requires iOS 27.";
 "本机数据" = "On-device data";
 "本机演示数据" = "Local demo data";
 "本机组合数据" = "Local portfolio data";
@@ -796,7 +780,6 @@
 "查看 Moomoo OpenAPI 说明" = "View Moomoo OpenAPI documentation";
 "查看分析师评级与目标价" = "View analyst ratings and price targets";
 "查看详情" = "View details";
-"查询怎么配，用下面的「复制配置提示词」交给 IBKR 的助手即可。持仓超过一年的话，把 Period 改到覆盖最早的建仓日。" = "Use “Copy configuration prompt” below with IBKR’s assistant. If you have held positions for over a year, extend Period to cover your earliest purchase.";
 "标普500" = "S&P 500";
 "格式" = "Format";
 "检查失败" = "Check failed";
@@ -845,13 +828,10 @@
 "此操作只会删除保存在这台 iPhone 上的聊天记录。" = "Only chat history stored on this iPhone will be deleted.";
 "段永平 / H&H" = "Duan Yongping / H&H";
 "每年" = "Per year";
-"每次只创建或更新一个 Trading 212 账户。" = "Create or update one Trading 212 account at a time.";
 "每股成交价" = "Price per share";
 "比较" = "Comparison";
 "毛利润" = "Gross profit";
 "气泡大小 = 仓位权重" = "Bubble size = position weight";
-"汇率未更新 · 使用离线估值，不适用于历史成交对账。" = "Exchange rates have not updated. Using offline estimates, unsuitable for historical trade reconciliation.";
-"汇率缓存 · %@；缺失币种使用离线估值。历史快照保留原记录汇率。" = "Cached FX · %@. Missing currencies use offline estimates. Historical snapshots retain their recorded rates.";
 "没有可计费的基金" = "No funds with available fees";
 "没有读取到这只证券的历史成交量" = "No historical volume was loaded for this security";
 "治理 / 审计" = "Governance / audit";
@@ -889,10 +869,6 @@
 "生成条件" = "Generate conditions";
 "用一句话描述" = "Describe in one sentence";
 "用中文简洁解释匹配条件及数据局限。不作买卖建议、不预测价格、不添加新闻或未知事实。" = "Explain the matching conditions and data limitations concisely in English. Do not give trading advice, predict prices, or add news or unknown facts.";
-"用于区分多个 Interactive Brokers 账户，创建后仍可在账户详情中修改。" = "Distinguishes multiple Interactive Brokers accounts. You can change it later in account details.";
-"用于区分多个 Moomoo 账户，创建后仍可在账户详情中修改。" = "Distinguishes multiple Moomoo accounts. You can change it later in account details.";
-"用于区分多个 Trading 212 账户，创建后仍可在账户详情中修改。" = "Distinguishes multiple Trading 212 accounts. You can change it later in account details.";
-"用于区分多个账户，创建后仍可在账户详情中修改。" = "Distinguishes multiple accounts. You can change it later in account details.";
 "用于穿透的%@" = "%@ used for look-through";
 "登录 ChatGPT" = "Sign in to ChatGPT";
 "登录 Moomoo" = "Sign in to Moomoo";
@@ -938,8 +914,6 @@
 "纳斯达克100" = "Nasdaq 100";
 "组合" = "Portfolio";
 "组合与基准的 %@ %@ 对比图，长按后单指拖动查看单日，保持第一指并加入第二指测量区间" = "Portfolio and benchmark %@ %@ comparison. Hold and drag to inspect a day; keep one finger down and add another to measure a range.";
-"组合摘要会直接发送给 DeepSeek，需要 API Key 和网络连接。" = "Sends your portfolio summary directly to DeepSeek. Requires an API key and internet access.";
-"组合摘要只在设备上处理，可离线使用；需要 Apple Intelligence 已开启且模型就绪。" = "Processes the portfolio summary on this device, including offline. Requires enabled Apple Intelligence and a ready model.";
 "组合风险摘要" = "Portfolio risk summary";
 "经营现金流" = "Operating cash flow";
 "统计范围" = "Reporting scope";
@@ -982,11 +956,9 @@
 "行业" = "Sector";
 "行业来自打包的美股公司资料，用于当前归类，不适用于历史回溯。" = "Sectors come from bundled US company data for current classification, not historical analysis.";
 "行业资本开支周期可能带来进一步波动" = "The sector’s capital expenditure cycle may bring more volatility";
-"行情、估值与 AI 密钥" = "Market data, valuation and AI keys";
 "行情与 AI" = "Quotes & AI";
 "行情与估值" = "Quotes & valuation";
 "行情响应无效" = "Invalid quote response";
-"行情密钥和 ChatGPT 登录都只保存在此 iPhone。" = "Market data keys and ChatGPT credentials stay on this iPhone.";
 "行情暂不可用" = "Quotes temporarily unavailable";
 "行情更新" = "Quote update";
 "行权价 USD" = "Strike price USD";
@@ -1022,18 +994,16 @@
 "请总结我当前组合最重要的三个风险。" = "Summarize the three most important risks in my current portfolio.";
 "请求跨越纽约日期，请重新刷新。" = "The date changed in New York during the request. Refresh again.";
 "请生成一段简洁的中文组合简报，指出集中度、盈亏和最值得关注的风险。" = "Generate a concise portfolio briefing in English, covering concentration, gains and losses, and the most important risks.";
-"请确认 CSV 包含完整交易记录。导入会创建新账户，不影响现有账户；已平仓持仓不显示。" = "Make sure the CSV contains the full transaction history. Import creates a new account without affecting existing accounts. Closed positions are not shown.";
-"请确认 CSV 包含完整交易记录。导入只更新当前账户，不影响其他账户；已平仓持仓不显示。" = "Make sure the CSV contains the full transaction history. Import updates only this account. Other accounts are unaffected; closed positions are not shown.";
+"请确认 CSV 包含完整交易记录。导入将创建新账户并重算成本。" = "Make sure the CSV contains the full transaction history. Import creates a new account and recalculates cost basis.";
+"请确认 CSV 包含完整交易记录。导入将更新当前账户并重算成本；其他账户不受影响。" = "Make sure the CSV contains the full transaction history. Import updates this account and recalculates cost basis; other accounts are unaffected.";
 "请解读我的组合近期表现，以及主要的收益和拖累来源。" = "Explain my portfolio’s recent performance and the main contributors and detractors.";
 "请选择扩展名为 .csv 的文件" = "Choose a file with the .csv extension";
-"读取估值矩阵需要的 P/E、EPS 与营收成长数据，并作为历史行情备用。" = "Loads P/E, EPS and revenue growth for the valuation matrix, and provides backup price history.";
 "读取完整期权链…" = "Loading the complete option chain…";
 "读取市场数据…" = "Loading market data…";
 "读取并查看分析师评级与目标价" = "Load analyst ratings and price targets";
 "读取并预览持仓" = "Load and preview holdings";
 "读取成功：%@ 个账户，%@ 项持仓" = "Loaded %@ accounts and %@ holdings";
 "读取成功：%@ 个账户，%@ 项持仓%@" = "Loaded %@ accounts and %@ holdings%@";
-"读取美股日线价格与成交量，用于计算成交量分布、VAH、POC 和 VAL。" = "Loads US daily prices and volume to calculate volume profiles, VAH, POC and VAL.";
 "财务 · %@" = "Financials · %@";
 "账户 %@" = "Account %@";
 "账户" = "Account";
@@ -1055,7 +1025,6 @@
 "跌幅" = "Losses";
 "距高点 -12.4%" = "-12.4% from high";
 "跟随系统" = "System";
-"跨账户资产活动流水" = "Asset activity across accounts";
 "轻点切换显示或隐藏" = "Tap to show or hide";
 "输入 %@ API Key" = "Enter %@ API key";
 "过去%@个交易日" = "The past %@ trading days";
@@ -1074,13 +1043,11 @@
 "连接状态" = "Connection status";
 "退出 ChatGPT" = "Sign out of ChatGPT";
 "选择 CSV 文件" = "Choose CSV file";
-"选择 DeepSeek 或自动模式需要回退时，组合摘要和问题会直接发送给 DeepSeek，不经过 Mac 或 Catfolio 服务端。" = "When using DeepSeek or automatic fallback, your portfolio summary and question are sent directly to DeepSeek, without a Mac or Catfolio server.";
 "选择人物" = "Select investors";
 "选股器" = "Stock screener";
 "通信" = "Communication services";
 "通信服务" = "Communication services";
 "通过 OAuth 授权创建账户" = "Create an account through OAuth";
-"通过系统浏览器完成 OAuth 2.1 + PKCE 授权。无需 OpenD，也不需要输入 API Key。" = "Authorize through the system browser with OAuth 2.1 + PKCE. No OpenD or API key required.";
 "道琼斯30" = "Dow Jones 30";
 "重叠持仓" = "Overlapping holdings";
 "重新同步以补齐；在补齐前，按税务口径的成本与损益不会计算。" = "Sync again to complete the records. Tax-basis costs and gains will not be calculated until then.";
@@ -2251,7 +2218,6 @@
 "%@ 找不到历史行情，没有计入账户历史。" = "%@ has no price history and is left out of the account history.";
 "数据问题" = "Data issues";
 "不影响出图" = "Charts still draw";
-"首页和收益页照常绘制，上面每一条是重建账户历史时做的推算或跳过的数据。导入券商的完整活动记录（带现金金额）后，这些推算会换成真实数据。" = "Home and Performance draw as usual. Each item above is an estimate made, or data left out, while rebuilding the account history. Import your broker's full activity statement, with cash amounts, and these estimates are replaced by real data.";
 "每条推算和数据问题列在 设置 → 本机数据 → 数据问题。" = "Each estimate and data issue is listed in Settings → Local data → Data issues.";
 " 等" = " and others";
 "收益按持仓市值和成本推算：成本增加视为入金、减少视为出金，没有现金流水。" = "Returns are estimated from holdings' value and cost: a rise in cost counts as a deposit and a fall as a withdrawal, as there is no cash ledger.";
@@ -2373,17 +2339,11 @@
 "同步状态" = "Sync status";
 "最近接收更新" = "Last received update";
 "重试同步" = "Retry sync";
-"同步显示货币、外观、公司名称、触控反馈、税年、持仓排序和筛选偏好。账户、持仓、交易记录和密钥仅保留在本机。" = "Sync display currency, appearance, company names, haptics, tax year, holdings order and screening preferences. Accounts, holdings, transactions and credentials stay on this device.";
 "未开启" = "Off";
 "由系统自动同步" = "Managed by iCloud";
 "暂时无法同步" = "Sync unavailable";
 "同步存储已满" = "Sync storage full";
 "部分设置过大" = "Some settings too large";
-"在每台设备上分别开启。开启时采用云端已有偏好，云端没有的项目保留本机设置。关闭不会删除本机或云端已有设置。" = "Enable separately on each device. Existing iCloud preferences take priority when enabled; settings absent from iCloud stay as they are on this device. Turning off keeps existing local and cloud settings.";
-"请在设备上登录同一 Apple 账户，并允许 Catfolio 使用 iCloud。更新由系统安排，可能延迟；此状态不表示其他设备已经收到。" = "Sign in to the same Apple Account on your devices and allow Catfolio to use iCloud. The system schedules updates, which may be delayed; this status does not confirm delivery to other devices.";
-"请检查系统设置中的 Apple 账户、Catfolio 的 iCloud 权限及网络连接。本机设置仍可使用。" = "Check your Apple Account, iCloud access for Catfolio in system settings, and your network connection. Local settings remain available.";
-"iCloud 偏好存储已达到限额。请缩短筛选规则或提示词后重试，本机设置仍会保留。" = "iCloud preference storage has reached its limit. Shorten screening rules or prompts and retry. Local settings are kept.";
-"部分筛选规则或提示词过长，仅保留在本机。缩短内容后会继续同步。" = "Some screening rules or prompts are too long and stay on this device. Shorten them to resume syncing.";
 "股息总计" = "Total dividends";
 "比例" = "Proportion";
 
@@ -2413,14 +2373,10 @@
 
 /* OpenRouter */
 "OpenRouter 模式需要 API Key。请在设置中填写，Key 只保存在此 iPhone。" = "OpenRouter needs an API key. Add one in Settings — it is kept only on this iPhone.";
-"优先使用 Apple 本地模型；不可用时依次使用已连接的 Codex、已填 Key 的 OpenRouter 和 DeepSeek。" = "Uses Apple's on-device model first; when it isn't available, falls back to Codex if connected, then OpenRouter if it has a key, then DeepSeek.";
-"组合摘要会直接发送给 OpenRouter，由你在设置里选的模型回答；需要 API Key 和网络连接。" = "Your portfolio summary is sent straight to OpenRouter and answered by the model you pick in Settings. Needs an API key and a network connection.";
 "AI 请求失败" = "The AI request failed";
 "用一个 Key 调用多家模型" = "Many models, one key";
-"选择 OpenRouter 或自动模式需要回退时，组合摘要和问题会直接发送给 OpenRouter，再由它转给你选的模型，不经过 Mac 或 Catfolio 服务端。" = "When OpenRouter is chosen, or Automatic falls back to it, your portfolio summary and question go straight to OpenRouter, which passes them to the model you picked. Nothing goes through a Mac or Catfolio's servers.";
 "连接成功，OpenRouter Key 可用" = "Connected — the OpenRouter key works";
 "模型" = "Model";
-"填写 OpenRouter 的模型 ID，如 anthropic/claude-sonnet-5 或 openai/gpt-5；留空时由 openrouter/auto 为每个问题挑选模型。" = "An OpenRouter model ID, such as anthropic/claude-sonnet-5 or openai/gpt-5. Leave it empty and openrouter/auto picks a model for each question.";
 "正在使用 OpenRouter 分析…" = "Analysing with OpenRouter…";
 
 /* SnapTrade */
@@ -2438,13 +2394,12 @@
 "SnapTrade 暂时无法读取，请稍后重试。现有持仓已保留。" = "SnapTrade is temporarily unavailable. Try again later. Existing holdings are preserved.";
 "%@ 的资产类型、市场或成本数据暂不支持，未更新此账户。" = "The asset type, exchange, or cost data for %@ is unsupported. This account was not updated.";
 "SnapTrade 个人 API" = "SnapTrade Personal API";
-"在 SnapTrade Dashboard 开启双重验证并创建个人 API Key。凭证仅保存在此 iPhone 的 Keychain。" = "Enable two-factor authentication in the SnapTrade Dashboard and create a Personal API key. Credentials stay in this iPhone’s Keychain.";
+"在 Dashboard 开启双重验证并创建个人 API Key；凭证仅存于此 iPhone。" = "Enable two-factor authentication in the Dashboard and create a Personal API key; credentials stay on this iPhone.";
 "打开 SnapTrade Dashboard" = "Open SnapTrade Dashboard";
 "连接或重新授权券商" = "Connect or reconnect brokerage";
 "读取账户列表" = "Read accounts";
-"授权完成后关闭网页，再读取账户列表。每次选择一个账户；可重复添加多个账户。" = "Close the page after authorization, then read your accounts. Select one account at a time; repeat to add more.";
+"授权后关闭网页并读取账户；仅同步股票和基金持仓，不含现金或交易流水。" = "After authorization, close the page and load your accounts. Syncs stock and fund holdings, not cash or transactions.";
 "此账户当前没有持仓。确认后将清空此账户的旧持仓，保留历史记录。" = "This account has no positions. Confirming will clear its previous holdings and preserve its history.";
-"同步股票及基金持仓、成本与报价，暂不导入现金或交易流水。数据时间以 SnapTrade 返回为准；预览保留 15 分钟。" = "Sync stock and fund holdings, cost basis, and quotes. Cash and transactions are not imported yet. Data time is provided by SnapTrade; previews expire after 15 minutes.";
 "移除本机 SnapTrade 凭证" = "Remove local SnapTrade credentials";
 "确认同步 SnapTrade 账户？" = "Sync this SnapTrade account?";
 "仅更新预览中的账户持仓；其他账户与已有交易历史保留。" = "Update only the previewed account’s holdings. Other accounts and existing transaction history are preserved.";
@@ -2540,25 +2495,16 @@
 "Finnhub 请求过于频繁，请稍后再试" = "Too many requests to Finnhub. Try again shortly.";
 "Finnhub 请求失败（%@）" = "Finnhub request failed (%@)";
 "美股公司新闻" = "US company news";
-"读取美股公司新闻和发布方摘要，作为今天值得关注、个股动态和今日异动的新闻来源之一。请求只带股票代码，不含持仓数量或金额。" = "Reads US company news and publisher summaries as one of the news sources for Today’s Focus, a security's developments and today's move. Requests carry only the symbol, never your quantities or amounts.";
 "连接成功，已读取 AAPL 的 %@ 条新闻" = "Connected. Loaded %@ news items for AAPL.";
 "新闻" = "News";
-"Google News、Yahoo Finance、SEC EDGAR 和 GDELT 无需密钥。在 设置 › 新闻 中选择使用哪些来源。" = "Google News, Yahoo Finance, SEC EDGAR and GDELT need no key. Choose which sources to use in Settings › News.";
-"新闻来源、屏蔽网站与搜索方式" = "Sources, blocked sites and search";
 "新闻来源" = "News sources";
 "需要密钥" = "Needs a key";
-"关闭的来源不会被请求。GDELT 每 5 秒只接受一次请求，一次分析会把所有持仓合并成一次搜索。Finnhub 只覆盖美股，密钥在 服务商 中设置。" = "Sources that are off are never contacted. GDELT accepts one request every 5 seconds, so an analysis combines all holdings into one search. Finnhub covers US listings only; set its key in Providers.";
 "搜索方式" = "Search";
 "补充诉讼与财报搜索" = "Also search lawsuits and earnings";
-"每只持仓另搜诉讼、调查，以及财报与指引" = "Separate searches per holding for lawsuits, probes, results and guidance";
 "分析时阅读正文" = "Read articles when analysing";
-"今天值得关注读取每只持仓最可靠的两篇文章" = "Today’s Focus reads the two most reliable articles per holding";
-"搜索词由代码固定生成，同一只持仓每次都按同样的方式搜索。阅读正文会让分析多花几秒，但判断不再只看标题。" = "Searches are fixed by the app, so a holding is searched the same way every time. Reading articles adds a few seconds, but the judgement no longer rests on headlines alone.";
 "屏蔽网站" = "Blocked sites";
-"StockStory、StockTitan、Simply Wall St 等" = "StockStory, StockTitan, Simply Wall St and similar";
 "取消屏蔽 %@" = "Unblock %@";
 "网站名称或域名，如 fool.com" = "Site name or domain, e.g. fool.com";
-"按发布方名称或域名匹配，屏蔽的网站不会出现在任何证据里。下次刷新分析时生效。" = "Matched by publisher name or domain; blocked sites never appear in any evidence. Takes effect at the next refresh.";
 "涨跌幅周期" = "Return period";
 "涨跌幅阈值" = "Return threshold";
 "接近 52 周高低点" = "Near 52-week high or low";
@@ -2639,7 +2585,6 @@
 "强烈看多" = "Strongly bullish";
 "强烈看空" = "Strongly bearish";
 "判断于 %@" = "Judged %@";
-"在 Cloudflare 控制台 › Workers AI 页面右侧可以复制 Account ID；API Token 在 My Profile › API Tokens 创建，模板选 Workers AI。" = "Copy the Account ID from the right side of Cloudflare dashboard › Workers AI. Create the API token under My Profile › API Tokens using the Workers AI template.";
 "在 设置 › 服务商 › Jev (Cloudflare) 中填写 Account ID 和 API Token 后即可运行。" = "Add your Account ID and API token in Settings › Providers › Jev (Cloudflare) to run it.";
 "基于行情指标的结构化判断" = "Structured calls from price metrics";
 "把握中" = "Medium confidence";
@@ -2656,7 +2601,6 @@
 "输入 Cloudflare API Token" = "Enter Cloudflare API token";
 "运行 JEV" = "Run JEV";
 "连接成功，Jev 可用" = "Connected. Jev is available";
-"通过你的 Cloudflare 账户调用 TypeSafe 的 Jev 模型（Workers AI 的 typesafe/jev），为 JEV 今日关注判断每只持仓该买入、持有还是卖出。发送的是行情指标、仓位占比和浮动盈亏百分比，不含账户、股数或金额。需要 Account ID 和一个有 Workers AI 权限的 API Token。" = "Calls TypeSafe’s Jev model through your Cloudflare account (Workers AI typesafe/jev) to decide, for JEV Today, whether to buy, hold or sell each holding. It sends price metrics, weights and unrealised gain percentages — no account, share counts or amounts. Needs an Account ID and an API token with Workers AI access.";
 "重新判断" = "Run again";
 "需要 Cloudflare Account ID 和 API Token：在 设置 › 服务商 › Jev (Cloudflare) 中填写。" = "Needs a Cloudflare Account ID and API token: add them in Settings › Providers › Jev (Cloudflare).";
 "需要 Cloudflare 凭证" = "Cloudflare credentials needed";
@@ -3122,7 +3066,8 @@
 
 "停止等待" = "Stop waiting";
 
-"停止等待不会撤销已确认的本地持仓更新。" = "Stopping the wait does not undo a confirmed local holdings update.";
+"停止等待不会撤销已确认的更新。" = "Stopping the wait does not undo a confirmed update.";
+
 
 // Merged ETF holdings display
 "合并穿透" = "Merged holdings";
@@ -3315,7 +3260,6 @@
 "最近正常" = "Latest OK";
 "%@ 个异常" = "%@ issues";
 "这次启动后还没有请求过任何数据源。" = "No data sources have been requested since this launch.";
-"仅在本次启动中记录来源、结果和时间；不记录网址、参数、密钥或证券代码。连接成功后仍可能发现数据格式问题；取消的请求不算失败。" = "Only source, result, and time are kept for this launch. URLs, parameters, keys, and ticker symbols are never recorded. A successful connection can still return unusable data. Cancelled requests do not count as failures.";
 "%@ 成功 · %@ 失败" = "%@ succeeded · %@ failed";
 "正常 · %@" = "Succeeded · %@";
 "行情数据" = "Market Data";
@@ -3364,7 +3308,46 @@
 "当前没有持仓报价可刷新" = "No held securities to refresh quotes for";
 "刷新失败，继续显示已有数据" = "Refresh failed; showing existing data";
 "刷新失败，请稍后重试" = "Refresh failed; please try again later";
+
+// Settings copy
+"Account ID 和 API Token 可在 Cloudflare 控制台获取。" = "Get the Account ID and API token in the Cloudflare dashboard.";
+"iCloud 空间不足；缩短筛选规则或提示词后重试。" = "iCloud storage is full. Shorten screening rules or prompts, then retry.";
+"下次刷新分析时生效。" = "Takes effect the next time analysis is refreshed.";
+"仅发送股票代码，读取公司新闻。" = "Sends ticker symbols only to load company news.";
+"仅同步偏好；账户、持仓、交易和密钥留在本机。" = "Only preferences sync; accounts, holdings, transactions and credentials stay on this device.";
+"仅在本机处理，可离线使用。" = "Processed only on this device; works offline.";
+"使用已连接的 ChatGPT。" = "Uses your connected ChatGPT account.";
+"发送行情、仓位占比和盈亏比例；不发送账户、股数或金额。" = "Sends market data, portfolio weights and return percentages; no account details, share counts or amounts.";
+"图表仍可查看；补充完整交易记录可提高准确性。" = "Charts remain available. Complete transaction records improve accuracy.";
+"填写模型 ID；留空自动选择。" = "Enter a model ID, or leave blank for automatic selection.";
+"开启时优先使用已有的 iCloud 偏好。" = "Existing iCloud preferences take priority when enabled.";
+"检查 iCloud 权限和网络后重试。" = "Check iCloud access and your connection, then retry.";
+"汇率使用离线估值。" = "Using offline exchange rate estimates.";
+"汇率缓存：%@。" = "Exchange rates cached: %@.";
+"组合摘要和问题会发送给 DeepSeek。" = "Portfolio summaries and questions are sent to DeepSeek.";
+"组合摘要和问题会经 OpenRouter 发送给所选模型。" = "Portfolio summaries and questions go to the selected model through OpenRouter.";
+"自动使用本地或已连接的 Codex、OpenRouter、DeepSeek。" = "Automatically uses an on-device model or a connected Codex, OpenRouter, or DeepSeek provider.";
+"读取估值数据，备用历史行情。" = "Loads valuation data and backup historical prices.";
+"读取美股价格和成交量。" = "Loads U.S. stock prices and volume.";
+"部分设置过大；缩短筛选规则或提示词后重试。" = "Some settings are too large. Shorten screening rules or prompts, then retry.";
 "Logo 样式" = "Logo style";
 "跟随外观" = "Match appearance";
 "浅色 Logo" = "Light logo";
 "深色 Logo" = "Dark logo";
+"回到对话" = "Back to chat";
+"当前对话" = "Current chat";
+"测试提示" = "Test toast";
+"已保存" = "Saved";
+"网络不可用" = "No connection";
+"保存失败" = "Couldn't save";
+"已验证并保存" = "Verified and saved";
+"验证失败" = "Verification failed";
+"持仓列表" = "Holdings";
+"穿透持仓" = "Look-through";
+"ETF 已穿透" = "Look-through on";
+"今天没有上涨" = "No gainers today";
+"今天没有下跌" = "No losers today";
+"不可算" = "unavailable";
+"部分估算" = "partly est.";
+"汇率影响" = "FX impact";
+"缺少数据" = "Missing data";

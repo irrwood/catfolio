@@ -28,6 +28,8 @@ struct TodayContributionCard: View {
     let isRefreshingBehindCache: Bool
     var onOpenDetail: (() -> Void)? = nil
     var onTitleBottomPositionChange: ((CGFloat) -> Void)? = nil
+    /// Reads today's changes again, from the card's own 刷新.
+    var onRefresh: (() -> Void)? = nil
     let onSelect: (Holding) -> Void
     let zoomNamespace: Namespace.ID?
 
@@ -60,8 +62,10 @@ struct TodayContributionCard: View {
         onOpenDetail: (() -> Void)? = nil,
         onTitleBottomPositionChange: ((CGFloat) -> Void)? = nil,
         zoomNamespace: Namespace.ID? = nil,
+        onRefresh: (() -> Void)? = nil,
         onSelect: @escaping (Holding) -> Void
     ) {
+        self.onRefresh = onRefresh
         self.holdings = holdings
         self.dailyChanges = dailyChanges
         self.benchmarkChange = benchmarkChange
@@ -125,7 +129,7 @@ struct TodayContributionCard: View {
                     HStack(spacing: 4) {
                         Text(L10n.text("TODAY"))
                             .appCaps(.caption, weight: .semibold)
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(CatfolioTheme.primaryText)
                         if onOpenDetail != nil {
                             Image(systemName: "chevron.right")
                                 .font(.caption2.weight(.semibold))
@@ -146,15 +150,19 @@ struct TodayContributionCard: View {
                             HomeSkeletonBlock(width: 133, height: 22, color: HomeSkeletonStyle.color(for: colorScheme))
                                 .accessibilityLabel(L10n.text("正在计算今日贡献"))
                         } else {
+                            // A step under the display amount: it sits under the
+                            // portfolio total and should not compete with it.
                             CatfolioDisplayAmountText(
                                 text: DisplayFormat.money(totalAmount, signed: true, fractionDigits: 2),
+                                size: 26,
+                                symbolSize: 16.8,
                                 color: .primary
                             )
                             .contentTransition(.numericText(value: totalAmount))
                             .refreshGlow(isActive: isRefreshingBehindCache)
                         }
                     }
-                    .frame(height: 39, alignment: .leading)
+                    .frame(height: 33, alignment: .leading)
 
                     HStack(spacing: 5) {
                         if contributions.isEmpty {
@@ -166,7 +174,7 @@ struct TodayContributionCard: View {
                             }
                         } else {
                             Text(DisplayFormat.percent(totalPercent))
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(CatfolioTheme.primaryText)
                             Text("·")
                                 .foregroundStyle(.tertiary)
                             benchmarkSummary
@@ -191,15 +199,14 @@ struct TodayContributionCard: View {
             .frame(height: 106, alignment: .top)
 
             Group {
-                if contributions.isEmpty {
-                    TodayContributionLoadingBars(isAnimating: isAwaitingContributions)
+                if isAwaitingContributions {
+                    TodayContributionLoadingBars(isAnimating: true)
                         .frame(height: 167, alignment: .top)
+                } else if contributions.isEmpty {
+                    emptyNote(L10n.text("行情暂不可用"), systemImage: "exclamationmark.circle")
                 } else if visibleContributions.isEmpty {
-                    ContentUnavailableView(
-                        direction == .gains ? L10n.text("今天暂无上涨持仓") : L10n.text("今天暂无下跌持仓"),
-                        systemImage: direction == .gains ? "arrow.up.right" : "arrow.down.right"
-                    )
-                    .frame(maxWidth: .infinity, minHeight: 167)
+                    emptyNote(direction == .gains ? L10n.text("今天没有上涨") : L10n.text("今天没有下跌"),
+                              systemImage: direction == .gains ? "arrow.up.right" : "arrow.down.right")
                 } else {
                     contributionBars
                         .frame(height: 167)
@@ -289,14 +296,41 @@ struct TodayContributionCard: View {
         }
     }
 
+    /// One quiet line where the bars would be: what is missing, and 刷新.
+    private func emptyNote(_ text: String, systemImage: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .font(.footnote.weight(.semibold))
+            Text(text)
+                .appText(.footnote, weight: .medium)
+            Spacer(minLength: 8)
+            if let onRefresh {
+                Button(action: onRefresh) {
+                    Label(L10n.text("刷新"), systemImage: "arrow.clockwise")
+                        .appText(.footnote, weight: .semibold)
+                        .foregroundStyle(CatfolioTheme.primaryText)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 167, alignment: .top)
+    }
+
     @ViewBuilder
     private var directionPicker: some View {
         if #available(iOS 26.0, *), !reduceTransparency {
             // Liquid glass, like the card it sits on. Not interactive: the
             // two buttons inside take the touch, and interactive glass holds
             // it for its own press effect first.
+            // White-tinted by day: untinted, the glass took the page's
+            // cyan through the card and read faintly green on white.
             directionPickerContent
-                .glassEffect(.regular, in: Capsule())
+                .glassEffect(isNight ? .regular : .regular.tint(.white.opacity(0.7)), in: Capsule())
         } else {
             directionPickerContent
                 .background(Color.white.opacity(colorScheme == .dark ? 0.16 : 0.40), in: Capsule())

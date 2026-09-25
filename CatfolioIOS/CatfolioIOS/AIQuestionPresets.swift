@@ -268,7 +268,7 @@ struct AIQuestionSecurityPicker: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.tertiary)
             }
-            .foregroundStyle(.primary)
+            .foregroundStyle(CatfolioTheme.primaryText)
             .contentShape(Rectangle())
         }
         .disabled(didSelect)

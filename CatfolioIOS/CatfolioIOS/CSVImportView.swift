@@ -33,7 +33,6 @@ struct CSVImportView: View {
                             .textInputAutocapitalization(.words)
                             .autocorrectionDisabled()
                     }
-                    SettingsFootnote(L10n.text("用于区分多个账户，创建后仍可在账户详情中修改。"))
                 }
 
                 SettingsSectionHeader(L10n.text("交易记录"))
@@ -55,7 +54,7 @@ struct CSVImportView: View {
                         SettingsValueRow(title: L10n.text("识别列"), value: selectedFile.headers.joined(separator: " · "), valueIsNumeric: false)
                     }
                 }
-                SettingsFootnote(L10n.text("文件只在此 iPhone 内解析和保存，不会上传。最大 50 MB。"))
+                SettingsFootnote(L10n.text("本机处理，不上传；最大 50 MB。"))
 
                 SettingsSection(L10n.text("格式")) {
                     requiredColumn("Date / Time", detail: L10n.text("支持 Time (UTC) 和带时分秒日期"))
@@ -88,9 +87,6 @@ struct CSVImportView: View {
                             }
                         }
                     }
-                    SettingsFootnote(context.isCreating
-                        ? L10n.text("导入会按交易日期重算加权平均成本，并创建一个新账户。")
-                        : L10n.text("导入会按交易日期重算加权平均成本，只更新当前账户。"))
                 }
 
                 if let importResult {
@@ -140,8 +136,8 @@ struct CSVImportView: View {
                 Button(L10n.text("取消"), role: .cancel) {}
             } message: {
                 Text(context.isCreating
-                    ? L10n.text("请确认 CSV 包含完整交易记录。导入会创建新账户，不影响现有账户；已平仓持仓不显示。")
-                    : L10n.text("请确认 CSV 包含完整交易记录。导入只更新当前账户，不影响其他账户；已平仓持仓不显示。"))
+                    ? L10n.text("请确认 CSV 包含完整交易记录。导入将创建新账户并重算成本。")
+                    : L10n.text("请确认 CSV 包含完整交易记录。导入将更新当前账户并重算成本；其他账户不受影响。"))
             }
         }
         .tint(CatfolioTheme.accent)
@@ -247,13 +243,6 @@ struct CSVImportResultSection: View {
                     }
                 } else {
                     SettingsValueRow(title: L10n.text("有效交易"), value: L10n.text("\(count) 条"))
-                }
-            }
-            if result.backupCreated == true {
-                SettingsRowContainer {
-                    Label(L10n.text("持仓已保存到此 iPhone"), systemImage: "iphone.gen3")
-                        .appText(.label, weight: .regular)
-                        .foregroundStyle(SettingsTemplate.secondaryText)
                 }
             }
             ForEach(Array(result.warnings.enumerated()), id: \.offset) { index, warning in

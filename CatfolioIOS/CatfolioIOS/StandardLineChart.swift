@@ -2393,6 +2393,9 @@ struct StandardLineChartSkeleton: View {
     var showsEndpointLabels = false
     var lineWidths: [CGFloat] = [2.25]
     var appearanceID: String? = nil
+    /// Whether to draw the axis label bars. Off, the plot keeps the same
+    /// geometry — only the line is drawn.
+    var showsAxis = true
 
     private var skeletonColor: Color {
         StandardLineChartLoadingTemplate.color(for: colorScheme)
@@ -2445,7 +2448,7 @@ struct StandardLineChartSkeleton: View {
                     context.fill(silhouette.subtracting(endpointHoles), with: .color(skeletonColor))
                 }
 
-                if axisWidth > 0 {
+                if axisWidth > 0, showsAxis {
                     ForEach(0..<5, id: \.self) { index in
                         Capsule()
                             .fill(skeletonColor)
@@ -2505,7 +2508,7 @@ struct StandardLineChartPlaceholder: View {
                 VStack(spacing: 5) {
                     Text(title)
                         .appText(.subheading, weight: .semibold)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(CatfolioTheme.primaryText)
                     Text(L10n.message(message))
                         .appText(.caption)
                         .foregroundStyle(.secondary)

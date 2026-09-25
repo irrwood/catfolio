@@ -2,43 +2,28 @@ import SwiftUI
 
 struct RootTabView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.locale) private var appLocale
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private enum TabBarMetrics {
-        static let regularIconSize: CGFloat = 27
-        static let compactIconSize: CGFloat = 20
-        static let regularControlSize: CGFloat = 56
-        static let compactControlSize: CGFloat = 44
-        static let regularTabButtonHeight: CGFloat = 48
-        static let compactTabButtonHeight: CGFloat = 40
-        static let nativeVerticalOffset: CGFloat = 6
-        static let compactVerticalOffset: CGFloat = 6
-    }
 
     private enum Destination: Hashable {
         case portfolio
         case returns
         case research
         case settings
+        case assistant
     }
 
     @AppStorage(DisplayCurrency.preferenceKey) private var displayCurrencyRawValue = DisplayCurrency.usd.rawValue
     @AppStorage(CompanyNameDisplay.preferenceKey) private var companyNameDisplayRawValue = CompanyNameDisplay.original.rawValue
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var selection: Destination
-    @State private var showsAIAssistant: Bool
-    @State private var isTabBarCompact = false
-    @Namespace private var portfolioAssistantZoom
-    @Namespace private var returnsAssistantZoom
-    @Namespace private var researchAssistantZoom
-    @Namespace private var settingsAssistantZoom
 
     init() {
         let arguments = LaunchArguments.all
         let showsLocalServiceRoute = arguments.contains("--show-local-services")
             || arguments.contains { $0.hasPrefix("--show-local-service-") }
         let initialSelection: Destination
-        if arguments.contains("--show-returns-page") || arguments.contains("--show-heatmap") {
+        if arguments.contains("--show-ai") {
+            initialSelection = .assistant
+        } else if arguments.contains("--show-returns-page") || arguments.contains("--show-heatmap") {
             initialSelection = .returns
         } else if arguments.contains("--show-research-tab") || arguments.contains("--show-policy-composer") || arguments.contains("--show-dca") {
             initialSelection = .research
@@ -48,7 +33,6 @@ struct RootTabView: View {
             initialSelection = .portfolio
         }
         _selection = State(initialValue: initialSelection)
-        _showsAIAssistant = State(initialValue: arguments.contains("--show-ai"))
     }
 
     private var presentationPreferencesID: String {
@@ -57,9 +41,8 @@ struct RootTabView: View {
 
     var body: some View {
         rootTabs
-            // Observe selection above the tab pages. Their individual bars
-            // disappear/appear during a switch and can miss the triggering
-            // change; this single owner stays mounted throughout navigation.
+            // Observe selection above the tab pages, which stays mounted
+            // throughout navigation.
             .sensoryFeedback(.selection, trigger: selection) { _, _ in hapticsEnabled }
             // Have the assistant's conversations in memory before it is opened.
             .task { await LocalChatLibraryCache.warm() }
@@ -74,7 +57,7 @@ struct RootTabView: View {
             .task {
                 guard LaunchArguments.contains("--demo-ai-open") else { return }
                 try? await Task.sleep(for: .seconds(4))
-                presentAI()
+                selection = .assistant
             }
             .task {
                 guard LaunchArguments.contains("--probe-news") else { return }
@@ -94,190 +77,74 @@ struct RootTabView: View {
             #endif
     }
 
+    /// The system tab bar, icons only. The assistant is a tab too: it is built once and kept, rather than pushed and rebuilt —
+    /// long conversation included — every time it opens.
     private var rootTabs: some View {
         TabView(selection: $selection) {
             Tab(value: .portfolio) {
-                tabPage(.portfolio) { PortfolioView() }
+                NavigationStack { PortfolioView() }
             } label: {
-                tabIcon(
-                    for: .portfolio,
-                    selectedAsset: "TabPortfolioSelected",
-                    unselectedAsset: "TabPortfolioUnselected",
-                    accessibilityLabel: L10n.text("持仓")
-                )
+                tabIcon(for: .portfolio, selected: "TabPortfolioSelected",
+                        unselected: "TabPortfolioUnselected", label: L10n.text("持仓"))
             }
 
             Tab(value: .returns) {
-                tabPage(.returns) { ReturnsView() }
+                NavigationStack { ReturnsView() }
             } label: {
-                tabIcon(
-                    for: .returns,
-                    selectedAsset: "TabPerformanceSelected",
-                    unselectedAsset: "TabPerformanceUnselected",
-                    accessibilityLabel: L10n.text("收益")
-                )
+                tabIcon(for: .returns, selected: "TabPerformanceSelected",
+                        unselected: "TabPerformanceUnselected", label: L10n.text("收益"))
             }
 
             Tab(value: .research) {
-                tabPage(.research) { ResearchView() }
+                NavigationStack { ResearchView() }
             } label: {
-                tabIcon(
-                    for: .research,
-                    selectedAsset: "TabResearchSelected",
-                    unselectedAsset: "TabResearchUnselected",
-                    accessibilityLabel: L10n.text("研究")
-                )
+                tabIcon(for: .research, selected: "TabResearchSelected",
+                        unselected: "TabResearchUnselected", label: L10n.text("研究"))
             }
 
             Tab(value: .settings) {
-                tabPage(.settings) { SettingsView() }
+                NavigationStack { SettingsView() }
             } label: {
-                tabIcon(
-                    for: .settings,
-                    selectedAsset: "TabSettingsSelected",
-                    unselectedAsset: "TabSettingsUnselected",
-                    accessibilityLabel: L10n.text("设置")
-                )
+                tabIcon(for: .settings, selected: "TabSettingsSelected",
+                        unselected: "TabSettingsUnselected", label: L10n.text("设置"))
             }
 
+            // The search role is the system's own separate circle at the end
+            // of the bar, where the assistant's button used to float.
+            Tab(value: .assistant, role: .search) {
+                NavigationStack {
+                    AIAssistantPage()
+                        .toolbarVisibility(.hidden, for: .navigationBar)
+                }
+            } label: {
+                tabIcon(for: .assistant, selected: "TabAI", unselected: "TabAI", label: L10n.text("AI 助手"))
+            }
         }
         .id(presentationPreferencesID)
         .tint(.primary)
-        .toolbarVisibility(.hidden, for: .tabBar)
-        .environment(\.rootTabBarCompact, $isTabBarCompact)
-        .onChange(of: selection) { _, _ in isTabBarCompact = false }
+        .modifier(MinimizesTabBarOnScroll())
     }
 
-    /// A navigation bar observes exactly one tab's root scroll view. Keep its
-    /// title, collapsed state and pushed pages out of the other tabs' stacks.
-    private func tabPage<Content: View>(
-        _ destination: Destination, @ViewBuilder content: () -> Content
-    ) -> some View {
-        let zoom = assistantNamespace(for: destination)
-        return NavigationStack {
-            content()
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    navigationBar(in: zoom)
-                        // Compact controls must not resize the scroll viewport.
-                        .frame(height: TabBarMetrics.regularControlSize, alignment: .bottom)
-                }
-                .navigationDestination(isPresented: Binding(
-                    get: { showsAIAssistant && selection == destination },
-                    set: { presented in
-                        if selection == destination { showsAIAssistant = presented }
-                    }
-                )) {
-                    AIAssistantPage()
-                        .toolbarVisibility(.hidden, for: .navigationBar)
-                        .navigationTransition(.zoom(sourceID: "ai-bubble", in: zoom))
-                }
+    /// An icon and no title: the label's text stays for VoiceOver only.
+    private func tabIcon(for destination: Destination, selected: String, unselected: String, label: String) -> some View {
+        Label {
+            Text(label)
+        } icon: {
+            Image(selection == destination ? selected : unselected)
+                .renderingMode(.template)
         }
-        .toolbarVisibility(.hidden, for: .tabBar)
+        .labelStyle(.iconOnly)
+        .accessibilityLabel(label)
     }
+}
 
-    private func navigationBar(in assistantZoom: Namespace.ID) -> some View {
-        HStack(spacing: isTabBarCompact ? 10 : 12) {
-            HStack(spacing: 0) {
-                navigationButton(.portfolio, selected: "TabPortfolioSelected", unselected: "TabPortfolioUnselected", label: L10n.text("持仓"))
-                navigationButton(.returns, selected: "TabPerformanceSelected", unselected: "TabPerformanceUnselected", label: L10n.text("收益"))
-                navigationButton(.research, selected: "TabResearchSelected", unselected: "TabResearchUnselected", label: L10n.text("研究"))
-                navigationButton(.settings, selected: "TabSettingsSelected", unselected: "TabSettingsUnselected", label: L10n.text("设置"))
-            }
-            .padding(isTabBarCompact ? 2 : 4)
-            .navigationGlass()
-            .accessibilityIdentifier("root-tab-bar")
-
-            Button(action: presentAI) {
-                Image("TabAI")
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: tabIconSize, height: tabIconSize)
-                    .frame(width: tabControlSize, height: tabControlSize)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .navigationGlass()
-            // Half the control's own side, so the source stays a circle at
-            // both sizes. The radius was fixed at 28 — exactly half of the
-            // regular 56pt control, and so a circle there, but more than half
-            // of the compact 44pt one, where a continuous corner past half
-            // the side bulges out into a diamond. `matchedTransitionSource`
-            // accepts only a RoundedRectangle, so this cannot be a `Circle`.
-            .matchedTransitionSource(id: "ai-bubble", in: assistantZoom) { source in
-                source.clipShape(
-                    RoundedRectangle(cornerRadius: tabControlSize / 2, style: .continuous)
-                )
-            }
-            .accessibilityLabel(L10n.text("AI 助手"))
+private struct MinimizesTabBarOnScroll: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.tabBarMinimizeBehavior(.onScrollDown)
+        } else {
+            content
         }
-        .padding(.horizontal, isTabBarCompact ? 48 : 20)
-        // Match the lower visual baseline of iOS 26/27's floating tab bar
-        // while the safe-area inset continues reserving content space.
-        .offset(y: TabBarMetrics.nativeVerticalOffset + (isTabBarCompact
-            ? TabBarMetrics.compactVerticalOffset
-            : 0))
-        .animation(reduceMotion ? nil : .smooth(duration: 0.28), value: isTabBarCompact)
-    }
-
-    private func navigationButton(
-        _ destination: Destination,
-        selected: String,
-        unselected: String,
-        label: String
-    ) -> some View {
-        Button {
-            selection = destination
-        } label: {
-            tabIcon(for: destination, selectedAsset: selected, unselectedAsset: unselected, accessibilityLabel: label)
-                .frame(maxWidth: .infinity)
-                .frame(height: isTabBarCompact
-                    ? TabBarMetrics.compactTabButtonHeight
-                    : TabBarMetrics.regularTabButtonHeight)
-                .background {
-                    if selection == destination {
-                        Capsule().fill(.primary.opacity(0.07))
-                    }
-                }
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selection == destination ? .isSelected : [])
-    }
-
-    private func tabIcon(
-        for destination: Destination,
-        selectedAsset: String,
-        unselectedAsset: String,
-        accessibilityLabel: String
-    ) -> some View {
-        Image(selection == destination ? selectedAsset : unselectedAsset)
-            .renderingMode(.template)
-            .resizable()
-            .scaledToFit()
-            .frame(width: tabIconSize, height: tabIconSize)
-            .accessibilityLabel(accessibilityLabel)
-    }
-
-    private var tabIconSize: CGFloat {
-        isTabBarCompact ? TabBarMetrics.compactIconSize : TabBarMetrics.regularIconSize
-    }
-
-    private var tabControlSize: CGFloat {
-        isTabBarCompact ? TabBarMetrics.compactControlSize : TabBarMetrics.regularControlSize
-    }
-
-    private func assistantNamespace(for destination: Destination) -> Namespace.ID {
-        switch destination {
-        case .portfolio: portfolioAssistantZoom
-        case .returns: returnsAssistantZoom
-        case .research: researchAssistantZoom
-        case .settings: settingsAssistantZoom
-        }
-    }
-
-    private func presentAI() {
-        showsAIAssistant = true
     }
 }
 
@@ -351,16 +218,5 @@ extension View {
         onOffsetChange: @escaping (CGFloat) -> Void = { _ in }
     ) -> some View {
         modifier(RootTabBarScrollTracking(onOffsetChange: onOffsetChange, onPhaseChange: onPhaseChange))
-    }
-}
-
-private extension View {
-    @ViewBuilder
-    func navigationGlass() -> some View {
-        if #available(iOS 26.0, *) {
-            glassEffect(.regular.interactive(), in: Capsule())
-        } else {
-            background(.ultraThinMaterial, in: Capsule())
-        }
     }
 }

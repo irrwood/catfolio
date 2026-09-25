@@ -5,21 +5,34 @@ enum BrandfetchLogoURL {
     // Logo API client IDs are public identifiers included in each image URL.
     static let clientID = "1idSx9hVGNTVGELIzRe"
 
-    /// Nil for symbols Brandfetch recently answered with no logo.
-    static func icon(for symbol: String) -> URL? {
+    /// Nil for symbols Brandfetch recently answered with no logo. `dark`
+    /// asks for the brand's icon made for dark backgrounds; that is nil too
+    /// once Brandfetch has answered it has none, so the caller falls back to
+    /// the default icon.
+    static func icon(for symbol: String, dark: Bool = false) -> URL? {
         let ticker = symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !ticker.isEmpty, ticker != "ETF 其他",
               ticker.range(of: "^[A-Z0-9][A-Z0-9._^-]*$", options: .regularExpression) != nil,
-              !BrandfetchMissCache.shared.isMissing(ticker) else {
+              !BrandfetchMissCache.shared.isMissing(ticker),
+              !dark || !BrandfetchMissCache.shared.isMissing(darkMissKey(ticker)) else {
             return nil
         }
         var components = URLComponents()
         components.scheme = "https"
         components.host = "cdn.brandfetch.io"
-        components.path = "/ticker/\(ticker)/w/96/h/96/fallback/404/icon.png"
+        // With fallback/404 a brand that has no dark icon answers 404, not a
+        // placeholder; the dark miss is then recorded under its own key.
+        components.path = "/ticker/\(ticker)/w/96/h/96\(dark ? "/theme/dark" : "")/fallback/404/icon.png"
         components.queryItems = [URLQueryItem(name: "c", value: clientID)]
         return components.url
     }
+
+    /// The miss-cache key for "no dark icon", separate from "no logo at all".
+    static func darkMissKey(_ symbol: String) -> String {
+        symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() + "@DARK"
+    }
+
+    static func isDark(_ url: URL) -> Bool { url.path.contains("/theme/dark/") }
 }
 
 /// Brandfetch requires logos to be hotlinked from an HTML image element and

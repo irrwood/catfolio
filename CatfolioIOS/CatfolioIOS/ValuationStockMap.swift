@@ -112,7 +112,7 @@ struct ValuationStockMap: View {
                     Text("\(plotted.count) / \(matrix.rows.count + matrix.unavailable.count)")
                         .monospacedDigit().foregroundStyle(.secondary)
                     Text(L10n.text("可绘制")).foregroundStyle(.secondary)
-                }.font(.system(size: 12, weight: .medium)).foregroundStyle(.primary)
+                }.font(.system(size: 12, weight: .medium)).foregroundStyle(CatfolioTheme.primaryText)
             }.tint(.secondary)
         }
         .buttonStyle(.plain)

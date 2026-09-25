@@ -27,11 +27,14 @@ final class LocalPriceCachePersistenceTests: XCTestCase {
             requestedTo: "2025-01-01"
         )
 
-        try await waitForCache(at: url) { json in
-            let aaa = json["AAA"] as? [String: Any]
-            let values = aaa?["values"] as? [String: Double]
-            return values?["2025-01-03"] == 102 && json["BBB"] != nil
+        // One file per symbol, written together after the short delay.
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            let files = (try? FileManager.default.contentsOfDirectory(atPath: url.path)) ?? []
+            if files.filter({ $0.hasSuffix(".json") }).count == 2 { break }
+            try await Task.sleep(for: .milliseconds(20))
         }
+        try await Task.sleep(for: .milliseconds(50))
 
         let restored = LocalHistoricalPriceCache(cacheURL: url)
         let hit = await restored.lookup(symbol: "AAA", from: "2025-01-01", to: "2025-01-03")

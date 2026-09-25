@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-24T20:01:35.958473+00:00",
+  "generatedAt": "2026-09-24T23:36:52.492431+00:00",
   "canvasSize": 192,
   "opticalMethod": "alpha-bounds-plus-ink-centroid-50-percent-x-20-percent-y; solid-plate-as-background; equal-area-56-percent-side-with-density; up-to-80-percent-ink-box; 10-percent-min-margin",
   "logos": {
@@ -6791,10 +6791,6 @@
       "sourceId": "0000027904",
       "themeColor": "#003366",
       "darkBackgroundColor": "#0B2A4C",
-      "darkInkLightened": [
-        "#003D79",
-        "#98002E"
-      ],
       "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "3e670c2f500a4b842f36b80f001693bdcbbf23635b602f049b5e41c46a02e369",
@@ -6810,8 +6806,8 @@
         "dark": {
           "svg": "DAL.dark.svg",
           "png": "DAL.dark.png",
-          "svgSha256": "36a1d0983b5f87c9213d3cf3af92f38cf91db6239584b1425aa2dd3745d183b1",
-          "pngSha256": "31bede4f661bce62d86d073f9633e1c741070580d7c33b9a552d733e1b4ec163"
+          "svgSha256": "ac045bdeeb42435bb866422d52726e6dd70c1fd52b826ca3396d9a06112a0496",
+          "pngSha256": "82a5562aa64bd8b66377bb20866c478cb8b8dec288554ae2f8f0ecc2a2be4cd5"
         }
       }
     },
@@ -13682,28 +13678,23 @@
       "sourceId": "8528688205",
       "themeColor": "#005DBA",
       "darkBackgroundColor": "#C60B31",
-      "darkInkLightened": [
-        "#005DBA",
-        "#00633D",
-        "#C50B30"
-      ],
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "e0a730381ecf5b58350286442694989e3429cc43e5c9bb16beb11b4636146856",
-        "dark": "e0a730381ecf5b58350286442694989e3429cc43e5c9bb16beb11b4636146856"
+        "light": "4fdc1dc91ea402952ae2bce7b7858619b29eb58e0e68826deff197f66c83e557",
+        "dark": "4fdc1dc91ea402952ae2bce7b7858619b29eb58e0e68826deff197f66c83e557"
       },
       "files": {
         "light": {
           "svg": "LGEN.L.light.svg",
           "png": "LGEN.L.light.png",
-          "svgSha256": "e4074f8f05e88c5ae68df518f6af6651faf4a36d9185083db145264ca1deddd8",
-          "pngSha256": "62195ce03585c357578ccfe0d04773abd32adf9a513a5528e712b1f54b158da1"
+          "svgSha256": "7e059abf0aa00f4a50333abe92ac5ea03126e91718b7d8ebb90e15c150455f85",
+          "pngSha256": "d7690a0de6d794f117ff8c5f0fdf983d677920afd787e37ad9634aad1bd75623"
         },
         "dark": {
           "svg": "LGEN.L.dark.svg",
           "png": "LGEN.L.dark.png",
-          "svgSha256": "815b7a0e4dd7cd2743eea66290c0a859382cd7d7e6b86dce101eed4f4a66bd50",
-          "pngSha256": "995a8747ff907e347134a7a656753ed9582d0661659aa3454ac2606009a14fac"
+          "svgSha256": "04e4b31096e0e34e6d01c28b84b05e2a6a6d80cf56b567c96df9ca802409f540",
+          "pngSha256": "3c3178a7eae520e82c77e92cd99aa325a73fffcbc48ea2933c330fe4014cff63"
         }
       }
     },
@@ -18676,9 +18667,6 @@
       "sourceId": "0001633917",
       "themeColor": "#002991",
       "darkBackgroundColor": "#346AF4",
-      "darkInkLightened": [
-        "#3F89F9"
-      ],
       "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "bb5d02fde441e761f1fd9e939bff5040f6c4ed70dd05b485f3d0e0f9562fd7b3",
@@ -18694,8 +18682,8 @@
         "dark": {
           "svg": "PYPL.dark.svg",
           "png": "PYPL.dark.png",
-          "svgSha256": "816f5a339830c058750b6aafadb623e66ce8bef3d4a2e43607e52b0ec6e619f4",
-          "pngSha256": "f151469adb7724c22016d7f44ed0e85d9ca97fc440b69f3037fed272935de2a5"
+          "svgSha256": "5f6ef395b3978f49c49fef008964f8be969346a2e9645bb70908bea8f0b3ada0",
+          "pngSha256": "eeb846e1eee1ed9ccce215d4831d4373db1e9f0676f1fc58f801c426a378c359"
         }
       }
     },
@@ -21870,9 +21858,6 @@
       "sourceId": "0000818686",
       "themeColor": "#00567A",
       "darkBackgroundColor": "#05421D",
-      "darkInkLightened": [
-        "#00567A"
-      ],
       "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "5af6c905f1699e5642da69fae884ad310d87441ab4b23f0ca855ebf1cabf19c2",
@@ -21888,8 +21873,8 @@
         "dark": {
           "svg": "TEVA.dark.svg",
           "png": "TEVA.dark.png",
-          "svgSha256": "6847c250919af678fffe65700cf02a1cd1cfd3acb550a28b63a9dd0af79f96d9",
-          "pngSha256": "e521334025b7866eb078ce661938ef57c111b87bc701fe30cf03f85acee7ce94"
+          "svgSha256": "12e373910fa5cce814586b916be015cb79e119721de1499d621b6c5c6a8f3e7f",
+          "pngSha256": "b2c909d0135d6cf7144dc50e41c770467069426790a30d56c9da846f2544db95"
         }
       }
     },

@@ -253,7 +253,7 @@ struct CompanyFinancialsView: View {
                     } label: {
                         Text(label(period))
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+                            .foregroundStyle(isSelected ? CatfolioTheme.primaryText : Color.secondary)
                             .padding(.horizontal, 14)
                             .frame(height: 42)
                             .background(isSelected ? Color(uiColor: .secondarySystemBackground) : Color.clear)

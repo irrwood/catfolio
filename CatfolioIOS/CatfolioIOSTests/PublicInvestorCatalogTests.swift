@@ -25,6 +25,13 @@ final class PublicInvestorCatalogTests: XCTestCase {
             ("AAPL", "Apple Inc. - Common Stock (AAPL) [OP]", "Apple"),
             ("MORN", "Morningstar, Inc. (MORN) [ST]", "Morningstar"),
             ("XYZ", "Example Corporation (XYZ) [ST]", "Example"),
+            ("CRWD", "CrowdStrike Holdings, Inc. - Class A (CRWD) [ST]", "CrowdStrike - Class A"),
+            ("CMCSA", "Comcast Corporation - Class A (CMCSA) [ST]", "Comcast - Class A"),
+            ("SQ", "Block, Inc. Class A Common Stock, (SQ) [ST]", "Block Class A Common Stock"),
+            ("VST", "Vistra Corp. Common Stock (VST) [ST]", "Vistra"),
+            ("AXP", "American Express Company (AXP) [ST]", "American Express"),
+            ("WBD", "Warner Bros. Discovery, Inc. - Series A (WBD) [ST]", "Warner Bros. Discovery - Series A"),
+            ("AB", "AllianceBernstein Holding L.P. Units (AB) [AB]", "AllianceBernstein Holding L.P. Units"),
             ("NVDA", "Nine Forty Five Battery LLC [OL]", "Nine Forty Five Battery LLC"),
             ("XYZ", "Example [Unknown]", "Example [Unknown]")
         ]
@@ -50,6 +57,55 @@ final class PublicInvestorCatalogTests: XCTestCase {
         XCTAssertTrue(holdings.contains { $0.displayName.contains("[ST]") })
         XCTAssertTrue(holdings.contains { $0.ticker.contains("[CALL") && $0.publicDisclosure?.instrumentLabel != nil })
         XCTAssertTrue(holdings.contains { $0.ticker == "AAPL" })
+    }
+
+    func testRebuiltPublicPortfolioAlsoCleansDisplayNamesAndKeepsClassBadge() {
+        let source = "Alphabet Inc. - Class A (GOOGL) [ST]"
+        let holding = Holding(
+            ticker: "GOOGL", logoSymbol: nil, displayName: source, sector: nil,
+            source: PublicInvestorAccountAdapter.source, shares: 1, averageCost: 1,
+            costCurrency: "USD", quotePrice: 1, quoteCurrency: "USD", todayChangePercent: nil,
+            marketValue: 1, weight: 1, unrealized: 0, unrealizedPercent: 0,
+            fxPnl: nil, fxPnlPercent: nil, fxPnlStatus: nil, fxPnlSource: nil
+        )
+        XCTAssertFalse(holding.shortName.contains("[ST]"))
+        XCTAssertFalse(holding.shortName.contains("(GOOGL)"))
+        XCTAssertEqual(holding.classMarkers, ["A"])
+        XCTAssertEqual(holding.displayName, source)
+    }
+
+    func testPublicAndRegularHoldingsUseTheSameHomeTitle() {
+        let preference = CompanyNameDisplay.preferenceKey
+        let previousPreference = UserDefaults.standard.object(forKey: preference)
+        UserDefaults.standard.set(CompanyNameDisplay.original.rawValue, forKey: preference)
+        defer {
+            if let previousPreference {
+                UserDefaults.standard.set(previousPreference, forKey: preference)
+            } else {
+                UserDefaults.standard.removeObject(forKey: preference)
+            }
+        }
+
+        func holding(ticker: String, name: String, source: String) -> Holding {
+            Holding(
+                ticker: ticker, logoSymbol: nil, displayName: name, sector: nil,
+                source: source, shares: 1, averageCost: 1,
+                costCurrency: "USD", quotePrice: 1, quoteCurrency: "USD", todayChangePercent: nil,
+                marketValue: 1, weight: 1, unrealized: 0, unrealizedPercent: 0,
+                fxPnl: nil, fxPnlPercent: nil, fxPnlStatus: nil, fxPnlSource: nil
+            )
+        }
+
+        for (ticker, regularName, disclosureName, expectedTitle) in [
+            ("AXP", "American Express Company", "American Express Company (AXP) [ST]", "American Express"),
+            ("WBD", "Warner Bros. Discovery, Inc. - Series A", "Warner Bros. Discovery, Inc. - Series A (WBD) [ST]", "Warner Bros. Discovery")
+        ] {
+            let regular = holding(ticker: ticker, name: regularName, source: "broker")
+            let publicInvestor = holding(ticker: ticker, name: disclosureName, source: PublicInvestorAccountAdapter.source)
+            XCTAssertEqual(SecurityNameParts(regular.shortName).primary, expectedTitle)
+            XCTAssertEqual(SecurityNameParts(publicInvestor.shortName).primary, expectedTitle)
+            XCTAssertEqual(publicInvestor.classMarkers, regular.classMarkers)
+        }
     }
 
     func testBundledCoreReleasePreservesDisclosureBoundaries() throws {
