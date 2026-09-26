@@ -320,3 +320,117 @@ Glow glowAt(float2 p, float time, float aspect, float bandTop, float2 clearBand)
     col += n * grain;
     return half4(half3(saturate(col)), 1.0h);
 }
+
+/// One huge, soft light from the top of the screen: a pale mist that falls
+/// through steel blue and navy to near black, sampled from the reference
+/// frame. The dome breathes, sways and carries a slow lobe along its lower
+/// edge. `intensity` scales the light (1 = the reference; lower keeps the
+/// top from going pale, for dark mode). The colour arguments are unused —
+/// the ramp is the reference's own — and so are glowTop, dispersion and the
+/// clear band; the signature matches `flowingGradient` for the Swift side.
+[[ stitchable ]] half4 mistGlow(float2 position,
+                                half4 color,
+                                float2 size,
+                                float time,
+                                half4 baseTop,
+                                half4 baseBottom,
+                                half4 haloColor,
+                                half4 coreColor,
+                                float grain,
+                                float glowTop,
+                                half4 fringeColor,
+                                float dispersion,
+                                float2 clearBand,
+                                float feather,
+                                float intensity) {
+    float2 p = (position - 0.5 * size) / max(size.y, 1.0);
+    // A light warp only: the edge should drift, not ripple.
+    p += float2(0.020 * sin(p.y * 3.0 + time * 0.35), 0.014 * sin(p.x * 3.5 - time * 0.27 + 1.3));
+    p += float2(0.005 * sin(p.y * 9.0 - time * 0.53 + 2.0), 0.004 * sin(p.x * 8.0 + time * 0.47));
+
+    // The dome: a wide Gaussian centred above the middle of the screen.
+    float2 centre = float2(0.12 * sin(time * 0.11) + 0.05 * sin(time * 0.047 + 1.0),
+                           -0.30 + 0.03 * sin(time * 0.17));
+    float breathe = 1.0 + 0.05 * sin(time * 0.13 + 0.5);
+    float2 d = (p - centre) / (float2(1.5, 0.46) * breathe);
+    float light = exp(-dot(d, d));
+    // A slow organic lobe riding the dome's lower edge.
+    float2 lobeCentre = float2(centre.x + 0.25 * sin(time * 0.09), centre.y + 0.36);
+    float lobe = cluster(p, lobeCentre, float2(0.30, 0.14), time, 2.0);
+    light = 1.0 - (1.0 - light) * (1.0 - 0.15 * lobe);
+    light *= intensity;
+
+    // Brightness → colour, linearly between stops read off the reference.
+    const float stops[7] = { 0.07, 0.28, 0.47, 0.65, 0.80, 0.87, 0.95 };
+    const float3 ramp[7] = {
+        float3(0.016, 0.020, 0.039),
+        float3(0.109, 0.169, 0.251),
+        float3(0.208, 0.305, 0.467),
+        float3(0.454, 0.560, 0.732),
+        float3(0.745, 0.804, 0.894),
+        float3(0.854, 0.882, 0.945),
+        float3(0.897, 0.925, 0.960),
+    };
+    float3 col = ramp[0];
+    for (int i = 0; i < 6; i++) {
+        float t = saturate((light - stops[i]) / (stops[i + 1] - stops[i]));
+        col += (ramp[i + 1] - ramp[i]) * t;
+    }
+
+    // Grain matters here: a smooth ramp this long bands badly at 8 bits.
+    float n = hash12(position + fract(time * 7.0) * float2(97.0, 131.0)) - 0.5;
+    col += n * grain;
+    return half4(half3(saturate(col)), 1.0h);
+}
+
+/// One big, soft, wandering halo: a bright organic core with a wide bloom
+/// around it, drifting across the upper and middle screen over a faint
+/// light from the top. Brightness is mapped through a five-colour ramp,
+/// darkest to brightest: baseBottom, fringeColor, haloColor, coreColor,
+/// baseTop. `intensity` scales the light (lower for dark mode). glowTop,
+/// dispersion and the clear band are unused; the signature matches
+/// `flowingGradient` for the Swift side.
+[[ stitchable ]] half4 bigHalo(float2 position,
+                               half4 color,
+                               float2 size,
+                               float time,
+                               half4 baseTop,
+                               half4 baseBottom,
+                               half4 haloColor,
+                               half4 coreColor,
+                               float grain,
+                               float glowTop,
+                               half4 fringeColor,
+                               float dispersion,
+                               float2 clearBand,
+                               float feather,
+                               float intensity) {
+    float aspect = size.x / max(size.y, 1.0);
+    float2 p = (position - 0.5 * size) / max(size.y, 1.0);
+    float topY = p.y;
+    p += float2(0.030 * sin(p.y * 3.0 + time * 0.40), 0.025 * sin(p.x * 3.5 - time * 0.31 + 1.3));
+    p += float2(0.008 * sin(p.y * 9.0 - time * 0.60 + 2.0), 0.007 * sin(p.x * 8.0 + time * 0.50));
+
+    float2 centre = float2(aspect * (0.30 * sin(time * 0.13) + 0.10 * sin(time * 0.051 + 1.7)),
+                           -0.12 + 0.14 * sin(time * 0.097 + 0.4));
+    // The core eases up to the peak rather than sitting on it, so it reads
+    // as light, not a flat disc; the bloom is the same shape, twice as wide.
+    float core  = 0.92 * pow(cluster(p, centre, float2(0.30, 0.26), time, 3.0), 1.5);
+    float bloom = 0.45 * cluster(p, centre, float2(0.60, 0.52), time, 3.0);
+    float sky   = 0.28 * exp(-((topY + 0.5) / 0.55) * ((topY + 0.5) / 0.55));
+    float light = 1.0 - (1.0 - core) * (1.0 - bloom) * (1.0 - sky);
+    light *= intensity;
+
+    const float stops[5] = { 0.05, 0.25, 0.50, 0.78, 0.97 };
+    float3 ramp[5] = { float3(baseBottom.rgb), float3(fringeColor.rgb), float3(haloColor.rgb),
+                       float3(coreColor.rgb), float3(baseTop.rgb) };
+    float3 col = ramp[0];
+    for (int i = 0; i < 4; i++) {
+        float t = saturate((light - stops[i]) / (stops[i + 1] - stops[i]));
+        col += (ramp[i + 1] - ramp[i]) * t;
+    }
+
+    float n = hash12(position + fract(time * 7.0) * float2(97.0, 131.0)) - 0.5;
+    col += n * grain;
+    return half4(half3(saturate(col)), 1.0h);
+}
