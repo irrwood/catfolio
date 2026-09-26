@@ -236,31 +236,18 @@ enum SecurityDetailPresentation {
         UIColor.black.withAlphaComponent(trait.userInterfaceStyle == .dark ? 0.5 : 0.35)
     }
 
-    /// The top of the designed ground. Figma paints `rgba(45,50,57,0.5)` over a
-    /// black frame; composited, that is this colour, drawn opaque so the dimmed
-    /// page behind a sheet never shows through it.
-    static let uiGroundTop = UIColor { trait in
+    /// The page's ground: one flat colour, the same on the opening card and on
+    /// the page — black at night, the light grey the white cards sit on by
+    /// day. It was a top-to-bottom gradient, which the card (drawn by Core
+    /// Animation) and the page (drawn by SwiftUI) laid out over different
+    /// heights: the page changed ground as the card faded off it.
+    static let uiGround = UIColor { trait in
         trait.userInterfaceStyle == .dark
-            ? UIColor(red: 23 / 255, green: 25 / 255, blue: 29 / 255, alpha: 1)
+            ? .black
             : UIColor(red: 0xF2 / 255, green: 0xF3 / 255, blue: 0xF5 / 255, alpha: 1)
     }
-    static let uiGroundBottom = UIColor { trait in
-        trait.userInterfaceStyle == .dark ? .black : .white
-    }
 
-    /// Blue-grey at the top of the sheet, black by its bottom edge. The design
-    /// draws this on a rectangle as long as the content, reaching black at
-    /// 43% — which on that rectangle is exactly the height of one screen. It is
-    /// fixed to the sheet here rather than to the scrolling content: attached
-    /// to the content, pulling down at the top dragged the rectangle's square
-    /// upper edge into view over the black beneath it.
-    static var ground: LinearGradient {
-        LinearGradient(
-            colors: [Color(uiColor: uiGroundTop), Color(uiColor: uiGroundBottom)],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
+    static var ground: Color { Color(uiColor: uiGround) }
 
     /// The open is confirmed with a click, not a thud — a rigid impact, which
     /// is the crisp one — and at the instant the row is let go, not when the
@@ -751,6 +738,13 @@ extension View {
             .presentationBackgroundInteraction(.disabled)
             .presentationDragIndicator(.hidden)
             .presentationCornerRadius(SecurityDetailPresentation.cornerRadius)
+            .presentationBackground { SecurityDetailPresentation.ground }
+    }
+
+    /// Presents a security page over the whole screen, on its ground. For a
+    /// `fullScreenCover` opened through the snapshot transition.
+    func securityDetailFullScreen() -> some View {
+        environment(\.isAppModal, false)
             .presentationBackground { SecurityDetailPresentation.ground }
     }
 
@@ -3001,4 +2995,3 @@ struct ContributionStripePattern: View {
         .allowsHitTesting(false)
     }
 }
-

@@ -79,8 +79,11 @@ final class SecurityDetailSnapshotTransition {
     /// not the scroll view's offset: the scroll view may not exist yet when
     /// the sheet reports in, and then its first scroll went unseen.
     private weak var pageTouchWatcher: UIGestureRecognizer?
-    /// The flight while it is in the air, for a swipe that calls it off.
+    /// The flight while it is in the air, for a finger that catches it.
     private var flightInAir: FlightInAir?
+    /// The list behind the page blurs under the dim as the card comes up —
+    /// only blurs: it does not shrink.
+    fileprivate static let backdropBlur = UIBlurEffect(style: .regular)
     private var closing: CloseSession?
     private weak var edgePan: UIScreenEdgePanGestureRecognizer?
 
@@ -94,8 +97,15 @@ final class SecurityDetailSnapshotTransition {
     private var contentHasAppeared = false
 
     /// Where the page header's logo sits in the sheet; measured on each open.
-    private var pageLogoInSheet = CGRect(x: 20, y: 20, width: 56, height: 56)
+    /// Nil until the first page has been measured.
+    private var pageLogoInSheet: CGRect?
     private weak var openingCard: UIView?
+    /// The opening scene's dim, which the page's own shade takes over from.
+    private weak var openingDim: UIView?
+    /// The opening scene's blur, which must not lie over the page once it is
+    /// under the card: the card faded off onto a blurred page, which then
+    /// snapped sharp as the scene went.
+    private weak var openingBlur: UIView?
     private var openingHost: UIHostingController<AnyView>?
 
     static let openDuration: TimeInterval = 0.46
@@ -179,12 +189,16 @@ final class SecurityDetailSnapshotTransition {
         contentHasAppeared = false
         settledActions = []
 
+        // The page is the whole screen: the card grows to all of it, and the
+        // page's first screen starts below the status bar as the page does.
         let top = window.safeAreaInsets.top
-        let target = CGRect(x: 0, y: top, width: window.bounds.width, height: window.bounds.height - top)
+        let target = window.bounds
         let widthScale = target.width / max(frame.width, 1)
 
         let scene = Scene(in: window, traits: window.traitCollection)
         overlay = scene.root
+        openingDim = scene.dim
+        openingBlur = scene.blur
         // Until the sheet is under it, the flight takes every touch: let
         // through, a tap meant for the page's ✕ landed on the list below —
         // its filter button, whose menu then opened over the page.
@@ -196,7 +210,8 @@ final class SecurityDetailSnapshotTransition {
 
         var logo: LogoFlight?
         if let rowLogo = flight.logoFrame {
-            let landing = pageLogoInSheet.offsetBy(dx: target.minX, dy: target.minY)
+            let landing = (pageLogoInSheet ?? CGRect(x: 20, y: top + 20, width: 56, height: 56))
+                .offsetBy(dx: target.minX, dy: target.minY)
             // The image the row is already showing — decoded, and drawn at
             // the page's size so it is sharp there. Only a logo still in its
             // web view is copied from the screen (a GPU copy, no redraw).
@@ -215,7 +230,7 @@ final class SecurityDetailSnapshotTransition {
         // on the card as it grows, scaled to its width and pinned to its top.
         var screen: UIView?
         if let opening {
-            let host = UIHostingController(rootView: opening())
+            let host = UIHostingController(rootView: AnyView(opening().padding(.top, top)))
             host.safeAreaRegions = []
             host.view.backgroundColor = .clear
             Self.place(host.view, size: target.size, at: .zero, scale: frame.width / max(target.width, 1))
@@ -235,14 +250,28 @@ final class SecurityDetailSnapshotTransition {
             Self.place(screen, at: .zero, scale: 1)
             logo?.land()
             scene.dim.alpha = 1
+            scene.blur.effect = Self.backdropBlur
+            // In the same animator, so a flight that is caught and pulled
+            // back, or reversed, unwinds all of it: the row gives way to the
+            // bare card in the first third, the page's first screen fades in
+            // from a tenth to seven tenths.
+            UIView.animateKeyframes(withDuration: 0, delay: 0) {
+                UIView.addKeyframe(withRelativeStartTime: 0, relativeDuration: 0.4) {
+                    rowSnapshot.alpha = 0
+                }
+                UIView.addKeyframe(withRelativeStartTime: 0.1, relativeDuration: 0.6) {
+                    screen?.alpha = 1
+                }
+            }
         }
-        UIView.animate(withDuration: Self.openDuration * 0.6, delay: Self.openDuration * 0.1,
-                       options: [.curveEaseOut]) {
-            screen?.alpha = 1
-        }
-        motion.addCompletion { [weak self] _ in
+        motion.addCompletion { [weak self] position in
             guard let self else { return }
             self.flightInAir = nil
+            // Pulled back into its row: the page is never presented.
+            guard position == .end else {
+                self.flightDidReturn(root: scene.root, logo: logo, cancelled: cancelled)
+                return
+            }
             // The card is where the sheet goes: present it, an empty shell of
             // the same ground, under the card.
             self.pending = flight
@@ -259,17 +288,13 @@ final class SecurityDetailSnapshotTransition {
         }
         }
         motion.startAnimation()
-        flightInAir = FlightInAir(flight: flight, motion: motion, rowSnapshot: rowSnapshot, screen: screen,
-                                  startScale: frame.width / max(target.width, 1), cancelled: cancelled)
-        // A swipe to the right while the card is still in the air calls the
-        // open off: the card goes back into its row.
-        let swipe = UIPanGestureRecognizer(target: self, action: #selector(flightSwiped(_:)))
-        swipe.maximumNumberOfTouches = 1
-        scene.root.addGestureRecognizer(swipe)
-        // The row gives way to the bare card in the first third of the flight.
-        UIView.animate(withDuration: Self.openDuration * 0.4, delay: 0, options: [.curveEaseInOut]) {
-            rowSnapshot.alpha = 0
-        }
+        flightInAir = FlightInAir(motion: motion)
+        // The flight can be caught: a finger on it holds it where it is, a
+        // pull to the right or down draws it back towards its row, and let go
+        // it either finishes opening or goes home.
+        let grab = UIPanGestureRecognizer(target: self, action: #selector(flightGrabbed(_:)))
+        grab.maximumNumberOfTouches = 1
+        scene.root.addGestureRecognizer(grab)
         return .snapshot
     }
 
@@ -288,7 +313,8 @@ final class SecurityDetailSnapshotTransition {
         overlay?.isUserInteractionEnabled = false
         raiseOverlay()
         // The sheet's own shade takes over from the overlay's.
-        (overlay?.subviews.first)?.alpha = 0
+        openingDim?.alpha = 0
+        openingBlur?.isHidden = true
         shade.alpha = 1
         if contentHasAppeared {
             let generation = openGeneration
@@ -334,61 +360,53 @@ final class SecurityDetailSnapshotTransition {
                                shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
     }
 
-    // MARK: Calling off the flight
+    // MARK: Catching the flight
 
-    fileprivate struct FlightInAir {
-        let flight: Flight
+    fileprivate final class FlightInAir {
         let motion: UIViewPropertyAnimator
-        let rowSnapshot: UIView
-        let screen: UIView?
-        /// The opening screen's scale at the row, where it started.
-        let startScale: CGFloat
-        let cancelled: (() -> Void)?
+        /// Where the flight was when the finger caught it.
+        var caughtAt: CGFloat = 0
+        init(motion: UIViewPropertyAnimator) { self.motion = motion }
     }
 
-    @objc private func flightSwiped(_ recognizer: UIPanGestureRecognizer) {
-        guard recognizer.state == .began, let view = recognizer.view else { return }
-        let velocity = recognizer.velocity(in: view)
-        guard velocity.x > abs(velocity.y) else { return }
-        cancelFlight()
+    /// How far a pull must travel to draw the card all the way back.
+    private static let pullBackDistance: CGFloat = 320
+
+    @objc private func flightGrabbed(_ recognizer: UIPanGestureRecognizer) {
+        guard let inAir = flightInAir, let view = recognizer.view else { return }
+        let motion = inAir.motion
+        let translation = recognizer.translation(in: view)
+        let pull = max(0, translation.x, translation.y)
+        switch recognizer.state {
+        case .began:
+            motion.pauseAnimation()
+            inAir.caughtAt = motion.fractionComplete
+        case .changed:
+            motion.fractionComplete = max(0, inAir.caughtAt - pull / Self.pullBackDistance)
+        case .ended, .cancelled, .failed:
+            let velocity = recognizer.velocity(in: view)
+            let goesHome = recognizer.state == .ended
+                && (pull > 60 || max(velocity.x, velocity.y) > 500)
+            motion.isReversed = goesHome
+            motion.continueAnimation(withTimingParameters: nil, durationFactor: 0)
+        default:
+            break
+        }
     }
 
-    /// The card, from wherever it is in the air, back into its row; the page
-    /// is never presented.
-    private func cancelFlight() {
-        guard let inAir = flightInAir, let root = overlay, let card = openingCard else { return }
-        flightInAir = nil
-        // Stopped where it is: the completion that would present the sheet
-        // does not run.
-        inAir.motion.stopAnimation(true)
+    /// The flight wound back to its start: the card is its row again.
+    private func flightDidReturn(root: UIView, logo: LogoFlight?, cancelled: (() -> Void)?) {
+        logo?.view.removeFromSuperview()
+        root.removeFromSuperview()
+        if overlay === root { overlay = nil }
         openGeneration &+= 1
         isOpening = false
         settledActions = []
-        let logo = openingLogo
         openingLogo = nil
-        let (row, rowLogo) = liveRowFrame(for: inAir.flight)
-        let dim = root.subviews.first
-        let back = UIViewPropertyAnimator(duration: Self.closeDuration, dampingRatio: 0.95) {
-            card.frame = row
-            card.layer.cornerRadius = Self.sourceRadius(for: row)
-            Self.place(inAir.rowSnapshot, at: .zero, scale: 1)
-            inAir.rowSnapshot.alpha = 1
-            Self.place(inAir.screen, at: .zero, scale: inAir.startScale)
-            inAir.screen?.alpha = 0
-            if let rowLogo { logo?.move(to: rowLogo) } else { logo?.view.alpha = 0 }
-            dim?.alpha = 0
-        }
-        back.addCompletion { [weak self] _ in
-            logo?.view.removeFromSuperview()
-            root.removeFromSuperview()
-            guard let self else { return }
-            if self.overlay === root { self.overlay = nil }
-            self.openingCard = nil
-            self.openingHost = nil
-            self.isAnimating = false
-            inAir.cancelled?()
-        }
-        back.startAnimation()
+        openingCard = nil
+        openingHost = nil
+        isAnimating = false
+        cancelled?()
     }
 
     private func raiseOverlay() {
@@ -525,6 +543,7 @@ final class SecurityDetailSnapshotTransition {
         }
         let scene = Scene(in: window, traits: window.traitCollection)
         overlay = scene.root
+        scene.blur.effect = Self.backdropBlur
         let session = CloseSession(owner: self, flight: flight, scene: scene, page: page,
                                    start: start, logo: logo, surface: surface, shade: shade)
         surface.alpha = 0
@@ -595,7 +614,45 @@ final class SecurityDetailSnapshotTransition {
         hiddenDimmingViews.removeAllObjects()
     }
 
+    /// Begins only for a pull downwards with the page at its top; otherwise
+    /// the page scrolls. The page's scroll view keeps its touch — held at its
+    /// top, it does not move.
+    private final class PullDownDelegate: NSObject, UIGestureRecognizerDelegate {
+        static let shared = PullDownDelegate()
+
+        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = recognizer as? UIPanGestureRecognizer, let view = pan.view else { return false }
+            let velocity = pan.velocity(in: view)
+            guard velocity.y > 0, velocity.y > abs(velocity.x) else { return false }
+            guard let scroll = Self.pageScrollView(in: view) else { return true }
+            return scroll.contentOffset.y <= -scroll.adjustedContentInset.top + 1
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+
+        /// The page's own vertical scroll view: the first one at least half
+        /// the page's height, breadth first.
+        private static func pageScrollView(in root: UIView) -> UIScrollView? {
+            var queue: [UIView] = [root]
+            var index = 0
+            while index < queue.count, index < 400 {
+                let view = queue[index]
+                index += 1
+                if let scroll = view as? UIScrollView, scroll.bounds.height > root.bounds.height * 0.5 {
+                    return scroll
+                }
+                queue.append(contentsOf: view.subviews)
+            }
+            return nil
+        }
+    }
+
     private func installEdgePan(on surface: UIView) {
+        let pull = UIPanGestureRecognizer(target: self, action: #selector(pulledDown(_:)))
+        pull.maximumNumberOfTouches = 1
+        pull.delegate = PullDownDelegate.shared
+        surface.addGestureRecognizer(pull)
         let pan = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(edgePanned(_:)))
         pan.edges = .left
         surface.addGestureRecognizer(pan)
@@ -603,6 +660,17 @@ final class SecurityDetailSnapshotTransition {
     }
 
     @objc private func edgePanned(_ recognizer: UIScreenEdgePanGestureRecognizer) {
+        followClose(recognizer, axis: \.x)
+    }
+
+    @objc private func pulledDown(_ recognizer: UIPanGestureRecognizer) {
+        followClose(recognizer, axis: \.y)
+    }
+
+    /// A swipe from the left edge, or a pull down from the page's top: the
+    /// page follows the finger as a card and, let go far enough, shrinks back
+    /// into its row — the same close either way.
+    private func followClose(_ recognizer: UIPanGestureRecognizer, axis: KeyPath<CGPoint, CGFloat>) {
         let view = recognizer.view
         switch recognizer.state {
         case .began:
@@ -611,11 +679,12 @@ final class SecurityDetailSnapshotTransition {
             guard !isAnimating else { return }
             _ = beginClose()
         case .changed:
-            closing?.drag(to: recognizer.translation(in: view).x)
+            let translation = recognizer.translation(in: view)
+            closing?.drag(to: axis == \CGPoint.x ? CGPoint(x: translation.x, y: 0) : CGPoint(x: 0, y: translation.y))
         case .ended, .cancelled, .failed:
             guard let session = closing else { return }
-            let travel = recognizer.translation(in: view).x
-            let speed = recognizer.velocity(in: view).x
+            let travel = recognizer.translation(in: view)[keyPath: axis]
+            let speed = recognizer.velocity(in: view)[keyPath: axis]
             if recognizer.state == .ended, travel > 90 || speed > 700 {
                 session.finish(dismiss: dismissAction)
             } else {
@@ -682,13 +751,16 @@ final class SecurityDetailSnapshotTransition {
             logo.map { scene.root.addSubview($0.flight.view) }
         }
 
-        /// Follows the finger: right, a little smaller, rounder.
-        func drag(to translation: CGFloat) {
-            let travel = max(0, translation)
-            let progress = min(travel / max(start.width, 1), 1)
+        /// Follows the finger — right from the edge, or down from the top —
+        /// a little smaller and rounder the further it goes.
+        func drag(to translation: CGPoint) {
+            let right = max(0, translation.x)
+            let down = max(0, translation.y)
+            let progress = min(max(right / max(start.width, 1), down / max(start.height * 0.6, 1)), 1)
             let scale = 1 - 0.14 * progress
             let size = CGSize(width: start.width * scale, height: start.height * scale)
-            let frame = CGRect(x: start.minX + travel, y: start.minY + (start.height - size.height) / 2,
+            let frame = CGRect(x: start.minX + right + (start.width - size.width) / 2 * (down > right ? 1 : 0),
+                               y: start.minY + (start.height - size.height) / 2 + down,
                                width: size.width, height: size.height)
             scene.card.frame = frame
             scene.card.layer.cornerRadius = SecurityDetailPresentation.cornerRadius + 16 * progress
@@ -732,6 +804,7 @@ final class SecurityDetailSnapshotTransition {
                 SecurityDetailSnapshotTransition.place(row, at: .zero, scale: end.width / max(rowSize.width, 1))
                 if landsLogo, let rowLogo = target.logo { logo?.flight.move(to: rowLogo) }
                 scene.dim.alpha = 0
+                scene.blur.effect = nil
             }
             motion.addCompletion { [self] _ in
                 scene.root.removeFromSuperview()
@@ -749,7 +822,7 @@ final class SecurityDetailSnapshotTransition {
         /// Short of the threshold: back into place, then the real sheet.
         func cancel() {
             let motion = UIViewPropertyAnimator(duration: 0.3, dampingRatio: 0.9) { [self] in
-                drag(to: 0)
+                drag(to: .zero)
             }
             motion.addCompletion { [self] _ in
                 surface?.alpha = 1
@@ -831,6 +904,8 @@ final class SecurityDetailSnapshotTransition {
     @MainActor
     fileprivate final class Scene {
         let root: UIView
+        /// Blurs the list as it steps back, under the dim.
+        let blur = UIVisualEffectView(effect: nil)
         let dim: UIView
         let card: GroundCard
 
@@ -843,27 +918,23 @@ final class SecurityDetailSnapshotTransition {
             dim.backgroundColor = SecurityDetailPresentation.backdropColor.resolvedColor(with: traits)
             dim.alpha = 0
             card = GroundCard(traits: traits)
+            blur.frame = root.bounds
+            blur.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            blur.isUserInteractionEnabled = false
+            root.addSubview(blur)
             root.addSubview(dim)
             root.addSubview(card)
             window.addSubview(root)
         }
     }
 
-    /// A card painted with the page's ground, top to bottom.
+    /// A card painted with the page's ground.
     fileprivate final class GroundCard: UIView {
-        override class var layerClass: AnyClass { CAGradientLayer.self }
-
         init(traits: UITraitCollection) {
             super.init(frame: .zero)
             clipsToBounds = true
             layer.cornerCurve = .continuous
-            let gradient = layer as? CAGradientLayer
-            gradient?.colors = [
-                SecurityDetailPresentation.uiGroundTop.resolvedColor(with: traits).cgColor,
-                SecurityDetailPresentation.uiGroundBottom.resolvedColor(with: traits).cgColor,
-            ]
-            gradient?.startPoint = CGPoint(x: 0.5, y: 0)
-            gradient?.endPoint = CGPoint(x: 0.5, y: 1)
+            backgroundColor = SecurityDetailPresentation.uiGround.resolvedColor(with: traits)
         }
 
         @available(*, unavailable)

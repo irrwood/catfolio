@@ -142,6 +142,24 @@ struct SecurityPriceChartState: View {
     static let plotHeight: CGFloat = 330
     static let fixedHeight: CGFloat = plotHeight + 62
 
+    /// The one placeholder line of the price chart — on the opening card, while
+    /// the history loads and while it is prepared — drawn in the plot's own
+    /// geometry (`SecurityPricePlot`: 49pt axis, 15pt top inset, no leading
+    /// overflow, 9pt endpoint inset). The plot's first appearance grows out of
+    /// this same shape; three placeholders of three sizes had it jump twice
+    /// before the data came.
+    static func placeholderLine(appearanceID: String?) -> some View {
+        StandardLineChartSkeleton(
+            axisWidth: 49,
+            topInset: 15,
+            leadingLineOverflow: 0,
+            trailingEndpointInset: 9,
+            lineWidths: [2.5],
+            appearanceID: appearanceID,
+            showsAxis: false
+        )
+    }
+
     let title: String
     let message: String
     let isLoading: Bool
@@ -154,13 +172,7 @@ struct SecurityPriceChartState: View {
                     // The line alone, in the plot's own frame; the time picker
                     // is the real one from the start. Nothing here is swapped
                     // for something of another size when the data arrives.
-                    StandardLineChartSkeleton(
-                        leadingLineOverflow: 30,
-                        trailingEndpointInset: 9,
-                        lineWidths: [2.5],
-                        appearanceID: appearanceID,
-                        showsAxis: false
-                    )
+                    Self.placeholderLine(appearanceID: appearanceID)
                         .frame(height: Self.plotHeight)
 
                     ChartTimeRangePicker(selection: .constant(.oneDay))
@@ -261,9 +273,8 @@ struct SecurityPriceChart: View {
                 // Keep prepared data visible during refresh; only an empty
                 // chart needs the geometry-matched loading placeholder.
                 if isPreparing && prepared == nil {
-                    StandardLineChartSkeleton(leadingLineOverflow: 0, trailingEndpointInset: 9,
-                        lineWidths: [2.5], appearanceID: "security-price|\(history.ticker)|\(history.currency)",
-                        showsAxis: false)
+                    SecurityPriceChartState.placeholderLine(
+                        appearanceID: "security-price|\(history.ticker)|\(history.currency)")
                 } else if data.points.count > 1 {
                     SecurityPricePlot(
                         data: data,

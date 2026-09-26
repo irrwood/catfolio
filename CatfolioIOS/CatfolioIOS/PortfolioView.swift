@@ -237,7 +237,9 @@ struct PortfolioView: View {
                 }
                 .modifier(PortfolioFloatingFilterOverlay())
                 .securityDetailZoomHost(holdingZoomState, in: holdingPresentationZoom)
-                .sheet(item: $selectedHolding, onDismiss: {
+                // Full screen: the page is the whole screen, and the list
+                // behind it steps back while it is up.
+                .fullScreenCover(item: $selectedHolding, onDismiss: {
                     SecurityDetailMeasure.end()
                     holdingZoomState.didDismiss()
                     SecurityDetailSnapshotTransition.shared.presentationDidEnd()
@@ -248,7 +250,7 @@ struct PortfolioView: View {
                         // A swipe in from the edge closes it the same way.
                         .onAppear { SecurityDetailSnapshotTransition.shared.dismissAction = { selectedHolding = nil } }
                         .environment(model)
-                        .securityDetailSheet()
+                        .securityDetailFullScreen()
                         .securityDetailSnapshotBackdrop()
                         .securityDetailZoomTransition(holdingZoomState.activeSource, in: holdingPresentationZoom)
                         // Off unless the flag is set: A keeps its own path above.
