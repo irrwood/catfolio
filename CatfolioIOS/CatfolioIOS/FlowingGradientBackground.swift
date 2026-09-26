@@ -5,10 +5,17 @@
 
 import SwiftUI
 
-/// The home page's backdrop: the static gradient it has always had, or the
-/// flowing shader. Stored per device.
+/// The home page's backdrop: one of the shader variants, or the static
+/// gradient it has always had. Stored per device.
 enum HomeBackgroundStyle: String, CaseIterable, Identifiable {
+    /// Calm glow, kept behind the content card.
     case flowing
+    /// The same glow in the brighter night palette.
+    case flowingBright
+    /// Glows above and below the chart, never on it.
+    case flowingAroundChart
+    /// Glowing arcs behind the content card.
+    case rings
     case classic
 
     static let preferenceKey = "catfolio.homeBackgroundStyle"
@@ -18,7 +25,28 @@ enum HomeBackgroundStyle: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .flowing: L10n.text("动态")
+        case .flowingBright: L10n.text("动态 · 明亮")
+        case .flowingAroundChart: L10n.text("动态 · 避开图表")
+        case .rings: L10n.text("光环")
         case .classic: L10n.text("经典")
+        }
+    }
+
+    /// The shader to draw, or nil for the static classic backdrop.
+    var shaderPattern: FlowingGradientBackground.Pattern? {
+        switch self {
+        case .flowing, .flowingBright, .flowingAroundChart: .glow
+        case .rings: .rings
+        case .classic: nil
+        }
+    }
+
+    func palette(for colorScheme: ColorScheme) -> FlowingGradientPalette {
+        let dark = colorScheme == .dark
+        switch self {
+        case .flowing, .flowingAroundChart, .classic: return dark ? .night : .day
+        case .flowingBright: return dark ? .nightBright : .day
+        case .rings: return dark ? .ringsNight : .ringsDay
         }
     }
 }
@@ -28,39 +56,94 @@ struct FlowingGradientPalette {
     var baseBottom: Color
     var halo: Color
     var core: Color
+    /// The warm edge where the glow's colours split apart.
+    var fringe: Color
+    /// How far the split opens; 0 turns it off.
+    var dispersion: Double
     /// Film-grain amplitude. Keep > 0 on dark palettes to avoid banding.
     var grain: Double
     /// Overall glow strength, 0–1. Lower is calmer and darker.
-    var intensity: Double
+    var intensity: Double = 1
 
-    /// A deep navy ground with a calm blue glow, sampled from the reference
-    /// animation's quiet frames rather than its bright cyan peak.
+    /// A deep-blue ground with a calm blue glow, sampled from the calm
+    /// reference frame.
     static let night = FlowingGradientPalette(
         baseTop: Color(red: 0.012, green: 0.020, blue: 0.130),
         baseBottom: Color(red: 0.012, green: 0.020, blue: 0.130),
         halo: Color(red: 0.000, green: 0.420, blue: 0.710),
         core: Color(red: 0.000, green: 0.580, blue: 0.900),
+        fringe: Color(red: 1.000, green: 0.450, blue: 0.850),
+        dispersion: 2,
         grain: 0.035,
         intensity: 0.6
     )
 
     /// The home page's light gradient (Figma 223:31122, #9ADCFF to white)
-    /// set moving: a deeper sky halo with a near-white core drifts over it.
+    /// set moving: a vivid azure halo with a white core drifts over it.
     static let day = FlowingGradientPalette(
         baseTop: Color(red: 154 / 255, green: 220 / 255, blue: 1),
         baseBottom: .white,
-        halo: Color(red: 0.420, green: 0.780, blue: 1.000),
-        core: Color(red: 0.930, green: 0.980, blue: 1.000),
-        grain: 0.012,
-        intensity: 1
+        halo: Color(red: 0.300, green: 0.600, blue: 1.000),
+        core: .white,
+        // The pink-to-violet band beside a bright sky edge. It sits behind
+        // the glass card, so it can be brighter than the open sky above.
+        fringe: Color(red: 0.980, green: 0.600, blue: 0.820),
+        dispersion: 2,
+        grain: 0.012
     )
 
-    static func matching(_ colorScheme: ColorScheme) -> FlowingGradientPalette {
-        colorScheme == .dark ? .night : .day
-    }
+    /// For the arcs: a deeper blue so the bands read against the navy,
+    /// white rims and lit centres, and a peach warmth at the lower sides.
+    /// The earlier, brighter night: a vivid blue halo and a pale cyan core
+    /// at full strength.
+    static let nightBright = FlowingGradientPalette(
+        baseTop: Color(red: 0.012, green: 0.020, blue: 0.075),
+        baseBottom: Color(red: 0.012, green: 0.020, blue: 0.075),
+        halo: Color(red: 0.100, green: 0.520, blue: 1.000),
+        core: Color(red: 0.600, green: 1.000, blue: 1.000),
+        fringe: Color(red: 1.000, green: 0.450, blue: 0.850),
+        dispersion: 2,
+        grain: 0.035
+    )
+
+    static let ringsNight = FlowingGradientPalette(
+        baseTop: night.baseTop,
+        baseBottom: night.baseBottom,
+        halo: Color(red: 0.100, green: 0.400, blue: 1.000),
+        core: Color(red: 0.920, green: 0.970, blue: 1.000),
+        fringe: Color(red: 1.000, green: 0.620, blue: 0.450),
+        dispersion: 2,
+        grain: 0.035
+    )
+
+    static let ringsDay = FlowingGradientPalette(
+        baseTop: day.baseTop,
+        baseBottom: day.baseBottom,
+        halo: Color(red: 0.220, green: 0.480, blue: 1.000),
+        core: .white,
+        fringe: Color(red: 0.980, green: 0.600, blue: 0.620),
+        dispersion: 2,
+        grain: 0.012
+    )
+
 }
 
 struct FlowingGradientBackground: View {
+    enum Pattern {
+        /// Drifting soft halos (`flowingGradient` in the .metal file).
+        case glow
+        /// Concentric glowing arcs lit by the same drifting light (`flowingRings`).
+        case rings
+
+        var functionName: String {
+            switch self {
+            case .glow: "flowingGradient"
+            case .rings: "flowingRings"
+            }
+        }
+    }
+
+    var pattern: Pattern
     var palette: FlowingGradientPalette
     /// 1 = default pace. The reference animation is slow; 0.6–1.5 works well.
     var speed: Double
@@ -68,11 +151,17 @@ struct FlowingGradientBackground: View {
     var isPaused: Bool
     /// Vertical band the glow must stay out of (e.g. a chart), as fractions of
     /// the view height from the top: `0.12...0.52`. The glow then lives above
-    /// and below it, handing over between the two. `nil` = roam everywhere.
-    /// The background ignores safe areas, so measure against the full screen.
+    /// and below it, handing over between the two. `nil` = no band. The
+    /// background ignores safe areas, so measure against the full screen.
     var clearBand: ClosedRange<Double>?
+    /// The same band in points, for callers that know where the chart is
+    /// but not the view's height. Used when `clearBand` is nil.
+    var clearBandPoints: ClosedRange<CGFloat>?
     /// Softness of the band edges, as a fraction of the view height.
     var feather: Double
+    /// No glow is drawn above this y (in the view's own space); nil lets it
+    /// wander the whole view.
+    var glowTop: CGFloat?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
@@ -81,17 +170,23 @@ struct FlowingGradientBackground: View {
     @State private var start = Date.now
 
     init(
+        pattern: Pattern = .glow,
         palette: FlowingGradientPalette = .night,
         speed: Double = 1,
         isPaused: Bool = false,
+        glowTop: CGFloat? = nil,
         clearBand: ClosedRange<Double>? = nil,
+        clearBandPoints: ClosedRange<CGFloat>? = nil,
         feather: Double = 0.06
     ) {
+        self.clearBand = clearBand
+        self.clearBandPoints = clearBandPoints
+        self.feather = feather
+        self.pattern = pattern
         self.palette = palette
         self.speed = speed
         self.isPaused = isPaused
-        self.clearBand = clearBand
-        self.feather = feather
+        self.glowTop = glowTop
     }
 
     var body: some View {
@@ -99,12 +194,15 @@ struct FlowingGradientBackground: View {
         TimelineView(.animation(paused: paused)) { context in
             // With Reduce Motion on, show a single pleasant still frame.
             let time = reduceMotion ? 12 : context.date.timeIntervalSince(start) * speed
-            let band = clearBand.map { (Float($0.lowerBound), Float($0.upperBound)) } ?? (0, 0)
             Rectangle()
                 .fill(palette.baseBottom)
-                .visualEffect { [palette, feather] content, proxy in
-                    content.colorEffect(
-                        ShaderLibrary.flowingGradient(
+                .visualEffect { [pattern, palette, glowTop, clearBand, clearBandPoints, feather] content, proxy in
+                    let height = max(proxy.size.height, 1)
+                    let band = clearBand
+                        ?? clearBandPoints.map { Double($0.lowerBound / height)...Double($0.upperBound / height) }
+                    return content.colorEffect(
+                        // Both functions take the same arguments.
+                        Shader(function: ShaderFunction(library: .default, name: pattern.functionName), arguments: [
                             .float2(proxy.size),
                             .float(Float(time)),
                             .color(palette.baseTop),
@@ -112,10 +210,13 @@ struct FlowingGradientBackground: View {
                             .color(palette.halo),
                             .color(palette.core),
                             .float(Float(palette.grain)),
-                            .float2(band.0, band.1),
+                            .float(Float(min(max(glowTop ?? 0, 0), proxy.size.height))),
+                            .color(palette.fringe),
+                            .float(Float(palette.dispersion)),
+                            .float2(Float(band?.lowerBound ?? 0), Float(band?.upperBound ?? 0)),
                             .float(Float(feather)),
-                            .float(Float(palette.intensity))
-                        )
+                            .float(Float(palette.intensity)),
+                        ])
                     )
                 }
         }
@@ -134,16 +235,14 @@ struct FlowingGradientBackground: View {
 }
 
 #Preview("Avoid chart") {
-    GeometryReader { geo in
-        ZStack(alignment: .top) {
-            // Chart occupies 12%–52% of the height; glow stays above/below it.
-            FlowingGradientBackground(clearBand: 0.12...0.52)
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(.white.opacity(0.3), style: StrokeStyle(dash: [4]))
-                .frame(height: geo.size.height * 0.40 - 16)
-                .padding(.top, geo.size.height * 0.12 + 8)
-                .padding(.horizontal, 16)
-        }
-    }
-    .ignoresSafeArea() // measure fractions against the same full-screen height
+    // Chart occupies 12%–52% of the height; glow stays above/below it.
+    FlowingGradientBackground(palette: .night, clearBand: 0.12...0.52)
+}
+
+#Preview("Rings, night") {
+    FlowingGradientBackground(pattern: .rings, palette: .ringsNight, glowTop: 380)
+}
+
+#Preview("Day, below a card") {
+    FlowingGradientBackground(palette: .day, glowTop: 420)
 }

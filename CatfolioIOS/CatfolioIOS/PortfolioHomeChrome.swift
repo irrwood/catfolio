@@ -32,6 +32,20 @@ struct PortfolioHomePageBackdrop: View {
     let colorScheme: ColorScheme
     let scrollState: PortfolioHomeScrollState
 
+    private var backgroundStyle: HomeBackgroundStyle {
+        HomeBackgroundStyle(rawValue: backgroundStyleRawValue) ?? .flowing
+    }
+
+    /// The hero chart, plot top to range-picker bottom, on screen at rest.
+    /// The card sits directly under the hero, so the chart is found from the
+    /// card's resting top. Before that is measured the band covers the whole
+    /// screen, so nothing glows yet.
+    private var chartBand: ClosedRange<CGFloat> {
+        guard let cardTop = scrollState.restingSheetTop else { return 0...10_000 }
+        let heroTop = cardTop - PortfolioHeroChartLayout.sectionHeight
+        return (heroTop + PortfolioHeroChartLayout.plotTop - 8)...cardTop
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             (colorScheme == .light ? Color.white : Color.black)
@@ -41,11 +55,18 @@ struct PortfolioHomePageBackdrop: View {
             // the native ScrollView also makes rubber-banding reveal the same
             // background instead of a separate pale-blue extension band.
             Group {
-                if HomeBackgroundStyle(rawValue: backgroundStyleRawValue) != .classic {
+                if let pattern = backgroundStyle.shaderPattern {
                     FlowingGradientBackground(
-                        palette: .matching(colorScheme),
+                        pattern: pattern,
+                        palette: backgroundStyle.palette(for: colorScheme),
                         // Fully faded once the sheet has covered the hero.
-                        isPaused: !isOnScreen || scrollState.backdropProgress >= 1
+                        isPaused: !isOnScreen || scrollState.backdropProgress >= 1,
+                        // Until the card has reported its resting top (a frame
+                        // or two), no glow.
+                        glowTop: backgroundStyle == .flowingAroundChart
+                            ? nil
+                            : scrollState.restingSheetTop ?? .infinity,
+                        clearBandPoints: backgroundStyle == .flowingAroundChart ? chartBand : nil
                     )
                 } else if colorScheme == .dark {
                     PortfolioNightGlow(cardTop: scrollState.restingSheetTop, scrollState: scrollState)
