@@ -474,13 +474,20 @@ struct SecurityPricePlot: View {
         )
         .overlay(alignment: data.offscaleCost?.isAbove == true ? .topTrailing : .bottomTrailing) {
             if let cost = data.offscaleCost {
-                // Past the edge the arrow points to: above the top, or below.
-                Text(axisPriceLabel(cost.value))
-                    .font(Typography.number(.footnote, weight: .semibold))
-                    .foregroundStyle(CatfolioPalette.tradeBuy)
-                    .lineLimit(1)
-                    .frame(width: 49)
-                    .allowsHitTesting(false)
+                // A triangle on the outer side says which way the cost lies:
+                // above the top of the scale, or below its bottom. Half
+                // strength, as a figure off the chart.
+                VStack(spacing: 2) {
+                    if cost.isAbove { OffscaleCostTriangle(pointsUp: true) }
+                    Text(axisPriceLabel(cost.value))
+                        .font(Typography.number(.footnote, weight: .semibold))
+                        .lineLimit(1)
+                    if !cost.isAbove { OffscaleCostTriangle(pointsUp: false) }
+                }
+                .foregroundStyle(CatfolioPalette.tradeBuy)
+                .opacity(0.5)
+                .frame(width: 49)
+                .allowsHitTesting(false)
                     .accessibilityLabel(L10n.text("持仓成本 \(axisPriceLabel(cost.value))，不在当前价格范围内"))
             }
         }
@@ -591,7 +598,15 @@ final class SecurityPricePlotSeriesCache {
                 seriesID: "price"
             )
         }
-        let axis = Self.axisTicks(for: data.domain)
+        var axis = Self.axisTicks(for: data.domain)
+        // The cost's green figure owns its edge of the axis: a grey price
+        // within a label's height of it would print over it.
+        if let cost = data.offscaleCost {
+            let low = data.domain.lowerBound, high = data.domain.upperBound
+            let plotHeight = SecurityPriceChartState.plotHeight - 15
+            let clearance = 30 / plotHeight * (high - low)
+            axis.ticks.removeAll { cost.isAbove ? $0 > high - clearance : $0 < low + clearance }
+        }
         let value = Prepared(priceSeries: priceSeries, interactionDates: data.points.map(\.date),
                              yTicks: axis.ticks, yTickDecimals: axis.decimals, markers: markers)
         cachedKey = key
@@ -732,8 +747,10 @@ struct SecurityPriceRangeData: @unchecked Sendable {
         let values = normalizedPoints.map(\.price)
         let minimum = values.min() ?? 0
         let maximum = values.max() ?? 1
-        let minimumSpan = max(abs(maximum) * 0.02, 0.01)
-        let span = max(maximum - minimum, minimumSpan)
+        // No floor of a share of the price: a quiet day on VUSA (0.9 on 110)
+        // was stretched to 2%, and its line filled half the height another
+        // stock's filled. Only a price that did not move at all needs a span.
+        let span = max(maximum - minimum, max(abs(maximum) * 0.0005, 0.01))
         let padding = span * 0.12
         let validCost = averageCost.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
         let visibleCost = validCost.flatMap { cost -> Double? in
@@ -825,4 +842,20 @@ struct SecurityPricePlotPoint: Identifiable {
     let returnPercent: Double
 
     var id: String { dateText }
+}
+
+/// The small triangle beside a cost that lies off the price chart's scale.
+private struct OffscaleCostTriangle: View {
+    let pointsUp: Bool
+
+    var body: some View {
+        Path { path in
+            path.move(to: CGPoint(x: 0, y: pointsUp ? 5 : 0))
+            path.addLine(to: CGPoint(x: 8, y: pointsUp ? 5 : 0))
+            path.addLine(to: CGPoint(x: 4, y: pointsUp ? 0 : 5))
+            path.closeSubpath()
+        }
+        .frame(width: 8, height: 5)
+        .accessibilityHidden(true)
+    }
 }

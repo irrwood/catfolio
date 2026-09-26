@@ -195,6 +195,35 @@ struct PortfolioView: View {
                             }
                         }
                         #endif
+                        // Drives the open and close without touch, for the
+                        // frame measurement. Every holding is opened twice: a
+                        // security's caches are per-ticker, so the first open
+                        // of each is cold and its second is warm from the same
+                        // container — which is how the two runs are comparable.
+                        // Opt-in by launch argument, so it is inert otherwise.
+                        // Outside `#if DEBUG` so the measurement can run in
+                        // Release, where the timings mean something.
+                        if SecurityDetailMeasure.isAutoDriving {
+                            try? await Task.sleep(for: .seconds(5))
+                            let live = model.holdings.filter { holding in
+                                [todayBarZoom, holdingsRowZoom].contains { namespace in
+                                    SecurityDetailSnapshotTransition.shared.hasLiveSource(
+                                        id: holding.ticker, namespace: namespace)
+                                }
+                            }
+                            for cycle in 0..<2 {
+                                for holding in live {
+                                    let namespace = SecurityDetailSnapshotTransition.shared.hasLiveSource(
+                                        id: holding.ticker, namespace: todayBarZoom)
+                                        ? todayBarZoom : holdingsRowZoom
+                                    openHolding(holding, from: namespace)
+                                    try? await Task.sleep(for: .seconds(2.6))
+                                    selectedHolding = nil
+                                    try? await Task.sleep(for: .seconds(2.6))
+                                }
+                                _ = cycle
+                            }
+                        }
                     }
                 }
                 .overlay(alignment: .top) {
@@ -209,6 +238,7 @@ struct PortfolioView: View {
                 .modifier(PortfolioFloatingFilterOverlay())
                 .securityDetailZoomHost(holdingZoomState, in: holdingPresentationZoom)
                 .sheet(item: $selectedHolding, onDismiss: {
+                    SecurityDetailMeasure.end()
                     holdingZoomState.didDismiss()
                     SecurityDetailSnapshotTransition.shared.presentationDidEnd()
                 }) { holding in
@@ -221,8 +251,10 @@ struct PortfolioView: View {
                         .securityDetailSheet()
                         .securityDetailSnapshotBackdrop()
                         .securityDetailZoomTransition(holdingZoomState.activeSource, in: holdingPresentationZoom)
+                        // Off unless the flag is set: A keeps its own path above.
+                        .securityDetailNativeZoomDestination(holding.ticker, in: holdingPresentationZoom,
+                            enabled: SecurityDetailNativeZoom.isEnabled)
                 }
-                .securityDetailOpenFeedback(trigger: selectedHolding?.ticker, enabled: hapticsEnabled)
                 .navigationDestination(isPresented: $showsTodayDetail) {
                     TodayDetailView(
                         holdings: model.holdings,
@@ -244,6 +276,16 @@ struct PortfolioView: View {
     private func openHolding(_ holding: Holding, from namespace: Namespace.ID) {
         guard selectedHolding == nil, holdingZoomState.activeSource == nil,
               !homeScrollController.touchCaughtMotion else { return }
+        // The native-zoom control: the same sheet, presented with the row as a
+        // matched transition source. No opening card, no hand-off, no backdrop,
+        // no edge pan — none of A's machinery is attached on this path.
+        if SecurityDetailNativeZoom.isEnabled {
+            SecurityDetailMeasure.begin("native-zoom")
+            openFeedback()
+            selectedHolding = holding
+            return
+        }
+        SecurityDetailMeasure.begin("snapshot-a")
         // From a row on screen, a card and the row's logo fly to the sheet's
         // place first; the sheet is presented under them when they land.
         holdingZoomState.prepare(id: holding.ticker, namespace: namespace) {
@@ -255,12 +297,22 @@ struct PortfolioView: View {
                         .environment(\.locale, appLocale)
                         .fontDesign(.rounded))
                 },
-                present: { selectedHolding = holding }) {
-            case .snapshot: break
-            case .plain: selectedHolding = holding
+                present: { selectedHolding = holding },
+                cancelled: { holdingZoomState.didDismiss() }) {
+            case .snapshot: openFeedback()
+            case .plain:
+                openFeedback()
+                selectedHolding = holding
             case .busy: holdingZoomState.didDismiss()
             }
         }
+    }
+
+    /// The click is the tap's, in the same run-loop turn: tied to the page's
+    /// presentation it came only once the card had landed.
+    private func openFeedback() {
+        guard hapticsEnabled else { return }
+        UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 0.8)
     }
 
     @MainActor private func refreshFromUser() async {

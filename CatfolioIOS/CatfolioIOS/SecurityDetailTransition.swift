@@ -67,11 +67,26 @@ final class SecurityDetailSnapshotTransition {
     private weak var shade: UIView?
     private var overlay: UIView?
     private var settledActions: [() -> Void] = []
+    /// The settled actions a reveal has taken over, until its fade ends.
+    private var revealingActions: [() -> Void] = []
+    /// Settled actions held back by a close that started before the open had
+    /// settled: run if the close is called off, dropped if the page goes.
+    private var deferredSettledActions: [() -> Void] = []
     private var openingLogo: LogoFlight?
+    /// Watches for the reader's first touch on the page while the landed card
+    /// and logo still sit over it: they are pictures, and a page scrolled
+    /// under them left the logo standing where the header had been. A touch,
+    /// not the scroll view's offset: the scroll view may not exist yet when
+    /// the sheet reports in, and then its first scroll went unseen.
+    private weak var pageTouchWatcher: UIGestureRecognizer?
+    /// The flight while it is in the air, for a swipe that calls it off.
+    private var flightInAir: FlightInAir?
     private var closing: CloseSession?
     private weak var edgePan: UIScreenEdgePanGestureRecognizer?
 
     private(set) var isAnimating = false
+    /// Counts opens, so a late callback can tell whether its open is current.
+    private var openGeneration: UInt64 = 0
     /// From the tap until the page's content has faded in.
     private var isOpening = false
     /// The opening page's content is in the view tree — which can come
@@ -138,11 +153,11 @@ final class SecurityDetailSnapshotTransition {
         return frame.width > 1 && row.insetBy(dx: -1, dy: -1).contains(frame) ? frame : nil
     }
 
-    #if DEBUG
+    /// Whether a row is on screen for this key. The measurement's auto-drive
+    /// reads it in Release too, so it is not `#if DEBUG`.
     func hasLiveSource(id: AnyHashable, namespace: Namespace.ID) -> Bool {
         liveFrame(for: SourceKey(id: id, namespace: namespace)) != nil
     }
-    #endif
 
     // MARK: Open
 
@@ -150,7 +165,7 @@ final class SecurityDetailSnapshotTransition {
     /// presented only when they land — shown any earlier, it is drawn above
     /// this overlay and covers it from its first frame.
     func beginOpen(id: AnyHashable, namespace: Namespace.ID, opening: (() -> AnyView)? = nil,
-                   present: @escaping () -> Void) -> OpenStyle {
+                   present: @escaping () -> Void, cancelled: (() -> Void)? = nil) -> OpenStyle {
         guard !isAnimating, pending == nil else { return .busy }
         guard !UIAccessibility.isReduceMotionEnabled else { return .plain }
         let key = SourceKey(id: id, namespace: namespace)
@@ -160,6 +175,7 @@ final class SecurityDetailSnapshotTransition {
                             logoFrame: logoFrame(for: key, within: frame))
         isAnimating = true
         isOpening = true
+        openGeneration &+= 1
         contentHasAppeared = false
         settledActions = []
 
@@ -169,6 +185,10 @@ final class SecurityDetailSnapshotTransition {
 
         let scene = Scene(in: window, traits: window.traitCollection)
         overlay = scene.root
+        // Until the sheet is under it, the flight takes every touch: let
+        // through, a tap meant for the page's ✕ landed on the list below —
+        // its filter button, whose menu then opened over the page.
+        scene.root.isUserInteractionEnabled = true
         let card = scene.card
         card.frame = frame
         card.layer.cornerRadius = Self.sourceRadius(for: frame)
@@ -222,6 +242,7 @@ final class SecurityDetailSnapshotTransition {
         }
         motion.addCompletion { [weak self] _ in
             guard let self else { return }
+            self.flightInAir = nil
             // The card is where the sheet goes: present it, an empty shell of
             // the same ground, under the card.
             self.pending = flight
@@ -232,9 +253,19 @@ final class SecurityDetailSnapshotTransition {
             // overlay, and would be drawn over the card.
             self.raiseOverlay()
             // Never left waiting on a sheet that does not report in.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.reveal() }
+            let generation = self.openGeneration
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.reveal(generation)
+        }
         }
         motion.startAnimation()
+        flightInAir = FlightInAir(flight: flight, motion: motion, rowSnapshot: rowSnapshot, screen: screen,
+                                  startScale: frame.width / max(target.width, 1), cancelled: cancelled)
+        // A swipe to the right while the card is still in the air calls the
+        // open off: the card goes back into its row.
+        let swipe = UIPanGestureRecognizer(target: self, action: #selector(flightSwiped(_:)))
+        swipe.maximumNumberOfTouches = 1
+        scene.root.addGestureRecognizer(swipe)
         // The row gives way to the bare card in the first third of the flight.
         UIView.animate(withDuration: Self.openDuration * 0.4, delay: 0, options: [.curveEaseInOut]) {
             rowSnapshot.alpha = 0
@@ -252,12 +283,112 @@ final class SecurityDetailSnapshotTransition {
         self.shade = shade
         installEdgePan(on: surface)
         hideSystemDimming(around: surface)
+        watchFirstTouch(on: surface)
+        // From here the page itself is under the card, and its touches are its own.
+        overlay?.isUserInteractionEnabled = false
         raiseOverlay()
         // The sheet's own shade takes over from the overlay's.
         (overlay?.subviews.first)?.alpha = 0
         shade.alpha = 1
-        if contentHasAppeared { FrameWaiter.after(frames: 2) { [weak self] in self?.reveal() } }
+        if contentHasAppeared {
+            let generation = openGeneration
+            FrameWaiter.after(frames: 2) { [weak self] in self?.reveal(generation) }
+        }
         return true
+    }
+
+    /// The reader's first touch on the page — a scroll, a tap on ✕ — takes
+    /// the card and the flying logo away at once, so nothing is left behind.
+    private func watchFirstTouch(on surface: UIView) {
+        stopWatchingFirstTouch()
+        let watcher = UILongPressGestureRecognizer(target: self, action: #selector(pageTouched(_:)))
+        watcher.minimumPressDuration = 0
+        watcher.cancelsTouchesInView = false
+        watcher.delaysTouchesBegan = false
+        watcher.delaysTouchesEnded = false
+        watcher.delegate = FirstTouchDelegate.shared
+        surface.addGestureRecognizer(watcher)
+        pageTouchWatcher = watcher
+    }
+
+    private func stopWatchingFirstTouch() {
+        guard let watcher = pageTouchWatcher else { return }
+        watcher.view?.removeGestureRecognizer(watcher)
+        pageTouchWatcher = nil
+    }
+
+    @objc private func pageTouched(_ recognizer: UIGestureRecognizer) {
+        guard recognizer.state == .began else { return }
+        dropOpeningOverlay()
+    }
+
+    private func dropOpeningOverlay() {
+        stopWatchingFirstTouch()
+        finishOpeningNow().forEach { $0() }
+    }
+
+    /// Never in the way: the page's own scrolling and buttons see every touch.
+    private final class FirstTouchDelegate: NSObject, UIGestureRecognizerDelegate {
+        static let shared = FirstTouchDelegate()
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+    }
+
+    // MARK: Calling off the flight
+
+    fileprivate struct FlightInAir {
+        let flight: Flight
+        let motion: UIViewPropertyAnimator
+        let rowSnapshot: UIView
+        let screen: UIView?
+        /// The opening screen's scale at the row, where it started.
+        let startScale: CGFloat
+        let cancelled: (() -> Void)?
+    }
+
+    @objc private func flightSwiped(_ recognizer: UIPanGestureRecognizer) {
+        guard recognizer.state == .began, let view = recognizer.view else { return }
+        let velocity = recognizer.velocity(in: view)
+        guard velocity.x > abs(velocity.y) else { return }
+        cancelFlight()
+    }
+
+    /// The card, from wherever it is in the air, back into its row; the page
+    /// is never presented.
+    private func cancelFlight() {
+        guard let inAir = flightInAir, let root = overlay, let card = openingCard else { return }
+        flightInAir = nil
+        // Stopped where it is: the completion that would present the sheet
+        // does not run.
+        inAir.motion.stopAnimation(true)
+        openGeneration &+= 1
+        isOpening = false
+        settledActions = []
+        let logo = openingLogo
+        openingLogo = nil
+        let (row, rowLogo) = liveRowFrame(for: inAir.flight)
+        let dim = root.subviews.first
+        let back = UIViewPropertyAnimator(duration: Self.closeDuration, dampingRatio: 0.95) {
+            card.frame = row
+            card.layer.cornerRadius = Self.sourceRadius(for: row)
+            Self.place(inAir.rowSnapshot, at: .zero, scale: 1)
+            inAir.rowSnapshot.alpha = 1
+            Self.place(inAir.screen, at: .zero, scale: inAir.startScale)
+            inAir.screen?.alpha = 0
+            if let rowLogo { logo?.move(to: rowLogo) } else { logo?.view.alpha = 0 }
+            dim?.alpha = 0
+        }
+        back.addCompletion { [weak self] _ in
+            logo?.view.removeFromSuperview()
+            root.removeFromSuperview()
+            guard let self else { return }
+            if self.overlay === root { self.overlay = nil }
+            self.openingCard = nil
+            self.openingHost = nil
+            self.isAnimating = false
+            inAir.cancelled?()
+        }
+        back.startAnimation()
     }
 
     private func raiseOverlay() {
@@ -273,20 +404,25 @@ final class SecurityDetailSnapshotTransition {
         contentHasAppeared = true
         // Before the sheet has reported in, the claim starts the wait.
         guard presented != nil else { return }
-        FrameWaiter.after(frames: 2) { [weak self] in self?.reveal() }
+        let generation = openGeneration
+        FrameWaiter.after(frames: 2) { [weak self] in self?.reveal(generation) }
     }
 
     /// The live page is drawn under the card: the card and its logo fade off
     /// it, the page's own logo already in the same place underneath.
-    private func reveal() {
-        guard isOpening else { return }
+    /// `generation` is the open that scheduled this. A timer from an earlier
+    /// open, closed quickly, fired into the next one's flight and faded its
+    /// card off mid-air, leaving the flying logo alone before the page
+    /// flashed in.
+    private func reveal(_ generation: UInt64) {
+        guard isOpening, generation == openGeneration else { return }
         isOpening = false
         let card = openingCard
         let logo = openingLogo
         openingCard = nil
         openingLogo = nil
         let root = overlay
-        let actions = settledActions
+        revealingActions = settledActions
         settledActions = []
         if let surface { measureHeader(in: surface) }
         // Only the card fades. The flying logo stays whole until the card is
@@ -297,13 +433,46 @@ final class SecurityDetailSnapshotTransition {
             card?.alpha = 0
         } completion: { [weak self] _ in
             logo?.view.removeFromSuperview()
-            self?.openingHost = nil
             root?.removeFromSuperview()
-            if let self, self.overlay === root { self.overlay = nil }
-            self?.isAnimating = false
+            // An open already finished by a scroll or a close has moved on;
+            // the pieces above were its own, nothing else is.
+            guard let self, generation == self.openGeneration else { return }
+            self.stopWatchingFirstTouch()
+            self.openingHost = nil
+            if self.overlay === root { self.overlay = nil }
+            self.isAnimating = false
             // Only now: the page's lower cards are a heavy build.
+            let actions = self.revealingActions
+            self.revealingActions = []
             actions.forEach { $0() }
         }
+    }
+
+    /// Ends the open at once, without the reveal's fade: the landed card and
+    /// the flying logo go, and the live page under them is all there is.
+    /// For a reader who has already started to use the page — to scroll it,
+    /// or to close it — while the card still covered it.
+    ///
+    /// Returns the settled actions still to run (the page's lower cards).
+    @discardableResult
+    private func finishOpeningNow() -> [() -> Void] {
+        guard presented != nil, closing == nil, isOpening || overlay != nil else { return [] }
+        // Retires the reveal still to come, its deadline, and a fade already
+        // under way.
+        openGeneration &+= 1
+        isOpening = false
+        stopWatchingFirstTouch()
+        let actions = revealingActions + settledActions
+        revealingActions = []
+        settledActions = []
+        openingLogo?.view.removeFromSuperview()
+        openingLogo = nil
+        openingCard = nil
+        openingHost = nil
+        overlay?.removeFromSuperview()
+        overlay = nil
+        isAnimating = false
+        return actions
     }
 
     /// Whether the backdrop should leave this shade alone.
@@ -325,6 +494,11 @@ final class SecurityDetailSnapshotTransition {
 
     /// ✕: the page shrinks back into its row at once.
     func close(perform dismiss: @escaping () -> Void) {
+        // Pressed while the landed card still covers the page — the ✕ is
+        // the page's own, under it — the card goes and the close goes on.
+        // Swallowed here, it left the button dead for as long as the page
+        // took to draw.
+        deferredSettledActions = finishOpeningNow()
         guard !isAnimating else { return }
         guard let session = beginClose() else {
             dismiss()
@@ -363,6 +537,9 @@ final class SecurityDetailSnapshotTransition {
         if closing === session { closing = nil }
         if overlay === session.scene.root { overlay = nil }
         isAnimating = false
+        let deferred = deferredSettledActions
+        deferredSettledActions = []
+        if !dismissed { deferred.forEach { $0() } }
         if dismissed {
             presented = nil
             surface = nil
@@ -377,17 +554,21 @@ final class SecurityDetailSnapshotTransition {
 
     // MARK: Edge swipe
 
-    // The sheet's own pan is left alone. Switching it off stopped a fast
-    // flick into the top of the page part-way through the sheet's hand-off
-    // with its scroll view, which then stayed pulled down. The presenter sets
-    // `interactiveDismissDisabled` instead: the pull only rubber-bands.
+    // The sheet's own pan is left alone, and so is its pull-down to close.
+    // Switching the pan off stopped a fast flick into the top of the page
+    // part-way through the sheet's hand-off with its scroll view, which then
+    // stayed pulled down. The page's scroll view holds its own top instead
+    // (`HoldingDetailScrollBoundary`); the edge swipe is a second way out.
 
     /// The system's dimming views — one beside the sheet, one over the page
     /// behind it — take their colour only after the sheet appears, and darkened
     /// the page a second step after the card's fade. Hidden, not faded (UIKit
     /// animates their alpha itself) while the page is up; ours is the page's
     /// only shade. Shown again when it goes.
-    private var hiddenDimmingViews: [UIView] = []
+    /// Weak: a dimming view UIKit has since let go of is not ours to keep.
+    /// Only views this page hid are listed, and one shown again by someone
+    /// else in the meantime is left as it is.
+    private let hiddenDimmingViews = NSHashTable<UIView>.weakObjects()
 
     private func hideSystemDimming(around surface: UIView) {
         guard let window = surface.window else { return }
@@ -398,7 +579,7 @@ final class SecurityDetailSnapshotTransition {
             index += 1
             if String(describing: type(of: view)).contains("DimmingView"), !view.isHidden {
                 view.isHidden = true
-                hiddenDimmingViews.append(view)
+                hiddenDimmingViews.add(view)
                 continue
             }
             // The page's own content is no place for dimming views.
@@ -408,8 +589,10 @@ final class SecurityDetailSnapshotTransition {
     }
 
     private func restoreSystemDimming() {
-        hiddenDimmingViews.forEach { $0.isHidden = false }
-        hiddenDimmingViews = []
+        for view in hiddenDimmingViews.allObjects where view.isHidden {
+            view.isHidden = false
+        }
+        hiddenDimmingViews.removeAllObjects()
     }
 
     private func installEdgePan(on surface: UIView) {
@@ -423,7 +606,9 @@ final class SecurityDetailSnapshotTransition {
         let view = recognizer.view
         switch recognizer.state {
         case .began:
-            guard !isAnimating, closing == nil else { return }
+            guard closing == nil else { return }
+            deferredSettledActions += finishOpeningNow()
+            guard !isAnimating else { return }
             _ = beginClose()
         case .changed:
             closing?.drag(to: recognizer.translation(in: view).x)
@@ -446,6 +631,11 @@ final class SecurityDetailSnapshotTransition {
 
     /// The sheet is gone, however it went.
     func presentationDidEnd() {
+        stopWatchingFirstTouch()
+        // Nothing an open scheduled may run once its page has gone.
+        openGeneration &+= 1
+        revealingActions = []
+        deferredSettledActions = []
         restoreSystemDimming()
         presented = nil
         pending = nil

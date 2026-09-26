@@ -487,9 +487,13 @@ struct PortfolioRefreshTimestamp: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: cachedAt != nil ? 20 : 0)
-        .offset(y: cachedAt != nil ? 0 : -16)
-        .opacity(isRefreshing || cachedAt != nil ? 1 : 0)
+        // Never takes room: a line that came and went with the cache pushed
+        // the whole hero down 20pt at launch and pulled it back on refresh.
+        .frame(height: 0)
+        .offset(y: -16)
+        // The cached figures say they are cached through the amount's
+        // refresh glow; up here the line sat under the status bar.
+        .opacity(isRefreshing && cachedAt == nil ? 1 : 0)
         .animation(.easeOut(duration: 0.18), value: isRefreshing)
         .accessibilityHidden(!isRefreshing && cachedAt == nil)
         .accessibilityLabel(cachedAt.map { L10n.text("上次显示于 \($0.formatted(.dateTime.month().day().hour().minute().locale(appLocale)))") }

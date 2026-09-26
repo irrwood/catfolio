@@ -109,6 +109,10 @@ final class AppModel {
     @ObservationIgnored private var detailQuoteGeneration = 0
     @ObservationIgnored private var holdingDetailContent: [HoldingDetailContentKey: HoldingDetailCachedContent] = [:]
     @ObservationIgnored private var holdingDetailContentOrder: [HoldingDetailContentKey] = []
+    @ObservationIgnored private var holdingDetailMemoryObserver: NSObjectProtocol?
+    /// Each entry holds a page's whole history, volume profile, options and
+    /// research; a handful covers going back and forth between holdings.
+    static let holdingDetailCacheLimit = 8
     @ObservationIgnored private var returnsPageTask: Task<Void, Never>?
     @ObservationIgnored private var detailChartTask: Task<Void, Never>?
     @ObservationIgnored private var portfolioSourceTask: Task<Void, Never>?
@@ -506,15 +510,33 @@ final class AppModel {
         let key = HoldingDetailContentKey(source: portfolioSource,
             quote: LocalMarketQuoteKey.make(ticker: holding.ticker, currency: holding.quoteCurrency ?? "USD"),
             accounts: accounts.map(\.id).sorted())
+        observeMemoryWarningsForHoldingDetails()
         holdingDetailContentOrder.removeAll { $0 == key }
         holdingDetailContentOrder.append(key)
         if let cached = holdingDetailContent[key] { return cached }
         let content = HoldingDetailCachedContent()
         holdingDetailContent[key] = content
-        while holdingDetailContentOrder.count > 24 {
+        while holdingDetailContentOrder.count > Self.holdingDetailCacheLimit {
             holdingDetailContent.removeValue(forKey: holdingDetailContentOrder.removeFirst())
         }
         return content
+    }
+
+    /// Under memory pressure the kept pages go; an open page keeps its own
+    /// content, which it holds itself.
+    private func observeMemoryWarningsForHoldingDetails() {
+        guard holdingDetailMemoryObserver == nil else { return }
+        holdingDetailMemoryObserver = NotificationCenter.default.addObserver(
+            forName: Notification.Name("UIApplicationDidReceiveMemoryWarningNotification"),
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.clearHoldingDetailCache() }
+        }
+    }
+
+    func clearHoldingDetailCache() {
+        holdingDetailContent = [:]
+        holdingDetailContentOrder = []
     }
 
     /// `currency` stands in for a security that is not held, whose listing

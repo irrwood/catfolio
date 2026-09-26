@@ -270,6 +270,10 @@ struct CostMarketCard: View {
                     Text("·")
                         .foregroundStyle(.tertiary)
                 }
+                // Held back, not shown as "—", until the history behind it is
+                // prepared, so the row does not change twice at launch.
+                .opacity(prepared == nil ? 0 : 1)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: prepared == nil)
 
                 Button {
                     showsNetDeposit.toggle()
@@ -542,7 +546,9 @@ struct FastCostMarketPlot: View {
             appearanceID: "portfolio-assets",
             dataTransition: .viewportZoom,
             seriesChangeBounce: 12,
-            animatesInitialAppearance: true,
+            // No morph out of the loading lines at launch: the blue line
+            // slid from the placeholder's slope to its real level.
+            animatesInitialAppearance: false,
             selectedDate: selectedPoint?.date,
             measuredRange: measuredRange,
             selectionIndicatorLabel: selectionIndicatorLabel,

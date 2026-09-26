@@ -78,6 +78,9 @@ struct HoldingDetailContentView: View {
     /// each in its own frame, instead of all together with the first screen.
     @State private var lowerStage = 0
     @Environment(\.accessibilityReduceMotion) private var lowerStagesReduceMotion
+    /// True on the opening card's copy of this page: it shares this content's
+    /// structure, so it reports an appear while the real page is still building.
+    @Environment(\.securityDetailOpeningPlaceholder) private var isOpeningPlaceholder
     @State private var cardInsight: SecurityCardInsightRequest?
     @State private var marketDataRevision = 0
     @State private var completedMarketDataRevision: Int?
@@ -113,10 +116,25 @@ struct HoldingDetailContentView: View {
         lowerStage >= stage || showsVolumeFocusedPreview
     }
 
-    private static let lowerStageCount = 4
+    static let lowerStageCount = 4
+
+    /// Whether this page has been opened before with its data in hand.
+    static func lowerStagesCanSkip(_ cached: HoldingDetailCachedContent) -> Bool {
+        cached.profile != nil && cached.priceHistory != nil
+    }
 
     private func startLowerStages() {
         guard lowerStage == 0, !isPreview else { return }
+        // Opened before: the cards' data is still in the cache, so they come
+        // up whole and at once. `lowerStage` itself starts at 0 on every
+        // presentation, and stepping it again replayed the placeholders
+        // over data that was already there.
+        if Self.lowerStagesCanSkip(cachedContent) {
+            var transaction = Transaction(animation: nil)
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { lowerStage = Self.lowerStageCount }
+            return
+        }
         Task { @MainActor in
             for stage in 1...Self.lowerStageCount {
                 withAnimation(lowerStagesReduceMotion ? nil : .easeOut(duration: 0.25)) { lowerStage = stage }
@@ -267,7 +285,17 @@ struct HoldingDetailContentView: View {
                 .background(HoldingDetailScrollBoundary())
                 // Built under the landed card, which then fades off it.
                 .onAppear {
+                    // The opening card carries this same content while the real
+                    // page is still a picture behind it; the tag keeps the two
+                    // apart in the measurement.
+                    SecurityDetailMeasure.contentAppeared(
+                        tag: isOpeningPlaceholder ? "opening-card" : "real-page")
                     if !isPreview { SecurityDetailSnapshotTransition.shared.contentDidAppear() }
+                }
+                // The first frame that carries real data, which is what decides
+                // whether the page could have been grown live.
+                .onChange(of: priceHistory != nil, initial: true) { _, hasData in
+                    if hasData { SecurityDetailMeasure.dataAppeared() }
                 }
             }
             .accessibilityIdentifier("holding-detail-scroll")
@@ -472,6 +500,10 @@ struct HoldingDetailScrollBoundary: UIViewRepresentable {
     final class BoundaryView: UIView {
         override func didMoveToWindow() {
             super.didMoveToWindow()
+            if window == nil {
+                topLock = nil
+                lockedScrollView = nil
+            }
             removeInheritedRefreshControl()
             // SwiftUI may install its refresh control after attaching content.
             DispatchQueue.main.async { [weak self] in self?.removeInheritedRefreshControl() }
@@ -482,21 +514,37 @@ struct HoldingDetailScrollBoundary: UIViewRepresentable {
             removeInheritedRefreshControl()
         }
 
+        private var topLock: NSKeyValueObservation?
+        private weak var lockedScrollView: UIScrollView?
+
+        /// The page stops dead at its top — a fast flick into it pulled a
+        /// screen of empty ground down above the header — but keeps its
+        /// bounce at the bottom. A pull from the top moves the sheet itself.
+        private func lockTop(of scrollView: UIScrollView) {
+            guard lockedScrollView !== scrollView else { return }
+            lockedScrollView = scrollView
+            topLock = scrollView.observe(\.contentOffset, options: [.new]) { scrollView, _ in
+                let top = -scrollView.adjustedContentInset.top
+                if scrollView.contentOffset.y < top {
+                    scrollView.contentOffset.y = top
+                }
+            }
+        }
+
         func removeInheritedRefreshControl() {
+            // Found once: this runs on every layout pass, and the scroll view
+            // around the page does not change while the page is up.
+            if let scrollView = lockedScrollView, window != nil {
+                if scrollView.refreshControl != nil { scrollView.refreshControl = nil }
+                return
+            }
             var ancestor = superview
             while let view = ancestor {
                 if let scrollView = view as? UIScrollView {
                     if scrollView.refreshControl != nil {
                         scrollView.refreshControl = nil
                     }
-                    // The page stops dead at its top: a fast flick into it
-                    // pulled a screen of empty ground down above the header.
-                    // A pull from the top moves the sheet itself instead.
-                    if #available(iOS 17.4, *) {
-                        if scrollView.bouncesVertically { scrollView.bouncesVertically = false }
-                    } else if scrollView.bounces {
-                        scrollView.bounces = false
-                    }
+                    lockTop(of: scrollView)
                     return
                 }
                 ancestor = view.superview

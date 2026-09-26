@@ -198,9 +198,14 @@ struct HoldingQuoteTradeLayout: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? subviews.map { $0.sizeThatFits(.unspecified).width }.reduce(0, +)
         let sizes = geometry(width: width, subviews: subviews)
+        // Side by side, the quote alone sets the height: a readout for a day
+        // of several trades runs two or three rows, and reserving them pushed
+        // the fixed-height chart below down by that much — only for the
+        // securities with such a day. The extra rows lie over the top of the
+        // plot while the reader scrubs, which is when they show.
         let height = sizes.vertical
             ? sizes.quote.height + spacing + sizes.trade.height
-            : max(sizes.quote.height, sizes.trade.height)
+            : sizes.quote.height
         return CGSize(width: width, height: height)
     }
 

@@ -388,7 +388,9 @@ final class HoldingResearchCardLayoutTests: XCTestCase {
                 averageCost: 160, selectedAccountKeys: ["isa", "invest"], accountOptions: accounts)
                 .background(Color(uiColor: .systemGroupedBackground)),
                 width: 402, dark: dark, name: "stock-header-figma-\(dark ? "dark" : "light")", settle: .milliseconds(700))
-            XCTAssertLessThan(size.height, 710)
+            // The chart is a fixed 330pt plot (Figma 455-5530); with the
+            // header, picker and account cards the section measures ~715pt.
+            XCTAssertLessThan(size.height, 730)
             XCTAssertGreaterThan(size.height, 610)
         }
         let header = HoldingDetailHeader(holding: visibilityHolding("NVDA", name: "NVIDIA", shares: 83.4078),
