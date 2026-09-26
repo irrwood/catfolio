@@ -22,10 +22,30 @@ struct ReturnsSourcePreview: Codable, Equatable {
     /// No more points than the card is wide enough to show.
     static let samples = 48
 
-    static func sampled(_ values: [Double]) -> [Double] {
-        guard values.count > samples else { return values }
-        let step = Double(values.count - 1) / Double(samples - 1)
-        return (0..<samples).map { values[Int((Double($0) * step).rounded())] }
+    static func sampled(_ values: [Double], count: Int = samples) -> [Double] {
+        guard values.count > count, count > 1 else { return values }
+        let step = Double(values.count - 1) / Double(count - 1)
+        return (0..<count).map { values[Int((Double($0) * step).rounded())] }
+    }
+
+    /// What the card draws: the three holdings that carried the most over the
+    /// range, largest first, each as the running total of those before it —
+    /// the first layer is the largest source alone, the last all three. The
+    /// others band is left out: it is not a source the card can name.
+    func sourceLayers(limit: Int = 3) -> [[Double]] {
+        let ranked = bands
+            .filter { $0.colour != nil }
+            .map { band in (band.values, band.values.reduce(0) { $0 + max(0, $1) }) }
+            .filter { $0.1 > 0 }
+            .sorted { $0.1 > $1.1 }
+            .prefix(limit)
+        var layers: [[Double]] = []
+        for (values, _) in ranked {
+            let below = layers.last ?? Array(repeating: 0, count: values.count)
+            guard below.count == values.count else { continue }
+            layers.append(zip(below, values).map { $0 + max(0, $1) })
+        }
+        return layers
     }
 
     /// The gains alone, without the principal under them: on a card that
@@ -196,6 +216,9 @@ struct ReturnsSourceCards: View {
     }
 }
 
+/// Figma 448:5900: a tinted liquid-glass tile per chart. Gains rise from the
+/// bottom edge with the label on top; losses hang from the top edge with the
+/// label underneath, so the two read as a mirrored pair.
 private struct ReturnsSourceCard: View {
     @Environment(\.colorScheme) private var colorScheme
     let chart: ReturnsChartDestination
@@ -203,62 +226,90 @@ private struct ReturnsSourceCard: View {
     let isRefreshing: Bool
     let isUnavailable: Bool
 
+    static let height: CGFloat = 173
+    static let radius: CGFloat = 24
+    /// How far below the card's top edge the gains may rise — clear of the
+    /// label — and, mirrored, how far above the bottom edge losses may hang.
+    static let chartInset: CGFloat = 38
+
     private var isLosses: Bool { chart == .losses }
+    private var palette: ReturnsSourcePalette { ReturnsSourcePalette(isLosses: isLosses, scheme: colorScheme) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 6) {
-                Image(systemName: chart.icon)
-                    .font(.footnote.weight(.semibold))
-                Text(chart.title)
-                    .appText(.footnote, weight: .medium)
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
+        let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+        VStack(alignment: .leading, spacing: 12) {
+            if isLosses {
+                Spacer(minLength: 0)
+                headline
+                label
+            } else {
+                label
+                headline
+                Spacer(minLength: 0)
             }
-            .foregroundStyle(.secondary)
-
-            headline
-                .padding(.top, 10)
-            Text(subtitle)
-                .appText(.caption, weight: .medium)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .padding(.top, 2)
-            }
-            .padding([.horizontal, .top], 16)
-
-            // Edge to edge: the drawing runs to the card's sides and bottom
-            // and takes the card's own corners, with no inset frame around it.
-            ReturnsSourceMiniChart(preview: preview, hangsDown: isLosses)
-                .frame(height: 76)
-                .padding(.top, 14)
         }
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SettingsTemplate.card)
-        .clipShape(RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius, style: .continuous))
+        .frame(height: Self.height)
+        .background {
+            ReturnsSourceMiniChart(preview: preview, hangsDown: isLosses, palette: palette)
+                .padding(isLosses ? .bottom : .top, Self.chartInset)
+        }
+        .clipShape(shape)
+        .background { ReturnsSourceGlass(tint: palette.card, shape: shape) }
+        .contentShape(shape)
         .accessibilityElement(children: .combine)
+        .accessibilityValue(accessibilityValue)
+    }
+
+    private var label: some View {
+        HStack(spacing: 4) {
+            icon
+            Text(chart.title)
+                .appCaps(.footnote, weight: .bold)
+                .textCase(.uppercase)
+                .foregroundStyle(palette.label)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 4)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.tertiary)
+        }
+        .frame(height: 24)
+    }
+
+    @ViewBuilder
+    private var icon: some View {
+        if isLosses {
+            Image(systemName: "arrowtriangle.down")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(palette.label)
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(palette.label.opacity(0.1)))
+        } else {
+            Image(systemName: "mug.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(palette.label)
+                .frame(width: 18, height: 16)
+        }
     }
 
     @ViewBuilder
     private var headline: some View {
         if let preview {
-            let amount = isLosses ? -preview.headline : preview.headline
-            Text(DisplayFormat.money(amount, signed: amount != 0, fractionDigits: 0))
-                .appNumber(.heading, weight: .semibold)
-                .foregroundStyle(amount < 0 ? CatfolioTheme.loss(for: colorScheme)
-                                 : amount > 0 ? CatfolioTheme.gain(for: colorScheme) : .primary)
+            // The label says which way the money went; the figure is its size.
+            let amount = abs(preview.headline)
+            Text(DisplayFormat.money(amount, fractionDigits: 0))
+                .appNumber(.heading, weight: .medium)
+                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .contentTransition(.numericText(value: amount))
                 .refreshGlow(isActive: isRefreshing)
         } else {
             Text(isUnavailable ? "—" : " ")
-                .appNumber(.heading, weight: .semibold)
+                .appNumber(.heading, weight: .medium)
                 .foregroundStyle(.tertiary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(alignment: .leading) {
@@ -269,70 +320,123 @@ private struct ReturnsSourceCard: View {
         }
     }
 
-    private var subtitle: String {
-        if isLosses {
-            guard let preview else { return L10n.text("近 1 年") }
-            return preview.losingCount == 0
-                ? L10n.text("没有持仓低于成本")
-                : L10n.text("\(preview.losingCount) 只低于成本")
-        }
-        // The figure is the holdings' whole gain over their cost, as the
-        // page's header has it; only the drawing is this year's.
-        return L10n.text("持仓浮动收益")
+    private var accessibilityValue: String {
+        guard isLosses, let preview else { return "" }
+        return preview.losingCount == 0
+            ? L10n.text("没有持仓低于成本")
+            : L10n.text("\(preview.losingCount) 只低于成本")
     }
 }
 
-/// The bands stacked, with no axes: gains rise from the bottom edge, losses
-/// hang from the top one, as they do on their pages.
-private struct ReturnsSourceMiniChart: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let preview: ReturnsSourcePreview?
-    let hangsDown: Bool
+/// The card's colours from the Figma frame: green for gains, gold for losses.
+private struct ReturnsSourcePalette {
+    let label: Color
+    let card: Color
+    let curve: Color
+    let curveFade: Color
+
+    init(isLosses: Bool, scheme: ColorScheme) {
+        let dark = scheme == .dark
+        if isLosses {
+            label = dark ? Color(red: 0.922, green: 0.753, blue: 0) : Color(red: 0.62, green: 0.49, blue: 0)
+            card = Color(red: 0.686, green: 0.561, blue: 0).opacity(0.2)
+            curve = Color(red: 0.863, green: 0.776, blue: 0.027)
+            curveFade = curve
+        } else {
+            label = dark ? Color(red: 0, green: 0.686, blue: 0) : Color(red: 0, green: 0.56, blue: 0)
+            card = Color(red: 0, green: 0.686, blue: 0).opacity(0.2)
+            curve = dark ? Color(red: 0, green: 1, blue: 0) : Color(red: 0, green: 0.8, blue: 0)
+            curveFade = Color(red: 0.494, green: 1, blue: 0.494)
+        }
+    }
+}
+
+/// Liquid glass on iOS 26, tinted with the card's colour; a tinted material
+/// before it.
+private struct ReturnsSourceGlass: View {
+    let tint: Color
+    let shape: RoundedRectangle
 
     var body: some View {
-        if let preview, let count = preview.bands.first?.values.count, count > 1 {
+        if #available(iOS 26.0, *) {
+            Color.clear.glassEffect(.regular.tint(tint).interactive(), in: shape)
+        } else {
+            shape.fill(.ultraThinMaterial).overlay(shape.fill(tint))
+        }
+    }
+}
+
+/// The three largest sources as layered areas, with no axes: the back layer
+/// is all three together, faint; the front one the largest source alone.
+private struct ReturnsSourceMiniChart: View {
+    let preview: ReturnsSourcePreview?
+    let hangsDown: Bool
+    let palette: ReturnsSourcePalette
+
+    /// Few enough points that each turn of the curve can be rounded off, as
+    /// in the design, without the line going soft.
+    private static let points = 14
+
+    var body: some View {
+        let layers = (preview?.sourceLayers() ?? []).map { ReturnsSourcePreview.sampled($0, count: Self.points) }
+        if let count = layers.first?.count, count > 1,
+           let peak = layers.last?.max(), peak > 0.5 {
             Canvas { context, size in
-                let totals = (0..<count).map { day in preview.bands.reduce(0) { $0 + $1.values[day] } }
-                guard let highest = totals.max(), highest > 0.5 else {
-                    // Nothing to stack — no holding below cost all year: the
-                    // axis alone, where the bands would start.
-                    let y: CGFloat = hangsDown ? 0.5 : size.height - 0.5
-                    var axis = Path()
-                    axis.move(to: CGPoint(x: 0, y: y))
-                    axis.addLine(to: CGPoint(x: size.width, y: y))
-                    context.stroke(axis, with: .color(.secondary.opacity(0.35)), lineWidth: 1)
-                    return
-                }
-                let peak = highest
-                var floor = [Double](repeating: 0, count: count)
-                func point(_ day: Int, _ height: Double) -> CGPoint {
-                    let x = size.width * CGFloat(day) / CGFloat(count - 1)
-                    let depth = size.height * CGFloat(height / peak)
-                    return CGPoint(x: x, y: hangsDown ? depth : size.height - depth)
-                }
-                for band in preview.bands {
-                    let ceiling = zip(floor, band.values).map { $0 + $1 }
-                    var path = Path()
-                    path.move(to: point(0, ceiling[0]))
-                    for day in 1..<count { path.addLine(to: point(day, ceiling[day])) }
-                    for day in stride(from: count - 1, through: 0, by: -1) { path.addLine(to: point(day, floor[day])) }
-                    path.closeSubpath()
-                    context.fill(path, with: .color(color(for: band)))
-                    floor = ceiling
+                // Back to front: all three, then two, then the largest alone.
+                for (depth, layer) in layers.enumerated().reversed() {
+                    let isBack = depth == layers.count - 1 && layers.count > 1
+                    let area = path(layer, peak: peak, size: size)
+                    // Full colour at the layer's peak, down to a tenth a
+                    // half the chart's height beyond it, most of it early, as in
+                    // the design — so the low stretches stay dark.
+                    let top = area.boundingRect
+                    let fade = size.height * 0.5
+                    let start = CGPoint(x: 0, y: hangsDown ? top.maxY : top.minY)
+                    let end = CGPoint(x: 0, y: hangsDown ? top.maxY - fade : top.minY + fade)
+                    context.drawLayer { layerContext in
+                        layerContext.opacity = isBack ? 0.2 : 1
+                        layerContext.fill(area, with: .linearGradient(
+                            Gradient(stops: [
+                                .init(color: palette.curve, location: 0),
+                                .init(color: palette.curve.opacity(0.4), location: 0.3),
+                                .init(color: palette.curveFade.opacity(0.1), location: 1),
+                            ]),
+                            startPoint: start, endPoint: end))
+                    }
                 }
             }
             .transition(.opacity)
-        } else {
-            // The card's corners clip it; it needs none of its own.
-            Rectangle().fill(Color.primary.opacity(0.05))
+        } else if preview != nil {
+            // Nothing to stack — no holding below cost all year: the axis
+            // alone, where the layers would start.
+            Rectangle()
+                .fill(palette.label.opacity(0.3))
+                .frame(height: 1)
+                .frame(maxHeight: .infinity, alignment: hangsDown ? .top : .bottom)
         }
     }
 
-    /// Each holding keeps its pages' colour. The others take the loss page's
-    /// grey on both cards: the gain page's deep grey is set for its purple
-    /// field and reads as a hole on a white card.
-    private func color(for band: ReturnsSourcePreview.Band) -> Color {
-        guard let colour = band.colour else { return LossAnalysisChart.color(for: .others, scheme: colorScheme) }
-        return HoldingContributionChart.color(for: .holding(colour: colour), scheme: colorScheme)
+    /// The layer's outline with each corner rounded: a quadratic through the
+    /// midpoints, so the line passes near every day without overshooting.
+    private func path(_ values: [Double], peak: Double, size: CGSize) -> Path {
+        let count = values.count
+        let points = values.enumerated().map { day, value -> CGPoint in
+            let x = size.width * CGFloat(day) / CGFloat(count - 1)
+            let depth = size.height * CGFloat(value / peak)
+            return CGPoint(x: x, y: hangsDown ? depth : size.height - depth)
+        }
+        let edge: CGFloat = hangsDown ? 0 : size.height
+        var path = Path()
+        path.move(to: CGPoint(x: 0, y: edge))
+        path.addLine(to: points[0])
+        for index in 1..<count {
+            let previous = points[index - 1], point = points[index]
+            let middle = CGPoint(x: (previous.x + point.x) / 2, y: (previous.y + point.y) / 2)
+            path.addQuadCurve(to: middle, control: previous)
+        }
+        path.addLine(to: points[count - 1])
+        path.addLine(to: CGPoint(x: size.width, y: edge))
+        path.closeSubpath()
+        return path
     }
 }
