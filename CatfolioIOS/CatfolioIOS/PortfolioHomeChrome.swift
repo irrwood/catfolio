@@ -25,6 +25,10 @@ struct PortfolioHomeTopBackground: View {
 
 struct PortfolioHomePageBackdrop: View {
     @Environment(\.locale) private var appLocale
+    @AppStorage(HomeBackgroundStyle.preferenceKey) private var backgroundStyleRawValue = HomeBackgroundStyle.flowing.rawValue
+    /// The tab keeps this view alive while another tab is showing; the
+    /// shader's clock stops then rather than drawing frames nobody sees.
+    @State private var isOnScreen = false
     let colorScheme: ColorScheme
     let scrollState: PortfolioHomeScrollState
 
@@ -37,7 +41,13 @@ struct PortfolioHomePageBackdrop: View {
             // the native ScrollView also makes rubber-banding reveal the same
             // background instead of a separate pale-blue extension band.
             Group {
-                if colorScheme == .dark {
+                if HomeBackgroundStyle(rawValue: backgroundStyleRawValue) != .classic {
+                    FlowingGradientBackground(
+                        palette: .matching(colorScheme),
+                        // Fully faded once the sheet has covered the hero.
+                        isPaused: !isOnScreen || scrollState.backdropProgress >= 1
+                    )
+                } else if colorScheme == .dark {
                     PortfolioNightGlow(cardTop: scrollState.restingSheetTop, scrollState: scrollState)
                 } else {
                     PortfolioHomeTopBackground(colorScheme: colorScheme)
@@ -48,6 +58,8 @@ struct PortfolioHomePageBackdrop: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea()
+        .onAppear { isOnScreen = true }
+        .onDisappear { isOnScreen = false }
     }
 }
 

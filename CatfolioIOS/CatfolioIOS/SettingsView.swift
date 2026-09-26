@@ -104,6 +104,7 @@ struct SettingsView: View {
     @AppStorage(DisplayCurrency.preferenceKey) private var displayCurrencyRawValue = DisplayCurrency.usd.rawValue
     @AppStorage(CompanyNameDisplay.preferenceKey) private var companyNameDisplayRawValue = CompanyNameDisplay.original.rawValue
     @AppStorage(AssetLogoStyle.preferenceKey) private var assetLogoStyleRawValue = AssetLogoStyle.automatic.rawValue
+    @AppStorage(HomeBackgroundStyle.preferenceKey) private var homeBackgroundStyleRawValue = HomeBackgroundStyle.flowing.rawValue
     @State private var showsCSVImport = false
     @State private var showsTrading212 = false
     @State private var showsIBKRFlex = false
@@ -113,7 +114,6 @@ struct SettingsView: View {
     @State private var showsPortfolioResetConfirmation = false
     @State private var isResettingPortfolio = false
     @State private var portfolioResetError: String?
-    @State private var showsFlowingGradient = LaunchArguments.contains("--show-flowing-gradient")
     @State private var reconciliation: LedgerReconciliation.Report?
     #if DEBUG
     @State private var showsRotationPreview = LaunchArguments.contains("--show-sector-rotation")
@@ -226,6 +226,18 @@ struct SettingsView: View {
                         Text(L10n.label(appearance.title)).tag(appearance.rawValue)
                     }
                 }
+
+                SettingsMenuRow(
+                    icon: .symbol("sparkles"),
+                    title: L10n.text("首页背景"),
+                    value: HomeBackgroundStyle(rawValue: homeBackgroundStyleRawValue)?.title ?? HomeBackgroundStyle.flowing.title,
+                    selection: $homeBackgroundStyleRawValue
+                ) {
+                    ForEach(HomeBackgroundStyle.allCases) { style in
+                        Text(style.title).tag(style.rawValue)
+                    }
+                }
+                .accessibilityIdentifier("settings.homeBackground")
 
                 SettingsMenuRow(
                     icon: .symbol("square.on.square"),
@@ -381,10 +393,6 @@ struct SettingsView: View {
                     ToastCenter.shared.show(sample.0, kind: sample.1)
                 }
                 .accessibilityIdentifier("settings.test-toast")
-                SettingsButtonRow(icon: .symbol("sparkles"), title: L10n.text("动态背景预览")) {
-                    showsFlowingGradient = true
-                }
-                .accessibilityIdentifier("settings.flowing-gradient")
             }
         }
         .tracksRootTabBarScroll()
@@ -392,7 +400,6 @@ struct SettingsView: View {
             .navigationDestination(isPresented: $showsTransitionMeasurePanel) {
                 SecurityDetailMeasurePanel()
             }
-            .fullScreenCover(isPresented: $showsFlowingGradient) { FlowingGradientPreview() }
             #if DEBUG
             .navigationDestination(isPresented: $showsRotationPreview) { SectorRotationView() }
             .navigationDestination(isPresented: $showsStockChartsPreview) { StockChartsRotationView() }

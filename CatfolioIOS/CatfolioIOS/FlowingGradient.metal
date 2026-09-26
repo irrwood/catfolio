@@ -49,13 +49,16 @@ float2 path(float t, float aspect) {
 /// - color:     original layer colour (ignored)
 /// - size:      view size in points
 /// - time:      seconds since the animation started
-/// - baseColor / haloColor / coreColor: background, outer glow, hot centre
+/// - baseTop / baseBottom: background, blended top to bottom (pass the same
+///   colour twice for a flat ground)
+/// - haloColor / coreColor: outer glow, hot centre
 /// - grain:     film-grain amplitude, ~0.03 is subtle; 0 disables
 [[ stitchable ]] half4 flowingGradient(float2 position,
                                        half4 color,
                                        float2 size,
                                        float time,
-                                       half4 baseColor,
+                                       half4 baseTop,
+                                       half4 baseBottom,
                                        half4 haloColor,
                                        half4 coreColor,
                                        float grain) {
@@ -83,7 +86,8 @@ float2 path(float t, float aspect) {
     float2 c2 = path(time * 0.8 + 37.0, aspect) * float2(-0.9, -1.0);
     float glow = 0.28 * blob(p, c2, float2(0.26, 0.34), -angle);
 
-    float3 col = float3(baseColor.rgb);
+    float3 col = mix(float3(baseTop.rgb), float3(baseBottom.rgb),
+                     saturate(position.y / max(size.y, 1.0)));
     col = mix(col, float3(haloColor.rgb), saturate(halo + glow));
     col = mix(col, float3(coreColor.rgb), smoothstep(0.0, 1.0, core));
 
