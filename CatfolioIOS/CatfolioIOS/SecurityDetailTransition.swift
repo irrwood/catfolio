@@ -246,7 +246,9 @@ final class SecurityDetailSnapshotTransition {
         let motion = UIViewPropertyAnimator(duration: Self.openDuration, dampingRatio: 0.9) {
             card.frame = target
             card.layer.cornerRadius = SecurityDetailPresentation.cornerRadius
-            Self.place(rowSnapshot, at: .zero, scale: widthScale)
+            // Onto the page's header row, below the status bar, so the row
+            // and the header it becomes are one row, not two.
+            Self.place(rowSnapshot, at: Self.rowInPage(top: top), scale: widthScale)
             Self.place(screen, at: .zero, scale: 1)
             logo?.land()
             scene.dim.alpha = 1
@@ -775,6 +777,8 @@ final class SecurityDetailSnapshotTransition {
 
         /// Home to the row, from wherever the card is now.
         func finish(dismiss: @escaping () -> Void) {
+            // Before the dismissal takes the page out of its window.
+            let top = surface?.window?.safeAreaInsets.top ?? scene.root.window?.safeAreaInsets.top ?? 0
             var transaction = Transaction(animation: nil)
             transaction.disablesAnimations = true
             withTransaction(transaction) { dismiss() }
@@ -786,7 +790,8 @@ final class SecurityDetailSnapshotTransition {
             row.alpha = 0
             row.layer.mask = nil
             let current = scene.card.frame
-            SecurityDetailSnapshotTransition.place(row, size: rowSize, at: .zero,
+            SecurityDetailSnapshotTransition.place(row, size: rowSize,
+                                                   at: SecurityDetailSnapshotTransition.rowInPage(top: top),
                                                    scale: current.width / max(rowSize.width, 1))
             let landsLogo = logo != nil && target.logo != nil && flight.logoFrame != nil
             if landsLogo, let rowLogo = flight.logoFrame {
@@ -964,6 +969,13 @@ final class SecurityDetailSnapshotTransition {
             ancestor = view.superview
         }
         return marker.window ?? marker
+    }
+
+    /// Where a row sits on the full-screen page: over its header row, which
+    /// starts 20pt below the status bar and is 56pt tall — the row's own
+    /// middle on the header's middle.
+    fileprivate static func rowInPage(top: CGFloat) -> CGPoint {
+        CGPoint(x: 0, y: top + 16)
     }
 
     /// Rows are square-edged and bars are rounded; a card that starts as a
