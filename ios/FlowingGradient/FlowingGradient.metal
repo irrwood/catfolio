@@ -33,6 +33,26 @@ float blob(float2 p, float2 center, float2 radii, float angle) {
     return exp(-dot(d, d));
 }
 
+// Organic glow: three soft ellipses orbiting a shared centre, each with its
+// own stretch and continuously turning axis, merged with a screen blend.
+// The outline keeps morphing instead of reading as one tilting ellipse.
+float cluster(float2 p, float2 center, float2 radii, float t, float seed) {
+    float acc = 0.0;
+    for (int i = 0; i < 3; ++i) {
+        float fi = float(i);
+        float ph = seed + fi * 2.094;
+        float2 off = radii * 0.55 * float2(sin(t * (0.23 + 0.07 * fi) + ph),
+                                           cos(t * (0.19 + 0.05 * fi) + ph * 1.3));
+        float s = 1.0 + 0.35 * sin(t * (0.31 + 0.06 * fi) + ph);
+        float dir = (i == 1) ? -1.0 : 1.0;
+        float a = ph + dir * t * (0.11 + 0.05 * fi) + 0.6 * sin(t * 0.17 + ph);
+        float2 r = radii * (0.72 + 0.12 * fi) * float2(s, 1.0 / s);
+        float b = blob(p, center + off, r, a);
+        acc = 1.0 - (1.0 - acc) * (1.0 - b);
+    }
+    return acc;
+}
+
 // Wandering path built from incommensurate sines so it never visibly loops.
 // x is scaled by `aspect` so the blob reaches the left/right edges (and a bit
 // beyond) on any screen shape; y stays in height units.
@@ -51,6 +71,11 @@ float2 path(float t, float aspect) {
 /// - time:      seconds since the animation started
 /// - baseColor / haloColor / coreColor: background, outer glow, hot centre
 /// - grain:     film-grain amplitude, ~0.03 is subtle; 0 disables
+/// - clearBand: (top, bottom) of a horizontal band, as fractions of the view
+///              height, that the glow must stay out of (e.g. a chart). When
+///              bottom <= top the glow roams the whole screen instead.
+/// - feather:   softness of the band edges, as a fraction of the height
+/// - intensity: overall strength of the glow, 0–1 (0.5 is calm, 1 is vivid)
 [[ stitchable ]] half4 flowingGradient(float2 position,
                                        half4 color,
                                        float2 size,
@@ -58,34 +83,79 @@ float2 path(float t, float aspect) {
                                        half4 baseColor,
                                        half4 haloColor,
                                        half4 coreColor,
-                                       float grain) {
+                                       float grain,
+                                       float2 clearBand,
+                                       float feather,
+                                       float intensity) {
     float aspect = size.x / max(size.y, 1.0);
 
-    // Centred coordinates in height units: y ∈ [-0.5, 0.5].
+    // Centred coordinates in height units: y ∈ [-0.5, 0.5], top is negative.
     float2 p = (position - 0.5 * size) / max(size.y, 1.0);
+    float bandY = p.y; // unwarped, so the clear band keeps straight edges
 
     // Gentle domain warp so the blob edges feel organic rather than elliptical.
-    p += 0.035 * float2(sin(p.y * 6.0 + time * 0.50),
-                        sin(p.x * 7.0 - time * 0.37 + 1.3));
+    p += 0.045 * float2(sin(p.y * 5.0 + time * 0.50),
+                        sin(p.x * 6.0 - time * 0.37 + 1.3));
+    p += 0.018 * float2(sin(p.y * 13.0 - time * 0.71 + 2.0),
+                        sin(p.x * 11.0 + time * 0.63));
 
-    // Shape: breathes between tall-narrow and wide-short, and slowly tilts.
-    float stretch = 1.0 + 0.45 * sin(time * 0.29 + 0.8);
-    float angle   = 0.9 * sin(time * 0.13);
+    float halo, core, glow;
+    if (clearBand.y <= clearBand.x) {
+        // Free roaming. The core trails the halo slightly so the hot spot
+        // shifts inside the glow instead of sitting dead centre.
+        halo = cluster(p, path(time, aspect),       float2(0.34, 0.34), time, 0.0);
+        core = cluster(p, path(time - 0.9, aspect), float2(0.15, 0.15), time - 0.9, 0.0);
 
-    // Main halo + core. The core trails the halo slightly so the hot spot
-    // shifts inside the glow instead of sitting dead centre.
-    float2 c0 = path(time, aspect);
-    float2 c1 = path(time - 0.9, aspect);
-    float halo = blob(p, c0, float2(0.34 * stretch, 0.34 / stretch), angle);
-    float core = blob(p, c1, float2(0.15 * stretch, 0.15 / stretch), angle);
+        // Dimmer secondary glow on a different path, for depth.
+        float2 c2 = path(time * 0.8 + 37.0, aspect) * float2(-0.9, -1.0);
+        glow = 0.28 * cluster(p, c2, float2(0.26, 0.34), time, 4.0);
+    } else {
+        // Zoned: one glow above the band, one below it. The light never
+        // crosses the band; instead emphasis slowly hands over between zones
+        // while each glow drifts sideways within its own zone.
+        float y0 = clearBand.x - 0.5;
+        float y1 = clearBand.y - 0.5;
+        float topY = min(0.5 * (-0.5 + y0), y0 - 0.16);
+        float botY = max(0.5 * (y1 + 0.5), y1 + 0.16);
+        float botAmp = max(0.0, 0.5 * (0.5 - y1) - 0.12);
 
-    // Dimmer secondary glow on a different path, for depth.
-    float2 c2 = path(time * 0.8 + 37.0, aspect) * float2(-0.9, -1.0);
-    float glow = 0.28 * blob(p, c2, float2(0.26, 0.34), -angle);
+        float wTop = smoothstep(-0.6, 0.6, sin(time * 0.09 + 1.0));
+        float wBot = 1.0 - wTop;
+
+        float2 ct0 = float2(path(time,        aspect).x, topY + 0.04 * sin(time * 0.23));
+        float2 ct1 = float2(path(time - 0.9,  aspect).x, topY + 0.04 * sin((time - 0.9) * 0.23));
+        float2 cb0 = float2(path(time + 19.0, aspect).x, botY + botAmp * sin(time * 0.19 + 0.7));
+        float2 cb1 = float2(path(time + 18.1, aspect).x, botY + botAmp * sin((time - 0.9) * 0.19 + 0.7));
+
+        float2 topHalo = float2(0.38, 0.19);
+        float2 topCore = float2(0.17, 0.09);
+        float2 botHalo = float2(0.34, 0.26);
+        float2 botCore = float2(0.15, 0.12);
+
+        float topH = cluster(p, ct0, topHalo, time, 1.0);
+        float botH = cluster(p, cb0, botHalo, time, 5.0);
+        halo = wTop * topH + wBot * botH;
+        core = wTop * cluster(p, ct1, topCore, time - 0.9, 1.0)
+             + wBot * cluster(p, cb1, botCore, time - 0.9, 5.0);
+        // Keep a faint ember in whichever zone is resting.
+        glow = 0.30 * (wBot * topH + wTop * botH);
+
+        // Hard guarantee: nothing lights the band itself.
+        float f = max(feather, 0.001);
+        float inBand = smoothstep(y0 - f, y0 + f, bandY) * (1.0 - smoothstep(y1 - f, y1 + f, bandY));
+        float mask = 1.0 - inBand;
+        halo *= mask;
+        core *= mask;
+        glow *= mask;
+    }
+
+    halo *= intensity;
+    glow *= intensity;
+    core *= intensity;
 
     float3 col = float3(baseColor.rgb);
     col = mix(col, float3(haloColor.rgb), saturate(halo + glow));
-    col = mix(col, float3(coreColor.rgb), smoothstep(0.0, 1.0, core));
+    col = mix(col, float3(coreColor.rgb), smoothstep(0.0, 1.0, saturate(core)));
 
     // Animated grain (also acts as dither against 8-bit banding).
     float n = hash12(position + fract(time * 7.0) * float2(97.0, 131.0)) - 0.5;
