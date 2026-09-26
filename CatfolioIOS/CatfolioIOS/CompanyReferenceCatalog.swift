@@ -264,7 +264,10 @@ struct CompanyReferenceCatalog: Decodable, Sendable {
     /// a market inferred from the symbol's shape.
     func entry(brokerSymbol: String, defaultMarket: String = "US") -> Entry? {
         let symbol = brokerSymbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        if let key = brokerAliases[symbol], let entry = entries[key] { return entry }
+        // A renamed listing resolves under whichever code the snapshot used.
+        for code in TickerRenames.equivalents(of: symbol) {
+            if let key = brokerAliases[code], let entry = entries[key] { return entry }
+        }
         return entry(symbol: symbol, market: defaultMarket)
     }
 

@@ -523,9 +523,15 @@ struct TodayContributionBar: View {
     }
 
     private var amountText: String {
-        DisplayCurrency.current.fromUSD(abs(amount)).formatted(
-            .number.precision(.fractionLength(2))
-        )
+        Self.barAmountText(DisplayCurrency.current.fromUSD(abs(amount)))
+    }
+
+    /// Whole units on a bar — "273", not "272.81" — except below one, where
+    /// the decimals are all there is ("0.64").
+    static func barAmountText(_ value: Double) -> String {
+        value < 1
+            ? value.formatted(.number.precision(.fractionLength(2)))
+            : value.formatted(.number.precision(.fractionLength(0)))
     }
 
     /// The same amount, abbreviated. Pence are noise at this magnitude, so
@@ -544,11 +550,7 @@ struct TodayContributionBar: View {
     }
 
     private var amountBubble: some View {
-        Text(
-            DisplayCurrency.current.fromUSD(abs(amount)).formatted(
-                .number.precision(.fractionLength(2))
-            )
-        )
+        Text(Self.barAmountText(DisplayCurrency.current.fromUSD(abs(amount))))
             .appNumber(.micro, weight: .bold)
             .foregroundStyle(colorScheme == .dark ? Color.white : accent)
             .lineLimit(1)

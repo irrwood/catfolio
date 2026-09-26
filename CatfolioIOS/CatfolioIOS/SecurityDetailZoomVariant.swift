@@ -14,10 +14,24 @@ enum SecurityDetailNativeZoom {
     static let preferenceKey = "securityDetail.nativeZoom"
 
     static var isEnabled: Bool {
-        // `ProcessInfo`, not `LaunchArguments`: the comparison runs in Release,
-        // where `LaunchArguments` answers no to everything by design. Opt-in
-        // only, so a shipped app cannot be talked into this path.
-        ProcessInfo.processInfo.arguments.contains(launchArgument)
+        // `ProcessInfo` first, then the panel's preference, so a scripted run
+        // keeps working and a phone run can be switched without a rebuild.
+        // Never `LaunchArguments`, which answers no to everything in Release by
+        // design — and the comparison runs in Release, where the timings mean
+        // something. Opt-in only, so a shipped app cannot reach this path.
+        if ProcessInfo.processInfo.arguments.contains(launchArgument) { return true }
+        return UserDefaults.standard.bool(forKey: preferenceKey)
+    }
+
+    static func setEnabled(_ isOn: Bool) {
+        UserDefaults.standard.set(isOn, forKey: preferenceKey)
+    }
+
+    /// Diagnostic: apply both modifiers regardless of the preference, so a run
+    /// can tell "the wiring is wrong" from "the platform ignores the zoom here".
+    /// `--force-native-zoom`
+    static var isForced: Bool {
+        ProcessInfo.processInfo.arguments.contains("--force-native-zoom")
     }
 }
 

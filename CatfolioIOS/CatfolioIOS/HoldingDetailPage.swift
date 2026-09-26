@@ -125,6 +125,7 @@ struct HoldingDetailContentView: View {
 
     private func startLowerStages() {
         guard lowerStage == 0, !isPreview else { return }
+        SecurityDetailLoadTrace.mark("lower-cards.start")
         // Opened before: the cards' data is still in the cache, so they come
         // up whole and at once. `lowerStage` itself starts at 0 on every
         // presentation, and stepping it again replayed the placeholders
@@ -291,11 +292,17 @@ struct HoldingDetailContentView: View {
                     SecurityDetailMeasure.contentAppeared(
                         tag: isOpeningPlaceholder ? "opening-card" : "real-page")
                     if !isPreview { SecurityDetailSnapshotTransition.shared.contentDidAppear() }
+                    if !isPreview, !isOpeningPlaceholder {
+                        SecurityDetailLoadTrace.mark("page.appeared")
+                        SecurityDetailLoadTrace.note("price.memory", priceHistory != nil ? "hit" : "miss")
+                        SecurityDetailLoadTrace.note("volume.memory", profile != nil ? "hit" : "miss")
+                    }
                 }
                 // The first frame that carries real data, which is what decides
                 // whether the page could have been grown live.
                 .onChange(of: priceHistory != nil, initial: true) { _, hasData in
                     if hasData { SecurityDetailMeasure.dataAppeared() }
+                    if hasData, !isPreview { SecurityDetailLoadTrace.mark("price.in-page") }
                 }
             }
             .accessibilityIdentifier("holding-detail-scroll")
@@ -372,15 +379,19 @@ struct HoldingDetailContentView: View {
 
     @MainActor
     private func loadVolumeProfile(forceRefresh: Bool) async {
-        if profile == nil, let cached = try? await model.volumeProfile(for: holding.ticker,
-            currency: holding.quoteCurrency, cachedOnly: true), !Task.isCancelled {
-            profile = cached
+        if profile == nil {
+            let cached = try? await model.volumeProfile(for: holding.ticker,
+                currency: holding.quoteCurrency, cachedOnly: true)
+            SecurityDetailLoadTrace.note("volume.disk", cached != nil ? "hit" : "miss")
+            SecurityDetailLoadTrace.mark("volume.disk")
+            if let cached, !Task.isCancelled { profile = cached }
         }
         guard !Task.isCancelled else { return }
         do {
             let loaded = try await model.volumeProfile(for: holding.ticker, currency: holding.quoteCurrency,
                                                        forceRefresh: forceRefresh)
             guard !Task.isCancelled else { return }
+            SecurityDetailLoadTrace.mark("volume.network")
             profile = loaded
             errorMessage = nil
         } catch {
@@ -428,11 +439,16 @@ struct HoldingDetailContentView: View {
                 selectedAccountKeys = context.allAccountKeys
             }
             accountContext = context
-            if priceHistory == nil, let cached = try? await model.securityPriceHistory(
-                for: holding.ticker, accountKeys: context.allAccountKeys, cachedOnly: true),
-               !Task.isCancelled {
-                priceHistory = cached
-                if !forceRefresh { isLoadingMarketData = false }
+            SecurityDetailLoadTrace.mark("price.account-context")
+            if priceHistory == nil {
+                let cached = try? await model.securityPriceHistory(
+                    for: holding.ticker, accountKeys: context.allAccountKeys, cachedOnly: true)
+                SecurityDetailLoadTrace.note("price.disk", cached != nil ? "hit" : "miss")
+                SecurityDetailLoadTrace.mark("price.disk")
+                if let cached, !Task.isCancelled {
+                    priceHistory = cached
+                    if !forceRefresh { isLoadingMarketData = false }
+                }
             }
             guard !Task.isCancelled else { return }
             let loaded = try await model.securityPriceHistory(
@@ -441,6 +457,7 @@ struct HoldingDetailContentView: View {
                 forceRefresh: forceRefresh
             )
             guard !Task.isCancelled else { return }
+            SecurityDetailLoadTrace.mark("price.network")
             priceHistory = loaded
             priceHistoryError = nil
         } catch {
@@ -451,7 +468,11 @@ struct HoldingDetailContentView: View {
 
     private var averageCostInQuoteCurrency: Double? {
         guard hasSelectedDetailAccounts else { return nil }
-        let holding = displayedHolding
+        return Self.averageCostInQuoteCurrency(of: displayedHolding)
+    }
+
+    /// The cost line's price, in the currency the chart is quoted in.
+    static func averageCostInQuoteCurrency(of holding: Holding) -> Double? {
         guard holding.averageCost.isFinite, holding.averageCost > 0 else { return nil }
         let costCurrency = (holding.costCurrency ?? holding.quoteCurrency ?? "USD").uppercased()
         let quoteCurrency = (holding.quoteCurrency ?? costCurrency).uppercased()
@@ -1216,5 +1237,70 @@ struct HoldingDetailLoadingPlaceholder: View {
         Capsule()
             .fill(color ?? skeletonColor)
             .frame(width: width, height: height)
+    }
+}
+
+// MARK: Prefetch
+
+extension HoldingDetailContentView {
+    /// At the tap, while the card is still in the air: the page's cached price
+    /// history and volume profile read from disk, and its chart prepared, so
+    /// the page's first frame has them. Measured (`--trace-security-load`),
+    /// both were on disk on every open and read in about a tenth of a second,
+    /// yet the chart waited until 1.1–1.5s — its preparation began only once
+    /// the page existed, and was thrown away when the network answered.
+    /// Only fills what the cache does not have yet; the page's own loading
+    /// still runs and refreshes from the network.
+    static func prefetch(_ holding: Holding, model: AppModel) {
+        let content = model.cachedHoldingDetail(for: holding)
+        Task { @MainActor in
+            if content.profile == nil,
+               let cached = try? await model.volumeProfile(for: holding.ticker, currency: holding.quoteCurrency,
+                                                           cachedOnly: true),
+               content.profile == nil {
+                content.profile = cached
+            }
+        }
+        guard content.priceHistory == nil else { return }
+        Task { @MainActor in
+            var history: SecurityPriceHistory?
+            var accountKeys: Set<String> = []
+            var shown = holding
+            var hasAccounts = true
+            do {
+                let context = try await model.holdingDetailAccountContext(for: holding.ticker)
+                if content.accountContext == nil {
+                    content.accountContext = context
+                    content.selectedAccountKeys = context.allAccountKeys
+                }
+                accountKeys = content.selectedAccountKeys
+                hasAccounts = !accountKeys.isEmpty
+                shown = context.holding(for: accountKeys) ?? holding
+                history = try? await model.securityPriceHistory(
+                    for: holding.ticker, accountKeys: context.allAccountKeys, cachedOnly: true)
+            } catch LocalPortfolioError.noPortfolio {
+                history = try? await model.marketPriceHistory(
+                    for: holding.ticker, currency: holding.quoteCurrency ?? "USD", cachedOnly: true)
+            } catch {
+                return
+            }
+            guard let history, content.priceHistory == nil else { return }
+            content.priceHistory = history
+            SecurityDetailLoadTrace.mark("prefetch.price")
+            // The chart, prepared exactly as the page will ask for it, so the
+            // page takes it from the cache instead of preparing it again.
+            let averageCost = hasAccounts ? averageCostInQuoteCurrency(of: shown) : nil
+            let request = SecurityPricePreparationRequest(history: history, averageCost: averageCost,
+                                                          accountKeys: accountKeys)
+            guard content.preparedChart?.request != request else { return }
+            let prepared = await Task.detached(priority: .userInitiated) {
+                SecurityPricePreparedData(history: history, averageCost: averageCost,
+                                          selectedAccountKeys: accountKeys)
+            }.value
+            if content.preparedChart == nil {
+                content.preparedChart = (request, prepared)
+                SecurityDetailLoadTrace.mark("prefetch.chart")
+            }
+        }
     }
 }

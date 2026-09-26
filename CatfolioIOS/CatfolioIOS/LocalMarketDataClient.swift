@@ -586,7 +586,7 @@ struct LocalMarketDataClient {
                 latestError = error
             }
         }
-        if bars == nil,
+        if bars == nil, Self.fmpCoversSymbol(symbol),
            let key = KeychainStore.string(for: LocalServiceKeys.fmp), !key.isEmpty {
             do {
                 let fetched = try await fmpHistoricalBars(ticker: ticker, from: start, to: end, key: key)
@@ -679,7 +679,8 @@ struct LocalMarketDataClient {
             latestError = error
         }
 
-        if let key = KeychainStore.string(for: LocalServiceKeys.fmp), !key.isEmpty {
+        if Self.fmpCoversSymbol(marketSymbol),
+           let key = KeychainStore.string(for: LocalServiceKeys.fmp), !key.isEmpty {
             do {
                 let bars = try await fmpHistoricalBars(ticker: ticker, from: start, to: end, key: key)
                 await LocalVolumeBarCache.shared.save(symbol: marketSymbol, bars: bars)
@@ -1912,7 +1913,7 @@ struct LocalMarketDataClient {
             }
         }
 
-        if KeychainStore.string(for: LocalServiceKeys.fmp)?.isEmpty == false {
+        if Self.fmpCoversSymbol(symbol), KeychainStore.string(for: LocalServiceKeys.fmp)?.isEmpty == false {
             do {
                 let fmp = try await fmpHistoricalCloses(symbol: symbol, from: from, to: to)
                 await LocalHistoricalPriceCache.shared.save(
@@ -2090,6 +2091,10 @@ struct LocalMarketDataClient {
     }
 
     static func yahooSymbol(ticker: String, currency: String) -> String {
+        TickerRenames.currentSymbol(for: listingSymbol(ticker: ticker, currency: currency))
+    }
+
+    private static func listingSymbol(ticker: String, currency: String) -> String {
         let normalized = ticker.uppercased()
         let overrides = [
             "BRK.B": "BRK-B",
@@ -2108,6 +2113,13 @@ struct LocalMarketDataClient {
             return "\(normalized).L"
         }
         return normalized
+    }
+
+    /// FMP's daily endpoint carries no currency, so London prices cannot be
+    /// told apart in pounds or pence. Skip it rather than let its refusal
+    /// replace the real Yahoo error on screen.
+    private static func fmpCoversSymbol(_ symbol: String) -> Bool {
+        !symbol.uppercased().hasSuffix(".L") && InstrumentCurrencyRules.marketDataSymbol(for: symbol) == nil
     }
 
     /// Massive's stocks aggregates cover U.S. listings. Exchange-suffixed

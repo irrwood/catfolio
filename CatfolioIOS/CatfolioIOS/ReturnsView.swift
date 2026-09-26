@@ -280,9 +280,13 @@ struct ReturnsComparisonPanel: View {
         if arguments.contains("--show-returns-2y") { return .twoYears }
         if arguments.contains("--show-returns-all")
             || arguments.contains("--show-returns-max") { return .maximum }
-        return .threeMonths
+        // The home chart's default, and a slot the shared picker has.
+        return .yearToDate
     }()
     @State private var selectedDate: Date?
+    /// The one line a right swipe on its row brought forward; the rest fade.
+    /// Kept here so it outlives the chart being rebuilt when a symbol leaves.
+    @State private var highlightedSeries: String?
     @State private var isModeSwitcherExpanded = LaunchArguments.contains("--show-returns-mode-expanded")
     @AppStorage(ComparisonBenchmarkCatalog.preferenceKey) private var storedBenchmarks: String?
     @State private var showsBenchmarkPicker = false
@@ -290,36 +294,37 @@ struct ReturnsComparisonPanel: View {
     @State private var computedBenchmarks = ComparisonBenchmarkCatalog.symbols
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if let comparison = model.comparison {
-                        ReturnsChart(
-                            comparison: comparison,
-                            mode: $chartMode,
-                            timeRange: $timeRange,
-                            selectedDate: $selectedDate,
-                            onAddBenchmark: { showsBenchmarkPicker = true }
-                        )
-                        // A removed symbol leaves at once; an added one arrives
-                        // with the recomputed comparison.
-                        .id("\(model.comparisonRevision)|\(storedBenchmarks ?? "")")
-                    } else {
-                        ReturnsComparisonPlaceholder(
-                            timeRange: $timeRange,
-                            title: model.returnsError == nil
-                                ? L10n.text("正在加载收益数据") : L10n.text("暂无收益记录"),
-                            message: model.returnsError
-                                ?? L10n.text("正在整理组合与基准的历史记录"),
-                            isLoading: model.returnsError == nil
-                        )
-                    }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                if let comparison = model.comparison {
+                    ReturnsChart(
+                        comparison: comparison,
+                        mode: $chartMode,
+                        timeRange: $timeRange,
+                        selectedDate: $selectedDate,
+                        highlightedSeries: $highlightedSeries,
+                        onAddBenchmark: { showsBenchmarkPicker = true }
+                    )
+                    // A removed symbol leaves at once; an added one arrives
+                    // with the recomputed comparison.
+                    .id("\(model.comparisonRevision)|\(storedBenchmarks ?? "")")
+                } else {
+                    ReturnsComparisonPlaceholder(
+                        timeRange: $timeRange,
+                        title: model.returnsError == nil
+                            ? L10n.text("正在加载收益数据") : L10n.text("暂无收益记录"),
+                        message: model.returnsError
+                            ?? L10n.text("正在整理组合与基准的历史记录"),
+                        isLoading: model.returnsError == nil
+                    )
                 }
-                .padding(.bottom, 34)
             }
-            .scrollIndicators(.hidden)
+            .padding(.bottom, 34)
         }
+        .scrollIndicators(.hidden)
+        // The header rides over the chart as the page scrolls, with the
+        // same soft blurred edge the other chart pages get from their bar.
+        .comparisonTopBar { header }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .foregroundStyle(.white)
         .background {
@@ -480,6 +485,19 @@ struct ReturnsComparisonPanel: View {
     }
 }
 
+private extension View {
+    /// A custom top bar that the scroll edge effect treats like the system's:
+    /// content scrolled under it fades and blurs instead of being cut off.
+    @ViewBuilder
+    func comparisonTopBar<Bar: View>(@ViewBuilder _ bar: () -> Bar) -> some View {
+        if #available(iOS 26.0, *) {
+            safeAreaBar(edge: .top, spacing: 0, content: bar)
+        } else {
+            safeAreaInset(edge: .top, spacing: 0) { bar().background(.bar) }
+        }
+    }
+}
+
 private struct ReturnsHeaderCircleGlass: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
@@ -545,13 +563,7 @@ private struct ReturnsTimeRangeControl: View {
     var isDisabled = false
 
     var body: some View {
-        ChartTimeRangePicker(
-            selection: $selection,
-            choiceGroups: ChartTimeRange.comparisonChoiceGroups,
-            isDisabled: isDisabled,
-            isOnDarkCanvas: true,
-            usesRawRangeLabels: true
-        )
+        ChartTimeRangePicker(selection: $selection, isDisabled: isDisabled)
         .frame(height: ReturnsChartLayout.rangePickerHeight)
         .accessibilityLabel(L10n.text("收益图表时间范围"))
     }
@@ -700,6 +712,7 @@ private struct ReturnsChart: View {
     @Binding var selectedDate: Date?
     let onAddBenchmark: () -> Void
     @State private var visibleSeries = Set(ReturnsSeriesStyle.displayOrder)
+    @Binding var highlightedSeries: String?
     @State private var measuredRange: ChartDateRange?
     @State private var prepared: ReturnsPreparedData?
     @State private var displayData = ReturnsDisplayData.empty
@@ -710,12 +723,14 @@ private struct ReturnsChart: View {
         mode: Binding<ReturnsChartMode>,
         timeRange: Binding<ChartTimeRange>,
         selectedDate: Binding<Date?>,
+        highlightedSeries: Binding<String?>,
         onAddBenchmark: @escaping () -> Void
     ) {
         self.comparison = comparison
         _mode = mode
         _timeRange = timeRange
         _selectedDate = selectedDate
+        _highlightedSeries = highlightedSeries
         self.onAddBenchmark = onAddBenchmark
     }
 
@@ -759,6 +774,7 @@ private struct ReturnsChart: View {
                     selectedDate: selectedDate == nil && measuredRange == nil ? nil : chartDate,
                     measuredRange: measuredRange,
                     mode: mode,
+                    highlightedSeries: highlightedSeries,
                     onSelect: {
                         guard measuredRange != nil || selectedDate != $0 else { return }
                         measuredRange = nil
@@ -850,16 +866,32 @@ private struct ReturnsChart: View {
         }
         return VStack(spacing: 12) {
             ForEach(Array(ranked.enumerated()), id: \.element.id) { index, item in
-                Button { toggleSeries(item.series) } label: {
-                    ReturnsRankingRow(item: item, rank: index + 1)
+                let canRemove = item.series != ReturnsSeriesStyle.portfolio
+                let isHighlighted = highlightedSeries == item.series
+                ReturnsSwipeRow(
+                    color: ReturnsSeriesStyle.color(for: item.series),
+                    isHighlighted: isHighlighted,
+                    canRemove: canRemove,
+                    onHighlight: { toggleHighlight(item.series) },
+                    onRemove: { remove(item.series) }
+                ) {
+                    Button { toggleSeries(item.series) } label: {
+                        ReturnsRankingRow(item: item, rank: index + 1)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .opacity(highlightedSeries == nil || isHighlighted ? 1 : 0.45)
                 .accessibilityValue(item.isVisible ? L10n.text("已显示") : L10n.text("已隐藏"))
+                .accessibilityAction(named: isHighlighted ? L10n.text("取消高亮") : L10n.text("高亮曲线")) {
+                    toggleHighlight(item.series)
+                }
                 .contextMenu {
-                    if item.series != ReturnsSeriesStyle.portfolio {
-                        Button(role: .destructive) {
-                            ComparisonBenchmarkCatalog.remove(item.series)
-                        } label: {
+                    Button { toggleHighlight(item.series) } label: {
+                        Label(isHighlighted ? L10n.text("取消高亮") : L10n.text("高亮曲线"),
+                              systemImage: "highlighter")
+                    }
+                    if canRemove {
+                        Button(role: .destructive) { remove(item.series) } label: {
                             Label(L10n.text("移除对比"), systemImage: "minus.circle")
                         }
                     }
@@ -927,10 +959,29 @@ private struct ReturnsChart: View {
         }
     }
 
+    private func toggleHighlight(_ series: String) {
+        withAnimation(.smooth(duration: 0.25)) {
+            highlightedSeries = highlightedSeries == series ? nil : series
+        }
+        // A hidden line cannot stand out; bring it back first.
+        if highlightedSeries == series, !visibleSeries.contains(series) {
+            visibleSeries.insert(series)
+            measuredRange = nil
+            rebuildDisplayData()
+        }
+    }
+
+    private func remove(_ series: String) {
+        guard series != ReturnsSeriesStyle.portfolio else { return }
+        if highlightedSeries == series { highlightedSeries = nil }
+        ComparisonBenchmarkCatalog.remove(series)
+    }
+
     private func toggleSeries(_ series: String) {
         if visibleSeries.contains(series) {
             guard visibleSeries.count > 2 else { return }
             visibleSeries.remove(series)
+            if highlightedSeries == series { highlightedSeries = nil }
         } else {
             visibleSeries.insert(series)
         }
@@ -1049,6 +1100,7 @@ private struct FastReturnsPlot: View {
     let selectedDate: Date?
     let measuredRange: ChartDateRange?
     let mode: ReturnsChartMode
+    let highlightedSeries: String?
     let onSelect: (Date) -> Void
     let onMeasure: (ChartDateRange) -> Void
     let onInteractionEnded: (Int) -> Void
@@ -1063,7 +1115,8 @@ private struct FastReturnsPlot: View {
     private var domain: ClosedRange<Double> { data.domain }
 
     var body: some View {
-        let prepared = seriesCache.prepared(for: data, differentiateWithoutColor: differentiateWithoutColor)
+        let prepared = seriesCache.prepared(for: data, differentiateWithoutColor: differentiateWithoutColor,
+                                            highlighted: highlightedSeries)
         StandardLineChart(
             series: prepared.series,
             interactionDates: prepared.interactionDates,
@@ -1110,6 +1163,8 @@ private struct FastReturnsPlot: View {
                         .minimumScaleFactor(0.72)
                         .frame(width: axisWidth, height: 18)
                         .background(endpoint.color, in: Capsule())
+                        .opacity(highlightedSeries == nil || highlightedSeries == endpoint.id
+                                 ? 1 : ReturnsPlotSeriesCache.fadedOpacity)
                         .position(
                             x: geometry.size.width - axisWidth / 2,
                             y: endpoint.y
@@ -1205,25 +1260,33 @@ private final class ReturnsPlotSeriesCache {
         let yTicks: [Double]
     }
 
+    /// How far the other lines fade while one is highlighted.
+    static let fadedOpacity = 0.18
+
     private var cachedDataID: UUID?
     private var cachedDifferentiatesWithoutColor = false
+    private var cachedHighlight: String?
     private var cachedValue: Prepared?
 
-    func prepared(for data: ReturnsDisplayData, differentiateWithoutColor: Bool) -> Prepared {
+    func prepared(for data: ReturnsDisplayData, differentiateWithoutColor: Bool, highlighted: String?) -> Prepared {
         if cachedDataID == data.id,
            cachedDifferentiatesWithoutColor == differentiateWithoutColor,
+           cachedHighlight == highlighted,
            let cachedValue { return cachedValue }
 
         let order = ReturnsSeriesStyle.order
-        let series = order.compactMap { name -> StandardLineChartSeries? in
+        // The highlighted line is drawn last, so nothing crosses over it.
+        let drawOrder = order.filter { $0 != highlighted } + order.filter { $0 == highlighted }
+        let series = drawOrder.compactMap { name -> StandardLineChartSeries? in
             guard let values = data.grouped[name], !values.isEmpty else { return nil }
+            let isFaded = highlighted != nil && highlighted != name
             return StandardLineChartSeries(
                 id: name,
                 points: values.map {
                     StandardLineChartPoint(id: "\(name)|\($0.id)", date: $0.date, value: $0.value)
                 },
-                color: ReturnsSeriesStyle.color(for: name),
-                lineWidth: 2,
+                color: ReturnsSeriesStyle.color(for: name).opacity(isFaded ? Self.fadedOpacity : 1),
+                lineWidth: highlighted == name ? 2.6 : 2,
                 dash: Self.dashPattern(for: name, in: order, enabled: differentiateWithoutColor),
                 selectionRadius: name == ReturnsSeriesStyle.portfolio ? 3.6 : 2.8,
                 latestPointRadius: name == ReturnsSeriesStyle.portfolio ? 5 : 4,
@@ -1237,6 +1300,7 @@ private final class ReturnsPlotSeriesCache {
         let value = Prepared(series: series, interactionDates: data.dates, yTicks: ticks)
         cachedDataID = data.id
         cachedDifferentiatesWithoutColor = differentiateWithoutColor
+        cachedHighlight = highlighted
         cachedValue = value
         return value
     }
@@ -1656,6 +1720,139 @@ private struct ReturnsRankingRow: View {
         .background { ReturnsGlassCardSurface(glow: isPortfolio ? color : nil) }
         .opacity(item.isVisible ? 1 : 0.20)
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+/// A ranking row that swipes: right to highlight its line (again to clear
+/// it), left to take the symbol out of the comparison. The portfolio's own
+/// row only highlights.
+private struct ReturnsSwipeRow<Content: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
+    let color: Color
+    let isHighlighted: Bool
+    let canRemove: Bool
+    let onHighlight: () -> Void
+    let onRemove: () -> Void
+    @ViewBuilder let content: Content
+
+    @State private var offset: CGFloat = 0
+    @State private var isRemoving = false
+
+    private static var threshold: CGFloat { 76 }
+    private var isPastThreshold: Bool {
+        offset >= Self.threshold || (canRemove && offset <= -Self.threshold)
+    }
+
+    var body: some View {
+        content
+            .offset(x: offset)
+            .background { actions }
+            .gesture(ReturnsHorizontalPan(onChange: drag, onEnd: end))
+            .sensoryFeedback(.impact(weight: .light), trigger: isPastThreshold) { wasPast, isPast in
+                hapticsEnabled && !wasPast && isPast
+            }
+    }
+
+    private var actions: some View {
+        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        return ZStack {
+            if offset > 0 {
+                action(icon: "highlighter",
+                       title: isHighlighted ? L10n.text("取消高亮") : L10n.text("高亮"),
+                       tint: color, armedText: CatfolioTheme.blackTextOnColor, width: offset)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else if offset < 0, canRemove {
+                action(icon: "trash", title: L10n.text("移除"), tint: CatfolioStyle.red, armedText: .white,
+                       width: -offset)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+        }
+        .clipShape(shape)
+    }
+
+    private func action(icon: String, title: String, tint: Color, armedText: Color, width: CGFloat) -> some View {
+        let isArmed = width >= Self.threshold
+        return VStack(spacing: 3) {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .semibold))
+            Text(title)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .foregroundStyle(isArmed ? armedText : .white)
+        .scaleEffect(isArmed ? 1 : 0.86)
+        .opacity(min(1, Double(width / 44)))
+        .frame(width: max(0, width - 8))
+        .frame(maxHeight: .infinity)
+        .background(tint.opacity(isArmed ? 1 : 0.35),
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: isArmed)
+    }
+
+    private func drag(_ translation: CGFloat) {
+        guard !isRemoving else { return }
+        // Past the threshold, and wherever there is no action, the row resists.
+        func resisted(_ value: CGFloat, limit: CGFloat) -> CGFloat {
+            abs(value) <= limit ? value : (value > 0 ? 1 : -1) * (limit + (abs(value) - limit) * 0.3)
+        }
+        if translation < 0, !canRemove {
+            offset = resisted(translation, limit: 0)
+        } else {
+            offset = resisted(translation, limit: Self.threshold + 24)
+        }
+    }
+
+    private func end(_ translation: CGFloat, _ velocity: CGFloat) {
+        guard !isRemoving else { return }
+        let settle: Animation? = reduceMotion ? nil : .spring(duration: 0.32, bounce: 0.18)
+        if offset >= Self.threshold || (offset > 30 && velocity > 700) {
+            onHighlight()
+            withAnimation(settle) { offset = 0 }
+        } else if canRemove, offset <= -Self.threshold || (offset < -30 && velocity < -700) {
+            isRemoving = true
+            withAnimation(reduceMotion ? nil : .easeIn(duration: 0.2)) { offset = -500 } completion: {
+                onRemove()
+            }
+        } else {
+            withAnimation(settle) { offset = 0 }
+        }
+    }
+}
+
+/// A pan that only starts on a mostly sideways drag, so the page above still
+/// scrolls when the finger lands on a row.
+private struct ReturnsHorizontalPan: UIGestureRecognizerRepresentable {
+    let onChange: (CGFloat) -> Void
+    let onEnd: (CGFloat, CGFloat) -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let pan = UIPanGestureRecognizer()
+        pan.delegate = context.coordinator
+        return pan
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        let translation = recognizer.translation(in: recognizer.view).x
+        switch recognizer.state {
+        case .changed:
+            onChange(translation)
+        case .ended, .cancelled, .failed:
+            onEnd(translation, recognizer.velocity(in: recognizer.view).x)
+        default:
+            break
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
+            let velocity = pan.velocity(in: pan.view)
+            return abs(velocity.x) > abs(velocity.y) * 1.3
+        }
     }
 }
 

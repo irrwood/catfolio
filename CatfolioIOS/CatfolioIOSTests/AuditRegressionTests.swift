@@ -347,6 +347,24 @@ final class AuditRegressionTests: XCTestCase {
         XCTAssertEqual(CycleComparisonView.axisText(0), "0")
     }
 
+    func testRenamedLondonTickerFollowsYahoo() {
+        XCTAssertEqual(LocalMarketDataClient.yahooSymbol(ticker: "PHNX", currency: "GBX"), "SDLF.L")
+        XCTAssertEqual(LocalMarketDataClient.yahooSymbol(ticker: "PHNX.L", currency: "GBP"), "SDLF.L")
+        XCTAssertEqual(LocalMarketDataClient.yahooSymbol(ticker: "PHNX", currency: "USD"), "PHNX")
+        XCTAssertEqual(TickerRenames.equivalents(of: "phnx.l"), ["PHNX.L", "SDLF.L"])
+        XCTAssertEqual(TickerRenames.equivalents(of: "SDLF.L"), ["SDLF.L", "PHNX.L"])
+    }
+
+    func testRenamedLondonTickerKeepsLogoAndCatalogEntry() throws {
+        // The logo was exported under PHNX.L, the company reference under SDLF.L.
+        for code in ["PHNX.L", "SDLF.L"] {
+            XCTAssertEqual(AssetLogoExportCatalog.imageURL(for: code, dark: false)?.lastPathComponent,
+                           "PHNX.L.light.png", code)
+            let entry = try CompanyReferenceCatalog.bundled.get().entry(brokerSymbol: code)
+            XCTAssertEqual(entry?.symbol, "SDLF", code)
+        }
+    }
+
     func testAlreadyQueuedFMPRequestHonorsLaterBackoff() async throws {
         let limiter = FMPRequestLimiter(spacing: 0.4)
         try await limiter.waitForTurn()

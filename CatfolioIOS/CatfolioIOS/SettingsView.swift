@@ -124,6 +124,10 @@ struct SettingsView: View {
     @State private var showsIsometricHeatmap = LaunchArguments.contains("--show-isometric-heatmap")
     #endif
 
+    /// Straight to the panel, so a run that only needs the table does not have
+    /// to tap through: `--show-transition-measure`.
+    @State private var showsTransitionMeasurePanel = SecurityDetailMeasure.wasAskedFor
+
     init(showsCloseButton: Bool = false) {
         self.showsCloseButton = showsCloseButton
     }
@@ -344,6 +348,21 @@ struct SettingsView: View {
             // is kept in IsometricHeatmapLab.swift; DEBUG builds still open it
             // with --show-isometric-heatmap.
 
+            // The transition measurement: how the security page's open is
+            // timed on a real device. Always present — recording is off until
+            // the panel's own switch is turned on, and with it off the cost is
+            // one `UserDefaults` read per open.
+            SettingsSection(L10n.text("诊断")) {
+                SettingsButtonRow(
+                    icon: .symbol("stopwatch"),
+                    title: L10n.text("走势转场测量"),
+                    subtitle: L10n.text("对比快照转场与原生 zoom 的打开耗时与掉帧")
+                ) {
+                    showsTransitionMeasurePanel = true
+                }
+                .accessibilityIdentifier("settings.transition-measure")
+            }
+
             SettingsSection(L10n.text("关于")) {
                 SettingsValueRow(
                     icon: .symbol("info.circle"),
@@ -365,6 +384,9 @@ struct SettingsView: View {
         }
         .tracksRootTabBarScroll()
             .accessibilityIdentifier("settings-root")
+            .navigationDestination(isPresented: $showsTransitionMeasurePanel) {
+                SecurityDetailMeasurePanel()
+            }
             #if DEBUG
             .navigationDestination(isPresented: $showsRotationPreview) { SectorRotationView() }
             .navigationDestination(isPresented: $showsStockChartsPreview) { StockChartsRotationView() }

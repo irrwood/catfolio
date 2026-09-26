@@ -3351,3 +3351,6 @@
 "部分估算" = "partly est.";
 "汇率影响" = "FX impact";
 "缺少数据" = "Missing data";
+"高亮" = "Highlight";
+"取消高亮" = "Clear highlight";
+"高亮曲线" = "Highlight line";

@@ -23,6 +23,14 @@ struct PortfolioView: View {
     @Namespace private var todayBarZoom
     @Namespace private var holdingPresentationZoom
     @State private var holdingZoomState = SecurityDetailZoomState()
+    /// The namespace the current open grew out of. `matchedTransitionSource`
+    /// and `.navigationTransition(.zoom)` are matched on the (id, namespace)
+    /// pair, so the native-zoom destination has to name the same one the row
+    /// published under — anything else and the source is silently ignored and
+    /// the page just slides up from the bottom. The box keeps the namespace
+    /// readable from state, which `Namespace.ID` alone is not.
+    @State private var nativeZoomBase: ZoomBase?
+    private struct ZoomBase { let namespace: Namespace.ID }
 
     private var previewsLoading: Bool {
         #if DEBUG
@@ -253,9 +261,14 @@ struct PortfolioView: View {
                         .securityDetailFullScreen()
                         .securityDetailSnapshotBackdrop()
                         .securityDetailZoomTransition(holdingZoomState.activeSource, in: holdingPresentationZoom)
-                        // Off unless the flag is set: A keeps its own path above.
-                        .securityDetailNativeZoomDestination(holding.ticker, in: holdingPresentationZoom,
-                            enabled: SecurityDetailNativeZoom.isEnabled)
+                        // Same namespace the row published under: the pair
+                        // (ticker, namespace) is what the zoom matches on, and
+                        // a mismatch silently drops the source.
+                        .securityDetailNativeZoomDestination(
+                            holding.ticker,
+                            in: nativeZoomBase?.namespace ?? holdingPresentationZoom,
+                            enabled: SecurityDetailNativeZoom.isEnabled
+                                || SecurityDetailNativeZoom.isForced)
                 }
                 .navigationDestination(isPresented: $showsTodayDetail) {
                     TodayDetailView(
@@ -284,10 +297,15 @@ struct PortfolioView: View {
         if SecurityDetailNativeZoom.isEnabled {
             SecurityDetailMeasure.begin("native-zoom")
             openFeedback()
+            // The page has to name the namespace this row published under, or
+            // the zoom has no source to grow from and the cover merely slides.
+            nativeZoomBase = ZoomBase(namespace: namespace)
             selectedHolding = holding
             return
         }
         SecurityDetailMeasure.begin("snapshot-a")
+        // Read from disk and prepare the chart while the card is in the air.
+        HoldingDetailContentView.prefetch(holding, model: model)
         // From a row on screen, a card and the row's logo fly to the sheet's
         // place first; the sheet is presented under them when they land.
         holdingZoomState.prepare(id: holding.ticker, namespace: namespace) {

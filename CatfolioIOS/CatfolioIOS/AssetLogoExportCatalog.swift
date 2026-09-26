@@ -21,8 +21,7 @@ enum AssetLogoExportCatalog {
     }()
 
     static func imageURL(for symbol: String, dark: Bool) -> URL? {
-        let key = symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard let stem = manifest?.aliases[key] else { return nil }
+        guard let stem = stem(for: symbol) else { return nil }
         return Bundle.main.url(
             forResource: stem + (dark ? ".dark" : ".light"),
             withExtension: "png",
@@ -31,8 +30,7 @@ enum AssetLogoExportCatalog {
     }
 
     static func themeColor(for symbol: String) -> Color? {
-        let key = symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard let stem = manifest?.aliases[key],
+        guard let stem = stem(for: symbol),
               let hex = manifest?.logos[stem]?.themeColor,
               hex.count == 7, hex.first == "#",
               let rgb = UInt32(hex.dropFirst(), radix: 16) else { return nil }
@@ -41,5 +39,10 @@ enum AssetLogoExportCatalog {
             green: Double((rgb >> 8) & 0xFF) / 255,
             blue: Double(rgb & 0xFF) / 255
         )
+    }
+
+    /// A renamed listing keeps the logo exported under its other code.
+    private static func stem(for symbol: String) -> String? {
+        TickerRenames.equivalents(of: symbol).lazy.compactMap { manifest?.aliases[$0] }.first
     }
 }

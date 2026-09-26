@@ -183,6 +183,7 @@ final class SecurityDetailSnapshotTransition {
               let rowSnapshot = Self.snapshot(of: marker) else { return .plain }
         let flight = Flight(key: key, rowFrame: frame, rowSnapshot: rowSnapshot,
                             logoFrame: logoFrame(for: key, within: frame))
+        SecurityDetailLoadTrace.begin((id.base as? String) ?? "\(id)")
         isAnimating = true
         isOpening = true
         openGeneration &+= 1
@@ -269,6 +270,7 @@ final class SecurityDetailSnapshotTransition {
         motion.addCompletion { [weak self] position in
             guard let self else { return }
             self.flightInAir = nil
+            SecurityDetailLoadTrace.mark("card.landed")
             // Pulled back into its row: the page is never presented.
             guard position == .end else {
                 self.flightDidReturn(root: scene.root, logo: logo, cancelled: cancelled)
@@ -304,6 +306,7 @@ final class SecurityDetailSnapshotTransition {
     /// card. The backdrop leaves its shade to us.
     func claimPresentation(surface: UIView, content: UIView, shade: UIView) -> Bool {
         guard let flight = pending else { return false }
+        SecurityDetailLoadTrace.mark("page.claimed")
         pending = nil
         presented = flight
         self.surface = surface
@@ -436,6 +439,7 @@ final class SecurityDetailSnapshotTransition {
     /// flashed in.
     private func reveal(_ generation: UInt64) {
         guard isOpening, generation == openGeneration else { return }
+        SecurityDetailLoadTrace.mark("card.reveal")
         isOpening = false
         let card = openingCard
         let logo = openingLogo

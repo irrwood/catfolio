@@ -1912,14 +1912,6 @@ enum ChartTimeRange: String, CaseIterable, Identifiable {
         [.maximum, .fiveYears],
     ]
 
-    /// The comparison's seven visible slots from Figma 437:11904. Paired
-    /// ranges preserve every interval available in the original chart.
-    static let comparisonChoiceGroups: [[ChartTimeRange]] = [
-        [.oneDay], [.oneWeek], [.oneMonth, .twoMonths],
-        [.threeMonths, .sixMonths], [.yearToDate],
-        [.oneYear, .twoYears], [.maximum, .fiveYears],
-    ]
-
     func includes(
         _ date: Date,
         through lastDate: Date,
@@ -2013,8 +2005,6 @@ struct ChartTimeRangePicker: View {
     /// field's colour, so the selected range is a white pill with dark text
     /// in both schemes rather than the page's own fill.
     var isOnTintedField = false
-    var isOnDarkCanvas = false
-    var usesRawRangeLabels = false
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -2026,7 +2016,7 @@ struct ChartTimeRangePicker: View {
                 Button {
                     select(group)
                 } label: {
-                    ChartTimeRangeMorphingLabel(text: usesRawRangeLabels ? choice.rawValue : choice.title)
+                    ChartTimeRangeMorphingLabel(text: choice.title)
                         .appText(.footnote, weight: isSelected ? .semibold : .medium)
                         .foregroundStyle(textColor(isSelected: isSelected))
                         .lineLimit(1)
@@ -2088,9 +2078,6 @@ struct ChartTimeRangePicker: View {
     }
 
     private func textColor(isSelected: Bool) -> Color {
-        if isOnDarkCanvas {
-            return .white.opacity(isSelected ? 1 : 0.5)
-        }
         if isOnTintedField {
             if isSelected { return Color(red: 0.10, green: 0.10, blue: 0.10) }
             return colorScheme == .dark ? Color.white.opacity(0.82) : Color.black.opacity(0.58)
@@ -2102,7 +2089,6 @@ struct ChartTimeRangePicker: View {
     }
 
     private var selectedBackgroundColor: Color {
-        if isOnDarkCanvas { return .white.opacity(0.10) }
         if isOnTintedField { return .white }
         if usesBrightSelectedBackground, colorScheme == .light {
             return .white
