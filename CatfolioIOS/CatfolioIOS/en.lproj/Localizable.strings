@@ -3340,10 +3340,12 @@
 "动态" = "Animated";
 "动态 · 明亮" = "Animated · Bright";
 "动态 · 避开图表" = "Animated · Around chart";
+"光环 · 模糊" = "Rings · Soft";
 "光环" = "Rings";
 "雾光" = "Mist";
 "白色光晕" = "White halo";
 "青蓝光晕" = "Cyan halo";
+"晴空" = "Clear sky";
 "经典" = "Classic";
 "测试提示" = "Test toast";
 "已保存" = "Saved";

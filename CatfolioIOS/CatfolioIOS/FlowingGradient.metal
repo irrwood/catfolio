@@ -152,7 +152,9 @@ Glow glowAt(float2 p, float time, float aspect, float bandTop, float2 clearBand)
                                        float dispersion,
                                        float2 clearBand,
                                        float feather,
-                                       float intensity) {
+                                       float intensity,
+                                       float4 lightShape,
+                                       float blur) {
     float aspect = size.x / max(size.y, 1.0);
 
     // Centred coordinates in height units: y ∈ [-0.5, 0.5], top is negative.
@@ -236,7 +238,8 @@ Glow glowAt(float2 p, float time, float aspect, float bandTop, float2 clearBand)
 /// The arcs expand slowly; colours split a little at each rim, and the
 /// lower sides warm towards `fringeColor`. Same arguments as
 /// `flowingGradient`, so the Swift side can switch between the two;
-/// `clearBand` and `feather` are not used here, `intensity` scales the light.
+/// `clearBand` and `feather` are not used here, `intensity` scales the light
+/// and `blur` (0 sharp, 1 soft) widens the rims into glowing bands.
 [[ stitchable ]] half4 flowingRings(float2 position,
                                     half4 color,
                                     float2 size,
@@ -251,7 +254,9 @@ Glow glowAt(float2 p, float time, float aspect, float bandTop, float2 clearBand)
                                     float dispersion,
                                     float2 clearBand,
                                     float feather,
-                                    float intensity) {
+                                    float intensity,
+                                    float4 lightShape,
+                                    float blur) {
     float aspect = size.x / max(size.y, 1.0);
     float2 p = (position - 0.5 * size) / max(size.y, 1.0);
     // A faint warp, so the arcs are not drawn with a compass.
@@ -273,13 +278,14 @@ Glow glowAt(float2 p, float time, float aspect, float bandTop, float2 clearBand)
     float light = blob(lp, c0, float2(0.44 * stretch, 0.44 / stretch), angle);
     float hot   = blob(lp, c1, float2(0.18 * stretch, 0.18 / stretch), angle);
 
-    // Arcs: centred below the bottom edge, a touch flattened, 0.11 apart,
+    // Arcs: centred below the bottom edge, a touch flattened, 0.17 apart,
     // drifting outwards. `d` is how far inside the nearest rim a point is.
     const float2 centre = float2(0.0, 0.70);
-    const float spacing = 0.11;
-    const float drift = 0.012;
+    const float spacing = 0.17;
+    const float drift = 0.014;
     float r = length((p - centre) * float2(0.85, 1.0));
     float split = 0.0022 * dispersion;
+    float bodyFalloff = 0.035 + 0.02 * blur;
 
     float3 ground = mix(float3(baseTop.rgb), float3(baseBottom.rgb),
                         saturate(position.y / max(size.y, 1.0)));
@@ -291,8 +297,14 @@ Glow glowAt(float2 p, float time, float aspect, float bandTop, float2 clearBand)
         // Red sees the arcs slightly further out than green, blue further in.
         float rc = r + float(1 - ch) * split;
         float d = spacing * fract((drift * time - rc) / spacing);
-        float rim = exp(-(d / 0.0035) * (d / 0.0035));
-        float body = exp(-d / 0.035) * (1.0 - exp(-d / 0.004));
+        // `blur` widens the rim into a soft band and eases the glow in
+        // behind it. The rim is measured to the nearer of this ring and the
+        // next, so a wide rim glows into both sides instead of stopping
+        // dead where one band wraps into the next.
+        float rimWidth = 0.0035 + 0.022 * blur;
+        float dd = min(d, spacing - d);
+        float rim = exp(-(dd / rimWidth) * (dd / rimWidth)) * (1.0 - 0.45 * blur);
+        float body = exp(-d / bodyFalloff) * (1.0 - exp(-d / (0.004 + 0.03 * blur)));
         float c = ground[ch];
         c = mix(c, float(haloColor[ch]), saturate(body * lit * 1.3));
         c = mix(c, float(coreColor[ch]), saturate(body * (hot * 1.5 + light * 0.25) + rim * (0.45 + light)));
@@ -304,10 +316,10 @@ Glow glowAt(float2 p, float time, float aspect, float bandTop, float2 clearBand)
     float dRed  = spacing * fract((drift * time - (r + split)) / spacing);
     float dBlue = spacing * fract((drift * time - (r - split)) / spacing);
     float dMid  = spacing * fract((drift * time - r) / spacing);
-    float edge  = saturate(exp(-dRed / 0.035) - exp(-dBlue / 0.035)) * (light + hot);
+    float edge  = saturate(exp(-dRed / bodyFalloff) - exp(-dBlue / bodyFalloff)) * (light + hot);
     float low   = saturate((p.y - top) / max(0.5 - top, 0.01));
     float side  = saturate(abs(p.x) / 0.35);
-    float warm  = saturate(0.45 * edge + 0.8 * exp(-dMid / 0.035) * low * side * (0.3 + light));
+    float warm  = saturate(0.45 * edge + 0.8 * exp(-dMid / bodyFalloff) * low * side * (0.3 + light));
     col = mix(col, float3(fringeColor.rgb), warm);
 
     // Backstop above the card edge, as in flowingGradient.
@@ -323,8 +335,8 @@ Glow glowAt(float2 p, float time, float aspect, float bandTop, float2 clearBand)
 
 /// One huge, soft light from the top of the screen: a pale mist that falls
 /// through steel blue and navy to near black, sampled from the reference
-/// frame. The dome breathes, sways and carries a slow lobe along its lower
-/// edge. `intensity` scales the light (1 = the reference; lower keeps the
+/// frame. The light breathes, sways and carries a slow lobe along its
+/// lower edge; its placement and size come from `lightShape`. `intensity` scales the light (1 = the reference; lower keeps the
 /// top from going pale, for dark mode). The colour arguments are unused —
 /// the ramp is the reference's own — and so are glowTop, dispersion and the
 /// clear band; the signature matches `flowingGradient` for the Swift side.
@@ -342,17 +354,22 @@ Glow glowAt(float2 p, float time, float aspect, float bandTop, float2 clearBand)
                                 float dispersion,
                                 float2 clearBand,
                                 float feather,
-                                float intensity) {
+                                float intensity,
+                                float4 lightShape,
+                                float blur) {
     float2 p = (position - 0.5 * size) / max(size.y, 1.0);
     // A light warp only: the edge should drift, not ripple.
     p += float2(0.020 * sin(p.y * 3.0 + time * 0.35), 0.014 * sin(p.x * 3.5 - time * 0.27 + 1.3));
     p += float2(0.005 * sin(p.y * 9.0 - time * 0.53 + 2.0), 0.004 * sin(p.x * 8.0 + time * 0.47));
 
-    // The dome: a wide Gaussian centred above the middle of the screen.
-    float2 centre = float2(0.12 * sin(time * 0.11) + 0.05 * sin(time * 0.047 + 1.0),
-                           -0.30 + 0.03 * sin(time * 0.17));
+    // The light: a wide Gaussian. lightShape = (centre y, sideways sway,
+    // width, height), in height units: day sits high (-0.30) and very wide
+    // so it reads as a dome from the top; night sits lower and narrower so
+    // the top falls dark and the sway shows.
+    float2 centre = float2(lightShape.y * (sin(time * 0.11) + 0.4 * sin(time * 0.047 + 1.0)),
+                           lightShape.x + 0.035 * sin(time * 0.17));
     float breathe = 1.0 + 0.05 * sin(time * 0.13 + 0.5);
-    float2 d = (p - centre) / (float2(1.5, 0.46) * breathe);
+    float2 d = (p - centre) / (lightShape.zw * breathe);
     float light = exp(-dot(d, d));
     // A slow organic lobe riding the dome's lower edge.
     float2 lobeCentre = float2(centre.x + 0.25 * sin(time * 0.09), centre.y + 0.36);
@@ -404,7 +421,9 @@ Glow glowAt(float2 p, float time, float aspect, float bandTop, float2 clearBand)
                                float dispersion,
                                float2 clearBand,
                                float feather,
-                               float intensity) {
+                               float intensity,
+                               float4 lightShape,
+                               float blur) {
     float aspect = size.x / max(size.y, 1.0);
     float2 p = (position - 0.5 * size) / max(size.y, 1.0);
     float topY = p.y;
@@ -428,6 +447,59 @@ Glow glowAt(float2 p, float time, float aspect, float bandTop, float2 clearBand)
     for (int i = 0; i < 4; i++) {
         float t = saturate((light - stops[i]) / (stops[i + 1] - stops[i]));
         col += (ramp[i + 1] - ramp[i]) * t;
+    }
+
+    float n = hash12(position + fract(time * 7.0) * float2(97.0, 131.0)) - 0.5;
+    col += n * grain;
+    return half4(half3(saturate(col)), 1.0h);
+}
+
+/// A wide arch of light across the middle of the screen (Figma 486:6627):
+/// sky above, a soft white rim, and inside it a fill that runs from white
+/// near the rim to a paler blue deeper in. The arch breathes, sways and
+/// rises a little; its rim splits slightly by colour, like the lens
+/// aberration on the Figma layer. Colours: baseTop = sky, coreColor = rim,
+/// haloColor = the deep inside. glowTop, fringeColor, the clear band and
+/// intensity are unused; the signature matches `flowingGradient`.
+[[ stitchable ]] half4 archGlow(float2 position,
+                                half4 color,
+                                float2 size,
+                                float time,
+                                half4 baseTop,
+                                half4 baseBottom,
+                                half4 haloColor,
+                                half4 coreColor,
+                                float grain,
+                                float glowTop,
+                                half4 fringeColor,
+                                float dispersion,
+                                float2 clearBand,
+                                float feather,
+                                float intensity,
+                                float4 lightShape,
+                                float blur) {
+    float2 p = (position - 0.5 * size) / max(size.y, 1.0);
+    p += float2(0.012 * sin(p.y * 4.0 + time * 0.35), 0.010 * sin(p.x * 5.0 - time * 0.28 + 1.3));
+
+    float2 centre = float2(0.04 * sin(time * 0.12), 0.53 + 0.02 * sin(time * 0.17));
+    float breathe = 1.0 + 0.03 * sin(time * 0.21 + 0.6);
+    float2 radii = float2(0.36, 0.50) * breathe;
+
+    float3 sky = float3(baseTop.rgb);
+    float3 rimColor = float3(coreColor.rgb);
+    float3 deepColor = float3(haloColor.rgb);
+    float3 col;
+    for (int ch = 0; ch < 3; ch++) {
+        float q = length((p - centre) / radii);
+        // Distance past the arch's edge in height units; red sees the rim
+        // a little further out than green, blue a little further in.
+        float d = (q - 1.0) * radii.y + float(1 - ch) * 0.010 * dispersion;
+        float rim = exp(-(d / 0.12) * (d / 0.12));
+        float inside = saturate(0.5 - d / 0.16);
+        float deep = saturate((1.0 - q) * 2.4);
+        float fill = mix(rimColor[ch], deepColor[ch], deep);
+        float c = mix(sky[ch], fill, inside);
+        col[ch] = mix(c, rimColor[ch], saturate(rim * 0.95));
     }
 
     float n = hash12(position + fract(time * 7.0) * float2(97.0, 131.0)) - 0.5;
