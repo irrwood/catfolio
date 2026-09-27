@@ -37,8 +37,8 @@ final class SecurityDetailSources {
 
     /// The source's frame in its window, if it is on screen now.
     private func liveFrame(for key: SourceKey) -> (view: UIView, frame: CGRect)? {
-        // The marker itself is left out: while its page zooms back into it,
-        // the system hides it, and a tap on the row then opens it again.
+        // The marker itself left out, as for a logo: a source with no logo is
+        // zoomed from this marker, which the system hides on the way back.
         guard let marker = sources[key]?.view, let window = marker.window,
               !Self.isHiddenInHierarchy(marker.superview) else { return nil }
         let frame = marker.convert(marker.bounds, to: window)
@@ -49,8 +49,10 @@ final class SecurityDetailSources {
 
     /// A list logo's frame in its window, only when it lies inside `row`.
     private func logoFrame(for key: SourceKey, within row: CGRect) -> CGRect? {
+        // The marker itself is left out: while its page zooms back into it,
+        // the system hides it, and a tap on the row then opens it again.
         guard let marker = logoSources[key]?.view, let window = marker.window,
-              !Self.isHiddenInHierarchy(marker) else { return nil }
+              !Self.isHiddenInHierarchy(marker.superview) else { return nil }
         let frame = marker.convert(marker.bounds, to: window)
         return frame.width > 1 && row.insetBy(dx: -1, dy: -1).contains(frame) ? frame : nil
     }
@@ -63,8 +65,7 @@ final class SecurityDetailSources {
         return (marker, logo)
     }
 
-    /// Hidden, or fully transparent. A row hidden for its page is hidden by
-    /// colour (see `SecurityDetailLiveZoomSourceVisibility`) and counts as shown.
+    /// Hidden, or fully transparent.
     private static func isHiddenInHierarchy(_ view: UIView?) -> Bool {
         var current: UIView? = view
         while let candidate = current {
@@ -180,8 +181,12 @@ extension View {
     @ViewBuilder
     func securityDetailLogoSource(_ id: String, in namespace: Namespace.ID?) -> some View {
         if let namespace {
-            background {
-                SecurityDetailLogoMarker(key: .init(id: AnyHashable(id), namespace: namespace))
+            let key = SecurityDetailSources.SourceKey(id: AnyHashable(id), namespace: namespace)
+            // By colour, not opacity: SwiftUI does not hit-test a view at or
+            // near zero opacity, and the row must take a tap while its page is
+            // still flying back into it.
+            colorMultiply(SecurityDetailLiveZoom.hiddenLogo.key == key ? .clear : .white).background {
+                SecurityDetailLogoMarker(key: key)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }

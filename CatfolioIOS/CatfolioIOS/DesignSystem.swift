@@ -493,9 +493,9 @@ extension View {
     /// replaces; the sources did not need reshaping.
     func catfolioZoomSource(_ id: some Hashable, in namespace: Namespace.ID) -> some View {
         let key = SecurityDetailSources.SourceKey(id: AnyHashable(id), namespace: namespace)
-        // The row only, not its marker: B zooms out of the marker, which
-        // carries the row's picture while the row is away.
-        return modifier(SecurityDetailLiveZoomSourceVisibility(key: key)).background {
+        // Where the row is and whether it is on screen; the zoom itself grows
+        // out of the row's logo (`securityDetailLogoSource`) when it has one.
+        return background {
             SecurityDetailSourceMarker(key: key)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)

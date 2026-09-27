@@ -7,14 +7,12 @@ import XCTest
 final class SecurityDetailLiveZoomTests: XCTestCase {
     func testCloseAnimatesBackBeforeReleasingSourceAndCanOpenAgain() async throws {
         try await withSource { presenter, key, transition in
-            let source = try XCTUnwrap(SecurityDetailSources.shared.liveSourceViews(for: key)?.row)
             var dismissals = 0
             for cycle in 1...2 {
                 XCTAssertTrue(transition.open(id: key.id, namespace: key.namespace, page: Self.page,
                                               didEnd: { dismissals += 1 }))
                 let page = try XCTUnwrap(presenter.presentedViewController)
                 try await self.waitUntil { !page.isBeingPresented && page.transitionCoordinator == nil }
-                XCTAssertEqual(SecurityDetailLiveZoom.hiddenSource.key, key)
 
                 transition.close()
 
@@ -24,12 +22,9 @@ final class SecurityDetailLiveZoomTests: XCTestCase {
                 XCTAssertTrue(page.transitionCoordinator?.isAnimated == true)
                 XCTAssertTrue(page.isBeingDismissed)
                 XCTAssertEqual(dismissals, cycle - 1)
-                XCTAssertEqual(SecurityDetailLiveZoom.hiddenSource.key, key)
                 transition.close() // A repeated close must not complete twice.
 
                 try await self.waitUntil { presenter.presentedViewController == nil && dismissals == cycle }
-                XCTAssertNil(SecurityDetailLiveZoom.hiddenSource.key)
-                XCTAssertTrue(source.subviews.isEmpty, "Remove the source-row image after the return completes")
                 XCTAssertNotNil(SecurityDetailSources.shared.liveSourceViews(for: key))
             }
         }
@@ -48,7 +43,6 @@ final class SecurityDetailLiveZoomTests: XCTestCase {
                 page.present(child, animated: false) { continuation.resume() }
             }
             XCTAssertEqual(dismissals, 0)
-            XCTAssertEqual(SecurityDetailLiveZoom.hiddenSource.key, key)
             await withCheckedContinuation { continuation in
                 child.dismiss(animated: false) { continuation.resume() }
             }
@@ -56,7 +50,6 @@ final class SecurityDetailLiveZoomTests: XCTestCase {
             XCTAssertNotNil(page.preferredTransition)
             transition.close()
             try await self.waitUntil { presenter.presentedViewController == nil && dismissals == 1 }
-            XCTAssertNil(SecurityDetailLiveZoom.hiddenSource.key)
         }
     }
 
@@ -119,7 +112,6 @@ private struct ZoomSourceFixture: View {
                 Text("$100")
             }
             .padding(12)
-            .modifier(SecurityDetailLiveZoomSourceVisibility(key: key))
             .background { SecurityDetailSourceMarker(key: key) }
             Spacer()
         }
