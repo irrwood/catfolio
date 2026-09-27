@@ -199,6 +199,7 @@ struct PortfolioView: View {
                                 openHolding(holding, from: todayBarZoom)
                                 try? await Task.sleep(for: .seconds(2.5))
                                 selectedHolding = nil
+                                SecurityDetailLiveZoom.shared.close()
                                 try? await Task.sleep(for: .seconds(2.5))
                             }
                         }
@@ -227,6 +228,7 @@ struct PortfolioView: View {
                                     openHolding(holding, from: namespace)
                                     try? await Task.sleep(for: .seconds(2.6))
                                     selectedHolding = nil
+                                    SecurityDetailLiveZoom.shared.close()
                                     try? await Task.sleep(for: .seconds(2.6))
                                 }
                                 _ = cycle
@@ -303,9 +305,34 @@ struct PortfolioView: View {
             selectedHolding = holding
             return
         }
-        SecurityDetailMeasure.begin(SecurityDetailTransitionStyle.current == .a ? "snapshot-a" : "snapshot-b")
-        // Read from disk and prepare the chart while the card is in the air.
+        // Read from disk and prepare the chart while the card or page is in the air.
         HoldingDetailContentView.prefetch(holding, model: model)
+        // B: the system's zoom on the live page, lined up on the row's logo.
+        // Out of reach — the row not on screen — it falls back to the plain
+        // cover below, as A does.
+        if SecurityDetailTransitionStyle.current == .b {
+            SecurityDetailMeasure.begin("live-zoom-b")
+            holdingZoomState.prepare(id: holding.ticker, namespace: namespace) {
+                let opened = SecurityDetailLiveZoom.shared.open(
+                    id: holding.ticker, namespace: namespace,
+                    page: { close in
+                        AnyView(HoldingDetailView(holding: holding, onClose: close)
+                            .environment(model)
+                            .environment(\.locale, appLocale)
+                            .environment(\.isAppModal, false)
+                            .fontDesign(.rounded)
+                            .tint(CatfolioTheme.accent))
+                    },
+                    didEnd: {
+                        SecurityDetailMeasure.end()
+                        holdingZoomState.didDismiss()
+                    })
+                openFeedback()
+                if !opened { selectedHolding = holding }
+            }
+            return
+        }
+        SecurityDetailMeasure.begin("snapshot-a")
         // From a row on screen, a card and the row's logo fly to the sheet's
         // place first; the sheet is presented under them when they land.
         holdingZoomState.prepare(id: holding.ticker, namespace: namespace) {

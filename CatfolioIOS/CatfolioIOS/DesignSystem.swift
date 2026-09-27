@@ -771,8 +771,11 @@ extension View {
     /// the page's own backgrounds, which the sheet's single ground now
     /// replaces; the sources did not need reshaping.
     func catfolioZoomSource(_ id: some Hashable, in namespace: Namespace.ID) -> some View {
-        background {
-            SecurityDetailSourceMarker(key: .init(id: AnyHashable(id), namespace: namespace))
+        let key = SecurityDetailSnapshotTransition.SourceKey(id: AnyHashable(id), namespace: namespace)
+        // The row only, not its marker: B zooms out of the marker, which
+        // carries the row's picture while the row is away.
+        return modifier(SecurityDetailLiveZoomSourceVisibility(key: key)).background {
+            SecurityDetailSourceMarker(key: key)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
         }

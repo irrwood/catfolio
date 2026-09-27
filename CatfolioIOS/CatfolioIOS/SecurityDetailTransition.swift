@@ -1,36 +1,6 @@
 import SwiftUI
 import UIKit
 
-/// Which of the two drawn opens the security page uses. Both run on the same
-/// card, logo flight, hand-off and close; they differ in what the card shows.
-///
-/// - A: the row gives way to the bare card as it grows, and the page's first
-///   screen fades in pinned to the card's top at the card's width.
-/// - B: the row and the page are one picture, as in the system's zoom. The row
-///   sits on the page's header with its logo on the header's; the two scale
-///   together from the row's size to the page's and cross-fade on the way.
-///
-/// Chosen in Settings, or at launch with `-securityDetail.transitionStyle A`.
-enum SecurityDetailTransitionStyle: String, CaseIterable, Identifiable {
-    case a = "A"
-    case b = "B"
-
-    static let preferenceKey = "securityDetail.transitionStyle"
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .a: L10n.text("A · 卡片展开")
-        case .b: L10n.text("B · 整体缩放")
-        }
-    }
-
-    static var current: Self {
-        UserDefaults.standard.string(forKey: preferenceKey).flatMap(Self.init(rawValue:)) ?? .b
-    }
-}
-
 /// The security page's open and close, drawn by us rather than by the
 /// system's zoom.
 ///
@@ -45,9 +15,6 @@ enum SecurityDetailTransitionStyle: String, CaseIterable, Identifiable {
 ///   at once, and once it has been drawn the card fades off it. The card
 ///   carries nothing else: a second drawing of the page on it disagreed with
 ///   the real one and showed double as they crossed.
-///   B (`SecurityDetailTransitionStyle`) keeps all of this and changes only
-///   the card's content: the row and that first screen are one picture,
-///   aligned on the logo, scaling together and cross-fading.
 /// - Close (✕, or a swipe in from the leading edge): the page, as it was last
 ///   drawn, sits in a card over the hidden sheet. A swipe drags the card; let
 ///   go past the threshold, or ✕, and it shrinks back into the row, its logo
@@ -74,7 +41,6 @@ final class SecurityDetailSnapshotTransition {
 
     fileprivate struct Flight {
         let key: SourceKey
-        let style: SecurityDetailTransitionStyle
         let rowFrame: CGRect
         let rowSnapshot: UIView
         /// The row's logo, in the window, when it sits inside the row: the
@@ -197,6 +163,19 @@ final class SecurityDetailSnapshotTransition {
         return frame.width > 1 && row.insetBy(dx: -1, dy: -1).contains(frame) ? frame : nil
     }
 
+    /// A row on screen and its logo (when the logo sits inside it), for B's
+    /// live zoom, which zooms out of the row's marker itself.
+    func liveSourceViews(for key: SourceKey) -> (row: UIView, logo: UIView?)? {
+        guard let (marker, frame) = liveFrame(for: key) else { return nil }
+        let logo = logoFrame(for: key, within: frame) == nil ? nil : logoSources[key]?.view
+        return (marker, logo)
+    }
+
+    /// Where the header's logo sits in a page, if the page has laid it out.
+    func pageLogoFrame(in page: UIView) -> CGRect? {
+        pageLogo(in: page).map { $0.convert($0.bounds, to: page) }
+    }
+
     /// Whether a row is on screen for this key. The measurement's auto-drive
     /// reads it in Release too, so it is not `#if DEBUG`.
     func hasLiveSource(id: AnyHashable, namespace: Namespace.ID) -> Bool {
@@ -215,8 +194,7 @@ final class SecurityDetailSnapshotTransition {
         let key = SourceKey(id: id, namespace: namespace)
         guard let (marker, frame) = liveFrame(for: key), let window = marker.window,
               let rowSnapshot = Self.snapshot(of: marker) else { return .plain }
-        let style = SecurityDetailTransitionStyle.current
-        let flight = Flight(key: key, style: style, rowFrame: frame, rowSnapshot: rowSnapshot,
+        let flight = Flight(key: key, rowFrame: frame, rowSnapshot: rowSnapshot,
                             logoFrame: logoFrame(for: key, within: frame))
         SecurityDetailLoadTrace.begin((id.base as? String) ?? "\(id)")
         isAnimating = true
@@ -244,10 +222,10 @@ final class SecurityDetailSnapshotTransition {
         card.layer.cornerRadius = Self.sourceRadius(for: frame)
         Self.place(rowSnapshot, size: frame.size, at: .zero, scale: 1)
 
-        let landing = (pageLogoInSheet ?? CGRect(x: 20, y: top + 20, width: 56, height: 56))
-            .offsetBy(dx: target.minX, dy: target.minY)
         var logo: LogoFlight?
         if let rowLogo = flight.logoFrame {
+            let landing = (pageLogoInSheet ?? CGRect(x: 20, y: top + 20, width: 56, height: 56))
+                .offsetBy(dx: target.minX, dy: target.minY)
             // The image the row is already showing — decoded, and drawn at
             // the page's size so it is sharp there. Only a logo still in its
             // web view is copied from the screen (a GPU copy, no redraw).
@@ -262,24 +240,14 @@ final class SecurityDetailSnapshotTransition {
             }
         }
         openingLogo = logo
-        // B: where the page starts — the row on its header row, the row's
-        // logo on the header's — as the page's origin and scale in the window.
-        let zoom = Self.zoomedPage(row: frame, rowLogo: logo == nil ? nil : flight.logoFrame,
-                                   pageLogo: landing, top: top, pageWidth: target.width)
         // The page's fixed first screen — the page's own views — fading in
-        // on the card as it grows. A: scaled to the card's width and pinned
-        // to its top. B: under the row, at the row's scale.
+        // on the card as it grows, scaled to its width and pinned to its top.
         var screen: UIView?
         if let opening {
             let host = UIHostingController(rootView: AnyView(opening().padding(.top, top)))
             host.safeAreaRegions = []
             host.view.backgroundColor = .clear
-            switch style {
-            case .a:
-                Self.place(host.view, size: target.size, at: .zero, scale: frame.width / max(target.width, 1))
-            case .b:
-                Self.place(host.view, size: target.size, at: zoom.origin - frame.origin, scale: zoom.scale)
-            }
+            Self.place(host.view, size: target.size, at: .zero, scale: frame.width / max(target.width, 1))
             host.view.alpha = 0
             card.addSubview(host.view)
             openingHost = host
@@ -292,44 +260,23 @@ final class SecurityDetailSnapshotTransition {
         let motion = UIViewPropertyAnimator(duration: Self.openDuration, dampingRatio: 0.9) {
             card.frame = target
             card.layer.cornerRadius = SecurityDetailPresentation.cornerRadius
-            switch style {
-            case .a:
-                // Onto the page's header row, below the status bar, so the
-                // row and the header it becomes are one row, not two.
-                Self.place(rowSnapshot, at: Self.rowInPage(top: top), scale: widthScale)
-            case .b:
-                // Where the page's header row is, grown with the page: the
-                // two stay one picture all the way.
-                Self.place(rowSnapshot, at: (frame.origin - zoom.origin) / zoom.scale, scale: 1 / zoom.scale)
-            }
+            // Onto the page's header row, below the status bar, so the row
+            // and the header it becomes are one row, not two.
+            Self.place(rowSnapshot, at: Self.rowInPage(top: top), scale: widthScale)
             Self.place(screen, at: .zero, scale: 1)
             logo?.land()
             scene.dim.alpha = 1
             scene.blur.effect = Self.backdropBlur
             // In the same animator, so a flight that is caught and pulled
-            // back, or reversed, unwinds all of it.
+            // back, or reversed, unwinds all of it: the row gives way to the
+            // bare card in the first third, the page's first screen fades in
+            // from a tenth to seven tenths.
             UIView.animateKeyframes(withDuration: 0, delay: 0) {
-                switch style {
-                case .a:
-                    // The row gives way to the bare card in the first third,
-                    // the page's first screen fades in from a tenth to seven
-                    // tenths.
-                    UIView.addKeyframe(withRelativeStartTime: 0, relativeDuration: 0.4) {
-                        rowSnapshot.alpha = 0
-                    }
-                    UIView.addKeyframe(withRelativeStartTime: 0.1, relativeDuration: 0.6) {
-                        screen?.alpha = 1
-                    }
-                case .b:
-                    // A cross-fade, as the system's zoom does: the page comes
-                    // up under the row first, so the card's bare ground never
-                    // shows between them, and the row goes after it.
-                    UIView.addKeyframe(withRelativeStartTime: 0, relativeDuration: 0.4) {
-                        screen?.alpha = 1
-                    }
-                    UIView.addKeyframe(withRelativeStartTime: 0.1, relativeDuration: 0.45) {
-                        rowSnapshot.alpha = 0
-                    }
+                UIView.addKeyframe(withRelativeStartTime: 0, relativeDuration: 0.4) {
+                    rowSnapshot.alpha = 0
+                }
+                UIView.addKeyframe(withRelativeStartTime: 0.1, relativeDuration: 0.6) {
+                    screen?.alpha = 1
                 }
             }
         }
@@ -860,27 +807,10 @@ final class SecurityDetailSnapshotTransition {
             row.alpha = 0
             row.layer.mask = nil
             let current = scene.card.frame
+            SecurityDetailSnapshotTransition.place(row, size: rowSize,
+                                                   at: SecurityDetailSnapshotTransition.rowInPage(top: top),
+                                                   scale: current.width / max(rowSize.width, 1))
             let landsLogo = logo != nil && target.logo != nil && flight.logoFrame != nil
-            // The page's scale in the card now: 1 at rest, less mid-drag.
-            let pageScale = current.width / max(start.width, 1)
-            // B: where the page ends — the row's logo on the header's — and
-            // the row on the page, at the page's scale, from the start.
-            let zoom = SecurityDetailSnapshotTransition.zoomedPage(
-                row: end, rowLogo: landsLogo ? target.logo : nil,
-                pageLogo: logo?.inPage ?? .zero,
-                top: top, pageWidth: start.width)
-            let rowInPage: CGPoint
-            let rowScaleInPage: CGFloat
-            switch flight.style {
-            case .a:
-                rowInPage = SecurityDetailSnapshotTransition.rowInPage(top: top)
-                rowScaleInPage = start.width / max(rowSize.width, 1)
-            case .b:
-                rowInPage = (end.origin - zoom.origin) / zoom.scale
-                rowScaleInPage = end.width / max(rowSize.width, 1) / zoom.scale
-            }
-            SecurityDetailSnapshotTransition.place(row, size: rowSize, at: rowInPage * pageScale,
-                                                   scale: rowScaleInPage * pageScale)
             if landsLogo, let rowLogo = flight.logoFrame {
                 SecurityDetailSnapshotTransition.punchHole(
                     in: row, at: rowLogo.offsetBy(dx: -flight.rowFrame.minX, dy: -flight.rowFrame.minY))
@@ -892,14 +822,7 @@ final class SecurityDetailSnapshotTransition {
                                                 dampingRatio: 0.92) { [self] in
                 scene.card.frame = end
                 scene.card.layer.cornerRadius = SecurityDetailSnapshotTransition.sourceRadius(for: end)
-                switch flight.style {
-                case .a:
-                    SecurityDetailSnapshotTransition.place(page, at: .zero, scale: end.width / max(start.width, 1))
-                case .b:
-                    // Shrunk with the row onto the row: its header's logo
-                    // lands on the row's.
-                    SecurityDetailSnapshotTransition.place(page, at: zoom.origin - end.origin, scale: zoom.scale)
-                }
+                SecurityDetailSnapshotTransition.place(page, at: .zero, scale: end.width / max(start.width, 1))
                 SecurityDetailSnapshotTransition.place(row, at: .zero, scale: end.width / max(rowSize.width, 1))
                 if landsLogo, let rowLogo = target.logo { logo?.flight.move(to: rowLogo) }
                 scene.dim.alpha = 0
@@ -910,25 +833,11 @@ final class SecurityDetailSnapshotTransition {
                 owner.closeDidEnd(self, dismissed: true)
             }
             motion.startAnimation()
-            let duration = SecurityDetailSnapshotTransition.closeDuration
-            switch flight.style {
-            case .a:
-                UIView.animate(withDuration: duration * 0.5, delay: duration * 0.3,
-                               options: [.curveEaseInOut]) { [self] in
-                    page.alpha = 0
-                    row.alpha = 1
-                }
-            case .b:
-                // The open's cross-fade backwards: the row comes up over the
-                // page first, and the page goes from under it after.
-                UIView.animate(withDuration: duration * 0.45, delay: duration * 0.15,
-                               options: [.curveEaseInOut]) {
-                    row.alpha = 1
-                }
-                UIView.animate(withDuration: duration * 0.4, delay: duration * 0.45,
-                               options: [.curveEaseInOut]) { [self] in
-                    page.alpha = 0
-                }
+            UIView.animate(withDuration: SecurityDetailSnapshotTransition.closeDuration * 0.5,
+                           delay: SecurityDetailSnapshotTransition.closeDuration * 0.3,
+                           options: [.curveEaseInOut]) { [self] in
+                page.alpha = 0
+                row.alpha = 1
             }
         }
 
@@ -1084,19 +993,6 @@ final class SecurityDetailSnapshotTransition {
     /// middle on the header's middle.
     fileprivate static func rowInPage(top: CGFloat) -> CGPoint {
         CGPoint(x: 0, y: top + 16)
-    }
-
-    /// B's page as it starts (or ends) a flight, as its origin in the window
-    /// and its scale: the row's logo on the header's logo, or — for a source
-    /// with no logo in it — the row across the page's header row.
-    fileprivate static func zoomedPage(row: CGRect, rowLogo: CGRect?, pageLogo: CGRect,
-                                       top: CGFloat, pageWidth: CGFloat) -> (origin: CGPoint, scale: CGFloat) {
-        if let rowLogo, pageLogo.width > 1 {
-            let scale = rowLogo.width / pageLogo.width
-            return (rowLogo.origin - pageLogo.origin * scale, scale)
-        }
-        let scale = row.width / max(pageWidth, 1)
-        return (row.origin - rowInPage(top: top) * scale, scale)
     }
 
     /// Rows are square-edged and bars are rounded; a card that starts as a
@@ -1278,10 +1174,4 @@ extension View {
                 .accessibilityHidden(true)
         }
     }
-}
-
-private extension CGPoint {
-    static func - (lhs: CGPoint, rhs: CGPoint) -> CGPoint { CGPoint(x: lhs.x - rhs.x, y: lhs.y - rhs.y) }
-    static func * (lhs: CGPoint, rhs: CGFloat) -> CGPoint { CGPoint(x: lhs.x * rhs, y: lhs.y * rhs) }
-    static func / (lhs: CGPoint, rhs: CGFloat) -> CGPoint { CGPoint(x: lhs.x / max(rhs, 0.001), y: lhs.y / max(rhs, 0.001)) }
 }
