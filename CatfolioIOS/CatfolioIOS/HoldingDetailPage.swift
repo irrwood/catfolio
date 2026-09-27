@@ -217,6 +217,10 @@ struct HoldingDetailContentView: View {
                                 if showsPosition {
                                     HoldingPositionDetails(holding: displayedHolding, realisedProfit: realisedProfit)
                                 }
+                                if (holding.shares > 0 || holding.marketValue > 0),
+                                   HoldingSecurityKind.classify(holding) != .fund {
+                                    HoldingAmountSourcesCard(ticker: holding.ticker)
+                                }
                             }
                             // One 16pt page margin below the price chart, the same as
                             // the research cards; only the header chart keeps its own.

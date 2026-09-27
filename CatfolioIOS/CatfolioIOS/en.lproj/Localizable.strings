@@ -3365,3 +3365,6 @@
 "高亮" = "Highlight";
 "取消高亮" = "Clear highlight";
 "高亮曲线" = "Highlight line";
+
+"直接持仓与 ETF 持仓" = "Direct holdings and ETF exposure";
+"全部历史" = "All History";

@@ -1179,6 +1179,21 @@ struct ETFLookThroughRow: Decodable, Identifiable {
 
     var id: String { ticker }
 
+    /// Open a real security page without treating ETF exposure as shares or cost.
+    /// The residual bucket represents multiple securities and has no such page.
+    func detailHolding(directHolding: Holding?, portfolioFraction: Double,
+                       dailyChangePercent: Double? = nil) -> Holding? {
+        guard ticker != "ETF 其他", !ticker.isEmpty else { return nil }
+        if let directHolding { return directHolding }
+        return Holding(
+            ticker: ticker, logoSymbol: logoSymbol, displayName: name, sector: sector,
+            source: nil, shares: 0, averageCost: 0, costCurrency: nil,
+            quotePrice: 0, quoteCurrency: nil, todayChangePercent: dailyChangePercent,
+            marketValue: totalUSD, weight: portfolioFraction, unrealized: 0, unrealizedPercent: 0,
+            fxPnl: nil, fxPnlPercent: nil, fxPnlStatus: nil, fxPnlSource: nil
+        )
+    }
+
     enum CodingKeys: String, CodingKey {
         case ticker, name, sector
         case estimatedHoldingPeriodPercent = "estimated_holding_period_percent"

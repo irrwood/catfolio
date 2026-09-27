@@ -39,8 +39,6 @@ struct ReturnsView: View {
                 )
             )
             .accessibilityIdentifier("performance.heatmap")
-            TodayAttentionPreview()
-            JEVTodayAttentionEntry()
             SettingsSectionHeader(L10n.text("Performance"))
             ReturnsSourceCards(store: sourcePreviews)
             SettingsCard {
@@ -51,6 +49,8 @@ struct ReturnsView: View {
                     .accessibilityIdentifier("performance.chart.\(chart.rawValue)")
                 }
             }
+            TodayAttentionPreview()
+            JEVTodayAttentionEntry()
         }
         // Only what the hero needs, so ordinary scrolling does not redraw
         // the page: the pull past the top, the bar's height, and whether the

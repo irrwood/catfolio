@@ -2,7 +2,8 @@ import OSLog
 import SwiftUI
 import UIKit
 
-/// Opens the live security page from its row; closing uses a short fade.
+/// The live security page zooms out of its row and back into it. UIKit owns
+/// both directions and the interactive pull/edge gestures, including cancellation.
 @MainActor
 final class SecurityDetailLiveZoom {
     static let shared = SecurityDetailLiveZoom()
@@ -31,7 +32,6 @@ final class SecurityDetailLiveZoom {
               page content: (_ close: @escaping () -> Void) -> AnyView,
               didEnd: @escaping () -> Void) -> Bool {
         guard page == nil else { return false }
-        SecurityDetailQuickClose.shared.removeOverlay()
         let key = SecurityDetailSources.SourceKey(id: id, namespace: namespace)
         guard let source = SecurityDetailSources.shared.liveSourceViews(for: key),
               let window = source.row.window,
@@ -53,8 +53,6 @@ final class SecurityDetailLiveZoom {
         controller.didDismiss = { [weak self] in self?.pageDidGo() }
 
         let options = UIViewController.Transition.ZoomOptions()
-        // Our short, cancellable close gesture replaces the reverse zoom.
-        options.interactiveDismissShouldBegin = { _ in false }
         options.dimmingColor = SecurityDetailPresentation.backdropColor
         options.dimmingVisualEffect = UIBlurEffect(style: .regular)
         options.alignmentRectProvider = { [weak self, weak rowLogo = source.logo] context in
@@ -67,19 +65,14 @@ final class SecurityDetailLiveZoom {
         // The row goes from the list in the same transaction as the tap; its
         // picture, behind it in the marker, is what shows until the zoom takes it.
         Self.hiddenSource.key = key
-        presenter.present(controller, animated: true) { [weak controller, weak self] in
-            guard let controller else { return }
-            controller.closeGesture = SecurityDetailCloseGesture(controller: controller) { [weak self] in
-                self?.close()
-            }
-        }
+        presenter.present(controller, animated: true)
         return true
     }
 
-    /// Dismiss the actual page immediately; a short picture fades above the list.
+    /// Keep the same zoom transition for the close button and interactive dismissal.
     func close() {
-        guard let page else { return }
-        SecurityDetailQuickClose.shared.dismiss(page)
+        guard let page, page.presentingViewController != nil, !page.isBeingDismissed else { return }
+        page.dismiss(animated: true)
     }
 
     private func pageDidGo() {
@@ -225,8 +218,6 @@ final class SecurityDetailLiveZoom {
     /// Reports actual dismissal; a cancelled pull never dismisses the page.
     private final class PageController: UIHostingController<AnyView> {
         var didDismiss: (() -> Void)?
-
-        var closeGesture: SecurityDetailCloseGesture?
 
         override func viewDidDisappear(_ animated: Bool) {
             super.viewDidDisappear(animated)

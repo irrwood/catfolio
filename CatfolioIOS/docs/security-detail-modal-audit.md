@@ -1,6 +1,6 @@
 # iOS 个股页面 modal 架构审计
 
-> 2026-09-27 更新：本文保留为历史审计记录。首页个股已统一使用原 B 路径 `SecurityDetailLiveZoom` 打开、`SecurityDetailQuickClose` 短淡出关闭；A 快照转场、原生 zoom 对照模式、动画选择及测量/测试入口已移除。下文相关开关与文件不再适用于当前版本。
+> 2026-09-27 更新：本文保留为历史审计记录。首页个股已统一使用原 B 路径 `SecurityDetailLiveZoom`：真实页面由 UIKit 缩放打开、飞回列表，交互关闭与取消也交由 UIKit。整页截图淡出和自定义关闭手势已撤回；A 快照转场、原生 zoom 对照模式、动画选择及测量/测试入口仍已移除。下文相关开关与文件不再适用于当前版本。
 
 范围：`HoldingDetailPage.swift`、`DesignSystem.swift`、`SecurityDetailTransition.swift`、全新的 `SecurityZoomTransition.swift`、以及 `PortfolioView` / `ResearchView` / `HoldingsHeatmapView` / `ReturnsView` 的呈现点。
 

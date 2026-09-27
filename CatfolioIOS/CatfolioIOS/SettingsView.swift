@@ -133,6 +133,8 @@ struct SettingsView: View {
             PublicInvestorSettingsSection()
 
             if !model.accounts.isEmpty {
+                SettingsHistoryOverview()
+
                 SettingsSection(L10n.text("账户范围")) {
                     allAccountsRow
                     ForEach(model.accounts) { account in
@@ -143,12 +145,11 @@ struct SettingsView: View {
                 SettingsSection(L10n.text("账户活动")) {
                     SettingsNavigationRow(
                         icon: .asset("SettingsInvoice"),
-                        title: L10n.text("History")
+                        title: L10n.text("全部历史")
                     ) {
                         HistoryView().environment(model)
                     }
                 }
-                SettingsHistoryOverview()
             }
 
             SettingsSection(L10n.text("新建账户")) {

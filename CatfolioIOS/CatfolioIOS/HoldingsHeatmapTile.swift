@@ -108,27 +108,8 @@ struct HoldingsHeatmapTile: View {
         var detailHolding: Holding? {
             if let holding { return holding }
             guard case let .exposure(row, _) = content else { return nil }
-            return Holding(
-                ticker: row.ticker,
-                logoSymbol: row.logoSymbol,
-                displayName: row.name,
-                sector: row.sector,
-                source: nil,
-                shares: 0,
-                averageCost: 0,
-                costCurrency: nil,
-                quotePrice: 0,
-                quoteCurrency: nil,
-                todayChangePercent: performancePeriod == .today ? changePercent : nil,
-                marketValue: marketValue,
-                weight: portfolioFraction,
-                unrealized: 0,
-                unrealizedPercent: 0,
-                fxPnl: nil,
-                fxPnlPercent: nil,
-                fxPnlStatus: nil,
-                fxPnlSource: nil
-            )
+            return row.detailHolding(directHolding: nil, portfolioFraction: portfolioFraction,
+                dailyChangePercent: performancePeriod == .today ? changePercent : nil)
         }
 
         var holding: Holding? {
