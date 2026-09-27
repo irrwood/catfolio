@@ -303,7 +303,7 @@ struct PortfolioView: View {
             selectedHolding = holding
             return
         }
-        SecurityDetailMeasure.begin("snapshot-a")
+        SecurityDetailMeasure.begin(SecurityDetailTransitionStyle.current == .a ? "snapshot-a" : "snapshot-b")
         // Read from disk and prepare the chart while the card is in the air.
         HoldingDetailContentView.prefetch(holding, model: model)
         // From a row on screen, a card and the row's logo fly to the sheet's

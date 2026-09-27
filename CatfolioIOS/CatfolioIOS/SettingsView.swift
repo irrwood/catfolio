@@ -105,6 +105,8 @@ struct SettingsView: View {
     @AppStorage(CompanyNameDisplay.preferenceKey) private var companyNameDisplayRawValue = CompanyNameDisplay.original.rawValue
     @AppStorage(AssetLogoStyle.preferenceKey) private var assetLogoStyleRawValue = AssetLogoStyle.automatic.rawValue
     @AppStorage(HomeBackgroundStyle.preferenceKey) private var homeBackgroundStyleRawValue = HomeBackgroundStyle.flowing.rawValue
+    @AppStorage(SecurityDetailTransitionStyle.preferenceKey)
+    private var securityTransitionRawValue = SecurityDetailTransitionStyle.b.rawValue
     @State private var showsCSVImport = false
     @State private var showsTrading212 = false
     @State private var showsIBKRFlex = false
@@ -250,6 +252,18 @@ struct SettingsView: View {
                     }
                 }
                 .accessibilityIdentifier("settings.logoStyle")
+
+                SettingsMenuRow(
+                    icon: .symbol("arrow.up.left.and.arrow.down.right"),
+                    title: L10n.text("个股打开动画"),
+                    value: (SecurityDetailTransitionStyle(rawValue: securityTransitionRawValue) ?? .b).title,
+                    selection: $securityTransitionRawValue
+                ) {
+                    ForEach(SecurityDetailTransitionStyle.allCases) { style in
+                        Text(style.title).tag(style.rawValue)
+                    }
+                }
+                .accessibilityIdentifier("settings.securityTransition")
 
                 SettingsMenuRow(
                     icon: .symbol("character.bubble"),
