@@ -37,6 +37,15 @@ final class SecurityDetailLiveZoom {
     private weak var page: PageController?
     /// A page is up and not on its way back; a tap on the list is ignored.
     var isShowingPage: Bool { page.map { !$0.isLeaving } ?? false }
+    /// The logo a page grew out of, and the corner it had before this file
+    /// rounded it. Without the second half the list keeps the zoom's corner for
+    /// good: the mark-up below is SwiftUI's, which never rebuilds that layer.
+    private var roundedLogo: (view: UIView, cornerRadius: CGFloat, clips: Bool)?
+    /// The stand-in each page put in its logo, kept here as well as in the
+    /// closure. A page whose `didDismiss` is replaced — the next page opened
+    /// while this one was still flying back — used to leave its picture in the
+    /// list, hiding a row that then drew as nothing.
+    private var logoPictures: [ObjectIdentifier: UIImageView] = [:]
 
     /// Presents the page zooming out of its row's logo. False when the row is
     /// not on screen; the caller then presents the page its own way.
@@ -74,9 +83,16 @@ final class SecurityDetailLiveZoom {
         let origin = source.logo ?? source.row
         var picture: UIImageView?
         if let logo = source.logo {
+            // The corner is the list's, and it is the frame the zoom grows from
+            // whether or not a picture is available for it: a security whose
+            // logo is not bundled still zooms, out of the logo view itself.
+            roundedLogo = (logo, logo.layer.cornerRadius, logo.clipsToBounds)
             logo.layer.cornerRadius = min(Self.rowLogoCornerRadius, logo.bounds.width / 2)
             logo.layer.cornerCurve = .continuous
             logo.clipsToBounds = true
+            // The picture only when the list has one: it is what the system
+            // grows and cross-fades, and the plain logo view draws nothing
+            // under that treatment.
             if let shown = (id.base as? String).flatMap(AssetLogoShownImages.shared.image(for:)) {
                 let image = Self.rounded(shown, cornerFraction: Self.rowLogoCornerRadius / Self.rowLogoSize)
                 let view = UIImageView(image: image)
@@ -107,16 +123,19 @@ final class SecurityDetailLiveZoom {
         controller.view.backgroundColor = SecurityDetailPresentation.uiGround
         controller.modalPresentationStyle = .fullScreen
         controller.hidesBottomBarWhenPushed = true
-        controller.didDismiss = { [weak self, weak controller, weak picture] in
-            picture?.removeFromSuperview()
+        if let picture { logoPictures[ObjectIdentifier(controller)] = picture }
+        controller.owningTabBarController = stack?.tabBarController
+        controller.previousTabBarHidden = stack?.tabBarController?.isTabBarHidden ?? false
+        controller.didDismiss = { [weak self, weak controller] in
+            guard let controller else { return }
+            self?.releaseLogoPicture(for: controller)
             self?.pageDidGo(controller)
             didEnd()
         }
 
         let options = UIViewController.Transition.ZoomOptions()
         options.dimmingColor = SecurityDetailPresentation.backdropColor
-        options.dimmingVisualEffect = UIBlurEffect(style: .regular)
-        if source.logo != nil {
+        if origin !== source.row {
             // The logo lines up on a square the page's width at its very top,
             // as an album's artwork does: grown that large it overlies the
             // header while it fades, and the page shrinks whole into it.
@@ -128,6 +147,14 @@ final class SecurityDetailLiveZoom {
         }
         controller.preferredTransition = .zoom(options: options) { [weak origin] _ in origin }
 
+        // A page that landed without reporting left its picture behind, over
+        // the logo of a row someone is about to tap. Clear it here as well as
+        // on the way out: the picture is not hit-testable, but it hides a logo
+        // and the list is what the reader is looking at.
+        for (id, view) in logoPictures where id != ObjectIdentifier(controller) {
+            view.removeFromSuperview()
+            logoPictures.removeValue(forKey: id)
+        }
         page = controller
         // Only with a picture to stand in for it: otherwise the list's logo
         // is all there is.
@@ -168,6 +195,7 @@ final class SecurityDetailLiveZoom {
         #if DEBUG
         Self.note("landed gone=\(gone.map { ObjectIdentifier($0).debugDescription } ?? "nil")")
         #endif
+        if let gone { releaseLogoPicture(for: gone) }
         guard page == nil || page === gone else {
             #if DEBUG
             Self.note("landed: NOT the page up, leaving state alone")
@@ -175,7 +203,27 @@ final class SecurityDetailLiveZoom {
             return
         }
         page = nil
+        // Unconditional: this page is down, so nothing may still be hidden.
+        // Returning early above with the key set would leave a list row with no
+        // logo for the rest of the session.
         Self.hiddenLogo.key = nil
+        restoreLogoAppearance()
+    }
+
+    /// Takes one page's stand-in out of its logo. Whatever else happened, the
+    /// logo must not keep a picture of itself over the top of it.
+    private func releaseLogoPicture(for controller: UIViewController) {
+        logoPictures.removeValue(forKey: ObjectIdentifier(controller))?.removeFromSuperview()
+    }
+
+    /// Puts the logo back the way the list drew it before this file rounded it
+    /// and clipped it. The mark-up is SwiftUI's and is never rebuilt, so
+    /// without this the list keeps the zoom's corner.
+    private func restoreLogoAppearance() {
+        guard let roundedLogo else { return }
+        roundedLogo.view.layer.cornerRadius = roundedLogo.cornerRadius
+        roundedLogo.view.clipsToBounds = roundedLogo.clips
+        self.roundedLogo = nil
     }
 
     /// A list row's logo and its corner (`PortfolioDetailsCard`).
@@ -242,27 +290,55 @@ final class SecurityDetailLiveZoom {
     /// Reports actual dismissal; a cancelled pull never dismisses the page.
     private final class PageController: UIHostingController<AnyView> {
         var didDismiss: (() -> Void)?
+        weak var owningTabBarController: UITabBarController?
+        var previousTabBarHidden = false
 
         /// On its way back to the row: popped or dismissed, and not pulled
         /// back up yet.
         var isLeaving: Bool { isMovingFromParent || isBeingDismissed || popping }
         private var popping = false
+        #if DEBUG
+        private let createdAt = CACurrentMediaTime()
+        private var appearedAt: CFTimeInterval?
+        #endif
 
         override func viewWillAppear(_ animated: Bool) {
             super.viewWillAppear(animated)
             // The home stack hides its bar; a pushed page must too.
             navigationController?.setNavigationBarHidden(true, animated: false)
+            // This UIKit push is outside SwiftUI's navigation path. Control
+            // its owning tab container directly; a SwiftUI toolbar preference
+            // can remain stuck after UIKit pops this hosting controller.
+            owningTabBarController?.setTabBarHidden(true, animated: animated)
         }
 
         override func viewWillDisappear(_ animated: Bool) {
             super.viewWillDisappear(animated)
             popping = isMovingFromParent
+            #if DEBUG
+            if isMovingFromParent || isBeingDismissed {
+                let now = CACurrentMediaTime()
+                let appeared = appearedAt.map { String(format: "%.2fs after it appeared", now - $0) } ?? "BEFORE it appeared"
+                SecurityDetailLiveZoom.note(String(format: "leaving %.2fs after open, ", now - createdAt) + appeared
+                    + " interactive=\(transitionCoordinator?.isInteractive == true)")
+            }
+            #endif
+            if popping {
+                owningTabBarController?.setTabBarHidden(previousTabBarHidden, animated: animated)
+            }
         }
 
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
             navigationController?.setNavigationBarHidden(true, animated: false)
+            owningTabBarController?.setTabBarHidden(true, animated: false)
             popping = false // A pull that was let go of.
+            #if DEBUG
+            if appearedAt == nil {
+                appearedAt = CACurrentMediaTime()
+                SecurityDetailLiveZoom.note(String(format: "appeared %.2fs after open", appearedAt! - createdAt))
+            }
+            #endif
         }
 
         override func viewDidDisappear(_ animated: Bool) {
