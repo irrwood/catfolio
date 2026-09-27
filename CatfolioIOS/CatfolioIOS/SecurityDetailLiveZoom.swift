@@ -1,3 +1,4 @@
+import OSLog
 import SwiftUI
 import UIKit
 
@@ -38,9 +39,9 @@ enum SecurityDetailTransitionStyle: String, CaseIterable, Identifiable {
 /// finger catch it mid-way.
 ///
 /// The one thing added to the system's zoom is where the page lines up with
-/// its row: `alignmentRectProvider` puts the row's logo on the page header's,
-/// so the row and the page scale as one picture and cross-fade, the logo
-/// staying in place between them.
+/// its row: `alignmentRectProvider` puts the row's logo on the page header's
+/// (centre on centre; see `alignment`), so the row and the page scale as one
+/// picture and cross-fade, the logo staying in place between them.
 @MainActor
 final class SecurityDetailLiveZoom {
     static let shared = SecurityDetailLiveZoom()
@@ -120,30 +121,55 @@ final class SecurityDetailLiveZoom {
     }
 
     /// The rect of the page that lines up with the row: the row laid over the
-    /// page's header so that its logo covers the header's logo. For a row with
-    /// no logo, the row across the header row.
+    /// page's header with its logo's centre on the header logo's centre. For a
+    /// row with no logo, the row across the header row.
+    ///
+    /// The rect stays inside the page. Grown until its 44pt logo matched the
+    /// header's 56pt one, a row is wider than the screen, and a rect reaching
+    /// off the page is not what the system lines up. So the row grows only as
+    /// far as it fits either side of the logo: the centres meet exactly, the
+    /// sizes within a few points.
     private func alignment(row: UIView, rowLogo: UIView?, page: UIView) -> CGRect? {
         let top = row.window?.safeAreaInsets.top ?? page.safeAreaInsets.top
         let rowSize = row.bounds.size
         guard rowSize.width > 1 else { return nil }
+        // Laid out now if it can be, so the header is measured rather than assumed.
+        if page.window != nil { page.layoutIfNeeded() }
+        let pageSize = page.bounds.width > 1 ? page.bounds.size : (row.window?.bounds.size ?? page.bounds.size)
         // The header's logo where it sits on the page's first screen. A page
         // scrolled away from its top is lined up as if at its top: its logo,
         // off the screen, would have put the row somewhere above the page.
         let measured = SecurityDetailSnapshotTransition.shared.pageLogoFrame(in: page)
-            .flatMap { page.bounds.contains($0) ? $0 : nil }
+            .flatMap { CGRect(origin: .zero, size: pageSize).contains($0) ? $0 : nil }
         if let measured { pageLogoInPage = measured }
         let pageLogo = measured ?? pageLogoInPage ?? CGRect(x: 20, y: top + 20, width: 56, height: 56)
         if let rowLogo, rowLogo.window != nil {
             let logo = rowLogo.convert(rowLogo.bounds, to: row)
             if logo.width > 1 {
-                let scale = pageLogo.width / logo.width
-                return CGRect(x: pageLogo.minX - logo.minX * scale, y: pageLogo.minY - logo.minY * scale,
-                              width: rowSize.width * scale, height: rowSize.height * scale)
+                let centre = CGPoint(x: pageLogo.midX, y: pageLogo.midY)
+                // As large as the logos want, as long as the row still fits
+                // on the page on every side of the logo's centre.
+                let scale = min(pageLogo.width / logo.width,
+                                centre.x / max(logo.midX, 1),
+                                (pageSize.width - centre.x) / max(rowSize.width - logo.midX, 1),
+                                centre.y / max(logo.midY, 1),
+                                (pageSize.height - centre.y) / max(rowSize.height - logo.midY, 1))
+                let rect = CGRect(x: centre.x - logo.midX * scale, y: centre.y - logo.midY * scale,
+                                  width: rowSize.width * scale, height: rowSize.height * scale)
+                #if DEBUG
+                let source = measured == nil ? "assumed" : "measured"
+                Self.log.debug("align row \(rowSize.debugDescription, privacy: .public) logo \(logo.debugDescription, privacy: .public) → page logo \(pageLogo.debugDescription, privacy: .public) (\(source, privacy: .public)) scale \(Double(scale), format: .fixed(precision: 3)) rect \(rect.debugDescription, privacy: .public)")
+                #endif
+                return rect
             }
         }
-        let scale = page.bounds.width / rowSize.width
-        return CGRect(x: 0, y: top + 16, width: page.bounds.width, height: rowSize.height * scale)
+        let scale = pageSize.width / rowSize.width
+        return CGRect(x: 0, y: top + 16, width: pageSize.width, height: rowSize.height * scale)
     }
+
+    #if DEBUG
+    private static let log = Logger(subsystem: "com.catfolio.ios", category: "SecurityDetailLiveZoom")
+    #endif
 
     /// The row as it is drawn now, from the scroll view it sits in, so nothing
     /// floating over the list comes with it. A bitmap rather than a snapshot
