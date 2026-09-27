@@ -65,7 +65,7 @@ final class SecurityDetailLiveZoomTests: XCTestCase {
             VStack(alignment: .leading, spacing: 20) {
                 HStack {
                     RoundedRectangle(cornerRadius: 12).fill(.blue)
-                        .frame(width: 56, height: 56).securityDetailLogoTarget()
+                        .frame(width: 56, height: 56)
                     Text("Test security")
                     Spacer()
                     Button("Close", action: close)

@@ -270,7 +270,8 @@ struct HoldingDetailContentView: View {
             .overlay(alignment: .topTrailing) {
                 if !isPreview {
                     HoldingDetailCloseButton(action: onClose)
-                        .padding(20)
+                        .padding(.horizontal, HoldingDetailHeader.inset)
+                        .padding(.top, HoldingDetailHeader.topInset)
                 }
             }
             // Transparent: the ground is the presentation's, so the one

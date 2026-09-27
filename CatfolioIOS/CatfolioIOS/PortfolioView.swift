@@ -11,7 +11,6 @@ struct PortfolioView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var selectedHolding: Holding?
-    @State private var isHoldingPresented = false
     @State private var showsTodayDetail = false
     @State private var homeScrollState = PortfolioHomeScrollState()
     @State private var homeScrollController = PortfolioHomeScrollController()
@@ -189,9 +188,7 @@ struct PortfolioView: View {
                     }
                 }
                 .modifier(PortfolioFloatingFilterOverlay())
-                .fullScreenCover(item: $selectedHolding, onDismiss: {
-                    isHoldingPresented = false
-                }) { holding in
+                .fullScreenCover(item: $selectedHolding) { holding in
                     HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
                         .environment(model)
                         .securityDetailFullScreen()
@@ -215,10 +212,13 @@ struct PortfolioView: View {
     }
 
     private func openHolding(_ holding: Holding, from namespace: Namespace.ID) {
-        guard selectedHolding == nil, !isHoldingPresented,
+        #if DEBUG
+        SecurityDetailLiveZoom.note("row tapped \(holding.ticker) selected=\(selectedHolding?.ticker ?? "nil") caughtMotion=\(homeScrollController.touchCaughtMotion)")
+        #endif
+        // A page flying back does not block the tap: the next one opens at once.
+        guard selectedHolding == nil, !SecurityDetailLiveZoom.shared.isShowingPage,
               !homeScrollController.touchCaughtMotion else { return }
         HoldingDetailContentView.prefetch(holding, model: model)
-        isHoldingPresented = true
         let opened = SecurityDetailLiveZoom.shared.open(
             id: holding.ticker, namespace: namespace,
             page: { close in
@@ -229,7 +229,7 @@ struct PortfolioView: View {
                     .fontDesign(.rounded)
                     .tint(CatfolioTheme.accent))
             },
-            didEnd: { isHoldingPresented = false })
+            didEnd: {})
         openFeedback()
         if !opened { selectedHolding = holding }
     }

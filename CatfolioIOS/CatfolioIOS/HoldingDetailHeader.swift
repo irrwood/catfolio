@@ -67,10 +67,22 @@ struct HoldingDetailHeader: View {
                 }
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
+        .padding(.horizontal, Self.inset)
+        .padding(.top, Self.topInset)
         .padding(.bottom, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    static let inset: CGFloat = 20
+    /// Below the safe area, for the logo and the close button alike.
+    static let topInset: CGFloat = 4
+    static let logoSize: CGFloat = 56
+
+    /// Where the logo sits on the page's first screen, in the page's
+    /// coordinates. Every layout puts it top-left, so the security page's zoom
+    /// lines its row up on this rather than measuring the page.
+    static func logoFrame(safeAreaTop: CGFloat) -> CGRect {
+        CGRect(x: inset, y: safeAreaTop + topInset, width: logoSize, height: logoSize)
     }
 
     @ViewBuilder
@@ -113,8 +125,7 @@ struct HoldingDetailHeader: View {
     }
 
     private var logo: some View {
-        AssetLogo(ticker: holding.ticker, logoSymbol: holding.logoSymbol, size: 56)
-            .securityDetailLogoTarget()
+        AssetLogo(ticker: holding.ticker, logoSymbol: holding.logoSymbol, size: Self.logoSize)
     }
 
     private var closeReservation: some View {

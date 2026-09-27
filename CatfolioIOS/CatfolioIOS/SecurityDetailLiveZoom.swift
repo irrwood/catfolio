@@ -4,6 +4,11 @@ import UIKit
 
 /// The live security page zooms out of its row and back into it. UIKit owns
 /// both directions and the interactive pull/edge gestures, including cancellation.
+///
+/// The page is pushed onto the row's navigation stack, not presented: a
+/// navigation zoom can be interrupted, so a tap on the list while a page is
+/// still flying back opens the next one at once. A modal's return holds every
+/// touch until its spring has settled. Without a stack the page is presented.
 @MainActor
 final class SecurityDetailLiveZoom {
     static let shared = SecurityDetailLiveZoom()
@@ -17,40 +22,103 @@ final class SecurityDetailLiveZoom {
 
     static let hiddenSource = HiddenSource()
 
-    private weak var page: UIViewController?
-    /// The row as it was drawn at the tap, inside the row's marker: the view
-    /// the system zooms out of and back into.
-    private weak var standIn: UIView?
-    private var didEnd: (() -> Void)?
-    /// Where the header's logo sat on the last page, for a page that has not
-    /// been laid out yet when the system asks.
-    private var pageLogoInPage: CGRect?
+    /// The page up now. One flying back is not: a tap on the list opens the
+    /// next page at once, as the system's own zoom lets it, and the page on
+    /// its way back cleans up after itself when it lands.
+    private weak var page: PageController?
+    /// The last row's picture. Tapped again while its page flies back, the
+    /// row is hidden and would draw as nothing, so this is used instead.
+    private var picture: (key: SecurityDetailSources.SourceKey, image: UIImage)?
+    /// The picture standing in for each page's row, held here rather than only
+    /// by the row's subview list and the dismissal closure. A page whose
+    /// `didDismiss` never runs — replaced while it was still flying back, or
+    /// torn down with the screen — used to leave its picture covering the row
+    /// for good, which is a row that draws correctly and takes no tap.
+    private var standIns: [ObjectIdentifier: UIImageView] = [:]
+
+    /// A page is up and not on its way back; a tap on the list is ignored.
+    var isShowingPage: Bool { page.map { !$0.isLeaving } ?? false }
 
     /// Presents the page zooming out of its row. False when the row is not on
     /// screen; the caller then presents the page its own way.
     func open(id: AnyHashable, namespace: Namespace.ID,
               page content: (_ close: @escaping () -> Void) -> AnyView,
               didEnd: @escaping () -> Void) -> Bool {
-        guard page == nil else { return false }
+        #if DEBUG
+        Self.note("open id=\(id) requested")
+        #endif
+        guard !isShowingPage else {
+            #if DEBUG
+            Self.note("BLOCKED: a page is up and not leaving (isShowingPage)")
+            #endif
+            return false
+        }
         let key = SecurityDetailSources.SourceKey(id: id, namespace: namespace)
-        guard let source = SecurityDetailSources.shared.liveSourceViews(for: key),
-              let window = source.row.window,
-              let presenter = Self.topController(from: window.rootViewController),
-              let drawn = Self.picture(of: source.row) else { return false }
-        // Without the list card's fill behind it: only the logo and the
-        // text zoom, not a slab of the card's colour.
-        let picture = Self.removingBackground(from: drawn) ?? drawn
+        guard let source = SecurityDetailSources.shared.liveSourceViews(for: key) else {
+            #if DEBUG
+            Self.note("BLOCKED: no live source for id=\(id)")
+            #endif
+            return false
+        }
+        guard let window = source.row.window else {
+            #if DEBUG
+            Self.note("BLOCKED: the row has no window")
+            #endif
+            return false
+        }
+        #if DEBUG
+        SecurityDetailTouchProbe.install(on: window)
+        #endif
+        let picture: UIImage
+        if Self.hiddenSource.key == key, let kept = self.picture, kept.key == key {
+            picture = kept.image
+        } else {
+            guard let drawn = Self.picture(of: source.row) else {
+                #if DEBUG
+                Self.note("BLOCKED: the row could not be drawn")
+                #endif
+                return false
+            }
+            // Without the list card's fill behind it: only the logo and the
+            // text zoom, not a slab of the card's colour.
+            picture = Self.removingBackground(from: drawn) ?? drawn
+        }
+        self.picture = (key, picture)
 
+        // The row as it was drawn at the tap, inside the row's marker: the
+        // view the system zooms out of and back into.
         let standIn = UIImageView(image: picture)
         standIn.frame = source.row.bounds
         standIn.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        standIn.isUserInteractionEnabled = false
         source.row.addSubview(standIn)
-        self.standIn = standIn
 
-        let controller = PageController(rootView: content { [weak self] in self?.close() })
+        let stack = Self.navigationController(of: source.row)
+        guard let presenter = stack ?? Self.topController(from: window.rootViewController) else {
+            #if DEBUG
+            Self.note("BLOCKED: no presenter and no stack")
+            #endif
+            standIn.removeFromSuperview()
+            return false
+        }
+
+        // The page has its own close; the stack's bar and back button stay
+        // hidden, which the hosted view has to say too or SwiftUI shows them.
+        let controller = PageController(rootView: AnyView(
+            content { [weak self] in self?.close() }
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationBarBackButtonHidden(true)))
+        controller.navigationItem.hidesBackButton = true
+        standIns[ObjectIdentifier(controller)] = standIn
         controller.view.backgroundColor = SecurityDetailPresentation.uiGround
         controller.modalPresentationStyle = .fullScreen
-        controller.didDismiss = { [weak self] in self?.pageDidGo() }
+        controller.hidesBottomBarWhenPushed = true
+        controller.didDismiss = { [weak self, weak controller] in
+            guard let controller else { return }
+            self?.standIns.removeValue(forKey: ObjectIdentifier(controller))?.removeFromSuperview()
+            self?.pageDidGo(controller)
+            didEnd()
+        }
 
         let options = UIViewController.Transition.ZoomOptions()
         options.dimmingColor = SecurityDetailPresentation.backdropColor
@@ -60,34 +128,75 @@ final class SecurityDetailLiveZoom {
         }
         controller.preferredTransition = .zoom(options: options) { [weak row = source.row] _ in row }
 
-        self.didEnd = didEnd
+        // Any picture left by a page that never reported: it would cover a row.
+        for (id, view) in standIns where id != ObjectIdentifier(controller) {
+            view.removeFromSuperview()
+            standIns.removeValue(forKey: id)
+        }
         page = controller
         // The row goes from the list in the same transaction as the tap; its
         // picture, behind it in the marker, is what shows until the zoom takes it.
         Self.hiddenSource.key = key
-        presenter.present(controller, animated: true)
+        if let stack {
+            stack.pushViewController(controller, animated: true)
+        } else {
+            presenter.present(controller, animated: true)
+        }
+        #if DEBUG
+        Self.note("opened id=\(id) via \(stack != nil ? "push" : "present")")
+        #endif
         return true
     }
 
     /// Keep the same zoom transition for the close button and interactive dismissal.
     func close() {
-        guard let page, page.presentingViewController != nil, !page.isBeingDismissed else { return }
-        page.dismiss(animated: true)
+        #if DEBUG
+        Self.note("close requested")
+        #endif
+        guard let page, !page.isLeaving else {
+            #if DEBUG
+            Self.note("close IGNORED: no page, or it is already leaving")
+            #endif
+            return
+        }
+        if let stack = page.navigationController {
+            guard let index = stack.viewControllers.firstIndex(of: page), index > 0 else { return }
+            stack.popToViewController(stack.viewControllers[index - 1], animated: true)
+        } else if page.presentingViewController != nil {
+            page.dismiss(animated: true)
+        }
     }
 
-    private func pageDidGo() {
-        standIn?.removeFromSuperview()
-        standIn = nil
+    /// A page has landed back in its row. Only the page up now owns the
+    /// hidden row: one that landed after the next page opened leaves it be.
+    private func pageDidGo(_ gone: UIViewController?) {
+        #if DEBUG
+        Self.note("landed gone=\(gone.map { ObjectIdentifier($0).debugDescription } ?? "nil")")
+        #endif
+        // This page's own picture goes whatever else has happened: it stands
+        // over a row the reader is about to tap.
+        if let gone {
+            standIns.removeValue(forKey: ObjectIdentifier(gone))?.removeFromSuperview()
+        }
+        guard page == nil || page === gone else {
+            #if DEBUG
+            Self.note("landed: NOT the page up, leaving state alone")
+            #endif
+            return
+        }
         page = nil
         Self.hiddenSource.key = nil
-        let didEnd = didEnd
-        self.didEnd = nil
-        didEnd?()
+        // Nothing is up, so nothing may be covered.
+        for view in standIns.values { view.removeFromSuperview() }
+        standIns.removeAll()
     }
 
     /// The rect of the page that lines up with the row: the row laid over the
     /// page's header with its logo's centre on the header logo's centre. For a
     /// row with no logo, the row across the header row.
+    ///
+    /// The header logo is where the header puts it, not measured: the page may
+    /// not be laid out when the system asks, or be scrolled on the way back.
     ///
     /// The rect stays inside the page. Grown until its 44pt logo matched the
     /// header's 56pt one, a row is wider than the screen, and a rect reaching
@@ -98,19 +207,11 @@ final class SecurityDetailLiveZoom {
         let top = row.window?.safeAreaInsets.top ?? page.safeAreaInsets.top
         let rowSize = row.bounds.size
         guard rowSize.width > 1 else { return nil }
-        // Laid out now if it can be, so the header is measured rather than assumed.
-        if page.window != nil { page.layoutIfNeeded() }
         let pageSize = page.bounds.width > 1 ? page.bounds.size : (row.window?.bounds.size ?? page.bounds.size)
-        // The header's logo where it sits on the page's first screen. A page
-        // scrolled away from its top is lined up as if at its top: its logo,
-        // off the screen, would have put the row somewhere above the page.
-        let measured = SecurityDetailSources.shared.pageLogoFrame(in: page)
-            .flatMap { CGRect(origin: .zero, size: pageSize).contains($0) ? $0 : nil }
-        if let measured { pageLogoInPage = measured }
-        let pageLogo = measured ?? pageLogoInPage ?? CGRect(x: 20, y: top + 20, width: 56, height: 56)
         if let rowLogo, rowLogo.window != nil {
             let logo = rowLogo.convert(rowLogo.bounds, to: row)
             if logo.width > 1 {
+                let pageLogo = HoldingDetailHeader.logoFrame(safeAreaTop: top)
                 let centre = CGPoint(x: pageLogo.midX, y: pageLogo.midY)
                 // As large as the logos want, as long as the row still fits
                 // on the page on every side of the logo's centre.
@@ -122,18 +223,37 @@ final class SecurityDetailLiveZoom {
                 let rect = CGRect(x: centre.x - logo.midX * scale, y: centre.y - logo.midY * scale,
                                   width: rowSize.width * scale, height: rowSize.height * scale)
                 #if DEBUG
-                let source = measured == nil ? "assumed" : "measured"
-                Self.log.debug("align row \(rowSize.debugDescription, privacy: .public) logo \(logo.debugDescription, privacy: .public) → page logo \(pageLogo.debugDescription, privacy: .public) (\(source, privacy: .public)) scale \(Double(scale), format: .fixed(precision: 3)) rect \(rect.debugDescription, privacy: .public)")
+                Self.log.debug("align row \(rowSize.debugDescription, privacy: .public) logo \(logo.debugDescription, privacy: .public) → page logo \(pageLogo.debugDescription, privacy: .public) scale \(Double(scale), format: .fixed(precision: 3)) rect \(rect.debugDescription, privacy: .public)")
                 #endif
                 return rect
             }
         }
         let scale = pageSize.width / rowSize.width
-        return CGRect(x: 0, y: top + 16, width: pageSize.width, height: rowSize.height * scale)
+        return CGRect(x: 0, y: top + HoldingDetailHeader.topInset, width: pageSize.width,
+                      height: rowSize.height * scale)
     }
 
     #if DEBUG
     private static let log = Logger(subsystem: "com.catfolio.ios", category: "SecurityDetailLiveZoom")
+
+    /// Every path that leaves a tap with nothing happening, and every state a
+    /// page changes, on one line. Read with
+    /// `log stream --predicate 'subsystem == "com.catfolio.ios"'` while tapping,
+    /// so "cannot open again" is answered by the log rather than by guessing
+    /// which of the four guards returned.
+    static func note(_ what: String) {
+        log.debug("liveZoom \(what, privacy: .public) page=\(Self.shared.describe) hidden=\(Self.shared.hiddenKey, privacy: .public)")
+    }
+
+    var describe: String {
+        guard let page else { return "none" }
+        return "up leaving=\(page.isLeaving) movingFromParent=\(page.isMovingFromParent) beingDismissed=\(page.isBeingDismissed) inStack=\(page.navigationController != nil) presenting=\(page.presentingViewController != nil)"
+    }
+
+    var hiddenKey: String {
+        guard let k = Self.hiddenSource.key else { return "none" }
+        return "\(k.id)"
+    }
     #endif
 
     /// The row as it is drawn now, from the scroll view it sits in, so nothing
@@ -207,6 +327,21 @@ final class SecurityDetailLiveZoom {
         return made.map { UIImage(cgImage: $0, scale: image.scale, orientation: image.imageOrientation) }
     }
 
+    /// The stack the row's screen sits in, when that screen is on top of it.
+    private static func navigationController(of view: UIView) -> UINavigationController? {
+        var responder: UIResponder? = view
+        while let next = responder?.next {
+            if let controller = next as? UIViewController {
+                // Also while a page is still popping: that is the interruption.
+                guard let stack = controller.navigationController,
+                      stack.presentedViewController == nil else { return nil }
+                return stack
+            }
+            responder = next
+        }
+        return nil
+    }
+
     private static func topController(from root: UIViewController?) -> UIViewController? {
         var top = root
         while let presented = top?.presentedViewController, !presented.isBeingDismissed {
@@ -219,9 +354,33 @@ final class SecurityDetailLiveZoom {
     private final class PageController: UIHostingController<AnyView> {
         var didDismiss: (() -> Void)?
 
+        /// On its way back to the row: popped or dismissed, and not pulled
+        /// back up yet.
+        var isLeaving: Bool { isMovingFromParent || isBeingDismissed || popping }
+        private var popping = false
+
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            // The home stack hides its bar; a pushed page must too.
+            navigationController?.setNavigationBarHidden(true, animated: false)
+        }
+
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            popping = isMovingFromParent
+        }
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            navigationController?.setNavigationBarHidden(true, animated: false)
+            popping = false // A pull that was let go of.
+        }
+
         override func viewDidDisappear(_ animated: Bool) {
             super.viewDidDisappear(animated)
-            guard isBeingDismissed || presentingViewController == nil else { return }
+            // Not when the page pushes or presents a page of its own.
+            guard isMovingFromParent || isBeingDismissed || popping else { return }
+            popping = false
             finish()
         }
 
@@ -233,10 +392,14 @@ final class SecurityDetailLiveZoom {
 }
 
 /// Hides a zoom source's row, not its marker, while its page is up.
+///
+/// By colour, not opacity: SwiftUI does not hit-test a view at (or near) zero
+/// opacity, and the row must take a tap while its page is still flying back
+/// into it. Multiplying by clear draws nothing and leaves hit-testing alone.
 struct SecurityDetailLiveZoomSourceVisibility: ViewModifier {
     let key: SecurityDetailSources.SourceKey
 
     func body(content: Content) -> some View {
-        content.opacity(SecurityDetailLiveZoom.hiddenSource.key == key ? 0 : 1)
+        content.colorMultiply(SecurityDetailLiveZoom.hiddenSource.key == key ? .clear : .white)
     }
 }
