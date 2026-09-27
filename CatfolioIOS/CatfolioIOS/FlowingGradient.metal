@@ -603,3 +603,90 @@ Glow glowAt(float2 p, float time, float aspect, float bandTop, float2 clearBand)
     col += n * grain;
     return half4(half3(saturate(col)), 1.0h);
 }
+
+/// Big waves: a few wide rings rising from below the screen that grow as
+/// they travel — the phase runs as r^0.55, so the spacing between waves
+/// widens outwards. Below `glowTop` (the card's top) they keep their
+/// colour; past it their blur rises up to 4× and their colour fades back
+/// into the ground over about 30% of the screen height, so each wave
+/// dissolves into the sky above the card. Lit by the same drifting light
+/// as `flowingRings`, with the same colours; `blur` is unused.
+[[ stitchable ]] half4 waveRings(float2 position,
+                                 half4 color,
+                                 float2 size,
+                                 float time,
+                                 half4 baseTop,
+                                 half4 baseBottom,
+                                 half4 haloColor,
+                                 half4 coreColor,
+                                 float grain,
+                                 float glowTop,
+                                 half4 fringeColor,
+                                 float dispersion,
+                                 float2 clearBand,
+                                 float feather,
+                                 float intensity,
+                                 float4 lightShape,
+                                 float blur) {
+    float aspect = size.x / max(size.y, 1.0);
+    float2 p = (position - 0.5 * size) / max(size.y, 1.0);
+    p += 0.012 * float2(sin(p.y * 5.0 + time * 0.40),
+                        sin(p.x * 6.0 - time * 0.30 + 1.3));
+
+    // The card top, or a little above the middle when there is none.
+    float top = glowTop > 0.0 ? saturate(glowTop / max(size.y, 1.0)) - 0.5 : -0.1;
+    float bandTop = top + 0.12;
+
+    float stretch = 1.0 + 0.45 * sin(time * 0.29 + 0.8);
+    float angle   = 0.9 * sin(time * 0.13);
+    float light = blob(p, confine(path(time, aspect), bandTop), float2(0.53 * stretch, 0.53 / stretch), angle);
+    float hot   = blob(p, confine(path(time - 0.9, aspect), bandTop), float2(0.20 * stretch, 0.20 / stretch), angle);
+    light *= intensity;
+    hot *= intensity;
+
+    const float2 centre = float2(0.0, 0.72);
+    const float k = 0.55;       // phase ∝ r^k: k < 1 widens the waves outwards
+    const float scale = 0.26;   // overall wave size
+    const float speed = 0.045;  // waves per second
+    float r0 = length((p - centre) * float2(0.85, 1.0));
+    // The spacing between waves at this radius (dr per unit of phase).
+    float spacing = scale * pow(max(r0, 0.001), 1.0 - k) / k;
+    float sizeScale = spacing / 0.2;
+
+    // Past the card top: 0 at the edge, 1 about 30% of the height above.
+    float above = saturate((top - p.y) / 0.30);
+    float soft = 1.0 + 3.0 * above;
+    float fade = 1.0 - 0.9 * pow(above, 0.8);
+    float split = 0.004 * dispersion * (1.0 + above);
+
+    float rimWidth = (0.006 + 0.02 * soft) * sizeScale;
+    float bodyFalloff = (0.05 + 0.03 * soft) * sizeScale;
+    float onset = (0.006 + 0.03 * soft) * sizeScale;
+
+    float3 ground = mix(float3(baseTop.rgb), float3(baseBottom.rgb),
+                        saturate(position.y / max(size.y, 1.0)));
+    float lit = 0.25 + 1.3 * light + 1.4 * hot;
+    float3 col;
+    float3 bodies;
+    for (int ch = 0; ch < 3; ch++) {
+        float r = max(r0 + float(1 - ch) * split, 0.001);
+        float psi = pow(r, k) / scale - speed * time;
+        float d = fract(-psi) * spacing;              // inside the nearest rim
+        float dd = min(d, spacing - d);
+        float rim = exp(-(dd / rimWidth) * (dd / rimWidth)) * (1.0 - 0.25 * saturate(soft - 1.0));
+        float body = exp(-d / bodyFalloff) * (1.0 - exp(-d / onset));
+        float c = mix(ground[ch], float(haloColor[ch]), saturate(body * lit * 1.2));
+        c = mix(c, float(coreColor[ch]), saturate(body * (hot * 1.1 + light * 0.2) + rim * (0.3 + 0.7 * light)));
+        col[ch] = c;
+        bodies[ch] = body;
+    }
+    float warm = saturate(0.5 * saturate(bodies.r - bodies.b) * (light + hot));
+    col = mix(col, float3(fringeColor.rgb), warm);
+
+    // Colour fades back into the ground past the card top.
+    col = mix(ground, col, fade);
+
+    float n = hash12(position + fract(time * 7.0) * float2(97.0, 131.0)) - 0.5;
+    col += n * grain;
+    return half4(half3(saturate(col)), 1.0h);
+}

@@ -16,7 +16,7 @@ enum HomeBackgroundStyle: String, CaseIterable, Identifiable {
     case flowingAroundChart
     /// Glowing arcs behind the content card.
     case rings
-    /// The same arcs, blurred into soft glowing bands.
+    /// Big soft waves that grow as they rise and dissolve past the card.
     case ringsBlurred
     /// Bright pearly arcs in sky blue, blurring more towards the top.
     case ringsBright
@@ -54,7 +54,8 @@ enum HomeBackgroundStyle: String, CaseIterable, Identifiable {
     var shaderPattern: FlowingGradientBackground.Pattern? {
         switch self {
         case .flowing, .flowingBright, .flowingAroundChart: .glow
-        case .rings, .ringsBlurred: .rings
+        case .rings: .rings
+        case .ringsBlurred: .waves
         case .ringsBright: .brightRings
         case .mist: .mist
         case .haloWhite, .haloCyan: .bigHalo
@@ -69,7 +70,7 @@ enum HomeBackgroundStyle: String, CaseIterable, Identifiable {
         case .flowing, .flowingAroundChart, .classic: return dark ? .night : .day
         case .flowingBright: return dark ? .nightBright : .day
         case .rings: return dark ? .ringsNight : .ringsDay
-        case .ringsBlurred: return (dark ? FlowingGradientPalette.ringsNight : .ringsDay).blurred(1)
+        case .ringsBlurred: return dark ? .wavesNight : .ringsDay
         case .ringsBright: return dark ? .brightRingsNight : .brightRingsDay
         case .mist: return dark ? .mistNight : .mistDay
         case .haloWhite: return dark ? .haloWhite.dimmed(0.72) : .haloWhite
@@ -179,13 +180,6 @@ struct FlowingGradientPalette {
         grain: 0.02
     )
 
-    /// The same palette with its rings softened.
-    func blurred(_ blur: Double) -> FlowingGradientPalette {
-        var palette = self
-        palette.blur = blur
-        return palette
-    }
-
     /// The same palette with its light held back, for dark mode.
     func dimmed(_ intensity: Double) -> FlowingGradientPalette {
         var palette = self
@@ -250,6 +244,15 @@ struct FlowingGradientPalette {
         grain: 0.035
     )
 
+    /// The waves at night: the rings' colours over a ground that is black
+    /// at the top and the rings' navy at the bottom, so the waves dissolve
+    /// into black past the card.
+    static let wavesNight: FlowingGradientPalette = {
+        var palette = ringsNight
+        palette.baseTop = .black
+        return palette
+    }()
+
     static let ringsDay = FlowingGradientPalette(
         baseTop: day.baseTop,
         baseBottom: day.baseBottom,
@@ -276,6 +279,8 @@ struct FlowingGradientBackground: View {
         case arch
         /// Bright pearly arcs, softer towards the top (`brightRings`).
         case brightRings
+        /// Big waves that grow as they rise and fade past the card (`waveRings`).
+        case waves
 
         var functionName: String {
             switch self {
@@ -285,6 +290,7 @@ struct FlowingGradientBackground: View {
             case .bigHalo: "bigHalo"
             case .arch: "archGlow"
             case .brightRings: "brightRings"
+            case .waves: "waveRings"
             }
         }
     }
