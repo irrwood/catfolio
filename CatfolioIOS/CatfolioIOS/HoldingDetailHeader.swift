@@ -6,8 +6,6 @@ struct HoldingDetailHeader: View {
     @Environment(\.locale) private var appLocale
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .title2) private var priceSize = 22.0
-    /// Drawn on the opening card, whose logo is the one flying in.
-    @Environment(\.securityDetailOpeningPlaceholder) private var isOpeningPlaceholder
     @ScaledMetric(relativeTo: .headline) private var nameSize = 18.0
     @ScaledMetric(relativeTo: .title2) private var quoteColumnWidth = 130.0
     let holding: Holding
@@ -117,8 +115,6 @@ struct HoldingDetailHeader: View {
     private var logo: some View {
         AssetLogo(ticker: holding.ticker, logoSymbol: holding.logoSymbol, size: 56)
             .securityDetailLogoTarget()
-            // The opening card's copy leaves the logo to the one flying in.
-            .opacity(isOpeningPlaceholder ? 0 : 1)
     }
 
     private var closeReservation: some View {
@@ -675,10 +671,4 @@ struct HoldingDataRow: View {
         guard isAlternating else { return .clear }
         return colorScheme == .dark ? .white.opacity(0.05) : .black.opacity(0.03)
     }
-}
-
-extension EnvironmentValues {
-    /// The security page's first screen drawn on the opening card, before
-    /// the page itself exists.
-    @Entry var securityDetailOpeningPlaceholder = false
 }

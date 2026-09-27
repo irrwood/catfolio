@@ -562,9 +562,7 @@ private struct HoldingsHeatmapRemainderDetail: View {
     @State private var completedQuoteIDs: Set<String> = []
     @State private var loadingQuotes = false
     @State private var selectedHolding: Holding?
-    @Namespace private var holdingZoom
-    @Namespace private var holdingPresentationZoom
-    @State private var holdingZoomState = SecurityDetailZoomState()
+    @State private var isHoldingPresented = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
@@ -611,7 +609,6 @@ private struct HoldingsHeatmapRemainderDetail: View {
                             Button { openHolding(holding) } label: { detailRow(item) }
                                 .buttonStyle(HoldingPressButtonStyle())
                                 .holdingDetailPreview(holding) { openHolding(holding) }
-                                .catfolioZoomSource(holding.ticker, in: holdingZoom)
                         } else {
                             detailRow(item)
                         }
@@ -634,20 +631,17 @@ private struct HoldingsHeatmapRemainderDetail: View {
         // Present from the list sheet itself so UIKit keeps the first sheet
         // underneath, including its scroll position, and owns the stacked
         // presentation and interactive dismissal animations.
-        .securityDetailZoomHost(holdingZoomState, in: holdingPresentationZoom)
-        .sheet(item: $selectedHolding, onDismiss: { holdingZoomState.didDismiss() }) { holding in
+        .sheet(item: $selectedHolding, onDismiss: { isHoldingPresented = false }) { holding in
             HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
                 .securityDetailSheet()
-                .securityDetailZoomTransition(holdingZoomState.activeSource, in: holdingPresentationZoom)
         }
         .securityDetailOpenFeedback(trigger: selectedHolding?.ticker, enabled: hapticsEnabled)
     }
 
     private func openHolding(_ holding: Holding) {
-        guard selectedHolding == nil, holdingZoomState.activeSource == nil else { return }
-        holdingZoomState.prepare(id: holding.ticker, namespace: holdingZoom) {
-            selectedHolding = holding
-        }
+        guard selectedHolding == nil, !isHoldingPresented else { return }
+        isHoldingPresented = true
+        selectedHolding = holding
     }
 
     private func detailRow(_ item: HoldingsHeatmapTile.Model) -> some View {

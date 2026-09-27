@@ -321,8 +321,6 @@ struct SecurityPriceChart: View {
         .onDisappear { onSelectionChange(nil) }
         .task(id: preparationRequest) {
             if let cached = cachedContent?.preparedChart, cached.request == preparationRequest {
-                SecurityDetailLoadTrace.note("chart", "prepared-in-memory")
-                SecurityDetailLoadTrace.mark("chart.ready")
                 prepared = cached.data
                 isPreparing = false
                 onSelectionChange(rangeSelection)
@@ -346,14 +344,10 @@ struct SecurityPriceChart: View {
                 // beats the placeholder: it was thrown away, and the line
                 // waited for a second preparation of the newer history.
                 if self.prepared == nil {
-                    SecurityDetailLoadTrace.note("chart", "superseded-shown")
-                    SecurityDetailLoadTrace.mark("chart.ready")
                     self.prepared = prepared
                 }
                 return
             }
-            SecurityDetailLoadTrace.note("chart", "prepared-now")
-            SecurityDetailLoadTrace.mark("chart.ready")
             self.prepared = prepared
             cachedContent?.preparedChart = (request, prepared)
             isPreparing = false

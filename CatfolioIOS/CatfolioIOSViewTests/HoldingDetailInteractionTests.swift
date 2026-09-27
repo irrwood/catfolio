@@ -222,7 +222,6 @@ final class HoldingDetailInteractionTests: XCTestCase {
         let sheet = try XCTUnwrap(detailController.sheetPresentationController)
         XCTAssertNil(sheet.largestUndimmedDetentIdentifier, "Native sheet must dim and block the presenting screen")
         XCTAssertFalse(detailController.isModalInPresentation, "Keep the native swipe-down dismissal")
-        XCTAssertFalse(SecurityDetailSnapshotTransition.shared.isAnimating)
         probe.showsDetail = false
         try await waitUntil { controller.presentedViewController == nil }
         XCTAssertNotNil(scrollView(in: controller.view)?.refreshControl)
@@ -292,6 +291,22 @@ final class HoldingDetailInteractionTests: XCTestCase {
         XCTAssertNil(detail.refreshControl)
         XCTAssertTrue(parent.refreshControl === parentRefresh)
         XCTAssertTrue(detail.panGestureRecognizer.isEnabled)
+    }
+
+    @MainActor
+    func testNativeDismissalKeepsTopOverscrollAvailable() {
+        let scroll = UIScrollView()
+        scroll.contentInset.top = 24
+        scroll.refreshControl = UIRefreshControl()
+        let boundary = HoldingDetailScrollBoundary.BoundaryView()
+        scroll.addSubview(boundary)
+        boundary.removeInheritedRefreshControl()
+
+        scroll.contentOffset.y = -84
+
+        XCTAssertEqual(scroll.contentOffset.y, -84, accuracy: 0.001)
+        XCTAssertNil(scroll.refreshControl)
+        XCTAssertTrue(scroll.panGestureRecognizer.isEnabled)
     }
 
     @MainActor

@@ -291,11 +291,6 @@ struct PortfolioDetailsCard: View {
                 .buttonStyle(HoldingPressButtonStyle())
                 .holdingDetailPreview(holding) { onSelect(holding) }
                 .holdingZoomSource(holding.ticker, in: zoomNamespace)
-                // The native-zoom control's source. Inert unless the flag is
-                // set, so A's row renders exactly as before.
-                .securityDetailNativeZoomSource(holding.ticker, in: zoomNamespace,
-                    enabled: SecurityDetailNativeZoom.isEnabled
-                        || SecurityDetailNativeZoom.isForced)
                 .environment(\.securityDetailZoomOrigin, zoomNamespace)
             }
         }

@@ -98,15 +98,12 @@ struct SettingsView: View {
     private let dataSourceHealth = DataSourceHealth.shared
     let showsCloseButton: Bool
     @AppStorage(AppLanguage.preferenceKey) private var languageRawValue = AppLanguage.system.rawValue
-    @State private var toastSampleIndex = 0
     @AppStorage("catfolio.haptics") private var hapticsEnabled = true
     @AppStorage(AppAppearance.preferenceKey) private var appearanceRawValue = AppAppearance.system.rawValue
     @AppStorage(DisplayCurrency.preferenceKey) private var displayCurrencyRawValue = DisplayCurrency.usd.rawValue
     @AppStorage(CompanyNameDisplay.preferenceKey) private var companyNameDisplayRawValue = CompanyNameDisplay.original.rawValue
     @AppStorage(AssetLogoStyle.preferenceKey) private var assetLogoStyleRawValue = AssetLogoStyle.automatic.rawValue
     @AppStorage(HomeBackgroundStyle.preferenceKey) private var homeBackgroundStyleRawValue = HomeBackgroundStyle.flowing.rawValue
-    @AppStorage(SecurityDetailTransitionStyle.preferenceKey)
-    private var securityTransitionRawValue = SecurityDetailTransitionStyle.b.rawValue
     @State private var showsCSVImport = false
     @State private var showsTrading212 = false
     @State private var showsIBKRFlex = false
@@ -126,10 +123,6 @@ struct SettingsView: View {
     @State private var showsOIPreview = LaunchArguments.contains("--preview-options-oi")
     @State private var showsIsometricHeatmap = LaunchArguments.contains("--show-isometric-heatmap")
     #endif
-
-    /// Straight to the panel, so a run that only needs the table does not have
-    /// to tap through: `--show-transition-measure`.
-    @State private var showsTransitionMeasurePanel = SecurityDetailMeasure.wasAskedFor
 
     init(showsCloseButton: Bool = false) {
         self.showsCloseButton = showsCloseButton
@@ -254,18 +247,6 @@ struct SettingsView: View {
                 .accessibilityIdentifier("settings.logoStyle")
 
                 SettingsMenuRow(
-                    icon: .symbol("arrow.up.left.and.arrow.down.right"),
-                    title: L10n.text("个股打开动画"),
-                    value: (SecurityDetailTransitionStyle(rawValue: securityTransitionRawValue) ?? .b).title,
-                    selection: $securityTransitionRawValue
-                ) {
-                    ForEach(SecurityDetailTransitionStyle.allCases) { style in
-                        Text(style.title).tag(style.rawValue)
-                    }
-                }
-                .accessibilityIdentifier("settings.securityTransition")
-
-                SettingsMenuRow(
                     icon: .symbol("character.bubble"),
                     title: L10n.text("公司名称"),
                     value: CompanyNameDisplay(rawValue: companyNameDisplayRawValue)?.title ?? CompanyNameDisplay.original.title,
@@ -375,21 +356,6 @@ struct SettingsView: View {
             // is kept in IsometricHeatmapLab.swift; DEBUG builds still open it
             // with --show-isometric-heatmap.
 
-            // The transition measurement: how the security page's open is
-            // timed on a real device. Always present — recording is off until
-            // the panel's own switch is turned on, and with it off the cost is
-            // one `UserDefaults` read per open.
-            SettingsSection(L10n.text("诊断")) {
-                SettingsButtonRow(
-                    icon: .symbol("stopwatch"),
-                    title: L10n.text("走势转场测量"),
-                    subtitle: L10n.text("对比快照转场与原生 zoom 的打开耗时与掉帧")
-                ) {
-                    showsTransitionMeasurePanel = true
-                }
-                .accessibilityIdentifier("settings.transition-measure")
-            }
-
             SettingsSection(L10n.text("关于")) {
                 SettingsValueRow(
                     icon: .symbol("info.circle"),
@@ -397,23 +363,10 @@ struct SettingsView: View {
                     value: appVersion,
                     valueIsNumeric: true
                 )
-                // Each tap shows the next kind, so all three can be checked.
-                SettingsButtonRow(icon: .symbol("bubble.left"), title: L10n.text("测试提示"), showsChevron: false) {
-                    let samples: [(String, AppToast.Kind)] = [
-                        (L10n.text("已保存"), .success), (L10n.text("已复制"), .info), (L10n.text("网络不可用"), .error),
-                    ]
-                    let sample = samples[toastSampleIndex % samples.count]
-                    toastSampleIndex += 1
-                    ToastCenter.shared.show(sample.0, kind: sample.1)
-                }
-                .accessibilityIdentifier("settings.test-toast")
             }
         }
         .tracksRootTabBarScroll()
             .accessibilityIdentifier("settings-root")
-            .navigationDestination(isPresented: $showsTransitionMeasurePanel) {
-                SecurityDetailMeasurePanel()
-            }
             #if DEBUG
             .navigationDestination(isPresented: $showsRotationPreview) { SectorRotationView() }
             .navigationDestination(isPresented: $showsStockChartsPreview) { StockChartsRotationView() }

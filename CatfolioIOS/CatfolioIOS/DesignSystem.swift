@@ -134,49 +134,6 @@ struct CatfolioDisplayAmountText: View {
     }
 }
 
-/// Defers expensive sheet content until UIKit reports that the system
-/// presentation transition has completed. This keeps the interactive spring
-/// free of chart preparation, decoding and network callbacks.
-struct PresentationDidAppearReader: UIViewControllerRepresentable {
-    let action: () -> Void
-
-    func makeUIViewController(context: Context) -> ObserverViewController {
-        ObserverViewController(action: action)
-    }
-
-    func updateUIViewController(_ controller: ObserverViewController, context: Context) {
-        controller.action = action
-    }
-
-    final class ObserverViewController: UIViewController {
-        var action: () -> Void
-        private var hasReported = false
-
-        init(action: @escaping () -> Void) {
-            self.action = action
-            super.init(nibName: nil, bundle: nil)
-        }
-
-        @available(*, unavailable)
-        required init?(coder: NSCoder) { nil }
-
-        override func loadView() {
-            let view = UIView(frame: .zero)
-            view.backgroundColor = .clear
-            view.isUserInteractionEnabled = false
-            self.view = view
-        }
-
-        override func viewDidAppear(_ animated: Bool) {
-            super.viewDidAppear(animated)
-            guard !hasReported else { return }
-            hasReported = true
-            let callback = action
-            DispatchQueue.main.async(execute: callback)
-        }
-    }
-}
-
 /// Content scrolling under a top bar fades out through a progressive blur
 /// instead of meeting it at a hard line.
 ///
@@ -236,11 +193,7 @@ enum SecurityDetailPresentation {
         UIColor.black.withAlphaComponent(trait.userInterfaceStyle == .dark ? 0.5 : 0.35)
     }
 
-    /// The page's ground: one flat colour, the same on the opening card and on
-    /// the page — black at night, the light grey the white cards sit on by
-    /// day. It was a top-to-bottom gradient, which the card (drawn by Core
-    /// Animation) and the page (drawn by SwiftUI) laid out over different
-    /// heights: the page changed ground as the card faded off it.
+    /// Shared ground for the security page and its presentation.
     static let uiGround = UIColor { trait in
         trait.userInterfaceStyle == .dark
             ? .black
@@ -253,193 +206,6 @@ enum SecurityDetailPresentation {
     /// is the crisp one — and at the instant the row is let go, not when the
     /// sheet finishes arriving.
     static let openFeedback = SensoryFeedback.impact(flexibility: .rigid, intensity: 0.8)
-}
-
-/// A backdrop in the presentation container, outside the sheet's zooming
-/// surface. Its opacity uses the same coordinator as the native transition,
-/// including interactive dismissal and cancellation.
-private struct SecurityDetailBackdrop: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> Controller { Controller() }
-    func updateUIViewController(_ controller: Controller, context: Context) {}
-
-    static func dismantleUIViewController(_ controller: Controller, coordinator: ()) {
-        controller.tearDown()
-    }
-
-    final class Controller: UIViewController {
-        private weak var sheetController: UIViewController?
-        // Keep the hit barrier opaque in UIKit's hit-testing sense even while
-        // its separate shade fades to zero. Background taps must not leak.
-        private let hitBarrier = UIView()
-        private let shade = UIView()
-        private var hasPresented = false
-        private var isDismissing = false
-        private var transitionInFlight = false
-
-        override func loadView() {
-            let observer = UIView(frame: .zero)
-            observer.backgroundColor = .clear
-            observer.isUserInteractionEnabled = false
-            view = observer
-
-            hitBarrier.backgroundColor = .clear
-            hitBarrier.accessibilityElementsHidden = true
-            hitBarrier.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            shade.backgroundColor = SecurityDetailPresentation.backdropColor
-            shade.alpha = 0
-            shade.isUserInteractionEnabled = false
-            shade.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            hitBarrier.addSubview(shade)
-        }
-
-        override func viewWillAppear(_ animated: Bool) {
-            super.viewWillAppear(animated)
-            presentBackdropIfNeeded(animated: animated)
-        }
-
-        override func viewIsAppearing(_ animated: Bool) {
-            super.viewIsAppearing(animated)
-            // Some presentations attach their container after willAppear.
-            // This is still before the first rendered frame.
-            presentBackdropIfNeeded(animated: animated)
-        }
-
-        override func viewWillDisappear(_ animated: Bool) {
-            super.viewWillDisappear(animated)
-            dismissBackdropIfNeeded(animated: animated)
-        }
-
-        override func viewDidAppear(_ animated: Bool) {
-            super.viewDidAppear(animated)
-            guard hasPresented, !isDismissing,
-                  !SecurityDetailSnapshotTransition.shared.owns(shade: shade) else { return }
-            transitionInFlight = false
-            shade.alpha = 1
-        }
-
-        override func viewDidDisappear(_ animated: Bool) {
-            super.viewDidDisappear(animated)
-            guard isDismissing || sheetController?.presentingViewController == nil else { return }
-            transitionInFlight = false
-            hitBarrier.removeFromSuperview()
-        }
-
-        private func presentBackdropIfNeeded(animated: Bool) {
-            guard !hasPresented else { return }
-            var owner: UIViewController = self
-            while let parent = owner.parent { owner = parent }
-            guard owner.presentingViewController != nil,
-                  let presentation = owner.presentationController,
-                  let container = presentation.containerView,
-                  let presentedView = presentation.presentedView else { return }
-            var surface = presentedView
-            // Use the public presentation surface and its ancestry, never
-            // private dimming-view names or UIKit's transition delegate.
-            while let parent = surface.superview, parent !== container { surface = parent }
-            guard surface.superview === container else { return }
-            sheetController = owner
-            hitBarrier.frame = container.bounds
-            shade.frame = hitBarrier.bounds
-            container.insertSubview(hitBarrier, belowSubview: surface)
-            hasPresented = true
-            // Opened from a row, the snapshot transition brings the shade up
-            // with its card and hands it over when the card lands.
-            if SecurityDetailSnapshotTransition.shared.claimPresentation(
-                surface: surface, content: presentedView, shade: shade) {
-                return
-            }
-            animateBackdrop(presenting: true, animated: animated)
-        }
-
-        private func dismissBackdropIfNeeded(animated: Bool) {
-            // Pushing research or presenting another sheet is not dismissal
-            // of this page: its backdrop must stay in place underneath it.
-            guard hasPresented, !isDismissing,
-                  sheetController?.isBeingDismissed == true else { return }
-            isDismissing = true
-            animateBackdrop(presenting: false, animated: animated)
-        }
-
-        private func animateBackdrop(presenting: Bool, animated: Bool) {
-            let target: CGFloat = presenting ? 1 : 0
-            // Opening, the shade fades on its own Core Animation clock. Run
-            // alongside the zoom it was stepped by the main thread, which is
-            // busiest building the page in exactly those frames — it came in
-            // in two or three visible jumps. Closing stays with the coordinator
-            // so an interactive swipe drives it and a cancelled one restores it.
-            // An explicit layer animation: UIKit calls this from inside the
-            // transition's setup, where `UIView.animate` is suppressed and the
-            // shade simply appeared.
-            if presenting, animated {
-                transitionInFlight = true
-                CATransaction.begin()
-                CATransaction.setCompletionBlock { [weak self] in
-                    self?.finishTransition(presenting: true, cancelled: false)
-                }
-                let fade = CABasicAnimation(keyPath: "opacity")
-                fade.fromValue = shade.layer.presentation()?.opacity ?? Float(shade.alpha)
-                fade.toValue = 1
-                fade.duration = 0.35
-                fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                shade.alpha = target
-                shade.layer.add(fade, forKey: "catfolio.backdrop.fade")
-                CATransaction.commit()
-                return
-            }
-            if let coordinator = sheetController?.transitionCoordinator ?? transitionCoordinator,
-               coordinator.isAnimated {
-                transitionInFlight = true
-                let scheduled = coordinator.animateAlongsideTransition(in: hitBarrier, animation: { _ in
-                    self.shade.alpha = target
-                }, completion: { context in
-                    self.finishTransition(presenting: presenting, cancelled: context.isCancelled)
-                })
-                if !scheduled {
-                    // The completion can still run when queuing fails. Leave
-                    // cleanup to it (or didDisappear), never to a second timer.
-                    UIView.animate(withDuration: 0.25, delay: 0,
-                                   options: [.beginFromCurrentState, .curveEaseInOut]) {
-                        self.shade.alpha = target
-                    }
-                }
-                return
-            }
-
-            // An unanimated presentation has no coordinator. If UIKit attaches
-            // this observer late, still fade instead of flashing a black layer.
-            transitionInFlight = true
-            UIView.animate(withDuration: animated ? 0.25 : 0,
-                           delay: 0, options: [.beginFromCurrentState, .curveEaseInOut]) {
-                self.shade.alpha = target
-            } completion: { _ in
-                self.finishTransition(presenting: presenting, cancelled: false)
-            }
-        }
-
-        private func finishTransition(presenting: Bool, cancelled: Bool) {
-            // A close requested during opening may already have started the
-            // next transition; its opacity and cleanup now belong to the exit.
-            guard presenting != isDismissing else { return }
-            transitionInFlight = false
-            if presenting ? cancelled : !cancelled {
-                hitBarrier.removeFromSuperview()
-            } else {
-                shade.alpha = 1
-            }
-            if !presenting, cancelled { isDismissing = false }
-        }
-
-        func tearDown() {
-            // SwiftUI may dismantle content before UIKit finishes its exit.
-            // The coordinator's completion retains us and removes the barrier.
-            guard !transitionInFlight else { return }
-            if sheetController?.isBeingDismissed == true {
-                dismissBackdropIfNeeded(animated: true)
-            } else {
-                hitBarrier.removeFromSuperview()
-            }
-        }
-    }
 }
 
 /// Keeps financial colours intact while the row responds to a press. Button
@@ -455,31 +221,6 @@ struct HoldingPressButtonStyle: ButtonStyle {
     }
 }
 
-/// Keeps one security sheet open at a time. UIKit owns the native slide-up
-/// presentation and interactive dismissal; the source identifies the request.
-@MainActor @Observable
-final class SecurityDetailZoomState {
-    struct Source {
-        let id: AnyHashable
-        let namespace: Namespace.ID
-    }
-
-    private(set) var activeSource: Source?
-
-    /// Do not suppress the sheet transaction or start a snapshot animation.
-    func prepare(id: AnyHashable, namespace: Namespace.ID, present: @escaping () -> Void) {
-        guard activeSource == nil else { return }
-        activeSource = Source(id: id, namespace: namespace)
-        present()
-    }
-
-    func didDismiss() {
-        // Called by sheet onDismiss, not by the selection becoming nil or a
-        // view disappearing at the start of an interactive dismissal.
-        activeSource = nil
-    }
-}
-
 private struct SecurityDetailZoomOriginKey: EnvironmentKey {
     static let defaultValue: Namespace.ID? = nil
 }
@@ -488,18 +229,6 @@ extension EnvironmentValues {
     var securityDetailZoomOrigin: Namespace.ID? {
         get { self[SecurityDetailZoomOriginKey.self] }
         set { self[SecurityDetailZoomOriginKey.self] = newValue }
-    }
-}
-
-extension View {
-    /// Compatibility for existing presenters; native sheets need no zoom host.
-    func securityDetailZoomHost(_ state: SecurityDetailZoomState, in namespace: Namespace.ID) -> some View {
-        self
-    }
-
-    /// Preserve the native sheet transition without attaching a source zoom.
-    func securityDetailZoomTransition(_ source: SecurityDetailZoomState.Source?, in namespace: Namespace.ID) -> some View {
-        self
     }
 }
 
@@ -741,18 +470,10 @@ extension View {
             .presentationBackground { SecurityDetailPresentation.ground }
     }
 
-    /// Presents a security page over the whole screen, on its ground. For a
-    /// `fullScreenCover` opened through the snapshot transition.
+    /// Ground for a full-screen security page without a visible source row.
     func securityDetailFullScreen() -> some View {
         environment(\.isAppModal, false)
             .presentationBackground { SecurityDetailPresentation.ground }
-    }
-
-    /// For a presenter that opens and closes through the snapshot transition:
-    /// the backdrop that lets the transition hold the sheet and its shade
-    /// back until the flying card lands, and hand them over when it does.
-    func securityDetailSnapshotBackdrop() -> some View {
-        background(SecurityDetailBackdrop().allowsHitTesting(false).accessibilityHidden(true))
     }
 
     /// The same ground for a security page pushed onto a navigation stack,
@@ -771,7 +492,7 @@ extension View {
     /// the page's own backgrounds, which the sheet's single ground now
     /// replaces; the sources did not need reshaping.
     func catfolioZoomSource(_ id: some Hashable, in namespace: Namespace.ID) -> some View {
-        let key = SecurityDetailSnapshotTransition.SourceKey(id: AnyHashable(id), namespace: namespace)
+        let key = SecurityDetailSources.SourceKey(id: AnyHashable(id), namespace: namespace)
         // The row only, not its marker: B zooms out of the marker, which
         // carries the row's picture while the row is away.
         return modifier(SecurityDetailLiveZoomSourceVisibility(key: key)).background {

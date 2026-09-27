@@ -1,5 +1,7 @@
 # iOS 个股页面 modal 架构审计
 
+> 2026-09-27 更新：本文保留为历史审计记录。首页个股已统一使用原 B 路径 `SecurityDetailLiveZoom` 打开、`SecurityDetailQuickClose` 短淡出关闭；A 快照转场、原生 zoom 对照模式、动画选择及测量/测试入口已移除。下文相关开关与文件不再适用于当前版本。
+
 范围：`HoldingDetailPage.swift`、`DesignSystem.swift`、`SecurityDetailTransition.swift`、全新的 `SecurityZoomTransition.swift`、以及 `PortfolioView` / `ResearchView` / `HoldingsHeatmapView` / `ReturnsView` 的呈现点。
 
 结论先说：**问题不是某个 bug，而是这里有"两套呈现系统同时管一个 sheet"** —— 系统的 `.sheet` 和一套手写的窗口级转场。后面列出的每一个卡顿和 bug 都能直接落到这个结构上。

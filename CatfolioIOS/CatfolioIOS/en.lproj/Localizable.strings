@@ -3331,9 +3331,6 @@
 "读取美股价格和成交量。" = "Loads U.S. stock prices and volume.";
 "部分设置过大；缩短筛选规则或提示词后重试。" = "Some settings are too large. Shorten screening rules or prompts, then retry.";
 "Logo 样式" = "Logo style";
-"个股打开动画" = "Stock page animation";
-"A · 卡片展开" = "A · Card grows";
-"B · 整体缩放" = "B · Whole zoom";
 "跟随外观" = "Match appearance";
 "浅色 Logo" = "Light logo";
 "深色 Logo" = "Dark logo";
@@ -3351,7 +3348,6 @@
 "青蓝光晕" = "Cyan halo";
 "晴空" = "Clear sky";
 "经典" = "Classic";
-"测试提示" = "Test toast";
 "已保存" = "Saved";
 "网络不可用" = "No connection";
 "保存失败" = "Couldn't save";

@@ -11,6 +11,7 @@ struct PortfolioView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var selectedHolding: Holding?
+    @State private var isHoldingPresented = false
     @State private var showsTodayDetail = false
     @State private var homeScrollState = PortfolioHomeScrollState()
     @State private var homeScrollController = PortfolioHomeScrollController()
@@ -21,17 +22,6 @@ struct PortfolioView: View {
     // id, and the transition has no way to know which one it grew from.
     @Namespace private var holdingsRowZoom
     @Namespace private var todayBarZoom
-    @Namespace private var holdingPresentationZoom
-    @State private var holdingZoomState = SecurityDetailZoomState()
-    /// The namespace the current open grew out of. `matchedTransitionSource`
-    /// and `.navigationTransition(.zoom)` are matched on the (id, namespace)
-    /// pair, so the native-zoom destination has to name the same one the row
-    /// published under — anything else and the source is silently ignored and
-    /// the page just slides up from the bottom. The box keeps the namespace
-    /// readable from state, which `Namespace.ID` alone is not.
-    @State private var nativeZoomBase: ZoomBase?
-    private struct ZoomBase { let namespace: Namespace.ID }
-
     private var previewsLoading: Bool {
         #if DEBUG
         LaunchArguments.contains("--show-portfolio-loading")
@@ -187,53 +177,6 @@ struct PortfolioView: View {
                             try? await Task.sleep(for: .milliseconds(250))
                             scrollProxy.scrollTo("today-contribution", anchor: .top)
                         }
-                        #if DEBUG
-                        // Opens and closes a security page through the same
-                        // calls as a tap and ✕, for recording the transition.
-                        if arguments.contains("--demo-security-transition") {
-                            try? await Task.sleep(for: .seconds(4))
-                            for _ in 0..<2 {
-                                guard let holding = model.holdings.first(where: {
-                                    SecurityDetailSnapshotTransition.shared.hasLiveSource(id: $0.ticker, namespace: todayBarZoom)
-                                }) else { break }
-                                openHolding(holding, from: todayBarZoom)
-                                try? await Task.sleep(for: .seconds(2.5))
-                                selectedHolding = nil
-                                SecurityDetailLiveZoom.shared.close()
-                                try? await Task.sleep(for: .seconds(2.5))
-                            }
-                        }
-                        #endif
-                        // Drives the open and close without touch, for the
-                        // frame measurement. Every holding is opened twice: a
-                        // security's caches are per-ticker, so the first open
-                        // of each is cold and its second is warm from the same
-                        // container — which is how the two runs are comparable.
-                        // Opt-in by launch argument, so it is inert otherwise.
-                        // Outside `#if DEBUG` so the measurement can run in
-                        // Release, where the timings mean something.
-                        if SecurityDetailMeasure.isAutoDriving {
-                            try? await Task.sleep(for: .seconds(5))
-                            let live = model.holdings.filter { holding in
-                                [todayBarZoom, holdingsRowZoom].contains { namespace in
-                                    SecurityDetailSnapshotTransition.shared.hasLiveSource(
-                                        id: holding.ticker, namespace: namespace)
-                                }
-                            }
-                            for cycle in 0..<2 {
-                                for holding in live {
-                                    let namespace = SecurityDetailSnapshotTransition.shared.hasLiveSource(
-                                        id: holding.ticker, namespace: todayBarZoom)
-                                        ? todayBarZoom : holdingsRowZoom
-                                    openHolding(holding, from: namespace)
-                                    try? await Task.sleep(for: .seconds(2.6))
-                                    selectedHolding = nil
-                                    SecurityDetailLiveZoom.shared.close()
-                                    try? await Task.sleep(for: .seconds(2.6))
-                                }
-                                _ = cycle
-                            }
-                        }
                     }
                 }
                 .overlay(alignment: .top) {
@@ -246,31 +189,12 @@ struct PortfolioView: View {
                     }
                 }
                 .modifier(PortfolioFloatingFilterOverlay())
-                .securityDetailZoomHost(holdingZoomState, in: holdingPresentationZoom)
-                // Full screen: the page is the whole screen, and the list
-                // behind it steps back while it is up.
                 .fullScreenCover(item: $selectedHolding, onDismiss: {
-                    SecurityDetailMeasure.end()
-                    holdingZoomState.didDismiss()
-                    SecurityDetailSnapshotTransition.shared.presentationDidEnd()
+                    isHoldingPresented = false
                 }) { holding in
-                    HoldingDetailView(holding: holding, onClose: {
-                        SecurityDetailSnapshotTransition.shared.close { selectedHolding = nil }
-                    })
-                        // A swipe in from the edge closes it the same way.
-                        .onAppear { SecurityDetailSnapshotTransition.shared.dismissAction = { selectedHolding = nil } }
+                    HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
                         .environment(model)
                         .securityDetailFullScreen()
-                        .securityDetailSnapshotBackdrop()
-                        .securityDetailZoomTransition(holdingZoomState.activeSource, in: holdingPresentationZoom)
-                        // Same namespace the row published under: the pair
-                        // (ticker, namespace) is what the zoom matches on, and
-                        // a mismatch silently drops the source.
-                        .securityDetailNativeZoomDestination(
-                            holding.ticker,
-                            in: nativeZoomBase?.namespace ?? holdingPresentationZoom,
-                            enabled: SecurityDetailNativeZoom.isEnabled
-                                || SecurityDetailNativeZoom.isForced)
                 }
                 .navigationDestination(isPresented: $showsTodayDetail) {
                     TodayDetailView(
@@ -291,68 +215,23 @@ struct PortfolioView: View {
     }
 
     private func openHolding(_ holding: Holding, from namespace: Namespace.ID) {
-        guard selectedHolding == nil, holdingZoomState.activeSource == nil,
+        guard selectedHolding == nil, !isHoldingPresented,
               !homeScrollController.touchCaughtMotion else { return }
-        // The native-zoom control: the same sheet, presented with the row as a
-        // matched transition source. No opening card, no hand-off, no backdrop,
-        // no edge pan — none of A's machinery is attached on this path.
-        if SecurityDetailNativeZoom.isEnabled {
-            SecurityDetailMeasure.begin("native-zoom")
-            openFeedback()
-            // The page has to name the namespace this row published under, or
-            // the zoom has no source to grow from and the cover merely slides.
-            nativeZoomBase = ZoomBase(namespace: namespace)
-            selectedHolding = holding
-            return
-        }
-        // Read from disk and prepare the chart while the card or page is in the air.
         HoldingDetailContentView.prefetch(holding, model: model)
-        // B: the system's zoom on the live page, lined up on the row's logo.
-        // Out of reach — the row not on screen — it falls back to the plain
-        // cover below, as A does.
-        if SecurityDetailTransitionStyle.current == .b {
-            SecurityDetailMeasure.begin("live-zoom-b")
-            holdingZoomState.prepare(id: holding.ticker, namespace: namespace) {
-                let opened = SecurityDetailLiveZoom.shared.open(
-                    id: holding.ticker, namespace: namespace,
-                    page: { close in
-                        AnyView(HoldingDetailView(holding: holding, onClose: close)
-                            .environment(model)
-                            .environment(\.locale, appLocale)
-                            .environment(\.isAppModal, false)
-                            .fontDesign(.rounded)
-                            .tint(CatfolioTheme.accent))
-                    },
-                    didEnd: {
-                        SecurityDetailMeasure.end()
-                        holdingZoomState.didDismiss()
-                    })
-                openFeedback()
-                if !opened { selectedHolding = holding }
-            }
-            return
-        }
-        SecurityDetailMeasure.begin("snapshot-a")
-        // From a row on screen, a card and the row's logo fly to the sheet's
-        // place first; the sheet is presented under them when they land.
-        holdingZoomState.prepare(id: holding.ticker, namespace: namespace) {
-            switch SecurityDetailSnapshotTransition.shared.beginOpen(
-                id: holding.ticker, namespace: namespace,
-                opening: {
-                    AnyView(HoldingDetailOpeningScreen(holding: holding)
-                        .environment(model)
-                        .environment(\.locale, appLocale)
-                        .fontDesign(.rounded))
-                },
-                present: { selectedHolding = holding },
-                cancelled: { holdingZoomState.didDismiss() }) {
-            case .snapshot: openFeedback()
-            case .plain:
-                openFeedback()
-                selectedHolding = holding
-            case .busy: holdingZoomState.didDismiss()
-            }
-        }
+        isHoldingPresented = true
+        let opened = SecurityDetailLiveZoom.shared.open(
+            id: holding.ticker, namespace: namespace,
+            page: { close in
+                AnyView(HoldingDetailView(holding: holding, onClose: close)
+                    .environment(model)
+                    .environment(\.locale, appLocale)
+                    .environment(\.isAppModal, false)
+                    .fontDesign(.rounded)
+                    .tint(CatfolioTheme.accent))
+            },
+            didEnd: { isHoldingPresented = false })
+        openFeedback()
+        if !opened { selectedHolding = holding }
     }
 
     /// The click is the tap's, in the same run-loop turn: tied to the page's

@@ -52,8 +52,4 @@ final class HoldingDetailCacheTests: XCTestCase {
                                         object: nil)
         XCTAssertFalse(kept === model.cachedHoldingDetail(for: holding("AAA")))
     }
-
-    func testFreshContentStepsItsLowerCardsIn() {
-        XCTAssertFalse(HoldingDetailContentView.lowerStagesCanSkip(HoldingDetailCachedContent()))
-    }
 }

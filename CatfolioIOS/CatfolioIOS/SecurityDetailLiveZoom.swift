@@ -2,46 +2,7 @@ import OSLog
 import SwiftUI
 import UIKit
 
-/// Which open the security page uses from the home list.
-///
-/// - A: `SecurityDetailSnapshotTransition` — a drawn card and logo fly, and
-///   the real page is presented under them when they land.
-/// - B: `SecurityDetailLiveZoom` — the system's zoom on the live page.
-///
-/// Chosen in Settings, or at launch with `-securityDetail.transitionStyle A`.
-enum SecurityDetailTransitionStyle: String, CaseIterable, Identifiable {
-    case a = "A"
-    case b = "B"
-
-    static let preferenceKey = "securityDetail.transitionStyle"
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .a: L10n.text("A · 卡片展开")
-        case .b: L10n.text("B · 整体缩放")
-        }
-    }
-
-    static var current: Self {
-        UserDefaults.standard.string(forKey: preferenceKey).flatMap(Self.init(rawValue:)) ?? .b
-    }
-}
-
-/// B: the security page opened by the system's own zoom, on the live page.
-///
-/// A flies a picture of the page and hands over to the real one when it
-/// lands; everything that went wrong with A — two lines on top of each other,
-/// the flash, a logo left behind, the page uncovered late — happened at that
-/// hand-off. Here there is none: from the tap it is the real page that grows,
-/// and the system draws it, closes it (✕, pull down, swipe right) and lets a
-/// finger catch it mid-way.
-///
-/// The one thing added to the system's zoom is where the page lines up with
-/// its row: `alignmentRectProvider` puts the row's logo on the page header's
-/// (centre on centre; see `alignment`), so the row and the page scale as one
-/// picture and cross-fade, the logo staying in place between them.
+/// Opens the live security page from its row; closing uses a short fade.
 @MainActor
 final class SecurityDetailLiveZoom {
     static let shared = SecurityDetailLiveZoom()
@@ -50,7 +11,7 @@ final class SecurityDetailLiveZoom {
     /// in for it — as the system hides a zoom's source.
     @MainActor @Observable
     final class HiddenSource {
-        var key: SecurityDetailSnapshotTransition.SourceKey?
+        var key: SecurityDetailSources.SourceKey?
     }
 
     static let hiddenSource = HiddenSource()
@@ -70,11 +31,15 @@ final class SecurityDetailLiveZoom {
               page content: (_ close: @escaping () -> Void) -> AnyView,
               didEnd: @escaping () -> Void) -> Bool {
         guard page == nil else { return false }
-        let key = SecurityDetailSnapshotTransition.SourceKey(id: id, namespace: namespace)
-        guard let source = SecurityDetailSnapshotTransition.shared.liveSourceViews(for: key),
+        SecurityDetailQuickClose.shared.removeOverlay()
+        let key = SecurityDetailSources.SourceKey(id: id, namespace: namespace)
+        guard let source = SecurityDetailSources.shared.liveSourceViews(for: key),
               let window = source.row.window,
               let presenter = Self.topController(from: window.rootViewController),
-              let picture = Self.picture(of: source.row) else { return false }
+              let drawn = Self.picture(of: source.row) else { return false }
+        // Without the list card's fill behind it: only the logo and the
+        // text zoom, not a slab of the card's colour.
+        let picture = Self.removingBackground(from: drawn) ?? drawn
 
         let standIn = UIImageView(image: picture)
         standIn.frame = source.row.bounds
@@ -88,6 +53,8 @@ final class SecurityDetailLiveZoom {
         controller.didDismiss = { [weak self] in self?.pageDidGo() }
 
         let options = UIViewController.Transition.ZoomOptions()
+        // Our short, cancellable close gesture replaces the reverse zoom.
+        options.interactiveDismissShouldBegin = { _ in false }
         options.dimmingColor = SecurityDetailPresentation.backdropColor
         options.dimmingVisualEffect = UIBlurEffect(style: .regular)
         options.alignmentRectProvider = { [weak self, weak rowLogo = source.logo] context in
@@ -100,14 +67,19 @@ final class SecurityDetailLiveZoom {
         // The row goes from the list in the same transaction as the tap; its
         // picture, behind it in the marker, is what shows until the zoom takes it.
         Self.hiddenSource.key = key
-        presenter.present(controller, animated: true)
+        presenter.present(controller, animated: true) { [weak controller, weak self] in
+            guard let controller else { return }
+            controller.closeGesture = SecurityDetailCloseGesture(controller: controller) { [weak self] in
+                self?.close()
+            }
+        }
         return true
     }
 
-    /// ✕, and a close the presenter asks for.
+    /// Dismiss the actual page immediately; a short picture fades above the list.
     func close() {
-        guard let page, page.presentingViewController != nil, !page.isBeingDismissed else { return }
-        page.dismiss(animated: true)
+        guard let page else { return }
+        SecurityDetailQuickClose.shared.dismiss(page)
     }
 
     private func pageDidGo() {
@@ -139,7 +111,7 @@ final class SecurityDetailLiveZoom {
         // The header's logo where it sits on the page's first screen. A page
         // scrolled away from its top is lined up as if at its top: its logo,
         // off the screen, would have put the row somewhere above the page.
-        let measured = SecurityDetailSnapshotTransition.shared.pageLogoFrame(in: page)
+        let measured = SecurityDetailSources.shared.pageLogoFrame(in: page)
             .flatMap { CGRect(origin: .zero, size: pageSize).contains($0) ? $0 : nil }
         if let measured { pageLogoInPage = measured }
         let pageLogo = measured ?? pageLogoInPage ?? CGRect(x: 20, y: top + 20, width: 56, height: 56)
@@ -192,6 +164,56 @@ final class SecurityDetailLiveZoom {
         }
     }
 
+    /// The row's picture with its background taken out: the colour at its
+    /// corner — the card's fill — becomes transparent, and every other pixel
+    /// keeps what it adds over that colour ("colour to alpha"), so text and
+    /// its antialiased edges come out clean, with no fringe of the fill.
+    private static func removingBackground(from image: UIImage) -> UIImage? {
+        guard let cg = image.cgImage else { return nil }
+        let width = cg.width, height = cg.height
+        guard width > 2, height > 2 else { return nil }
+        let bytesPerRow = width * 4
+        var pixels = [UInt8](repeating: 0, count: bytesPerRow * height)
+        let space = CGColorSpaceCreateDeviceRGB()
+        let info = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+        let made = pixels.withUnsafeMutableBytes { buffer -> CGImage? in
+            guard let context = CGContext(data: buffer.baseAddress, width: width, height: height,
+                                          bitsPerComponent: 8, bytesPerRow: bytesPerRow,
+                                          space: space, bitmapInfo: info) else { return nil }
+            context.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+            let p = buffer.bindMemory(to: UInt8.self)
+            // The fill: a pixel just inside the top-left corner.
+            let corner = 2 * bytesPerRow + 2 * 4
+            let bg = (Double(p[corner]) / 255, Double(p[corner + 1]) / 255, Double(p[corner + 2]) / 255)
+            func share(_ c: Double, _ b: Double) -> Double {
+                if c > b { return b < 1 ? (c - b) / (1 - b) : 0 }
+                if c < b { return b > 0 ? (b - c) / b : 0 }
+                return 0
+            }
+            for i in stride(from: 0, to: bytesPerRow * height, by: 4) {
+                let a0 = Double(p[i + 3]) / 255
+                guard a0 > 0 else { continue }
+                let c = (Double(p[i]) / 255 / a0, Double(p[i + 1]) / 255 / a0, Double(p[i + 2]) / 255 / a0)
+                let alpha = min(1, max(share(c.0, bg.0), share(c.1, bg.1), share(c.2, bg.2))) * a0
+                if alpha <= 0.001 {
+                    p[i] = 0; p[i + 1] = 0; p[i + 2] = 0; p[i + 3] = 0
+                    continue
+                }
+                let k = a0 / alpha
+                func channel(_ c: Double, _ b: Double) -> UInt8 {
+                    let straight = min(1, max(0, (c - b) * k + b))
+                    return UInt8((straight * alpha * 255).rounded())
+                }
+                p[i] = channel(c.0, bg.0)
+                p[i + 1] = channel(c.1, bg.1)
+                p[i + 2] = channel(c.2, bg.2)
+                p[i + 3] = UInt8((alpha * 255).rounded())
+            }
+            return context.makeImage()
+        }
+        return made.map { UIImage(cgImage: $0, scale: image.scale, orientation: image.imageOrientation) }
+    }
+
     private static func topController(from root: UIViewController?) -> UIViewController? {
         var top = root
         while let presented = top?.presentedViewController, !presented.isBeingDismissed {
@@ -200,23 +222,28 @@ final class SecurityDetailLiveZoom {
         return top
     }
 
-    /// The page, telling us when it has gone — by ✕ or by the system's own
-    /// pull or swipe. A pull let go short of closing does not count.
+    /// Reports actual dismissal; a cancelled pull never dismisses the page.
     private final class PageController: UIHostingController<AnyView> {
         var didDismiss: (() -> Void)?
+
+        var closeGesture: SecurityDetailCloseGesture?
 
         override func viewDidDisappear(_ animated: Bool) {
             super.viewDidDisappear(animated)
             guard isBeingDismissed || presentingViewController == nil else { return }
+            finish()
+        }
+
+        private func finish() {
             didDismiss?()
             didDismiss = nil
         }
     }
 }
 
-/// Hides a zoom source's row, not its marker, while B's page is up.
+/// Hides a zoom source's row, not its marker, while its page is up.
 struct SecurityDetailLiveZoomSourceVisibility: ViewModifier {
-    let key: SecurityDetailSnapshotTransition.SourceKey
+    let key: SecurityDetailSources.SourceKey
 
     func body(content: Content) -> some View {
         content.opacity(SecurityDetailLiveZoom.hiddenSource.key == key ? 0 : 1)

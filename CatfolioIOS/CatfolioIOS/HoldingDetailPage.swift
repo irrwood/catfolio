@@ -73,14 +73,6 @@ struct HoldingDetailContentView: View {
         get { cachedContent.realisedProfit }
         nonmutating set { cachedContent.realisedProfit = newValue }
     }
-    /// How many of the lower cards are built. Opening builds only the first
-    /// screen; once the open has settled the heavy cards arrive one by one,
-    /// each in its own frame, instead of all together with the first screen.
-    @State private var lowerStage = 0
-    @Environment(\.accessibilityReduceMotion) private var lowerStagesReduceMotion
-    /// True on the opening card's copy of this page: it shares this content's
-    /// structure, so it reports an appear while the real page is still building.
-    @Environment(\.securityDetailOpeningPlaceholder) private var isOpeningPlaceholder
     @State private var cardInsight: SecurityCardInsightRequest?
     @State private var marketDataRevision = 0
     @State private var completedMarketDataRevision: Int?
@@ -107,41 +99,9 @@ struct HoldingDetailContentView: View {
         hasSelectedDetailAccounts && hasPosition
     }
 
-    /// A preview ends at the price chart, so it never builds the cards below.
+    /// A preview ends at the price chart.
     private var showsLowerSections: Bool {
-        (lowerStage > 0 && !isPreview) || showsVolumeFocusedPreview
-    }
-
-    private func showsLowerStage(_ stage: Int) -> Bool {
-        lowerStage >= stage || showsVolumeFocusedPreview
-    }
-
-    static let lowerStageCount = 4
-
-    /// Whether this page has been opened before with its data in hand.
-    static func lowerStagesCanSkip(_ cached: HoldingDetailCachedContent) -> Bool {
-        cached.profile != nil && cached.priceHistory != nil
-    }
-
-    private func startLowerStages() {
-        guard lowerStage == 0, !isPreview else { return }
-        SecurityDetailLoadTrace.mark("lower-cards.start")
-        // Opened before: the cards' data is still in the cache, so they come
-        // up whole and at once. `lowerStage` itself starts at 0 on every
-        // presentation, and stepping it again replayed the placeholders
-        // over data that was already there.
-        if Self.lowerStagesCanSkip(cachedContent) {
-            var transaction = Transaction(animation: nil)
-            transaction.disablesAnimations = true
-            withTransaction(transaction) { lowerStage = Self.lowerStageCount }
-            return
-        }
-        Task { @MainActor in
-            for stage in 1...Self.lowerStageCount {
-                withAnimation(lowerStagesReduceMotion ? nil : .easeOut(duration: 0.25)) { lowerStage = stage }
-                try? await Task.sleep(for: .milliseconds(140))
-            }
-        }
+        !isPreview || showsVolumeFocusedPreview
     }
 
     private var showsInitialLoadingPlaceholder: Bool {
@@ -242,8 +202,7 @@ struct HoldingDetailContentView: View {
                                 // Left out for a security with no options: one
                                 // the panel cannot read, or whose chain lists
                                 // no expiry at all.
-                                if showsLowerStage(2),
-                                   OptionsOIView.supports(symbol: holding.ticker, currency: holding.quoteCurrency),
+                                if OptionsOIView.supports(symbol: holding.ticker, currency: holding.quoteCurrency),
                                    !cachedContent.optionsSnapshots.values.contains(where: { $0.listsOptions == false }) {
                                     OptionsOIView(symbol: holding.ticker, currency: holding.quoteCurrency,
                                         price: priceHistory?.latestAvailablePrice ?? holding.quotePrice,
@@ -255,7 +214,7 @@ struct HoldingDetailContentView: View {
                                         onSnapshot: { days, snapshot in cachedContent.optionsSnapshots[days] = snapshot })
                                 }
 
-                                if showsPosition, showsLowerStage(3) {
+                                if showsPosition {
                                     HoldingPositionDetails(holding: displayedHolding, realisedProfit: realisedProfit)
                                 }
                             }
@@ -264,15 +223,11 @@ struct HoldingDetailContentView: View {
                             .padding(.horizontal, HoldingDetailCardStyle.pageInset)
                             .padding(.top, showsVolumeFocusedPreview ? 28 : 24)
 
-                            if showsLowerStage(4) {
-                                HoldingResearchSection(holding: holding,
-                                    price: priceHistory?.latestAvailablePrice ?? holding.quotePrice,
-                                    cachedContent: cachedContent)
-                                .id("\(holding.ticker)|\(appLocale.identifier)")
-                                .padding(.bottom, 72)
-                            } else {
-                                Color.clear.frame(height: 72)
-                            }
+                            HoldingResearchSection(holding: holding,
+                                price: priceHistory?.latestAvailablePrice ?? holding.quotePrice,
+                                cachedContent: cachedContent)
+                            .id("\(holding.ticker)|\(appLocale.identifier)")
+                            .padding(.bottom, 72)
                         }
                     } else {
                         HoldingDetailLowerLoadingPlaceholder(ticker: holding.ticker, showsPosition: showsPosition)
@@ -284,26 +239,6 @@ struct HoldingDetailContentView: View {
                 // view loses inherited refresh, never its presenting page or
                 // the independently refreshable analyst/financial sheets.
                 .background(HoldingDetailScrollBoundary())
-                // Built under the landed card, which then fades off it.
-                .onAppear {
-                    // The opening card carries this same content while the real
-                    // page is still a picture behind it; the tag keeps the two
-                    // apart in the measurement.
-                    SecurityDetailMeasure.contentAppeared(
-                        tag: isOpeningPlaceholder ? "opening-card" : "real-page")
-                    if !isPreview { SecurityDetailSnapshotTransition.shared.contentDidAppear() }
-                    if !isPreview, !isOpeningPlaceholder {
-                        SecurityDetailLoadTrace.mark("page.appeared")
-                        SecurityDetailLoadTrace.note("price.memory", priceHistory != nil ? "hit" : "miss")
-                        SecurityDetailLoadTrace.note("volume.memory", profile != nil ? "hit" : "miss")
-                    }
-                }
-                // The first frame that carries real data, which is what decides
-                // whether the page could have been grown live.
-                .onChange(of: priceHistory != nil, initial: true) { _, hasData in
-                    if hasData { SecurityDetailMeasure.dataAppeared() }
-                    if hasData, !isPreview { SecurityDetailLoadTrace.mark("price.in-page") }
-                }
             }
             .accessibilityIdentifier("holding-detail-scroll")
             // A long press on a card's title reads that card aloud, so to
@@ -336,13 +271,6 @@ struct HoldingDetailContentView: View {
             }
             // Transparent: the ground is the presentation's, so the one
             // background there is is the one the system rounds.
-            .background {
-                PresentationDidAppearReader {
-                    // After the open has landed and faded, not when the sheet
-                    // first appears under the card.
-                    SecurityDetailSnapshotTransition.shared.whenOpenSettles { startLowerStages() }
-                }
-            }
             // Start cache-backed work as soon as SwiftUI inserts the sheet,
             // while the native presentation animation is still running. The
             // available holding header renders immediately; only genuinely
@@ -382,8 +310,6 @@ struct HoldingDetailContentView: View {
         if profile == nil {
             let cached = try? await model.volumeProfile(for: holding.ticker,
                 currency: holding.quoteCurrency, cachedOnly: true)
-            SecurityDetailLoadTrace.note("volume.disk", cached != nil ? "hit" : "miss")
-            SecurityDetailLoadTrace.mark("volume.disk")
             if let cached, !Task.isCancelled { profile = cached }
         }
         guard !Task.isCancelled else { return }
@@ -391,7 +317,6 @@ struct HoldingDetailContentView: View {
             let loaded = try await model.volumeProfile(for: holding.ticker, currency: holding.quoteCurrency,
                                                        forceRefresh: forceRefresh)
             guard !Task.isCancelled else { return }
-            SecurityDetailLoadTrace.mark("volume.network")
             profile = loaded
             errorMessage = nil
         } catch {
@@ -439,12 +364,9 @@ struct HoldingDetailContentView: View {
                 selectedAccountKeys = context.allAccountKeys
             }
             accountContext = context
-            SecurityDetailLoadTrace.mark("price.account-context")
             if priceHistory == nil {
                 let cached = try? await model.securityPriceHistory(
                     for: holding.ticker, accountKeys: context.allAccountKeys, cachedOnly: true)
-                SecurityDetailLoadTrace.note("price.disk", cached != nil ? "hit" : "miss")
-                SecurityDetailLoadTrace.mark("price.disk")
                 if let cached, !Task.isCancelled {
                     priceHistory = cached
                     if !forceRefresh { isLoadingMarketData = false }
@@ -457,7 +379,6 @@ struct HoldingDetailContentView: View {
                 forceRefresh: forceRefresh
             )
             guard !Task.isCancelled else { return }
-            SecurityDetailLoadTrace.mark("price.network")
             priceHistory = loaded
             priceHistoryError = nil
         } catch {
@@ -522,8 +443,8 @@ struct HoldingDetailScrollBoundary: UIViewRepresentable {
         override func didMoveToWindow() {
             super.didMoveToWindow()
             if window == nil {
-                topLock = nil
-                lockedScrollView = nil
+                refreshObservation = nil
+                observedScrollView = nil
             }
             removeInheritedRefreshControl()
             // SwiftUI may install its refresh control after attaching content.
@@ -535,27 +456,12 @@ struct HoldingDetailScrollBoundary: UIViewRepresentable {
             removeInheritedRefreshControl()
         }
 
-        private var topLock: NSKeyValueObservation?
-        private weak var lockedScrollView: UIScrollView?
-
-        /// The page stops dead at its top — a fast flick into it pulled a
-        /// screen of empty ground down above the header — but keeps its
-        /// bounce at the bottom. A pull from the top moves the sheet itself.
-        private func lockTop(of scrollView: UIScrollView) {
-            guard lockedScrollView !== scrollView else { return }
-            lockedScrollView = scrollView
-            topLock = scrollView.observe(\.contentOffset, options: [.new]) { scrollView, _ in
-                let top = -scrollView.adjustedContentInset.top
-                if scrollView.contentOffset.y < top {
-                    scrollView.contentOffset.y = top
-                }
-            }
-        }
-
+        private var refreshObservation: NSKeyValueObservation?
+        private weak var observedScrollView: UIScrollView?
         func removeInheritedRefreshControl() {
             // Found once: this runs on every layout pass, and the scroll view
             // around the page does not change while the page is up.
-            if let scrollView = lockedScrollView, window != nil {
+            if let scrollView = observedScrollView, window != nil {
                 if scrollView.refreshControl != nil { scrollView.refreshControl = nil }
                 return
             }
@@ -565,7 +471,13 @@ struct HoldingDetailScrollBoundary: UIViewRepresentable {
                     if scrollView.refreshControl != nil {
                         scrollView.refreshControl = nil
                     }
-                    lockTop(of: scrollView)
+                    if observedScrollView !== scrollView {
+                        observedScrollView = scrollView
+                        // SwiftUI can restore inherited refresh when a child sheet opens.
+                        refreshObservation = scrollView.observe(\.refreshControl, options: [.new]) { scroll, _ in
+                            if scroll.refreshControl != nil { scroll.refreshControl = nil }
+                        }
+                    }
                     return
                 }
                 ancestor = view.superview
@@ -824,43 +736,6 @@ struct HoldingVolumeProfileLoadingPlaceholder: View {
     }
 }
 
-/// Only cheap shapes during the native slide. No research initializers,
-/// disk reads or chart preparation are needed to show that content is coming.
-/// The page's first screen before the page exists, for the opening card:
-/// the same views in the same layout as the page's own first frame — header,
-/// line-only chart, time picker, account shells, the AI button, the ✕ and
-/// the lower placeholders — without the figures only the page can know. On
-/// landing the page appears under it identical, so the crossing cannot be
-/// seen; only the figures and the chart arrive.
-struct HoldingDetailOpeningScreen: View {
-    let holding: Holding
-
-    var body: some View {
-        // In a scroll view like the page's, so it is laid out from the top
-        // exactly as the page is, however far below the screen it runs.
-        ScrollView {
-            VStack(spacing: 0) {
-                HoldingDetailPriceSection(
-                    holding: holding,
-                    priceHistory: nil,
-                    priceHistoryError: nil,
-                    averageCost: nil,
-                    selectedAccountKeys: []
-                )
-                HoldingDetailLowerLoadingPlaceholder(ticker: holding.ticker, showsPosition: holding.shares > 0)
-            }
-        }
-        .scrollDisabled(true)
-        .scrollIndicators(.hidden)
-        .overlay(alignment: .topTrailing) {
-            HoldingDetailCloseButton(action: {})
-                .padding(20)
-        }
-        .environment(\.securityDetailOpeningPlaceholder, true)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-}
 
 struct HoldingDetailLowerLoadingPlaceholder: View {
     let ticker: String
@@ -1286,7 +1161,6 @@ extension HoldingDetailContentView {
             }
             guard let history, content.priceHistory == nil else { return }
             content.priceHistory = history
-            SecurityDetailLoadTrace.mark("prefetch.price")
             // The chart, prepared exactly as the page will ask for it, so the
             // page takes it from the cache instead of preparing it again.
             let averageCost = hasAccounts ? averageCostInQuoteCurrency(of: shown) : nil
@@ -1299,7 +1173,6 @@ extension HoldingDetailContentView {
             }.value
             if content.preparedChart == nil {
                 content.preparedChart = (request, prepared)
-                SecurityDetailLoadTrace.mark("prefetch.chart")
             }
         }
     }
