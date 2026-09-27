@@ -86,7 +86,7 @@ final class SecurityDetailLiveZoom {
         controller.modalPresentationStyle = .fullScreen
         controller.didDismiss = { [weak self] in self?.pageDidGo() }
 
-        let options = UIZoomTransitionOptions()
+        let options = UIViewController.Transition.ZoomOptions()
         options.dimmingColor = SecurityDetailPresentation.backdropColor
         options.dimmingVisualEffect = UIBlurEffect(style: .regular)
         options.alignmentRectProvider = { [weak self, weak rowLogo = source.logo] context in
