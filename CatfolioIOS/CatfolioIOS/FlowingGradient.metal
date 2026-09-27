@@ -506,3 +506,100 @@ Glow glowAt(float2 p, float time, float aspect, float bandTop, float2 clearBand)
     col += n * grain;
     return half4(half3(saturate(col)), 1.0h);
 }
+
+/// Bright, pearly rings: the arcs of `flowingRings` with near-white rims,
+/// bands in a deeper shade of the sky (haloColor) instead of deep blue, and
+/// a sheen along each rim that shifts between cyan, pink and peach — along
+/// the arc, from ring to ring, and slowly over time. Blur grows towards the
+/// top: the lowest rings stay fairly crisp, the higher ones melt into soft
+/// light. Colours: baseTop/baseBottom = ground, haloColor = bands,
+/// coreColor = rims; `blur` scales the softness (1 = default).
+[[ stitchable ]] half4 brightRings(float2 position,
+                                   half4 color,
+                                   float2 size,
+                                   float time,
+                                   half4 baseTop,
+                                   half4 baseBottom,
+                                   half4 haloColor,
+                                   half4 coreColor,
+                                   float grain,
+                                   float glowTop,
+                                   half4 fringeColor,
+                                   float dispersion,
+                                   float2 clearBand,
+                                   float feather,
+                                   float intensity,
+                                   float4 lightShape,
+                                   float blur) {
+    float aspect = size.x / max(size.y, 1.0);
+    float2 p = (position - 0.5 * size) / max(size.y, 1.0);
+    p += 0.012 * float2(sin(p.y * 5.0 + time * 0.40),
+                        sin(p.x * 6.0 - time * 0.30 + 1.3));
+
+    float top = saturate(glowTop / max(size.y, 1.0)) - 0.5;
+    bool confined = glowTop > 0.0;
+    float bandTop = confined ? top + 0.12 : -0.46;
+
+    // The light that brightens the rings as it passes (as in flowingRings).
+    float stretch = 1.0 + 0.45 * sin(time * 0.29 + 0.8);
+    float angle   = 0.9 * sin(time * 0.13);
+    float2 lp = p;
+    if (confined && lp.y < top) { lp.y = top - (top - lp.y) * 2.5; }
+    float light = blob(lp, confine(path(time, aspect), bandTop), float2(0.44 * stretch, 0.44 / stretch), angle);
+    float hot   = blob(lp, confine(path(time - 0.9, aspect), bandTop), float2(0.18 * stretch, 0.18 / stretch), angle);
+    light *= intensity;
+    hot *= intensity;
+
+    const float2 centre = float2(0.0, 0.70);
+    const float spacing = 0.17;
+    const float drift = 0.014;
+    float r0 = length((p - centre) * float2(0.85, 1.0));
+    float split = 0.006 * dispersion;
+
+    // Softness rises from 0.35× at the bottom to 1.8× near the top.
+    float up = saturate((0.55 - p.y) / 0.9);
+    float b = blur * (0.35 + 1.45 * up);
+    float rimWidth = 0.004 + 0.022 * b;
+    float bodyFalloff = 0.035 + 0.02 * b;
+    float onset = 0.004 + 0.03 * b;
+
+    float3 ground = mix(float3(baseTop.rgb), float3(baseBottom.rgb),
+                        saturate(position.y / max(size.y, 1.0)));
+    float lit = 0.25 + 1.3 * light + 1.5 * hot;
+    float3 col;
+    float3 rims;
+    for (int ch = 0; ch < 3; ch++) {
+        float r = r0 + float(1 - ch) * split;
+        float d = spacing * fract((drift * time - r) / spacing);
+        float dd = min(d, spacing - d);
+        float rim = exp(-(dd / rimWidth) * (dd / rimWidth)) * (1.0 - 0.3 * saturate(b - 0.5));
+        float body = exp(-d / bodyFalloff) * (1.0 - exp(-d / onset));
+        float c = mix(ground[ch], float(haloColor[ch]), saturate(body * lit * 1.1));
+        c = mix(c, float(coreColor[ch]), saturate(rim * (0.6 + light) + body * (hot * 1.2 + light * 0.2)));
+        col[ch] = c;
+        rims[ch] = rim;
+    }
+
+    // Pearly sheen, kept to cyan, pink and peach (no violet): its hue runs
+    // along the arc, steps from ring to ring and drifts over time; it is
+    // strongest where the colour channels part at the rim.
+    float arcAngle = atan2(p.x, centre.y - p.y);
+    float ring = floor((drift * time - r0) / spacing);
+    float h = arcAngle * 0.9 + time * 0.05 + ring * 0.37;
+    const float3 cyan  = float3(0.72, 0.95, 1.00);
+    const float3 pink  = float3(1.00, 0.82, 0.90);
+    const float3 peach = float3(1.00, 0.90, 0.76);
+    float3 sheen = mix(cyan, pink, 0.5 + 0.5 * cos(6.2832 * h));
+    sheen = mix(sheen, peach, 0.6 * (0.5 + 0.5 * cos(6.2832 * (h * 0.7 + 0.3))));
+    float edge = saturate(abs(rims.r - rims.b) * 2.2 + rims.g * 0.35) * (0.4 + light + hot);
+    col = mix(col, sheen, 0.6 * saturate(edge));
+
+    if (confined) {
+        float mask = smoothstep(glowTop - 0.22 * size.y, glowTop - 0.04 * size.y, position.y);
+        col = mix(ground, col, mask);
+    }
+
+    float n = hash12(position + fract(time * 7.0) * float2(97.0, 131.0)) - 0.5;
+    col += n * grain;
+    return half4(half3(saturate(col)), 1.0h);
+}

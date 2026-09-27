@@ -18,6 +18,8 @@ enum HomeBackgroundStyle: String, CaseIterable, Identifiable {
     case rings
     /// The same arcs, blurred into soft glowing bands.
     case ringsBlurred
+    /// Bright pearly arcs in sky blue, blurring more towards the top.
+    case ringsBright
     /// One huge soft light from the top, mist to navy to black.
     case mist
     /// A big wandering white halo.
@@ -39,6 +41,7 @@ enum HomeBackgroundStyle: String, CaseIterable, Identifiable {
         case .flowingAroundChart: L10n.text("动态 · 避开图表")
         case .rings: L10n.text("光环")
         case .ringsBlurred: L10n.text("光环 · 模糊")
+        case .ringsBright: L10n.text("亮光环")
         case .mist: L10n.text("雾光")
         case .haloWhite: L10n.text("白色光晕")
         case .haloCyan: L10n.text("青蓝光晕")
@@ -52,6 +55,7 @@ enum HomeBackgroundStyle: String, CaseIterable, Identifiable {
         switch self {
         case .flowing, .flowingBright, .flowingAroundChart: .glow
         case .rings, .ringsBlurred: .rings
+        case .ringsBright: .brightRings
         case .mist: .mist
         case .haloWhite, .haloCyan: .bigHalo
         case .clearSky: .arch
@@ -66,6 +70,7 @@ enum HomeBackgroundStyle: String, CaseIterable, Identifiable {
         case .flowingBright: return dark ? .nightBright : .day
         case .rings: return dark ? .ringsNight : .ringsDay
         case .ringsBlurred: return (dark ? FlowingGradientPalette.ringsNight : .ringsDay).blurred(1)
+        case .ringsBright: return dark ? .brightRingsNight : .brightRingsDay
         case .mist: return dark ? .mistNight : .mistDay
         case .haloWhite: return dark ? .haloWhite.dimmed(0.72) : .haloWhite
         case .haloCyan: return dark ? .haloCyan.dimmed(0.72) : .haloCyan
@@ -211,6 +216,30 @@ struct FlowingGradientPalette {
         grain: 0.03
     )
 
+    /// For the bright rings: the ground is the home page's own gradient,
+    /// the bands a deeper shade of its sky blue, the rims near white.
+    static let brightRingsDay = FlowingGradientPalette(
+        baseTop: Color(red: 154 / 255, green: 220 / 255, blue: 1),
+        baseBottom: .white,
+        halo: Color(red: 0.420, green: 0.740, blue: 0.970),
+        core: .white,
+        fringe: .white,
+        dispersion: 1,
+        grain: 0.012,
+        blur: 1
+    )
+
+    static let brightRingsNight = FlowingGradientPalette(
+        baseTop: Color(red: 0.020, green: 0.050, blue: 0.100),
+        baseBottom: Color(red: 0.020, green: 0.050, blue: 0.100),
+        halo: Color(red: 0.160, green: 0.420, blue: 0.680),
+        core: Color(red: 0.880, green: 0.970, blue: 1.000),
+        fringe: .white,
+        dispersion: 1,
+        grain: 0.03,
+        blur: 1
+    )
+
     static let ringsNight = FlowingGradientPalette(
         baseTop: night.baseTop,
         baseBottom: night.baseBottom,
@@ -245,6 +274,8 @@ struct FlowingGradientBackground: View {
         case bigHalo
         /// A wide breathing arch of light (`archGlow`).
         case arch
+        /// Bright pearly arcs, softer towards the top (`brightRings`).
+        case brightRings
 
         var functionName: String {
             switch self {
@@ -253,6 +284,7 @@ struct FlowingGradientBackground: View {
             case .mist: "mistGlow"
             case .bigHalo: "bigHalo"
             case .arch: "archGlow"
+            case .brightRings: "brightRings"
             }
         }
     }
