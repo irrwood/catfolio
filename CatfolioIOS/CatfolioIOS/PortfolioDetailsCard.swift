@@ -971,8 +971,6 @@ struct SecurityClassBadge: View {
             .appText(.caption, weight: .medium)
             .foregroundStyle(gray)
             .padding(.horizontal, 3)
-            // Align the visible capital, not the font's descender space.
-            .offset(y: -0.5)
             .frame(height: badgeHeight)
             .background(gray.opacity(colorScheme == .dark ? 0.24 : 0.1),
                         in: RoundedRectangle(cornerRadius: 3))
