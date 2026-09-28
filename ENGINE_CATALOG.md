@@ -24,6 +24,7 @@
 
 | 能力 | 实现入口 | 调用/消费位置 | 测试与边界 |
 |---|---|---|---|
+| 定投策略对比 | `DCASimulation.swift`、`DCAStore.swift`、`DCAAIConditions.swift`、`DCABundledHistory.swift` | 研究 → 定投计算器，`DCACalculatorView.swift` | `DCASimulationTests.swift`、`DCAAIConditionsTests.swift`、`DCABundledHistoryTests.swift`；自然语言经现有 AI 整理为可审核、可修改的受限条件，首条命中采用用户设置倍数；默认固定 1×，已移除 ECDA 开关和自动涨跌加减投规则，旧存档字段忽略；同计划对比固定定投；共享 `StandardLineChart` 与 MWR 求解器。包含双方实际投入、收益、回撤和 XIRR；已移除初始现金池、余额条件及隐藏仓位、储备、冷却规则，每期直接按倍数投入并买入，分别核算本金和现金流收益。内置 SPY 真实日线支持离线回测，后台刷新完整行情。仅设备端模拟，不下单。[口径与验证](docs/ios-dca-calculator.md)，2026-09-20 |
 | iCloud 偏好同步 | `CloudPreferences.swift` → `CloudPreferenceSync`、`CatfolioIOS.entitlements` | 设置页 iCloud 开关/状态；App 启动与前台生命周期 | `CloudPreferencesTests.swift`、`SettingsInteractionTests.swift`；每台设备默认关闭，只同步允许列表内偏好；真实双设备传递尚未验收。[范围与状态](docs/ios-icloud-preferences.md)，2026-09-14 补全 |
 | 管理层兑现核对 | `ManagementDelivery.swift`、`ManagementDeliveryClient.swift`、`ManagementDeliveryAnalyzer.swift` | 个股研究区 `ManagementDeliveryCard`；iPhone 直接下载 FMP 文字稿与标准化财报，设备端 AI 提取/匹配，数字由规则判定 | `ManagementDeliveryTests.swift`；最近 4/6/8 季度、至少四个连续财季，最多核对 40 项承诺。资料不上传；需 iOS 26 Apple Intelligence 与 FMP 权限，证据不足为待验证。[边界与验收](docs/ios-management-delivery.md)，2026-09-13 新增；真机端到端尚未验收 |
 | 组合估值、成本和持仓汇总 | [LocalPortfolioStore.swift](CatfolioIOS/CatfolioIOS/LocalPortfolioStore.swift) → `LocalPortfolioEngine` | 本地组合 presentation、概览和持仓 | `LocalPortfolioEngineTests.swift`；当前估值 FX 有缓存及固定值兜底，不用于历史成交对账 |
@@ -40,6 +41,7 @@
 | 公司参考查询、行业归类 | [CompanyReferenceCatalog.swift](CatfolioIOS/CatfolioIOS/CompanyReferenceCatalog.swift)、[SectorAttribution.swift](CatfolioIOS/CatfolioIOS/SectorAttribution.swift) | 持仓分类及相关分析 | `SectorAttributionTests.swift`、`CompanyCIKSeedTests.swift`；不是完整历史证券生命周期解析器；当前行业数据由已有维护流程负责，勿重复改写 |
 | 公开投资者资料与组合适配 | [PublicInvestorCatalog.swift](CatfolioIOS/CatfolioIOS/PublicInvestorCatalog.swift) | 公开投资者选择及 `PublicInvestorAccountAdapter` | `PublicInvestorCatalogTests.swift`、`PublicInvestorSelectionTests.swift`；公开披露不是实时真实账户 |
 | 收益分析数据组织 | [LocalReturnsAnalytics.swift](CatfolioIOS/CatfolioIOS/LocalReturnsAnalytics.swift) | 收益分析页面 | 含历史收益与估值数据组织；不能据此宣称完整独立风险引擎已建成 |
+| 年度 EPS Growth / ROIC 与三维估值矩阵 | `ValuationQuality.swift` → `SECQualityCalculator`；`CompanyFinancials.swift` 缓存；`ValuationStockMap.swift` | iOS 收益 → 估值 · 成长 · 质量；原有 P/E 计算保留 | `ValuationQualityTests.swift`；SEC US-GAAP、USD 年度口径，同份申报中的两年稀释 EPS；平均期初期末资本，税率/债务/资本缺失不补零，金融企业不绘制 ROIC。3D 使用 RealityKit，2D 使用 Swift Charts。2026-09-20 新增；详见 [口径与验证](docs/ios-valuation-stock-map.md) |
 
 ## Core 已有数据与导出模块
 

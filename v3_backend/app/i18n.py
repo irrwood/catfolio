@@ -24,6 +24,7 @@ EN = {
     "数据": "Data",
     "回测与优化": "Backtest & Optimize",
     "策略回测": "Strategy Lab",
+    "定投计算器": "DCA Calculator",
     "收益对比": "Comparison",
     "持仓热力图": "Heatmap",
     "AI 分析": "AI Analysis",

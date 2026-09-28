@@ -47,6 +47,28 @@ struct Trading212AccountCredentials: Equatable {
     var label: String { L10n.text("账户 \(slot)") }
 }
 
+/// Which Trading 212 product an account is.
+///
+/// Trading 212 identifies an account by number and currency only — neither
+/// `/equity/account/info`, `/equity/account/cash` nor `/equity/account/summary`
+/// says whether it is a Stocks & Shares ISA — so this is something the person
+/// connecting the account states. The credential slot a key is filed under is
+/// just a local index and never implied a product.
+enum Trading212AccountType: String, CaseIterable, Identifiable, Codable, Sendable {
+    case invest
+    case stocksISA = "stocks_isa"
+
+    var id: String { rawValue }
+
+    /// The product name Trading 212 uses in its own apps.
+    var displayName: String {
+        switch self {
+        case .invest: L10n.text("Invest")
+        case .stocksISA: L10n.text("Stocks & Shares ISA")
+        }
+    }
+}
+
 struct Trading212Position: Decodable, Identifiable, Equatable {
     let accountSlot: Int
     let accountCurrency: String?

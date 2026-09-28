@@ -3,8 +3,7 @@
     "id": "chart-range",
     "group": "interaction",
     "label": "双指区间测量",
-    "title": "两根手指，看清一段涨跌。",
-    "description": "把曲线上的两个时刻，变成一段可以比较的变化。",
+    "description": "长按并加入第二指，移动端点查看区间涨跌。",
     "items": [
       "长按曲线，保持第一指，再加入第二指",
       "移动两个端点，查看起止日期与区间变化",
@@ -18,14 +17,13 @@
     "id": "heatmap",
     "group": "interaction",
     "label": "立体持仓热力图",
-    "title": "轻轻展开，组合尽在眼前。",
-    "description": "收益页上的立体热力图，可以展开为完整的持仓视图。",
+    "description": "用面积与颜色查看持仓分布，展开后按收益或行业查看。",
     "items": [
       "轻点展开，查看持仓占比与涨跌",
       "切换今日 / 持有期，或按板块分组",
       "开启 ETF 穿透，点按直接持仓查看详情"
     ],
-    "note": "截图为演示持仓的收起状态；展开状态可在上方交互展示中切换查看。",
+    "note": "截图为演示持仓的收起状态；在 App 内点按可展开。",
     "image": "assets/refresh/heatmap.png",
     "captured": "2026-09-13"
   },
@@ -33,8 +31,7 @@
     "id": "contributors",
     "group": "analyze",
     "label": "收益来源 · 胜利复盘",
-    "title": "赚到的收益，值得再看一遍。",
-    "description": "拆开收益来源，回看主要盈利持仓的贡献与变化，为自己的投资做一次复盘。",
+    "description": "拆分主要盈利持仓的历史贡献，复盘收益来源。",
     "items": [
       "本金、主要盈利持仓、其他收益分层展示",
       "长按查看某一天，切换时间范围",
@@ -48,8 +45,7 @@
     "id": "market-rotation",
     "group": "research",
     "label": "市场轮动 · RRG",
-    "title": "放眼市场，看见轮动。",
-    "description": "比较六个市场指数相对标普 500 的强弱与动量。",
+    "description": "用 RRG 比较六个市场指数相对标普 500 的强弱与动量。",
     "items": [
       "StockCharts 来源的 RS-Ratio 与 RS-Momentum",
       "30 周轨迹、指数选择与历史回放",
@@ -63,8 +59,7 @@
     "id": "sector-rotation",
     "group": "research",
     "label": "板块轮动",
-    "title": "看清行业，如何接棒。",
-    "description": "将 11 个美国行业板块，放在同一张四象限图中观察。",
+    "description": "查看 11 个美国行业板块的相对位置、周度轨迹与历史回放。",
     "items": [
       "领先、减弱、落后、改善四象限",
       "板块选择、周轨迹与历史回放",
@@ -78,8 +73,7 @@
     "id": "composer",
     "group": "research",
     "label": "策略编曲家",
-    "title": "把研究思路，编成规则。",
-    "description": "从一个投资想法，到可检查、可追溯的研究流程。",
+    "description": "写下投资想法，检查筛选规则、执行步骤与模拟结果。",
     "items": [
       "写策略、策略步骤、结果三个工作区",
       "自然语言草稿，经 AI 整理后检查候选规则",
@@ -93,8 +87,7 @@
     "id": "insiders",
     "group": "research",
     "label": "内部人士交易",
-    "title": "看看公司里的人，如何行动。",
-    "description": "从公开申报中，观察内部人士的主动买入与卖出。",
+    "description": "查看公开申报中的内部人士买卖，区分主动交易与计划交易。",
     "items": [
       "主动买卖 / 全部交易切换",
       "汇总买卖金额，查看人员和交易明细",
@@ -108,8 +101,7 @@
     "id": "revenue",
     "group": "analyze",
     "label": "收入构成",
-    "title": "公司的收入，从哪里来？",
-    "description": "把一个营收总额，拆成业务和地区的具体贡献。",
+    "description": "按业务或地区拆分收入，并比较历年占比。",
     "items": [
       "产品与业务 / 地区两个维度",
       "流向图展示收入规模与构成占比",
@@ -123,12 +115,12 @@
     "id": "analyst-history",
     "group": "research",
     "label": "分析师历史回顾",
-    "title": "把预期，放回时间里。",
-    "description": "将过去的目标价和评级，与股价放在一起回看。",
+    "description": "将历史目标价、评级与同期股价对照。",
     "items": [
       "股价与历史目标价对照",
       "查看不同月份的推荐建议",
-      "月度快照和来源日期清晰可见"
+      "月度快照和来源日期清晰可见",
+      "查看一致评级与目标价"
     ],
     "note": "使用本地月度快照，覆盖依公司而定；目标价代表分析师观点，不是收益承诺。",
     "image": "assets/refresh/analyst-history.png",
@@ -138,8 +130,7 @@
     "id": "chart-selection",
     "group": "interaction",
     "label": "单指查看单日",
-    "title": "停在一天，看清那一刻。",
-    "description": "沿着曲线滑动，把模糊的印象变成具体数字。",
+    "description": "沿曲线拖动，查看某一天的日期与数值。",
     "items": [
       "长按后单指拖动，逐日查看",
       "日期、数值与曲线指示线同步变化",
@@ -152,43 +143,40 @@
   {
     "id": "accounts",
     "group": "manage",
-    "title": "账户再多，也能一起看清。",
     "label": "账户管理",
-    "description": "自行配置支持的券商连接，不限制添加数量。把全部账户放在一起，统一监控持仓与分析收益。",
+    "description": "通过 SnapTrade 个人 API 或其他支持的方式添加账户，统一查看持仓、市值与收益。",
     "items": [
-      "自行添加支持的券商连接，不限制券商与账户数量",
+      "使用自备 SnapTrade 个人 API 凭证只读连接券商账户",
+      "添加支持的券商与账户，不限制连接数量",
       "全部账户统一查看持仓、收益与资产分布",
       "按需切换指定账户，独立查看与对比"
     ],
-    "note": "截图为演示账户。连接需相应只读授权，支持范围与数据可用性取决于各券商；2000+ 家机构覆盖计划尚未开放。",
+    "note": "截图为演示账户。SnapTrade 连接需自备个人 API 凭证并完成只读授权；可连接的券商与数据范围取决于 SnapTrade 和对应券商。",
     "image": "assets/refresh/accounts.png",
     "captured": "2026-09-13"
   },
   {
     "id": "overview",
     "group": "manage",
-    "title": "你的组合，一眼看清。",
     "label": "组合首页",
-    "description": "从资产全貌，到每一只股票的变化。",
+    "description": "汇总资产、净入金与持仓收益，查看历史曲线和个股变化。",
     "items": [
       "市值、净入金、持仓盈亏与历史曲线",
       "单日查看、双指区间测量",
       "持仓排序、今日与持有期口径、热力图"
     ],
     "note": "新版原生界面，使用完全虚构的演示组合。",
-    "image": "assets/refresh/overview.png",
+    "image": "assets/zh-latest/home.png",
     "captured": "2026-09-13"
   },
   {
     "id": "today",
     "group": "manage",
-    "title": "今天赚了多少，一眼就知道。",
-    "label": "今日收益速览",
-    "description": "快速了解今日盈亏与涨跌来源，为接下来的观察和判断提供依据。",
+    "label": "今日收益与组合透视",
+    "description": "查看今日盈亏，按行业和持仓拆分贡献，给组合做一次 X-Ray。",
     "items": [
-      "首页直接查看今日盈亏金额与涨跌幅",
-      "切换上涨 / 下跌贡献，找到影响组合的持仓",
-      "进入今日详情，按行业拆解并对照市场基准"
+      "今日盈亏、市场基准与持仓涨跌贡献",
+      "按行业拆分，可展开查看持仓（Portfolio X-Ray）"
     ],
     "note": "截图为演示组合的今日详情。按当前持仓与最近报价推算，未计入今日买卖影响；用于辅助判断，不是买卖信号。",
     "image": "assets/refresh/today.png",
@@ -197,9 +185,8 @@
   {
     "id": "etf",
     "group": "manage",
-    "title": "穿过基金，看见持仓。",
     "label": "ETF 穿透",
-    "description": "你持有的不只是一只 ETF，而是它背后的公司。",
+    "description": "穿透受支持 ETF 的底层持仓，识别与直接持股的重叠。",
     "items": [
       "展开支持基金的底层股票",
       "合并直接持仓与 ETF 间接暴露",
@@ -212,28 +199,27 @@
   {
     "id": "returns",
     "group": "analyze",
-    "title": "成长，放在时间里看。",
     "label": "收益分析",
-    "description": "把自己的投资旅程，与市场放在一起比较。",
+    "description": "用 TWR、MWR 或现金流镜像，与市场基准比较收益。",
     "items": [
       "现金流镜像、TWR 与 MWR 收益口径",
       "基准对比、时间范围与区间测量",
       "回撤曲线、最大回撤、估值成长矩阵"
     ],
     "note": "演示组合的 TWR 对比界面；可切换 MWR 和现金流镜像，数据口径随选择变化。",
-    "image": "assets/refresh/returns.png",
-    "captured": "2026-09-13"
+    "image": "assets/zh-latest/returns-comparison.png",
+    "captured": "2026-09-21"
   },
   {
     "id": "detail",
     "group": "analyze",
-    "title": "价格之外，还有细节。",
     "label": "个股详情",
-    "description": "从买入时刻，到现在的价格位置。",
+    "description": "在价格曲线上查看买卖标记、成本线、持仓盈亏与汇率影响。",
     "items": [
       "历史价格、买卖标记与成本参考线",
       "跨账户持仓、盈亏及汇率盈亏计算",
-      "52 周区间、Volume Profile 与 POC / VAH / VAL"
+      "52 周区间、Volume Profile 与 POC / VAH / VAL",
+      "查看可用的公司相关 Polymarket 事件"
     ],
     "note": "演示持仓的买卖标记与成本线；报价、历史曲线和持仓快照可能来自不同时间。",
     "image": "assets/refresh/detail.png",
@@ -243,8 +229,7 @@
     "id": "volume",
     "group": "analyze",
     "label": "成交量与 52 周位置",
-    "title": "价格的位置，也有来处。",
-    "description": "从成交密集区到年度高低点，为当前价格补充坐标。",
+    "description": "查看成交密集区、POC 与 52 周价格位置，辅助判断支撑和压力。",
     "items": [
       "Volume Profile 与成交峰值 POC",
       "VAH / VAL 价值区间及成本参考",
@@ -257,9 +242,8 @@
   {
     "id": "oi",
     "group": "analyze",
-    "title": "看见期权持仓的分布。",
     "label": "期权 OI",
-    "description": "按执行价，观察 Call 与 Put 聚集在哪里。",
+    "description": "按执行价与到期范围查看看涨、看跌期权的未平仓量。",
     "items": [
       "7、30、90 天到期范围",
       "Call / Put 峰值和 OI 集中区",
@@ -272,9 +256,8 @@
   {
     "id": "financial",
     "group": "analyze",
-    "title": "理解公司，从数字开始。",
     "label": "财务基本面",
-    "description": "让财报、盈利和预期，成为研究的依据。",
+    "description": "按年度或季度查看利润表、资产负债表和现金流量表。",
     "items": [
       "利润表、资产负债表、现金流：年度 / 季度",
       "可视化收入、成本与利润的关系",
@@ -287,9 +270,8 @@
   {
     "id": "research",
     "group": "research",
-    "title": "抬头看看，更大的市场。",
     "label": "市场研究",
-    "description": "把持仓变化放回指数、波动率和行业背景中。",
+    "description": "查看市场指数、VIX、美债收益率及行业表现。",
     "items": [
       "市场指数、VIX 与美国国债收益率",
       "当前持仓涨幅榜与跌幅榜",
@@ -302,9 +284,8 @@
   {
     "id": "attention",
     "group": "research",
-    "title": "把注意力，留给值得的事。",
     "label": "今天值得关注",
-    "description": "整理变化、证据和风险，帮助你决定下一步研究什么。",
+    "description": "整理持仓的变化、支持与反对证据，以及待跟进的风险。",
     "items": [
       "分析当前账户持仓与关注理由",
       "正反证据、风险与后续观察点",
@@ -317,9 +298,8 @@
   {
     "id": "screener",
     "group": "research",
-    "title": "从想法，找到公司。",
     "label": "选股器",
-    "description": "写下你想找的公司，再逐项核验条件。",
+    "description": "用预设或自然语言设置财务筛选条件，逐项核对匹配依据。",
     "items": [
       "一键预设，或自然语言生成筛选条件",
       "市值、营收、估值、增长、利润率与现金流",
@@ -332,9 +312,8 @@
   {
     "id": "sentiment",
     "group": "research",
-    "title": "感受行业的温度。",
     "label": "行业情绪",
-    "description": "用波动率和成交量，补充价格之外的观察。",
+    "description": "结合 VXSMH 波动率和 SMH 成交量观察半导体板块。",
     "items": [
       "半导体行业情绪分数与市场状态",
       "VXSMH 波动率趋势与 SMH 成交量",
@@ -347,13 +326,11 @@
   {
     "id": "ai",
     "group": "research",
-    "title": "连接你自己的 AI。",
     "label": "AI 助手",
-    "description": "使用自己的 AI 账户或服务，为组合研究提供帮助。Catfolio 不额外收取 AI 接入费，服务与授权由你掌握。",
+    "description": "连接自己的 AI，围绕组合提问。Catfolio 不收接入费，第三方费用另计。",
     "items": [
-      "Apple 本地、ChatGPT Codex、DeepSeek",
-      "组合上下文问答、聊天记录与语言偏好",
-      "个股多空论据、来源引用与后台分析"
+      "Apple 本地模型、ChatGPT Codex、DeepSeek",
+      "组合问答、聊天记录与带来源的个股研究"
     ],
     "note": "截图为演示分析。本地模型需设备支持；远程服务可能按其订阅或用量收费，并接收相关问题与分析上下文。",
     "image": "assets/refresh/ai.png",
@@ -363,8 +340,7 @@
     "id": "daily-brief",
     "group": "research",
     "label": "行情解读纸张",
-    "title": "最近，有什么动静？",
-    "description": "从个股曲线打开一张纸，阅读简短的行情与公司动态解读。",
+    "description": "从个股曲线打开行情与公司动态简报，并核对来源。",
     "items": [
       "从个股页直接打开",
       "结合可用来源生成简短解读",
@@ -377,9 +353,8 @@
   {
     "id": "history",
     "group": "manage",
-    "title": "每笔来去，都有记录。",
     "label": "历史与费用",
-    "description": "把交易、现金活动与持有成本，整理得清清楚楚。",
+    "description": "按账户和年份整理交易、分红、利息及资金进出，支持 CSV 导出。",
     "items": [
       "买卖、分红、利息、入出金与转账",
       "账户 / 年份筛选、已实现盈亏",
@@ -393,8 +368,7 @@
     "id": "orders",
     "group": "manage",
     "label": "交易记录",
-    "title": "每一次买卖，都有来路。",
-    "description": "按账户和年份整理交易，回看卖出记录与已实现盈亏。",
+    "description": "逐笔查看交易数量、价格、金额与已实现盈亏。",
     "items": [
       "按时间查看交易数量、价格与金额",
       "已实现盈亏汇总与逐笔记录",
@@ -408,8 +382,7 @@
     "id": "dividends",
     "group": "manage",
     "label": "股息计算与预测",
-    "title": "收到多少，接下来期待多少。",
-    "description": "汇总已到账股息，结合股息预测，了解投资带来的现金收入。",
+    "description": "汇总已到账股息与逐笔派息记录；预测结果需以实际公告为准。",
     "items": [
       "汇总已入账股息，逐笔查看派息记录",
       "按账户和年份整理历史股息收入",
@@ -423,8 +396,7 @@
     "id": "interest",
     "group": "manage",
     "label": "利息计算",
-    "title": "现金的收入，也有记录。",
-    "description": "把分散的利息入账，放进同一份清晰的记录。",
+    "description": "按日期和账户汇总已入账利息。",
     "items": [
       "汇总已入账利息",
       "查看时间、金额与来源账户",
@@ -438,8 +410,7 @@
     "id": "fees",
     "group": "manage",
     "label": "基金费用计算",
-    "title": "持有成本，心中有数。",
-    "description": "用当前基金市值和年费率，了解预计的年度成本。",
+    "description": "按当前基金市值与年费率估算年度持有成本。",
     "items": [
       "预计年度费用与基金总市值",
       "加权年费率",
@@ -452,9 +423,8 @@
   {
     "id": "investors",
     "group": "personal",
-    "title": "换个组合，换个视角。",
     "label": "公开投资者模拟",
-    "description": "从公开披露中，研究不同投资者的持仓。",
+    "description": "从公开披露研究投资者持仓，使用独立模拟账户查看。",
     "items": [
       "佩洛西、段永平、Berkshire 等可用披露组合",
       "多人物选择，复用持仓、收益、历史与 AI",
@@ -467,84 +437,35 @@
   {
     "id": "preferences",
     "group": "personal",
-    "title": "按你的习惯，照顾你的数据。",
     "label": "个性化与本地数据",
-    "description": "熟悉的语言、币种和外观，自主掌握的账本。",
+    "description": "选择中文或英文、外观与触控反馈，管理本地账本。",
     "items": [
-      "简体中文 / English，可跟随系统语言",
-      "九种显示货币，金额按可用汇率自动换算",
-      "外观、触控反馈、本地账本与部分偏好 iCloud 同步"
+      "中文 / English，可跟随系统语言",
+      "外观、触控反馈与本地账本管理"
     ],
     "note": "截图为语言、外观、公司名称和显示货币设置。个人账本及券商凭据不通过偏好同步。",
-    "image": "assets/refresh/preferences.png",
+    "image": "assets/zh-latest/settings.png",
     "captured": "2026-09-13"
   },
   {
     "id": "currency",
     "group": "personal",
     "label": "货币自动换算",
-    "title": "换个币种，换个熟悉的视角。",
-    "description": "用熟悉的货币查看组合，不必逐个换算金额。",
+    "description": "选择九种显示货币，加载组合时自动更新可用汇率并换算估值。",
     "items": [
-      "九种显示货币可选",
-      "按 App 可用汇率换算汇总金额",
-      "与语言设置独立，明细保留相应原币"
+      "九种显示货币，金额按可用汇率自动换算",
+      "缓存汇率和日期，离线时沿用缓存估值",
+      "明细保留交易原币"
     ],
-    "note": "截图为货币菜单；离线估值有状态提示。显示换算不执行实际换汇。",
+    "note": "使用最近可用收盘汇率，不是实时外汇报价。显示换算不执行实际换汇；历史快照保留原汇率。",
     "image": "assets/refresh/currency.png",
-    "captured": "2026-09-13"
-  },
-  {
-    "id": "automatic-fx",
-    "group": "personal",
-    "label": "汇率自动更新",
-    "title": "汇率变了，估值也跟上。",
-    "description": "加载组合时自动获取可用汇率，让跨币种资产按更新后的汇率估值。",
-    "items": [
-      "随组合加载自动获取最近可用汇率",
-      "缓存汇率与日期，减少重复请求",
-      "离线时沿用缓存，缺失币种使用离线估值"
-    ],
-    "note": "截图展示设置中的汇率状态，演示模式为未更新状态。使用最近可用收盘汇率，非实时换汇报价；历史快照保留原记录汇率。",
-    "image": "assets/refresh/preferences.png",
-    "captured": "2026-09-13"
-  },
-  {
-    "id": "security",
-    "group": "personal",
-    "label": "安全与自主掌控",
-    "title": "数据与权限，自己掌握。",
-    "description": "本地处理账本，自主管理连接，以只读方式了解自己的投资。",
-    "items": [
-      "账本保存在本机，组合在本地计算",
-      "自行配置账户与服务，凭证保存在 Keychain",
-      "读取券商数据，不提供下单、撤单或转账功能"
-    ],
-    "note": "配图为演示账户管理页。请使用专用只读凭据；行情同步和可选远程 AI 需要连接对应服务，数据范围见安全专区。",
-    "image": "assets/refresh/accounts.png",
-    "captured": "2026-09-13"
-  },
-  {
-    "id": "portfolio-xray",
-    "group": "analyze",
-    "label": "Portfolio X-Ray · 组合透视",
-    "title": "给你的组合，做一次透视。",
-    "description": "按行业拆解今日收益，看清每一部分如何影响组合，更了解自己的投资。",
-    "items": [
-      "按行业查看今日盈亏贡献",
-      "展开行业，查看其中的持仓与表现",
-      "识别推动收益与拖累组合的方向"
-    ],
-    "note": "配图为演示组合的行业收益分析。当前展示今日口径，按当前持仓与最近报价推算，未计入今日买卖影响。",
-    "image": "assets/refresh/today.png",
     "captured": "2026-09-13"
   },
   {
     "id": "management-delivery",
     "group": "analyze",
     "label": "财报电话会 · 管理层兑现追踪",
-    "title": "说过的话，后来兑现了吗？",
-    "description": "自动整理财报电话会中的明确承诺，对照后续财报与原文证据，了解公司的预期如何落地。",
+    "description": "提取财报电话会中的承诺，对照后续结果与原文证据核查兑现情况。",
     "items": [
       "选择最近 4 / 6 / 8 个季度，发起下载与本机分析",
       "逐项查看承诺原话、目标期限、后续结果与来源",
@@ -558,8 +479,7 @@
     "id": "account-comparison",
     "group": "manage",
     "label": "个股账户对比",
-    "title": "同一只股票，合起来看，分开看。",
-    "description": "在个股页切换账户范围，看清跨账户的总持仓，也了解每个账户各自的表现。",
+    "description": "在同一只股票中选择全部、单个或多个账户，对比股数、成本与盈亏。",
     "items": [
       "选择全部，合并查看各账户中的同一只股票",
       "保留单个账户，独立查看股数、成本与盈亏",

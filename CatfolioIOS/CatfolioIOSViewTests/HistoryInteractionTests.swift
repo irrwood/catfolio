@@ -35,6 +35,30 @@ final class HistoryInteractionTests: XCTestCase {
         }
     }
 
+    func testTickerScopeKeepsWholeHistoryAndCombinesWithAccountAndYearFilters() throws {
+        let input = ledger([
+            entry("BUY", date: "2025-01-01", price: 100, ticker: "AAA"),
+            entry("SELL", price: 120, ticker: "AAA"),
+            entry("DIVIDEND", price: 3, ticker: "aaa"),
+            entry("SELL", price: 900, ticker: "BBB"),
+            entry("DIVIDEND", account: "two", price: 8, ticker: "AAA")
+        ])
+        let result = try HistoryPreparedLedger.build(ledger: input,
+            accountIDs: [input.transactions[0].accountKey], locale: Locale(identifier: "en_GB"),
+            ticker: " aaa ")
+        let all = result.page(category: .all, basis: .calendar, year: nil)
+        XCTAssertEqual(all.activities.count, 3)
+        XCTAssertTrue(all.activities.allSatisfy { $0.transaction.ticker.uppercased() == "AAA" })
+        XCTAssertEqual(result.page(category: .orders, basis: .calendar, year: "2026").activities.count, 1)
+        XCTAssertEqual(result.page(category: .dividends, basis: .calendar, year: nil).totalUSD, 3)
+        let expected = try prepare(ledger(Array(input.transactions.prefix(3))))
+        XCTAssertEqual(result.realisedTotal, expected.realisedTotal)
+        let empty = try HistoryPreparedLedger.build(ledger: input,
+            accountIDs: Set(input.accounts.map(\.id)), locale: Locale(identifier: "en_GB"), ticker: "MISSING")
+        XCTAssertTrue(empty.page(category: .all, basis: .calendar, year: nil).activities.isEmpty)
+        XCTAssertEqual(try prepare(input).page(category: .all, basis: .calendar, year: nil).activities.count, 5)
+    }
+
     private func entry(_ action: String, date: String = "2026-04-06", account: String = "one",
                        id: String = UUID().uuidString, price: Double = 100,
                        ticker: String = "TEST", currency: String = "USD") -> LocalTransactionRecord {

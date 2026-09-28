@@ -2,6 +2,7 @@
   if (!document.documentElement.lang || !document.documentElement.lang.startsWith("en")) return;
 
   const exact = new Map(Object.entries({
+    ...(window.CATFOLIO_PAGE_I18N || {}),
     "未刷新": "-",
     "读取中": "Loading",
     "读取中...": "Loading...",

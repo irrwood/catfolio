@@ -697,6 +697,7 @@
 "无异常" = "No issues";
 "无正 OI" = "No positive OI";
 "无法保存名称" = "Unable to save name";
+"无法保存账户类型" = "Unable to save the account type";
 "无法保存本机对话：%@" = "Unable to save local conversation: %@";
 "无法创建账户：%@" = "Unable to create account: %@";
 "无法删除账户" = "Unable to delete account";
@@ -1272,6 +1273,10 @@
 "Individual" = "Individual";
 "Stocks ISA" = "Stocks ISA";
 "Invest" = "Invest";
+"Stocks & Shares ISA" = "Stocks & Shares ISA";
+"未设置" = "Not set";
+"账户类型：%@" = "Account type: %@";
+"Trading 212 的 API 只报告账户号和币种，不报告账户类型。请按 212 App 中该账户的类型选择；它只影响 Catfolio 的显示。" = "Trading 212's API reports the account number and currency but not the account type. Choose the type shown for this account in the 212 app; it only changes how Catfolio labels it.";
 "随机生成一个新昵称" = "Generate a new random nickname";
 "关键问题" = "Key questions";
 "%@ 个来源 · 含联网搜索" = "%@ sources · Includes web search";
@@ -3660,7 +3665,7 @@
 
 "当前是测试页面，尚未连接 App Store，没有恢复或更改任何购买记录。" = "This preview is not connected to the App Store. No purchases have been restored or changed.";
 
-"已选择 100 美元终身版。当前仅演示购买流程，不会扣费或更改当前功能。" = "You selected lifetime access for USD 100. This is a purchase preview. You will not be charged, and your current features will not change.";
+"已选择 129 美元终身版。当前仅演示购买流程，不会扣费或更改当前功能。" = "You selected lifetime access for USD 129. This is a purchase preview. You will not be charged, and your current features will not change.";
 
 "看清你的每一笔投资" = "See the full picture of your investments";
 
@@ -3686,7 +3691,7 @@
 
 "行情与 AI 仍使用你配置的服务商。" = "Market data and AI continue to use your configured providers.";
 
-"解锁终身版 · $100" = "Unlock lifetime access · $100";
+"解锁终身版 · $129" = "Unlock lifetime access · $129";
 
 "界面预览，不会扣费。套餐与权益仅作展示。" = "Preview only. No charge. Plan and benefits are for display.";
 
@@ -3700,12 +3705,16 @@
 
 "每月 7.99 美元" = "USD 7.99 per month";
 
-"一次支付 100 美元" = "USD 100 once";
+"一次支付 129 美元" = "USD 129 once";
 
 "每月 $7.99，自动续订，可在 App Store 管理或取消。" = "$7.99 per month, renewing automatically. Manage or cancel in the App Store.";
 
-"一次支付 $100，终身使用，无需续订。" = "Pay $100 once for lifetime access. No renewals.";
+"一次支付 $129，终身使用，无需续订。" = "Pay $129 once for lifetime access. No renewals.";
 
 "订阅 · $7.99/月" = "Subscribe · $7.99/month";
 
 "已选择%@，%@。当前仅演示购买流程，不会扣费或更改当前功能。" = "Selected %@, %@. This is a purchase preview. You will not be charged, and your current features will not change.";
+
+"交易历史" = "Transaction History";
+
+"未实现盈亏比例" = "Unrealized return";

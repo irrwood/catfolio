@@ -3,8 +3,7 @@
     "id": "chart-range",
     "group": "interaction",
     "label": "Two-finger intervals",
-    "title": "Two fingers. One clear interval.",
-    "description": "Turn two moments on a chart into a change you can compare.",
+    "description": "Hold and add a second finger; move the endpoints to measure an interval.",
     "items": [
       "Hold with one finger, then add a second",
       "Move endpoints to inspect dates and interval changes",
@@ -18,14 +17,13 @@
     "id": "heatmap",
     "group": "interaction",
     "label": "Portfolio heatmap",
-    "title": "A little depth. The whole picture.",
-    "description": "Expand the dimensional heatmap into a full view of your holdings.",
+    "description": "View holdings by size and color; expand to explore returns or sectors.",
     "items": [
       "Tap to expand weights and gains or losses",
       "Switch today or holding-period returns, or group by sector",
       "Look through ETFs and tap direct holdings for details"
     ],
-    "note": "Demo holdings in the collapsed state. See the expanded state in the interaction showcase above.",
+    "note": "Demo holdings in the collapsed state. Tap the heatmap in the app to expand.",
     "image": "assets/refresh/heatmap.png",
     "captured": "2026-09-13"
   },
@@ -33,8 +31,7 @@
     "id": "contributors",
     "group": "analyze",
     "label": "Return sources · Review your gains",
-    "title": "Your gains deserve a second look.",
-    "description": "Review leading profitable holdings and how their contributions changed over time.",
+    "description": "Review the historical contributions of your leading profitable holdings.",
     "items": [
       "Separate layers for cost basis, leading winners, and other returns",
       "Press to inspect a day and switch time periods",
@@ -48,8 +45,7 @@
     "id": "market-rotation",
     "group": "research",
     "label": "Market rotation · RRG",
-    "title": "See where momentum moves.",
-    "description": "Compare six market indices against the S&P 500 for relative strength and momentum.",
+    "description": "Compare six market indices against the S&P 500 using RRG strength and momentum.",
     "items": [
       "RS-Ratio and RS-Momentum from StockCharts",
       "30-week trails, index selection, and historical playback",
@@ -63,8 +59,7 @@
     "id": "sector-rotation",
     "group": "research",
     "label": "Sector rotation",
-    "title": "See sectors take the lead.",
-    "description": "Explore 11 US sectors together in a four-quadrant chart.",
+    "description": "Explore 11 US sectors with quadrant positions, weekly trails, and historical playback.",
     "items": [
       "Leading, weakening, lagging, and improving quadrants",
       "Sector selection, weekly trails, and historical playback",
@@ -78,8 +73,7 @@
     "id": "composer",
     "group": "research",
     "label": "Strategy Composer",
-    "title": "Turn research into rules.",
-    "description": "Take an investment idea into a research process you can inspect and trace.",
+    "description": "Turn an investment idea into filters, reviewable steps, and simulated results.",
     "items": [
       "Workspaces for writing, steps, and results",
       "Draft in natural language, then review AI-organized candidate rules",
@@ -93,8 +87,7 @@
     "id": "insiders",
     "group": "research",
     "label": "Insider transactions",
-    "title": "See how insiders act.",
-    "description": "Explore active insider purchases and sales in public filings.",
+    "description": "Review disclosed insider purchases and sales, separating active from planned trades.",
     "items": [
       "Switch between active trades and all transactions",
       "Review buy and sell totals, people, and transaction details",
@@ -108,8 +101,7 @@
     "id": "revenue",
     "group": "analyze",
     "label": "Revenue breakdown",
-    "title": "Where does the revenue come from?",
-    "description": "Break a revenue total down into businesses and regions.",
+    "description": "Break revenue down by business or geography and compare annual shares.",
     "items": [
       "Product and business lines, or geography",
       "Flow charts showing revenue scale and shares",
@@ -123,12 +115,12 @@
     "id": "analyst-history",
     "group": "research",
     "label": "Historical analyst views",
-    "title": "Put expectations back in time.",
-    "description": "Revisit earlier price targets and recommendations alongside stock prices.",
+    "description": "Compare historical price targets and ratings with stock prices at the time.",
     "items": [
       "Compare stock prices with historical targets",
       "Explore recommendations across months",
-      "Clearly dated monthly snapshots"
+      "Clearly dated monthly snapshots",
+      "Consensus ratings and price targets"
     ],
     "note": "Local monthly snapshots with company-dependent coverage. Targets are analyst views, not promised returns.",
     "image": "assets/refresh/analyst-history.png",
@@ -138,8 +130,7 @@
     "id": "chart-selection",
     "group": "interaction",
     "label": "Single-day inspection",
-    "title": "Pause on a day. See the details.",
-    "description": "Slide along the curve to turn an impression into a number.",
+    "description": "Drag along a chart to inspect a day and its values.",
     "items": [
       "Press and drag with one finger to inspect days",
       "Dates, values, and the chart guide update together",
@@ -152,43 +143,40 @@
   {
     "id": "accounts",
     "group": "manage",
-    "title": "More accounts. One clear view.",
     "label": "Account management",
-    "description": "Configure supported brokers without a connection-count limit. Monitor holdings and analyze returns across your accounts.",
+    "description": "Add accounts through SnapTrade Personal API or other supported methods; view holdings, value, and returns together.",
     "items": [
-      "Add supported brokers and accounts without a count limit",
+      "Use your own SnapTrade Personal API credentials for read-only broker connections",
+      "Add supported brokers and accounts without a connection-count limit",
       "View combined holdings, returns, and asset allocation",
       "Select individual accounts for inspection and comparison"
     ],
-    "note": "Demo accounts. Read-only authorization is required; coverage depends on each broker. The 2,000+ institution coverage plan is not yet available.",
+    "note": "Demo accounts. SnapTrade requires your own Personal API credentials and read-only authorization; available brokers and data depend on SnapTrade and the institution.",
     "image": "assets/refresh/accounts.png",
     "captured": "2026-09-13"
   },
   {
     "id": "overview",
     "group": "manage",
-    "title": "Your portfolio at a glance.",
     "label": "Portfolio overview",
-    "description": "Move from your overall assets to the details of each stock.",
+    "description": "See assets, net deposits, holding returns, historical charts, and individual positions.",
     "items": [
       "Market value, net deposits, holding returns, and historical charts",
       "Single-day inspection and two-finger intervals",
       "Holding sort options, today and holding-period views, and heatmaps"
     ],
     "note": "Current native interface with a completely fictional demo portfolio.",
-    "image": "assets/refresh/overview.png",
+    "image": "assets/en-latest/home.png",
     "captured": "2026-09-13"
   },
   {
     "id": "today",
     "group": "manage",
-    "title": "How did you do today?",
-    "label": "Today's returns",
-    "description": "Quickly understand today's gains, losses, and contributors to guide further investigation.",
+    "label": "Today's returns & Portfolio X-Ray",
+    "description": "See today’s gains and losses, broken down by sector and holding for a portfolio X-Ray.",
     "items": [
-      "Today's gain or loss and percentage change on the home page",
-      "Switch positive and negative contributors",
-      "Explore sector contributions alongside market benchmarks"
+      "Today's gain or loss, market benchmarks, and holding contributors",
+      "Sector breakdown with expandable holdings (Portfolio X-Ray)"
     ],
     "note": "Demo portfolio. Estimates use current holdings and recent quotes, excluding today's trades. For observation, not trading signals.",
     "image": "assets/refresh/today.png",
@@ -197,9 +185,8 @@
   {
     "id": "etf",
     "group": "manage",
-    "title": "See the companies inside.",
     "label": "ETF look-through",
-    "description": "Look beyond the fund to the companies you indirectly own.",
+    "description": "Look through supported ETFs to their underlying holdings and identify overlap with direct positions.",
     "items": [
       "Expand underlying stocks in supported funds",
       "Combine direct holdings with indirect ETF exposure",
@@ -212,28 +199,27 @@
   {
     "id": "returns",
     "group": "analyze",
-    "title": "Put growth in perspective.",
     "label": "Return analysis",
-    "description": "Compare your investment journey with the market.",
+    "description": "Compare returns with benchmarks using TWR, MWR, or a cash-flow mirror.",
     "items": [
       "Cash-flow mirror, TWR, and MWR measures",
       "Benchmark comparisons, time ranges, and interval inspection",
       "Drawdown chart, maximum drawdown, and valuation-growth matrix"
     ],
     "note": "Demo TWR comparison. Switch to MWR or cash-flow mirror; the calculation basis changes with the selection.",
-    "image": "assets/refresh/returns.png",
-    "captured": "2026-09-13"
+    "image": "assets/en-latest/returns-comparison.png",
+    "captured": "2026-09-21"
   },
   {
     "id": "detail",
     "group": "analyze",
-    "title": "There is more than the price.",
     "label": "Stock details",
-    "description": "From your purchase to where the price stands today.",
+    "description": "See trade markers, cost lines, holding gains and losses, and FX impact alongside prices.",
     "items": [
       "Historical prices, trade markers, and cost reference line",
       "Cross-account holdings, gains or losses, and FX impact",
-      "52-week range, Volume Profile, POC, VAH, and VAL"
+      "52-week range, Volume Profile, POC, VAH, and VAL",
+      "Related Polymarket events where data is available"
     ],
     "note": "Trade markers and cost line for demo holdings. Quotes, historical charts, and holding snapshots may use different dates.",
     "image": "assets/refresh/detail.png",
@@ -243,8 +229,7 @@
     "id": "volume",
     "group": "analyze",
     "label": "Volume & 52-week position",
-    "title": "Put the price in context.",
-    "description": "From high-volume areas to yearly extremes, give the current price a frame of reference.",
+    "description": "Inspect volume concentrations, POC, and the 52-week range as references for support and resistance.",
     "items": [
       "Volume Profile and the point of control",
       "Value-area high and low, with cost reference",
@@ -257,9 +242,8 @@
   {
     "id": "oi",
     "group": "analyze",
-    "title": "See where positions gather.",
     "label": "Options open interest",
-    "description": "Explore call and put concentrations by strike price.",
+    "description": "View call and put open interest by strike price and expiry range.",
     "items": [
       "7-, 30-, and 90-day expiry ranges",
       "Call and put peaks and open-interest concentrations",
@@ -272,9 +256,8 @@
   {
     "id": "financial",
     "group": "analyze",
-    "title": "Understand the company in numbers.",
     "label": "Financial fundamentals",
-    "description": "Ground your research in reported financials, earnings, and expectations.",
+    "description": "Read annual or quarterly income statements, balance sheets, and cash-flow statements.",
     "items": [
       "Annual and quarterly income, balance-sheet, and cash-flow statements",
       "Visual relationships between revenue, costs, and profit",
@@ -287,9 +270,8 @@
   {
     "id": "research",
     "group": "research",
-    "title": "See the wider market.",
     "label": "Market research",
-    "description": "Place holding changes in the context of indices, volatility, and sectors.",
+    "description": "Track market indices, VIX, US Treasury yields, and sector performance.",
     "items": [
       "Market indices, VIX, and US Treasury yields",
       "Gainers and losers among current holdings",
@@ -302,9 +284,8 @@
   {
     "id": "attention",
     "group": "research",
-    "title": "Focus on what matters.",
     "label": "Worth watching today",
-    "description": "Organize changes, evidence, and risks to decide what to research next.",
+    "description": "Review holding changes, supporting and opposing evidence, and risks to follow up.",
     "items": [
       "Analyze selected-account holdings and reasons to watch",
       "Supporting and opposing evidence, risks, and follow-up points",
@@ -317,9 +298,8 @@
   {
     "id": "screener",
     "group": "research",
-    "title": "From an idea to a company.",
     "label": "Stock screener",
-    "description": "Describe what you are looking for, then check each condition.",
+    "description": "Set financial filters with presets or natural language, then inspect why each company matches.",
     "items": [
       "Use presets or natural-language filters",
       "Market cap, revenue, valuation, growth, margins, and cash flow",
@@ -332,9 +312,8 @@
   {
     "id": "sentiment",
     "group": "research",
-    "title": "Take the sector's pulse.",
     "label": "Sector sentiment",
-    "description": "Add volatility and volume to your price perspective.",
+    "description": "Assess the semiconductor sector using VXSMH volatility and SMH volume.",
     "items": [
       "Semiconductor sentiment score and market state",
       "VXSMH volatility trends and SMH volume",
@@ -347,13 +326,11 @@
   {
     "id": "ai",
     "group": "research",
-    "title": "Bring your own AI.",
     "label": "AI assistant",
-    "description": "Use your AI account or service to help research your portfolio. Catfolio adds no AI connection fee; you manage the service and access.",
+    "description": "Connect your own AI for portfolio questions. Catfolio adds no connection fee; provider charges may apply.",
     "items": [
       "Apple local model, ChatGPT Codex, and DeepSeek",
-      "Portfolio-aware questions, chat history, and language preferences",
-      "Bull and bear arguments, source citations, and background analysis"
+      "Portfolio questions, saved chats, and stock research with sources"
     ],
     "note": "Demo analysis. Local models require device support. Remote services receive relevant questions and context and may charge subscription or usage fees.",
     "image": "assets/refresh/ai.png",
@@ -363,8 +340,7 @@
     "id": "daily-brief",
     "group": "research",
     "label": "Market brief",
-    "title": "What's been happening?",
-    "description": "Open a paper-like sheet from the stock chart for a short market and company update.",
+    "description": "Open a market and company brief from the stock chart and check its sources.",
     "items": [
       "Open directly from stock details",
       "Generate a brief using available sources",
@@ -377,9 +353,8 @@
   {
     "id": "history",
     "group": "manage",
-    "title": "Every movement has a record.",
     "label": "History & costs",
-    "description": "Keep trades, cash activity, and holding costs organized.",
+    "description": "Organize trades, dividends, interest, and cash movements by account and year; export to CSV.",
     "items": [
       "Trades, dividends, interest, deposits, withdrawals, and transfers",
       "Account and year filters with realized gains",
@@ -393,8 +368,7 @@
     "id": "orders",
     "group": "manage",
     "label": "Trade history",
-    "title": "Revisit every trade.",
-    "description": "Organize transactions by account and year and review sales and realized gains.",
+    "description": "Inspect trade quantities, prices, amounts, and realized gains or losses.",
     "items": [
       "Dated quantities, prices, and amounts",
       "Realized-gain totals and individual transactions",
@@ -408,8 +382,7 @@
     "id": "dividends",
     "group": "manage",
     "label": "Dividends & forecasts",
-    "title": "What arrived. What to expect.",
-    "description": "Sum dividends received and explore forecasts to understand your investment income.",
+    "description": "Sum received dividends and review each payment; forecasts depend on actual company announcements.",
     "items": [
       "Total posted dividends and inspect each payment",
       "Organize historical dividends by account and year",
@@ -423,8 +396,7 @@
     "id": "interest",
     "group": "manage",
     "label": "Interest income",
-    "title": "Keep cash income in view.",
-    "description": "Bring separate interest credits into one clear record.",
+    "description": "Sum posted interest by date and account.",
     "items": [
       "Sum interest already credited",
       "Review dates, amounts, and source accounts",
@@ -438,8 +410,7 @@
     "id": "fees",
     "group": "manage",
     "label": "Fund fee estimates",
-    "title": "Know the cost of holding.",
-    "description": "Estimate annual costs using current fund values and expense ratios.",
+    "description": "Estimate annual holding costs from current fund values and expense ratios.",
     "items": [
       "Estimated annual fees and total fund value",
       "Weighted annual expense ratio",
@@ -452,9 +423,8 @@
   {
     "id": "investors",
     "group": "personal",
-    "title": "Another portfolio. Another perspective.",
     "label": "Public investor simulations",
-    "description": "Research investor holdings through public disclosures.",
+    "description": "Explore publicly disclosed investor holdings in separate simulated accounts.",
     "items": [
       "Available disclosures for Pelosi, Duan Yongping, Berkshire, and others",
       "Choose investors and explore holdings, returns, history, and AI",
@@ -467,84 +437,35 @@
   {
     "id": "preferences",
     "group": "personal",
-    "title": "Make it yours.",
     "label": "Preferences & local data",
-    "description": "Your language, currency, appearance, and a ledger you control.",
+    "description": "Choose Chinese or English, appearance, and haptics; manage your local ledger.",
     "items": [
-      "Simplified Chinese or English, with system-language support",
-      "Nine display currencies with available-rate conversion",
-      "Appearance, haptics, local ledger, and some iCloud preference sync"
+      "Chinese or English, with system-language support",
+      "Appearance, haptics, and local ledger management"
     ],
     "note": "Language, appearance, company-name, and currency settings. Personal ledgers and broker credentials are not included in preference sync.",
-    "image": "assets/refresh/preferences.png",
+    "image": "assets/en-latest/settings.png",
     "captured": "2026-09-13"
   },
   {
     "id": "currency",
     "group": "personal",
     "label": "Display-currency conversion",
-    "title": "A familiar currency. A clearer view.",
-    "description": "Read your portfolio in a familiar currency without converting each amount yourself.",
+    "description": "Choose from nine display currencies; available FX rates update with portfolio loading for valuation.",
     "items": [
-      "Choose from nine display currencies",
-      "Convert totals using available in-app exchange rates",
-      "Separate from language, with original currencies retained in relevant details"
+      "Nine currencies; totals convert using available rates",
+      "Rates and dates are cached for offline valuation",
+      "Original currencies remain in transaction details"
     ],
-    "note": "Currency menu. Offline valuation has a status indicator. Display conversion does not exchange money.",
+    "note": "Uses recent closing rates, not live exchange quotes. Display conversion does not exchange money; historical snapshots retain their recorded rates.",
     "image": "assets/refresh/currency.png",
-    "captured": "2026-09-13"
-  },
-  {
-    "id": "automatic-fx",
-    "group": "personal",
-    "label": "Automatic FX updates",
-    "title": "Rates change. Valuations follow.",
-    "description": "Fetch available rates when loading your portfolio to update cross-currency valuations.",
-    "items": [
-      "Fetch recent available rates with portfolio loading",
-      "Cache rates and dates to reduce repeat requests",
-      "Use cached rates offline and fallback estimates where needed"
-    ],
-    "note": "Settings show the demo mode's not-yet-updated state. Uses recent closing rates, not live exchange quotes. Historical snapshots keep their recorded rates.",
-    "image": "assets/refresh/preferences.png",
-    "captured": "2026-09-13"
-  },
-  {
-    "id": "security",
-    "group": "personal",
-    "label": "Security & control",
-    "title": "Your data. Your permissions.",
-    "description": "Process your ledger locally, manage your connections, and use read-only access to understand your investments.",
-    "items": [
-      "Local ledger storage and portfolio calculations",
-      "Self-configured accounts and services, credentials in Keychain",
-      "Broker data reading without orders, cancellations, or transfers"
-    ],
-    "note": "Demo account management. Use dedicated read-only credentials. Market data and optional remote AI connect to their respective services; see the security section for scope.",
-    "image": "assets/refresh/accounts.png",
-    "captured": "2026-09-13"
-  },
-  {
-    "id": "portfolio-xray",
-    "group": "analyze",
-    "label": "Portfolio X-Ray",
-    "title": "Give your portfolio an X-ray.",
-    "description": "Break today's returns down by sector to understand how each part affects your portfolio.",
-    "items": [
-      "Today's gain and loss contributions by sector",
-      "Expand sectors to inspect holdings and performance",
-      "Identify what drives gains and what weighs on returns"
-    ],
-    "note": "Demo sector analysis using today's period, current holdings, and recent quotes. Excludes the impact of today's trades.",
-    "image": "assets/refresh/today.png",
     "captured": "2026-09-13"
   },
   {
     "id": "management-delivery",
     "group": "analyze",
     "label": "Earnings calls · Management delivery",
-    "title": "Did they deliver on what they said?",
-    "description": "Organize explicit earnings-call commitments and compare later financials and quoted evidence to understand what happened.",
+    "description": "Extract earnings-call commitments and check delivery against later results and source evidence.",
     "items": [
       "Choose 4, 6, or 8 quarters and start on-device analysis",
       "Review original wording, deadlines, later results, and sources",
@@ -558,8 +479,7 @@
     "id": "account-comparison",
     "group": "manage",
     "label": "Compare accounts within a stock",
-    "title": "One stock. Together or apart.",
-    "description": "Switch the account scope to understand combined holdings and each account's performance.",
+    "description": "Choose all, one, or several accounts for a stock to compare shares, costs, and gains or losses.",
     "items": [
       "Select All for the same stock across accounts",
       "Keep one account for its shares, cost basis, and gains or losses",

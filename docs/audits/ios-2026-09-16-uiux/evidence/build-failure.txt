@@ -1,0 +1,26 @@
+# 本轮构建失败记录
+
+命令：
+
+```
+xcodebuild -project CatfolioIOS.xcodeproj -scheme CatfolioIOS -configuration Debug \
+  -destination 'platform=iOS Simulator,id=9BAE01F7-1E92-45BD-A817-395FC654CC16' \
+  -derivedDataPath /tmp/catfolio-uiux-audit-build build
+```
+
+结果：`** BUILD FAILED **`（3 failures）
+
+首条错误：
+
+```
+/Users/qian/Documents/股票分析/CatfolioIOS/CatfolioIOS/APIClient.swift:6:13: error: external macro implementation type 'ObservationMacros.ObservableMacro' could not be found for macro 'Observable()'; '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/bin/swift-plugin-server' produced malformed response
+     |             `- error: external macro implementation type 'ObservationMacros.ObservableMacro' could not be found for macro 'Observable()'; '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/bin/swift-plugin-server' produced malformed response
+/Users/qian/Documents/股票分析/CatfolioIOS/CatfolioIOS/MoomooOAuthView.swift:7:6: error: no exact matches in call to initializer 
+```
+
+本机工具链：Xcode 27.0（27A266a），系统仅安装一个 Xcode（/Applications/Xcode.app）。
+失败点是 `ObservationMacros.ObservableMacro` 的宏展开插件，`swift-plugin-server produced malformed response`。
+该错误与源码无关，属于本机工具链/环境问题；换用 Xcode 26 或修复插件服务后应可构建。
+
+因此本轮审查的全部结论均来自源码阅读，**未在最新构建上运行或在模拟器截图验证**。
+evidence/installed-build-home.png 来自模拟器上已安装的 Build 10 旧产物，仅用于肉眼交叉验证。

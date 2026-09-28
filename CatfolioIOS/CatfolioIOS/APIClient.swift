@@ -993,6 +993,14 @@ final class AppModel {
         await refreshPortfolio()
     }
 
+    /// Stores which Trading 212 product an account is. The API never reports
+    /// it, so this is the only source for the account detail's type row.
+    func setTrading212AccountType(_ accountType: Trading212AccountType, for accountKey: String) async throws {
+        guard !isFakeDataMode && !isPublicInvestorMode else { return }
+        _ = try await LocalPortfolioStore.shared.setAccountTypeOverride(accountType.rawValue, for: accountKey)
+        await refreshPortfolio()
+    }
+
     func addHistoricalTransaction(
         to account: PortfolioAccount,
         date: Date,
@@ -1168,9 +1176,20 @@ final class AppModel {
     func importTrading212(
         _ snapshot: Trading212Snapshot,
         accountNames: [String: String] = [:],
+        accountTypeOverrides: [String: String] = [:],
         replacingAccountsOnly: Bool = false
     ) async throws -> CSVImportResult {
         var warnings: [String] = []
+        // Trading 212 never reports whether an account is an ISA. A sync that
+        // does not carry a freshly chosen type must keep the stored one, since
+        // nothing else on the device knows it.
+        let storedTypes = Dictionary(
+            accounts.filter { $0.source == "Trading 212" }
+                .compactMap { account in
+                    account.accountID.flatMap { id in account.accountTypeOverride.map { (id, $0) } }
+                },
+            uniquingKeysWith: { _, last in last }
+        )
         let positions = snapshot.positions.compactMap { position -> LocalPositionRecord? in
             guard position.quantity > 0 else { return nil }
             guard let average = position.averagePricePaid, average > 0 else {
@@ -1185,7 +1204,7 @@ final class AppModel {
                 openedDate: position.createdAt.map { String($0.prefix(10)) },
                 accountID: "account-\(position.accountSlot)",
                 accountName: accountNames["account-\(position.accountSlot)"]
-                    ?? (position.accountSlot == 1 ? "Trading 212 · ISA" : "Trading 212 · Invest"),
+                    ?? L10n.text("账户 \(position.accountSlot)"),
                 accountCurrency: position.accountCurrency ?? "GBP",
                 brokerPnl: position.ppl,
                 brokerPnlCurrency: position.ppl == nil ? nil : (position.accountCurrency ?? "GBP"),
@@ -1217,7 +1236,7 @@ final class AppModel {
                 source: "Trading 212",
                 accountID: "account-\(transaction.accountSlot)",
                 accountName: accountNames["account-\(transaction.accountSlot)"]
-                    ?? (transaction.accountSlot == 1 ? "Trading 212 · ISA" : "Trading 212 · Invest"),
+                    ?? L10n.text("账户 \(transaction.accountSlot)"),
                 tradeID: transaction.reference,
                 brokerFXRate: transaction.brokerFXRate,
                 realisedProfitLoss: transaction.realisedProfitLoss,
@@ -1240,13 +1259,17 @@ final class AppModel {
             transactions: snapshot.hasCompleteTransactionHistory ? transactions : nil,
             replacingAccountsOnly: replacingAccountsOnly,
             syncedAccounts: snapshot.syncedAccounts.map { account in
-                PortfolioAccount(
+                let accountTypeOverride = account.accountID.flatMap { id in
+                    accountTypeOverrides[id] ?? storedTypes[id]
+                }
+                return PortfolioAccount(
                     id: account.id, accountID: account.accountID, source: account.source,
                     name: account.accountID.flatMap { accountNames[$0] } ?? account.name,
                     baseCurrency: account.baseCurrency, positionCount: account.positionCount,
                     transactionCount: account.transactionCount,
                     manualTransactionCount: account.manualTransactionCount,
-                    hasCSVImport: account.hasCSVImport, marketValueUSD: account.marketValueUSD
+                    hasCSVImport: account.hasCSVImport, marketValueUSD: account.marketValueUSD,
+                    accountTypeOverride: accountTypeOverride
                 )
             }
         )

@@ -115,7 +115,7 @@ struct PaywallView: View {
                         }
                         Spacer(minLength: 8)
                         VStack(alignment: .trailing, spacing: 5) {
-                            Text(plan == .monthly ? "$7.99" : "$100")
+                            Text(plan == .monthly ? "$7.99" : "$129")
                                 .font(.title2.weight(.bold)).monospacedDigit()
                             Text(plan == .monthly ? L10n.text("每月") : L10n.text("一次购买"))
                                 .appText(.label).foregroundStyle(SettingsTemplate.secondaryText)
@@ -145,11 +145,11 @@ struct PaywallView: View {
         VStack(spacing: 10) {
             Text(selectedPlan == .monthly
                  ? L10n.text("每月 $7.99，自动续订，可在 App Store 管理或取消。")
-                 : L10n.text("一次支付 $100，终身使用，无需续订。"))
+                 : L10n.text("一次支付 $129，终身使用，无需续订。"))
                 .appText(.label).foregroundStyle(SettingsTemplate.secondaryText)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-            GlassPrimaryButton(title: selectedPlan == .monthly ? L10n.text("订阅 · $7.99/月") : L10n.text("解锁终身版 · $100"), systemImage: "arrow.right") {
+            GlassPrimaryButton(title: selectedPlan == .monthly ? L10n.text("订阅 · $7.99/月") : L10n.text("解锁终身版 · $129"), systemImage: "arrow.right") {
                 notice = .purchase
             }
             .accessibilityIdentifier("paywall-continue")
@@ -177,6 +177,6 @@ enum PaywallPlan: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String { self == .monthly ? L10n.text("月度订阅") : L10n.text("终身版") }
     var priceDescription: String {
-        self == .monthly ? L10n.text("每月 7.99 美元") : L10n.text("一次支付 100 美元")
+        self == .monthly ? L10n.text("每月 7.99 美元") : L10n.text("一次支付 129 美元")
     }
 }

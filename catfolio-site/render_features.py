@@ -17,8 +17,8 @@ def render():
         rows = "".join(f"<li>{escape(line)}</li>" for line in item["items"])
         cards.append(f'''<article class="capability" data-group="{e['group']}" id="capability-{e['id']}">
 <button class="screenshot-button" data-shot="{e['id']}" aria-label="放大查看：{e['label']}截图"><img src="{e['image']}" width="1206" height="2622" alt="{e['label']}：{e['note']}" loading="lazy" decoding="async"><span class="zoom-label">查看截图 ↗</span></button>
-<p class="capability-label">{e['label']}</p><h3>{e['title']}</h3><p class="capability-description">{e['description']}</p>
-<ul>{rows}</ul><p class="capability-note">{e['note']}</p></article>''')
+<h3 class="capability-label">{e['label']}</h3><p class="capability-description">{e['description']}</p>
+<details class="capability-details"><summary>细节与数据说明</summary><ul>{rows}</ul><p class="capability-note">{e['note']}</p></details></article>''')
     path = ROOT / "index.html"
     html = path.read_text()
     block = '<!-- FEATURES:START -->\n<div class="capability-grid">\n' + "\n".join(cards) + '\n</div>\n<!-- FEATURES:END -->'

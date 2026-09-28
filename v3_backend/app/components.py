@@ -551,6 +551,7 @@ _V5_NAV_GROUPS = [
         ("/returns", "收益对比", "analysis.svg"),
         ("/analytics", "分析图表", "trade.svg"),
         ("/strategy", "策略回测", "strategy.svg"),
+        ("/dca", "定投计算器", "strategy.svg"),
         ("/heatmap", "持仓热力图", "tools.svg"),
         ("/sentiment", "行业情绪", "analysis.svg"),
         ("/ai", "AI 分析", "magic.svg"),

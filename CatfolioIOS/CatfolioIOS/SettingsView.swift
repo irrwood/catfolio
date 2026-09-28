@@ -661,7 +661,23 @@ private struct AccountDetailView: View {
                 }
                 .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
 
-                SettingsValueRow(title: L10n.text("账户类型"), value: L10n.label(account.accountType), valueIsNumeric: false)
+                // Trading 212's API cannot say whether an account is an ISA, so
+                // this is the one type the person states rather than the app
+                // reading it; every other broker's type stays a value.
+                if account.source == "Trading 212" {
+                    SettingsMenuRow(
+                        title: L10n.text("账户类型"),
+                        value: L10n.label(account.accountType),
+                        selection: accountTypeSelection
+                    ) {
+                        ForEach(Trading212AccountType.allCases) { type in
+                            Text(type.displayName).tag(Optional(type))
+                        }
+                    }
+                    .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
+                } else {
+                    SettingsValueRow(title: L10n.text("账户类型"), value: L10n.label(account.accountType), valueIsNumeric: false)
+                }
                 SettingsValueRow(title: L10n.text("基础币种"), value: account.baseCurrency, valueIsNumeric: false)
                 SettingsValueRow(title: L10n.text("Broker"), value: L10n.label(account.brokerName), valueIsNumeric: false)
             }
@@ -826,6 +842,24 @@ private struct AccountDetailView: View {
                 notice = AccountNotice(title: L10n.text("无法保存名称"), message: error.localizedDescription)
             }
         }
+    }
+
+    /// Trading 212's API reports an account number and a currency, never the
+    /// product, so the type is chosen here and saved on its own.
+    private var accountTypeSelection: Binding<Trading212AccountType?> {
+        Binding(
+            get: { account.chosenAccountType },
+            set: { type in
+                guard let type else { return }
+                Task {
+                    do {
+                        try await model.setTrading212AccountType(type, for: accountID)
+                    } catch {
+                        notice = AccountNotice(title: L10n.text("无法保存账户类型"), message: error.localizedDescription)
+                    }
+                }
+            }
+        )
     }
 
     private func deduplicateTransactions() {

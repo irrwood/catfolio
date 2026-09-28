@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from app.routes import api, home, report, lab, analysis_charts, backtest, heatmap, returns, ai, bank, settings, strategy, import_csv
+from app.routes import api, home, report, lab, analysis_charts, backtest, heatmap, returns, ai, bank, settings, strategy, import_csv, dca
 from app import i18n
 from app.data_store import public_demo_mode
 
@@ -28,6 +28,7 @@ app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 
 
 _PUBLIC_DEMO_POSTS = {
+    "/api/dca/backtest",
     "/api/lab/ai-analysis",
     "/api/ai/briefing",
     "/api/ai/risk-diagnosis",
@@ -108,6 +109,7 @@ app.include_router(ai.router)
 app.include_router(bank.router)
 app.include_router(settings.router)
 app.include_router(strategy.router)
+app.include_router(dca.router)
 app.include_router(import_csv.router)
 app.include_router(i18n.router)
 

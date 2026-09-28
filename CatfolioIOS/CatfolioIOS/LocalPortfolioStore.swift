@@ -610,6 +610,13 @@ struct PortfolioAccount: Identifiable, Equatable, Codable {
     let manualTransactionCount: Int
     let hasCSVImport: Bool
     let marketValueUSD: Double
+    /// The broker product the person chose when connecting this account,
+    /// stored as a `Trading212AccountType` raw value.
+    ///
+    /// Trading 212 reports an account number and a currency, never whether the
+    /// account is an ISA, so the choice cannot be derived and has to survive
+    /// every sync, merge and reset of the positions around it.
+    var accountTypeOverride: String? = nil
 
     /// Registered but never synced.
     ///
@@ -632,13 +639,14 @@ struct PortfolioAccount: Identifiable, Equatable, Codable {
     }
 
     var accountType: String {
-        switch source {
+        if let chosen = chosenAccountType { return chosen.displayName }
+        return switch source {
         case "Trading 212":
-            switch accountID {
-            case "account-1": "Stocks ISA"
-            case "account-2": "Invest"
-            default: "投资账户"
-            }
+            // The credential slot an account was added under used to decide
+            // this, which labelled a second Invest account as an ISA. The slot
+            // is a local key index, so an account with no chosen type says so
+            // rather than guessing.
+            "未设置"
         case "IBKR Flex": "Individual"
         case "Moomoo": "Individual"
         case "CSV": "手动账户"
@@ -648,14 +656,11 @@ struct PortfolioAccount: Identifiable, Equatable, Codable {
         }
     }
 
+    var chosenAccountType: Trading212AccountType? {
+        accountTypeOverride.flatMap(Trading212AccountType.init(rawValue:))
+    }
+
     var displayName: String {
-        if source == "Trading 212", name.hasPrefix("Trading 212 · 账户 ") {
-            switch accountID {
-            case "account-1": return "Trading 212 · ISA"
-            case "account-2": return "Trading 212 · Invest"
-            default: return name
-            }
-        }
         if source == "IBKR Flex", name.hasPrefix("IBKR · ••••") {
             return "IBKR · Individual"
         }
@@ -685,6 +690,14 @@ struct HoldingDetailAccountOption: Identifiable, Equatable {
     /// Existing engine P&L converted to the card's quote currency. Public
     /// disclosures without a cost basis leave this unknown, never zero.
     var unrealized: Double? = nil
+
+    static func unrealizedPercent(marketValue: Double, unrealized: Double?) -> Double? {
+        guard marketValue.isFinite, let unrealized, unrealized.isFinite else { return nil }
+        let cost = marketValue - unrealized
+        guard cost > 0 else { return nil }
+        let percent = unrealized / cost * 100
+        return percent.isFinite ? percent : nil
+    }
 }
 
 struct HoldingDetailAccountContext: Equatable {
@@ -769,7 +782,10 @@ extension LocalPortfolioDocument {
                     hasCSVImport: firstPosition?.source == "CSV" || accountTransactions.contains {
                         $0.entryMethod == "csv"
                     },
-                    marketValueUSD: (try? LocalPortfolioEngine.totals(for: accountPositions).marketValue) ?? 0
+                    marketValueUSD: (try? LocalPortfolioEngine.totals(for: accountPositions).marketValue) ?? 0,
+                    // Positions carry the account's name and currency; only the
+                    // chosen broker product lives in the saved account list.
+                    accountTypeOverride: saved[key]?.accountTypeOverride
                 )
             }
             .sorted {
@@ -1593,7 +1609,31 @@ actor LocalPortfolioStore {
                 name: account.id == accountKey ? name : account.name, baseCurrency: account.baseCurrency,
                 positionCount: account.positionCount, transactionCount: account.transactionCount,
                 manualTransactionCount: account.manualTransactionCount, hasCSVImport: account.hasCSVImport,
-                marketValueUSD: account.marketValueUSD)
+                marketValueUSD: account.marketValueUSD, accountTypeOverride: account.accountTypeOverride)
+        }
+        document.updatedAt = Date()
+        try save(document)
+        return document
+    }
+
+    /// Records the broker product the person chose for an account.
+    ///
+    /// Trading 212's API reports an account number and a currency only, so a
+    /// type chosen on the connection screen is the single copy of that fact,
+    /// and a later sync that omits it must not clear it.
+    func setAccountTypeOverride(_ accountType: String, for accountKey: String) throws -> LocalPortfolioDocument {
+        var document = try load()
+        guard let target = document.accounts.first(where: { $0.id == accountKey }),
+              target.accountTypeOverride != accountType else {
+            return document
+        }
+        document.knownAccounts = document.accounts.map { account in
+            PortfolioAccount(id: account.id, accountID: account.accountID, source: account.source,
+                name: account.name, baseCurrency: account.baseCurrency,
+                positionCount: account.positionCount, transactionCount: account.transactionCount,
+                manualTransactionCount: account.manualTransactionCount, hasCSVImport: account.hasCSVImport,
+                marketValueUSD: account.marketValueUSD,
+                accountTypeOverride: account.id == accountKey ? accountType : account.accountTypeOverride)
         }
         document.updatedAt = Date()
         try save(document)

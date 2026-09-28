@@ -300,6 +300,7 @@ def strategy_page(request: Request):
     <h1><svg class="hi hi-inline" aria-hidden="true" focusable="false"><use href="#hi-strategy"></use></svg> 策略回测</h1>
     <p>用 Python 写策略，对任意股票回测，每次运行自动保存为一条记录，可随时回看对比。</p>
   </div>
+  <a class="btn" href="/dca">定投计算器 ↗</a>
 </div>
 
 <div class="strat-layout" style="display:grid;grid-template-columns:260px minmax(0,1fr);gap:var(--sp-lg);margin-top:var(--sp-lg);">

@@ -71,6 +71,7 @@ struct HoldingDetailContentView: View {
         get { cachedContent.realisedProfit }
         nonmutating set { cachedContent.realisedProfit = newValue }
     }
+    @State private var showsTransactionHistory = false
     @State private var cardInsight: SecurityCardInsightRequest?
     @State private var marketDataRevision = 0
     @State private var completedMarketDataRevision: Int?
@@ -114,7 +115,7 @@ struct HoldingDetailContentView: View {
     }
 
     var body: some View {
-        // No `NavigationStack` of its own: nothing on this page navigates.
+        // History opens in its own sheet; the detail needs no NavigationStack.
         // The stack was a second, opaque, rectangular view controller under
         // the sheet — outside the clip the zoom and the drag apply to the
         // sheet — with a hidden bar whose inset settled only after the page
@@ -220,6 +221,22 @@ struct HoldingDetailContentView: View {
                             price: priceHistory?.latestAvailablePrice ?? holding.quotePrice,
                             cachedContent: cachedContent)
                         .id("\(holding.ticker)|\(appLocale.identifier)")
+
+                        Button { showsTransactionHistory = true } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "clock.arrow.circlepath")
+                                Text(L10n.text("交易历史"))
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(20)
+                            .background(SettingsTemplate.card, in: RoundedRectangle(cornerRadius: 20))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("holding.transaction-history")
+                        .padding(.horizontal, HoldingDetailCardStyle.pageInset)
+                        .padding(.top, 24)
                         .padding(.bottom, 72)
                     }
                     }
@@ -231,6 +248,17 @@ struct HoldingDetailContentView: View {
                 .background(HoldingDetailScrollBoundary())
             }
             .accessibilityIdentifier("holding-detail-scroll")
+            .sheet(isPresented: $showsTransactionHistory) {
+                NavigationStack {
+                    HistoryView(ticker: holding.ticker)
+                        .environment(model)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button(L10n.text("关闭")) { showsTransactionHistory = false }
+                            }
+                        }
+                }
+            }
             // A long press on a card's title reads that card aloud, so to
             // speak, in the same paper as "今天有什么动静？".
             .environment(\.securityCardInsight, SecurityCardInsightAction { title, facts, source in
@@ -540,6 +568,7 @@ struct HoldingDetailAccountSelector: View {
 
     @ScaledMetric(relativeTo: .subheadline) private var labelSize = 14.0
     @ScaledMetric(relativeTo: .subheadline) private var lineHeight = 16.0
+    @ScaledMetric(relativeTo: .caption2) private var badgeSize = 11.0
 
     let options: [HoldingDetailAccountOption]
     let selectedAccountKeys: Set<String>
@@ -605,13 +634,27 @@ struct HoldingDetailAccountSelector: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            // Figma 282:2115: title, then a tightly grouped pair of account figures.
+            // Figma 479:6258: account name and return badge above the figures.
             VStack(alignment: .leading, spacing: 5) {
-                Text(title)
-                    .font(.system(size: labelSize, weight: .medium))
-                    .tracking(0.28)
-                    .lineLimit(1)
-                    .frame(height: lineHeight, alignment: .leading)
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(.system(size: labelSize, weight: .medium))
+                        .tracking(0.28)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Text(HoldingDetailAccountOption.unrealizedPercent(marketValue: marketValue, unrealized: unrealized)
+                        .map { DisplayFormat.percent($0) } ?? "—")
+                        .font(Typography.number(size: badgeSize, weight: .semibold))
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, 5)
+                        .frame(minHeight: 18)
+                        .background(Color.primary.opacity(isSelected ? 0.10 : 0.05),
+                                    in: RoundedRectangle(cornerRadius: 6))
+                        .opacity(0.40)
+                        .accessibilityIdentifier("holding-detail-account-return-\(id)")
+                }
+                .frame(minHeight: lineHeight, alignment: .leading)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(DisplayFormat.money(marketValue, currency: currency, fractionDigits: 0))
                         .foregroundStyle(Color.primary.opacity(0.50))
@@ -628,9 +671,7 @@ struct HoldingDetailAccountSelector: View {
             .textCase(.uppercase)
             .foregroundStyle(CatfolioTheme.primaryText)
             .fixedSize(horizontal: true, vertical: false)
-            .padding(.leading, 16)
-            .padding(.trailing, 58)
-            .padding(.vertical, 10)
+            .padding(10)
             .frame(minWidth: 128, minHeight: 74, alignment: .leading)
             .modifier(AccountGlassSurface(isSelected: isSelected, colorScheme: colorScheme))
         }
@@ -640,6 +681,9 @@ struct HoldingDetailAccountSelector: View {
             L10n.text("\(title)，持仓市值 \(DisplayFormat.money(marketValue, currency: currency))")
         )
         .accessibilityValue(L10n.text("未实现盈亏") + " " + (unrealized.map { DisplayFormat.money($0, currency: currency, signed: true) } ?? "—"))
+        .accessibilityHint(L10n.text("未实现盈亏比例") + " " +
+            (HoldingDetailAccountOption.unrealizedPercent(marketValue: marketValue, unrealized: unrealized)
+                .map { DisplayFormat.percent($0) } ?? "—"))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
@@ -691,16 +735,16 @@ struct HoldingDetailAccountSelector: View {
                         if isSelected {
                             LinearGradient(colors: [Color.black.opacity(colorScheme == .dark ? 0.30 : 0.02), tint],
                                 startPoint: .top, endPoint: .bottom)
-                                .clipShape(RoundedRectangle(cornerRadius: 22))
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
                         }
                     }
-                    .glassEffect(.regular.tint(isSelected ? .clear : tint).interactive(), in: .rect(cornerRadius: 22))
+                    .glassEffect(.regular.tint(isSelected ? .clear : tint).interactive(), in: .rect(cornerRadius: 16))
             } else {
                 content
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22))
-                    .background(tint, in: RoundedRectangle(cornerRadius: 22))
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .background(tint, in: RoundedRectangle(cornerRadius: 16))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 22)
+                        RoundedRectangle(cornerRadius: 16)
                             .stroke(Color.primary.opacity(colorScheme == .dark ? 0.18 : 0.06), lineWidth: 0.75)
                     }
             }

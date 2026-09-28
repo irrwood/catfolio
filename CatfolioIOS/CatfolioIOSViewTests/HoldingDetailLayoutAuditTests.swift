@@ -3,6 +3,28 @@ import XCTest
 @testable import CatfolioIOS
 
 final class HoldingDetailLayoutAuditTests: XCTestCase {
+    func testAccountReturnUsesCostAndRejectsUnknownBasis() {
+        XCTAssertEqual(HoldingDetailAccountOption.unrealizedPercent(marketValue: 118.1, unrealized: 18.1)!, 18.1, accuracy: 0.001)
+        XCTAssertEqual(HoldingDetailAccountOption.unrealizedPercent(marketValue: 80, unrealized: -20), -20)
+        XCTAssertNil(HoldingDetailAccountOption.unrealizedPercent(marketValue: 100, unrealized: nil))
+        XCTAssertNil(HoldingDetailAccountOption.unrealizedPercent(marketValue: 100, unrealized: 100))
+        XCTAssertNil(HoldingDetailAccountOption.unrealizedPercent(marketValue: .infinity, unrealized: 10))
+    }
+
+    @MainActor
+    func testAccountReturnBadgeDesign() async throws {
+        let options = [HoldingDetailAccountOption(id: "invest", displayName: "Invest",
+            marketValue: 76_402, currency: "USD", marketValueUSD: 76_402, unrealized: 11_709),
+            HoldingDetailAccountOption(id: "invest2", displayName: "Invest2",
+            marketValue: 76_402, currency: "USD", marketValueUSD: 76_402, unrealized: 11_709)]
+        for dark in [true, false] {
+            _ = try await capture(HoldingDetailAccountSelector(options: options,
+                selectedAccountKeys: ["invest", "invest2"], onSelectAll: {}, onToggleAccount: { _ in })
+                .background(dark ? Color.black : Color.white),
+                language: "en", width: 402, large: false, dark: dark, name: "account-return-\(dark)")
+        }
+    }
+
     @MainActor
     func testChartAccountsAndResearchEntriesAtLargeType() async throws {
         let old = UserDefaults.standard.object(forKey: AppLanguage.preferenceKey)
@@ -136,6 +158,9 @@ final class HoldingDetailLayoutAuditTests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+        if name.hasPrefix("account-return-"), let data = image.pngData() {
+            try data.write(to: URL(fileURLWithPath: "/tmp/\(name).png"))
+        }
         return size
     }
 }

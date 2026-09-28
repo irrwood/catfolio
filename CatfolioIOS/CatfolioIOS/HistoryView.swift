@@ -182,6 +182,7 @@ struct HistoryView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private let initialAccountIDs: Set<String>?
+    private let ticker: String?
     #if DEBUG
     private var usesPreviewLedger = false
     #endif
@@ -211,7 +212,8 @@ struct HistoryView: View {
     @State private var showsExporter = false
     @State private var exportError: String?
 
-    init(initialAccountIDs: Set<String>? = nil, initialCategory: HistoryCategory = .all) {
+    init(initialAccountIDs: Set<String>? = nil, initialCategory: HistoryCategory = .all, ticker: String? = nil) {
+        self.ticker = ticker?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         self.initialAccountIDs = initialAccountIDs
         _selectedAccountIDs = State(initialValue: initialAccountIDs)
         _category = State(initialValue: initialCategory)
@@ -227,6 +229,7 @@ struct HistoryView: View {
     /// Deterministic native navigation tests without touching stored accounts.
     init(previewLedger: PortfolioActivityLedger, prepared: HistoryPreparedLedger) {
         initialAccountIDs = nil
+        ticker = nil
         usesPreviewLedger = true
         _ledger = State(initialValue: previewLedger)
         _preparedLedger = State(initialValue: prepared)
@@ -257,7 +260,7 @@ struct HistoryView: View {
         }
         // Cover the home-indicator safe area, not just the list's safe frame.
         .background { SettingsTemplate.pageBackground.ignoresSafeArea() }
-        .navigationTitle(L10n.text("History"))
+        .navigationTitle(ticker.map { "\($0) · \(L10n.text("History"))" } ?? L10n.text("History"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
         .toolbarVisibility(.hidden, for: .tabBar)
@@ -990,8 +993,9 @@ struct HistoryView: View {
         let ledger = ledger
         let accountIDs = effectiveAccountIDs
         let locale = appLocale
+        let ticker = ticker
         let worker = Task.detached(priority: .userInitiated) {
-            try HistoryPreparedLedger.build(ledger: ledger, accountIDs: accountIDs, locale: locale)
+            try HistoryPreparedLedger.build(ledger: ledger, accountIDs: accountIDs, locale: locale, ticker: ticker)
         }
         async let scopedPositions = model.holdings(forAccounts: accountIDs)
         do {
@@ -999,7 +1003,8 @@ struct HistoryView: View {
                 try await worker.value
             } onCancel: { worker.cancel() }
             try Task.checkCancellation()
-            let holdings = (try? await scopedPositions) ?? []
+            let allHoldings = (try? await scopedPositions) ?? []
+            let holdings = allHoldings.filter { ticker == nil || $0.ticker.uppercased() == ticker }
             try Task.checkCancellation()
             let charges = await Task.detached(priority: .userInitiated) {
                 HistoryFeeCharge.build(holdings: holdings)
@@ -1372,11 +1377,13 @@ struct HistoryPreparedLedger {
     }
 
     static func build(
-        ledger: PortfolioActivityLedger, accountIDs: Set<String>, locale: Locale
+        ledger: PortfolioActivityLedger, accountIDs: Set<String>, locale: Locale, ticker: String? = nil
     ) throws -> Self {
         try Task.checkCancellation()
+        let symbol = ticker?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         let activities = ledger.transactions.compactMap { transaction -> PortfolioActivity? in
-            guard accountIDs.contains(transaction.accountKey) else { return nil }
+            guard accountIDs.contains(transaction.accountKey),
+                  symbol == nil || transaction.ticker.uppercased() == symbol else { return nil }
             let activity = PortfolioActivity(
                 transaction: transaction,
                 securityName: ledger.securityNames[transaction.ticker.uppercased()] ?? transaction.ticker
