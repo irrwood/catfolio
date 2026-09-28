@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192"><rect width="192" height="192" fill="#FFFFFF" /><svg viewBox="-1.25457 -1.49291 39.727 40.3085" fill="none" x="35.0031" y="38.9232" width="122.1573" height="123.8506">
+<defs><mask id="catfolio-manual-erase" maskUnits="userSpaceOnUse" x="0" y="0" width="37" height="32"><rect x="0" y="0" width="37" height="32" fill="#FFFFFF" /><rect x="30.112223" y="2.1496841" width="3.2590656" height="4.2638782" fill="#000000" /><rect x="2.4188798" y="3.1738261" width="4.4185135" height="3.5702375" fill="#000000" /></mask></defs><g mask="url(#catfolio-manual-erase)"><path d="M36.9627 31.9967H0.25L0.26284 31.9839L14.7348 23.7399L18.5999 21.5312L22.4908 23.7399L34.5229 30.5971L36.9627 31.9839V31.9967Z" fill="#049848" />
+<path d="M18.5999 0.0234375V21.5323L14.7348 23.7409L0.26284 31.9849L0.25 31.9978L8.48114 17.6543L14.7348 6.77785L18.5999 0.0234375Z" fill="#62B66D" />
+<path d="M36.9604 32V31.9872L34.5206 30.6003L22.4885 23.7432L18.5977 21.5345V0.0256818L18.6105 0.0128409V0L22.4885 6.75441L28.7421 17.6565L36.9604 32Z" fill="#AED9AC" />
+</g></svg></svg>

@@ -60,31 +60,35 @@ private struct ToastHost: View {
     let center: ToastCenter
 
     var body: some View {
-        VStack {
-            if let toast = center.current {
-                ToastBubble(toast: toast) { center.finish(toast.id) }
-                    .id(toast.id)
+        GeometryReader { geometry in
+            VStack {
+                if let toast = center.current {
+                    ToastBubble(toast: toast, maximumWidth: max(44, geometry.size.width - 32)) { center.finish(toast.id) }
+                        .id(toast.id)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .padding(.top, 6)
+            .frame(maxWidth: .infinity)
         }
-        .padding(.top, 6)
-        .frame(maxWidth: .infinity)
         .fontDesign(.rounded)
     }
 }
 
 /// A circle scales up, opens sideways into a capsule, then the words come
 /// through a blur from left to right; leaving, the same in reverse.
-private struct ToastBubble: View {
+struct ToastBubble: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     let toast: AppToast
+    let maximumWidth: CGFloat
     let onFinish: () -> Void
 
     @State private var isShown = false
     @State private var isExpanded = false
     @State private var reveal: CGFloat = 0
     @State private var expandedWidth: CGFloat = Self.diameter
+    @State private var expandedHeight: CGFloat = Self.diameter
 
     private static let diameter: CGFloat = 44
     private static let textSoftEdge: CGFloat = 36
@@ -107,6 +111,23 @@ private struct ToastBubble: View {
     }
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            messageContent(wrapped: false)
+            messageContent(wrapped: true)
+        }
+        .frame(width: maximumWidth, alignment: .leading)
+        .fixedSize()
+        .frame(width: isExpanded ? expandedWidth : Self.diameter,
+               height: isExpanded ? expandedHeight : Self.diameter, alignment: .leading)
+        .clipShape(RoundedRectangle(cornerRadius: Self.diameter / 2))
+        .modifier(ToastSurface())
+        .scaleEffect(isShown ? 1 : 0.3)
+        .opacity(isShown ? 1 : 0)
+        .accessibilityHidden(true)
+        .task { await run() }
+    }
+
+    private func messageContent(wrapped: Bool) -> some View {
         // The glyph sits centred in the circle's 44pt; the words tuck 8pt into
         // that slot so they read with the glyph, not beside an empty margin.
         HStack(spacing: -8) {
@@ -117,21 +138,19 @@ private struct ToastBubble: View {
             Text(toast.message)
                 .appText(.subheading, weight: .medium)
                 .foregroundStyle(CatfolioTheme.primaryText)
-                .lineLimit(1)
-                .fixedSize()
+                .lineLimit(wrapped ? nil : 1)
+                .fixedSize(horizontal: !wrapped, vertical: true)
                 .blur(radius: (1 - reveal) * 6)
                 .mask(alignment: .leading) { revealMask }
                 .padding(.trailing, 18)
+                .padding(.vertical, 12)
         }
-        .fixedSize()
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { expandedWidth = $0 }
-        .frame(width: isExpanded ? expandedWidth : Self.diameter, height: Self.diameter, alignment: .leading)
-        .clipShape(Capsule())
-        .modifier(ToastSurface())
-        .scaleEffect(isShown ? 1 : 0.3)
-        .opacity(isShown ? 1 : 0)
-        .accessibilityHidden(true)
-        .task { await run() }
+        .frame(width: wrapped ? maximumWidth : nil)
+        .fixedSize(horizontal: !wrapped, vertical: true)
+        .onGeometryChange(for: CGSize.self) { $0.size } action: {
+            expandedWidth = $0.width
+            expandedHeight = max(Self.diameter, $0.height)
+        }
     }
 
     /// Solid up to the reveal line, then a soft edge, then nothing: the line
@@ -194,17 +213,18 @@ private struct ToastBubble: View {
 
 private struct ToastSurface: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    private let shape = RoundedRectangle(cornerRadius: 22)
 
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *), !reduceTransparency {
             // Tinted towards the page colour: clear glass let a navigation
             // title under the toast read through its words.
-            content.glassEffect(.regular.tint(Color(uiColor: .systemBackground).opacity(0.6)), in: Capsule())
+            content.glassEffect(.regular.tint(Color(uiColor: .systemBackground).opacity(0.6)), in: shape)
         } else {
             content
                 .background(reduceTransparency ? AnyShapeStyle(SettingsTemplate.card) : AnyShapeStyle(.regularMaterial),
-                            in: Capsule())
-                .overlay { Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5) }
+                            in: shape)
+                .overlay { shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5) }
         }
     }
 }

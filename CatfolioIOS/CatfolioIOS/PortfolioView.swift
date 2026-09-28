@@ -14,8 +14,6 @@ struct PortfolioView: View {
     @State private var showsTodayDetail = false
     @State private var homeScrollState = PortfolioHomeScrollState()
     @State private var homeScrollController = PortfolioHomeScrollController()
-    @State private var refreshNotice: PortfolioRefreshResult?
-    @State private var refreshNoticeToken = UUID()
     // One namespace per origin. A security shown both in the Today bars and
     // in the holdings list would otherwise publish two sources under the same
     // id, and the transition has no way to know which one it grew from.
@@ -178,15 +176,6 @@ struct PortfolioView: View {
                         }
                     }
                 }
-                .overlay(alignment: .top) {
-                    if let refreshNotice {
-                        PortfolioRefreshNotice(result: refreshNotice)
-                            .padding(.horizontal, 20)
-                            .padding(.top, 8)
-                            .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
-                            .zIndex(10)
-                    }
-                }
                 .modifier(PortfolioFloatingFilterOverlay())
                 .fullScreenCover(item: $selectedHolding) { holding in
                     HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
@@ -242,23 +231,8 @@ struct PortfolioView: View {
     }
 
     @MainActor private func refreshFromUser() async {
-        let token = UUID()
-        refreshNoticeToken = token
-        refreshNotice = nil
         guard let result = await model.refreshPortfolioReportingResult(), !Task.isCancelled else { return }
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
-            refreshNotice = result
-        }
-        if UIAccessibility.isVoiceOverRunning {
-            UIAccessibility.post(notification: .announcement, argument: result.noticeText)
-        }
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(6))
-            guard refreshNoticeToken == token else { return }
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
-                refreshNotice = nil
-            }
-        }
+        ToastCenter.shared.show(result.noticeText, kind: result.toastKind)
     }
 }
 
@@ -295,42 +269,11 @@ extension PortfolioRefreshResult {
         }
     }
 
-    var noticeSymbol: String {
+    var toastKind: AppToast.Kind {
         switch self {
-        case .quotesUpdated, .portfolioLoaded: "checkmark.circle.fill"
-        case .portfolioLoadedWithoutNewQuotes, .unchangedQuotes, .unchangedContent, .noHeldQuotes: "info.circle.fill"
-        case .failed: "exclamationmark.circle.fill"
+        case .quotesUpdated, .portfolioLoaded: .success
+        case .portfolioLoadedWithoutNewQuotes, .unchangedQuotes, .unchangedContent, .noHeldQuotes: .info
+        case .failed: .error
         }
-    }
-
-    var noticeTint: Color {
-        switch self {
-        case .quotesUpdated, .portfolioLoaded: CatfolioTheme.positive
-        case .portfolioLoadedWithoutNewQuotes, .unchangedQuotes, .unchangedContent, .noHeldQuotes: CatfolioTheme.warning
-        case .failed: CatfolioTheme.danger
-        }
-    }
-}
-
-struct PortfolioRefreshNotice: View {
-    let result: PortfolioRefreshResult
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: result.noticeSymbol)
-                .foregroundStyle(result.noticeTint)
-                .padding(.top, 3)
-            Text(result.noticeText)
-                .appText(.footnote, weight: .semibold)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("portfolio-refresh-result")
-        .allowsHitTesting(false)
     }
 }

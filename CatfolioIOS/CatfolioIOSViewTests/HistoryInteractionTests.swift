@@ -15,6 +15,26 @@ final class HistoryInteractionTests: XCTestCase {
         XCTAssertEqual(activity.displayTitle, "Morningstar")
     }
 
+    func testPreparedRowTextPreservesAmountsAndAccountScope() throws {
+        let transactions = [entry("BUY", id: "buy"), entry("SELL", id: "sell"),
+                            entry("DIVIDEND", id: "dividend", price: 2),
+                            entry("BUY", account: "other", id: "excluded")]
+        let input = ledger(transactions)
+        let result = try HistoryPreparedLedger.build(ledger: input,
+            accountIDs: [transactions[0].accountKey], locale: Locale(identifier: "en_GB"))
+        XCTAssertEqual(result.rowPresentations.count, 3)
+        XCTAssertNil(result.rowPresentations[transactions[3].id])
+        for transaction in transactions.prefix(3) {
+            let activity = PortfolioActivity(transaction: transaction,
+                                             securityName: input.securityNames[transaction.ticker.uppercased()] ?? transaction.ticker)
+            let row = try XCTUnwrap(result.rowPresentations[activity.id])
+            let order = activity.kind == .buy || activity.kind == .sell
+            XCTAssertEqual(row.amount, DisplayFormat.money(order ? abs(activity.nativeAmount) : activity.nativeAmount,
+                                                          currency: transaction.currency, signed: !order))
+            XCTAssertEqual(row.title, activity.displayTitle)
+        }
+    }
+
     private func entry(_ action: String, date: String = "2026-04-06", account: String = "one",
                        id: String = UUID().uuidString, price: Double = 100,
                        ticker: String = "TEST", currency: String = "USD") -> LocalTransactionRecord {
@@ -228,6 +248,28 @@ final class HistoryInteractionTests: XCTestCase {
     }
 
     @MainActor
+    func testChangingCategoryDoesNotRebuildPagesButNewContentDoes() async throws {
+        let probe = HistoryPagerContentProbe()
+        let controller = UIHostingController(rootView: HistoryPagerContentHarness(probe: probe))
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previousWindow = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previousWindow?.makeKeyAndVisible() }
+        try await Task.sleep(for: .milliseconds(650))
+        let initialBuilds = probe.builds
+        XCTAssertEqual(initialBuilds, HistoryCategory.allCases.count)
+        probe.selection = .orders
+        try await Task.sleep(for: .milliseconds(650))
+        XCTAssertEqual(probe.builds, initialBuilds, "A tab change must only move the pager")
+        probe.revision += 1
+        try await Task.sleep(for: .milliseconds(650))
+        XCTAssertEqual(probe.builds, initialBuilds + HistoryCategory.allCases.count,
+                       "A new ledger or filter must still update every page")
+    }
+
+    @MainActor
     func testNativePagerShowsBothLivePagesAndPillAtHalfwayThenCancels() async throws {
         let controller = HistoryPagingController(selection: .all)
         controller.updatePages(HistoryCategory.allCases.enumerated().map { index, category in
@@ -252,6 +294,10 @@ final class HistoryInteractionTests: XCTestCase {
         XCTAssertEqual(second.convert(second.bounds, to: controller.view).minX, width / 2, accuracy: 1)
         XCTAssertEqual(controller.selection, .all, "Dragging has not committed a category")
         let bar = controller.categoryBar
+        for button in bar.buttons {
+            XCTAssertEqual(button.bounds.width, bar.buttons[0].bounds.width, accuracy: 0.5)
+            XCTAssertEqual(button.bounds.height, bar.buttons[0].bounds.height, accuracy: 0.5)
+        }
         XCTAssertEqual(bar.pill.frame.minX,
                        (bar.buttons[0].frame.minX + bar.buttons[1].frame.minX) / 2, accuracy: 0.5)
         attach(controller.view, name: "History-pager-halfway")
@@ -330,6 +376,14 @@ final class HistoryInteractionTests: XCTestCase {
             XCTAssertEqual(position.pullDown, -offset)
             XCTAssertEqual(position.materialOpacity, 0)
         }
+    }
+
+    func testHeaderMaterialInterpolatesBetweenCategoryScrollPositions() {
+        let rest = HistoryHeaderPosition(scrollOffset: 0)
+        let scrolled = HistoryHeaderPosition(scrollOffset: 300)
+        XCTAssertEqual(HistoryHeaderPosition.interpolated(from: rest, to: scrolled, fraction: 0), rest)
+        XCTAssertEqual(HistoryHeaderPosition.interpolated(from: rest, to: scrolled, fraction: 1), scrolled)
+        XCTAssertEqual(HistoryHeaderPosition.interpolated(from: rest, to: scrolled, fraction: 0.5).materialOpacity, 0.5)
     }
 
     func testHeaderMaterialAppearsOnlyAsContentPassesUnderIt() {
@@ -435,7 +489,9 @@ final class HistoryInteractionTests: XCTestCase {
         // SwiftUI applies the category transform in its rendering layer;
         // UIScrollView.convert does not include that transform consistently.
         // Compare the rendered "All" label at the expected physical positions.
-        let labelRect = CGRect(x: 34, y: barBottom + 20, width: 32, height: 24)
+        let categories = try XCTUnwrap(descendants(controller.view, of: HistoryCategoryBar.self).first)
+        let allLabel = try XCTUnwrap(categories.buttons.first?.titleLabel)
+        let labelRect = allLabel.convert(allLabel.bounds, to: controller.view)
         let restingImage = snapshot(controller.view)
 
         list.setContentOffset(CGPoint(x: 0, y: restOffset.y - 80), animated: false)
@@ -581,6 +637,23 @@ private struct HistoryNavigationFixture: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 Capsule().fill(.bar).frame(height: 56)
             }
+        }
+    }
+}
+
+@MainActor @Observable
+private final class HistoryPagerContentProbe {
+    var selection: HistoryCategory = .all
+    var revision = 0
+    @ObservationIgnored var builds = 0
+}
+
+private struct HistoryPagerContentHarness: View {
+    @Bindable var probe: HistoryPagerContentProbe
+    var body: some View {
+        HistoryPagingView(selection: $probe.selection, contentID: probe.revision) { category in
+            probe.builds += 1
+            return AnyView(List { Text(category.rawValue) })
         }
     }
 }

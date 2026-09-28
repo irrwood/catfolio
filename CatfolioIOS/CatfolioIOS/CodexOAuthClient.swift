@@ -405,7 +405,9 @@ struct CodexOAuthClient: Sendable {
         if webSearch, !Self.containsCompletedWebSearch(data) {
             throw LocalServiceError.invalidResponse
         }
-        return try Self.parseCompletion(data)
+        let text = try Self.parseCompletion(data)
+        let sources = webSearch ? AIWebSearch.sourceLinks(in: data) : ""
+        return sources.isEmpty ? text : text + AIWebSearch.sourceMarker + sources
     }
 
     private func send(

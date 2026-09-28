@@ -6,10 +6,13 @@ import UIKit
 struct HistoryPagingView: UIViewControllerRepresentable {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var selection: HistoryCategory
+    var contentID: AnyHashable
     var page: (HistoryCategory) -> AnyView
 
     final class Coordinator {
         var selection: HistoryCategory
+        var contentID: AnyHashable?
+        var environmentID: String?
         init(selection: HistoryCategory) { self.selection = selection }
     }
 
@@ -27,12 +30,20 @@ struct HistoryPagingView: UIViewControllerRepresentable {
             if selection != $0 { selection = $0 }
         }
         controller.reduceMotion = reduceMotion
-        let height = HistoryCategoryBar.preferredHeight
-        controller.updatePages(HistoryCategory.allCases.map {
-            AnyView(page($0)
-                .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: height) }
-                .environment(\.self, context.environment))
-        })
+        let environment = context.environment
+        let environmentID = "\(environment.locale.identifier)|\(environment.colorScheme)|\(environment.dynamicTypeSize)|\(environment.accessibilityReduceMotion)|\(environment.accessibilityReduceTransparency)|\(String(describing: environment.legibilityWeight))"
+        // Settling a swipe changes selection, not the ledger. Replacing every
+        // hosting root here made every category diff its List after each swipe.
+        if context.coordinator.contentID != contentID || context.coordinator.environmentID != environmentID {
+            context.coordinator.contentID = contentID
+            context.coordinator.environmentID = environmentID
+            let height = HistoryCategoryBar.preferredHeight
+            controller.updatePages(HistoryCategory.allCases.map {
+                AnyView(page($0)
+                    .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: height) }
+                    .environment(\.self, environment))
+            })
+        }
         if context.coordinator.selection != selection {
             context.coordinator.selection = selection
             controller.select(selection, animated: !reduceMotion)
@@ -59,6 +70,7 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
     private var laidOutSize = CGSize.zero
     private var isLayingOutPages = false
     private var requestedIndex: Int?
+    private var lastHeaderPosition: HistoryHeaderPosition?
     /// Fades the header material out over its last stretch, so content
     /// scrolling up under the category bar dissolves into it instead of
     /// meeting a hard line along the bar's bottom edge.
@@ -136,10 +148,15 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
         let progress = oldWidth > 0 ? pager.contentOffset.x / oldWidth : CGFloat(selectedIndex)
         pager.frame = view.bounds
         for (index, host) in hosts.enumerated() {
-            host.view.frame = CGRect(x: CGFloat(index) * size.width, y: 0,
-                                     width: size.width, height: size.height)
-            host.view.layoutIfNeeded()
-            connectList(at: index)
+            let frame = CGRect(x: CGFloat(index) * size.width, y: 0,
+                               width: size.width, height: size.height)
+            if host.view.frame != frame { host.view.frame = frame }
+            // Only force layout for content actually crossing the viewport.
+            // Offscreen hosting controllers otherwise remeasure entire Lists.
+            if livePages.contains(index), abs(CGFloat(index) - pageProgress) < 1 {
+                host.view.layoutIfNeeded()
+                connectList(at: index)
+            }
         }
         pager.contentSize = CGSize(width: size.width * CGFloat(hosts.count), height: size.height)
         if oldWidth != size.width {
@@ -148,6 +165,7 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
         }
         laidOutSize = size
         categoryBar.transform = .identity
+        lastHeaderPosition = nil
         categoryBar.frame = CGRect(x: 0, y: view.safeAreaInsets.top, width: size.width,
                                    height: HistoryCategoryBar.preferredHeight)
         // Extend the same material to the physical top edge, underneath (not
@@ -187,18 +205,23 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
             pager.panGestureRecognizer.require(toFail: back)
         }
         observeSelectedList()
-        // With the push finished, bring the remaining pages up one at a
-        // time, so none of them costs a frame and a jump across the bar
-        // lands on content.
+        scheduleNeighbourPreparation()
+    }
+
+    private func scheduleNeighbourPreparation() {
         wakeTask?.cancel()
         wakeTask = Task { @MainActor [weak self] in
-            guard let first = self?.selectedIndex else { return }
-            // Nearest first, so a swipe straight after the push lands on content.
-            let order = HistoryCategory.allCases.indices.sorted { abs($0 - first) < abs($1 - first) }
-            for index in order {
-                try? await Task.sleep(for: .milliseconds(80))
-                guard let self, !Task.isCancelled else { return }
-                self.wake([index])
+            do { try await Task.sleep(for: .milliseconds(160)) } catch { return }
+            while let self, !Task.isCancelled {
+                let busy = self.requestedIndex != nil || self.pager.isTracking || self.pager.isDecelerating
+                    || self.lists.values.contains { $0.isTracking || $0.isDecelerating || $0.isDragging }
+                if !busy {
+                    // Include layout, not just rootView assignment. Otherwise
+                    // SwiftUI postpones the expensive first layout until dragging.
+                    self.preparePages(self.neighbourhood(of: self.selectedIndex))
+                    return
+                }
+                do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
             }
         }
     }
@@ -221,6 +244,15 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
         view.setNeedsLayout()
     }
 
+    private func preparePages(_ indices: Set<Int>) {
+        wake(indices)
+        view.layoutIfNeeded()
+        for index in indices.sorted() where hosts.indices.contains(index) {
+            hosts[index].view.layoutIfNeeded()
+            connectList(at: index)
+        }
+    }
+
     private var selectedIndex: Int { HistoryCategory.allCases.firstIndex(of: selection) ?? 0 }
     var pageProgress: CGFloat {
         guard pager.bounds.width > 0 else { return CGFloat(selectedIndex) }
@@ -229,7 +261,7 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
 
     func select(_ category: HistoryCategory, animated: Bool) {
         let index = HistoryCategory.allCases.firstIndex(of: category) ?? 0
-        wake(neighbourhood(of: index))
+        preparePages(neighbourhood(of: index))
         let target = CGPoint(x: CGFloat(index) * pager.bounds.width, y: 0)
         // Tapping the current tab during deceleration should return to it,
         // even though the swipe has not committed a different selection yet.
@@ -252,13 +284,15 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard !isLayingOutPages else { return }
         categoryBar.setProgress(pageProgress)
-        if scrollView.isDragging || scrollView.isDecelerating {
-            wake(neighbourhood(of: Int(pageProgress.rounded())))
-        }
+        updateHeader()
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         requestedIndex = nil
+        wakeTask?.cancel()
+        // Covers a gesture begun before idle preparation has run. No page is
+        // created later at the half-way point or during deceleration.
+        preparePages(neighbourhood(of: Int(pageProgress.rounded())))
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
@@ -281,6 +315,7 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
         observeSelectedList()
         updateHeader()
         onSelection?(selection)
+        scheduleNeighbourPreparation()
     }
 
     private func connectList(at index: Int) {
@@ -289,12 +324,14 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
         // These lists are SwiftUI's, but they live in hosting controllers
         // under a UIKit pager, so the style is set on the scroll view itself
         // rather than trusted to reach it through the environment.
-        list.applySoftTopScrollEdge()
+        // The pager owns one continuous material for every category. A
+        // second native edge effect made each List's header look different.
+        if #available(iOS 26.0, *) { list.topEdgeEffect.isHidden = true }
         list.scrollsToTop = index == selectedIndex
         hosts[index].view.accessibilityElementsHidden = index != selectedIndex
         observations[index] = list.observe(\.contentOffset, options: [.new]) { [weak self] _, _ in
             MainActor.assumeIsolated {
-                guard let self, index == self.selectedIndex else { return }
+                guard let self, abs(CGFloat(index) - self.pageProgress) < 1 else { return }
                 self.updateHeader()
             }
         }
@@ -319,8 +356,17 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
     }
 
     private func updateHeader() {
-        guard let list = lists[selectedIndex] else { return }
-        let position = HistoryHeaderPosition(scrollOffset: list.contentOffset.y + list.adjustedContentInset.top)
+        let progress = pageProgress
+        let lower = Int(progress.rounded(.down))
+        let upper = min(hosts.count - 1, lower + 1)
+        func position(at index: Int) -> HistoryHeaderPosition {
+            guard let list = lists[index] else { return HistoryHeaderPosition(scrollOffset: 0) }
+            return HistoryHeaderPosition(scrollOffset: list.contentOffset.y + list.adjustedContentInset.top)
+        }
+        let position = HistoryHeaderPosition.interpolated(
+            from: position(at: lower), to: position(at: upper), fraction: progress - CGFloat(lower))
+        guard position != lastHeaderPosition else { return }
+        lastHeaderPosition = position
         categoryBar.transform = CGAffineTransform(translationX: 0, y: position.pullDown)
         headerMaterial.alpha = position.materialOpacity
     }
@@ -343,8 +389,8 @@ final class HistoryPagingScrollView: UIScrollView {
     }
 }
 
-/// The pill interpolates between the actual text widths on every scroll
-/// frame, including a cancelled drag. No independent header animation.
+/// Equal-size category slots share typography and a single moving capsule.
+/// Long translations and Dynamic Type scroll rather than changing each slot's shape.
 final class HistoryCategoryBar: UIView {
     let scrollView = UIScrollView()
     let pill = UIView()
@@ -364,6 +410,7 @@ final class HistoryCategoryBar: UIView {
         scrollView.contentInsetAdjustmentBehavior = .never
         addSubview(scrollView)
         pill.backgroundColor = SettingsTemplate.uiCard
+        pill.layer.cornerCurve = .continuous
         pill.isUserInteractionEnabled = false
         pill.accessibilityIdentifier = "history-category-pill"
         scrollView.addSubview(pill)
@@ -390,6 +437,8 @@ final class HistoryCategoryBar: UIView {
             button.setTitle(L10n.label(HistoryCategory.allCases[index].rawValue), for: .normal)
             button.titleLabel?.font = font
             button.titleLabel?.adjustsFontForContentSizeCategory = true
+            button.titleLabel?.numberOfLines = 1
+            button.titleLabel?.textAlignment = .center
         }
         setNeedsLayout()
     }
@@ -400,11 +449,11 @@ final class HistoryCategoryBar: UIView {
         let inset = SettingsTemplate.pageInset
         let chipPadding = SettingsTemplate.segmentHorizontalPadding * 2
         let barPadding = SettingsTemplate.segmentBarVerticalPadding
-        let widths = buttons.map { max(60, ceil($0.intrinsicContentSize.width) + chipPadding) }
-        let extra = max(0, bounds.width - inset * 2 - widths.reduce(0, +)) / CGFloat(buttons.count)
+        let measuredWidth = buttons.map { ceil($0.intrinsicContentSize.width) + chipPadding }.max() ?? 60
+        let slotWidth = max(60, measuredWidth, (bounds.width - inset * 2) / CGFloat(buttons.count))
         var x = inset
-        for (index, button) in buttons.enumerated() {
-            button.frame = CGRect(x: x, y: barPadding, width: widths[index] + extra,
+        for button in buttons {
+            button.frame = CGRect(x: x, y: barPadding, width: slotWidth,
                                   height: bounds.height - barPadding * 2)
             x = button.frame.maxX
         }
@@ -415,7 +464,6 @@ final class HistoryCategoryBar: UIView {
 
     func setProgress(_ value: CGFloat) {
         progress = min(CGFloat(buttons.count - 1), max(0, value))
-        layoutIfNeeded()
         updatePill()
     }
 

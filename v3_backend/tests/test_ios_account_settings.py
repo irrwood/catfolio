@@ -86,21 +86,23 @@ def test_transaction_rows_use_the_records_stable_domain_identity():
 
 def test_new_account_section_is_add_only_and_uses_creation_context():
     source = SETTINGS.read_text(encoding="utf-8")
-    section = source[source.index('Section("新建账户")'):source.index('Section("行情与 AI")')]
-
-    assert "券商与导入" not in source
+    picker = (SETTINGS.parent / "AddAccountView.swift").read_text(encoding="utf-8")
+    root = source[source.index('SettingsPage(title: L10n.text("设置"))'):]
+    assert root.index('GlassPrimaryButton(title: L10n.text("添加账户")') < root.index('PublicInvestorSettingsSection()')
+    assert '.appSheet(isPresented: $showsAddAccount)' in root
+    assert 'AddAccountView().environment(model)' in root
+    assert 'SettingsSection(L10n.text("新建账户"))' not in root
     for label in ("Trading 212", "Moomoo", "Interactive Brokers", "CSV 导入"):
-        assert label in section
-    assert "这里只负责添加账户" not in section
-    assert "可选任意一个或多个账户" not in source
-
+        assert label in picker
     for connector in (
         "CSVImportView(context: .create)",
         "Trading212View(context: .create)",
         "IBKRFlexView(context: .create)",
         "MoomooOAuthView(context: .create)",
+        "RobinhoodConnectionView(context: .create)",
+        "SnapTradeView(context: .create)",
     ):
-        assert connector in source
+        assert connector in picker
 
 
 def test_settings_root_uses_native_ios_form_sections_and_controls():

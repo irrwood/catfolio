@@ -215,34 +215,27 @@ struct HoldingPredictionMarketsCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // The same header as every research card: title, a secondary
-            // line, and one quiet control where the others put their chevron.
-            HStack(alignment: .center, spacing: 14) {
-                // Just the name: the source and event count read as noise
-                // above the events themselves.
-                HoldingDetailCardTitle(title: L10n.text("Predicting markets"))
-                    .redacted(reason: isLoading && markets.isEmpty ? .placeholder : [])
-                    .chartLoadingShimmer(active: isLoading && markets.isEmpty)
-                if isLoading {
-                    ChartSkeletonShape(width: 18, height: 18, cornerRadius: 9).frame(width: 24, height: 24).chartLoadingShimmer()
-                } else {
-                    Button {
-                        Task { await load(forceRefresh: true) }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 13, weight: .semibold))
-                            .frame(width: 24, height: 24)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.tertiary)
-                    .accessibilityLabel(L10n.text("Refresh predicting markets"))
+        // The same card as the others on the page — its title, the content
+        // 20pt under — with the refresh where the others put their chevron.
+        // Its own header, in a minimum-height row centred on the title, sat
+        // the title lower than every other card's.
+        HoldingDetailSectionCard(title: L10n.text("Predicting markets")) {
+            if isLoading {
+                ChartSkeletonShape(width: 18, height: 18, cornerRadius: 9).frame(width: 24, height: 24).chartLoadingShimmer()
+            } else {
+                Button {
+                    Task { await load(forceRefresh: true) }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tertiary)
+                .accessibilityLabel(L10n.text("Refresh predicting markets"))
             }
-            .padding(HoldingDetailCardStyle.contentInset)
-            .frame(maxWidth: .infinity, minHeight: HoldingDetailCardStyle.minimumRowHeight, alignment: .leading)
-
+        } content: {
             Group {
                 if isLoading && markets.isEmpty {
                     predictionLoadingRows
@@ -252,12 +245,8 @@ struct HoldingPredictionMarketsCard: View {
                     predictionRows
                 }
             }
-            .padding(.horizontal, HoldingDetailCardStyle.contentInset)
-            .padding(.bottom, HoldingDetailCardStyle.contentInset)
             // Its caveat is in the page's footer with the others.
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .holdingDetailCard()
         .task(id: taskID) {
             if usesCachedContentOnlyInitially {
                 isLoading = false
@@ -271,7 +260,7 @@ struct HoldingPredictionMarketsCard: View {
     private var predictionRows: some View {
         VStack(spacing: 0) {
             ForEach(Array(PolymarketRelatedEvent.grouped(markets).enumerated()), id: \.element.id) { index, event in
-                if index > 0 { Divider().padding(.vertical, 18) }
+                if index > 0 { Divider().opacity(0.5).padding(.vertical, 20) }
                 Button {
                     if let url = event.webURL { openURL(url) }
                 } label: {

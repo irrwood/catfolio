@@ -200,7 +200,6 @@ struct HoldingsHeatmapTile: View {
                     tileBody
                 }
                 .buttonStyle(HoldingPressButtonStyle())
-                .holdingDetailPreview(model.detailHolding, onOpen: action)
                 .holdingZoomSource(model.detailHolding?.ticker ?? model.id, in: zoomOrigin)
             } else {
                 tileBody

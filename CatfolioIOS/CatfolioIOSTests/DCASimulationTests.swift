@@ -23,7 +23,7 @@ final class DCASimulationTests: XCTestCase {
             conditions: [.init(metric: .smaRatio, window: 200, comparison: .lt, threshold: 0.85)], multiplier: 2)])
     }
     func testFixedDCAInvestsEveryDollarWithoutPositionOrReserveLimits() throws {
-        var c = settings()
+        let c = settings()
         let result = try DCASimulation.run(settings: c, prices: prices())
         XCTAssertTrue(result.trades.allSatisfy { $0.amount == 500 && $0.deposit == 500 })
         XCTAssertEqual(result.final.holdings, result.final.contributed, accuracy: 1e-8)
@@ -251,7 +251,7 @@ final class DCASimulationTests: XCTestCase {
         XCTAssertEqual(npv, 0, accuracy: 0.0001)
     }
     func testDefaultStrategyMatchesFixedDCA() throws {
-        var c = settings()
+        let c = settings()
         let result = try DCASimulation.run(settings: c, prices: prices { 100 * exp(0.15 * sin(Double($0) / 9)) })
         XCTAssertEqual(result.excessProfit, 0, accuracy: 1e-8)
         XCTAssertEqual(result.maxDrawdown, result.baselineMaxDrawdown, accuracy: 1e-10)

@@ -53,10 +53,12 @@ final class StockChartsRotationTests: XCTestCase {
         wrong = base; wrong["rrgdata"] = rows
         XCTAssertThrowsError(try StockChartsRRGResponse.decode(JSONSerialization.data(withJSONObject: wrong)))
     }
-    func testFailedOrOlderRefreshRetainsSourceSnapshot() throws {
+    func testFailedOrOlderRefreshRetainsSourceSnapshot() async throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
         defer { try? FileManager.default.removeItem(at: url) }
         let store = StockChartsRRGStore(cacheURL: url)
+        XCTAssertNil(store.capture, "Construction must not synchronously decode the snapshot")
+        await store.restore()
         let original = try XCTUnwrap(store.capture?.response.rrgdata.last?.end)
         XCTAssertThrowsError(try store.accept(Data("{}".utf8)))
         XCTAssertEqual(store.capture?.response.rrgdata.last?.end, original)

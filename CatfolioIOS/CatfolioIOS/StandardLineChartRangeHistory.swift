@@ -8,8 +8,14 @@ struct StandardLineChartRangeHistory {
     init(from old: [StandardLineChartPoint], to new: [StandardLineChartPoint]) {
         var byDate: [Date: StandardLineChartPoint] = [:]
         byDate.reserveCapacity(old.count + new.count)
-        for point in old { byDate[point.date] = point }
-        // A refreshed observation at a shared date belongs to the new range.
+        // Inside the new range's span only its own points count; the old
+        // ones only extend it past either end, for the camera to travel
+        // through. Merged across the span, two ranges sampled on different
+        // dates — a denser range, a rebased return, or the in-between
+        // points of an interrupted transition — alternated point by point
+        // and the line became a comb of spikes on every quick range tap.
+        let span = new.first.flatMap { first in new.last.map { first.date...$0.date } }
+        for point in old where !(span?.contains(point.date) ?? false) { byDate[point.date] = point }
         for point in new { byDate[point.date] = point }
         points = byDate.values.sorted { $0.date < $1.date }
     }

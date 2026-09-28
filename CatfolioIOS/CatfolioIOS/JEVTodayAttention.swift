@@ -1221,7 +1221,7 @@ final class JEVRunner {
     /// them. Valuations are read from the saved fundamentals alone.
     static let optionsBudget: Double = 12
     /// A saved chain this recent is used as it is, without asking Yahoo.
-    static let optionsFreshDays = 4
+    nonisolated static let optionsFreshDays = 4
 
     private nonisolated static func withTimeout<T: Sendable>(_ seconds: Double,
                                                               _ operation: @escaping @Sendable () async -> T) async -> T? {
@@ -1308,9 +1308,10 @@ final class JEVRunner {
             }
         }
         if !missing.isEmpty {
+            let requestedTickers = Array(missing.prefix(6))
             let fetched = await withTimeout(filingsBudget) { () -> [String: CompanyFinancialsData] in
                 await withTaskGroup(of: (String, CompanyFinancialsData?).self) { group in
-                    for ticker in missing.prefix(6) {
+                    for ticker in requestedTickers {
                         group.addTask { (ticker, try? await CompanyFinancialsClient.shared.load(ticker: ticker, forceRefresh: true)) }
                     }
                     var result: [String: CompanyFinancialsData] = [:]
@@ -1351,7 +1352,7 @@ final class JEVRunner {
     }
 
     /// How far from the price a wall may sit and still be sent.
-    static let wallReach = 0.3
+    nonisolated static let wallReach = 0.3
 
     private nonisolated static func optionsListed(_ holdings: [Holding]) -> [Holding] {
         holdings.filter {

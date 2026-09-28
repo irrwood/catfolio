@@ -101,6 +101,16 @@ struct DataSourceStatus: Sendable {
     var failureCount = 0
 
     var isFailing: Bool { lastEvent?.outcome.isFailure ?? false }
+
+    /// Keep counts exact, but show each distinct issue only once in the row.
+    var distinctEarlierFailures: [DataSourceEvent] {
+        var outcomes = lastEvent.map { [$0.outcome] } ?? []
+        return recentFailures.filter { event in
+            guard !outcomes.contains(event.outcome) else { return false }
+            outcomes.append(event.outcome)
+            return true
+        }
+    }
 }
 
 /// The request path accumulates only the small status snapshot that the UI can
@@ -360,8 +370,12 @@ extension URLSession {
     /// and any error are passed through unchanged; callers still decide what
     /// a status means for them.
     func recordedData(for request: URLRequest) async throws -> (Data, URLResponse) {
+        let source = DataSource.of(request.url)
+        // A locally skipped request is not another failed connection.
+        try await ProviderRequestCooldown.shared.check(source)
         do {
             let result = try await data(for: request)
+            await ProviderRequestCooldown.shared.record(source, response: result.1)
             DataSourceHealth.enqueue(request.url, response: result.1)
             return result
         } catch {

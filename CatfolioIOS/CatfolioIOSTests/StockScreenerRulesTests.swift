@@ -84,6 +84,47 @@ final class StockScreenerRulesTests: XCTestCase {
         XCTAssertThrowsError(try ScreenRules().validate())
     }
 
+    func testHoldingMetricsParseAndMatch() throws {
+        let rules = try ScreenRules.parse(#"{"sector":"","industry":"","conditions":[{"metric":"weight","comparison":"atLeast","value":5},{"metric":"unrealizedPercent","comparison":"atMost","value":-10}],"unsupported":""}"#)
+        let match = ScreenStock(id: "HELD", name: "Held", values: [.weight: 8, .unrealizedPercent: -15])
+        XCTAssertTrue(match.matches(rules))
+        XCTAssertFalse(ScreenStock(id: "OTHER", name: "Other", values: [.weight: 2, .unrealizedPercent: -15]).matches(rules))
+        XCTAssertFalse(ScreenStock(id: "MISSING", name: "Missing", values: [.weight: 8]).matches(rules))
+    }
+
+    func testPresetIndustryMustMatch() {
+        let rules = ScreenTemplate.all[1].rules
+        let values: [ScreenMetric: Double] = [.marketCap: 20, .growth: 30]
+        XCTAssertFalse(ScreenStock(id: "A", name: "A", values: values).matches(rules))
+        XCTAssertTrue(ScreenStock(id: "B", name: "B", values: values, industry: "Semiconductors").matches(rules))
+    }
+
+    func testSectorOnlyRulesAreSupported() throws {
+        let rules = ScreenRules(sector: "Technology")
+        try rules.validate()
+        XCTAssertTrue(ScreenStock(id: "A", name: "A", values: [:], sector: "Technology").matches(rules))
+        XCTAssertFalse(ScreenStock(id: "B", name: "B", values: [:], sector: "Energy").matches(rules))
+    }
+
+    func testAllSixPresetsRemainValid() throws {
+        XCTAssertEqual(ScreenTemplate.all.count, 6)
+        for template in ScreenTemplate.all { try template.rules.validate() }
+    }
+
+    func testUniverseOnlyContainsOpenHoldingsAndConvertsWeightToPercent() throws {
+        func holding(_ ticker: String, shares: Double, weight: Double) -> Holding {
+            Holding(ticker: ticker, logoSymbol: nil, displayName: ticker, sector: nil, source: nil,
+                    shares: shares, averageCost: 80, costCurrency: "USD", quotePrice: 100, quoteCurrency: "USD",
+                    todayChangePercent: nil, marketValue: 100, weight: weight, unrealized: -10, unrealizedPercent: -10,
+                    fxPnl: nil, fxPnlPercent: nil, fxPnlStatus: nil, fxPnlSource: nil)
+        }
+        let rows = ScreenStock.holdings([holding("HELD", shares: 2, weight: 0.08), holding("CLOSED", shares: 0, weight: 0)])
+        XCTAssertEqual(rows.map(\.id), ["HELD"])
+        XCTAssertEqual(rows.first?.values[.weight], 8)
+        XCTAssertNil(rows.first?.values[.todayChange])
+        XCTAssertTrue(ScreenStock.holdings([]).isEmpty)
+    }
+
     private func assertRejected(
         _ json: String, file: StaticString = #filePath, line: UInt = #line
     ) {

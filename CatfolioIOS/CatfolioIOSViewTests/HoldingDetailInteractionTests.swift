@@ -735,6 +735,20 @@ final class LineChartMotionTests: XCTestCase {
         XCTAssertEqual(settled.map(\.value), new.map(\.value))
     }
 
+    func testRangeHistoryKeepsOnlyNewPointsInsideTheNewSpan() {
+        // A daily old range and a sparser, rebased new one over the same
+        // stretch: merged, they alternated 10, 100, 10, 100 — a comb.
+        let old = points([0, 1, 2, 3, 4, 5, 6, 7, 8]) { _ in 10 }
+        let new = points([2, 4, 6, 8]) { _ in 100 }
+        let history = StandardLineChartRangeHistory(from: old, to: new)
+
+        let inside = history.samples(from: new[0].date, to: new[new.count - 1].date)
+        XCTAssertEqual(inside.map(\.date), new.map(\.date))
+        XCTAssertEqual(Set(inside.map(\.value)), [100])
+        // Beyond the new span the old range still carries the camera.
+        XCTAssertEqual(history.points.map { $0.date.timeIntervalSinceReferenceDate }, [0, 1, 2, 4, 6, 8])
+    }
+
     func testRebasedInterleavedDatesCannotCreateSpikes() {
         let old = points([0, 2, 4, 6, 8, 10]) { _ in 10 }
         let new = points([1, 3, 5, 7, 9, 10]) { _ in 100 }

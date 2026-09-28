@@ -406,7 +406,7 @@ struct CostMarketCard: View {
                 topInset: 0,
                 trailingEndpointInset: 21,
                 seriesCount: 2,
-                lineWidths: [2.5],
+                lineWidths: [2],
                 appearanceID: "portfolio-assets"
             )
                 .accessibilityElement()
@@ -604,7 +604,7 @@ final class CostMarketPlotSeriesCache {
                 StandardLineChartPoint(id: $0.id, date: $0.date, value: $0.marketValue)
             },
             color: scheme == .light ? .white : CatfolioTheme.gain(for: .dark),
-            lineWidth: 2.5,
+            lineWidth: 2,
             latestPointRadius: showsLatestPoint ? 5 : 0,
             latestPointColor: scheme == .light ? .black : nil,
             latestPointUsesGlass: false
@@ -615,7 +615,7 @@ final class CostMarketPlotSeriesCache {
                 StandardLineChartPoint(id: "cost|\($0.id)", date: $0.date, value: $0.cost)
             },
             color: Color(red: 0.204, green: 0.459, blue: 1),
-            lineWidth: 2.5,
+            lineWidth: 2,
             latestPointRadius: showsLatestPoint ? 5 : 0,
             latestPointUsesGlass: false
         )

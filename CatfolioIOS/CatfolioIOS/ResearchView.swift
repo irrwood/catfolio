@@ -276,6 +276,7 @@ struct MarketSecurityResult: Identifiable, Equatable, Sendable {
 struct TodayAttentionView: View {
     var body: some View {
         ResearchView(showsAttention: true)
+            .toolbarVisibility(.hidden, for: .tabBar)
     }
 }
 
@@ -563,7 +564,10 @@ struct ResearchView: View {
         .appFullScreenCover(isPresented: $showsPolicyComposer) {
             PolicyComposerEntry()
         }
-        .navigationDestination(isPresented: $showsDCA) { DCACalculatorView() }
+        .navigationDestination(isPresented: $showsDCA) {
+            DCACalculatorView()
+                .toolbarVisibility(.hidden, for: .tabBar)
+        }
         .sheet(item: $selectedSecurity) { holding in
             HoldingDetailView(holding: holding, onClose: { selectedSecurity = nil })
                 .environment(model)
@@ -650,9 +654,6 @@ struct ResearchView: View {
                         StockChartsRotationView()
                     }
                     .accessibilityIdentifier("research.stockcharts-rrg")
-                    SettingsNavigationRow(icon: .symbol("clock.arrow.trianglehead.counterclockwise.rotate.90"), title: L10n.text("周期对比")) {
-                        CycleComparisonView()
-                    }
                     SettingsNavigationRow(icon: .symbol("gauge.with.dots.needle.50percent"), title: L10n.text("行业情绪")) {
                         IndustrySentimentView()
                     }
@@ -662,7 +663,7 @@ struct ResearchView: View {
                         DCACalculatorView()
                     }
                     .accessibilityIdentifier("research.dca")
-                    SettingsNavigationRow(icon: .symbol("line.3.horizontal.decrease"), title: L10n.text("选股器")) {
+                    SettingsNavigationRow(icon: .symbol("line.3.horizontal.decrease"), title: L10n.text("AI 持仓筛选")) {
                         StockScreenerView()
                     }
                     SettingsButtonRow(icon: .symbol("slider.horizontal.3"), title: L10n.text("策略编曲家")) {

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-24T23:36:52.492431+00:00",
+  "generatedAt": "2026-09-27T18:55:19.524890+00:00",
   "canvasSize": 192,
   "opticalMethod": "alpha-bounds-plus-ink-centroid-50-percent-x-20-percent-y; solid-plate-as-background; equal-area-56-percent-side-with-density; up-to-80-percent-ink-box; 10-percent-min-margin",
   "logos": {
@@ -1316,6 +1316,57 @@
         }
       }
     },
+    "AES": {
+      "kind": "stock",
+      "sourceId": "0000874761",
+      "themeColor": "#9776FF",
+      "darkBackgroundColor": "#FFFFFF",
+      "lightBackgroundColor": "#FFFFFF",
+      "selectionOrigin": "manual_default",
+      "sourceSha256": {
+        "light": "ee87b1a1c335a58f1cfd3024f91014accbb4f53c6d6eca0ddfb1fd88bb229efb",
+        "dark": "ee87b1a1c335a58f1cfd3024f91014accbb4f53c6d6eca0ddfb1fd88bb229efb"
+      },
+      "files": {
+        "light": {
+          "svg": "AES.light.svg",
+          "png": "AES.light.png",
+          "svgSha256": "57c36b4437eb4cfbd9b11a637d8806fe3e43f25a0fe1e6282410219ea96c937d",
+          "pngSha256": "82d2d525a9ebc55ac7c33f6db774a7542a01a992a75b84212862ede80dc18ce9"
+        },
+        "dark": {
+          "svg": "AES.dark.svg",
+          "png": "AES.dark.png",
+          "svgSha256": "57c36b4437eb4cfbd9b11a637d8806fe3e43f25a0fe1e6282410219ea96c937d",
+          "pngSha256": "82d2d525a9ebc55ac7c33f6db774a7542a01a992a75b84212862ede80dc18ce9"
+        }
+      }
+    },
+    "AFL": {
+      "kind": "stock",
+      "sourceId": "0000004977",
+      "themeColor": "#01A7E1",
+      "darkBackgroundColor": "#007BA8",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "0df584861511fc9391a5b26417d277f498459aea905f532181ca37a9266cb989",
+        "dark": "0df584861511fc9391a5b26417d277f498459aea905f532181ca37a9266cb989"
+      },
+      "files": {
+        "light": {
+          "svg": "AFL.light.svg",
+          "png": "AFL.light.png",
+          "svgSha256": "b567870b68d6a779e1c23fa3760ed90b0e48c4ee60ed3948cd688f7722015428",
+          "pngSha256": "445566a2d4c7ab4da793cdd769532b4da518df154d925b1f149cebd083fa1b89"
+        },
+        "dark": {
+          "svg": "AFL.dark.svg",
+          "png": "AFL.dark.png",
+          "svgSha256": "497652519524d6e7437924be483abe6a0ef583c85bb00cf36e0216ff793f9c16",
+          "pngSha256": "9cbbc50be5a181d60abcacc039f4e7125c7e1ef994fb93225d1c12d685c37c3e"
+        }
+      }
+    },
     "AG": {
       "kind": "stock",
       "sourceId": "0001308648",
@@ -1515,6 +1566,31 @@
           "png": "AIZ.dark.png",
           "svgSha256": "601de170cb0af8ddf1ef62110964ad862cf6367ba2cc4ac5f968dc0a4f0953ac",
           "pngSha256": "929716371b342716711a469326fbd25bf3fa40460642f517a0c7af4a3a142f9d"
+        }
+      }
+    },
+    "AJG": {
+      "kind": "stock",
+      "sourceId": "0000354190",
+      "themeColor": "#91C3E6",
+      "darkBackgroundColor": "#91C3E6",
+      "selectionOrigin": "manual_default",
+      "sourceSha256": {
+        "light": "dd53df428e737c3a7906a876e6418b63a7d8c56e65f6c9e4ef08aa4faeba5651",
+        "dark": "2dee2c3a47364a10993e4e70a20ee8b7cc0906bf9d13e5c35154d85319df10c0"
+      },
+      "files": {
+        "light": {
+          "svg": "AJG.light.svg",
+          "png": "AJG.light.png",
+          "svgSha256": "6cb3d449c8db0879af450ed57e3753d10bf19c9e29fcf871a41396823b80df66",
+          "pngSha256": "f58903e32b05a13e6bd17dff6169327790e49eedf31ea9d64b82d1421754e89f"
+        },
+        "dark": {
+          "svg": "AJG.dark.svg",
+          "png": "AJG.dark.png",
+          "svgSha256": "25e81efffe5c4444a21cc621feb0c3f6c81e5a8cf9d425ea5431e2d57f4b01ad",
+          "pngSha256": "cda5df95c918cb14cea5931f8397023c15bd4eae80536d646a99eec1774db812"
         }
       }
     },
@@ -3658,6 +3734,31 @@
         }
       }
     },
+    "BF.B": {
+      "kind": "stock",
+      "sourceId": "0000014693",
+      "themeColor": "#000000",
+      "darkBackgroundColor": "#A2674F",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "86f39b64fe2bfa1d635c827e1f29ec2468b405da9fbfeef9f42fc0d7edb8798c",
+        "dark": "86f39b64fe2bfa1d635c827e1f29ec2468b405da9fbfeef9f42fc0d7edb8798c"
+      },
+      "files": {
+        "light": {
+          "svg": "BF.B.light.svg",
+          "png": "BF.B.light.png",
+          "svgSha256": "da3779cc998ff5ac0144ec0355ae90cb93b3e56fa9555cd610a37b91ae784476",
+          "pngSha256": "4d133c7ba1960d63e0a3cd3b636290836b4ec7a158757fba990d6abe6a5363ae"
+        },
+        "dark": {
+          "svg": "BF.B.dark.svg",
+          "png": "BF.B.dark.png",
+          "svgSha256": "fdb8a4358e56fcf865618ac2a0fb63b70e989a21d33d2c0efb419f0c7fd5896e",
+          "pngSha256": "4523a027b36c2ff339287ca4b546cd5e5aeeee56f2ae2b67a2192a09dd04edbc"
+        }
+      }
+    },
     "BFAM": {
       "kind": "stock",
       "sourceId": "0001437578",
@@ -4576,21 +4677,21 @@
       "darkInkTint": "#F3F7FB",
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "4bd20c4cca0815abc7bf7db99f9d2bf86fc0997a2b675b9171cfac90654f53a9",
-        "dark": "c355abe0bf473dc07913d223a9d159dbdb019c566f17f60dae7836d27eb2ab61"
+        "light": "ee0e6e1901cc81c6ea41599ad99f99730c2955ea4d661725ab77c44e61be8177",
+        "dark": "b95b5f22668b9a0db33c93a80a26364ea1a08364b18c0c8de91a1fdd0633d10f"
       },
       "files": {
         "light": {
           "svg": "CAP.PA.light.svg",
           "png": "CAP.PA.light.png",
-          "svgSha256": "1883a7f293957c8b2ea4099680acda389f3a7ffd9649fc097330c15c15ffcb10",
-          "pngSha256": "b976d4a3ba7971a7043966e34fbd9ff3f5380afff8cfac8bba97abdeff8aead2"
+          "svgSha256": "fc76735f8c40039cb22c2fad7866b1820b26c2b162b26a39baa3f3021fa0da06",
+          "pngSha256": "6bde8fe522dd295a87be34efe722b829cfb0d41d7b26d461e45fe0c9f57240ec"
         },
         "dark": {
           "svg": "CAP.PA.dark.svg",
           "png": "CAP.PA.dark.png",
-          "svgSha256": "a4c21969aeec1299ad24056866da65acdc7ac1f2e4d049e8c1069f50d49e0b03",
-          "pngSha256": "b3cc1adf305c60459679dd5e640180caf00fc9132eb9374d12b89130b1689b14"
+          "svgSha256": "c22856d0883f9123c3e4bb790f70920cbc35a12a65d02f102c688fcf7de2a1a4",
+          "pngSha256": "adcf7dec7abe0a8755cee7349daba2fe87692f6ffb079271b544b4b28131bc9b"
         }
       }
     },
@@ -5930,6 +6031,31 @@
         }
       }
     },
+    "COHR": {
+      "kind": "stock",
+      "sourceId": "0000820318",
+      "themeColor": "#000000",
+      "darkBackgroundColor": "#1B1B1B",
+      "selectionOrigin": "manual_default",
+      "sourceSha256": {
+        "light": "163882b4e4420f203db689b2b0f4537d4f2765fd5c1a0be41ea126c2910d26ef",
+        "dark": "9065db6e247e28601c9050116f159d48aef14493e9bc75916d399501ed77e476"
+      },
+      "files": {
+        "light": {
+          "svg": "COHR.light.svg",
+          "png": "COHR.light.png",
+          "svgSha256": "d0f69ca1dd9ade74215c71f921336967dfb942221720f184a7a7d756ac6b8c94",
+          "pngSha256": "6cae8dd14ea4c3d2392a025a763a689af068d96de9c736378d7c0c4c8f13b6a9"
+        },
+        "dark": {
+          "svg": "COHR.dark.svg",
+          "png": "COHR.dark.png",
+          "svgSha256": "58d094b6f5bd87a5557b6b2f69576e66e83eeee4b3472cf19804a5f891fad073",
+          "pngSha256": "2f12c105e96b2a986a950091538eb5aa9739402265afa7125011e06d819632a1"
+        }
+      }
+    },
     "COIN": {
       "kind": "stock",
       "sourceId": "0001679788",
@@ -6052,6 +6178,32 @@
           "png": "COP.dark.png",
           "svgSha256": "0dec709560a3b2f9629db5be5dbd78530fd7a1e8d5ae5af556739591415abfad",
           "pngSha256": "c0cf10cba6a2ba8e4706ce59c350f2ca1e44328ec5d732a6f37fd6f2a57281c4"
+        }
+      }
+    },
+    "COR": {
+      "kind": "stock",
+      "sourceId": "0001140859",
+      "themeColor": "#461E96",
+      "darkBackgroundColor": "#461E96",
+      "darkInkTint": "#F6F4FA",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "121180988118a97be2173305381721942453a34d7679f029449d3fa2fd7815c9",
+        "dark": "9ad28296007644407a0bb7921c36ef051c981f3445806ef31aede2f010f3882c"
+      },
+      "files": {
+        "light": {
+          "svg": "COR.light.svg",
+          "png": "COR.light.png",
+          "svgSha256": "a7fc0fc27bf364b7ada0b65e2b03a59017ef0ce0941d7c7ed09fe81044aa043b",
+          "pngSha256": "f198bc37cdfafbe60875acb2fafe314deccc371091c7f67dbf336d187a3c1568"
+        },
+        "dark": {
+          "svg": "COR.dark.svg",
+          "png": "COR.dark.png",
+          "svgSha256": "4ce0f27faff529d233685b8537c2a704fa5668641d86f063014063dffabb6bef",
+          "pngSha256": "116746e48b82beadf02ddde9a8539cc97ca30cd6c4f16b3b44557d87c0e3cd5e"
         }
       }
     },
@@ -6811,6 +6963,31 @@
         }
       }
     },
+    "DAR": {
+      "kind": "stock",
+      "sourceId": "0000916540",
+      "themeColor": "#62B66D",
+      "darkBackgroundColor": "#023B1B",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "3d2a245e4e03eda0f72e137bd61a254a3ce12589dca62ecbe289f94186809040",
+        "dark": "3d2a245e4e03eda0f72e137bd61a254a3ce12589dca62ecbe289f94186809040"
+      },
+      "files": {
+        "light": {
+          "svg": "DAR.light.svg",
+          "png": "DAR.light.png",
+          "svgSha256": "71ab729e75565e7bd3829f8871ee9d09ce53c24c5cff602e7dcb53575d611425",
+          "pngSha256": "47c2d289a92a4b00c56b395f803935e765c94f39ecd879e634a18ee3a09fa0ba"
+        },
+        "dark": {
+          "svg": "DAR.dark.svg",
+          "png": "DAR.dark.png",
+          "svgSha256": "44c3a40746f0fc21e40105fd511dbc0a9102b7849136c90466454b1aff2799bd",
+          "pngSha256": "98c6bc30e66cab06a3dde68da792c833e91a47f053440d662a095ea2c3c45e7e"
+        }
+      }
+    },
     "DASH": {
       "kind": "stock",
       "sourceId": "0001792789",
@@ -7038,6 +7215,31 @@
         }
       }
     },
+    "DECK": {
+      "kind": "stock",
+      "sourceId": "0000910521",
+      "themeColor": "#333E47",
+      "darkBackgroundColor": "#333E47",
+      "selectionOrigin": "manual_default",
+      "sourceSha256": {
+        "light": "5a5e938d51d406fd32cb4d89a8adfb5191bda84e7a9114a34f67367ef0f21723",
+        "dark": "3f566728684894f130b6e752e356dae244d1d8441eb2d180721349d847f152bb"
+      },
+      "files": {
+        "light": {
+          "svg": "DECK.light.svg",
+          "png": "DECK.light.png",
+          "svgSha256": "075a8782fb23c5d0da3353b13960334766de3d8d7f54f5c8f421f4edb577d041",
+          "pngSha256": "5f0d24e833dbb9f26bb466caede0d0cec06ec33882056462de1ab8b8f1209b6d"
+        },
+        "dark": {
+          "svg": "DECK.dark.svg",
+          "png": "DECK.dark.png",
+          "svgSha256": "f2b6f3e5ac690f02ab2b9927bc149a78ed767a158769178a8ba3a4e30d9f0971",
+          "pngSha256": "5eec7ab634a282c70d359d9f6af2c9984ad4c45010a477a87bc062cdec9f8d85"
+        }
+      }
+    },
     "DELL": {
       "kind": "stock",
       "sourceId": "0001571996",
@@ -7139,6 +7341,32 @@
           "png": "DG.PA.dark.png",
           "svgSha256": "fe22f482d3ce30dd86f31abb9905d648481eec85ec4ff38cda19587b7591f922",
           "pngSha256": "9f37c138762fb6f929d21cbfa15e7381d317093b47e9ac972574d4f44ffa435c"
+        }
+      }
+    },
+    "DGX": {
+      "kind": "stock",
+      "sourceId": "0001022079",
+      "themeColor": "#034C1F",
+      "darkBackgroundColor": "#034C1F",
+      "darkInkTint": "#F2F6F4",
+      "selectionOrigin": "manual_default",
+      "sourceSha256": {
+        "light": "520f7b21a171c2b6e89b493c90331d55fbcdd076e60223584cd13de059eb5570",
+        "dark": "48e78394209f99b66b3d5521c51df0722ed34ea7ebb33f9b7c80debbc3b5b983"
+      },
+      "files": {
+        "light": {
+          "svg": "DGX.light.svg",
+          "png": "DGX.light.png",
+          "svgSha256": "98cd50f40a84cb31ee63026ab88fbd9e80d2816a721b417a3be9c3aa65cfcb86",
+          "pngSha256": "0dbcfa4269949338ea3d0a60c8170ff4be4ef2c9999323ff871d4d2795b857c4"
+        },
+        "dark": {
+          "svg": "DGX.dark.svg",
+          "png": "DGX.dark.png",
+          "svgSha256": "9e05887a335c0871365bf997b755dc8d181f5655a55b3331e9ffbd1a19dd90a3",
+          "pngSha256": "4934780903c223dc4c77c3a7a9426c8f40985198f7416ceaf49038227b59d392"
         }
       }
     },
@@ -9623,6 +9851,31 @@
         }
       }
     },
+    "FIX": {
+      "kind": "stock",
+      "sourceId": "0001035983",
+      "themeColor": "#FA0029",
+      "darkBackgroundColor": "#5F0010",
+      "selectionOrigin": "manual_default",
+      "sourceSha256": {
+        "light": "9df2b8721569edf33c2354008102ec7bd712a2b02fc868ef0428465a2d385faa",
+        "dark": "e12cea3f27773994e09c2c201632f3908248a8bddaf238da123da671c7b651e5"
+      },
+      "files": {
+        "light": {
+          "svg": "FIX.light.svg",
+          "png": "FIX.light.png",
+          "svgSha256": "cb43df651676096e4566f74634663eb13663973f4be3fe141d28e71634ff9b58",
+          "pngSha256": "719fbcddedaec25109e5b360a02b046d7ecb6a2c47fc51c946404b5724a55586"
+        },
+        "dark": {
+          "svg": "FIX.dark.svg",
+          "png": "FIX.dark.png",
+          "svgSha256": "f8c40c0664931538f2693cde1f9223c141cd355c48e14b9670ee47dcf71c368b",
+          "pngSha256": "1c2973091a375fe4b9df55f3973c1e04b1bacaadb33942500c04cb8bdc3916a8"
+        }
+      }
+    },
     "FLEX": {
       "kind": "stock",
       "sourceId": "0000866374",
@@ -10615,6 +10868,31 @@
         }
       }
     },
+    "GPK": {
+      "kind": "stock",
+      "sourceId": "0001408075",
+      "themeColor": "#006548",
+      "darkBackgroundColor": "#006548",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "fcb036ebbc310d04c038bdcc70b87ac062aac61513e6cba6d1a9d420a97d9ecf",
+        "dark": "fcb036ebbc310d04c038bdcc70b87ac062aac61513e6cba6d1a9d420a97d9ecf"
+      },
+      "files": {
+        "light": {
+          "svg": "GPK.light.svg",
+          "png": "GPK.light.png",
+          "svgSha256": "5bf0f6cc2f4bfb7d7885b0d887b60738165dac67cda7bf04c3c6c52fe98e42ed",
+          "pngSha256": "506393d6dfff14a77e9819f93ce5eabaa991e3e253c53a6e8acdb3999f12fb68"
+        },
+        "dark": {
+          "svg": "GPK.dark.svg",
+          "png": "GPK.dark.png",
+          "svgSha256": "deef120c5672123fc49dd392ec0621df8c6100de4a7b7cd71cf1cdbf0fb3afd6",
+          "pngSha256": "20a70112462cf171eb30a5044c9671c55b76d65c13522b51fa6aa06204b7990b"
+        }
+      }
+    },
     "GPN": {
       "kind": "stock",
       "sourceId": "0001123360",
@@ -10944,6 +11222,32 @@
           "png": "HCA.dark.png",
           "svgSha256": "51577f06fc28cf5c60137eb8264f1b9d439b5f5f27120e8e9834c01f6d2dcd2e",
           "pngSha256": "37df00d48be493226a7774e3d871dfd6fc49b3df393926df142dd0ae960ffbd4"
+        }
+      }
+    },
+    "HD": {
+      "kind": "stock",
+      "sourceId": "0000354950",
+      "themeColor": "#F96302",
+      "darkBackgroundColor": "#F96302",
+      "lightBackgroundColor": "#F96302",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "0fad18c4380d4c0e29ca9a46ea3faec801e9136eb766d44345bbb5d9d17d8fa9",
+        "dark": "0fad18c4380d4c0e29ca9a46ea3faec801e9136eb766d44345bbb5d9d17d8fa9"
+      },
+      "files": {
+        "light": {
+          "svg": "HD.light.svg",
+          "png": "HD.light.png",
+          "svgSha256": "af960dbda99ed4a4b6305a48f5cac0114e6dedd51fa6defceb61785d6b1b928a",
+          "pngSha256": "d28eb493a4074468bf7ca9dd2278765b8426d0142cce9f958332344eb99f982e"
+        },
+        "dark": {
+          "svg": "HD.dark.svg",
+          "png": "HD.dark.png",
+          "svgSha256": "af960dbda99ed4a4b6305a48f5cac0114e6dedd51fa6defceb61785d6b1b928a",
+          "pngSha256": "d28eb493a4074468bf7ca9dd2278765b8426d0142cce9f958332344eb99f982e"
         }
       }
     },
@@ -11805,28 +12109,54 @@
         }
       }
     },
+    "IBKR": {
+      "kind": "stock",
+      "sourceId": "0001381197",
+      "themeColor": "#D81222",
+      "darkBackgroundColor": "#5B080E",
+      "selectionOrigin": "manual_default",
+      "sourceSha256": {
+        "light": "fb5b661415f66ec59781d48eafb49adad370f8adbd1c12573afba612dc68c3a1",
+        "dark": "3f5b9c4da79ed495fc6f7037c5858bc8df6a636f30c6d946807a1a1e39c9b707"
+      },
+      "files": {
+        "light": {
+          "svg": "IBKR.light.svg",
+          "png": "IBKR.light.png",
+          "svgSha256": "eff18fcce30cf607747b39e9d2a24f5bafa6bd095b2c3b6074e5e005843a213e",
+          "pngSha256": "9767a6b07da176796866c87c09fca7118c036812f8e4ad8976430c7c5e9ebd8b"
+        },
+        "dark": {
+          "svg": "IBKR.dark.svg",
+          "png": "IBKR.dark.png",
+          "svgSha256": "55ed6951f7ad3e6f05b9ab2a010af8d47c0d39597eaae8a82e791965accd9315",
+          "pngSha256": "33c464bfeb77afe6bd21428ea6cd9172708c8bb58fc17f86c01519bbaff190e7"
+        }
+      }
+    },
     "IBM": {
       "kind": "stock",
       "sourceId": "0000051143",
       "themeColor": "#1F70C1",
       "darkBackgroundColor": "#1F70C1",
+      "darkInkTint": "#F4F8FC",
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "57555e5b8fc9e99a3169f1cb4c16d62efef44774ea3d2a7f84c3641741a04cf9",
-        "dark": "2d58dc41927aa7e4cb9b38a9a6b7623a0cc3062421bcb43c13933def4f875a34"
+        "light": "68b414f19fd1a93d2a05ea1855b8ff5f9e4c26bc83e59e48dc68726783f50fe0",
+        "dark": "d33ed9497340a3f1bc8441ddd8785c55ca442dbdde06a37c8cc5aebd806026e9"
       },
       "files": {
         "light": {
           "svg": "IBM.light.svg",
           "png": "IBM.light.png",
-          "svgSha256": "c2c8586704199b9f74e5691bfbccde72afbff561693d986229b9eda26bddf9ae",
-          "pngSha256": "beb01ab33bf58bd0d09613a72482b5f80815a971f9c71c433200b6deb4cbf719"
+          "svgSha256": "2d89a32407d2bb6cec17ed59d47271fb2d0d7f528b8eb47056ce6a5545383944",
+          "pngSha256": "3ca93617ac9984f33b9626a89aa4857a33b80b49388ece0fd3e38ed1689aa900"
         },
         "dark": {
           "svg": "IBM.dark.svg",
           "png": "IBM.dark.png",
-          "svgSha256": "1e8253517d10eab4f14f907262d1390b1740107e0c6df376fd6ceac999aef55c",
-          "pngSha256": "491d1a723061acdc59eb518c4a76816944212083caae0bd4eaf5e536e6d250d2"
+          "svgSha256": "ecc31e31258470d28a3800512e8e926176e24ee5cf23123d39cd5121d240b068",
+          "pngSha256": "cea98fe624ee46acdbc5454951c483bdbb11540c15824db96f93a3fc80708734"
         }
       }
     },
@@ -13219,6 +13549,32 @@
         }
       }
     },
+    "KKR": {
+      "kind": "stock",
+      "sourceId": "0001404912",
+      "themeColor": "#53284F",
+      "darkBackgroundColor": "#53284F",
+      "darkInkTint": "#F6F4F6",
+      "selectionOrigin": "manual_default",
+      "sourceSha256": {
+        "light": "8bd88559220c3377ff80b5742be7a7b17140f6d7a5c3bf0e89642c8f08390566",
+        "dark": "c9e683fb0c555cd369b3552a6019f83997ecdffbf54e65328f13871377a3af3d"
+      },
+      "files": {
+        "light": {
+          "svg": "KKR.light.svg",
+          "png": "KKR.light.png",
+          "svgSha256": "0c694168e3fdf502a7268210877a95c3ba93193cc6cf6c1d0a7909125904bcc9",
+          "pngSha256": "3e64181d9bf2bb9c3be38ba40f16a9880ecfcc3c62181aa9f1bcb6926a30abc0"
+        },
+        "dark": {
+          "svg": "KKR.dark.svg",
+          "png": "KKR.dark.png",
+          "svgSha256": "ccdf544dbce2df322d8fa847473bd4588f781200e16c648f9f0330c28f14f77f",
+          "pngSha256": "2deb2ca39885acf75fd6118cd45d220ee57de305301ab7bb966c5a7ef30694c2"
+        }
+      }
+    },
     "KLAC": {
       "kind": "stock",
       "sourceId": "0000319201",
@@ -13702,11 +14058,11 @@
       "kind": "stock",
       "sourceId": "0000920148",
       "themeColor": "#4CD5F7",
-      "darkBackgroundColor": "#1D515E",
+      "darkBackgroundColor": "#0F657B",
       "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "346308e9bfa204a7820541a08e6667c3336ea0fe539b3bc1c64f23746051489c",
-        "dark": "d4d66db9219c5593afddf40ec35fcf1dfed02f5a075869adacff1e6ea0771cdf"
+        "dark": "346308e9bfa204a7820541a08e6667c3336ea0fe539b3bc1c64f23746051489c"
       },
       "files": {
         "light": {
@@ -13718,8 +14074,8 @@
         "dark": {
           "svg": "LH.dark.svg",
           "png": "LH.dark.png",
-          "svgSha256": "f67732660e321e1f4f5098d297f66e9e78e450a637949579c600972542ef900e",
-          "pngSha256": "b733be91e9554045aaf73e1bab5ef5eae55201ea8c409a3550e1eb8718f0b70f"
+          "svgSha256": "0b9c1b2d3829cc28ea91ee4649d6c367f8c575b8c81e702bd616c017a79cb97e",
+          "pngSha256": "117525d49040e07273cde00d19e5b56e48064e8a29fac032034f60f5c4aa6ac5"
         }
       }
     },
@@ -13773,6 +14129,32 @@
           "png": "LHX.dark.png",
           "svgSha256": "a9eeda4573eb2e5bb236f237acad57cd76936923039a9ededff80569ad782e20",
           "pngSha256": "a906c468fb95667f4a09b877db5f6a87cc746e4f9a8fcae49c9092482b01d53b"
+        }
+      }
+    },
+    "LII": {
+      "kind": "stock",
+      "sourceId": "0001069202",
+      "themeColor": "#C9202F",
+      "darkBackgroundColor": "#C9202F",
+      "darkInkTint": "#FCF4F5",
+      "selectionOrigin": "manual_default",
+      "sourceSha256": {
+        "light": "47b68c761bbeaead165b6cb50b75286c0d84f69b270f30e932cebb28152e0491",
+        "dark": "23147d480ce5a4f76eee927aefa003185cb8885725e823c009d5e9cacd488699"
+      },
+      "files": {
+        "light": {
+          "svg": "LII.light.svg",
+          "png": "LII.light.png",
+          "svgSha256": "d9d82195d7d44d41e0f9b80e0792b2ffca566622c4df0e949ad36ec026800b76",
+          "pngSha256": "54bc1a4912bc740c4a82535e4c71d6f66daaf87c8443e4e2e0091e634834aa9f"
+        },
+        "dark": {
+          "svg": "LII.dark.svg",
+          "png": "LII.dark.png",
+          "svgSha256": "3d61e184b219a24c45edbd94a9448d52fdd00e12fae310b68b65a6c99be78bf8",
+          "pngSha256": "3f45460f656de040d4aed214b5433f3254e8d486d99547f3e3c447f9a138971d"
         }
       }
     },
@@ -15197,6 +15579,31 @@
         }
       }
     },
+    "MNST": {
+      "kind": "stock",
+      "sourceId": "0000865752",
+      "themeColor": "#52C21E",
+      "darkBackgroundColor": "#51C21F",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "ad293dcec5299ac82249dd629bf286dae0d7865ef2ac2ac8f24161b454af153d",
+        "dark": "331ad44897b338f8f5715024e88539af6dcbe1a3c2cb7bd67ce8ec50fa90dda5"
+      },
+      "files": {
+        "light": {
+          "svg": "MNST.light.svg",
+          "png": "MNST.light.png",
+          "svgSha256": "9ba3d526e782990d90f050c21af1d1e5629cffc39673a010028d8dee9c7b2976",
+          "pngSha256": "8f6913f30769903f75699410f7445802ce23ba6f59741d7be24865fed2396fc8"
+        },
+        "dark": {
+          "svg": "MNST.dark.svg",
+          "png": "MNST.dark.png",
+          "svgSha256": "b3fc4ff73d8f0e33abffabd17e42dbcb84093446d7af1651eac760aea71f027c",
+          "pngSha256": "376d24ca392e410d0f048144d6950e720a4d43abf91476882875c54f5d49fde1"
+        }
+      }
+    },
     "MO": {
       "kind": "stock",
       "sourceId": "0000764180",
@@ -16321,25 +16728,26 @@
     "NLY": {
       "kind": "stock",
       "sourceId": "0001043219",
-      "themeColor": "#383838",
-      "darkBackgroundColor": "#383838",
-      "selectionOrigin": "auto_us_popular",
+      "themeColor": "#083B92",
+      "darkBackgroundColor": "#083B92",
+      "darkInkTint": "#F3F5FA",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "4f7fda946f8dff40127a862ff197988094e9ef1b1af297e552321bd80a05b5d2",
-        "dark": "8c9e5be8e0c3a36274dc83048d25a880a0f12873cab4674187b4a994bed1d48f"
+        "light": "91e34b194e9fe67cee876ee3ba7013461130af7bc15c4f1d43233b2d92f82aeb",
+        "dark": "c1cf43839826266c38552918bfff97f2e29360478f3a1afd9b7505ad0e0c92e9"
       },
       "files": {
         "light": {
           "svg": "NLY.light.svg",
           "png": "NLY.light.png",
-          "svgSha256": "1944df57618b4b415d6da77409a56956d27df55ebf0f6986a540b7ed0a3a38e0",
-          "pngSha256": "9913b4d5faf1378a30eb21aa222d32c4340b9922ef90fa01fe34fae831b9c7da"
+          "svgSha256": "3b16a25a8ce1cd4888ca2bd5c6da116b5af8bd7deb23d8f04a48d59490212d12",
+          "pngSha256": "ab02bac87f8262652e32a2eb10f4a3c5c97033ce3350654dfbbba5beee23bbe6"
         },
         "dark": {
           "svg": "NLY.dark.svg",
           "png": "NLY.dark.png",
-          "svgSha256": "e3d8da9f9e00fb04e3e8edfe059d2c0893627395f9655f74bb6c1cd0541705f7",
-          "pngSha256": "d1ca1290c2644329bb55a048b8af02b40f3535ccf205cadf02fba8c07afea8a4"
+          "svgSha256": "c84e9ebf584656a34b0a0dd01692c201c0ecaceda4ea508a2aa64d2e3c42c351",
+          "pngSha256": "10e589d6d4249fe9fe0351118c1c4ad1d75f230d4783f51c9b5d16d91fe0938a"
         }
       }
     },
@@ -18380,6 +18788,31 @@
         }
       }
     },
+    "PPL": {
+      "kind": "stock",
+      "sourceId": "0000922224",
+      "themeColor": "#2D4491",
+      "darkBackgroundColor": "#2D4491",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "820f79cb1536a0c696582c8c6ceebf08af599fca8706e7e597a28c1370892d87",
+        "dark": "2f2fee370a8bff5fce10c6b5b68465535914c56ea577ccf9a46b156754bb9c6b"
+      },
+      "files": {
+        "light": {
+          "svg": "PPL.light.svg",
+          "png": "PPL.light.png",
+          "svgSha256": "b40806078fc275395f8add527d9fbaa0f418e62d7876529b4326c80bcf49a3cd",
+          "pngSha256": "40a113cf48c0f46e4a92fa0b781595c2597dcb0f86e2670113ebadda984a6c37"
+        },
+        "dark": {
+          "svg": "PPL.dark.svg",
+          "png": "PPL.dark.png",
+          "svgSha256": "60251baa09e590cc8d24a8a010ab75b27a13c1e4ee2cec6f2231813feed20eae",
+          "pngSha256": "7b60057e3232e179880978f8c2c97504f815041d96f37b86ec6ba913c27ef0fd"
+        }
+      }
+    },
     "PRU": {
       "kind": "stock",
       "sourceId": "0001137774",
@@ -18662,6 +19095,31 @@
         }
       }
     },
+    "PWR": {
+      "kind": "stock",
+      "sourceId": "0001050915",
+      "themeColor": "#B66402",
+      "darkBackgroundColor": "#E89A3E",
+      "selectionOrigin": "manual_default",
+      "sourceSha256": {
+        "light": "2dcae09b151ff8778f1ff009b9bf0f9c928386b39caefbc96cef21a579848289",
+        "dark": "d742812f7131783ba5954b014c30a203b32bc16ffac396575663b57212473a3c"
+      },
+      "files": {
+        "light": {
+          "svg": "PWR.light.svg",
+          "png": "PWR.light.png",
+          "svgSha256": "91d42a916de13e9d326af9a50ce841db0ee51972111c463316cffc3094cd5846",
+          "pngSha256": "d9705de94d3a5bc71da33ca7538f9b00da81892ba8f60c1819ae7550b10cdbfe"
+        },
+        "dark": {
+          "svg": "PWR.dark.svg",
+          "png": "PWR.dark.png",
+          "svgSha256": "d5649bc316fa0452764944b18616321389206c57ef79862226998bba7e823f00",
+          "pngSha256": "82505c47350d0cf59496b7c7a32b0146c1dd20377fa786753ed0d5f8b47ff889"
+        }
+      }
+    },
     "PYPL": {
       "kind": "stock",
       "sourceId": "0001633917",
@@ -18684,6 +19142,31 @@
           "png": "PYPL.dark.png",
           "svgSha256": "5f6ef395b3978f49c49fef008964f8be969346a2e9645bb70908bea8f0b3ada0",
           "pngSha256": "eeb846e1eee1ed9ccce215d4831d4373db1e9f0676f1fc58f801c426a378c359"
+        }
+      }
+    },
+    "Q": {
+      "kind": "stock",
+      "sourceId": "0002058873",
+      "themeColor": "#000000",
+      "darkBackgroundColor": "#1B1B1B",
+      "selectionOrigin": "manual_default",
+      "sourceSha256": {
+        "light": "259d7b9d8259f65cf833231d126c2de5f79afbdffac2d1c0590b00943510a279",
+        "dark": "f6a13901a6be9640dede4ecafdee0792205f369245650165a6c9d4bdc0e12cab"
+      },
+      "files": {
+        "light": {
+          "svg": "Q.light.svg",
+          "png": "Q.light.png",
+          "svgSha256": "fef58b031e5b26e51d1b585d8cd517cf0f50b135e65afaf76276f55b3d42b229",
+          "pngSha256": "3405166ecc532081b3fe3ab0e43c688eb42c413e8c6fb98b542454b4f6b3c244"
+        },
+        "dark": {
+          "svg": "Q.dark.svg",
+          "png": "Q.dark.png",
+          "svgSha256": "309c964fdc44e9c28278e28feef9767accdf30594588a43cafa6678f78d92d59",
+          "pngSha256": "acebdbb8601e39dfd347db929c8a63264fb0c0f1300d5caf88abf0de7423fe71"
         }
       }
     },
@@ -20533,6 +21016,32 @@
           "png": "SNAP.dark.png",
           "svgSha256": "881c1ee4b50d7e948e39497c75cd76429e5235e563ac59a8cd5901f0fa680b2b",
           "pngSha256": "cd635dc67dbde7171e6d37cd8144b8299653f07a8fbbd7c07392c0de1fc0017a"
+        }
+      }
+    },
+    "SNDK": {
+      "kind": "stock",
+      "sourceId": "0002023554",
+      "themeColor": "#E10500",
+      "darkBackgroundColor": "#E10500",
+      "darkInkTint": "#FEF2F2",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "31e7b69459b6530610f1c8538f7aec7d2cbee227026f0cd184d49d71d8b171f2",
+        "dark": "03a6882c1af8b362695ec6ef1b83842c4152c18c85b924b7a4462416b534860f"
+      },
+      "files": {
+        "light": {
+          "svg": "SNDK.light.svg",
+          "png": "SNDK.light.png",
+          "svgSha256": "aae1fd60ac57369e76ba46fdc559a74a95c7ba73dbfc438ad8dd1be6fe59f692",
+          "pngSha256": "9e74da5f56061c4200f691e0739faccb78e54eac163fc5f7e404de1ee248b508"
+        },
+        "dark": {
+          "svg": "SNDK.dark.svg",
+          "png": "SNDK.dark.png",
+          "svgSha256": "520d159209873f76a80b426214bc2ce83ad36570ea67d911589cdfaa54845782",
+          "pngSha256": "c73c2859831f1d048deb25969d94e2a1c31baf342fe0708cf86f5781bdc97108"
         }
       }
     },
@@ -22466,6 +22975,57 @@
         }
       }
     },
+    "TSM": {
+      "kind": "stock",
+      "sourceId": "0001046179",
+      "themeColor": "#E60012",
+      "darkBackgroundColor": "#1B1B1B",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "cc373789d16663b4a80eddd2c24eb11d1d058256e9275ef4a9d70d19dff5c9da",
+        "dark": "cc373789d16663b4a80eddd2c24eb11d1d058256e9275ef4a9d70d19dff5c9da"
+      },
+      "files": {
+        "light": {
+          "svg": "TSM.light.svg",
+          "png": "TSM.light.png",
+          "svgSha256": "c1fbfd905860ff622a503de40338b6e07c3c3a7f37e98132ede51eeaa6533a0f",
+          "pngSha256": "52a73eebb4c072abe900b0a10a78dd7dc7747e32fd1a61e6546b591338bb575a"
+        },
+        "dark": {
+          "svg": "TSM.dark.svg",
+          "png": "TSM.dark.png",
+          "svgSha256": "eed0b1348d4ac701357e5887f7d646f9322021ae9e417a74c5f564a2073e0c19",
+          "pngSha256": "7537e765fab744fc140da2363d7bc4f614a250d1e275a79c685a30bf8b04ca29"
+        }
+      }
+    },
+    "TSN": {
+      "kind": "stock",
+      "sourceId": "0000100493",
+      "themeColor": "#00205B",
+      "darkBackgroundColor": "#00205B",
+      "darkInkTint": "#F2F4F7",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "8e08acd0b22cd1a2cb01a055db2835dd580b4cd850821faaf5e03b1581ff577e",
+        "dark": "bb3f974b40a5e29209837357da8276ee725e148657293f18a076c5b2f6f709c6"
+      },
+      "files": {
+        "light": {
+          "svg": "TSN.light.svg",
+          "png": "TSN.light.png",
+          "svgSha256": "86dbc0f7269173df04968330a2c4dea0f4b01524cfc59e504997f75a170ebfd1",
+          "pngSha256": "a213e2c398d1ae94b028bf770959cf48305adb5d7e08bf46d7eee30bc7ed5cb4"
+        },
+        "dark": {
+          "svg": "TSN.dark.svg",
+          "png": "TSN.dark.png",
+          "svgSha256": "47daf26bb1b2e6d31f8d984f98b3913480f4e7177489e831804e3526f22047d4",
+          "pngSha256": "c1bb7c610e0e409ecdfb6154327e4e5f0c30a41c7fdb2db73c34db0b76faba81"
+        }
+      }
+    },
     "TT": {
       "kind": "stock",
       "sourceId": "0001466258",
@@ -23752,6 +24312,31 @@
         }
       }
     },
+    "VRSN": {
+      "kind": "stock",
+      "sourceId": "0001014473",
+      "themeColor": "#0064A4",
+      "darkBackgroundColor": "#0064A4",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "a5d4985533dfa13088a4f1ffd54218a62a1d7e510fba99f8b2ffe42a276b063a",
+        "dark": "fb85eaa6a3e56f30d5c102f8249889b4b7208db2b74a5a5161d1ebeda8ceeecf"
+      },
+      "files": {
+        "light": {
+          "svg": "VRSN.light.svg",
+          "png": "VRSN.light.png",
+          "svgSha256": "246202ac3e35df5f07cffee88d8477f52cc550dc5cc6fad4810882b85f862dcf",
+          "pngSha256": "fd6d82b46dc71f1dbe1be4e793316186e254473f0a30fda96d19d55e6b5b5ee1"
+        },
+        "dark": {
+          "svg": "VRSN.dark.svg",
+          "png": "VRSN.dark.png",
+          "svgSha256": "6f5fd035a7afed63cc7ccd89fb501bf50417efcc21712ff90bfb9869da77165e",
+          "pngSha256": "894e2dc39c2924df494f8b470c8251654e6a8f8375bc3730402d13b12951d991"
+        }
+      }
+    },
     "VRT": {
       "kind": "stock",
       "sourceId": "0001674101",
@@ -24533,6 +25118,31 @@
           "png": "WSE.dark.png",
           "svgSha256": "481b35a8d5c3eb7745634dd9b4636157e324c42926df40ab58ce6bc743656405",
           "pngSha256": "057e7e390520e622ba478bcf19cd1642a4bf3f530153e8e1bd777a52046e1a85"
+        }
+      }
+    },
+    "WSM": {
+      "kind": "stock",
+      "sourceId": "0000719955",
+      "themeColor": "#1A1A1A",
+      "darkBackgroundColor": "#1A1A1A",
+      "selectionOrigin": "manual_default",
+      "sourceSha256": {
+        "light": "f3d67204ddec57c775365d5ae9b1595790d2532b45a00adefcbc2bce28241deb",
+        "dark": "cc6662c74460c9a912c0778507df8b5b4136ff8493eb0939097e3abec5815ca1"
+      },
+      "files": {
+        "light": {
+          "svg": "WSM.light.svg",
+          "png": "WSM.light.png",
+          "svgSha256": "cd9d2b4265dfe3c7ee19d38d993faa5eff0d8e89c2a1960d83492ab16a146339",
+          "pngSha256": "2c2d1740c2ef9e152fa3d76eb053922ce50aedd40eecadab68b2371c75766daa"
+        },
+        "dark": {
+          "svg": "WSM.dark.svg",
+          "png": "WSM.dark.png",
+          "svgSha256": "c48eafc0ceb629bfdfd0e394119636f121b9df484a3966267bf0e0110a00bed0",
+          "pngSha256": "01e095d73a4cd54db3d62a1174815a3186f6bc3cd3017a9aeb1987520021de15"
         }
       }
     },
@@ -25321,7 +25931,9 @@
     "AENA.MC": "AENA.MC",
     "AEP": "AEP",
     "AER": "AER",
+    "AES": "AES",
     "AFK": "SMH",
+    "AFL": "AFL",
     "AG": "AG",
     "AGAC": "IVV",
     "AGAUX": "IVV",
@@ -25360,6 +25972,7 @@
     "AIQ": "BOTZ",
     "AIR.PA": "AIR.PA",
     "AIZ": "AIZ",
+    "AJG": "AJG",
     "AKAM": "AKAM",
     "ALB": "ALB",
     "ALC": "ALC",
@@ -25508,6 +26121,7 @@
     "BEMB": "IVV",
     "BEN": "BEN",
     "BEZ.L": "BEZ.L",
+    "BF.B": "BF.B",
     "BFAM": "BFAM",
     "BFLX": "IVV",
     "BG": "BG",
@@ -25867,6 +26481,7 @@
     "CNYB": "IVV",
     "CNYE": "IVV",
     "COF": "COF",
+    "COHR": "COHR",
     "COIN": "COIN",
     "COJDX": "IVV",
     "COJHX": "IVV",
@@ -25878,6 +26493,7 @@
     "COO": "COO",
     "COP": "COP",
     "COPX": "BOTZ",
+    "COR": "COR",
     "CORO": "IVV",
     "CORP": "IVV",
     "CORP.L": "IVV",
@@ -26070,6 +26686,7 @@
     "D28G": "IVV",
     "DAL": "DAL",
     "DAPP": "SMH",
+    "DAR": "DAR",
     "DASH": "DASH",
     "DAVE": "DAVE",
     "DAX": "BOTZ",
@@ -26097,6 +26714,7 @@
     "DDBB": "IVV",
     "DDOG": "DDOG",
     "DE": "DE",
+    "DECK": "DECK",
     "DECO": "SPY",
     "DEEF": "AH50",
     "DELL": "DELL",
@@ -26112,6 +26730,7 @@
     "DGIT": "IVV",
     "DGRO": "IVV",
     "DGT": "SPY",
+    "DGX": "DGX",
     "DH2O": "IVV",
     "DH2O.L": "IVV",
     "DHI": "DHI",
@@ -26648,6 +27267,7 @@
     "FISV": "FISV",
     "FITB": "FITB",
     "FITE": "SPY",
+    "FIX": "FIX",
     "FLAG": "BOTZ",
     "FLEX": "FLEX",
     "FLOA": "IVV",
@@ -26752,6 +27372,7 @@
     "GOVT": "IVV",
     "GOVZ": "IVV",
     "GPC": "GPC",
+    "GPK": "GPK",
     "GPN": "GPN",
     "GPZ": "SMH",
     "GREK": "BOTZ",
@@ -26808,6 +27429,7 @@
     "HCAM": "IVV",
     "HCEM": "IVV",
     "HCGH": "IVV",
+    "HD": "HD",
     "HDEF": "AH50",
     "HDIQ": "IVV",
     "HDIQ.L": "IVV",
@@ -27060,6 +27682,7 @@
     "IBIL": "IVV",
     "IBIM": "IVV",
     "IBIT": "IVV",
+    "IBKR": "IBKR",
     "IBLC": "IVV",
     "IBM": "IBM",
     "IBMO": "IVV",
@@ -28225,6 +28848,7 @@
     "KHC": "KHC",
     "KIE": "SPY",
     "KIM": "KIM",
+    "KKR": "KKR",
     "KLAC": "KLAC",
     "KLMN": "QQQ",
     "KLMT": "QQQ",
@@ -28270,6 +28894,7 @@
     "LH": "LH",
     "LHA.DE": "LHA.DE",
     "LHX": "LHX",
+    "LII": "LII",
     "LIN": "LIN",
     "LINE": "LINE",
     "LIT": "BOTZ",
@@ -28408,6 +29033,7 @@
     "MMTM": "SPY",
     "MNDI.L": "MNDI.L",
     "MNDY": "MNDY",
+    "MNST": "MNST",
     "MO": "MO",
     "MOAT": "SMH",
     "MOD": "MOD",
@@ -28680,6 +29306,7 @@
     "PPA": "QQQ",
     "PPG": "PPG",
     "PPH": "SMH",
+    "PPL": "PPL",
     "PRAB": "SPY",
     "PRF": "QQQ",
     "PRFZ": "QQQ",
@@ -28719,6 +29346,7 @@
     "PUM.DE": "PUM.DE",
     "PVI": "QQQ",
     "PWB": "QQQ",
+    "PWR": "PWR",
     "PWV": "QQQ",
     "PWZ": "QQQ",
     "PXE": "QQQ",
@@ -28730,6 +29358,7 @@
     "PYZ": "QQQ",
     "PZA": "QQQ",
     "PZT": "QQQ",
+    "Q": "Q",
     "QANT": "IVV",
     "QARP": "AH50",
     "QAT": "IVV",
@@ -29083,6 +29712,7 @@
     "SNA": "SNA",
     "SNAP": "SNAP",
     "SNAZ": "IVV",
+    "SNDK": "SNDK",
     "SNGB": "IVV",
     "SNN": "SNN",
     "SNOW": "SNOW",
@@ -29429,6 +30059,8 @@
     "TSCO.L": "TSCO.L",
     "TSEM": "TSEM",
     "TSLA": "TSLA",
+    "TSM": "TSM",
+    "TSN": "TSN",
     "TT": "TT",
     "TTE": "TTE",
     "TTE.PA": "TTE",
@@ -29620,6 +30252,7 @@
     "VRIG": "QQQ",
     "VRP": "QQQ",
     "VRSK": "VRSK",
+    "VRSN": "VRSN",
     "VRT": "VRT",
     "VRTX": "VRTX",
     "VSDB": "VOO",
@@ -29740,6 +30373,7 @@
     "WSBC": "WSBC",
     "WSDC": "IVV",
     "WSE": "WSE",
+    "WSM": "WSM",
     "WSML": "IVV",
     "WSMT": "IVV",
     "WSNI": "IVV",
@@ -30520,9 +31154,9 @@
     "ZURN.SW": "ZURN.SW"
   },
   "counts": {
-    "logos": 991,
-    "stocks": 982,
+    "logos": 1015,
+    "stocks": 1006,
     "etfIssuers": 9,
-    "tickerAliases": 5321
+    "tickerAliases": 5345
   }
 }

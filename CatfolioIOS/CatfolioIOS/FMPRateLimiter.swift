@@ -40,7 +40,7 @@ actor FMPRequestLimiter {
     /// Honour `Retry-After` when the server sends one; otherwise wait long
     /// enough that a per-minute budget has a chance to recover.
     func backOff(retryAfter: String?) {
-        let seconds = min(60, max(1, retryAfter.flatMap(Double.init) ?? 5))
+        let seconds = ProviderRequestCooldown.delay(retryAfter: retryAfter)
         let resume = Date().addingTimeInterval(seconds)
         blockedUntil = max(blockedUntil, resume)
     }

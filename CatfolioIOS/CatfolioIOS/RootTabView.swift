@@ -122,7 +122,7 @@ struct RootTabView: View {
         }
         .id(presentationPreferencesID)
         .tint(.primary)
-        .modifier(MinimizesTabBarOnScroll())
+        .modifier(KeepsTabBarExpanded())
     }
 
     /// An icon and no title: the label's text stays for VoiceOver only.
@@ -138,10 +138,12 @@ struct RootTabView: View {
     }
 }
 
-private struct MinimizesTabBarOnScroll: ViewModifier {
+/// The tab bar stays full width while the pages scroll: collapsed to a
+/// single ball it hid the other tabs behind a tap.
+private struct KeepsTabBarExpanded: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.tabBarMinimizeBehavior(.onScrollDown)
+            content.tabBarMinimizeBehavior(.never)
         } else {
             content
         }

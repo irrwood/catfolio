@@ -85,4 +85,27 @@ final class PortfolioHoldingListTests: XCTestCase {
         XCTAssertEqual(row.ticker, "ETF 其他")
         XCTAssertEqual(row.fundMarketValues, ["VUAG.L": 50])
     }
+
+    func test52WeekSortUsesRelativeQuotePositionInBothModesAndKeepsMissingLast() {
+        let positions = [holding("AAA", value: 110), holding("BBB", value: 19),
+                         holding("CCC", value: 250), holding("FLAT", value: 10), holding("MISSING")]
+        let ranges: [String: Holding52WeekRange] = [
+            "AAA": .init(low: 100, high: 200, latestClose: 180, currency: "USD"),
+            "BBB": .init(low: 10, high: 20, latestClose: 11, currency: "USD"),
+            "CCC": .init(low: 100, high: 200, latestClose: 190, currency: "USD"),
+            "EXPO": .init(low: 100, high: 200, latestClose: 150, currency: "USD"),
+            "FLAT": .init(low: 10, high: 10, latestClose: 10, currency: "USD")
+        ]
+        for lookThrough in [false, true] {
+            var items: [PortfolioHoldingListItem] = positions.map {
+                lookThrough ? .exposure(exposure($0.ticker), direct: $0, portfolioTotal: 1000, performance: nil)
+                    : .holding($0, performance: nil)
+            }
+            items.append(.exposure(exposure("EXPO"), direct: nil, portfolioTotal: 1000, performance: nil))
+            XCTAssertEqual(PortfolioHoldingListItem.sorted(items, by: .week52Position, ascending: true,
+                week52Ranges: ranges).map(\.id), ["AAA", "EXPO", "BBB", "CCC", "FLAT", "MISSING"])
+            XCTAssertEqual(PortfolioHoldingListItem.sorted(items, by: .week52Position, ascending: false,
+                week52Ranges: ranges).map(\.id), ["CCC", "BBB", "EXPO", "AAA", "MISSING", "FLAT"])
+        }
+    }
 }

@@ -195,9 +195,7 @@ enum SecurityDetailPresentation {
 
     /// Shared ground for the security page and its presentation.
     static let uiGround = UIColor { trait in
-        trait.userInterfaceStyle == .dark
-            ? .black
-            : UIColor(red: 0xF2 / 255, green: 0xF3 / 255, blue: 0xF5 / 255, alpha: 1)
+        trait.userInterfaceStyle == .dark ? .black : .white
     }
 
     static var ground: Color { Color(uiColor: uiGround) }
@@ -232,235 +230,15 @@ extension EnvironmentValues {
     }
 }
 
-private struct HoldingDetailPreviewModifier: ViewModifier {
-    // Standalone ImageRenderer trees do not inherit the app environment.
-    // A visual copy can render its label without constructing a live preview.
-    @Environment(AppModel.self) private var model: AppModel?
-    let holding: Holding?
-    let onOpen: () -> Void
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if let holding, let model {
-            content
-                // UIKit's context menu rather than SwiftUI's `.contextMenu`:
-                // the moment a finger lands, the menu starts lifting the row
-                // onto a platter with a wide soft shadow — before it knows the
-                // press is a hold — and on the white list every tap flashed a
-                // dark grey band. SwiftUI has no say over that shadow; UIKit's
-                // preview parameters do.
-                .background {
-                    ShadowlessContextMenuRegion(
-                        cornerRadius: 12,
-                        actionTitle: L10n.text("打开个股"),
-                        actionImage: "arrow.up.forward.app",
-                        // The page's top down to the end of its price chart:
-                        // enough to recognise the security, small enough to
-                        // stay a glance.
-                        previewSize: {
-                            let screen = UIScreen.main.bounds.size
-                            return CGSize(width: min(390, screen.width - 48), height: min(450, screen.height * 0.55))
-                        },
-                        preview: {
-                            // The actual detail page shares its cache with a
-                            // subsequent open.
-                            AnyView(
-                                HoldingDetailView(holding: holding, onClose: {}, isPreview: true)
-                                    .environment(model)
-                                    .background(SecurityDetailPresentation.ground)
-                                    .allowsHitTesting(false)
-                            )
-                        },
-                        onOpen: onOpen
-                    )
-                }
-                .accessibilityHint(L10n.text("轻点打开个股，长按预览"))
-        } else {
-            content
-        }
-    }
-}
-
-/// Marks the view it sits behind as a context-menu region. The menu itself is
-/// one `UIContextMenuInteraction` on the nearest scroll view (or the window),
-/// shared by every region in it, so taps and scrolling stay with SwiftUI; the
-/// interaction only starts over a region, and lifts a snapshot of it with an
-/// empty shadow path.
-private struct ShadowlessContextMenuRegion: UIViewRepresentable {
-    let cornerRadius: CGFloat
-    let actionTitle: String
-    let actionImage: String
-    let previewSize: () -> CGSize
-    let preview: () -> AnyView
-    let onOpen: () -> Void
-
-    func makeUIView(context: Context) -> RegionView { RegionView() }
-
-    func updateUIView(_ view: RegionView, context: Context) {
-        view.cornerRadius = cornerRadius
-        view.actionTitle = actionTitle
-        view.actionImage = actionImage
-        view.previewSize = previewSize
-        view.preview = preview
-        view.onOpen = onOpen
-    }
-
-    static func dismantleUIView(_ view: RegionView, coordinator: ()) {
-        view.unregister()
-    }
-
-    final class RegionView: UIView {
-        var cornerRadius: CGFloat = 12
-        var actionTitle = ""
-        var actionImage = ""
-        var previewSize: () -> CGSize = { .zero }
-        var preview: () -> AnyView = { AnyView(EmptyView()) }
-        var onOpen: () -> Void = {}
-        private weak var menuHost: ShadowlessContextMenuHost?
-
-        init() {
-            super.init(frame: .zero)
-            isUserInteractionEnabled = false
-            backgroundColor = .clear
-            isAccessibilityElement = false
-        }
-
-        @available(*, unavailable)
-        required init?(coder: NSCoder) { nil }
-
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            guard let window else {
-                unregister()
-                return
-            }
-            var ancestor = superview
-            var host: UIView = window
-            while let view = ancestor {
-                if view is UIScrollView {
-                    host = view
-                    break
-                }
-                ancestor = view.superview
-            }
-            let menu = ShadowlessContextMenuHost.host(for: host)
-            if menuHost !== menu {
-                unregister()
-                menu.add(self)
-                menuHost = menu
-            }
-        }
-
-        func unregister() {
-            menuHost?.remove(self)
-            menuHost = nil
-        }
-
-        var isShowing: Bool {
-            guard window != nil else { return false }
-            var view: UIView? = self
-            while let current = view {
-                if current.isHidden || current.alpha < 0.01 { return false }
-                view = current.superview
-            }
-            return true
-        }
-    }
-}
-
-@MainActor
-private final class ShadowlessContextMenuHost: NSObject, UIContextMenuInteractionDelegate {
-    private static var key: UInt8 = 0
-    typealias Region = ShadowlessContextMenuRegion.RegionView
-
-    private let regions = NSHashTable<Region>.weakObjects()
-    private weak var active: Region?
-
-    static func host(for view: UIView) -> ShadowlessContextMenuHost {
-        if let existing = objc_getAssociatedObject(view, &key) as? ShadowlessContextMenuHost {
-            return existing
-        }
-        let host = ShadowlessContextMenuHost()
-        view.addInteraction(UIContextMenuInteraction(delegate: host))
-        objc_setAssociatedObject(view, &key, host, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-        return host
-    }
-
-    func add(_ region: Region) { regions.add(region) }
-    func remove(_ region: Region) { regions.remove(region) }
-
-    func contextMenuInteraction(_ interaction: UIContextMenuInteraction,
-                                configurationForMenuAtLocation location: CGPoint) -> UIContextMenuConfiguration? {
-        guard let view = interaction.view,
-              let region = regions.allObjects.last(where: { region in
-                  region.isShowing && region.bounds.contains(region.convert(location, from: view))
-              }) else { return nil }
-        active = region
-        return UIContextMenuConfiguration(identifier: nil, previewProvider: { [weak region] in
-            guard let region else { return nil }
-            let controller = UIHostingController(rootView: region.preview())
-            controller.preferredContentSize = region.previewSize()
-            controller.view.backgroundColor = .clear
-            return controller
-        }, actionProvider: { [weak region] _ in
-            guard let region else { return nil }
-            return UIMenu(children: [
-                UIAction(title: region.actionTitle, image: UIImage(systemName: region.actionImage)) { [weak region] _ in
-                    region?.onOpen()
-                }
-            ])
-        })
-    }
-
-    func contextMenuInteraction(_ interaction: UIContextMenuInteraction,
-                                configuration: UIContextMenuConfiguration,
-                                highlightPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
-        active.flatMap(targetedPreview)
-    }
-
-    func contextMenuInteraction(_ interaction: UIContextMenuInteraction,
-                                configuration: UIContextMenuConfiguration,
-                                dismissalPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
-        active.flatMap(targetedPreview)
-    }
-
-    func contextMenuInteraction(_ interaction: UIContextMenuInteraction,
-                                willPerformPreviewActionForMenuWith configuration: UIContextMenuConfiguration,
-                                animator: any UIContextMenuInteractionCommitAnimating) {
-        // Tapping the preview opens the page, as the menu's action does.
-        let region = active
-        animator.addCompletion { region?.onOpen() }
-    }
-
-    /// A snapshot of the region, lifted in place with no shadow. The empty
-    /// shadow path is the point of all this: a nil one means "use the visible
-    /// path", which is the dark band.
-    private func targetedPreview(for region: Region) -> UITargetedPreview? {
-        guard let window = region.window else { return nil }
-        let frame = region.convert(region.bounds, to: window)
-        guard frame.width > 1, frame.height > 1,
-              let snapshot = window.resizableSnapshotView(from: frame, afterScreenUpdates: false,
-                                                          withCapInsets: .zero) else { return nil }
-        let parameters = UIPreviewParameters()
-        parameters.backgroundColor = .clear
-        parameters.visiblePath = UIBezierPath(roundedRect: snapshot.bounds, cornerRadius: region.cornerRadius)
-        parameters.shadowPath = UIBezierPath()
-        return UITargetedPreview(view: snapshot, parameters: parameters,
-                                 target: UIPreviewTarget(container: window, center: CGPoint(x: frame.midX, y: frame.midY)))
-    }
-}
-
-extension View {
-    func holdingDetailPreview(_ holding: Holding?, onOpen: @escaping () -> Void) -> some View {
-        modifier(HoldingDetailPreviewModifier(holding: holding, onOpen: onOpen))
-    }
-}
-
 extension View {
     /// Presents a security page as a sheet: the designed ground, the designed
     /// corners, no grabber.
     func securityDetailSheet() -> some View {
-        presentationDetents([.large])
+        // A sheet has no status-bar safe area above the stock header. Keep
+        // this inset on the presentation container so content, placeholders
+        // and the close overlay move together; full-screen zoom geometry stays intact.
+        safeAreaPadding(.top, 16)
+            .presentationDetents([.large])
             .environment(\.isAppModal, false)
             // The system coordinates dimming, touch blocking and the slide
             // in both directions, including a cancelled drag to dismiss.
@@ -1551,7 +1329,7 @@ extension View {
     @ViewBuilder
     func catfolioTabBarBehavior() -> some View {
         if #available(iOS 26.0, *) {
-            self.tabBarMinimizeBehavior(.onScrollDown)
+            self.tabBarMinimizeBehavior(.never)
         } else {
             self
         }
@@ -1729,6 +1507,7 @@ struct ChartTimeRangePicker: View {
     /// field's colour, so the selected range is a white pill with dark text
     /// in both schemes rather than the page's own fill.
     var isOnTintedField = false
+    var isOnComparisonField = false
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -1802,6 +1581,7 @@ struct ChartTimeRangePicker: View {
     }
 
     private func textColor(isSelected: Bool) -> Color {
+        if isOnComparisonField { return .white.opacity(isSelected ? 1 : 0.5) }
         if isOnTintedField {
             if isSelected { return Color(red: 0.10, green: 0.10, blue: 0.10) }
             return colorScheme == .dark ? Color.white.opacity(0.82) : Color.black.opacity(0.58)
@@ -1813,6 +1593,7 @@ struct ChartTimeRangePicker: View {
     }
 
     private var selectedBackgroundColor: Color {
+        if isOnComparisonField { return .white.opacity(0.1) }
         if isOnTintedField { return .white }
         if usesBrightSelectedBackground, colorScheme == .light {
             return .white

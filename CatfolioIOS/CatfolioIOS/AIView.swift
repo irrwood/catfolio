@@ -23,6 +23,7 @@ struct AIView: View {
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var lastAttentionContext: String?
     @State private var question = ""
+    @AppStorage("ai.web-search.enabled") private var webSearchEnabled = false
     @State private var isSending = false
     /// The answer being written, while it is.
     @State private var streamingAnswer: StreamingAnswer?
@@ -148,6 +149,7 @@ struct AIView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             AIComposer(
                 question: $question,
+                webSearchEnabled: $webSearchEnabled,
                 isSending: isSending || isRestoringHistory,
                 isFloating: isEmbedded,
                 focus: $isComposerFocused,
@@ -360,10 +362,16 @@ struct AIView: View {
         .onTapGesture(perform: dismissSidebar)
         // The card follows the finger up, with some give downwards; a
         // short or slow drag springs back.
-        .gesture(DragGesture(minimumDistance: 8)
+        // This handle moves with the card. Measuring in its own coordinate
+        // space feeds that movement back into the next drag translation.
+        .gesture(DragGesture(minimumDistance: 8, coordinateSpace: .global)
             .onChanged { value in
                 let y = value.translation.height
-                conversationCardDrag = y < 0 ? y : y * 0.25
+                var transaction = Transaction(animation: nil)
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    conversationCardDrag = y < 0 ? y : y * 0.25
+                }
             }
             .onEnded { value in
                 let opens = value.translation.height < -80 || value.predictedEndTranslation.height < -240
@@ -643,6 +651,7 @@ struct AIView: View {
 
         let origin = activeConversationID
         let context = lastAttentionContext
+        let usesWebSearch = webSearchEnabled
         let generation = UUID()
         answerGeneration = generation
         answerTask = Task { @MainActor in
@@ -701,7 +710,7 @@ struct AIView: View {
             await persistMessages()
             guard isCurrent() else { return }
             do {
-                if Self.isAttentionPreset(cleanQuestion) {
+                if Self.isAttentionPreset(cleanQuestion) && !usesWebSearch {
                     let report = try await model.portfolioAttention()
                     guard isCurrent() else { return }
                     let message = ChatMessage(role: .assistant, text: report.markdownFallback)
@@ -715,9 +724,9 @@ struct AIView: View {
                         let events: AsyncThrowingStream<AIStreamEvent, Error>
                         if let researchRequest {
                             events = LocalAIClient().streamPublicResearch(
-                                cleanQuestion, context: researchRequest.context)
+                                cleanQuestion, context: researchRequest.context, webSearch: usesWebSearch)
                         } else {
-                            events = try await model.streamAI(cleanQuestion, attentionContext: context)
+                            events = try await model.streamAI(cleanQuestion, attentionContext: context, webSearch: usesWebSearch)
                         }
                         for try await event in events {
                             guard isCurrent() else { live.cancel(); return }
@@ -1331,6 +1340,7 @@ private struct PortfolioAttentionDetail: View {
         .softTopScrollEdge()
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
+        .toolbarVisibility(.hidden, for: .tabBar)
         .overlay(alignment: .trailing) {
             // Keep the additional left-swipe gesture at the right edge so the
             // article keeps its normal scrolling gestures.
@@ -2234,6 +2244,7 @@ private enum MarkdownBlockParser {
 private struct AIComposer: View {
     @Environment(\.locale) private var appLocale
     @Binding var question: String
+    @Binding var webSearchEnabled: Bool
     let isSending: Bool
     let isFloating: Bool
     let focus: FocusState<Bool>.Binding
@@ -2270,6 +2281,7 @@ private struct AIComposer: View {
     private var standardComposer: some View {
         HStack(alignment: .bottom, spacing: 8) {
             quickActionsMenu
+            webSearchButton
             TextField(L10n.text("询问你的投资组合"), text: $question, axis: .vertical)
                 .lineLimit(1...4)
                 .focused(focus)
@@ -2291,6 +2303,7 @@ private struct AIComposer: View {
         HStack(alignment: .bottom, spacing: 8) {
             quickActionsMenu
                 .fixedSize()
+            webSearchButton
             floatingTextFieldSurface
                 .frame(maxWidth: .infinity)
                 .layoutPriority(1)
@@ -2347,6 +2360,22 @@ private struct AIComposer: View {
         .buttonStyle(.plain)
         .disabled(isSending)
         .accessibilityLabel(L10n.text("AI 快捷操作"))
+    }
+
+    private var webSearchButton: some View {
+        Button { webSearchEnabled.toggle() } label: {
+            Image(systemName: "globe")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(webSearchEnabled ? Color.accentColor : Color.secondary)
+                .frame(width: 44, height: 48)
+                .background(webSearchEnabled ? Color.accentColor.opacity(0.12) : Color.clear, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(isSending)
+        .accessibilityLabel(L10n.text("联网搜索"))
+        .accessibilityValue(webSearchEnabled ? L10n.text("已开启") : L10n.text("已关闭"))
+        .accessibilityAddTraits(webSearchEnabled ? [.isSelected] : [])
+        .accessibilityIdentifier("ai.web-search")
     }
 
     private var floatingTextField: some View {
@@ -2662,6 +2691,7 @@ final class StreamingAnswer {
     let startedAt = Date()
     private(set) var reasoning = ""
     private(set) var text = ""
+    private(set) var searchStatus = ""
     private(set) var answerStartedAt: Date?
     /// Characters of `text` revealed so far.
     private(set) var shown = 0
@@ -2678,6 +2708,8 @@ final class StreamingAnswer {
     func receive(_ event: AIStreamEvent) {
         guard !isCancelled else { return }
         switch event {
+        case let .searchStatus(status):
+            searchStatus = status
         case let .reasoning(delta):
             reasoning += delta
         case let .text(delta):
@@ -2735,6 +2767,11 @@ private struct StreamingAnswerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if !answer.searchStatus.isEmpty {
+                Label(answer.searchStatus, systemImage: "globe")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
             if answer.isThinking || !answer.reasoning.isEmpty {
                 ReasoningDisclosure(
                     reasoning: answer.reasoning,

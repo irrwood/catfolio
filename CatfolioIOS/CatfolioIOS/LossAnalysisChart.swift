@@ -19,6 +19,8 @@ struct LossAnalysisChart: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.locale) private var appLocale
     @State private var loading = HoldingHistoryState()
+    @State private var handledRefreshRevision = 0
+    @State private var handledDrawdownRefreshRevision = 0
     @State private var retryRevision = 0
     @State private var range = ChartTimeRange.oneYear
     @State private var selectedDate: Date?
@@ -26,6 +28,8 @@ struct LossAnalysisChart: View {
     /// Holdings the reader turned off; the next ones by loss take their place.
     @State private var hiddenTickers: Set<String> = []
     @State private var showsOthers = true
+    /// The band a right swipe on its row brought forward (`key(for:)`).
+    @State private var highlightedBand: String?
     /// Today's share counts held through the whole window (a buy never reads
     /// as a rise), for the drawdown tiles moved here from the underwater page.
     @State private var drawdownLoading = HoldingHistoryState()
@@ -82,7 +86,9 @@ struct LossAnalysisChart: View {
         }
         .toolbarBackground(.hidden, for: .navigationBar)
         .task(id: "\(model.portfolioChartRevision)|\(model.holdings.count)|\(refreshRevision)|\(retryRevision)") {
-            await loading.load { cachedOnly in
+            let forceRefresh = refreshRevision != handledRefreshRevision
+            handledRefreshRevision = refreshRevision
+            await loading.load(forceRefresh: forceRefresh) { cachedOnly in
                 if let fetchHistory { return try await fetchHistory(cachedOnly) }
                 #if DEBUG
                 if LaunchArguments.contains("--demo-loss-history") { return Self.demoHistory() }
@@ -91,7 +97,9 @@ struct LossAnalysisChart: View {
             }
         }
         .task(id: "\(model.portfolioChartRevision)|\(model.holdings.count)|\(refreshRevision)|\(retryRevision)") {
-            await drawdownLoading.load { cachedOnly in
+            let forceRefresh = refreshRevision != handledDrawdownRefreshRevision
+            handledDrawdownRefreshRevision = refreshRevision
+            await drawdownLoading.load(forceRefresh: forceRefresh) { cachedOnly in
                 #if DEBUG
                 if LaunchArguments.contains("--demo-loss-history") { return Self.demoHistory() }
                 #endif
@@ -176,7 +184,8 @@ struct LossAnalysisChart: View {
     }
 
     private func plot(stack: HoldingLossStack, visible: [Int], bottom: Double) -> some View {
-        let series = Self.chartSeries(stack: stack, visible: visible, scheme: colorScheme)
+        let series = Self.chartSeries(stack: stack, visible: visible, scheme: colorScheme,
+                                      highlighted: highlightedBand)
         let outer = series.first?.id
         return StandardLineChart(
             series: series,
@@ -212,7 +221,13 @@ struct LossAnalysisChart: View {
         .accessibilityLabel(L10n.text("亏损来源堆叠图，长按后拖动查看单日"))
     }
 
-    static func chartSeries(stack: HoldingLossStack, visible: [Int], scheme: ColorScheme) -> [StandardLineChartSeries] {
+    /// A band's name for highlighting: its ticker, or one key for the others.
+    static func key(for band: HoldingLossStack.Band) -> String {
+        band.kind == .others ? "loss-others" : band.title
+    }
+
+    static func chartSeries(stack: HoldingLossStack, visible: [Int], scheme: ColorScheme,
+                            highlighted: String? = nil) -> [StandardLineChartSeries] {
         // These paths are cumulative boundaries, not individual holdings.
         // Match them by depth when range rankings change, or a ticker moving
         // between ranks will pull its old boundary across neighbouring bands.
@@ -227,7 +242,12 @@ struct LossAnalysisChart: View {
             case .others: .others
             case let .holding(colour): .holding(colour: colour)
             }
-            let color = HoldingContributionChart.fillColor(for: gainKind, scheme: scheme)
+            let band: Int? = isOthers ? others.first : depth < named.count ? named[depth] : nil
+            let isFaded = highlighted != nil && highlighted != band.map { key(for: stack.bands[$0]) }
+            func paint(_ color: Color) -> Color {
+                isFaded ? ReturnsSourceChartStyle.faded(color, scheme: scheme) : color
+            }
+            let color = paint(HoldingContributionChart.fillColor(for: gainKind, scheme: scheme))
             // Keep unused layers at zero thickness against the others layer.
             // A range with fewer losers can then shrink bands continuously,
             // instead of fading old cumulative areas over the new viewport.
@@ -241,10 +261,10 @@ struct LossAnalysisChart: View {
                 },
                 color: color,
                 lineWidth: 0,
-                areaFill: kind == .others ? .white : color,
-                areaFillEndColor: HoldingContributionChart.fillEndColor(for: gainKind),
+                areaFill: kind == .others ? paint(.white) : color,
+                areaFillEndColor: HoldingContributionChart.fillEndColor(for: gainKind).map(paint),
                 areaBaseline: 0,
-                areaStripeColor: kind == .others ? ReturnsSourceChartStyle.stripeColor : nil,
+                areaStripeColor: kind == .others && !isFaded ? ReturnsSourceChartStyle.stripeColor : nil,
                 areaStripeSpacing: 35.5,
                 areaStripeWidth: 13,
                 latestPointRadius: 0,
@@ -274,43 +294,95 @@ struct LossAnalysisChart: View {
         .allowsHitTesting(false)
     }
 
-    /// Every row turns its band on and off, as on the gain sources. The
+    /// The comparison page's list, as on the gain sources: tap to turn a
+    /// band on and off, swipe right to highlight it, left to hide it. The
     /// deepest loss is listed first.
     private func legend(stack: HoldingLossStack, row: HoldingLossStack.Row) -> some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 12) {
             ForEach(Array(stack.bands.indices.reversed()), id: \.self) { band in
                 let item = stack.bands[band]
+                let key = Self.key(for: item)
                 let isOn = item.kind != .others || showsOthers
-                Button { toggle(item) } label: {
-                    legendRow(rank: stack.rank(for: item), maximumRank: stack.holdingRanks.count,
-                              swatch: Self.color(for: item.kind, scheme: colorScheme), isOn: isOn,
-                              title: item.title, subtitle: item.subtitle) {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            lossText(row.bands[band])
-                            if let deepest = stack.deepest[item.title], item.kind != .others {
-                                Text(L10n.text("最深 \(DisplayFormat.money(-deepest, signed: true, fractionDigits: 0))"))
-                                    .appNumber(.caption)
-                                    .foregroundStyle(.secondary)
+                let color = Self.color(for: item.kind, scheme: colorScheme)
+                ReturnsSwipeRow(
+                    color: color, isHighlighted: highlightedBand == key, canRemove: isOn,
+                    removeTitle: L10n.text("隐藏此项"), removeIcon: "eye.slash", removeSlidesOut: false,
+                    onHighlight: { highlight(item) }, onRemove: { toggle(item) }
+                ) {
+                    Button { toggle(item) } label: {
+                        ReturnsSourceListRow(rank: stack.rank(for: item), color: color,
+                                             title: item.title, subtitle: item.subtitle, isOn: isOn,
+                                             logo: logoHolding(for: item), isStriped: item.kind == .others) {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                lossText(row.bands[band])
+                                if let deepest = stack.deepest[item.title], item.kind != .others {
+                                    Text(L10n.text("最深 \(DisplayFormat.money(-deepest, signed: true, fractionDigits: 0))"))
+                                        .appNumber(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .returnsDimmed(highlightedBand != nil && highlightedBand != key)
                 .accessibilityAddTraits(isOn ? .isSelected : [])
                 .accessibilityHint(L10n.text("轻点切换显示或隐藏"))
+                .accessibilityAction(named: highlightedBand == key ? L10n.text("取消高亮") : L10n.text("高亮曲线")) {
+                    highlight(item)
+                }
             }
             ForEach(stack.hidden, id: \.ticker) { holding in
-                Button {
-                    withAnimation(.snappy) { _ = hiddenTickers.remove(holding.ticker) }
-                } label: {
-                    legendRow(rank: stack.holdingRanks[holding.ticker], maximumRank: stack.holdingRanks.count,
-                              swatch: .secondary, isOn: false, title: holding.ticker, subtitle: holding.name) {
-                        Text(L10n.text("已隐藏")).appText(.caption).foregroundStyle(.secondary)
+                ReturnsSwipeRow(
+                    color: .secondary, isHighlighted: false, canRemove: false,
+                    onHighlight: { show(holding.ticker, highlighting: true) }, onRemove: {}
+                ) {
+                    Button { show(holding.ticker, highlighting: false) } label: {
+                        ReturnsSourceListRow(rank: stack.holdingRanks[holding.ticker], color: .secondary,
+                                             title: holding.ticker, subtitle: holding.name, isOn: false,
+                                             logo: logoHolding(ticker: holding.ticker)) {
+                            Text(L10n.text("已隐藏")).appText(.caption).foregroundStyle(.secondary)
+                        }
                     }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .returnsDimmed(highlightedBand != nil)
                 .accessibilityHint(L10n.text("轻点重新显示"))
             }
+        }
+    }
+
+    /// A band's company logo, from its holding's logo symbol where there is
+    /// one; nil for the others and the principal, which are not one company.
+    private func logoHolding(for band: HoldingLossStack.Band) -> (ticker: String, symbol: String)? {
+        guard case .holding = band.kind else { return nil }
+        return logoHolding(ticker: band.title)
+    }
+
+    private func logoHolding(ticker: String) -> (ticker: String, symbol: String) {
+        let key = ticker.uppercased()
+        let holding = model.holdings.first { $0.ticker.uppercased() == key }
+        return (ticker, holding?.logoSymbol ?? ticker)
+    }
+
+    private func show(_ ticker: String, highlighting: Bool) {
+        withAnimation(.snappy) {
+            _ = hiddenTickers.remove(ticker)
+            if highlighting { highlightedBand = ticker }
+        }
+    }
+
+    /// Again on the highlighted band clears it; the others, if off, come
+    /// back on first.
+    private func highlight(_ band: HoldingLossStack.Band) {
+        let key = Self.key(for: band)
+        withAnimation(.smooth(duration: 0.25)) {
+            if highlightedBand == key {
+                highlightedBand = nil
+                return
+            }
+            if band.kind == .others { showsOthers = true }
+            highlightedBand = key
         }
     }
 
@@ -320,32 +392,9 @@ struct LossAnalysisChart: View {
             .foregroundStyle(loss > 0.5 ? CatfolioTheme.loss(for: colorScheme) : .secondary)
     }
 
-    private func legendRow<Trailing: View>(rank: Int?, maximumRank: Int, swatch: Color, isOn: Bool, title: String, subtitle: String,
-                                           @ViewBuilder trailing: () -> Trailing) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            ReturnsSourceRankLabel(rank: rank, maximumRank: maximumRank)
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(isOn ? swatch : .clear)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(isOn ? .clear : Color.secondary, lineWidth: 1.5)
-                }
-                .frame(width: 20, height: 20)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).appText(.subheading, weight: .semibold).lineLimit(1)
-                Text(subtitle).appText(.caption).foregroundStyle(.secondary).lineLimit(1)
-            }
-            Spacer(minLength: 12)
-            trailing()
-        }
-        .opacity(isOn ? 1 : 0.45)
-        .padding(.vertical, 12)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-    }
-
     private func toggle(_ band: HoldingLossStack.Band) {
         withAnimation(.snappy) {
+            if highlightedBand == Self.key(for: band), band.kind != .others || showsOthers { highlightedBand = nil }
             switch band.kind {
             case .others: showsOthers.toggle()
             case .holding: hiddenTickers.insert(band.title)

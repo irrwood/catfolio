@@ -1,9 +1,8 @@
 import SwiftUI
 
 /// The gain-sources and loss-analysis charts, cut down to what fits on the
-/// entry card: the headline figure and the bands' shapes over the range each
-/// page opens on. Built from the same stacks the pages draw, so the card and
-/// the page agree.
+/// entry card: the latest headline and recent band shapes. Gains preview the
+/// last two months; losses preview a year, using the detail pages' stacks.
 struct ReturnsSourcePreview: Codable, Equatable {
     struct Band: Codable, Equatable {
         /// The holding's place in the palette; nil for the others.
@@ -52,7 +51,7 @@ struct ReturnsSourcePreview: Codable, Equatable {
     /// short the principal would flatten every gain into a line.
     static func gains(history: HoldingValueHistory, holdings: [Holding]) -> ReturnsSourcePreview? {
         let stack = HoldingContributionStack(history: history, holdings: holdings)
-        let rows = stack.window(for: .yearToDate).rows
+        let rows = stack.window(for: .twoMonths).rows
         guard rows.count > 1, let last = rows.last else { return nil }
         let bands: [Band] = stack.bands.indices.compactMap { index in
             let colour: Int?
@@ -85,9 +84,8 @@ struct ReturnsSourcePreview: Codable, Equatable {
 ///
 /// The cards open on what was last shown for these accounts, kept on disk, so
 /// a cold launch has them at once instead of a blank card. The saved prices
-/// then redraw them, and fresh prices are fetched once per portfolio change —
-/// not on every visit to the tab. Coming back from a chart page redraws from
-/// the saved prices, which that page has just brought up to date.
+/// then redraw them. Network prices are needed only when these accounts have
+/// no usable saved previews or history.
 @MainActor @Observable
 final class ReturnsSourcePreviewStore {
     private(set) var gains: ReturnsSourcePreview?
@@ -98,7 +96,6 @@ final class ReturnsSourcePreviewStore {
     private(set) var isUnavailable = false
 
     private var shownScope: String?
-    private var freshRevision: String?
     private var generation = 0
 
     private struct Snapshot: Codable {
@@ -121,8 +118,7 @@ final class ReturnsSourcePreviewStore {
     /// - Parameters:
     ///   - scope: the accounts and holdings the previews describe; what the
     ///     disk copy is kept under.
-    ///   - revision: changes whenever the portfolio does; fresh prices are
-    ///     fetched once for each.
+    ///   - revision: identifies the portfolio revision requested by the caller.
     ///   - isPortfolioLoaded: false in the moment after launch, before the
     ///     accounts and holdings are known.
     func load(scope: String, revision: String, holdings: [Holding], isPortfolioLoaded: Bool,
@@ -130,6 +126,7 @@ final class ReturnsSourcePreviewStore {
         generation &+= 1
         let request = generation
         isUnavailable = false
+        isRefreshing = false
 
         // Before the portfolio has loaded, neither the accounts nor the
         // holdings are known: show what was last drawn, and run again when
@@ -151,7 +148,8 @@ final class ReturnsSourcePreviewStore {
         if let cached = try? await fetch(true), !Task.isCancelled, request == generation {
             publish(cached, holdings: holdings, scope: scope)
         }
-        guard !Task.isCancelled, request == generation, freshRevision != revision else { return }
+        guard !Task.isCancelled, request == generation else { return }
+        if gains != nil && losses != nil { return }
 
         isRefreshing = true
         defer { if request == generation { isRefreshing = false } }
@@ -159,7 +157,6 @@ final class ReturnsSourcePreviewStore {
             let fresh = try await fetch(false)
             guard !Task.isCancelled, request == generation else { return }
             publish(fresh, holdings: holdings, scope: scope)
-            freshRevision = revision
         } catch {
             guard !Task.isCancelled, request == generation else { return }
             if gains == nil && losses == nil { isUnavailable = true }
@@ -200,7 +197,7 @@ struct ReturnsSourceCards: View {
     let store: ReturnsSourcePreviewStore
 
     var body: some View {
-        HStack(alignment: .top, spacing: SettingsTemplate.tileSpacing) {
+        HStack(alignment: .top, spacing: 16) {
             NavigationLink { ReturnsChartPage(chart: .contributors) } label: {
                 ReturnsSourceCard(chart: .contributors, preview: store.gains,
                                   isRefreshing: store.isRefreshing, isUnavailable: store.isUnavailable)
@@ -216,9 +213,11 @@ struct ReturnsSourceCards: View {
     }
 }
 
-/// Figma 448:5900: a tinted liquid-glass tile per chart. Gains rise from the
-/// bottom edge with the label on top; losses hang from the top edge with the
-/// label underneath, so the two read as a mirrored pair.
+/// Figma 487:5328 (dark) and 487:5331 (light): one tile per chart, the
+/// icon and chevron on top, the title over the amount at the foot, and a
+/// blur that deepens toward the foot so the text reads over the curves. Gains are blue and rise
+/// from the bottom edge; losses are purple and hang from the top edge. Each
+/// has a blurred glow set in the design's own place, over liquid glass.
 private struct ReturnsSourceCard: View {
     @Environment(\.colorScheme) private var colorScheme
     let chart: ReturnsChartDestination
@@ -237,84 +236,124 @@ private struct ReturnsSourceCard: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
-        VStack(alignment: .leading, spacing: 12) {
-            if isLosses {
-                Spacer(minLength: 0)
+        let clearPoint = SIMD2<Float>(isLosses ? (colorScheme == .light ? 0.382 : 0.575) : 0.364,
+                                      isLosses ? (colorScheme == .light ? 0.439 : 0.503) : 0.587)
+        let blurredPoint = SIMD2<Float>(isLosses ? (colorScheme == .light ? 0.139 : 0.176) : 0.147,
+                                        isLosses && colorScheme == .dark ? 1.032 : 1)
+        VStack(alignment: .leading, spacing: 0) {
+            topRow
+            Spacer(minLength: 0)
+            // Figma's 12pt is measured between trimmed text boxes (cap
+            // height to baseline); SwiftUI's line boxes add about 8pt of
+            // their own between the two, and 4pt under the figure.
+            VStack(alignment: .leading, spacing: 4) {
+                Text(chart.title)
+                    .font(Typography.text(size: 14, weight: .bold))
+                    .tracking(0.56)
+                    .textCase(.uppercase)
+                    .foregroundStyle(palette.title)
+                    .opacity(colorScheme == .dark ? (isLosses ? 0.8 : 0.4) : 1)
+                    .blendMode(colorScheme == .dark ? .plusLighter : .normal)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 headline
-                label
-            } else {
-                label
-                headline
-                Spacer(minLength: 0)
             }
         }
-        .padding(16)
+        .padding([.horizontal, .top], 16)
+        .padding(.bottom, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: Self.height)
         .background {
-            ReturnsSourceMiniChart(preview: preview, hangsDown: isLosses, palette: palette)
-                .padding(isLosses ? .bottom : .top, Self.chartInset)
+            ZStack(alignment: .topLeading) {
+                palette.fill
+                artwork
+            }
+            .drawingGroup()
+            .visualEffect { content, proxy in
+                content.layerEffect(
+                    Shader(function: ShaderFunction(library: .default, name: "returnsProgressiveBlur"), arguments: [
+                        .float2(proxy.size),
+                        .float2(clearPoint.x, clearPoint.y),
+                        .float2(blurredPoint.x, blurredPoint.y),
+                        .float(18.1)
+                    ]),
+                    maxSampleOffset: CGSize(width: 18.1, height: 18.1)
+                )
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
         .clipShape(shape)
-        .background { ReturnsSourceGlass(tint: palette.card, shape: shape) }
+        .modifier(ReturnsSourceGlass(shape: shape))
         .contentShape(shape)
         .accessibilityElement(children: .combine)
         .accessibilityValue(accessibilityValue)
     }
 
-    private var label: some View {
-        HStack(spacing: 4) {
+    private var artwork: some View {
+        ZStack(alignment: .topLeading) {
+            glows(abovePlot: false)
+            ReturnsSourceMiniChart(preview: preview, hangsDown: isLosses, palette: palette)
+                .padding(isLosses ? .bottom : .top, Self.chartInset)
+        }
+    }
+
+    /// Blurred ellipses at the design's own offsets from the card's corner.
+    private func glows(abovePlot: Bool) -> some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(Array(palette.glows.filter { $0.abovePlot == abovePlot }.enumerated()), id: \.offset) { _, glow in
+                Ellipse()
+                    .fill(glow.color)
+                    .frame(width: glow.frame.width, height: glow.frame.height)
+                    .blur(radius: 33)
+                    .offset(x: glow.frame.minX, y: glow.frame.minY)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .allowsHitTesting(false)
+    }
+
+    private var topRow: some View {
+        HStack(spacing: 8) {
             icon
-            Text(chart.title)
-                .appCaps(.footnote, weight: .bold)
-                .textCase(.uppercase)
-                .foregroundStyle(palette.label)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
             Spacer(minLength: 4)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.tertiary)
+            Image("SettingsChevron")
+                .foregroundStyle(Color.white.opacity(0.5))
         }
         .frame(height: 24)
     }
 
-    @ViewBuilder
+    /// The Figma frame's own glyphs, in white: a mug for gains, a rounded
+    /// down-triangle for losses.
     private var icon: some View {
-        if isLosses {
-            Image(systemName: "arrowtriangle.down")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(palette.label)
-                .frame(width: 24, height: 24)
-                .background(Circle().fill(palette.label.opacity(0.1)))
-        } else {
-            Image(systemName: "mug.fill")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(palette.label)
-                .frame(width: 18, height: 16)
-        }
+        Image(isLosses ? "ReturnsLossAnalysis" : "ReturnsGainSources")
+            .resizable()
+            .scaledToFit()
+            .foregroundStyle(.white)
+            .frame(width: isLosses ? 14.3 : 18, height: isLosses ? 12.2 : 16)
+            .frame(width: isLosses ? 17 : 18, height: 16)
     }
 
     @ViewBuilder
     private var headline: some View {
         if let preview {
-            // The label says which way the money went; the figure is its size.
-            let amount = abs(preview.headline)
-            Text(DisplayFormat.money(amount, fractionDigits: 0))
-                .appNumber(.heading, weight: .medium)
-                .foregroundStyle(.primary)
+            // Signed, as in the dark frame: a loss reads as money lost.
+            let amount = isLosses ? -abs(preview.headline) : preview.headline
+            Text(DisplayFormat.money(amount, signed: amount != 0, fractionDigits: 0))
+                .font(Typography.number(size: 20, weight: .semibold))
+                .foregroundStyle(palette.amount)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .contentTransition(.numericText(value: amount))
                 .refreshGlow(isActive: isRefreshing)
         } else {
             Text(isUnavailable ? "—" : " ")
-                .appNumber(.heading, weight: .medium)
-                .foregroundStyle(.tertiary)
+                .font(Typography.number(size: 20, weight: .semibold))
+                .foregroundStyle(palette.amount.opacity(0.5))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(alignment: .leading) {
                     if !isUnavailable {
-                        Capsule().fill(Color.primary.opacity(0.07)).frame(width: 96, height: 18)
+                        Capsule().fill(Color.white.opacity(0.15)).frame(width: 96, height: 18)
                     }
                 }
         }
@@ -328,46 +367,108 @@ private struct ReturnsSourceCard: View {
     }
 }
 
-/// The card's colours from the Figma frame: green for gains, gold for losses.
+/// The paints of Figma 487:5328 / 487:5331, per chart and scheme.
 private struct ReturnsSourcePalette {
-    let label: Color
-    let card: Color
+    struct Glow {
+        let color: Color
+        /// Offset from the card's top-left corner, and size, before the blur.
+        let frame: CGRect
+        let abovePlot: Bool
+    }
+
+    /// The card's own fill under the glows: clear in the dark (the glass and
+    /// the glows carry it), the design's gradient at 86% in the light.
+    let fill: LinearGradient
+    /// The title over the amount: the chart's colour in the dark, white on
+    /// the light scheme's coloured cards.
+    let title: Color
+    let amount: Color
+    let solidLayerColors: [Color]?
+    let glows: [Glow]
+    /// Each layer: this colour at the curve, fading to `curveFade` at its base.
     let curve: Color
     let curveFade: Color
+    let stroke: Color
+    /// The whole layer — fill and edge — is set at this opacity.
+    let layerOpacity: Double
+    let backLayerOpacity: Double
+    let frontLayerOpacity: Double
+    let backLayerColor: Color?
+    let strokeOpacity: Double
+    let strokeWidth: CGFloat
+
+    private static func rgb(_ hex: UInt32, _ alpha: Double = 1) -> Color {
+        Color(red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255,
+              blue: Double(hex & 0xFF) / 255).opacity(alpha)
+    }
 
     init(isLosses: Bool, scheme: ColorScheme) {
-        let dark = scheme == .dark
-        if isLosses {
-            label = dark ? Color(red: 0.922, green: 0.753, blue: 0) : Color(red: 0.62, green: 0.49, blue: 0)
-            card = Color(red: 0.686, green: 0.561, blue: 0).opacity(0.2)
-            curve = Color(red: 0.863, green: 0.776, blue: 0.027)
-            curveFade = curve
-        } else {
-            label = dark ? Color(red: 0, green: 0.686, blue: 0) : Color(red: 0, green: 0.56, blue: 0)
-            card = Color(red: 0, green: 0.686, blue: 0).opacity(0.2)
-            curve = dark ? Color(red: 0, green: 1, blue: 0) : Color(red: 0, green: 0.8, blue: 0)
-            curveFade = Color(red: 0.494, green: 1, blue: 0.494)
+        amount = scheme == .light ? Self.rgb(isLosses ? 0x6836B1 : 0x005CA7) : .white
+        // Front (bottom) to back (top): the daylight waves become whiter downward.
+        solidLayerColors = isLosses ? nil : scheme == .light
+            ? [.white, Self.rgb(0xA7D7FF), Self.rgb(0x56AFF8)]
+            : [Self.rgb(0x0489F7), Self.rgb(0x0062B4), Self.rgb(0x078AF7)]
+        backLayerOpacity = scheme == .dark ? (isLosses ? 0.3 : 0.4) : 1
+        frontLayerOpacity = isLosses && scheme == .light ? 0.5 : 1
+        backLayerColor = isLosses && scheme == .light ? Self.rgb(0xAD76FF) : nil
+        strokeOpacity = scheme == .dark ? 0.3 : 0.7
+        strokeWidth = scheme == .dark ? 1 : 1.5
+        switch (isLosses, scheme == .dark) {
+        case (false, true):
+            fill = LinearGradient(stops: [
+                .init(color: Self.rgb(0x004F74, 0.8), location: 0.04445),
+                .init(color: Color.black.opacity(0.8), location: 0.67584)
+            ], startPoint: .topLeading, endPoint: .bottomTrailing)
+            title = .white
+            glows = [Glow(color: Self.rgb(0x004D8C), frame: CGRect(x: -99, y: 93, width: 224, height: 148), abovePlot: false)]
+            curve = Self.rgb(0x0189F8); curveFade = Self.rgb(0x0189F8, 0)
+            stroke = .clear; layerOpacity = 1
+        case (false, false):
+            fill = LinearGradient(stops: [
+                .init(color: Self.rgb(0x2498F6, 0.8), location: 0.04445),
+                .init(color: Self.rgb(0x71BDF9, 0.8), location: 0.67584)
+            ], startPoint: .topLeading, endPoint: .bottomTrailing)
+            title = Self.rgb(0x2FA2FF)
+            glows = [Glow(color: Self.rgb(0xFDFEFF), frame: CGRect(x: -98, y: 94, width: 224, height: 148), abovePlot: true)]
+            curve = .white; curveFade = .white
+            stroke = .clear; layerOpacity = 1
+        case (true, true):
+            fill = LinearGradient(stops: [
+                .init(color: Self.rgb(0x2B006B, 0.9), location: 0.07168),
+                .init(color: Color.black.opacity(0.9), location: 0.605)
+            ], startPoint: .bottomLeading, endPoint: .topTrailing)
+            title = Self.rgb(0xB355FF)
+            glows = [Glow(color: Self.rgb(0x42197F), frame: CGRect(x: -119, y: -74, width: 264, height: 165), abovePlot: false)]
+            curve = Self.rgb(0x7D25FF); curveFade = Self.rgb(0xAC74FF, 0)
+            stroke = .clear; layerOpacity = 1
+        case (true, false):
+            fill = LinearGradient(colors: [.white, .white],
+                                  startPoint: .top, endPoint: .bottom)
+            title = Self.rgb(0xB355FF)
+            glows = [Glow(color: Self.rgb(0x9651FF), frame: CGRect(x: -100, y: -91, width: 222, height: 165), abovePlot: false)]
+            curve = Self.rgb(0x7D25FF); curveFade = Self.rgb(0xAC74FF)
+            stroke = .clear; layerOpacity = 0.4
         }
     }
 }
 
-/// Liquid glass on iOS 26, tinted with the card's colour; a tinted material
-/// before it.
-private struct ReturnsSourceGlass: View {
-    let tint: Color
+/// Apply native liquid glass to the complete card, never to its chart layers.
+private struct ReturnsSourceGlass: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
     let shape: RoundedRectangle
 
-    var body: some View {
+    func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            Color.clear.glassEffect(.regular.tint(tint).interactive(), in: shape)
+            content.glassEffect(colorScheme == .dark ? .clear.interactive() : .regular.interactive(), in: shape)
         } else {
-            shape.fill(.ultraThinMaterial).overlay(shape.fill(tint))
+            content.background(.ultraThinMaterial, in: shape)
         }
     }
 }
 
 /// The three largest sources as layered areas, with no axes: the back layer
-/// is all three together, faint; the front one the largest source alone.
+/// is all three together, the front one the largest source alone. Each
+/// fades from its curve toward its base and carries a thin edge on the curve.
 private struct ReturnsSourceMiniChart: View {
     let preview: ReturnsSourcePreview?
     let hangsDown: Bool
@@ -375,34 +476,49 @@ private struct ReturnsSourceMiniChart: View {
 
     /// Few enough points that each turn of the curve can be rounded off, as
     /// in the design, without the line going soft.
-    private static let points = 14
+    private var sampleCount: Int { 14 }
 
     var body: some View {
-        let layers = (preview?.sourceLayers() ?? []).map { ReturnsSourcePreview.sampled($0, count: Self.points) }
+        let layers = (preview?.sourceLayers() ?? []).map { ReturnsSourcePreview.sampled($0, count: sampleCount) }
         if let count = layers.first?.count, count > 1,
            let peak = layers.last?.max(), peak > 0.5 {
             Canvas { context, size in
                 // Back to front: all three, then two, then the largest alone.
-                for (depth, layer) in layers.enumerated().reversed() {
-                    let isBack = depth == layers.count - 1 && layers.count > 1
-                    let area = path(layer, peak: peak, size: size)
-                    // Full colour at the layer's peak, down to a tenth a
-                    // half the chart's height beyond it, most of it early, as in
-                    // the design — so the low stretches stay dark.
-                    let top = area.boundingRect
-                    let fade = size.height * 0.5
-                    let start = CGPoint(x: 0, y: hangsDown ? top.maxY : top.minY)
-                    let end = CGPoint(x: 0, y: hangsDown ? top.maxY - fade : top.minY + fade)
+                for (index, layer) in layers.enumerated().reversed() {
+                    // The day gain halo sits between the middle and front
+                    // curves; the white foreground remains clean above it.
+                    if index == 0 {
+                        for glow in palette.glows where glow.abovePlot {
+                            context.drawLayer { glowContext in
+                                glowContext.addFilter(.blur(radius: 33))
+                                glowContext.fill(Path(ellipseIn: glow.frame.offsetBy(dx: 0, dy: -ReturnsSourceCard.chartInset)),
+                                                 with: .color(glow.color))
+                            }
+                        }
+                    }
+                    let curve = curvePath(layer, peak: peak, size: size)
+                    var area = curve
+                    let edge: CGFloat = hangsDown ? 0 : size.height
+                    area.addLine(to: CGPoint(x: size.width, y: edge))
+                    area.addLine(to: CGPoint(x: 0, y: edge))
+                    area.closeSubpath()
+                    let bounds = area.boundingRect
+                    // From the curve's furthest reach to the base it grows from.
+                    let start = CGPoint(x: 0, y: hangsDown ? bounds.maxY : bounds.minY)
+                    let end = CGPoint(x: 0, y: edge)
+                    let solidColor = palette.solidLayerColors.map { $0[min(index, $0.count - 1)] }
+                        ?? (index == layers.count - 1 ? palette.backLayerColor : nil)
                     context.drawLayer { layerContext in
-                        layerContext.opacity = isBack ? 0.2 : 1
+                        layerContext.opacity = index == 0 ? palette.frontLayerOpacity
+                            : palette.layerOpacity * (index == layers.count - 1 ? palette.backLayerOpacity : 1)
                         layerContext.fill(area, with: .linearGradient(
-                            Gradient(stops: [
-                                .init(color: palette.curve, location: 0),
-                                .init(color: palette.curve.opacity(0.4), location: 0.3),
-                                .init(color: palette.curveFade.opacity(0.1), location: 1),
-                            ]),
+                            Gradient(colors: [solidColor ?? palette.curve, solidColor ?? palette.curveFade]),
                             startPoint: start, endPoint: end))
                     }
+                    // The edge stands clear of the fill's opacity: at the
+                    // design's 30% a hairline all but vanished on the phone.
+                    context.stroke(curve, with: .color(palette.stroke.opacity(palette.strokeOpacity)),
+                                   style: StrokeStyle(lineWidth: palette.strokeWidth, lineCap: .round, lineJoin: .round))
                 }
             }
             .transition(.opacity)
@@ -410,33 +526,37 @@ private struct ReturnsSourceMiniChart: View {
             // Nothing to stack — no holding below cost all year: the axis
             // alone, where the layers would start.
             Rectangle()
-                .fill(palette.label.opacity(0.3))
+                .fill(palette.stroke.opacity(0.4))
                 .frame(height: 1)
                 .frame(maxHeight: .infinity, alignment: hangsDown ? .top : .bottom)
         }
     }
 
-    /// The layer's outline with each corner rounded: a quadratic through the
-    /// midpoints, so the line passes near every day without overshooting.
-    private func path(_ values: [Double], peak: Double, size: CGSize) -> Path {
-        let count = values.count
-        let points = values.enumerated().map { day, value -> CGPoint in
-            let x = size.width * CGFloat(day) / CGFloat(count - 1)
+    /// Round across each complete sample interval. Shared midpoint weights
+    /// keep the stacked layers ordered while softening narrow peaks and dips.
+    private func curvePath(_ values: [Double], peak: Double, size: CGSize) -> Path {
+        guard values.count > 1 else { return Path() }
+        // Broaden the bend over neighboring samples instead of increasing a
+        // radius already capped by the narrow spacing in these small cards.
+        let softened = values.indices.map { index in
+            guard index > 0, index < values.count - 1 else { return values[index] }
+            return values[index - 1] * 0.25 + values[index] * 0.5 + values[index + 1] * 0.25
+        }
+        let points = softened.enumerated().map { day, value -> CGPoint in
+            let x = size.width * CGFloat(day) / CGFloat(values.count - 1)
             let depth = size.height * CGFloat(value / peak)
             return CGPoint(x: x, y: hangsDown ? depth : size.height - depth)
         }
-        let edge: CGFloat = hangsDown ? 0 : size.height
-        var path = Path()
-        path.move(to: CGPoint(x: 0, y: edge))
-        path.addLine(to: points[0])
-        for index in 1..<count {
-            let previous = points[index - 1], point = points[index]
-            let middle = CGPoint(x: (previous.x + point.x) / 2, y: (previous.y + point.y) / 2)
-            path.addQuadCurve(to: middle, control: previous)
+        func midpoint(_ a: CGPoint, _ b: CGPoint) -> CGPoint {
+            CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2)
         }
-        path.addLine(to: points[count - 1])
-        path.addLine(to: CGPoint(x: size.width, y: edge))
-        path.closeSubpath()
+        var path = Path()
+        path.move(to: points[0])
+        path.addLine(to: midpoint(points[0], points[1]))
+        for index in 1..<(points.count - 1) {
+            path.addQuadCurve(to: midpoint(points[index], points[index + 1]), control: points[index])
+        }
+        path.addLine(to: points[points.count - 1])
         return path
     }
 }

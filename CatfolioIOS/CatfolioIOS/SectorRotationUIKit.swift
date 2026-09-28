@@ -93,8 +93,9 @@ final class SectorRotationChartView: UIView, UIGestureRecognizerDelegate {
     private(set) var selected: String?
     var onSelection: ((String?) -> Void)?
     var onPrecise: ((SectorRotationSnapshot.Sector) -> Void)?
-    private lazy var lightSurface = RotationVectorSurface(dark: false)
-    private lazy var darkSurface = RotationVectorSurface(dark: true)
+    private var surfaceTask: Task<Void, Never>?
+    private lazy var lightSurface = RotationVectorSurface.shared(dark: false)
+    private lazy var darkSurface = RotationVectorSurface.shared(dark: true)
     private var surface: RotationVectorSurface {
         traitCollection.userInterfaceStyle == .dark ? darkSurface : lightSurface
     }
@@ -133,6 +134,7 @@ final class SectorRotationChartView: UIView, UIGestureRecognizerDelegate {
         feedback.onChange = { [weak self] in self?.updateTouch(at: $0) }
         addGestureRecognizer(feedback)
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: SectorRotationChartView, _: UITraitCollection) in
+            view.prepareSurface()
             view.setNeedsDisplay()
         }
     }
@@ -151,7 +153,21 @@ final class SectorRotationChartView: UIView, UIGestureRecognizerDelegate {
     }
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        if window == nil { clearTouch() }
+        if window == nil {
+            clearTouch()
+            surfaceTask?.cancel()
+            surfaceTask = nil
+        } else { prepareSurface() }
+    }
+
+    private func prepareSurface() {
+        surfaceTask?.cancel()
+        let surface = surface
+        surfaceTask = Task { [weak self] in
+            await surface.prepare()
+            guard !Task.isCancelled else { return }
+            self?.setNeedsDisplay()
+        }
     }
 
     /// Feedback observes touch-down without recognizing a gesture or delaying scrolling.
@@ -437,9 +453,18 @@ final class RotationTouchFeedbackRecognizer: UIGestureRecognizer {
 
 /// Figma's atmosphere is generated once from its ellipse/blur values; every dot
 /// remains a live resolution-independent path, never part of a background PNG.
+@MainActor
 private final class RotationVectorSurface {
-    private let atmosphere: UIImage
-    private let labelGlazes: UIImage
+    private static var cache: [Bool: RotationVectorSurface] = [:]
+    static func shared(dark: Bool) -> RotationVectorSurface {
+        if let existing = cache[dark] { return existing }
+        let surface = RotationVectorSurface(dark: dark)
+        cache[dark] = surface
+        return surface
+    }
+    private var atmosphere: UIImage?
+    private var labelGlazes: UIImage?
+    private var preparation: Task<(UIImage, UIImage), Never>?
     let nodeLight = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [
         UIColor.white.withAlphaComponent(0.55).cgColor,
         UIColor.white.withAlphaComponent(0.06).cgColor,
@@ -450,12 +475,29 @@ private final class RotationVectorSurface {
 
     init(dark: Bool) {
         self.dark = dark
-        atmosphere = Self.makeAtmosphere(dark: dark)
-        labelGlazes = Self.makeAtmosphere(dark: dark, glazesOnly: true)
+    }
+
+    func prepare() async {
+        guard atmosphere == nil else { return }
+        let dark = dark
+        if preparation == nil {
+            preparation = Task.detached(priority: .userInitiated) {
+                (Self.makeAtmosphere(dark: dark), Self.makeAtmosphere(dark: dark, glazesOnly: true))
+            }
+        }
+        guard let preparation else { return }
+        let images = await preparation.value
+        atmosphere = images.0
+        labelGlazes = images.1
+        self.preparation = nil
     }
 
     func draw(in context: CGContext, bounds: CGRect, touch: CGPoint?, lift: CGFloat, reduceMotion: Bool) {
-        atmosphere.draw(in: bounds)
+        if let atmosphere { atmosphere.draw(in: bounds) }
+        else {
+            context.setFillColor((dark ? UIColor(white: 0.06, alpha: 1) : .white).cgColor)
+            context.fill(bounds)
+        }
         let sx = bounds.width/370, sy = bounds.height/246
         let dots = CGMutablePath(), lights = CGMutablePath(), shadows = CGMutablePath()
         for row in 0..<25 {
@@ -492,10 +534,10 @@ private final class RotationVectorSurface {
         context.addPath(lights); context.fillPath()
         context.restoreGState()
         // Figma places these two blurred patches above the dot overlay.
-        labelGlazes.draw(in: bounds)
+        labelGlazes?.draw(in: bounds)
     }
 
-    private static func makeAtmosphere(dark: Bool, glazesOnly: Bool = false) -> UIImage {
+    nonisolated private static func makeAtmosphere(dark: Bool, glazesOnly: Bool = false) -> UIImage {
         // 261:2024 is the white base; 261:2034 is an alpha mask, not a blue fill.
         // Paints: 2026, 2035, 11640, 2036, 2037, 11641; glazes: 11634, 11642.
         let padding: CGFloat = 256

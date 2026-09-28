@@ -109,9 +109,18 @@ final class StockChartsRRGStore: NSObject, WKScriptMessageHandler, WKNavigationD
         self.cacheURL = cacheURL ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("stockcharts-rrg-reference.json")
         super.init()
-        let local = [Bundle.main.url(forResource: "stockcharts_rrg_reference", withExtension: "json"), self.cacheURL]
-            .compactMap { $0 }.compactMap { try? StockChartsRRGCapture.decode(Data(contentsOf: $0)) }
-        capture = local.max { ($0.response.rrgdata.last?.end ?? "") < ($1.response.rrgdata.last?.end ?? "") }
+    }
+
+    func restore() async {
+        guard capture == nil else { return }
+        let urls = [Bundle.main.url(forResource: "stockcharts_rrg_reference", withExtension: "json"), cacheURL]
+            .compactMap { $0 }
+        let local = await Task.detached(priority: .userInitiated) {
+            urls.compactMap { try? StockChartsRRGCapture.decode(Data(contentsOf: $0)) }
+                .max { ($0.response.rrgdata.last?.end ?? "") < ($1.response.rrgdata.last?.end ?? "") }
+        }.value
+        guard !Task.isCancelled, capture == nil else { return }
+        capture = local
     }
 
     func refresh() {

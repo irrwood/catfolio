@@ -31,6 +31,11 @@ private struct HeroDotField: View {
 }
 
 enum ReturnsSourceChartStyle {
+    // Figma income-sources-screen 496:19294.
+    static let incomeBackground = Color(red: 0.235, green: 0.635, blue: 0.988)
+    static let incomeBackgroundEnd = Color(red: 0.663, green: 0.839, blue: 0.992)
+    static let incomeBase = Color(red: 228 / 255, green: 242 / 255, blue: 1)
+    static let incomeFooter = Color(red: 0, green: 128 / 255, blue: 1)
     static let inset: CGFloat = 24
     static let chartHeight: CGFloat = 280
     static let stripHeight: CGFloat = 62
@@ -42,6 +47,21 @@ enum ReturnsSourceChartStyle {
 
     static func secondary(for scheme: ColorScheme) -> Color {
         scheme == .dark ? Color.white.opacity(0.72) : Color.black.opacity(0.55)
+    }
+
+    /// The hero's field paint (Figma), behind the plot.
+    static func field(for scheme: ColorScheme) -> Color {
+        scheme == .dark
+            ? Color(red: 0.360386, green: 0.194594, blue: 0.834078)
+            : Color(red: 238 / 255, green: 248 / 255, blue: 254 / 255)
+    }
+
+    /// A band set back while another is highlighted. The bands are stacked
+    /// as overlapping cumulative areas, so a see-through band would show
+    /// the ones beneath it; each is instead mixed most of the way into the
+    /// field and stays opaque.
+    static func faded(_ color: Color, scheme: ColorScheme) -> Color {
+        color.mix(with: field(for: scheme), by: 0.75)
     }
 }
 
@@ -112,6 +132,7 @@ struct ReturnsSourceChartHero<Header: View, Plot: View, Axis: View>: View {
     let header: Header
     let plot: Plot
     let axis: Axis
+    var isIncome = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -123,7 +144,8 @@ struct ReturnsSourceChartHero<Header: View, Plot: View, Axis: View>: View {
                 .zIndex(1)
             ZStack {
                 // 454pt of colour behind a 280pt plot, blurred at 35pt.
-                plot
+                if !isIncome {
+                    plot
                     .frame(height: ReturnsSourceChartStyle.chartHeight)
                     .scaleEffect(y: 454 / 280, anchor: .bottom)
                     .blur(radius: 35)
@@ -131,6 +153,7 @@ struct ReturnsSourceChartHero<Header: View, Plot: View, Axis: View>: View {
                     .blendMode(colorScheme == .dark ? .plusLighter : .lighten)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
+                }
                 plot.frame(height: ReturnsSourceChartStyle.chartHeight)
             }
             .frame(height: ReturnsSourceChartStyle.chartHeight)
@@ -154,11 +177,19 @@ struct ReturnsSourceChartHero<Header: View, Plot: View, Axis: View>: View {
     /// the chart glow, not a second gradient baked into the background.
     private var heroField: some View {
         ZStack(alignment: .bottom) {
-            (colorScheme == .dark
-                ? Color(red: 0.360386, green: 0.194594, blue: 0.834078)
-                : Color(red: 238 / 255, green: 248 / 255, blue: 254 / 255))
+            (isIncome ? ReturnsSourceChartStyle.incomeBackground : ReturnsSourceChartStyle.field(for: colorScheme))
                 .padding(.top, -320)
-            HeroDotField(color: .black)
+            if isIncome {
+                // The supplied rotated gradient runs vertically over 506pt,
+                // ending at the plot baseline; the range strip keeps its tint.
+                LinearGradient(colors: [ReturnsSourceChartStyle.incomeBackground,
+                                        ReturnsSourceChartStyle.incomeBackgroundEnd],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: 506)
+                    .padding(.bottom, ReturnsSourceChartStyle.stripHeight)
+            }
+            if !isIncome {
+                HeroDotField(color: .black)
                 .mask {
                     LinearGradient(stops: [.init(color: .white, location: 0),
                                            .init(color: .clear, location: 0.7684)],
@@ -170,6 +201,7 @@ struct ReturnsSourceChartHero<Header: View, Plot: View, Axis: View>: View {
                 // the background behind navigation does not dilute the dots.
                 .frame(height: 533)
                 .padding(.bottom, ReturnsSourceChartStyle.stripHeight - 23)
+            }
         }
         .frame(maxWidth: .infinity)
         .allowsHitTesting(false)
@@ -182,6 +214,7 @@ struct ReturnsSourceChartHero<Header: View, Plot: View, Axis: View>: View {
     /// under its tint rather than a flat fill.
     private func rangeStrip<Chart: View>(reflecting chart: Chart) -> some View {
         ChartTimeRangePicker(selection: $range, isOnTintedField: true)
+            .environment(\.colorScheme, isIncome ? .dark : colorScheme)
             .frame(maxWidth: .infinity)
             .frame(height: ReturnsSourceChartStyle.stripHeight)
             .background(alignment: .top) {
@@ -213,13 +246,17 @@ struct HoldingContributionChart: View {
     @Environment(\.locale) private var appLocale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var loading = HoldingHistoryState()
+    @State private var handledRefreshRevision = 0
     @State private var retryRevision = 0
     @State private var range = ChartTimeRange.yearToDate
+    @State private var incomeHeroHeight: CGFloat = 0
     @State private var selectedDate: Date?
     /// Holdings the reader turned off; the next ones by gain take their place.
     @State private var hiddenTickers: Set<String> = []
     @State private var showsPrincipal = false
     @State private var showsOthers = true
+    /// The band a right swipe on its row brought forward (its series id).
+    @State private var highlightedBand: String?
     @State private var preparedCache = HoldingContributionPreparedCache()
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
 
@@ -229,7 +266,8 @@ struct HoldingContributionChart: View {
                                    holdings: model.holdings, hiding: hiddenTickers,
                                    locale: appLocale, language: ContentLanguage.current,
                                    range: range, showsPrincipal: showsPrincipal,
-                                   showsOthers: showsOthers, scheme: colorScheme)
+                                   showsOthers: showsOthers, highlighted: highlightedBand,
+                                   scheme: colorScheme)
         }
 
         VStack(alignment: .leading, spacing: 18) {
@@ -241,16 +279,11 @@ struct HoldingContributionChart: View {
                 // surface below it.
                 let chart = plot(prepared: prepared)
                 ReturnsSourceChartHero(range: $range, header: header(shown), plot: chart,
-                                       axis: axisLabels(top: prepared.top))
-                Group {
-                    legend(stack: prepared.stack, row: shown)
-                    Text(L10n.text("按当前持仓的股数回推每天的市值，所以已卖出的持仓不在图中。收益最多的几只各占一层：按盈利从高到低，直到下一只不到全部盈利的 6%，最多 6 只。其他持仓整体亏损时，亏损从本金层里扣除，本金层会低于本金线。其他收益只包含未单独列出且未隐藏的持仓。轻点下方任意一行可以隐藏或显示；隐藏的收益从图中移除，由下一只补上。顶部组合总额与本金不受隐藏影响。"))
-                        .appText(.micro, weight: .regular)
-                        .foregroundStyle(.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.horizontal, ReturnsSourceChartStyle.inset)
-                .padding(.top, 6)
+                                       axis: axisLabels(top: prepared.top), isIncome: true)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { incomeHeroHeight = $0 }
+                legend(stack: prepared.stack, row: shown)
+                    .padding(.horizontal, ReturnsSourceChartStyle.inset)
+                    .padding(.top, 6)
             } else if let errorMessage = loading.errorMessage {
                 StandardLineChartPlaceholder(title: L10n.text("暂时无法绘制"), message: errorMessage, isLoading: false)
                     .frame(height: 300)
@@ -274,9 +307,25 @@ struct HoldingContributionChart: View {
         }
         // The tinted field runs behind the bar, so the bar brings no surface
         // of its own on this page.
+        .background {
+            GeometryReader { geometry in
+                let start = max(0, incomeHeroHeight - ReturnsSourceChartStyle.stripHeight)
+                VStack(spacing: 0) {
+                    Color.clear.frame(height: start)
+                    LinearGradient(colors: [.black, ReturnsSourceChartStyle.incomeFooter],
+                                   startPoint: .top, endPoint: .bottom)
+                        .frame(height: 402)
+                    ReturnsSourceChartStyle.incomeFooter
+                        .frame(height: max(0, geometry.size.height - start - 402))
+                }
+            }
+        }
+        .foregroundStyle(.white)
         .toolbarBackground(.hidden, for: .navigationBar)
         .task(id: "\(model.portfolioChartRevision)|\(model.holdings.count)|\(refreshRevision)|\(retryRevision)") {
-            await loading.load { cachedOnly in
+            let forceRefresh = refreshRevision != handledRefreshRevision
+            handledRefreshRevision = refreshRevision
+            await loading.load(forceRefresh: forceRefresh) { cachedOnly in
                 if let fetchHistory { return try await fetchHistory(cachedOnly) }
                 #if DEBUG
                 if LaunchArguments.contains("--demo-loss-history") {
@@ -329,11 +378,11 @@ struct HoldingContributionChart: View {
     }
 
     private var heroPrimary: Color {
-        ReturnsSourceChartStyle.primary(for: colorScheme)
+        .white
     }
 
     private var heroSecondary: Color {
-        ReturnsSourceChartStyle.secondary(for: colorScheme)
+        .white
     }
 
     private func plot(prepared: HoldingContributionPreparedCache.Prepared) -> some View {
@@ -372,13 +421,7 @@ struct HoldingContributionChart: View {
     }
 
     /// Stable per band, so turning one off morphs the rest into place.
-    static func seriesID(_ band: HoldingContributionStack.Band) -> String {
-        switch band.kind {
-        case .principal: "band-principal"
-        case .others: "band-others"
-        case .holding: "band-\(band.title)"
-        }
-    }
+    static func seriesID(_ band: HoldingContributionStack.Band) -> String { band.id }
 
     /// The home chart's axis: three faint values down the left of the plot.
     private func axisLabels(top: Double) -> some View {
@@ -391,68 +434,107 @@ struct HoldingContributionChart: View {
             }
         }
         .animation(StandardLineChartTransition.zoom, value: top)
-        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.42) : Color.black.opacity(0.32))
+        .foregroundStyle(Color.white.opacity(0.5))
         .padding(.leading, ReturnsSourceChartStyle.inset)
         .padding(.top, 6)
         .padding(.bottom, 8)
         .allowsHitTesting(false)
     }
 
-    /// Every row turns its band on and off. A holding turned off leaves the
-    /// plot and the next one by gain takes its band; it waits, dimmed, at
-    /// the foot of the list to be turned back on.
+    /// The comparison page's list: tap a row to turn its band on and off,
+    /// swipe right to highlight it, swipe left to hide it. A holding turned
+    /// off leaves the plot and the next one by gain takes its band; it
+    /// waits, dimmed, at the foot of the list to be turned back on.
     private func legend(stack: HoldingContributionStack, row: HoldingContributionStack.Row) -> some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 12) {
             // Top of the stack first, as the eye reads the chart.
-            ForEach(Array(stack.bands.indices.reversed()), id: \.self) { band in
-                let item = stack.bands[band]
+            ForEach(Array(stack.bands.enumerated().reversed()), id: \.element.id) { band, item in
+                let id = Self.seriesID(item)
                 let isOn = isShown(item.kind)
-                Button { toggle(item) } label: {
-                    legendRow(rank: stack.rank(for: item), maximumRank: stack.holdingRanks.count,
-                              swatch: Self.color(for: item.kind, scheme: colorScheme), isOn: isOn,
-                              isOtherGains: item.kind == .others,
-                              title: item.title, subtitle: item.subtitle) {
-                        legendAmount(item.kind, row: row, band: band)
+                let color = Self.incomeDisplayColor(for: item.kind, scheme: colorScheme,
+                                                    isHighlighted: highlightedBand == id,
+                                                    isFaded: highlightedBand != nil && highlightedBand != id,
+                                                    rankFromTop: stack.bands.count - 1 - band)
+                ReturnsSwipeRow(
+                    color: color, isHighlighted: highlightedBand == id, canRemove: isOn,
+                    removeTitle: L10n.text("隐藏此项"), removeIcon: "eye.slash", removeSlidesOut: false,
+                    onHighlight: { highlight(item) }, onRemove: { toggle(item) }
+                ) {
+                    Button { toggle(item) } label: {
+                        ReturnsSourceListRow(rank: stack.rank(for: item), color: color,
+                                             title: item.title, subtitle: item.subtitle, isOn: isOn,
+                                             logo: logoHolding(for: item), isStriped: false, isOnBlueField: true,
+                                             isHighlighted: highlightedBand == id) {
+                            legendAmount(item.kind, row: row, band: band)
+                        }
                     }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
                 .accessibilityAddTraits(isOn ? .isSelected : [])
                 .accessibilityHint(L10n.text("轻点切换显示或隐藏"))
+                .accessibilityAction(named: highlightedBand == id ? L10n.text("取消高亮") : L10n.text("高亮曲线")) {
+                    highlight(item)
+                }
             }
             ForEach(stack.hidden, id: \.ticker) { holding in
-                Button {
-                    withAnimation(.snappy) { _ = hiddenTickers.remove(holding.ticker) }
-                } label: {
-                    legendRow(rank: stack.holdingRanks[holding.ticker], maximumRank: stack.holdingRanks.count,
-                              swatch: .secondary, isOn: false,
-                              title: holding.ticker, subtitle: holding.name) {
-                        Text(L10n.text("已隐藏")).appText(.caption).foregroundStyle(.secondary)
+                ReturnsSwipeRow(
+                    color: .secondary, isHighlighted: false, canRemove: false,
+                    onHighlight: { show(holding.ticker, highlighting: true) }, onRemove: {}
+                ) {
+                    Button { show(holding.ticker, highlighting: false) } label: {
+                        ReturnsSourceListRow(rank: stack.holdingRanks[holding.ticker], color: .secondary,
+                                             title: holding.ticker, subtitle: holding.name, isOn: false,
+                                             logo: logoHolding(ticker: holding.ticker), isOnBlueField: true) {
+                            Text(L10n.text("已隐藏")).appText(.caption).foregroundStyle(.secondary)
+                        }
                     }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .returnsDimmed(highlightedBand != nil, ground: .black)
                 .accessibilityHint(L10n.text("轻点重新显示"))
             }
         }
+        // Rapid hide/restore must not interpolate text and row positions from
+        // an interrupted reorder. The chart owns its separate data animation.
+        .animation(nil, value: hiddenTickers)
     }
 
-    private func legendRow<Trailing: View>(rank: Int?, maximumRank: Int,
-                                           swatch: Color, isOn: Bool, isOtherGains: Bool = false,
-                                           title: String, subtitle: String,
-                                           @ViewBuilder trailing: () -> Trailing) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            ReturnsSourceRankLabel(rank: rank, maximumRank: maximumRank)
-            ReturnsSourceLegendSwatch(color: swatch, isOn: isOn, isOtherGains: isOtherGains)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).appText(.subheading, weight: .semibold).lineLimit(1)
-                Text(subtitle).appText(.caption).foregroundStyle(.secondary).lineLimit(1)
-            }
-            Spacer(minLength: 12)
-            trailing()
+    /// A band's company logo, from its holding's logo symbol where there is
+    /// one; nil for the others and the principal, which are not one company.
+    private func logoHolding(for band: HoldingContributionStack.Band) -> (ticker: String, symbol: String)? {
+        guard case .holding = band.kind else { return nil }
+        return logoHolding(ticker: band.title)
+    }
+
+    private func logoHolding(ticker: String) -> (ticker: String, symbol: String) {
+        let key = ticker.uppercased()
+        let holding = model.holdings.first { $0.ticker.uppercased() == key }
+        return (ticker, holding?.logoSymbol ?? ticker)
+    }
+
+    private func show(_ ticker: String, highlighting: Bool) {
+        withAnimation(.snappy) {
+            _ = hiddenTickers.remove(ticker)
+            if highlighting { highlightedBand = "band-\(ticker)" }
         }
-        .opacity(isOn ? 1 : 0.45)
-        .padding(.vertical, 12)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
+    }
+
+    /// Again on the highlighted band clears it; a band that is off comes
+    /// back on first, since a hidden band has nothing to show.
+    private func highlight(_ band: HoldingContributionStack.Band) {
+        let id = Self.seriesID(band)
+        withAnimation(.smooth(duration: 0.25)) {
+            if highlightedBand == id {
+                highlightedBand = nil
+                return
+            }
+            switch band.kind {
+            case .principal: showsPrincipal = true
+            case .others: showsOthers = true
+            case .holding: break
+            }
+            highlightedBand = id
+        }
     }
 
     private func isShown(_ kind: HoldingContributionStack.Band.Kind) -> Bool {
@@ -465,6 +547,7 @@ struct HoldingContributionChart: View {
 
     private func toggle(_ band: HoldingContributionStack.Band) {
         withAnimation(.snappy) {
+            if isShown(band.kind), highlightedBand == Self.seriesID(band) { highlightedBand = nil }
             switch band.kind {
             case .principal: showsPrincipal.toggle()
             case .others: showsOthers.toggle()
@@ -490,11 +573,37 @@ struct HoldingContributionChart: View {
         } else {
             Text(DisplayFormat.money(amount, signed: true, fractionDigits: 0))
                 .appNumber(.callout)
-                .foregroundStyle(amount >= 0 ? CatfolioTheme.gain(for: colorScheme) : CatfolioTheme.loss(for: colorScheme))
+                .foregroundStyle(.white)
         }
     }
 
-    /// Figma uses saturated plot paints and softer legend swatches.
+    /// Flat blue layers from Figma 439:15498, ordered by contribution rank.
+    static func incomeFillColor(for kind: HoldingContributionStack.Band.Kind, scheme: ColorScheme, rankFromTop: Int? = nil) -> Color {
+        switch kind {
+        case .principal, .others: return ReturnsSourceChartStyle.incomeBase
+        case let .holding(index):
+            // Six distinct shades, darkest at the top; never cycle back to dark.
+            let palette = [Color(red: 0, green: 46 / 255, blue: 88 / 255),
+                           Color(red: 0, green: 107 / 255, blue: 203 / 255),
+                           Color(red: 66 / 255, green: 163 / 255, blue: 251 / 255),
+                           Color(red: 141 / 255, green: 201 / 255, blue: 1),
+                           Color(red: 172 / 255, green: 217 / 255, blue: 1),
+                           Color(red: 200 / 255, green: 230 / 255, blue: 1)]
+            return palette[min(max(0, rankFromTop ?? index), palette.count - 1)]
+        }
+    }
+
+    /// Chart bands and legend swatches share the same paint in every state.
+    static func incomeDisplayColor(for kind: HoldingContributionStack.Band.Kind,
+                                   scheme: ColorScheme, isHighlighted: Bool, isFaded: Bool,
+                                   rankFromTop: Int? = nil) -> Color {
+        let base = incomeFillColor(for: kind, scheme: scheme, rankFromTop: rankFromTop)
+        if isHighlighted { return ReturnsSourceChartStyle.incomeBase }
+        if isFaded { return base.mix(with: ReturnsSourceChartStyle.incomeBackground, by: 0.75) }
+        return base
+    }
+
+    // Loss analysis retains its existing multicolour palette.
     static func fillColor(for kind: HoldingContributionStack.Band.Kind, scheme: ColorScheme) -> Color {
         if case let .holding(index) = kind {
             switch index % 6 {
@@ -507,7 +616,6 @@ struct HoldingContributionChart: View {
         return color(for: kind, scheme: scheme)
     }
 
-    /// Chart gradients are separate from the neutral "other gains" legend key.
     static func fillEndColor(for kind: HoldingContributionStack.Band.Kind) -> Color? {
         switch kind {
         case .others: nil
@@ -580,6 +688,7 @@ final class HoldingContributionPreparedCache {
         let range: ChartTimeRange
         let showsPrincipal: Bool
         let showsOthers: Bool
+        let highlighted: String?
         let scheme: ColorScheme
     }
 
@@ -594,7 +703,7 @@ final class HoldingContributionPreparedCache {
     func prepared(history: HoldingValueHistory, historyRevision: Int,
                   holdings: [Holding], hiding: Set<String>, locale: Locale,
                   language: String, range: ChartTimeRange,
-                  showsPrincipal: Bool, showsOthers: Bool,
+                  showsPrincipal: Bool, showsOthers: Bool, highlighted: String? = nil,
                   scheme: ColorScheme) -> Prepared {
         // Names can change without a history refresh, for example after an
         // account edit. Compare the source fields rather than resolving the
@@ -617,7 +726,7 @@ final class HoldingContributionPreparedCache {
         let stack = cachedStack!
         let nextPlotKey = PlotKey(stackGeneration: stackGeneration, range: range,
                                   showsPrincipal: showsPrincipal, showsOthers: showsOthers,
-                                  scheme: scheme)
+                                  highlighted: highlighted, scheme: scheme)
         if plotKey == nextPlotKey, let cachedPlot { return cachedPlot }
 
         let window = stack.window(for: range)
@@ -648,8 +757,12 @@ final class HoldingContributionPreparedCache {
         var series: [StandardLineChartSeries] = []
         for (position, band) in visible.enumerated().reversed() {
             let kind = stack.bands[band].kind
-            let color = HoldingContributionChart.fillColor(for: kind, scheme: scheme)
             let id = HoldingContributionChart.seriesID(stack.bands[band])
+            let color = HoldingContributionChart.incomeDisplayColor(
+                for: kind, scheme: scheme,
+                isHighlighted: highlighted == id,
+                isFaded: highlighted != nil && highlighted != id,
+                rankFromTop: stack.bands.count - 1 - band)
             series.append(StandardLineChartSeries(
                 id: id,
                 points: window.rows.indices.map { index in
@@ -659,10 +772,11 @@ final class HoldingContributionPreparedCache {
                 },
                 color: color,
                 lineWidth: 0,
-                areaFill: kind == .others ? .white : color,
-                areaFillEndColor: HoldingContributionChart.fillEndColor(for: kind),
+                areaFill: color,
+                cornerRadius: 6,
+                areaFillEndColor: nil,
                 areaBaseline: 0,
-                areaStripeColor: kind == .others ? ReturnsSourceChartStyle.stripeColor : nil,
+                areaStripeColor: nil,
                 areaStripeSpacing: 35.5,
                 areaStripeWidth: 13,
                 latestPointRadius: 0,
@@ -675,8 +789,9 @@ final class HoldingContributionPreparedCache {
                 points: window.rows.map {
                     StandardLineChartPoint(id: "principal|\($0.dateText)", date: $0.date, value: $0.principal)
                 },
-                color: HoldingContributionChart.principalLine,
-                lineWidth: 2.5,
+                color: HoldingContributionChart.principalLine
+                    .opacity(highlighted == nil || highlighted == "band-principal" ? 1 : 0.3),
+                lineWidth: 1.25,
                 latestPointRadius: 0,
                 latestPointUsesGlass: false
             ))
@@ -698,7 +813,7 @@ final class HoldingContributionPreparedCache {
 /// the largest, so the largest is on top. Hidden gains are excluded; portfolio
 /// totals remain available separately for the header.
 struct HoldingContributionStack {
-    struct Band {
+    struct Band: Identifiable {
         enum Kind: Equatable {
             case principal
             case others
@@ -711,6 +826,15 @@ struct HoldingContributionStack {
         let kind: Kind
         let title: String
         let subtitle: String
+
+        /// Identity follows the holding, never its current position or colour.
+        var id: String {
+            switch kind {
+            case .principal: "band-principal"
+            case .others: "band-others"
+            case .holding: "band-\(title)"
+            }
+        }
     }
 
     struct Row {

@@ -30,6 +30,7 @@ struct PortfolioDetailsCard: View {
         self.floatsFilter = floatsFilter
     }
     @AppStorage("portfolio.holdings.mergeETF") private var mergesETF = false
+    @AppStorage("portfolio.holdings.shows52Week") private var shows52Week = false
     @State private var selectedMergedRow: ETFLookThroughRow?
     private var showsMergedHoldings: Bool {
         mergesETF || LaunchArguments.contains("--show-merged-etf") || LaunchArguments.contains("--show-etf")
@@ -51,6 +52,9 @@ struct PortfolioDetailsCard: View {
     @AppStorage("portfolio.holdings.sortField") private var holdingSortFieldRawValue = HoldingSortField.marketValue.rawValue
     @AppStorage("portfolio.holdings.sortAscending") private var holdingSortAscending = false
     @State private var holdingPerformancePeriod: HoldingPerformancePeriod = .holdingPeriod
+    @State private var week52SortRanges: [String: Holding52WeekRange] = [:]
+    @State private var isLoadingWeek52Sort = false
+    @State private var week52SortGeneration = 0
     @State private var heatmapPerformancePeriod: HoldingPerformancePeriod = .today
     @State private var heatmapGroupsBySector = LaunchArguments.all
         .contains("--group-heatmap-by-sector")
@@ -107,6 +111,16 @@ struct PortfolioDetailsCard: View {
         .task(id: "heatmap-constituents-\(loadedETFHoldingsKey)-\(heatmapLooksThroughETF)-\(heatmapPerformancePeriod.rawValue)") {
             guard showsHeatmap, heatmapLooksThroughETF, heatmapPerformancePeriod == .today else { return }
             await loadETFConstituentDailyChanges()
+        }
+        .task(id: week52SortLoadKey) {
+            week52SortGeneration &+= 1
+            let generation = week52SortGeneration
+            guard !week52SortLoadKey.isEmpty else { isLoadingWeek52Sort = false; return }
+            isLoadingWeek52Sort = true
+            defer { if generation == week52SortGeneration { isLoadingWeek52Sort = false } }
+            let ranges = await Holding52WeekRange.load(week52SortRequests)
+            guard !Task.isCancelled, generation == week52SortGeneration else { return }
+            week52SortRanges = ranges
         }
         .appSheet(item: $selectedMergedRow) { row in
             HoldingAmountSourcesPage(ticker: row.ticker, initialRow: row)
@@ -170,6 +184,8 @@ struct PortfolioDetailsCard: View {
                 } label: {
                     Label(L10n.text("ETF 穿透"), systemImage: showsMergedHoldings ? "checkmark" : "square.3.layers.3d")
                 }
+                Divider()
+                Toggle(L10n.text("52 周"), isOn: $shows52Week)
             } label: {
                 // The list's name, then its count with the day in small
                 // type — the title no longer carries the app's name.
@@ -190,6 +206,10 @@ struct PortfolioDetailsCard: View {
             .buttonStyle(.plain)
 
             Spacer()
+            if isLoadingWeek52Sort {
+                ProgressView().controlSize(.small)
+                    .accessibilityLabel(L10n.text("正在读取 52 周范围…"))
+            }
             filterMenu(floating: false)
                 .accessibilityIdentifier("portfolio-inline-filter")
                 .anchorPreference(key: PortfolioFloatingFilterPreference.self, value: .bounds) { anchor in
@@ -245,23 +265,16 @@ struct PortfolioDetailsCard: View {
         return exposures.count
     }
 
-    /// "111  9月25日 / 周四": the count in a light weight, the day small.
+    /// Count, date and weekday share one secondary caption treatment.
     private var headerSubtitle: some View {
         let date = model.localUpdatedAt ?? Date()
         let day = date.formatted(.dateTime.month(.abbreviated).day().locale(appLocale))
         let weekday = date.formatted(.dateTime.weekday(.abbreviated).locale(appLocale))
-        return HStack(alignment: .firstTextBaseline, spacing: 8) {
-            if let tableCount {
-                Text("\(tableCount)")
-                    .font(Typography.number(size: 17, weight: .light))
-                    .monospacedDigit()
-                    .foregroundStyle(CatfolioTheme.primaryText)
-            }
-            Text("\(day) / \(weekday)")
-                .appText(.caption, weight: .medium)
-                .foregroundStyle(.secondary)
-        }
-        .lineLimit(1)
+        let parts = [tableCount.map(String.init), day, weekday].compactMap { $0 }
+        return Text(parts.joined(separator: " · "))
+            .appText(.caption, weight: .medium)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
     }
 
     private var listExposures: [ETFLookThroughRow]? {
@@ -269,10 +282,24 @@ struct PortfolioDetailsCard: View {
         return etfResponse?.rows
     }
 
-    private var listItems: [PortfolioHoldingListItem] {
-        let items = PortfolioHoldingListItem.make(holdings: holdings, exposures: listExposures,
+    private var unsortedListItems: [PortfolioHoldingListItem] {
+        PortfolioHoldingListItem.make(holdings: holdings, exposures: listExposures,
             period: holdingPerformancePeriod, dailyChanges: model.holdingDailyChanges)
-        return PortfolioHoldingListItem.sorted(items, by: holdingSortField, ascending: holdingSortAscending)
+    }
+
+    private var listItems: [PortfolioHoldingListItem] {
+        PortfolioHoldingListItem.sorted(unsortedListItems, by: holdingSortField, ascending: holdingSortAscending,
+            week52Ranges: week52SortRanges)
+    }
+
+    private var week52SortRequests: [Holding52WeekRequest] {
+        unsortedListItems.compactMap { Holding52WeekRequest(item: $0) }.sorted { $0.ticker < $1.ticker }
+    }
+
+    private var week52SortLoadKey: String {
+        guard !showsHeatmap, holdingSortField == .week52Position else { return "" }
+        return "\(model.localUpdatedAt?.timeIntervalSince1970 ?? 0)|"
+            + week52SortRequests.map { "\($0.ticker):\($0.currency)" }.joined(separator: "|")
     }
 
     @ViewBuilder
@@ -287,7 +314,7 @@ struct PortfolioDetailsCard: View {
                 }
             }
         }
-        // Both modes keep the same row, preview, zoom source and open action.
+        // Both modes keep the same row, zoom source and open action.
         // Until the current exposure data is ready, these are the direct holdings.
         LazyVStack(spacing: 4) {
             ForEach(listItems) { item in
@@ -296,10 +323,15 @@ struct PortfolioDetailsCard: View {
                     if let detail { onSelect(detail) }
                     else if case let .exposure(row, _, _, _) = item { selectedMergedRow = row }
                 } label: {
-                    HoldingRow(item: item, performancePeriod: holdingPerformancePeriod)
+                    if shows52Week {
+                        Holding52WeekRow(item: item, performancePeriod: holdingPerformancePeriod,
+                            suppliedRange: holdingSortField == .week52Position ? week52SortRanges[item.ticker.uppercased()] : nil,
+                            loadsRange: holdingSortField != .week52Position)
+                    } else {
+                        HoldingRow(item: item, performancePeriod: holdingPerformancePeriod)
+                    }
                 }
                 .buttonStyle(HoldingPressButtonStyle())
-                .holdingDetailPreview(detail) { if let detail { onSelect(detail) } }
                 .holdingZoomSource(item.ticker, in: detail == nil ? nil : zoomNamespace)
             }
         }
@@ -376,6 +408,7 @@ enum HoldingSortField: String, CaseIterable, Identifiable {
     case marketValue
     case unrealized
     case unrealizedPercent
+    case week52Position
     case name
 
     var id: String { rawValue }
@@ -385,6 +418,7 @@ enum HoldingSortField: String, CaseIterable, Identifiable {
         case .marketValue: L10n.text("市值")
         case .unrealized: L10n.text("盈利")
         case .unrealizedPercent: L10n.text("收益率")
+        case .week52Position: L10n.text("52 周位置")
         case .name: L10n.text("名称")
         }
     }
@@ -394,6 +428,7 @@ enum HoldingSortField: String, CaseIterable, Identifiable {
         case .marketValue: L10n.text("Mkt Cap")
         case .unrealized: L10n.text("P&L")
         case .unrealizedPercent: L10n.text("Return")
+        case .week52Position: L10n.text("52 周位置")
         case .name: L10n.text("Name")
         }
     }
@@ -653,10 +688,13 @@ struct HoldingRow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let item: PortfolioHoldingListItem
     let performancePeriod: HoldingPerformancePeriod
+    let week52: Holding52WeekPrices?
 
-    init(item: PortfolioHoldingListItem, performancePeriod: HoldingPerformancePeriod) {
+    init(item: PortfolioHoldingListItem, performancePeriod: HoldingPerformancePeriod,
+         week52: Holding52WeekPrices? = nil) {
         self.item = item
         self.performancePeriod = performancePeriod
+        self.week52 = week52
     }
 
     init(holding: Holding, performancePeriod: HoldingPerformancePeriod, dailyChangePercent: Double?) {
@@ -666,7 +704,13 @@ struct HoldingRow: View {
 
     @ViewBuilder
     var body: some View {
-        if case let .holding(holding, _) = item {
+        if let week52 {
+            content
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(item.name + "，" + item.ticker)
+                .accessibilityValue(week52Description(week52))
+                .accessibilityHint(L10n.text(item.ticker == "ETF 其他" ? "金额来源" : "打开个股"))
+        } else if case let .holding(holding, _) = item {
             content
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(L10n.text("\(holding.shortName)，\(DisplayFormat.listShares(holding.shares, compact: false, locale: appLocale)) 股 \(holding.ticker)，市值 \(DisplayFormat.money(holding.marketValue))，\(performancePeriod.title)盈亏 \(profitDescription)"))
@@ -684,22 +728,33 @@ struct HoldingRow: View {
             } else {
                 HStack(alignment: .center, spacing: 10) {
                     logo
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(alignment: .center, spacing: 8) {
-                            SecurityDisplayName(name: item.name, scale: .body, weight: .semibold,
-                                                showsClassMarkers: false)
-                                .layoutPriority(1)
-                            Spacer(minLength: 4)
-                            // Keep the existing 1pt optical alignment of the number.
-                            amount.offset(y: -1)
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(alignment: .center, spacing: 8) {
+                                SecurityDisplayName(name: item.name, scale: .body, weight: .semibold,
+                                                    showsClassMarkers: false)
+                                    .layoutPriority(1)
+                                Spacer(minLength: 4)
+                                // Keep the existing 1pt optical alignment of the number.
+                                if let week52 {
+                                    price(week52.current, currency: week52.currency, isCost: false).offset(y: -1)
+                                } else {
+                                    amount.offset(y: -1)
+                                }
+                            }
+                            HStack(alignment: .center, spacing: 5) {
+                                subtitle
+                                Spacer(minLength: 2)
+                                if let week52 {
+                                    price(week52.cost, currency: week52.currency, isCost: true)
+                                } else {
+                                    HoldingPerformanceLabel(performance: item.performance)
+                                }
+                            }
                         }
-                        HStack(alignment: .center, spacing: 5) {
-                            subtitle
-                            Spacer(minLength: 2)
-                            HoldingPerformanceLabel(performance: item.performance)
-                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        if let week52 { Holding52WeekBar(positions: week52.positions) }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -718,7 +773,18 @@ struct HoldingRow: View {
                     SecurityDisplayName(name: item.name, scale: .body, weight: .semibold, singleLine: false)
                 }
             }
-            if case let .holding(holding, _) = item {
+            if let week52 {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(L10n.text("现价") + " " + priceText(week52.current, currency: week52.currency))
+                            .appNumber(.callout, weight: .semibold)
+                        Text(L10n.text("成本价") + " " + priceText(week52.cost, currency: week52.currency))
+                            .appNumber(.footnote, weight: .medium).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    Holding52WeekBar(positions: week52.positions)
+                }
+            } else if case let .holding(holding, _) = item {
                 HoldingMetrics(holding: holding, performance: item.performance, period: performancePeriod,
                                alignment: .leading, compact: false)
             } else {
@@ -772,6 +838,34 @@ struct HoldingRow: View {
     private var profitDescription: String {
         guard let performance = item.performance else { return L10n.text("暂无数据") }
         return "\(DisplayFormat.money(performance.amount, signed: true, fractionDigits: 2)) · \(DisplayFormat.percent(performance.percent))"
+    }
+
+    private func price(_ value: Double?, currency: String?, isCost: Bool) -> some View {
+        Text(priceText(value, currency: currency))
+            .appNumber(isCost ? .footnote : .callout, weight: isCost ? .medium : .semibold)
+            .foregroundStyle(isCost ? Color(red: 142 / 255, green: 142 / 255, blue: 147 / 255) : CatfolioTheme.primaryText)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func priceText(_ value: Double?, currency: String?) -> String {
+        guard let value, let currency else { return "—" }
+        return DisplayFormat.money(value, currency: currency)
+    }
+
+    private func week52Description(_ prices: Holding52WeekPrices) -> String {
+        var parts = [L10n.text("现价") + " " + priceText(prices.current, currency: prices.currency),
+                     L10n.text("成本价") + " " + priceText(prices.cost, currency: prices.currency)]
+        if let range = prices.range {
+            parts.append(L10n.text("52 周范围") + " " + priceText(range.low, currency: range.currency)
+                + " – " + priceText(range.high, currency: range.currency))
+            if let start = range.startPrice {
+                parts.append(L10n.text("期初价") + " " + priceText(start, currency: range.currency))
+            }
+        } else {
+            parts.append(L10n.text("52 周范围暂无数据"))
+        }
+        return parts.joined(separator: "，")
     }
 }
 

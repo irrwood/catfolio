@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// Publish saved prices before refreshing, and never let a cancelled or
+/// Reuse saved prices unless explicitly refreshed, and never let a cancelled or
 /// superseded request replace the active portfolio's chart.
 @MainActor @Observable
 final class HoldingHistoryState {
@@ -10,7 +10,7 @@ final class HoldingHistoryState {
     private(set) var revision = 0
     private var generation = 0
 
-    func load(fetch: (Bool) async throws -> HoldingValueHistory) async {
+    func load(forceRefresh: Bool = false, fetch: (Bool) async throws -> HoldingValueHistory) async {
         generation &+= 1
         let request = generation
         history = nil
@@ -26,6 +26,7 @@ final class HoldingHistoryState {
         if let cached = try? await fetch(true), !Task.isCancelled,
            request == generation, cached.rows.count > 1 {
             publish(cached)
+            if !forceRefresh { return }
         }
         guard !Task.isCancelled, request == generation else { return }
 
@@ -49,4 +50,3 @@ final class HoldingHistoryState {
         }
     }
 }
-

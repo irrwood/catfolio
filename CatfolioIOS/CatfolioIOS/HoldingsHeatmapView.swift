@@ -608,7 +608,6 @@ private struct HoldingsHeatmapRemainderDetail: View {
                         if let holding = item.detailHolding {
                             Button { openHolding(holding) } label: { detailRow(item) }
                                 .buttonStyle(HoldingPressButtonStyle())
-                                .holdingDetailPreview(holding) { openHolding(holding) }
                         } else {
                             detailRow(item)
                         }

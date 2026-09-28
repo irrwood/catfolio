@@ -296,6 +296,7 @@ struct SettingsPage<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     let title: String?
     let subtitle: String?
+    let pageBackground: Color
     /// Room for the floating tab bar on the root settings tab. A pushed page
     /// has no bar over it and passes its own, smaller value.
     var bottomInset: CGFloat = SettingsTemplate.rootTabBottomInset
@@ -310,12 +311,14 @@ struct SettingsPage<Content: View>: View {
         subtitle: String? = nil,
         bottomInset: CGFloat = SettingsTemplate.rootTabBottomInset,
         topInset: CGFloat = 0,
+        pageBackground: Color = SettingsTemplate.pageBackground,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
         self.subtitle = subtitle
         self.bottomInset = bottomInset
         self.topInset = topInset
+        self.pageBackground = pageBackground
         self.content = content()
     }
 
@@ -342,7 +345,7 @@ struct SettingsPage<Content: View>: View {
             .background(NavigationBarScrollAnchor().accessibilityHidden(true))
         }
         .scrollContentBackground(.hidden)
-        .appPageBackground(SettingsTemplate.pageBackground)
+        .appPageBackground(pageBackground)
         // Every settings page has a bar over it — the tab's large title or a
         // pushed page's — so the page container carries the soft edge once.
         .softTopScrollEdge()
@@ -733,6 +736,7 @@ struct SettingsNavigationRow<Destination: View>: View {
     var body: some View {
         NavigationLink {
             destination
+                .toolbarVisibility(.hidden, for: .tabBar)
         } label: {
             SettingsRowContainer {
                 HStack(spacing: SettingsTemplate.iconSpacing) {
@@ -1075,6 +1079,7 @@ struct SettingsSelectionRow<Destination: View>: View {
                 if opensDestination {
                     NavigationLink {
                         destination
+                            .toolbarVisibility(.hidden, for: .tabBar)
                     } label: {
                         HStack(spacing: SettingsTemplate.iconSpacing) {
                             stackedText

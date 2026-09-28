@@ -138,7 +138,7 @@ Glow glowAt(float2 p, float time, float aspect, float bandTop, float2 clearBand)
 ///   above and below it. When bottom <= top there is no band.
 /// - feather:   softness of the band edges, as a fraction of the height
 /// - intensity: overall strength of the glow, 0–1 (0.5 is calm, 1 is vivid)
-[[ stitchable ]] half4 flowingGradient(float2 position,
+static inline __attribute__((always_inline)) half4 flowingGradientImpl(float2 position,
                                        half4 color,
                                        float2 size,
                                        float time,
@@ -230,6 +230,80 @@ Glow glowAt(float2 p, float time, float aspect, float bandTop, float2 clearBand)
     col += n * grain;
 
     return half4(half3(saturate(col)), 1.0h);
+}
+
+// Both entry points inline the shared implementation. Calling another
+// stitchable entry point leaves an unresolved visible function in SwiftUI.
+[[ stitchable ]] half4 flowingGradient(float2 position,
+                                       half4 color,
+                                       float2 size,
+                                       float time,
+                                       half4 baseTop,
+                                       half4 baseBottom,
+                                       half4 haloColor,
+                                       half4 coreColor,
+                                       float grain,
+                                       float glowTop,
+                                       half4 fringeColor,
+                                       float dispersion,
+                                       float2 clearBand,
+                                       float feather,
+                                       float intensity,
+                                       float4 lightShape,
+                                       float blur) {
+    return flowingGradientImpl(position, color, size, time,
+        baseTop, baseBottom, haloColor, coreColor, grain, glowTop,
+        fringeColor, dispersion, clearBand, feather, intensity, lightShape, blur);
+}
+
+/// The bright glow allowed to reach the screen edges. A slow horizontal
+/// bias makes the two sides take unequal turns without mirrored motion.
+/// In night mode, light spills in from outside the card's side edges.
+[[ stitchable ]] half4 softFlowingGradient(float2 position,
+                                           half4 color,
+                                           float2 size,
+                                           float time,
+                                           half4 baseTop,
+                                           half4 baseBottom,
+                                           half4 haloColor,
+                                           half4 coreColor,
+                                           float grain,
+                                           float glowTop,
+                                           half4 fringeColor,
+                                           float dispersion,
+                                           float2 clearBand,
+                                           float feather,
+                                           float intensity,
+                                           float4 lightShape,
+                                           float blur) {
+    if (lightShape.y > lightShape.x) {
+        float2 uv = position / max(size, float2(1.0));
+        float cardY = glowTop > 0.0 ? saturate(glowTop / max(size.y, 1.0)) : 0.60;
+        float leftWidth = 0.23 + 0.025 * sin(time * 0.13);
+        float rightWidth = 0.18 + 0.030 * sin(time * 0.097 + 2.0);
+        float leftY = cardY + 0.12 + 0.045 * sin(time * 0.11);
+        float rightY = cardY + 0.21 + 0.060 * sin(time * 0.083 + 1.8);
+        float2 left = (uv - float2(-0.06, leftY)) / float2(leftWidth, 0.36);
+        float2 right = (uv - float2(1.05, rightY)) / float2(rightWidth, 0.40);
+        float light = (0.62 + 0.10 * sin(time * 0.071 + 0.5)) * exp(-dot(left, left))
+                    + (0.43 + 0.12 * sin(time * 0.093 + 2.4)) * exp(-dot(right, right));
+        // A faint wide spill rounds the card's shoulders without lighting
+        // the chart centre. The two edges never form a mirrored pair.
+        float shoulder = exp(-pow((uv.y - cardY - 0.025) / 0.15, 2.0));
+        light += 0.045 * shoulder * pow(abs(uv.x - 0.5) * 2.0, 2.0);
+        float topMask = smoothstep(max(cardY - 0.36, 0.18), cardY - 0.04, uv.y);
+        float3 tint = mix(float3(haloColor.rgb), float3(coreColor.rgb), 0.32);
+        float3 col = tint * light * topMask * intensity;
+        float n = hash12(position + fract(time * 7.0) * float2(97.0, 131.0)) - 0.5;
+        col += n * grain * saturate(light * 3.0) * topMask;
+        return half4(half3(saturate(col)), 1.0h);
+    }
+    float2 driftingPosition = position;
+    driftingPosition.x += size.x * (0.10 + 0.16 * sin(time * 0.073 + 0.8));
+    half4 result = flowingGradientImpl(driftingPosition, color, size, time,
+        baseTop, baseBottom, haloColor, coreColor, grain, 0.0,
+        fringeColor, dispersion, float2(0.0), feather, intensity, lightShape, blur);
+    return result;
 }
 
 /// Concentric arcs rising from below the screen, each a thin bright rim

@@ -235,6 +235,7 @@ struct TodayDetailView: View {
         .softTopScrollEdge()
         .navigationTitle(L10n.text("今日"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarVisibility(.hidden, for: .tabBar)
     }
 
     private var summary: some View {
@@ -494,6 +495,7 @@ private struct SectorMembersView: View {
         .softTopScrollEdge()
         .navigationTitle(breakdown.displayName)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarVisibility(.hidden, for: .tabBar)
     }
 
     private func percentText(_ fraction: Double) -> String {

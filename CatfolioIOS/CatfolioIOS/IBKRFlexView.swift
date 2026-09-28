@@ -31,6 +31,8 @@ struct IBKRFlexView: View {
 
     let context: AccountConnectorContext
 
+    @State private var showsSetupGuide = false
+    @State private var guideStep = 0
     @State private var token = ""
     @State private var queryID = ""
     @State private var snapshot: IBKRFlexSnapshot?
@@ -78,170 +80,35 @@ struct IBKRFlexView: View {
     var body: some View {
         NavigationStack {
             SettingsPage(bottomInset: 32) {
-                if context.isCreating, snapshot != nil {
-                    SettingsSectionHeader(L10n.text("账户昵称"))
-                    SettingsCard {
-                        AccountNicknameField(nickname: $nickname, edited: $nicknameEdited)
-                            .disabled(isWorking)
-                    }
-                }
-
-                SettingsSectionHeader(L10n.text("Flex 凭证"))
-                SettingsCard {
-                    SettingsFieldRow("Flex Token", text: $token, isSecure: true, isMonospaced: true)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-
-                    SettingsFieldRow("Query ID", text: $queryID, isMonospaced: true)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.numberPad)
-
-                    SettingsRowContainer {
-                        Text(L10n.text("凭证仅存于此 iPhone。"))
-                            .appText(.label, weight: .regular)
-                            .foregroundStyle(SettingsTemplate.secondaryText)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                SettingsFootnote(L10n.text("Query ID 在 Flex Queries 列表的查询名称旁。持仓超过一年时，请将 Period 扩至最早建仓日。"))
-
-                SettingsSectionHeader(L10n.text("连接"))
-                SettingsCard {
-                    if let snapshot {
-                        SettingsButtonRow(
-                            icon: .symbol("arrow.clockwise"),
-                            title: L10n.text("重新读取持仓"),
-                            showsChevron: false
-                        ) {
-                            Task { await testFlex() }
-                        }
-                        .disabled(isWorking)
-
-                        SettingsRowContainer {
-                            GlassPrimaryButton(
-                                title: isWorking
-                                    ? (context.isCreating ? L10n.text("正在创建") : L10n.text("正在同步"))
-                                    : (context.isCreating ? L10n.text("创建 IBKR 账户") : L10n.text("同步 \(snapshot.positions.count) 项到 Catfolio")),
-                                systemImage: "tray.and.arrow.down.fill",
-                                isDisabled: !hasValidNickname,
-                                isBusy: isWorking
-                            ) {
-                                showsSyncConfirmation = true
-                            }
-                        }
-                    } else {
-                        // Saving no longer waits on a report IBKR may take
-                        // minutes to build. The account is created now and
-                        // shows as awaiting its first sync; the credentials
-                        // can be revisited by opening it again.
-                        SettingsRowContainer {
-                            GlassPrimaryButton(
-                                title: context.isCreating ? L10n.text("保存并创建账户") : L10n.text("保存凭证"),
-                                systemImage: "tray.and.arrow.down.fill",
-                                isDisabled: !hasCompleteCredentials || !hasValidNickname,
-                                isBusy: isWorking
-                            ) {
-                                Task { await saveAndClose() }
-                            }
-                        }
-
-                        SettingsButtonRow(
-                            icon: .symbol("arrow.down.circle"),
-                            title: isWorking ? L10n.text("正在读取") : L10n.text("现在就读取持仓"),
-                            showsChevron: false
-                        ) {
-                            Task { await testFlex() }
-                        }
-                        .disabled(isWorking || !hasCompleteCredentials)
-                    }
-
-                    if status.isPresented {
-                        SettingsRowContainer { statusView }
-                    }
-
-                    SettingsButtonRow(
-                        icon: .symbol(didCopyBrief ? "checkmark.circle" : "doc.on.doc"),
-                        title: didCopyBrief ? L10n.text("已复制，去 IBKR 粘贴给它的助手") : L10n.text("复制配置提示词"),
-                        showsChevron: false,
-                        tint: didCopyBrief ? CatfolioTheme.positive : CatfolioTheme.accent
-                    ) {
-                        UIPasteboard.general.string = IBKRFlexQueryBrief.prompt
-                        withAnimation { didCopyBrief = true }
-                        Task {
-                            try? await Task.sleep(for: .seconds(2))
-                            withAnimation { didCopyBrief = false }
-                        }
-                    }
-
-                    settingsLink(
-                        L10n.text("如何创建 Activity Flex Query"),
-                        url: "https://www.ibkrguides.com/clientportal/performanceandstatements/activityflex.htm"
-                    )
-
-                    settingsLink(
-                        L10n.text("如何启用 Flex Web Service 并生成 Token"),
-                        url: "https://www.ibkrguides.com/clientportal/performanceandstatements/flex-web-service.htm"
-                    )
-                }
-
-                if let snapshot {
-                    SettingsSectionHeader(L10n.text("Flex 预览"))
-                    SettingsCard {
-                        SettingsValueRow(title: L10n.text("报表日期"), value: snapshot.reportDate ?? L10n.text("最新"), valueIsNumeric: false)
-                        SettingsValueRow(title: "Open Positions", value: L10n.text("\(snapshot.positions.count) 项"))
-                        SettingsValueRow(title: L10n.text("成交明细"), value: L10n.text("\(snapshot.transactions.count) 笔"))
-
-                        ForEach(snapshot.positions.prefix(10)) { position in
-                            SettingsRowContainer {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: SettingsTemplate.subtitleSpacing) {
-                                        Text(position.symbol)
-                                            .appText(.subheading, weight: .semibold)
-                                        Text(position.name)
-                                            .appText(.label, weight: .regular)
-                                            .foregroundStyle(SettingsTemplate.secondaryText)
-                                            .lineLimit(1)
-                                    }
-                                    Spacer()
-                                    VStack(alignment: .trailing, spacing: SettingsTemplate.subtitleSpacing) {
-                                        Text(DisplayFormat.shares(position.quantity))
-                                            .appNumber(.subheading)
-                                        if let marketValue = position.marketValue {
-                                            Text(DisplayFormat.money(marketValue, currency: position.currency))
-                                                .appNumber(.label, weight: .regular, monospaced: false)
-                                                .foregroundStyle(SettingsTemplate.secondaryText)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if snapshot.positions.count > 10 {
-                        SettingsFootnote(L10n.text("仅显示前 10 项；同步处理全部可导入股票持仓。"))
-                    }
-                }
-
-                if (!token.isEmpty || !queryID.isEmpty) && !context.isCreating {
-                    SettingsCard {
-                        SettingsButtonRow(
-                            icon: .symbol("trash"),
-                            title: L10n.text("移除本机 Flex 凭证"),
-                            showsChevron: false,
-                            role: .destructive
-                        ) {
-                            showsClearConfirmation = true
-                        }
-                    }
+                if context.isCreating && guideStep < 3 {
+                    IBKRAccountGuide(step: guideStep) { guideStep += 1 } skip: { guideStep = 3 }
+                } else {
+                    connectionContent
                 }
             }
             .softTopScrollEdge()
             .navigationTitle(context.isCreating ? L10n.text("新建 IBKR 账户") : "IBKR Flex")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                if context.isCreating && guideStep > 0 && snapshot == nil {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button {
+                            guideStep -= 1
+                        } label: {
+                            Label(L10n.text("上一步"), systemImage: "chevron.left")
+                        }
+                        .disabled(isWorking)
+                    }
+                }
+
                 ToolbarItem(placement: .confirmationAction) {
                     AppModalDoneButton { dismiss() }
                 }
+            }
+            .appSheet(isPresented: $showsSetupGuide) {
+                IBKRGuideHelpView()
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .task { prepareAccount() }
             .onChange(of: token) { _, _ in invalidatePreview() }
@@ -283,6 +150,177 @@ struct IBKRFlexView: View {
             }
         }
         .buttonStyle(SettingsRowButtonStyle())
+    }
+
+    @ViewBuilder
+    private var connectionContent: some View {
+        if context.isCreating {
+            Text(L10n.text("第 \(4) 步，共 4 步"))
+                .appText(.label).foregroundStyle(SettingsTemplate.secondaryText)
+            ProgressView(value: 4, total: 4).tint(CatfolioTheme.accent)
+        }
+        if context.isCreating, snapshot != nil {
+            SettingsSectionHeader(L10n.text("账户昵称"))
+            SettingsCard {
+                AccountNicknameField(nickname: $nickname, edited: $nicknameEdited)
+                    .disabled(isWorking)
+            }
+        }
+
+        IBKRConnectionIntro {
+            showsSetupGuide = true
+        }
+        .disabled(isWorking)
+
+        SettingsSectionHeader(L10n.text("Flex 凭证"))
+        SettingsCard {
+            SettingsFieldRow("Flex Token", text: $token, isSecure: true, isMonospaced: true)
+                .privacySensitive()
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+
+            SettingsFieldRow("Query ID", text: $queryID, isMonospaced: true)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .keyboardType(.numberPad)
+
+            SettingsRowContainer {
+                Text(L10n.text("凭证仅存于此 iPhone。"))
+                    .appText(.label, weight: .regular)
+                    .foregroundStyle(SettingsTemplate.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        SettingsFootnote(L10n.text("Query ID 在 Flex Queries 列表的查询名称旁。持仓超过一年时，请将 Period 扩至最早建仓日。"))
+
+        SettingsSectionHeader(L10n.text("连接"))
+        SettingsCard {
+            if let snapshot {
+                SettingsButtonRow(
+                    icon: .symbol("arrow.clockwise"),
+                    title: L10n.text("重新读取持仓"),
+                    showsChevron: false
+                ) {
+                    Task { await testFlex() }
+                }
+                .disabled(isWorking)
+
+                SettingsRowContainer {
+                    GlassPrimaryButton(
+                        title: isWorking
+                            ? (context.isCreating ? L10n.text("正在创建") : L10n.text("正在同步"))
+                            : (context.isCreating ? L10n.text("创建 IBKR 账户") : L10n.text("同步 \(snapshot.positions.count) 项到 Catfolio")),
+                        systemImage: "tray.and.arrow.down.fill",
+                        isDisabled: !hasValidNickname,
+                        isBusy: isWorking
+                    ) {
+                        showsSyncConfirmation = true
+                    }
+                }
+            } else {
+                // Saving no longer waits on a report IBKR may take
+                // minutes to build. The account is created now and
+                // shows as awaiting its first sync; the credentials
+                // can be revisited by opening it again.
+                SettingsRowContainer {
+                    GlassPrimaryButton(
+                        title: context.isCreating ? L10n.text("保存并创建账户") : L10n.text("保存凭证"),
+                        systemImage: "tray.and.arrow.down.fill",
+                        isDisabled: !hasCompleteCredentials || !hasValidNickname,
+                        isBusy: isWorking
+                    ) {
+                        Task { await saveAndClose() }
+                    }
+                }
+
+                SettingsButtonRow(
+                    icon: .symbol("arrow.down.circle"),
+                    title: isWorking ? L10n.text("正在读取") : L10n.text("现在就读取持仓"),
+                    showsChevron: false
+                ) {
+                    Task { await testFlex() }
+                }
+                .disabled(isWorking || !hasCompleteCredentials)
+            }
+
+            if status.isPresented {
+                SettingsRowContainer { statusView }
+            }
+
+            SettingsButtonRow(
+                icon: .symbol(didCopyBrief ? "checkmark.circle" : "doc.on.doc"),
+                title: didCopyBrief ? L10n.text("已复制，去 IBKR 粘贴给它的助手") : L10n.text("复制配置提示词"),
+                showsChevron: false,
+                tint: didCopyBrief ? CatfolioTheme.positive : CatfolioTheme.accent
+            ) {
+                UIPasteboard.general.string = IBKRFlexQueryBrief.prompt
+                withAnimation { didCopyBrief = true }
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    withAnimation { didCopyBrief = false }
+                }
+            }
+
+            settingsLink(
+                L10n.text("如何创建 Activity Flex Query"),
+                url: "https://www.ibkrguides.com/clientportal/performanceandstatements/activityflex.htm"
+            )
+
+            settingsLink(
+                L10n.text("如何启用 Flex Web Service 并生成 Token"),
+                url: "https://www.ibkrguides.com/clientportal/performanceandstatements/flex-web-service.htm"
+            )
+        }
+
+        if let snapshot {
+            SettingsSectionHeader(L10n.text("Flex 预览"))
+            SettingsCard {
+                SettingsValueRow(title: L10n.text("报表日期"), value: snapshot.reportDate ?? L10n.text("最新"), valueIsNumeric: false)
+                SettingsValueRow(title: "Open Positions", value: L10n.text("\(snapshot.positions.count) 项"))
+                SettingsValueRow(title: L10n.text("成交明细"), value: L10n.text("\(snapshot.transactions.count) 笔"))
+
+                ForEach(snapshot.positions.prefix(10)) { position in
+                    SettingsRowContainer {
+                        HStack {
+                            VStack(alignment: .leading, spacing: SettingsTemplate.subtitleSpacing) {
+                                Text(position.symbol)
+                                    .appText(.subheading, weight: .semibold)
+                                Text(position.name)
+                                    .appText(.label, weight: .regular)
+                                    .foregroundStyle(SettingsTemplate.secondaryText)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: SettingsTemplate.subtitleSpacing) {
+                                Text(DisplayFormat.shares(position.quantity))
+                                    .appNumber(.subheading)
+                                if let marketValue = position.marketValue {
+                                    Text(DisplayFormat.money(marketValue, currency: position.currency))
+                                        .appNumber(.label, weight: .regular, monospaced: false)
+                                        .foregroundStyle(SettingsTemplate.secondaryText)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if snapshot.positions.count > 10 {
+                SettingsFootnote(L10n.text("仅显示前 10 项；同步处理全部可导入股票持仓。"))
+            }
+        }
+
+        if (!token.isEmpty || !queryID.isEmpty) && !context.isCreating {
+            SettingsCard {
+                SettingsButtonRow(
+                    icon: .symbol("trash"),
+                    title: L10n.text("移除本机 Flex 凭证"),
+                    showsChevron: false,
+                    role: .destructive
+                ) {
+                    showsClearConfirmation = true
+                }
+            }
+        }
     }
 
     @ViewBuilder

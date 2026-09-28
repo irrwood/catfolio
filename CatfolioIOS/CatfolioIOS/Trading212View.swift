@@ -7,6 +7,7 @@ struct Trading212View: View {
 
     let context: AccountConnectorContext
 
+    @State private var guideStep: Trading212GuideStep = .prepare
     @State private var environment: Trading212Environment = .live
     @State private var apiKey = ""
     @State private var apiSecret = ""
@@ -34,137 +35,19 @@ struct Trading212View: View {
     var body: some View {
         NavigationStack {
             SettingsPage(bottomInset: 32) {
-                SettingsSectionHeader("Trading 212 API")
-                SettingsCard {
-                    SettingsRowContainer {
-                        Picker(L10n.text("环境"), selection: $environment) {
-                            ForEach(Trading212Environment.allCases) { item in
-                                Text(item.displayName).tag(item)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                    }
+                if context.isCreating {
+                    Trading212GuideProgress(step: guideStep)
                 }
-                SettingsFootnote(L10n.text("请使用只读 Key；凭证仅存于此 iPhone。"))
-
-                if context.isCreating, snapshot != nil {
-                    SettingsSectionHeader(L10n.text("账户昵称"))
-                    SettingsCard {
-                        AccountNicknameField(nickname: $nickname, edited: $nicknameEdited)
-                            .disabled(isWorking)
+                if context.isCreating && guideStep.isTutorial {
+                    Trading212GuideLesson(step: guideStep) {
+                        guideStep = guideStep.nextTutorialStep
+                    } skip: {
+                        guideStep = .credentials
                     }
-                }
-
-                credentialsSection
-
-                SettingsSectionHeader(L10n.text("连接"))
-                SettingsCard {
-                    if let snapshot {
-                        SettingsButtonRow(
-                            icon: .symbol("arrow.clockwise"),
-                            title: L10n.text("重新读取持仓"),
-                            showsChevron: false
-                        ) {
-                            perform(.preview)
-                        }
-                        .disabled(isWorking)
-
-                        SettingsRowContainer {
-                            GlassPrimaryButton(
-                                title: isWorking
-                                    ? (context.isCreating ? L10n.text("正在创建") : L10n.text("正在同步"))
-                                    : (context.isCreating ? L10n.text("创建 Trading 212 账户") : L10n.text("同步 \(snapshot.positions.count) 项到 Catfolio")),
-                                systemImage: "tray.and.arrow.down.fill",
-                                isDisabled: !hasValidNickname,
-                                isBusy: isWorking
-                            ) {
-                                showsSyncConfirmation = true
-                            }
-                        }
-                    } else {
-                        SettingsRowContainer {
-                            GlassPrimaryButton(
-                                title: isWorking ? L10n.text("正在读取") : L10n.text("读取并预览持仓"),
-                                systemImage: "arrow.down.circle",
-                                isBusy: isWorking
-                            ) {
-                                perform(.preview)
-                            }
-                        }
-                    }
-
-                    if status.isPresented {
-                        SettingsRowContainer { statusView }
-                    }
-
-                    Link(destination: URL(string: "https://helpcentre.trading212.com/hc/en-us/articles/14584770928157-Trading-212-API-key")!) {
-                        SettingsRowContainer {
-                            HStack(spacing: SettingsTemplate.iconSpacing) {
-                                SettingsRowLabel(
-                                    icon: .symbol("arrow.up.right.square"),
-                                    title: L10n.text("查看 API Key 设置说明")
-                                )
-                            }
-                        }
-                    }
-                    .buttonStyle(SettingsRowButtonStyle())
-                }
-
-                if let snapshot {
-                    SettingsSectionHeader(L10n.text("持仓预览"))
-                    SettingsCard {
-                        SettingsValueRow(title: L10n.text("账户"), value: L10n.text("\(snapshot.accountCount) 个"))
-                        SettingsValueRow(title: L10n.text("持仓"), value: L10n.text("\(snapshot.positions.count) 项"))
-
-                        ForEach(snapshot.positions.prefix(10)) { position in
-                            SettingsRowContainer {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: SettingsTemplate.subtitleSpacing) {
-                                        HStack(spacing: 6) {
-                                            Text(position.ticker)
-                                                .appText(.subheading, weight: .semibold)
-                                            if snapshot.accountCount > 1 {
-                                                Text(L10n.text("账户 \(position.accountSlot)"))
-                                                    .appText(.label, weight: .medium)
-                                                    .foregroundStyle(SettingsTemplate.secondaryText)
-                                            }
-                                        }
-                                        Text(position.name)
-                                            .appText(.label, weight: .regular)
-                                            .foregroundStyle(SettingsTemplate.secondaryText)
-                                            .lineLimit(1)
-                                    }
-                                    Spacer()
-                                    VStack(alignment: .trailing, spacing: SettingsTemplate.subtitleSpacing) {
-                                        Text(DisplayFormat.shares(position.quantity))
-                                            .appNumber(.subheading)
-                                        if let currentPrice = position.currentPrice {
-                                            Text(DisplayFormat.money(position.quantity * currentPrice, currency: position.currency))
-                                                .appNumber(.label, weight: .regular, monospaced: false)
-                                                .foregroundStyle(SettingsTemplate.secondaryText)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if snapshot.positions.count > 10 {
-                        SettingsFootnote(L10n.text("仅显示前 10 项；保存全部可导入持仓。"))
-                    }
-                }
-
-                if hasCredentials && !context.isCreating {
-                    SettingsCard {
-                        SettingsButtonRow(
-                            icon: .symbol("trash"),
-                            title: L10n.text("移除本机 Trading 212 凭证"),
-                            showsChevron: false,
-                            role: .destructive
-                        ) {
-                            showsClearConfirmation = true
-                        }
-                    }
+                } else if context.isCreating && guideStep == .complete {
+                    completionContent
+                } else {
+                    connectionContent
                 }
             }
             .disabled(isWorking)
@@ -172,6 +55,18 @@ struct Trading212View: View {
             .navigationTitle(context.isCreating ? L10n.text("新建 Trading 212 账户") : "Trading 212")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                if context.isCreating, let previous = guideStep.previous {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button {
+                            if guideStep == .review { invalidatePreview() }
+                            guideStep = previous
+                        } label: {
+                            Label(L10n.text("上一步"), systemImage: "chevron.left")
+                        }
+                        .disabled(isWorking)
+                        .accessibilityIdentifier("account-guide-back")
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     AppModalDoneButton { stopWaiting(); dismiss() }
                 }
@@ -210,8 +105,171 @@ struct Trading212View: View {
     }
 
     @ViewBuilder
+    private var connectionContent: some View {
+        if !context.isCreating || guideStep == .credentials {
+            SettingsSectionHeader("Trading 212 API")
+            SettingsCard {
+                SettingsRowContainer {
+                    Picker(L10n.text("环境"), selection: $environment) {
+                        ForEach(Trading212Environment.allCases) { item in
+                            Text(item.displayName).tag(item)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
+            }
+            SettingsFootnote(L10n.text("请使用只读 Key；凭证仅存于此 iPhone。"))
+        }
+
+        if context.isCreating, snapshot != nil {
+            SettingsSectionHeader(L10n.text("账户昵称"))
+            SettingsCard {
+                AccountNicknameField(nickname: $nickname, edited: $nicknameEdited)
+                    .disabled(isWorking)
+            }
+        }
+
+        if !context.isCreating || guideStep == .credentials {
+            credentialsSection
+        }
+
+        SettingsSectionHeader(L10n.text("连接"))
+        SettingsCard {
+            if let snapshot {
+                SettingsButtonRow(
+                    icon: .symbol("arrow.clockwise"),
+                    title: L10n.text("重新读取持仓"),
+                    showsChevron: false
+                ) {
+                    perform(.preview)
+                }
+                .disabled(isWorking)
+
+                SettingsRowContainer {
+                    GlassPrimaryButton(
+                        title: isWorking
+                            ? (context.isCreating ? L10n.text("正在创建") : L10n.text("正在同步"))
+                            : (context.isCreating ? L10n.text("创建 Trading 212 账户") : L10n.text("同步 \(snapshot.positions.count) 项到 Catfolio")),
+                        systemImage: "tray.and.arrow.down.fill",
+                        isDisabled: !hasValidNickname,
+                        isBusy: isWorking
+                    ) {
+                        showsSyncConfirmation = true
+                    }
+                }
+            } else {
+                SettingsRowContainer {
+                    GlassPrimaryButton(
+                        title: isWorking ? L10n.text("正在读取") : L10n.text("读取并预览持仓"),
+                        systemImage: "arrow.down.circle",
+                        isDisabled: !credentialsReady,
+                        isBusy: isWorking
+                    ) {
+                        perform(.preview)
+                    }
+                }
+            }
+
+            if status.isPresented {
+                SettingsRowContainer { statusView }
+            }
+
+            Link(destination: URL(string: "https://helpcentre.trading212.com/hc/en-us/articles/14584770928157-Trading-212-API-key")!) {
+                SettingsRowContainer {
+                    HStack(spacing: SettingsTemplate.iconSpacing) {
+                        SettingsRowLabel(
+                            icon: .symbol("arrow.up.right.square"),
+                            title: L10n.text("查看 API Key 设置说明")
+                        )
+                    }
+                }
+            }
+            .buttonStyle(SettingsRowButtonStyle())
+        }
+
+        if let snapshot {
+            SettingsSectionHeader(L10n.text("持仓预览"))
+            SettingsCard {
+                SettingsValueRow(title: L10n.text("账户"), value: L10n.text("\(snapshot.accountCount) 个"))
+                SettingsValueRow(title: L10n.text("持仓"), value: L10n.text("\(snapshot.positions.count) 项"))
+
+                ForEach(snapshot.positions.prefix(10)) { position in
+                    SettingsRowContainer {
+                        HStack {
+                            VStack(alignment: .leading, spacing: SettingsTemplate.subtitleSpacing) {
+                                HStack(spacing: 6) {
+                                    Text(position.ticker)
+                                        .appText(.subheading, weight: .semibold)
+                                    if snapshot.accountCount > 1 {
+                                        Text(L10n.text("账户 \(position.accountSlot)"))
+                                            .appText(.label, weight: .medium)
+                                            .foregroundStyle(SettingsTemplate.secondaryText)
+                                    }
+                                }
+                                Text(position.name)
+                                    .appText(.label, weight: .regular)
+                                    .foregroundStyle(SettingsTemplate.secondaryText)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: SettingsTemplate.subtitleSpacing) {
+                                Text(DisplayFormat.shares(position.quantity))
+                                    .appNumber(.subheading)
+                                if let currentPrice = position.currentPrice {
+                                    Text(DisplayFormat.money(position.quantity * currentPrice, currency: position.currency))
+                                        .appNumber(.label, weight: .regular, monospaced: false)
+                                        .foregroundStyle(SettingsTemplate.secondaryText)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if snapshot.positions.count > 10 {
+                SettingsFootnote(L10n.text("仅显示前 10 项；保存全部可导入持仓。"))
+            }
+        }
+
+        if hasCredentials && !context.isCreating {
+            SettingsCard {
+                SettingsButtonRow(
+                    icon: .symbol("trash"),
+                    title: L10n.text("移除本机 Trading 212 凭证"),
+                    showsChevron: false,
+                    role: .destructive
+                ) {
+                    showsClearConfirmation = true
+                }
+            }
+        }
+    }
+
+    private var credentialsReady: Bool {
+        (try? accountCredentials()) != nil
+    }
+
+    private var completionContent: some View {
+        SettingsCard {
+            SettingsRowContainer {
+                VStack(alignment: .leading, spacing: 16) {
+                    Label(L10n.text("账户已添加"), systemImage: "checkmark.circle")
+                        .appText(.subheading, weight: .semibold)
+                    Text(nickname).appText(.subheading)
+                    statusView
+                    GlassPrimaryButton(title: L10n.text("完成")) {
+                        stopWaiting()
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
     private var credentialsSection: some View {
         SettingsSectionHeader(L10n.text("只读凭证"))
+        SettingsFootnote(L10n.text("需要 Portfolio、History 和 Account data 的读取权限。"))
         SettingsCard {
             SettingsFieldRow("API Key", text: $apiKey, isSecure: true, isMonospaced: true)
                 .textInputAutocapitalization(.never)
@@ -333,6 +391,7 @@ struct Trading212View: View {
         }
         snapshot = result
         snapshotRequest = request
+        if context.isCreating { guideStep = .review }
         let historyText = result.transactionHistoryStatus.map { L10n.clauseSeparator + L10n.message($0) } ?? ""
         status = .success(L10n.text("读取成功：\(result.accountCount) 个账户，\(result.positions.count) 项持仓\(historyText)"))
         if !result.hasCompleteTransactionHistory {
@@ -364,6 +423,7 @@ struct Trading212View: View {
         status = .success(context.isCreating
             ? L10n.text("已创建账户，导入 \(result.holdingsCount) 个持仓\(warningText)\(historyText)")
             : L10n.text("已同步 \(result.holdingsCount) 个持仓\(warningText)\(historyText)"))
+        if context.isCreating { guideStep = .complete }
         if !currentSnapshot.hasCompleteTransactionHistory {
             scheduleHistoryRetry(.sync)
         }

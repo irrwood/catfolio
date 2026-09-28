@@ -88,6 +88,7 @@ struct StandardLineChartSeries: Identifiable {
     /// shape: 0 keeps the flat colour, 0.4 mixes 40% white into the bottom
     /// edge. The gradient spans the shape's own bounds, so a band reads as
     /// its pure colour where it starts and pales where it ends.
+    let cornerRadius: CGFloat
     let areaFillWash: Double
     /// Optional design-specified gradient endpoint; other charts retain their wash.
     let areaFillEndColor: Color?
@@ -108,6 +109,7 @@ struct StandardLineChartSeries: Identifiable {
         lineWidth: CGFloat = 2.25,
         dash: [CGFloat] = [],
         areaFill: Color? = nil,
+        cornerRadius: CGFloat = 0,
         areaFillWash: Double = 0,
         areaFillEndColor: Color? = nil,
         areaBaseline: Double? = nil,
@@ -121,6 +123,7 @@ struct StandardLineChartSeries: Identifiable {
         isLoadingPlaceholder: Bool = false
     ) {
         self.id = id
+        self.cornerRadius = max(0, cornerRadius)
         self.points = points.sorted { $0.date < $1.date }
         self.color = color
         self.lineWidth = lineWidth
@@ -816,7 +819,10 @@ struct StandardLineChart: View {
                 let point = item.points[index]
                 return "\(point.id):\(point.value)"
             }
-            return "\(item.id):\(item.points.count):\(first?.id ?? "-"):\(last?.id ?? "-"):\(samples.joined(separator: ","))"
+            // The paint too: a band set back behind a highlighted one keeps
+            // its points and must still redraw.
+            let paint = "\(item.color)|\(item.areaFill.map { "\($0)" } ?? "-")|\(item.lineWidth)"
+            return "\(item.id):\(item.points.count):\(first?.id ?? "-"):\(last?.id ?? "-"):\(paint):\(samples.joined(separator: ","))"
         }
         let markerParts = markers.map { "\($0.id):\($0.point.id):\($0.point.value)" }
         let scalePart = "\(interactionDates.count):\(interactionDates.first?.timeIntervalSinceReferenceDate ?? 0):\(interactionDates.last?.timeIntervalSinceReferenceDate ?? 0):\(domain.lowerBound):\(domain.upperBound)"
@@ -1342,11 +1348,7 @@ struct StandardLineChart: View {
         let points = samples.map { point(in: plot, normalized: $0) }
         guard let first = points.first else { return }
 
-        var path = Path()
-        path.move(to: first)
-        for point in points.dropFirst() {
-            path.addLine(to: point)
-        }
+        let path = StandardLineChartRoundedPath.make(points, radius: incoming.cornerRadius)
 
         if let fill = incoming.areaFill,
            let incomingBaseline = incoming.areaBaseline {
@@ -1627,18 +1629,17 @@ struct StandardLineChart: View {
         plot: CGRect
     ) {
         guard points.count > 1 else { return }
-        var path = Path()
         var locations: [CGPoint] = []
-        for (index, point) in points.enumerated() {
+        for point in points {
             let location = CGPoint(
                 x: x(for: point.date, in: plot, dates: dates),
                 y: y(for: point.value, in: plot, domain: valueDomain)
             )
             locations.append(location)
-            index == 0 ? path.move(to: location) : path.addLine(to: location)
         }
         // The viewport-zoom transition draws through here. Without this, a
         // filled series lost its area for the length of every range change.
+        let path = StandardLineChartRoundedPath.make(locations, radius: series.cornerRadius)
         if let fill = series.areaFill, let baseline = series.areaBaseline,
            let first = locations.first, let last = locations.last {
             let baseY = y(for: baseline, in: plot, domain: valueDomain)
@@ -1662,6 +1663,10 @@ struct StandardLineChart: View {
         color: Color? = nil,
         context: inout GraphicsContext
     ) {
+        // An area-only series (the stacked source bands) has no line. Core
+        // Graphics strokes a zero width as a one-pixel hairline, which left
+        // a thread of each band's colour along the axis wherever it was flat.
+        guard series.lineWidth > 0 else { return }
         var strokeContext = context
         if let endpoint = path.currentPoint, let radius = series.latestPointRadius {
             // Geometry, not the ring's opacity, hides the line head. This
@@ -1873,14 +1878,14 @@ struct StandardLineChart: View {
         plot: CGRect
     ) {
         guard series.points.count > 1 else { return }
-        var area = Path()
-        for (index, point) in series.points.enumerated() {
+        let locations = series.points.map { point in
             let location = CGPoint(
                 x: x(for: point.date, in: plot, dates: dates),
                 y: y(for: point.value, in: plot, domain: valueDomain)
             )
-            index == 0 ? area.move(to: location) : area.addLine(to: location)
+            return location
         }
+        var area = StandardLineChartRoundedPath.make(locations, radius: series.cornerRadius)
         if let first = series.points.first, let last = series.points.last {
             let baselineY = y(for: baseline, in: plot, domain: valueDomain)
             area.addLine(to: CGPoint(x: x(for: last.date, in: plot, dates: dates), y: baselineY))
@@ -2608,5 +2613,34 @@ struct ChartShapeSkeleton: View {
         .chartLoadingShimmer(appearanceID: appearanceID)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+/// Quadratic fillets with a shared horizontal radius keep stacked boundaries
+/// ordered: all layers use the same positive interpolation weights and dates.
+/// Rounding is opt-in and does not change source values or the selection readout.
+enum StandardLineChartRoundedPath {
+    static func make(_ points: [CGPoint], radius: CGFloat) -> Path {
+        var path = Path()
+        guard let first = points.first else { return path }
+        path.move(to: first)
+        guard radius > 0, points.count > 2 else {
+            for point in points.dropFirst() { path.addLine(to: point) }
+            return path
+        }
+        for index in 1..<(points.count - 1) {
+            let previous = points[index - 1], vertex = points[index], next = points[index + 1]
+            let left = vertex.x - previous.x, right = next.x - vertex.x
+            guard left > 0, right > 0 else { path.addLine(to: vertex); continue }
+            let width = min(radius, min(left, right) / 2)
+            let entry = CGPoint(x: vertex.x - width,
+                                y: vertex.y + (previous.y - vertex.y) * width / left)
+            let exit = CGPoint(x: vertex.x + width,
+                               y: vertex.y + (next.y - vertex.y) * width / right)
+            path.addLine(to: entry)
+            path.addQuadCurve(to: exit, control: vertex)
+        }
+        path.addLine(to: points[points.count - 1])
+        return path
     }
 }

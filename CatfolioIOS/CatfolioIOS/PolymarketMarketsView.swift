@@ -409,28 +409,24 @@ actor PolymarketClient {
     private var cacheURL: URL { diskCacheURL }
 }
 
-/// One event: its question, then up to three options. Each option reads as
-/// name and volume on the left, probability and its 24h move on the right.
+/// One event: its question, then up to three options. Each option is a row:
+/// its name with the volume beneath, and on the right the probability, its
+/// 24h move just before it.
 struct PolymarketEventCard: View {
     @Environment(\.locale) private var locale
     let event: PolymarketRelatedEvent
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(event.title)
-                    .appText(.footnote, weight: .semibold)
-                    .foregroundStyle(CatfolioTheme.primaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
-            }
+        VStack(alignment: .leading, spacing: 12) {
+            // The question leads the block; the whole block opens the event.
+            Text(event.title)
+                .appText(.callout, weight: .semibold)
+                .foregroundStyle(CatfolioTheme.primaryText)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 ForEach(event.visibleMarkets) { market in
                     optionRow(market)
                 }
@@ -442,26 +438,25 @@ struct PolymarketEventCard: View {
     }
 
     private func optionRow(_ market: PolymarketRelatedMarket) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(optionTitle(market))
-                        .appText(.footnote)
-                        .foregroundStyle(CatfolioTheme.primaryText)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(L10n.text("\(DisplayFormat.compactMoney(market.totalVolume, currency: "USD")) volume"))
-                        .appText(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(optionTitle(market))
+                    .appText(.footnote, weight: .medium)
+                    .foregroundStyle(CatfolioTheme.primaryText)
+                    .lineLimit(1)
+                Text(L10n.text("\(DisplayFormat.compactMoney(market.totalVolume, currency: "USD")) volume"))
+                    .appText(.caption)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(market.probabilityText(locale: locale))
-                        .appNumber(.subheading, weight: .semibold)
-                        .foregroundStyle(CatfolioTheme.primaryText)
-                    change(market.oneDayPriceChange)
-                }
-                .fixedSize()
+            change(market.oneDayPriceChange)
+
+            Text(market.probabilityText(locale: locale))
+                .appNumber(.callout, weight: .semibold)
+                .foregroundStyle(CatfolioTheme.primaryText)
+                .frame(minWidth: 44, alignment: .trailing)
         }
         .accessibilityElement(children: .combine)
     }
@@ -489,11 +484,6 @@ struct PolymarketEventCard: View {
             .foregroundStyle(color)
             .accessibilityLabel(L10n.text("24h probability change") + " " +
                 change.formatted(.percent.precision(.fractionLength(0...1)).locale(locale)))
-        } else {
-            Text(verbatim: "—")
-                .appNumber(.caption, weight: .medium)
-                .foregroundStyle(.quaternary)
-                .accessibilityLabel(L10n.text("24h probability change unavailable"))
         }
     }
 }

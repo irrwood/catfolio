@@ -12,6 +12,7 @@ struct DCACalculatorView: View {
   @State private var amountDraft = DCASettings()
   @State private var showsSymbols = false
   @State private var showsAIConditions = false
+  @State private var showsStrategyPresets = false
   // Market research does not inherit a portfolio's demo-account mode.
   private var demo: Bool {
     #if DEBUG
@@ -90,6 +91,7 @@ struct DCACalculatorView: View {
       }
     }
     .appSheet(isPresented: $showsMethod) { methodSheet }
+    .appSheet(isPresented: $showsStrategyPresets) { strategyPresetsSheet }
     .appSheet(isPresented: $showsAIConditions) {
       DCAAIConditionsView(plan: store.settings.conditionPlan) {
         store.settings.conditionPlan = $0
@@ -102,6 +104,7 @@ struct DCACalculatorView: View {
       await store.load(demo: demo)
       #if DEBUG
         if LaunchArguments.contains("--show-dca-ai-conditions") { showsAIConditions = true }
+        if LaunchArguments.contains("--show-dca-presets") { showsStrategyPresets = true }
         if LaunchArguments.contains("--show-dca-symbols") { showsSymbols = true }
         if LaunchArguments.contains("--show-dca-amount") { amountDraft = store.settings; showsAmount = true }
       #endif
@@ -110,6 +113,7 @@ struct DCACalculatorView: View {
     .onChange(of: focusedSeries) { _, _ in selectedDate = nil }
     .onChange(of: showsCustomStrategy) { _, visible in
       if !visible && focusedSeries == "strategy" { focusedSeries = nil }
+      if !visible && focusedSeries == "fixedCapital" { focusedSeries = "capital" }
     }
   }
 
@@ -169,6 +173,9 @@ struct DCACalculatorView: View {
         controlLabel(store.settings.frequency.title, systemImage: "repeat")
       }
       .tint(.primary).accessibilityIdentifier("dca.frequency")
+      Button { showsStrategyPresets = true } label: {
+        controlLabel(L10n.text("策略示例"), systemImage: "list.bullet.rectangle")
+      }.buttonStyle(.plain).accessibilityIdentifier("dca.presets")
       Button { showsAIConditions = true } label: {
         controlLabel(L10n.text("策略条件"), systemImage: "text.bubble")
       }.buttonStyle(.plain).accessibilityIdentifier("dca.conditions")
@@ -193,6 +200,43 @@ struct DCACalculatorView: View {
       }
       runButton
     }.padding(.top, 10)
+  }
+  private var strategyPresetsSheet: some View {
+    NavigationStack {
+      Form {
+        Section {
+          ForEach(DCAStrategyPreset.allCases) { preset in
+            Button {
+              store.settings.conditionPlan = preset.plan
+              showsStrategyPresets = false
+            } label: {
+              HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                  Text(preset.title).font(.headline).foregroundStyle(.primary)
+                  Text(preset.detail).font(.subheadline).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                if preset.matches(store.settings.conditionPlan) {
+                  Image(systemName: "checkmark").foregroundStyle(.primary)
+                }
+              }.padding(.vertical, 6)
+            }
+            .accessibilityIdentifier("dca.preset.\(preset.id)")
+          }
+        } footer: {
+          Text(L10n.text("选择后替换当前策略条件，保留标的、基础金额、频率和日期。可继续编辑条件，再运行回测。"))
+        }
+        Section {
+          Text(L10n.text("加投示例需要更多资金；不足 252 个交易日时暂停本期买入。"))
+          Text(L10n.text("当前仅支持单一标的，不模拟多资产配置、再平衡或分红再投资。"))
+        }
+      }
+      .navigationTitle(L10n.text("策略示例"))
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar { ToolbarItem(placement: .confirmationAction) {
+        AppModalDoneButton { showsStrategyPresets = false }
+      } }
+    }
   }
   private var amountSheet: some View {
     NavigationStack {
@@ -363,7 +407,7 @@ struct DCACalculatorView: View {
           Spacer()
           Text(
             money(
-              focusedSeries == "capital"
+              focusedSeries == "fixedCapital" ? point.baselineContributed : focusedSeries == "capital"
                 ? (showsCustomStrategy ? point.contributed : point.baselineContributed)
                 : (showsCustomStrategy && focusedSeries != "fixed" ? point.value : point.baseline))
           ).appNumber(.title, weight: .semibold).lineLimit(1).minimumScaleFactor(0.7)
@@ -383,9 +427,15 @@ struct DCACalculatorView: View {
               "fixed", title: L10n.text("固定定投"), caption: L10n.text("每期买入全部基础金额"),
               color: CatfolioTheme.services, dash: [7, 4])
             chartKey(
-              "capital", title: L10n.text("累计投入"), caption: showsCustomStrategy
+              "capital", title: showsCustomStrategy ? L10n.text("自定义策略累计投入") : L10n.text("累计投入"), caption: showsCustomStrategy
                 ? L10n.text("自定义策略每次实际买入金额的累计值") : L10n.text("累计投入"),
               color: .secondary, dash: [2, 3])
+            if showsCustomStrategy {
+              chartKey(
+                "fixedCapital", title: L10n.text("固定定投累计投入"),
+                caption: L10n.text("固定定投每次实际买入金额的累计值"),
+                color: CatfolioTheme.services.opacity(0.65), dash: [5, 3])
+            }
           }
         }.scrollIndicators(.hidden)
       } else {
@@ -470,13 +520,15 @@ struct DCACalculatorView: View {
     }
     return [
       line("capital", showsCustomStrategy ? \.contributed : \.baselineContributed, color: .secondary, width: 1.5, dash: [2, 3]),
+      line("fixedCapital", \.baselineContributed, color: CatfolioTheme.services.opacity(0.65), width: 1.5, dash: [5, 3]),
       line("strategy", \.value, color: CatfolioPalette.securityPriceLine, width: 2.5),
       line("fixed", \.baseline, color: CatfolioTheme.services, width: 2, dash: [7, 4]),
-    ].filter { (showsCustomStrategy || $0.id != "strategy")
+    ].filter { (showsCustomStrategy || ($0.id != "strategy" && $0.id != "fixedCapital"))
       && (focusedSeries == nil || (!showsCustomStrategy && focusedSeries == "strategy") || $0.id == focusedSeries) }
   }
   private var chartHeadline: String {
     if focusedSeries == "fixed" { return L10n.text("固定定投总资产") }
+    if focusedSeries == "fixedCapital" { return L10n.text("固定定投累计投入") }
     if focusedSeries == "capital" {
       return showsCustomStrategy ? L10n.text("自定义策略累计投入") : L10n.text("累计投入")
     }

@@ -324,9 +324,7 @@ struct TodayContributionCard: View {
     @ViewBuilder
     private var directionPicker: some View {
         if #available(iOS 26.0, *), !reduceTransparency {
-            // Liquid glass, like the card it sits on. Not interactive: the
-            // two buttons inside take the touch, and interactive glass holds
-            // it for its own press effect first.
+            // The button handles touches directly; glass supplies its surface.
             // White-tinted by day: untinted, the glass took the page's
             // cyan through the card and read faintly green on white.
             directionPickerContent
@@ -337,41 +335,23 @@ struct TodayContributionCard: View {
         }
     }
 
-    /// Figma 398:3514 at night: the chosen side is a darker well in the glass,
-    /// not a white capsule, and the arrows are white.
     private var isNight: Bool { colorScheme == .dark }
 
     private var directionPickerContent: some View {
-        HStack(spacing: 2) {
-            directionButton(.gains, systemImage: "arrow.up")
-            directionButton(.losses, systemImage: "arrow.down")
-        }
-        .padding(3)
-        .frame(width: 97, height: 47)
-    }
-
-    private func directionButton(_ value: Direction, systemImage: String) -> some View {
         Button {
-            switchDirection(to: value)
+            switchDirection(to: direction == .gains ? .losses : .gains)
         } label: {
-            Image(systemName: systemImage)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(isNight
-                    ? Color.white.opacity(direction == value ? 1 : 0.55)
-                    : Color(red: 17 / 255, green: 17 / 255, blue: 17 / 255))
-                .frame(width: 44, height: 41)
-                .background {
-                    if direction == value {
-                        Capsule()
-                            .fill(isNight ? Color.black.opacity(0.30) : Color.white)
-                            .shadow(color: Color.black.opacity(0.10), radius: 2, y: 2)
-                    }
-                }
-                .contentShape(Capsule())
+            Image(systemName: direction == .gains ? "arrow.up" : "arrow.down")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(isNight ? Color.white : Color(red: 17 / 255, green: 17 / 255, blue: 17 / 255))
+                .frame(width: 47, height: 47)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(value == .gains ? L10n.text("上涨贡献") : L10n.text("下跌贡献"))
-        .accessibilityAddTraits(direction == value ? .isSelected : [])
+        .accessibilityLabel(L10n.text("切换涨跌贡献"))
+        .accessibilityValue(direction == .gains ? L10n.text("上涨贡献") : L10n.text("下跌贡献"))
+        .accessibilityHint(direction == .gains ? L10n.text("查看下跌贡献") : L10n.text("查看上涨贡献"))
+        .accessibilityIdentifier("home.today.direction-toggle")
     }
 
     private func switchDirection(to value: Direction) {
@@ -523,7 +503,8 @@ struct TodayContributionBar: View {
     }
 
     private var amountText: String {
-        Self.barAmountText(DisplayCurrency.current.fromUSD(abs(amount)))
+        let displayedAmount = DisplayCurrency.current.fromUSD(abs(amount))
+        return DisplayFormat.money(abs(amount), fractionDigits: displayedAmount < 1 ? 2 : 0)
     }
 
     /// Whole units on a bar — "273", not "272.81" — except below one, where
@@ -539,7 +520,7 @@ struct TodayContributionBar: View {
     /// space that could not hold the digits.
     ///
     private var compactAmountText: String {
-        DisplayFormat.compact(DisplayCurrency.current.fromUSD(abs(amount)))
+        DisplayFormat.compactMoney(abs(amount))
     }
 
     private func barAmountLabel(_ text: String) -> some View {
@@ -550,7 +531,7 @@ struct TodayContributionBar: View {
     }
 
     private var amountBubble: some View {
-        Text(Self.barAmountText(DisplayCurrency.current.fromUSD(abs(amount))))
+        Text(amountText)
             .appNumber(.micro, weight: .bold)
             .foregroundStyle(colorScheme == .dark ? Color.white : accent)
             .lineLimit(1)
@@ -818,17 +799,11 @@ struct TodayLoadingHeader: View {
                 .frame(height: 20, alignment: .bottom)
             }
             Spacer(minLength: 8)
-            HStack(spacing: 2) {
-                Image(systemName: "arrow.up")
-                    .frame(width: 44, height: 38)
-                    .background(Color(uiColor: .systemBackground), in: Capsule())
-                Image(systemName: "arrow.down")
-                    .frame(width: 44, height: 38)
-            }
-            .font(.system(size: 14, weight: .medium))
-            .foregroundStyle(Color.primary.opacity(0.10))
-            .padding(3)
-            .background(color, in: Capsule())
+            Image(systemName: "arrow.up")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(Color.primary.opacity(0.10))
+                .frame(width: 47, height: 47)
+                .background(color, in: Circle())
         }
     }
 }

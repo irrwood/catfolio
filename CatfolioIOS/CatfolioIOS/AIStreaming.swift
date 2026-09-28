@@ -8,6 +8,7 @@ import Foundation
 enum AIStreamEvent: Sendable, Equatable {
     case reasoning(String)
     case text(String)
+    case searchStatus(String)
 }
 
 /// Reading the providers' server-sent events, one `data:` line at a time.

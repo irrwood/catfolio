@@ -12,6 +12,10 @@ enum HomeBackgroundStyle: String, CaseIterable, Identifiable {
     case flowing
     /// The same glow in the brighter night palette.
     case flowingBright
+    /// Soft blue daylight, with an asymmetric glow and a black night sky.
+    case flowingSoft
+    /// Bright flowing sky above the clear sky's breathing arch.
+    case flowingSky
     /// Glows above and below the chart, never on it.
     case flowingAroundChart
     /// Glowing arcs behind the content card.
@@ -38,6 +42,8 @@ enum HomeBackgroundStyle: String, CaseIterable, Identifiable {
         switch self {
         case .flowing: L10n.text("动态")
         case .flowingBright: L10n.text("动态 · 明亮")
+        case .flowingSoft: L10n.text("动态 · 柔光")
+        case .flowingSky: L10n.text("动态 · 晴空")
         case .flowingAroundChart: L10n.text("动态 · 避开图表")
         case .rings: L10n.text("光环")
         case .ringsBlurred: L10n.text("光环 · 模糊")
@@ -54,12 +60,13 @@ enum HomeBackgroundStyle: String, CaseIterable, Identifiable {
     var shaderPattern: FlowingGradientBackground.Pattern? {
         switch self {
         case .flowing, .flowingBright, .flowingAroundChart: .glow
+        case .flowingSoft: .softGlow
         case .rings: .rings
         case .ringsBlurred: .waves
         case .ringsBright: .brightRings
         case .mist: .mist
         case .haloWhite, .haloCyan: .bigHalo
-        case .clearSky: .arch
+        case .clearSky, .flowingSky: .arch
         case .classic: nil
         }
     }
@@ -69,6 +76,11 @@ enum HomeBackgroundStyle: String, CaseIterable, Identifiable {
         switch self {
         case .flowing, .flowingAroundChart, .classic: return dark ? .night : .day
         case .flowingBright: return dark ? .nightBright : .day
+        case .flowingSoft: return dark ? .softNight : .softDay
+        case .flowingSky:
+            var palette = dark ? FlowingGradientPalette.clearSkyNight : .clearSkyDay
+            palette.baseTop = (dark ? FlowingGradientPalette.nightBright : .day).baseTop
+            return palette
         case .rings: return dark ? .ringsNight : .ringsDay
         case .ringsBlurred: return dark ? .wavesNight : .ringsDay
         case .ringsBright: return dark ? .brightRingsNight : .brightRingsDay
@@ -95,7 +107,8 @@ struct FlowingGradientPalette {
     var intensity: Double = 1
     /// Where the mist's light sits and how it moves, in height units:
     /// centre y (-0.5 top, 0.5 bottom), sideways sway, width, height.
-    /// Only `mistGlow` reads it.
+    /// `mistGlow` reads all four values; x < y selects the night edge
+    /// lighting in `softFlowingGradient`, anchored to the card by glowTop.
     var lightShape = SIMD4<Float>(-0.30, 0.12, 1.5, 0.46)
     /// Softness of the rings, 0 (thin sharp rims) to 1 (wide glowing
     /// bands). Only `flowingRings` reads it.
@@ -141,6 +154,28 @@ struct FlowingGradientPalette {
         dispersion: 2,
         grain: 0.035
     )
+
+    /// Keep the bright variant's sky, replacing deep blue with pale blue
+    /// and pink with soft white, without chromatic separation.
+    static let softDay: FlowingGradientPalette = {
+        var palette = day
+        palette.baseBottom = Color(white: 0.96)
+        palette.halo = Color(red: 0.76, green: 0.88, blue: 0.96)
+        palette.core = Color(white: 0.97)
+        palette.fringe = Color(white: 0.94)
+        palette.dispersion = 0
+        palette.intensity = 0.65
+        palette.grain = 0.008
+        palette.lightShape = .zero
+        return palette
+    }()
+
+    static let softNight: FlowingGradientPalette = {
+        var palette = nightBright
+        palette.baseTop = .black
+        palette.lightShape = SIMD4<Float>(0.18, 0.44, 0, 0)
+        return palette
+    }()
 
     /// For the mist: its colours are the shader's own ramp, so only grain
     /// and intensity matter. Full strength by day; by night the light is
@@ -269,6 +304,8 @@ struct FlowingGradientBackground: View {
     enum Pattern {
         /// Drifting soft halos (`flowingGradient` in the .metal file).
         case glow
+        /// Unconfined asymmetric glow, with an optional pure-black sky.
+        case softGlow
         /// Concentric glowing arcs lit by the same drifting light (`flowingRings`).
         case rings
         /// One huge soft light from the top (`mistGlow`).
@@ -285,6 +322,7 @@ struct FlowingGradientBackground: View {
         var functionName: String {
             switch self {
             case .glow: "flowingGradient"
+            case .softGlow: "softFlowingGradient"
             case .rings: "flowingRings"
             case .mist: "mistGlow"
             case .bigHalo: "bigHalo"
@@ -388,6 +426,14 @@ struct FlowingGradientBackground: View {
     FlowingGradientBackground(palette: .day)
 }
 
+#Preview("Soft glow, day") {
+    FlowingGradientBackground(pattern: .softGlow, palette: .softDay)
+}
+
+#Preview("Soft glow, night") {
+    FlowingGradientBackground(pattern: .softGlow, palette: .softNight)
+}
+
 #Preview("Avoid chart") {
     // Chart occupies 12%–52% of the height; glow stays above/below it.
     FlowingGradientBackground(palette: .night, clearBand: 0.12...0.52)
@@ -403,6 +449,14 @@ struct FlowingGradientBackground: View {
 
 #Preview("Clear sky") {
     FlowingGradientBackground(pattern: .arch, palette: .clearSkyDay)
+}
+
+#Preview("Flowing sky, day") {
+    FlowingGradientBackground(pattern: .arch, palette: HomeBackgroundStyle.flowingSky.palette(for: .light))
+}
+
+#Preview("Flowing sky, night") {
+    FlowingGradientBackground(pattern: .arch, palette: HomeBackgroundStyle.flowingSky.palette(for: .dark))
 }
 
 #Preview("Mist") {

@@ -81,7 +81,7 @@ final class IBKRFirstSync {
         do {
             let fetched = try await IBKRFlexClient().fetchOpenPositions(
                 credentials: credentials,
-                onProgress: { seconds in
+                onProgress: { [weak self] seconds in
                     Task { @MainActor [weak self] in
                         guard let self, case .waiting = self.phase else { return }
                         self.phase = .waiting(seconds: seconds)

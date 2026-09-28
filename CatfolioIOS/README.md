@@ -23,6 +23,10 @@
 
 - 支持 iPhone 通过 SnapTrade Personal API Key 直连：券商授权、单账户持仓预览与确认同步，凭证只存本机 Keychain。首版不导入现金或交易流水。[配置与覆盖范围](../docs/ios-snaptrade.md)。
 
+### Robinhood MCP（实验性）
+
+设置 → 新建账户 → Robinhood。使用设备端 PKCE 和 Keychain，桌面授权后将回调链接粘贴回 App。可选择账户、预览股票/ETF 持仓后创建独立账户，并从账户详情再次同步。提供报价、Level 2、期权及组合的只读查询；有效美股报价优先用于持仓刷新，其他标的保留原有行情回退。尚待真实账号联调，未替换 FMP 财务和历史接口。[接入状态与限制](../docs/robinhood-mcp-integration.md)。
+
 ### 汇率影响管线
 
 1. 先保留券商原始值：Trading 212 返回的 FX P/L 会作为券商口径展示。

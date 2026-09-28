@@ -27,11 +27,10 @@ struct HoldingDetailView: View {
     let holding: Holding
     let onClose: () -> Void
     var confirmsOpen = false
-    var isPreview = false
 
     var body: some View {
         HoldingDetailContentView(holding: holding, onClose: onClose, confirmsOpen: confirmsOpen,
-            isPreview: isPreview, cachedContent: model.cachedHoldingDetail(for: holding))
+            cachedContent: model.cachedHoldingDetail(for: holding))
             .id(model.portfolioSource)
     }
 }
@@ -47,7 +46,6 @@ struct HoldingDetailContentView: View {
     /// Set only where the presenter has no state of its own to key the open
     /// click to — a `NavigationLink` push. Sheet presenters click at the tap.
     var confirmsOpen = false
-    var isPreview = false
     let cachedContent: HoldingDetailCachedContent
     @State private var hasConfirmedOpen = false
 
@@ -97,11 +95,6 @@ struct HoldingDetailContentView: View {
 
     private var showsPosition: Bool {
         hasSelectedDetailAccounts && hasPosition
-    }
-
-    /// A preview ends at the price chart.
-    private var showsLowerSections: Bool {
-        !isPreview || showsVolumeFocusedPreview
     }
 
     private var showsInitialLoadingPlaceholder: Bool {
@@ -162,79 +155,72 @@ struct HoldingDetailContentView: View {
                         }
                     }
 
-                    // Lightweight placeholders exist from the first sheet frame.
-                    // Mount the expensive cards once native presentation settles;
-                    // each card then keeps its own loading/error/cache state.
-                    if showsLowerSections {
-                        VStack(spacing: 0) {
-                            // A plain stack: built once when the page lands. Lazily,
-                            // the options wall was created as it scrolled in and
-                            // the volume chart torn down as it scrolled out, and
-                            // each was a hitch under the reader's finger.
-                            VStack(spacing: HoldingDetailCardStyle.spacing) {
-                                if let profile {
-                                    VolumePriceChart(
-                                        profile: profile,
-                                        holding: displayedHolding,
-                                        showsHoldingCost: showsPosition
+                    VStack(spacing: 0) {
+                        // A plain stack: built once when the page lands. Lazily,
+                        // the options wall was created as it scrolled in and
+                        // the volume chart torn down as it scrolled out, and
+                        // each was a hitch under the reader's finger.
+                        VStack(spacing: HoldingDetailCardStyle.spacing) {
+                            if let profile {
+                                VolumePriceChart(
+                                    profile: profile,
+                                    holding: displayedHolding,
+                                    showsHoldingCost: showsPosition
+                                )
+                                .onAppear { ChartAppearanceHistory.record("volume-profile|\(holding.ticker)") }
+
+                                if let high = profile.fiftyTwoWeekHigh,
+                                   let low = profile.fiftyTwoWeekLow,
+                                   high > low {
+                                    FiftyTwoWeekRange(
+                                        low: low,
+                                        high: high,
+                                        current: priceHistory?.latestAvailablePrice ?? displayedHolding.quotePrice,
+                                        periodStart: profile.fiftyTwoWeekStartPrice,
+                                        currency: profile.currency
                                     )
-                                    .onAppear { ChartAppearanceHistory.record("volume-profile|\(holding.ticker)") }
-
-                                    if let high = profile.fiftyTwoWeekHigh,
-                                       let low = profile.fiftyTwoWeekLow,
-                                       high > low {
-                                        FiftyTwoWeekRange(
-                                            low: low,
-                                            high: high,
-                                            current: priceHistory?.latestAvailablePrice ?? displayedHolding.quotePrice,
-                                            periodStart: profile.fiftyTwoWeekStartPrice,
-                                            currency: profile.currency
-                                        )
-                                    }
-                                } else if let errorMessage {
-                                    HoldingDetailSectionCard(title: L10n.text("Volume Profile")) {
-                                        StatusNotice(text: errorMessage, kind: .info)
-                                    }
-                                } else {
-                                    HoldingVolumeProfileLoadingPlaceholder(ticker: holding.ticker)
                                 }
-
-                                // Left out for a security with no options: one
-                                // the panel cannot read, or whose chain lists
-                                // no expiry at all.
-                                if OptionsOIView.supports(symbol: holding.ticker, currency: holding.quoteCurrency),
-                                   !cachedContent.optionsSnapshots.values.contains(where: { $0.listsOptions == false }) {
-                                    OptionsOIView(symbol: holding.ticker, currency: holding.quoteCurrency,
-                                        price: priceHistory?.latestAvailablePrice ?? holding.quotePrice,
-                                        costUSD: showsPosition ? VolumeProfileInterpretation.convertedPrice(
-                                            displayedHolding.averageCost, from: displayedHolding.costCurrency, to: "USD",
-                                            usdRate: LocalPortfolioEngine.usdRate(for:)) : nil,
-                                        refreshRevision: marketDataRevision,
-                                        initialSnapshots: cachedContent.optionsSnapshots,
-                                        onSnapshot: { days, snapshot in cachedContent.optionsSnapshots[days] = snapshot })
+                            } else if let errorMessage {
+                                HoldingDetailSectionCard(title: L10n.text("Volume Profile")) {
+                                    StatusNotice(text: errorMessage, kind: .info)
                                 }
-
-                                if showsPosition {
-                                    HoldingPositionDetails(holding: displayedHolding, realisedProfit: realisedProfit)
-                                }
-                                if (holding.shares > 0 || holding.marketValue > 0),
-                                   HoldingSecurityKind.classify(holding) != .fund {
-                                    HoldingAmountSourcesCard(ticker: holding.ticker)
-                                }
+                            } else {
+                                HoldingVolumeProfileLoadingPlaceholder(ticker: holding.ticker)
                             }
-                            // One 16pt page margin below the price chart, the same as
-                            // the research cards; only the header chart keeps its own.
-                            .padding(.horizontal, HoldingDetailCardStyle.pageInset)
-                            .padding(.top, showsVolumeFocusedPreview ? 28 : 24)
 
-                            HoldingResearchSection(holding: holding,
-                                price: priceHistory?.latestAvailablePrice ?? holding.quotePrice,
-                                cachedContent: cachedContent)
-                            .id("\(holding.ticker)|\(appLocale.identifier)")
-                            .padding(.bottom, 72)
+                            // Left out for a security with no options: one
+                            // the panel cannot read, or whose chain lists
+                            // no expiry at all.
+                            if OptionsOIView.supports(symbol: holding.ticker, currency: holding.quoteCurrency),
+                               !cachedContent.optionsSnapshots.values.contains(where: { $0.listsOptions == false }) {
+                                OptionsOIView(symbol: holding.ticker, currency: holding.quoteCurrency,
+                                    price: priceHistory?.latestAvailablePrice ?? holding.quotePrice,
+                                    costUSD: showsPosition ? VolumeProfileInterpretation.convertedPrice(
+                                        displayedHolding.averageCost, from: displayedHolding.costCurrency, to: "USD",
+                                        usdRate: LocalPortfolioEngine.usdRate(for:)) : nil,
+                                    refreshRevision: marketDataRevision,
+                                    initialSnapshots: cachedContent.optionsSnapshots,
+                                    onSnapshot: { days, snapshot in cachedContent.optionsSnapshots[days] = snapshot })
+                            }
+
+                            if showsPosition {
+                                HoldingPositionDetails(holding: displayedHolding, realisedProfit: realisedProfit)
+                            }
+                            if (holding.shares > 0 || holding.marketValue > 0),
+                               HoldingSecurityKind.classify(holding) != .fund {
+                                HoldingAmountSourcesCard(ticker: holding.ticker)
+                            }
                         }
-                    } else {
-                        HoldingDetailLowerLoadingPlaceholder(ticker: holding.ticker, showsPosition: showsPosition)
+                        // One 16pt page margin below the price chart, the same as
+                        // the research cards; only the header chart keeps its own.
+                        .padding(.horizontal, HoldingDetailCardStyle.pageInset)
+                        .padding(.top, showsVolumeFocusedPreview ? 28 : 24)
+
+                        HoldingResearchSection(holding: holding,
+                            price: priceHistory?.latestAvailablePrice ?? holding.quotePrice,
+                            cachedContent: cachedContent)
+                        .id("\(holding.ticker)|\(appLocale.identifier)")
+                        .padding(.bottom, 72)
                     }
                     }
                 }
@@ -247,7 +233,7 @@ struct HoldingDetailContentView: View {
             .accessibilityIdentifier("holding-detail-scroll")
             // A long press on a card's title reads that card aloud, so to
             // speak, in the same paper as "今天有什么动静？".
-            .environment(\.securityCardInsight, isPreview ? nil : SecurityCardInsightAction { title, facts, source in
+            .environment(\.securityCardInsight, SecurityCardInsightAction { title, facts, source in
                 let isFund = HoldingSecurityKind.classify(holding) == .fund
                 let context = SecurityCardInsightContext(
                     ticker: holding.ticker,
@@ -268,11 +254,9 @@ struct HoldingDetailContentView: View {
                                        sourceFrame: request.sourceFrame)
             }
             .overlay(alignment: .topTrailing) {
-                if !isPreview {
-                    HoldingDetailCloseButton(action: onClose)
-                        .padding(.horizontal, HoldingDetailHeader.inset)
-                        .padding(.top, HoldingDetailHeader.topInset)
-                }
+                HoldingDetailCloseButton(action: onClose)
+                    .padding(.horizontal, HoldingDetailHeader.inset)
+                    .padding(.top, HoldingDetailHeader.topInset)
             }
             // Transparent: the ground is the presentation's, so the one
             // background there is is the one the system rounds.
@@ -831,7 +815,7 @@ struct HoldingDetailLoadingPlaceholder: View {
                 StandardLineChartSkeleton(
                     leadingLineOverflow: 30,
                     trailingEndpointInset: 9,
-                    lineWidths: [2.5]
+                    lineWidths: [2]
                 )
                     .frame(height: SecurityPriceChartState.plotHeight)
 

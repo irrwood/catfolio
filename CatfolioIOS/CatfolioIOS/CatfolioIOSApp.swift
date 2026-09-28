@@ -41,6 +41,7 @@ struct CatfolioIOSApp: App {
 
     private var appContent: some View {
             RootTabView()
+                .modifier(ServiceAPIOnboardingPresenter())
                 .fontDesign(.rounded)
                 .task { ReferenceCatalogs.warm() }
                 .task {

@@ -1,0 +1,24 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192"><rect width="192" height="192" fill="#006548" /><svg version="1.1" id="Layer_1" x="44.0395" y="43.5733" viewBox="-2.46537 -2.46731 119.968 120.913" xml:space="preserve" enable-background="new 0 0 114.4 114.4" width="104.0389" height="104.8581">
+<defs><mask id="catfolio-manual-erase" maskUnits="userSpaceOnUse" x="0" y="0" width="114.4" height="114.4"><rect x="0" y="0" width="114.4" height="114.4" fill="#FFFFFF" /><rect x="110.22779" y="4.4293665" width="4.1722125" height="8.6808787" fill="#000000" /><rect x="0" y="5.8657953" width="2.7709029" height="8.8270138" fill="#000000" /><rect x="0" y="95.175871" width="3.1628622" height="6.6938943" fill="#000000" /><rect x="108.33709" y="97.922985" width="6.0629063" height="4.8768345" fill="#000000" /></mask></defs><g mask="url(#catfolio-manual-erase)"><g>
+	<circle cx="57.5" cy="57.5" r="55.5" fill="#FFFFFF" />
+</g>
+<g>
+	<circle cx="57.5" cy="58.5" r="55.5" fill="#FFFFFF" />
+</g>
+<g>
+	<ellipse cx="57.5" cy="58" rx="55.5" ry="55" fill="#FFFFFF" />
+</g>
+<g>
+	<path d="M52.2,76.3L10.3,34.4C8.2,38.7,6.7,43.2,5.8,48l46.4,46.4V76.3" fill="#006548" />
+	<path d="M52.2,42.3L25.8,15.9c-3.5,2.6-6.6,5.7-9.3,9l35.7,35.7V42.3" fill="#006548" />
+	<path d="M52.2,5.5C46.3,6.1,40.7,7.6,35.5,10l16.6,16.6V5.5" fill="#006548" />
+	<path d="M5.1,62.9c2.3,25,22.1,44.9,47.1,47.4V110L5.1,62.9" fill="#006548" />
+</g>
+<g>
+	<path d="M79.7,10.1c-5.1-2.4-10.7-3.9-16.5-4.6v21.1L79.7,10.1" fill="#76BC21" />
+	<path d="M63.2,110.3c24.7-2.6,44.4-22.4,46.8-47.2l-46.8,46.8V110.3" fill="#76BC21" />
+	<path d="M63.2,94.3l46.2-46.2c-0.9-4.8-2.4-9.3-4.5-13.6L63.2,76.2V94.3" fill="#76BC21" />
+	<path d="M63.2,60.6L98.8,25c-2.7-3.4-5.8-6.4-9.3-9.1L63.2,42.2V60.6" fill="#76BC21" />
+</g>
+</g></svg></svg>

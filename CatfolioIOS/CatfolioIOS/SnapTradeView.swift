@@ -131,7 +131,7 @@ struct SnapTradeView: View {
                 }
                 .disabled(busy)
             }
-            .navigationTitle("SnapTrade")
+            .navigationTitle(L10n.text("链接 2000+交易所"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

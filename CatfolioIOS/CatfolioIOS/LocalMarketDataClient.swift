@@ -245,10 +245,14 @@ struct LocalMarketDataClient {
     /// preserving their independent quantities and costs.
     func latestQuotes(for positions: [LocalPositionRecord], forceRefresh: Bool = false) async -> [String: ObservedMarketQuote] {
         guard !positions.isEmpty else { return [:] }
+        let robinhoodGeneration = await RobinhoodMCPClient.shared.connectionGeneration()
+        let robinhoodSymbols = positions.filter { $0.quoteCurrency.uppercased() == "USD" }
+            .map { Self.yahooSymbol(ticker: $0.ticker, currency: $0.quoteCurrency) }
+        let robinhood = await RobinhoodMCPClient.shared.quotes(symbols: robinhoodSymbols)
         let symbols = positions.map {
             Self.yahooSymbol(ticker: $0.ticker, currency: $0.quoteCurrency)
-        }.uniqued()
-        let rawPrices = await withTaskGroup(of: (String, ObservedMarketQuote?).self) { group in
+        }.uniqued().filter { robinhood[$0] == nil }
+        var rawPrices = await withTaskGroup(of: (String, ObservedMarketQuote?).self) { group in
             var iterator = symbols.makeIterator()
             let concurrencyLimit = min(8, symbols.count)
             for _ in 0..<concurrencyLimit {
@@ -266,6 +270,14 @@ struct LocalMarketDataClient {
                 }
             }
             return result
+        }
+
+        // A disconnect/reconnect while another provider is pending invalidates
+        // the previous user's in-flight quote batch.
+        if await RobinhoodMCPClient.shared.connectionGeneration() == robinhoodGeneration {
+            for (symbol, quote) in robinhood {
+                rawPrices[symbol] = ObservedMarketQuote(price: quote.price, observedAt: quote.observedAt)
+            }
         }
 
         return positions.reduce(into: [String: ObservedMarketQuote]()) { result, position in
@@ -630,19 +642,35 @@ struct LocalMarketDataClient {
         cachedOnly: Bool = false
     ) async throws -> VolumeProfile {
         let end = DayDateFormatter.shared.string(from: Date())
+        return try await withVolumeBars(ticker: ticker, currency: currency,
+            forceRefresh: forceRefresh, cachedOnly: cachedOnly) { bars in
+            try Self.makeVolumeProfile(bars: bars, ticker: ticker, currency: currency,
+                referencePrice: referencePrice, fallbackDate: end)
+        }
+    }
+
+    func fiftyTwoWeekRange(ticker: String, currency: String) async throws -> Holding52WeekRange {
+        let scale = Self.priceScale(ticker: ticker, currency: currency,
+            referencePrice: nil, marketPrice: nil)
+        return try await withVolumeBars(ticker: ticker, currency: currency) { bars in
+            guard let range = Holding52WeekRange.make(bars: bars, currency: currency, scale: scale) else {
+                throw LocalServiceError.noMarketData
+            }
+            return range
+        }
+    }
+
+    private func withVolumeBars<Value>(ticker: String, currency: String,
+                                      forceRefresh: Bool = false, cachedOnly: Bool = false,
+                                      transform: ([MarketDailyBar]) throws -> Value) async throws -> Value {
+        let end = DayDateFormatter.shared.string(from: Date())
         let start = DayDateFormatter.shared.string(
             from: Calendar.current.date(byAdding: .day, value: -370, to: Date()) ?? Date()
         )
         let marketSymbol = Self.yahooSymbol(ticker: ticker, currency: currency)
         let cached = await LocalVolumeBarCache.shared.lookup(symbol: marketSymbol)
         if let cached, cachedOnly || (!forceRefresh && cached.isFresh) {
-            return try Self.makeVolumeProfile(
-                bars: cached.bars,
-                ticker: ticker,
-                currency: currency,
-                referencePrice: referencePrice,
-                fallbackDate: end
-            )
+            return try transform(cached.bars)
         }
 
         guard !cachedOnly else { throw LocalServiceError.noMarketData }
@@ -653,13 +681,7 @@ struct LocalMarketDataClient {
             do {
                 let bars = try await massiveHistoricalBars(symbol: marketSymbol, from: start, to: end, key: key)
                 await LocalVolumeBarCache.shared.save(symbol: marketSymbol, bars: bars)
-                return try Self.makeVolumeProfile(
-                    bars: bars,
-                    ticker: ticker,
-                    currency: currency,
-                    referencePrice: referencePrice,
-                    fallbackDate: end
-                )
+                return try transform(bars)
             } catch {
                 latestError = error
             }
@@ -668,13 +690,7 @@ struct LocalMarketDataClient {
         do {
             let bars = try await yahooHistoricalBars(symbol: marketSymbol, from: start, to: end)
             await LocalVolumeBarCache.shared.save(symbol: marketSymbol, bars: bars)
-            return try Self.makeVolumeProfile(
-                bars: bars,
-                ticker: ticker,
-                currency: currency,
-                referencePrice: referencePrice,
-                fallbackDate: end
-            )
+            return try transform(bars)
         } catch {
             latestError = error
         }
@@ -684,26 +700,14 @@ struct LocalMarketDataClient {
             do {
                 let bars = try await fmpHistoricalBars(ticker: ticker, from: start, to: end, key: key)
                 await LocalVolumeBarCache.shared.save(symbol: marketSymbol, bars: bars)
-                return try Self.makeVolumeProfile(
-                    bars: bars,
-                    ticker: ticker,
-                    currency: currency,
-                    referencePrice: referencePrice,
-                    fallbackDate: end
-                )
+                return try transform(bars)
             } catch {
                 latestError = error
             }
         }
 
         if let cached {
-            return try Self.makeVolumeProfile(
-                bars: cached.bars,
-                ticker: ticker,
-                currency: currency,
-                referencePrice: referencePrice,
-                fallbackDate: end
-            )
+            return try transform(cached.bars)
         }
         throw latestError ?? LocalServiceError.noMarketData
     }

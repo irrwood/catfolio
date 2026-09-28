@@ -114,7 +114,10 @@ actor SectorRotationStore {
     private let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("sector-rotation-v2", isDirectory: true)
 
+    private var localSnapshots: [SectorRotationSnapshot]?
+
     func local() -> [SectorRotationSnapshot] {
+        if let localSnapshots { return localSnapshots }
         var snapshots: [SectorRotationSnapshot] = []
         if let bundle = Bundle.main.url(forResource: "sector_rotation_history", withExtension: "json"),
            let data = try? Data(contentsOf: bundle),
@@ -132,7 +135,9 @@ actor SectorRotationStore {
         }
         var unique: [String: SectorRotationSnapshot] = [:]
         for snapshot in snapshots { unique[snapshot.asOf] = snapshot }
-        return unique.values.sorted { $0.asOf < $1.asOf }
+        let result = unique.values.sorted { $0.asOf < $1.asOf }
+        localSnapshots = result
+        return result
     }
 
     func fetch(endpoint: String, date: String? = nil) async throws -> SectorRotationSnapshot {
@@ -159,6 +164,8 @@ actor SectorRotationStore {
         }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try data.write(to: directory.appendingPathComponent(snapshot.asOf + ".json"), options: [.atomic, .completeFileProtectionUnlessOpen])
+        // A successful write invalidates the actor's in-memory history.
+        localSnapshots = nil
         return snapshot
     }
 }

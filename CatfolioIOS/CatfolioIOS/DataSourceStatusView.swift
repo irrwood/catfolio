@@ -22,6 +22,7 @@ import SwiftUI
             if rows.isEmpty {
                 SettingsFootnote(L10n.text("这次启动后还没有请求过任何数据源。"))
             } else {
+                SettingsFootnote(L10n.text("以下是本次启动的请求记录。单个证券或接口失败，不代表整个数据源不可用。"))
                 ForEach(DataSource.Kind.allCases, id: \.self) { kind in
                     let members = rows.filter { $0.source.kind == kind }
                     if !members.isEmpty {
@@ -67,9 +68,8 @@ private struct DataSourceStatusRow: View {
                         .appText(.footnote)
                         .foregroundStyle(status.isFailing ? CatfolioTheme.danger : SettingsTemplate.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
-                    // Earlier failures, when the last word was one of several:
-                    // one refusal is noise, three in a row is the source.
-                    ForEach(status.recentFailures.dropFirst(status.isFailing ? 1 : 0).prefix(2)) { event in
+                    // Distinct earlier issues; repeated requests still count above.
+                    ForEach(status.distinctEarlierFailures.prefix(2)) { event in
                         Text(Self.line(for: event))
                             .appText(.caption)
                             .foregroundStyle(SettingsTemplate.secondaryText)

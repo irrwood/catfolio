@@ -66,19 +66,11 @@ struct SectorRotationView: View {
                     if snapshot.backfilled {
                         Text(L10n.text("回填快照")).font(.caption2).foregroundStyle(.gray).padding(.top, 4)
                     }
-                    Text(L10n.text("位置相对其他板块，不是绝对涨跌。图心为板块中位数。"))
-                        .font(.system(size: 10, design: .rounded))
-                        .foregroundStyle(Color.primary.opacity(0.4))
-                        .padding(.top, 14)
                 } else if isLoading {
                     ChartShapeSkeleton(layout: .bubbles, appearanceID: "sector-rotation").frame(height: 246)
                 } else {
                     ContentUnavailableView(L10n.text("暂无板块轮动数据"), systemImage: "chart.xyaxis.line", description: Text(L10n.text("连接快照服务后读取每日板块数据。")))
                 }
-                Text(L10n.text("展示板块相对 SPY 的趋势和动量，仅供市场观察，不构成投资建议。"))
-                    .font(.system(size: 10, design: .rounded))
-                    .foregroundStyle(Color.primary.opacity(0.4))
-                    .padding(.top, 8)
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 32)
@@ -201,8 +193,10 @@ struct SectorRotationView: View {
     private func percent(_ value: Double) -> String { String(format: "%+0.1f%%", value * 100) }
     private func restore() async {
         let local = await SectorRotationStore.shared.local()
-        for item in local { snapshots[item.asOf] = item }
-        dates = snapshots.keys.sorted(); selectedDate = dates.last ?? ""
+        guard !Task.isCancelled else { return }
+        snapshots = Dictionary(uniqueKeysWithValues: local.map { ($0.asOf, $0) })
+        dates = local.map(\.asOf)
+        selectedDate = dates.last ?? ""
     }
     private func refresh() async {
         guard !endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }

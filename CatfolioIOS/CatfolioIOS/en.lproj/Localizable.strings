@@ -2357,7 +2357,6 @@
 
 "打开个股" = "Open security";
 
-"轻点打开个股，长按预览" = "Tap to open security details. Touch and hold to preview.";
 
 "思考中" = "Thinking";
 
@@ -3339,6 +3338,8 @@
 "首页背景" = "Home background";
 "动态" = "Animated";
 "动态 · 明亮" = "Animated · Bright";
+"动态 · 柔光" = "Animated · Soft Glow";
+"动态 · 晴空" = "Animated · Clear Sky";
 "动态 · 避开图表" = "Animated · Around chart";
 "光环 · 模糊" = "Rings · Soft";
 "亮光环" = "Bright rings";
@@ -3365,6 +3366,346 @@
 "高亮" = "Highlight";
 "取消高亮" = "Clear highlight";
 "高亮曲线" = "Highlight line";
+"隐藏此项" = "Hide";
+"今年预计" = "Expected this year";
+"年费用" = "Annual fees";
 
 "直接持仓与 ETF 持仓" = "Direct holdings and ETF exposure";
 "全部历史" = "All History";
+"52 周" = "52 Weeks";
+"成本价" = "Cost price";
+"52 周范围" = "52-week range";
+"52 周范围暂无数据" = "52-week range unavailable";
+"52 周位置" = "52-week position";
+"正在读取 52 周范围…" = "Loading 52-week ranges…";
+"期初价" = "Period start price";
+
+"策略示例" = "Strategy examples";
+
+"回撤时小幅加投" = "Modest drawdown top-up";
+
+"分档加投" = "Tiered drawdown top-up";
+
+"每期投入基础金额，不根据价格调整。" = "Invest the base amount each period, without price-based adjustments.";
+
+"距近 252 个交易日高点回撤达到 10% 时投入 1.5×，其余投入 1×。" = "Invest 1.5× after a drawdown of at least 10% from the trailing 252-trading-day high; otherwise invest 1×.";
+
+"距近 252 个交易日高点回撤达到 20% 时投入 2×；达到 10% 时投入 1.5×；其余投入 1×。" = "Invest 2× after a drawdown of at least 20% from the trailing 252-trading-day high, 1.5× after at least 10%, and 1× otherwise.";
+
+"选择后替换当前策略条件，保留标的、基础金额、频率和日期。可继续编辑条件，再运行回测。" = "Selecting an example replaces the current conditions and keeps the symbol, base amount, frequency and dates. Edit the conditions if needed, then run the backtest.";
+
+"加投示例需要更多资金；不足 252 个交易日时暂停本期买入。" = "Top-up examples require more capital. Purchases pause when fewer than 252 trading days are available.";
+
+"当前仅支持单一标的，不模拟多资产配置、再平衡或分红再投资。" = "This calculator supports one security. It does not simulate multi-asset allocation, rebalancing or dividend reinvestment.";
+
+"参考：eToro 定期投资策略" = "Source: eToro recurring investment strategies";
+
+"固定定投和按市场情况调整投入的思路参考该文章；回撤阈值与倍数为本应用的可编辑示例，并非原文参数或收益承诺。" = "The article informs the ideas of fixed contributions and market-based adjustments. Drawdown thresholds and multipliers are editable examples supplied by this app, not parameters from the article or promises of returns.";
+
+"切换涨跌贡献" = "Toggle gain and loss contributions";
+
+"查看下跌贡献" = "Show loss contributions";
+
+"查看上涨贡献" = "Show gain contributions";
+
+"仪表盘样式" = "Gauge style";
+
+"简约" = "Simple";
+
+"机械" = "Mechanical";
+
+/* Robinhood local MCP connection */
+"Level 2 盘口" = "Level 2 order book";
+"Robinhood 仅允许读取数据" = "Only read operations are allowed for Robinhood";
+"Robinhood 回调链接无效或已过期，请重新连接" = "The Robinhood callback is invalid or expired. Please reconnect.";
+"Robinhood 官方连接说明" = "Robinhood connection guide";
+"Robinhood 客户端注册失败" = "Could not register with Robinhood";
+"Robinhood 工具列表无法读取" = "Could not load Robinhood capabilities";
+"Robinhood 授权失败，请重新连接" = "Robinhood authorization failed. Please reconnect.";
+"Robinhood 授权已过期，请重新连接" = "Robinhood authorization expired. Please reconnect.";
+"Robinhood 授权校验失败，请重新连接" = "Robinhood authorization could not be verified. Please reconnect.";
+"Robinhood 数据接口已变化，暂时使用其他行情源" = "The Robinhood data interface has changed. Other market sources remain available.";
+"Robinhood 数据暂不可用，请稍后重试或重新连接" = "Robinhood data is unavailable. Try again later or reconnect.";
+"Robinhood 数据请求失败" = "Robinhood data request failed";
+"Robinhood 数据读取失败，请检查账户权限" = "Could not read Robinhood data. Check account permissions.";
+"Robinhood 请求过于频繁，请稍后再试" = "Robinhood rate limit reached. Please try again later.";
+"Robinhood 账户号码" = "Robinhood account number";
+"Robinhood 账户暂不支持此数据" = "This data is unavailable for your Robinhood account";
+"Robinhood 返回了无法识别的数据" = "Robinhood returned an unsupported response";
+"Robinhood 连接失败" = "Could not connect to Robinhood";
+"令牌仅存于此 iPhone 的 Keychain。Catfolio 仅调用读取工具；Robinhood 授权页可能包含交易权限。" = "Tokens stay in this iPhone’s Keychain. Catfolio only calls read tools; Robinhood’s authorization screen may include trading permissions.";
+"在电脑打开登录链接并授权。跳转至 localhost 后页面可能无法打开，请复制地址栏的完整链接并粘贴到这里。请在 30 分钟内完成。" = "Open the sign-in link on your computer and authorize. The localhost page may fail to open afterward. Copy the full address from the browser and paste it here within 30 minutes.";
+"完成 Robinhood 连接" = "Complete Robinhood connection";
+"实时期权报价" = "Live option quotes";
+"实时股票报价" = "Live equity quotes";
+"实验性连接：尚未完成真实账号联调，部分数据可能暂不可用。" = "Experimental connection: live account verification is pending. Some data may be unavailable.";
+"将登录链接发送到电脑" = "Send sign-in link to your computer";
+"持仓刷新优先尝试 Robinhood 美股报价；缺失、过期或权限不足时使用原有行情源。" = "Portfolio refresh tries Robinhood US equity quotes first, then existing sources for missing, stale or unavailable quotes.";
+"断开 Robinhood" = "Disconnect Robinhood";
+"无法创建安全的授权请求" = "Could not create a secure authorization request";
+"期权合约 ID，以逗号分隔" = "Option contract IDs, separated by commas";
+"期权链" = "Option chains";
+"检查可用数据" = "Check available data";
+"生成桌面登录链接" = "Create desktop sign-in link";
+"粘贴电脑浏览器的完整回调链接" = "Paste the full callback URL from your computer";
+"组合快照用于查看，不会覆盖现有交易账本或成本。" = "Portfolio snapshots are for viewing and do not overwrite your ledger or cost basis.";
+"股票代码数量超出 Robinhood 单次查询限制" = "Too many symbols for one Robinhood request";
+"股票代码，以逗号分隔" = "Stock symbols, separated by commas";
+"请先生成 Robinhood 登录链接" = "Create a Robinhood sign-in link first";
+"请先连接 Robinhood" = "Connect Robinhood first";
+"请填写 Robinhood 查询所需信息" = "Enter the required Robinhood query information";
+"请检查 Robinhood 查询代码和数量" = "Check the Robinhood symbols and request size";
+"读取 Robinhood 账户" = "Read Robinhood accounts";
+"读取期权持仓" = "Read option positions";
+"读取组合快照" = "Read portfolio snapshot";
+"读取股票持仓" = "Read equity positions";
+"账户与组合" = "Accounts and portfolio";
+"连接管理" = "Manage connection";
+
+"链接 2000+交易所" = "Connect to 2000+ exchanges";
+
+"Robinhood 持仓或成本数据不完整，现有账户未更新。" = "Robinhood position or cost data is incomplete. The existing account has not been updated.";
+
+"此 Robinhood 账户的币种或股票持仓暂不支持导入，现有账户未更新。" = "This Robinhood account currency or position type is not supported. The existing account has not been updated.";
+
+"Robinhood 预览已过期，请重新读取持仓。" = "The Robinhood preview expired. Reload the positions.";
+
+"此 Robinhood 账户已存在，请从账户详情同步。" = "This Robinhood account already exists. Sync from its account details.";
+
+"Robinhood 返回的账户不匹配，现有账户未更新。" = "The Robinhood account does not match. The existing account has not been updated.";
+
+"Robinhood 连接已变化，请重新读取账户和持仓。" = "The Robinhood connection changed. Reload accounts and positions.";
+
+"选择 Robinhood 账户" = "Select a Robinhood account";
+
+"预览 Robinhood 股票持仓" = "Preview Robinhood equity positions";
+
+"仅同步股票/ETF 持仓，不含现金、期权和历史交易。历史收益可能不完整。" = "Syncs stock and ETF positions only, excluding cash, options and past trades. Historical returns may be incomplete.";
+
+"Robinhood 持仓预览" = "Robinhood position preview";
+
+"此账户没有股票持仓；确认同步将清空该账户已导入的股票持仓。" = "This account has no equity positions. Confirming sync will clear its imported equity positions.";
+
+"创建 Robinhood 账户" = "Create Robinhood account";
+
+"同步 Robinhood 持仓" = "Sync Robinhood positions";
+
+"确认导入 Robinhood 股票持仓？" = "Import Robinhood equity positions?";
+
+"仅更新所选 Robinhood 账户的股票持仓；不导入现金、期权或历史成交。" = "Updates equity positions for the selected Robinhood account only. Cash, options and past trades are not imported.";
+
+"Robinhood 同步" = "Robinhood sync";
+
+"确认同步" = "Confirm sync";
+
+"平均成本" = "Average cost";
+
+"报价" = "Quote";
+
+"收益图表口径，当前 %@，展开选项" = "Return chart basis, currently %@, expand options";
+
+"持仓成本 %@，不在当前价格范围内" = "Holding cost %@ is outside the current price range";
+
+"AI 持仓筛选" = "AI Holdings Screener";
+"AI 筛选持仓" = "Screen holdings with AI";
+"当前账户持仓" = "Current account holdings";
+"你想找哪些持仓？" = "Which holdings are you looking for?";
+"预设筛选" = "Screening presets";
+"持仓占比 · %" = "Portfolio weight · %";
+"持仓盈亏 · %" = "Unrealized return · %";
+"今日涨跌 · %" = "Daily change · %";
+"持仓占比" = "Portfolio weight";
+"持仓盈亏" = "Unrealized return";
+"今日涨跌" = "Daily change";
+"例如：筛选仓位超过 5%、持仓亏损超过 10% 的股票" = "For example: holdings with at least 5% weight and a loss of at least 10%";
+"AI 将描述转为可核验条件，并直接筛选当前账户持仓。只发送描述，不发送持仓；不支持的条件会明确提示。" = "AI turns your description into verifiable rules and screens your current holdings. Only your description is sent; unsupported criteria are explained.";
+"当前账户暂无持仓，请先导入或切换账户。" = "No holdings in the current account. Import holdings or switch accounts first.";
+"只在当前账户持仓中查找同时满足全部条件的证券，按仓位从大到小核验。" = "Checks only current account holdings against all criteria, from largest to smallest portfolio weight.";
+"正在解析条件或核验持仓…" = "Interpreting criteria or checking holdings…";
+"继续核验剩余持仓" = "Continue checking remaining holdings";
+"点击解释会将这项持仓的匹配指标（可能含仓位和盈亏）发送给已选择的 AI 服务。财务指标并非实时行情。" = "Requesting an explanation sends this holding’s matching metrics, which may include weight and returns, to your selected AI service. Financial metrics are not real-time quotes.";
+"已核验的 %@ 项持仓中没有符合的，可放宽条件后重试。" = "No matches among %@ checked holdings. Try relaxing the criteria.";
+"%@ 项因数据缺失或读取失败未能核验。" = "%@ holdings could not be verified due to missing data or request failures.";
+"仅覆盖当前账户已核验的持仓。读取于 %@。" = "Covers verified holdings in the current account only. Retrieved %@.";
+
+"固定定投累计投入" = "Fixed DCA contributions";
+
+"固定定投每次实际买入金额的累计值" = "The sum of actual fixed DCA purchases";
+
+// Account connection guides
+"添加账户" = "Add account";
+"准备连接账户" = "Prepare your account";
+"找到 API 设置" = "Find API settings";
+"创建只读凭证" = "Create read-only credentials";
+"填写连接凭证" = "Enter your credentials";
+"确认账户与持仓" = "Review your account";
+"账户已添加" = "Account added";
+"第 %@ 步，共 5 步" = "Step %@ of 5";
+"第 %@ 步，共 4 步" = "Step %@ of 4";
+"添加账户进度" = "Account setup progress";
+"选择要添加的账户" = "Choose the account to connect";
+"先在 Trading 212 切换到目标 Invest 或 Stocks & Shares ISA 账户。每个账户分别添加；SIPP 暂不支持 API 连接。" = "In Trading 212, switch to the Invest or Stocks & Shares ISA account you want to connect. Add each account separately. SIPP does not currently support the API.";
+"连接后可以导入什么" = "What you can import";
+"读取持仓、现金与可用的历史记录。先预览，再确认添加到 Catfolio。" = "Read holdings, cash and available history. Review the preview before adding the account to Catfolio.";
+"使用只读 API 连接" = "Connect with read-only access";
+"无需填写券商登录密码。API Key 与 Secret 仅保存在此 iPhone 的钥匙串中。" = "Your broker password is not needed. The API Key and Secret are stored only in this iPhone’s Keychain.";
+"打开 Trading 212 菜单" = "Open the Trading 212 menu";
+"在 Trading 212 App 中点击 ☰，确认当前是要导入的账户。" = "Tap ☰ in Trading 212 and check that you have selected the account you want to import.";
+"进入 Settings → API (Beta)" = "Go to Settings → API (Beta)";
+"打开设置，找到 API (Beta)。如果没有此入口，请检查账户类型。" = "Open Settings and find API (Beta). If it is missing, check your account type.";
+"选择 Generate API key" = "Select Generate API key";
+"首次使用需阅读并接受 Trading 212 的风险提示，然后创建新密钥，可命名为 Catfolio。" = "Read and accept Trading 212’s risk notice, then create a new key. You can name it Catfolio.";
+"勾选读取权限" = "Select read permissions";
+"开启 Portfolio、Account data 和 History 的读取权限，包括历史订单、股息与交易记录。不要开启下单或修改订单权限。" = "Enable read access to Portfolio, Account data and History, including past orders, dividends and transactions. Leave order placement and modification disabled.";
+"检查 IP 限制" = "Check IP restrictions";
+"如设置了 IP 白名单，需要允许此 iPhone 当前网络的公网 IP；切换网络后可能需要更新。" = "If you use an IP allowlist, allow the public IP of this iPhone’s network. You may need to update it after switching networks.";
+"保存 Key 与 Secret" = "Save the Key and Secret";
+"生成后会显示 API Key 和 API Secret。Secret 只显示一次，请安全保存，再返回 Catfolio 填写。" = "The API Key and API Secret appear after generation. The Secret is shown only once. Save it securely, then return to Catfolio.";
+"已准备好，填写凭证" = "Ready, enter credentials";
+"下一步" = "Next";
+"上一步" = "Back";
+"已有 Key 和 Secret，直接填写" = "I already have a Key and Secret";
+"查看官方图文教程" = "View the official illustrated guide";
+"需要 Portfolio、History 和 Account data 的读取权限。" = "Read access is required for Portfolio, History and Account data.";
+"选择券商或导入方式" = "Choose a broker or import method";
+"Trading 212 和 IBKR 提供逐步连接教程。已有凭证可以直接填写。" = "Trading 212 and IBKR include step-by-step guides. If you have credentials, you can enter them directly.";
+"打开 Flex Queries" = "Open Flex Queries";
+"创建账户报表" = "Create an account report";
+"获取 Token 和 Query ID" = "Get your Token and Query ID";
+"登录 Interactive Brokers 网页端，进入 Performance & Reports → Flex Queries。也可以从菜单 Reporting → Flex Queries 进入。" = "Sign in to Interactive Brokers on the web. Go to Performance & Reports → Flex Queries, or Menu → Reporting → Flex Queries.";
+"Catfolio 使用自定义 Activity Flex Query，请在这里创建自己的报表。" = "Catfolio uses a custom Activity Flex Query. Create your own report here.";
+"在 Activity Flex Query 区域点击 +，将查询命名为 Catfolio，选择 XML 格式。" = "Click + in Activity Flex Query, name the query Catfolio and choose XML format.";
+"包含 Account Information、Open Positions、Trades、Cash Transactions 的全部字段。Trades 使用逐笔 Execution，Open Positions 使用 Summary。" = "Include all fields in Account Information, Open Positions, Trades and Cash Transactions. Use Execution detail for Trades and Summary for Open Positions.";
+"初次可选择最近 365 天。保存查询，并记下查询名称旁的 Query ID。" = "Start with the last 365 days. Save the query and note the Query ID next to its name.";
+"回到 Flex Queries，打开 Flex Web Service 的设置，启用服务并生成 Token，检查有效期和 IP 限制。" = "Return to Flex Queries, open Flex Web Service settings, enable the service and generate a Token. Check its expiry and IP restrictions.";
+"复制 Token 和刚保存的 Query ID，下一步填入 Catfolio。凭证仅保存在此 iPhone 的钥匙串中。" = "Copy the Token and your Query ID for the next step. Credentials are stored only in this iPhone’s Keychain.";
+"可以先保存并创建账户，稍后同步；也可以立即读取持仓，预览后再确认。IBKR 生成报表可能需要几分钟。" = "Save and create the account to sync later, or read holdings now and review before confirming. IBKR may take a few minutes to generate a report.";
+"已有 Token 和 Query ID，直接填写" = "I already have a Token and Query ID";
+
+"分步连接教程" = "Step-by-step connection guide";
+
+"连接账户" = "Connect account";
+
+"输入从 Interactive Brokers 获取的 Token 和 Query ID，即可连接账户。" = "Enter the Token and Query ID from Interactive Brokers to connect your account.";
+
+"查看分步教程" = "View step-by-step instructions";
+
+"以下是本次启动的请求记录。单个证券或接口失败，不代表整个数据源不可用。" = "These are requests from this app session. A failed security or endpoint request does not mean the entire source is unavailable.";
+
+"正在搜索网页…" = "Searching the web…";
+
+"已获取来源，正在整理回答…" = "Sources found. Preparing the answer…";
+
+"联网搜索暂不可用（需连接支持搜索的 Codex），以下回答仅基于已有数据。" = "Web search is unavailable (a connected Codex service with search support is required). This answer uses existing data only.";
+
+"网络来源" = "Web sources";
+
+"联网搜索" = "Web search";
+
+"已开启" = "On";
+
+"已关闭" = "Off";
+
+"API 配置引导" = "API setup guide";
+
+"配置行情与 AI" = "Set up market data and AI";
+
+"让 Catfolio 连接你需要的服务" = "Connect the services you need";
+
+"API Key 是服务商提供的访问密钥。添加后，可以使用对应的行情、新闻或 AI 功能。" = "An API Key gives Catfolio access to a provider’s market data, news or AI features.";
+
+"按需配置一个即可，不必一次填完。也可以稍后在设置 › 服务商中继续。" = "Set up just the service you need. You can add more later in Settings › Providers.";
+
+"开始配置" = "Start setup";
+
+"选择需要的功能，再获取对应服务商的 Key。" = "Choose a feature, then get a Key from its provider.";
+
+"服务商的额度、功能和费用以其账户方案为准。" = "Usage limits, features and fees depend on your provider’s plan.";
+
+"Cloudflare 需要 Workers AI 的 API Token 和 Account ID，请一并准备。" = "For Cloudflare, prepare a Workers AI API Token and your Account ID.";
+
+"稍后设置" = "Set up later";
+
+"1 · 了解用途" = "1 · Understand the service";
+
+"2 · 获取 API Key" = "2 · Get an API Key";
+
+"3 · 填写并验证" = "3 · Enter and verify";
+
+"打开服务商官网，登录或注册后，在控制台的 API Keys 页面创建或复制密钥。" = "Open the provider’s website and sign in or create an account. Create or copy a key from the console’s API Keys page.";
+
+"复制后回到 Catfolio。无需填写服务商登录密码。" = "Copy the key and return to Catfolio. You will not need to enter your provider password.";
+
+"打开服务商官网" = "Open provider website";
+
+"下一步粘贴 Key，选择保存并验证。验证失败时可以修改重试，或选择仅保存。密钥保存在此 iPhone 的 Keychain 中。" = "Next, paste your Key and choose Save and verify. If verification fails, edit and retry or save without verification. Keys are stored in this iPhone’s Keychain.";
+
+"已有 Key，继续填写" = "I have a Key, continue";
+
+"验证通过，可以开始使用" = "Verified and ready to use";
+
+"已保存，连接尚未验证" = "Saved, connection not yet verified";
+
+"完成配置" = "Finish setup";
+
+"继续配置其他服务" = "Set up another service";
+
+"首次进入引导（测试）" = "First-launch guide (test)";
+
+"付费墙（测试）" = "Paywall (test)";
+
+"恢复购买" = "Restore purchases";
+
+"付费墙预览" = "Paywall preview";
+
+"当前是测试页面，尚未连接 App Store，没有恢复或更改任何购买记录。" = "This preview is not connected to the App Store. No purchases have been restored or changed.";
+
+"已选择 100 美元终身版。当前仅演示购买流程，不会扣费或更改当前功能。" = "You selected lifetime access for USD 100. This is a purchase preview. You will not be charged, and your current features will not change.";
+
+"看清你的每一笔投资" = "See the full picture of your investments";
+
+"账户、收益与研究，在一处看得更完整。" = "Your accounts, performance and research, together in one place.";
+
+"账户全景" = "All your accounts";
+
+"汇总多个账户，统一查看资产与现金。" = "See assets and cash across your accounts.";
+
+"深入理解收益" = "Understand your returns";
+
+"追踪收益来源、持仓贡献与历史表现。" = "Explore return sources, holding contributions and performance over time.";
+
+"AI 辅助研究" = "AI-assisted research";
+
+"结合持仓与公司信息，梳理投资问题。" = "Explore investment questions with portfolio and company context.";
+
+"终身版" = "Lifetime access";
+
+"一次购买" = "One-time purchase";
+
+"一次付费，终身使用。无需续订。" = "Pay once for lifetime access. No renewals.";
+
+"行情与 AI 仍使用你配置的服务商。" = "Market data and AI continue to use your configured providers.";
+
+"解锁终身版 · $100" = "Unlock lifetime access · $100";
+
+"界面预览，不会扣费。套餐与权益仅作展示。" = "Preview only. No charge. Plan and benefits are for display.";
+
+"选择你的方案" = "Choose your plan";
+
+"按月续订" = "Billed monthly";
+
+"一次付费，无需续订" = "Pay once, no renewals";
+
+"月度订阅" = "Monthly subscription";
+
+"每月 7.99 美元" = "USD 7.99 per month";
+
+"一次支付 100 美元" = "USD 100 once";
+
+"每月 $7.99，自动续订，可在 App Store 管理或取消。" = "$7.99 per month, renewing automatically. Manage or cancel in the App Store.";
+
+"一次支付 $100，终身使用，无需续订。" = "Pay $100 once for lifetime access. No renewals.";
+
+"订阅 · $7.99/月" = "Subscribe · $7.99/month";
+
+"已选择%@，%@。当前仅演示购买流程，不会扣费或更改当前功能。" = "Selected %@, %@. This is a purchase preview. You will not be charged, and your current features will not change.";

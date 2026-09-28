@@ -294,6 +294,159 @@ final class HoldingContributionTests: XCTestCase {
         )
     }
 
+    func testBandIdentitySurvivesRepeatedHideRestoreAndPromotion() {
+        var identities: [String: String] = [:]
+        let changes: [Set<String>] = [[], ["A"], ["A", "C"], ["C"], [], ["A", "E", "B"], []]
+        for _ in 0..<10 {
+            for hidden in changes {
+                let stack = HoldingContributionStack(history: history(), hiding: hidden)
+                XCTAssertEqual(Set(stack.bands.map(\.id)).count, stack.bands.count)
+                for band in stack.bands {
+                    if let previous = identities[band.title] {
+                        XCTAssertEqual(band.id, previous, "Reordering must not recycle another holding's row")
+                    }
+                    identities[band.title] = band.id
+                    XCTAssertEqual(HoldingContributionChart.seriesID(band), band.id)
+                }
+            }
+        }
+    }
+
+    @MainActor
+    func testIncomeShadesRemainOrderedAfterHidingHoldings() {
+        let environment = EnvironmentValues()
+        for hiding: Set<String> in [[], ["A"], ["A", "E", "B"]] {
+            let stack = HoldingContributionStack(history: history(), hiding: hiding)
+            var previous: Float = 2
+            for index in stack.bands.indices {
+                let color = HoldingContributionChart.incomeFillColor(for: stack.bands[index].kind,
+                    scheme: .light, rankFromTop: stack.bands.count - 1 - index).resolve(in: environment)
+                let brightness = 0.2126 * color.red + 0.7152 * color.green + 0.0722 * color.blue
+                XCTAssertLessThanOrEqual(brightness, previous, "Upper bands must be darker")
+                previous = brightness
+            }
+        }
+        var previous: Float = -1
+        for rank in (0..<6).reversed() {
+            let color = HoldingContributionChart.incomeFillColor(for: .holding(colour: rank), scheme: .light)
+                .resolve(in: environment)
+            let brightness = color.red + color.green + color.blue
+            if previous >= 0 { XCTAssertLessThan(brightness, previous) }
+            previous = brightness
+        }
+    }
+
+    @MainActor
+    func testTintedRankBadgesKeepTwoDigitWidthForLongRanks() async throws {
+        let ranks = [1, 12, 99, 100, 999, 1000]
+        for rank in ranks {
+            let host = UIHostingController(rootView: ReturnsRankBadge(rank: rank, color: .blue,
+                isPortfolio: false, usesTintedGlass: true))
+            let size = host.sizeThatFits(in: CGSize(width: 300, height: 100))
+            XCTAssertEqual(size.width, 36, accuracy: 0.5)
+            XCTAssertEqual(size.height, 28, accuracy: 0.5)
+        }
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        let host = UIHostingController(rootView: VStack(spacing: 20) {
+            ForEach(ranks, id: \.self) { rank in
+                HStack(spacing: 20) {
+                    Text(String(rank)).frame(width: 50, alignment: .trailing)
+                    ReturnsRankBadge(rank: rank, color: Color(red: 52 / 255, green: 199 / 255, blue: 89 / 255),
+                                     isPortfolio: false, usesTintedGlass: true)
+                    ReturnsRankBadge(rank: rank, color: ReturnsSourceChartStyle.incomeBase,
+                                     isPortfolio: false, usesTintedGlass: true)
+                }
+            }
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(ReturnsSourceChartStyle.incomeFooter))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previous?.makeKeyAndVisible() }
+        try await Task.sleep(for: .milliseconds(400))
+        host.view.layoutIfNeeded()
+        let image = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
+            host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+        }
+        let attachment = XCTAttachment(image: image)
+        attachment.name = "tinted-rank-badges"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
+    func testIncomeHighlightBrightensBandAndMatchesLegend() throws {
+        let cache = HoldingContributionPreparedCache()
+        func prepared(_ highlighted: String?) -> HoldingContributionPreparedCache.Prepared {
+            cache.prepared(history: history(), historyRevision: 1, holdings: [], hiding: [],
+                           locale: Locale(identifier: "en_US"), language: "en", range: .yearToDate,
+                           showsPrincipal: true, showsOthers: true, highlighted: highlighted, scheme: .light)
+        }
+        let normal = prepared(nil)
+        let band = try XCTUnwrap(normal.stack.bands.first { if case .holding = $0.kind { true } else { false } })
+        let id = HoldingContributionChart.seriesID(band)
+        let highlighted = prepared(id)
+        let before = try XCTUnwrap(normal.series.first { $0.id == id })
+        let after = try XCTUnwrap(highlighted.series.first { $0.id == id })
+        let environment = EnvironmentValues()
+        let base = try XCTUnwrap(before.areaFill).resolve(in: environment)
+        let bright = try XCTUnwrap(after.areaFill).resolve(in: environment)
+        XCTAssertGreaterThan(bright.red + bright.green + bright.blue, base.red + base.green + base.blue)
+        let legend = HoldingContributionChart.incomeDisplayColor(for: band.kind, scheme: .light,
+                                                                 isHighlighted: true, isFaded: false)
+        XCTAssertEqual(bright, legend.resolve(in: environment))
+        XCTAssertEqual(bright, ReturnsSourceChartStyle.incomeBase.resolve(in: environment))
+        for rank in 0..<6 {
+            let selected = HoldingContributionChart.incomeDisplayColor(for: .holding(colour: rank),
+                scheme: .light, isHighlighted: true, isFaded: false).resolve(in: environment)
+            XCTAssertEqual(selected, bright, "Every highlighted band gets the brightest shade")
+        }
+        XCTAssertEqual(before.points.map(\.value), after.points.map(\.value))
+        let restored = try XCTUnwrap(prepared(nil).series.first { $0.id == id })
+        XCTAssertEqual(restored.areaFill?.resolve(in: environment), base)
+
+        let renderer = ImageRenderer(content: VStack(spacing: 16) {
+            ForEach([false, true], id: \.self) { selected in
+                let color = HoldingContributionChart.incomeDisplayColor(for: band.kind, scheme: .light,
+                                                                        isHighlighted: selected, isFaded: false)
+                ReturnsSourceListRow(rank: 1, color: color, title: selected ? "Highlighted" : "Normal",
+                                     subtitle: "Matching band and legend", isOn: true, isOnBlueField: true,
+                                     isHighlighted: selected) { Text("+$300") }
+                Rectangle().fill(color).frame(height: 40)
+            }
+        }.padding(24).frame(width: 402).background(ReturnsSourceChartStyle.incomeFooter))
+        let attachment = XCTAttachment(image: try XCTUnwrap(renderer.uiImage))
+        attachment.name = "income-legend-highlight"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
+    func testHistoryCacheHitDoesNotRequestNetwork() async throws {
+        let state = HoldingHistoryState()
+        let value = history()
+        var requests: [Bool] = []
+        await state.load { cachedOnly in
+            requests.append(cachedOnly)
+            return value
+        }
+        XCTAssertEqual(requests, [true])
+        XCTAssertEqual(state.history?.rows.count, value.rows.count)
+    }
+
+    @MainActor
+    func testExplicitHistoryRefreshStillRequestsNetwork() async throws {
+        let state = HoldingHistoryState()
+        let value = history()
+        var requests: [Bool] = []
+        await state.load(forceRefresh: true) { cachedOnly in
+            requests.append(cachedOnly)
+            return value
+        }
+        XCTAssertEqual(requests, [true, false])
+    }
+
     @MainActor
     func testLoadingRetriesWhilePortfolioArrivesAndPreservesCosts() async throws {
         let state = HoldingHistoryState()

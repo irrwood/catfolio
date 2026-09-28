@@ -24,6 +24,9 @@ struct HoldingDetailPriceSection: View {
     @State private var explanation: SecurityPaperRequest?
     @State private var explanationAnchor = SecurityPaperSourceAnchor()
     @State private var tradeReadoutReservations: [SecurityTradeReadout.Measurement] = []
+    /// Whether this section first drew the placeholder line — then the line
+    /// grows out of it when the history comes, instead of replacing it.
+    @State private var startedWithoutHistory: Bool?
 
     private var movement: SecurityPriceMoveContext? {
         guard let priceHistory else { return nil }
@@ -54,6 +57,7 @@ struct HoldingDetailPriceSection: View {
                     averageCost: averageCost,
                     selectedAccountKeys: selectedAccountKeys,
                     cachedContent: cachedContent,
+                    followsPlaceholder: startedWithoutHistory ?? false,
                     onSelectionChange: { selection in
                         guard priceSelection != selection else { return }
                         priceSelection = selection
@@ -122,6 +126,9 @@ struct HoldingDetailPriceSection: View {
             priceSelection = nil
             updateTradeReadoutReservations()
         }
+        .onAppear {
+            if startedWithoutHistory == nil { startedWithoutHistory = priceHistory == nil }
+        }
         .onChange(of: priceHistory?.trades, initial: true) { _, _ in
             updateTradeReadoutReservations()
         }
@@ -154,7 +161,7 @@ struct SecurityPriceChartState: View {
             topInset: 15,
             leadingLineOverflow: 0,
             trailingEndpointInset: 9,
-            lineWidths: [2.5],
+            lineWidths: [2],
             appearanceID: appearanceID,
             showsAxis: false
         )
@@ -220,7 +227,11 @@ struct SecurityPriceChart: View {
     let selectedAccountKeys: Set<String>
     let cachedContent: HoldingDetailCachedContent?
     let onSelectionChange: (SecurityPriceSelection?) -> Void
+    /// The section showed a placeholder line before this history arrived.
+    let followsPlaceholder: Bool
     @State private var prepared: SecurityPricePreparedData?
+    /// This chart itself showed the placeholder while it prepared.
+    @State private var startedWithoutPreparedData: Bool
     @State private var isPreparing = true
     @State private var range: ChartTimeRange
     @State private var selectedDate: Date?
@@ -233,9 +244,11 @@ struct SecurityPriceChart: View {
         averageCost: Double?,
         selectedAccountKeys: Set<String>,
         cachedContent: HoldingDetailCachedContent? = nil,
+        followsPlaceholder: Bool = false,
         onSelectionChange: @escaping (SecurityPriceSelection?) -> Void = { _ in }
     ) {
         self.history = history
+        self.followsPlaceholder = followsPlaceholder
         self.averageCost = averageCost
         self.selectedAccountKeys = selectedAccountKeys
         self.cachedContent = cachedContent
@@ -244,6 +257,7 @@ struct SecurityPriceChart: View {
         let cached = cachedContent?.preparedChart.flatMap { $0.request == request ? $0.data : nil }
         _prepared = State(initialValue: cached)
         _isPreparing = State(initialValue: cached == nil)
+        _startedWithoutPreparedData = State(initialValue: cached == nil)
         let arguments = LaunchArguments.all
         // Every new detail/preview opens on the latest session, including
         // cache-backed opens. Range changes stay local to this presentation.
@@ -296,7 +310,8 @@ struct SecurityPriceChart: View {
                             selectedDate = measuredRange.end
                             publishInteractiveSelection(selection(for: measuredRange))
                         },
-                        onInteractionEnded: { _ in clearInteraction() }
+                        onInteractionEnded: { _ in clearInteraction() },
+                        growsFromPlaceholder: followsPlaceholder || startedWithoutPreparedData
                     )
                 } else {
                     StandardLineChartPlaceholder(
@@ -445,6 +460,9 @@ struct SecurityPricePlot: View {
     let onSelect: (Date) -> Void
     let onMeasure: (ChartDateRange) -> Void
     let onInteractionEnded: (Int) -> Void
+    /// Whether the line grows out of the placeholder's shape: only when a
+    /// placeholder was on screen, waiting for this data.
+    var growsFromPlaceholder = false
 
     var body: some View {
         let prepared = seriesCache.prepared(for: data, scheme: colorScheme)
@@ -472,7 +490,10 @@ struct SecurityPricePlot: View {
             transitionKey: transitionKey,
             appearanceID: appearanceID,
             dataTransition: .viewportZoom,
-            animatesInitialAppearance: true,
+            // Out of the placeholder's shape only when the placeholder was
+            // shown: data already at hand is simply there. Morphed every
+            // time, it read as a placeholder replaced on every open.
+            animatesInitialAppearance: growsFromPlaceholder,
             markers: prepared.markers,
             markerMagnetRadius: 6,
             referenceLines: [costReference].compactMap { $0 },
@@ -594,7 +615,7 @@ final class SecurityPricePlotSeriesCache {
                 StandardLineChartPoint(id: $0.id, date: $0.date, value: $0.price)
             },
             color: CatfolioPalette.securityPriceLine,
-            lineWidth: 2.5,
+            lineWidth: 2,
             selectionRadius: 4,
             latestPointRadius: 5,
             latestPointColor: scheme == .dark ? .white : Color(red: 10 / 255, green: 11 / 255, blue: 12 / 255),

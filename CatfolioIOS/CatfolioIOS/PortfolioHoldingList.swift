@@ -68,13 +68,17 @@ enum PortfolioHoldingListItem: Identifiable {
         }
     }
 
-    static func sorted(_ items: [Self], by field: HoldingSortField, ascending: Bool) -> [Self] {
+    static func sorted(_ items: [Self], by field: HoldingSortField, ascending: Bool,
+                       week52Ranges: [String: Holding52WeekRange] = [:]) -> [Self] {
         // Resolve display names and numeric keys once, outside the comparator.
         let entries = items.map { item in
             let value: Double? = switch field {
             case .marketValue: item.marketValue
             case .unrealized: item.performance?.amount
             case .unrealizedPercent: item.performance?.percent
+            case .week52Position:
+                Holding52WeekPrices(holding: item.detailHolding,
+                    range: week52Ranges[item.ticker.uppercased()]).rangePosition
             case .name: nil
             }
             return (item: item, name: field == .name ? item.name : "", value: value)

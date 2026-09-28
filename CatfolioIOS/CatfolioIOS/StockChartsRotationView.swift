@@ -86,7 +86,12 @@ struct StockChartsRotationView: View {
                     .frame(width: 1, height: 1).opacity(0.01).allowsHitTesting(false).accessibilityHidden(true)
             }
         }
-        .task { store.refresh() }
+        .task {
+            await store.restore()
+            // Starting WebKit is main-thread work; keep it out of the push transition.
+            do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+            store.refresh()
+        }
         .onChange(of: store.capture?.capturedAt) { _, _ in if !playing { index = -1 } }
         .onDisappear { playing = false; store.cancel() }
         .task(id: playing) {

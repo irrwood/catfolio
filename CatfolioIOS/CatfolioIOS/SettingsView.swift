@@ -104,11 +104,15 @@ struct SettingsView: View {
     @AppStorage(CompanyNameDisplay.preferenceKey) private var companyNameDisplayRawValue = CompanyNameDisplay.original.rawValue
     @AppStorage(AssetLogoStyle.preferenceKey) private var assetLogoStyleRawValue = AssetLogoStyle.automatic.rawValue
     @AppStorage(HomeBackgroundStyle.preferenceKey) private var homeBackgroundStyleRawValue = HomeBackgroundStyle.flowing.rawValue
+    @State private var showsPaywallPreview = false
+    @State private var showsFirstLaunchGuide = false
+    @State private var showsAddAccount = false
     @State private var showsCSVImport = false
     @State private var showsTrading212 = false
     @State private var showsIBKRFlex = false
     @State private var showsSnapTrade = false
     @State private var showsMoomooOAuth = false
+    @State private var showsRobinhood = false
     @State private var showsLocalServices = false
     @State private var showsPortfolioResetConfirmation = false
     @State private var isResettingPortfolio = false
@@ -116,6 +120,7 @@ struct SettingsView: View {
     @State private var reconciliation: LedgerReconciliation.Report?
     #if DEBUG
     @State private var showsRotationPreview = LaunchArguments.contains("--show-sector-rotation")
+    @State private var showsSentimentPreview = LaunchArguments.contains("--show-industry-sentiment")
     @State private var showsStockChartsPreview = LaunchArguments.contains("--show-stockcharts-rrg")
     @State private var showsScreenerPreview = LaunchArguments.contains("--show-screener")
     @State private var showsHistoryPreview = LaunchArguments.contains("--show-history-preview")
@@ -130,6 +135,22 @@ struct SettingsView: View {
 
     var body: some View {
         SettingsPage(title: L10n.text("设置")) {
+            GlassPrimaryButton(title: L10n.text("添加账户"), systemImage: "plus") {
+                showsAddAccount = true
+            }
+            .accessibilityIdentifier("settings-add-account")
+
+            SettingsCard {
+                SettingsButtonRow(icon: .symbol("play.rectangle"), title: L10n.text("首次进入引导（测试）")) {
+                    showsFirstLaunchGuide = true
+                }
+                .accessibilityIdentifier("settings-test-first-launch-guide")
+                SettingsButtonRow(icon: .symbol("crown"), title: L10n.text("付费墙（测试）")) {
+                    showsPaywallPreview = true
+                }
+                .accessibilityIdentifier("settings-test-paywall")
+            }
+
             PublicInvestorSettingsSection()
 
             if !model.accounts.isEmpty {
@@ -142,39 +163,6 @@ struct SettingsView: View {
                     }
                 }
 
-                SettingsSection(L10n.text("账户活动")) {
-                    SettingsNavigationRow(
-                        icon: .asset("SettingsInvoice"),
-                        title: L10n.text("全部历史")
-                    ) {
-                        HistoryView().environment(model)
-                    }
-                }
-            }
-
-            SettingsSection(L10n.text("新建账户")) {
-                connector("Trading 212", icon: "chart.line.uptrend.xyaxis") {
-                    showsTrading212 = true
-                }
-                connector("Moomoo", icon: "person.badge.key") {
-                    showsMoomooOAuth = true
-                }
-                connector("Interactive Brokers", icon: "doc.text") {
-                    showsIBKRFlex = true
-                }
-                connector("SnapTrade", icon: "link") {
-                    showsSnapTrade = true
-                }
-                connector(L10n.text("CSV 导入"), icon: "doc.badge.plus") {
-                    showsCSVImport = true
-                }
-                SettingsButtonRow(
-                    icon: .symbol("camera"),
-                    title: L10n.text("拍照 AI 添加持仓"),
-                    action: {}
-                )
-                .disabled(true)
-                .accessibilityHint(L10n.text("功能暂未开放"))
             }
 
             SettingsSection(L10n.text("行情与 AI")) {
@@ -369,15 +357,23 @@ struct SettingsView: View {
         .tracksRootTabBarScroll()
             .accessibilityIdentifier("settings-root")
             #if DEBUG
-            .navigationDestination(isPresented: $showsRotationPreview) { SectorRotationView() }
-            .navigationDestination(isPresented: $showsStockChartsPreview) { StockChartsRotationView() }
-            .navigationDestination(isPresented: $showsScreenerPreview) { StockScreenerView() }
+            .navigationDestination(isPresented: $showsRotationPreview) {
+                SectorRotationView().toolbarVisibility(.hidden, for: .tabBar)
+            }
+            .navigationDestination(isPresented: $showsStockChartsPreview) {
+                StockChartsRotationView().toolbarVisibility(.hidden, for: .tabBar)
+            }
+            .navigationDestination(isPresented: $showsScreenerPreview) {
+                StockScreenerView().toolbarVisibility(.hidden, for: .tabBar)
+            }
             .navigationDestination(isPresented: $showsHistoryPreview) { HistoryView().environment(model) }
+            .navigationDestination(isPresented: $showsSentimentPreview) { IndustrySentimentView().environment(model) }
             .navigationDestination(isPresented: $showsResearchPreview) { TodayAttentionView().environment(model) }
             .navigationDestination(isPresented: $showsOIPreview) {
                 ScrollView { OptionsOIView(symbol: "TEST", currency: "USD", price: 108, costUSD: 104).padding(24) }
                     .softTopScrollEdge()
                     .navigationTitle(L10n.text("OI 布局验证"))
+                    .toolbarVisibility(.hidden, for: .tabBar)
             }
             .navigationDestination(isPresented: $showsIsometricHeatmap) { IsometricHeatmapLabView().environment(model) }
             #endif
@@ -392,6 +388,8 @@ struct SettingsView: View {
             }
             .task {
                 let arguments = LaunchArguments.all
+                showsPaywallPreview = arguments.contains("--show-paywall")
+                showsAddAccount = arguments.contains("--show-add-account")
                 showsCSVImport = arguments.contains("--show-csv")
                 showsTrading212 = arguments.contains("--show-trading212")
                 showsIBKRFlex = arguments.contains("--show-flex")
@@ -422,6 +420,17 @@ struct SettingsView: View {
             } message: {
                 Text(L10n.message(portfolioResetError ?? ""))
             }
+            .fullScreenCover(isPresented: $showsPaywallPreview) {
+                PaywallView()
+            }
+            .fullScreenCover(isPresented: $showsFirstLaunchGuide) {
+                // Reuse the launch flow without resetting its seen flag or any credentials.
+                ServiceAPIOnboardingView()
+            }
+            .appSheet(isPresented: $showsAddAccount) {
+                AddAccountView().environment(model)
+                    .presentationDetents([.large]).presentationDragIndicator(.visible)
+            }
             .appSheet(isPresented: $showsCSVImport) {
                 CSVImportView(context: .create).environment(model)
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
@@ -436,6 +445,10 @@ struct SettingsView: View {
             }
             .appSheet(isPresented: $showsIBKRFlex) {
                 IBKRFlexView(context: .create).environment(model)
+                    .presentationDetents([.large]).presentationDragIndicator(.visible)
+            }
+            .appSheet(isPresented: $showsRobinhood) {
+                RobinhoodConnectionView(context: .create).environment(model)
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
             }
             .appSheet(isPresented: $showsMoomooOAuth) {
@@ -585,6 +598,7 @@ struct SettingsView: View {
 }
 
 private enum AccountManagementSheet: String, Identifiable {
+    case robinhood
     case snaptrade
     case trading212
     case moomoo
@@ -747,6 +761,8 @@ private struct AccountDetailView: View {
             Trading212View(context: .manage(account))
         case .moomoo:
             MoomooOAuthView(context: .manage(account))
+        case .robinhood:
+            RobinhoodConnectionView(context: .manage(account))
         case .snaptrade:
             SnapTradeView(context: .manage(account))
         case .ibkr:
@@ -762,6 +778,7 @@ private struct AccountDetailView: View {
         switch account.source {
         case "Trading 212": .trading212
         case "Moomoo": .moomoo
+        case "Robinhood": .robinhood
         case "SnapTrade": .snaptrade
         case "IBKR Flex": .ibkr
         default: .csv
@@ -772,6 +789,7 @@ private struct AccountDetailView: View {
         switch account.source {
         case "Trading 212": L10n.text("Trading 212 同步")
         case "Moomoo": L10n.text("Moomoo 同步")
+        case "Robinhood": L10n.text("Robinhood 同步")
         case "SnapTrade": L10n.text("SnapTrade 同步")
         case "IBKR Flex": L10n.text("IBKR 同步")
         case "CSV": L10n.text("CSV 导入")
@@ -840,6 +858,74 @@ private struct AccountDetailView: View {
     }
 }
 
+/// One History figure, laid out as Figma 487:5391: the icon and chevron on
+/// top, the title over the amount at the foot. The colours stay the
+/// settings card's own.
+private struct SettingsHistoryOverviewTile: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
+    let title: String
+    let icon: String
+    let caption: String
+    let value: String
+    let valueColor: Color
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius, style: .continuous)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: .semibold))
+                    .frame(width: 18, height: 24)
+                    .accessibilityHidden(true)
+                Spacer(minLength: 0)
+                // One line: a wrapped caption would push this tile's figures
+                // out of line with its neighbour's.
+                Text(caption)
+                    .appText(.caption, weight: .semibold)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Image("SettingsChevron")
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+            .frame(height: 24)
+            Spacer(minLength: 8)
+            // Figma's gap is between trimmed text boxes; the line boxes
+            // here already carry most of it.
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(Typography.text(size: 14, weight: .bold))
+                    .textCase(.uppercase)
+                    .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
+                    .minimumScaleFactor(0.8)
+                Text(value)
+                    .font(Typography.number(size: 20, weight: .semibold))
+                    .foregroundStyle(valueColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
+        }
+        .foregroundStyle(CatfolioTheme.primaryText)
+        .padding([.horizontal, .top], 16)
+        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, minHeight: 109, alignment: .leading)
+        .modifier(SettingsHistoryTileGlass())
+        .contentShape(shape)
+    }
+}
+
+private struct SettingsHistoryTileGlass: ViewModifier {
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius, style: .continuous)
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular.interactive(), in: shape)
+        } else {
+            content.background(.regularMaterial, in: shape)
+        }
+    }
+}
+
 /// Uses the same prepared ledger and fund charges as History, across all
 /// accounts and years. Display currency remains a presentation preference.
 private struct SettingsHistoryOverview: View {
@@ -849,12 +935,8 @@ private struct SettingsHistoryOverview: View {
     @AppStorage(DisplayCurrency.preferenceKey) private var displayCurrency = DisplayCurrency.usd.rawValue
     @State private var prepared: HistoryPreparedLedger?
     @State private var annualFees: Double?
-    /// This calendar year's dividends: received so far, plus what today's
-    /// holdings paid over the rest of the year last year.
-    @State private var dividendForecast: Double?
     @State private var failed = false
-    /// Figures are on screen and a fresh read is running behind them.
-    @State private var isReloading = false
+    @State private var loadedKey: LoadKey?
 
     private struct LoadKey: Hashable {
         let updatedAt: Date?
@@ -863,20 +945,31 @@ private struct SettingsHistoryOverview: View {
         let locale: String
     }
 
+    private var loadKey: LoadKey {
+        LoadKey(updatedAt: model.localUpdatedAt,
+                accountIDs: Set(model.accounts.map(\.id)),
+                investorSelection: model.publicInvestorSelection, locale: locale.identifier)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12),
                                      count: typeSize.isAccessibilitySize ? 1 : 2), spacing: 12) {
                 overviewCard(.orders, title: L10n.text("已实现盈亏"), icon: "arrow.up.arrow.down",
                              caption: realisedCaption, amount: realisedAmount, signed: true)
-                overviewCard(.dividends, title: L10n.text("Total dividends"), icon: "banknote",
-                             caption: dividendForecastCaption, amount: total(for: .dividends))
-                overviewCard(.interest, title: L10n.text("Total interest"), icon: "percent",
+                overviewCard(.dividends, title: L10n.text("股息"), icon: "banknote",
+                             caption: "", amount: total(for: .dividends))
+                overviewCard(.interest, title: L10n.text("利息"), icon: "percent",
                              caption: "", amount: total(for: .interest))
-                overviewCard(.fees, title: L10n.text("年费用合计"), icon: "creditcard",
+                overviewCard(.fees, title: L10n.text("年费用"), icon: "creditcard",
                              caption: "", amount: annualFees)
             }
-            .refreshGlow(isActive: isReloading)
+            SettingsCard {
+                SettingsNavigationRow(icon: .asset("SettingsInvoice"), title: L10n.text("全部历史")) {
+                    HistoryView().environment(model)
+                }
+                .accessibilityIdentifier("settings.history-overview.all")
+            }
             if failed {
                 Button(L10n.text("无法读取速览，轻点重试")) {
                     Task { await load() }
@@ -889,9 +982,8 @@ private struct SettingsHistoryOverview: View {
             }
         }
         .accessibilityIdentifier("settings.history-overview")
-        .task(id: LoadKey(updatedAt: model.localUpdatedAt,
-                          accountIDs: Set(model.accounts.map(\.id)),
-                          investorSelection: model.publicInvestorSelection, locale: locale.identifier)) {
+        .task(id: loadKey) {
+            guard loadedKey != loadKey else { return }
             await load()
         }
     }
@@ -900,13 +992,6 @@ private struct SettingsHistoryOverview: View {
         guard let calculation = prepared?.realisedTotal,
               calculation.brokerCount + calculation.estimatedCount > 0 else { return nil }
         return calculation.combinedUSD
-    }
-
-    private var dividendForecastCaption: String {
-        guard let dividendForecast, dividendForecast.isFinite, dividendForecast > 0 else { return "" }
-        let currency = DisplayCurrency(rawValue: displayCurrency) ?? .usd
-        let amount = DisplayFormat.money(currency.fromUSD(dividendForecast), currency: currency.rawValue, fractionDigits: 0)
-        return L10n.text("今年预计 \(amount)")
     }
 
     private var realisedCaption: String {
@@ -933,8 +1018,8 @@ private struct SettingsHistoryOverview: View {
         return NavigationLink {
             HistoryView(initialCategory: category).environment(model)
         } label: {
-            SectorGlassCard(title: title, icon: icon, caption: caption, value: value,
-                            tint: .clear, valueColor: color, usesGlass: false)
+            SettingsHistoryOverviewTile(title: title, icon: icon, caption: caption,
+                                        value: value, valueColor: color)
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
@@ -951,8 +1036,7 @@ private struct SettingsHistoryOverview: View {
     /// jump a reader saw on coming back from a page that changes the key.
     private func load() async {
         failed = false
-        isReloading = prepared != nil
-        defer { isReloading = false }
+        let requestKey = loadKey
         do {
             let ledger = try await model.activityLedger()
             let accountIDs = Set(ledger.accounts.map(\.id))
@@ -971,15 +1055,7 @@ private struct SettingsHistoryOverview: View {
                 annualFees = charges.isEmpty ? nil : charges.reduce(0) { $0 + $1.annual }
             }
             prepared = result
-            if let positions {
-                // After the cards are up: the schedules are a request per
-                // holding, the first time each day.
-                let year = String(DayDateCodec.string(from: Date()).prefix(4))
-                let received = result.page(category: .dividends, basis: .calendar, year: year).totalUSD
-                let remaining = await LocalMarketDataClient().remainingDividends(for: positions)
-                try Task.checkCancellation()
-                if remaining.covered > 0 || received > 0 { dividendForecast = received + remaining.usd }
-            }
+            loadedKey = requestKey
         } catch {
             guard !Task.isCancelled else { return }
             failed = true
@@ -1102,7 +1178,7 @@ private struct ManualTransactionView: View {
     }
 }
 
-private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable {
+enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable {
     case massive
     case fmp
     case deepSeek
@@ -1231,7 +1307,7 @@ private enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable 
     }
 }
 
-private enum LocalServiceStatus: Equatable {
+enum LocalServiceStatus: Equatable {
     case unconfigured
     case configured
     case verified
@@ -1307,12 +1383,20 @@ private struct LocalServicesSettingsView: View {
     @State private var statuses: [LocalServiceProvider: LocalServiceStatus] = [:]
     @State private var hasAppliedLaunchRoute = false
 
+    @State private var showsAPISetupGuide = false
+
     /// A page of Settings' own stack, not a modal with a stack of its own.
     var body: some View {
             SettingsPage(
                 title: L10n.text("服务商"),
                 bottomInset: 32
             ) {
+                SettingsCard {
+                    SettingsButtonRow(icon: .symbol("list.number"), title: L10n.text("API 配置引导")) {
+                        showsAPISetupGuide = true
+                    }
+                }
+
                 SettingsSection(L10n.text("行情与估值")) {
                     providerLink(.massive)
                     providerLink(.fmp)
@@ -1370,7 +1454,11 @@ private struct LocalServicesSettingsView: View {
                     providerLink(.jev)
                 }
             }
+            .sheet(isPresented: $showsAPISetupGuide, onDismiss: refreshStatuses) {
+                ServiceAPIOnboardingView()
+            }
             .navigationDestination(item: $routedProvider) { provider in detail(provider) }
+            .toolbarVisibility(.hidden, for: .tabBar)
             .onAppear {
                 refreshStatuses()
                 applyLaunchRouteIfNeeded()
@@ -1382,6 +1470,7 @@ private struct LocalServicesSettingsView: View {
         LocalServiceDetailView(provider: provider) { status in
             statuses[provider] = status
         }
+        .toolbarVisibility(.hidden, for: .tabBar)
     }
 
     private var selectedAIProvider: AIProviderPreference {
@@ -1391,6 +1480,7 @@ private struct LocalServicesSettingsView: View {
     private var codexLink: some View {
         NavigationLink {
             CodexOAuthSettingsView()
+                .toolbarVisibility(.hidden, for: .tabBar)
         } label: {
             LocalServiceRowLabel(iconName: "bubble.left.and.text.bubble.right",
                 title: "ChatGPT Codex", subtitle: L10n.text("使用 ChatGPT 订阅进行组合问答"),
@@ -1673,7 +1763,7 @@ private struct LocalServiceFeedback {
     let kind: StatusNotice.Kind
 }
 
-private struct LocalServiceDetailView: View {
+struct LocalServiceDetailView: View {
     @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
     let provider: LocalServiceProvider

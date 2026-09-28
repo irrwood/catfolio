@@ -199,6 +199,9 @@ struct HistoryView: View {
 
     @State private var scopedHoldings: [Holding] = []
     @State private var feeCharges: [HistoryFeeCharge] = []
+    /// This calendar year's dividends: received so far, plus what today's
+    /// holdings paid over the rest of the year last year.
+    @State private var dividendForecastUSD: Double?
     @State private var isLoading = true
     /// When the page appeared, so the first lists wait for the push to end.
     @State private var appearedAt = ContinuousClock.Instant.now
@@ -243,7 +246,10 @@ struct HistoryView: View {
                     description: Text(L10n.message(errorMessage))
                 )
             } else {
-                HistoryPagingView(selection: $category) { pageCategory in
+                HistoryPagingView(selection: $category, contentID: HistoryPageContentID(
+                    ledger: preparedLedger.contentID, basis: taxYearBasisRaw,
+                    year: selectedTaxYear, forecast: dividendForecastUSD
+                )) { pageCategory in
                     AnyView(historyList(for: pageCategory))
                 }
                 .ignoresSafeArea(.container, edges: [.top, .bottom])
@@ -251,7 +257,6 @@ struct HistoryView: View {
         }
         // Cover the home-indicator safe area, not just the list's safe frame.
         .background { SettingsTemplate.pageBackground.ignoresSafeArea() }
-        .softTopScrollEdge()
         .navigationTitle(L10n.text("History"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
@@ -508,7 +513,9 @@ struct HistoryView: View {
                     value: DisplayFormat.money(totalUSD(for: .dividend)),
                     color: CatfolioTheme.positive
                 )
-            ]
+            ] + (dividendForecastUSD.map {
+                [HistorySummaryMetric(title: L10n.text("今年预计"), value: DisplayFormat.money($0), color: .secondary)]
+            } ?? [])
         case .interest:
             [
                 HistorySummaryMetric(
@@ -687,7 +694,7 @@ struct HistoryView: View {
     private func dividendContributionSection(_ page: HistoryActivityPage) -> some View {
         let breakdown = page.dividendBreakdown
         return Section {
-            HistoryDividendCard(breakdown: breakdown, totalUSD: page.totalUSD)
+            HistoryDividendCard(breakdown: breakdown, totalUSD: page.totalUSD, forecastUSD: dividendForecastUSD)
                 .listRowInsets(EdgeInsets())
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
@@ -701,11 +708,12 @@ struct HistoryView: View {
     }
 
     private func activityRow(_ activity: PortfolioActivity) -> some View {
-        HStack(spacing: 12) {
+        let presentation = preparedLedger.rowPresentations[activity.id] ?? HistoryRowPresentation(activity)
+        return HStack(spacing: 12) {
             activityIcon(activity)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(activity.displayTitle)
+                Text(presentation.title)
                     .font(.body.weight(.semibold))
                     .lineLimit(1)
 
@@ -730,20 +738,14 @@ struct HistoryView: View {
 
             VStack(alignment: .trailing, spacing: 4) {
                 let isOrder = activity.kind == .buy || activity.kind == .sell
-                Text(DisplayFormat.money(
-                    isOrder ? abs(activity.nativeAmount) : activity.nativeAmount,
-                    currency: activity.transaction.currency,
-                    // Order values describe trade size, not cash-flow direction
-                    // or profit. Keep both buys and sells unsigned and neutral.
-                    signed: !isOrder
-                ))
+                Text(presentation.amount)
                 .appNumber(.subheading, weight: .semibold)
                 .foregroundStyle(isOrder ? CatfolioTheme.primaryText : amountColor(activity.nativeAmount))
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
 
                 if isOrder {
-                    Text(L10n.text("\(DisplayFormat.shares(activity.transaction.quantity)) shares"))
+                    Text(presentation.quantity)
                         .appNumber(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -1014,6 +1016,13 @@ struct HistoryView: View {
             scopedHoldings = holdings
             feeCharges = charges
             withAnimation(.easeOut(duration: 0.2)) { isLoading = false }
+            // After the lists are up: the schedules are a request per
+            // holding, the first time each day.
+            let year = String(DayDateCodec.string(from: Date()).prefix(4))
+            let received = prepared.page(category: .dividends, basis: .calendar, year: year).totalUSD
+            let remaining = await LocalMarketDataClient().remainingDividends(for: holdings)
+            try Task.checkCancellation()
+            dividendForecastUSD = remaining.covered > 0 || received > 0 ? received + remaining.usd : nil
         } catch {
             // Superseded scopes and a popped page must not publish old results.
         }
@@ -1108,6 +1117,17 @@ struct HistoryHeaderPosition: Equatable {
     let pullDown: CGFloat
     let materialOpacity: Double
 
+    private init(pullDown: CGFloat, materialOpacity: Double) {
+        self.pullDown = pullDown
+        self.materialOpacity = materialOpacity
+    }
+
+    static func interpolated(from: Self, to: Self, fraction: CGFloat) -> Self {
+        let t = min(1, max(0, fraction))
+        return Self(pullDown: from.pullDown + (to.pullDown - from.pullDown) * t,
+                    materialOpacity: from.materialOpacity + (to.materialOpacity - from.materialOpacity) * Double(t))
+    }
+
     init(scrollOffset: CGFloat) {
         pullDown = max(0, -scrollOffset)
         let progress = min(1, max(0, scrollOffset / 16))
@@ -1134,6 +1154,8 @@ struct HistoryDividendCard: View {
     @State private var selectedTicker: String?
     let breakdown: HistoryDividendBreakdown
     let totalUSD: Double
+    /// This calendar year's expected dividends; nil until known.
+    var forecastUSD: Double? = nil
 
     private var selectedRow: HistoryDividendBreakdown.Row? {
         breakdown.rows.first { $0.id == selectedTicker } ?? breakdown.rows.first
@@ -1152,6 +1174,19 @@ struct HistoryDividendCard: View {
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
+            if let forecastUSD, forecastUSD.isFinite {
+                Divider()
+                HStack {
+                    Text(L10n.text("今年预计")).appText(.subheading, weight: .medium)
+                    Spacer(minLength: 12)
+                    Text(DisplayFormat.money(forecastUSD))
+                        .appNumber(.subheading)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .accessibilityElement(children: .combine)
+            }
             Divider()
             VStack(spacing: 13) {
                 HStack(spacing: 12) {
@@ -1296,7 +1331,30 @@ struct HistoryDividendBreakdown {
 /// Immutable UI indexes, rebuilt off the main actor only when the ledger or
 /// account scope changes. A category tap or a scroll never runs FIFO, parses
 /// the catalogues, sorts transactions, or regroups a whole history.
+/// Prepared once alongside the ledger, rather than formatting on row reuse.
+struct HistoryRowPresentation {
+    let title: String
+    let amount: String
+    let quantity: String
+
+    init(_ activity: PortfolioActivity) {
+        let isOrder = activity.kind == .buy || activity.kind == .sell
+        title = activity.displayTitle
+        amount = DisplayFormat.money(isOrder ? abs(activity.nativeAmount) : activity.nativeAmount,
+                                     currency: activity.transaction.currency, signed: !isOrder)
+        quantity = isOrder ? L10n.text("\(DisplayFormat.shares(activity.transaction.quantity)) shares") : ""
+    }
+}
+
+private struct HistoryPageContentID: Hashable {
+    let ledger: UUID
+    let basis: String
+    let year: String?
+    let forecast: Double?
+}
+
 struct HistoryPreparedLedger {
+    let contentID = UUID()
     private struct Period: Hashable {
         var basis: TaxYearBasis = .calendar
         var year: String?
@@ -1306,6 +1364,7 @@ struct HistoryPreparedLedger {
     var realisedTotal = RealisedProfitSummary()
     var realisedByTaxYear: [TaxYearBasis: [(label: String, summary: RealisedProfitSummary)]] = [:]
     var matchedDisposals: [String: UKShareMatching.Disposal] = [:]
+    var rowPresentations: [String: HistoryRowPresentation] = [:]
 
     func page(category: HistoryCategory, basis: TaxYearBasis, year: String?) -> HistoryActivityPage {
         let period = year.map { Period(basis: basis, year: $0) } ?? Period()
@@ -1328,6 +1387,10 @@ struct HistoryPreparedLedger {
         // The year filters apply to its results, never to acquisition lots.
         let transactions = activities.map(\.transaction)
         var result = Self()
+        for activity in activities {
+            try Task.checkCancellation()
+            result.rowPresentations[activity.id] = HistoryRowPresentation(activity)
+        }
         result.realisedTotal = RealisedProfitCalculator.summarize(transactions: transactions)
         for basis in TaxYearBasis.allCases {
             try Task.checkCancellation()

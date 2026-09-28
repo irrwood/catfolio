@@ -83,6 +83,23 @@ final class IndustrySentimentEngineTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(value.z20), 1.2290306962245858, accuracy: 1e-9)
     }
 
+    func testCachedDatesPreserveSnapshotRoundTrip() throws {
+        let original = try snapshot(count: 260, shift: 3, lastDayUp: true)
+        let encoded = try JSONEncoder.sentimentEncoder.encode(original)
+        let restored = try IndustrySentimentSnapshot.decode(encoded)
+        XCTAssertEqual(restored.history.map(\.timestamp), original.history.map(\.timestamp))
+        XCTAssertEqual(restored.history.map(\.date), original.history.map(\.date))
+        XCTAssertEqual(restored.history.map(\.close), original.history.map(\.close))
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        let rows = try XCTUnwrap(object["history"] as? [[String: Any]])
+        XCTAssertNil(rows.first?["timestamp"], "The cached date must not change the snapshot file format")
+    }
+
+    func testMalformedHistoryDateIsRejectedDuringDecode() {
+        let payload = Data(#"{"date":"invalid","close":25,"ma20":null,"volume":null}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(IndustrySentimentSnapshot.Day.self, from: payload))
+    }
+
     func testCboeHistoryParsesToIsoDates() throws {
         let csv = "\u{FEFF}DATE,OPEN,HIGH,LOW,CLOSE\n09/16/2026,36.27,39.05,35.16,38.20\n09/17/2026,35.30,36.51,33.86,35.19\n"
         let rows = try IndustrySentimentClient.parseVolatility(Data(csv.utf8))

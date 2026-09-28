@@ -619,7 +619,7 @@ struct PortfolioAccount: Identifiable, Equatable, Codable {
     /// SnapTrade accounts are created only after a confirmed complete preview,
     /// so an empty SnapTrade account has already synced successfully.
     var awaitsFirstSync: Bool {
-        source != "SnapTrade" && positionCount == 0 && transactionCount == 0
+        !["SnapTrade", "Robinhood"].contains(source) && positionCount == 0 && transactionCount == 0
     }
 
     var brokerName: String {

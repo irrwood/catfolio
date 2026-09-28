@@ -15,6 +15,7 @@ struct HeatmapHeroState {
     /// tracks, drags, decelerates or scrolls programmatically.
     var isScrolling: Bool
     var onToggle: () -> Void
+    var collapsedHeight: CGFloat = 202
 
     /// How far to pull before letting go stands the heatmap up, or lays it
     /// back down.
@@ -172,7 +173,7 @@ struct HeatmapHeroTextures {
         locale: Locale,
         displayScale: CGFloat
     ) async -> HeatmapHeroTextures? {
-        let ground = SettingsTemplate.pageBackground
+        let ground = Color(uiColor: .systemBackground)
 
         let renderer = ImageRenderer(
             content: heatmap
@@ -287,6 +288,7 @@ enum HeatmapHeroBlur {
 }
 
 private struct HeatmapHeroMorph<Heatmap: View>: View, Animatable {
+    @Environment(\.displayScale) private var displayScale
     /// 0 lying on the plane, 1 standing in its place.
     var progress: Double
     let state: HeatmapHeroState
@@ -299,7 +301,7 @@ private struct HeatmapHeroMorph<Heatmap: View>: View, Animatable {
     let onHeatmapSize: (CGSize) -> Void
 
     /// How much of the page the plane takes below the large title.
-    static var collapsedHeight: CGFloat { 250 }
+    var collapsedHeight: CGFloat { state.collapsedHeight }
 
     var animatableData: Double {
         get { progress }
@@ -310,7 +312,7 @@ private struct HeatmapHeroMorph<Heatmap: View>: View, Animatable {
         let e = CGFloat(min(1, max(0, progress)))
         let isUpright = e > 0.999
         let expandedHeight = heatmapSize.height
-        let height = Self.collapsedHeight + (expandedHeight - Self.collapsedHeight) * e
+        let height = collapsedHeight + (expandedHeight - collapsedHeight) * e
 
         heatmap
         .fixedSize(horizontal: false, vertical: true)
@@ -344,58 +346,57 @@ private struct HeatmapHeroMorph<Heatmap: View>: View, Animatable {
         let inset = SettingsTemplate.pageInset
         let top = state.topInset + state.pull
         let size = CGSize(width: heatmapSize.width + inset * 2, height: top + height + 90)
-        let bottom = top + Self.collapsedHeight
         let settings = HeatmapHeroSurface.Settings(
             e: e,
             canvas: size,
-            isometricAnchor: CGPoint(x: size.width / 2, y: top + Self.collapsedHeight * 0.45),
+            isometricAnchor: CGPoint(x: size.width / 2, y: top + collapsedHeight * 0.45),
             uprightOrigin: CGPoint(x: inset, y: top)
         )
-        var bands = IsometricBands(
-            // Fully blurred through the large title, clear just below it.
-            top: .init(full: state.topInset - 30, clear: state.topInset + 40, maximum: 18, degrees: 3.79),
-            bottom: .init(full: bottom - 8, clear: bottom - 150, maximum: 16, degrees: 6.62),
-            fade: (clear: bottom - 140, full: bottom + 4),
-            // Radii and saturation are baked into the glow textures.
-            glows: [
-                .init(radius: HeatmapHeroBlur.glowStyles[0].radius, saturation: HeatmapHeroBlur.glowStyles[0].saturation,
-                      profile: [(0, 0.1), (state.topInset, 0.06), (bottom - 110, 0.08), (bottom - 30, 0)]),
-                .init(radius: HeatmapHeroBlur.glowStyles[1].radius, saturation: HeatmapHeroBlur.glowStyles[1].saturation,
-                      profile: [(0, 0.1), (state.topInset, 0.03), (bottom - 120, 0.06),
-                                (bottom - 45, 0.32), (bottom + 15, 0.2), (bottom + 75, 0)]),
-            ]
+        // Figma 496:23660: two vertical layers, with a clear interval
+        // between the status-bar fade and the lower fade behind the title.
+        let scale = size.width / 402
+        let topEnd = 81 * scale
+        let lowerStart = 158 * scale
+        let lowerEnd = 302 * scale
+        let effectStrength = 1 - IsometricBands.smoothstep(0, 0.55, e)
+        let samplingScale = Float(displayScale)
+
+        return HeatmapHeroSurface(
+            textures: textures,
+            layer: .sharp,
+            settings: settings,
+            drift: drift,
+            moves: drifts
         )
-        bands.strength = 1 - IsometricBands.smoothstep(0, 0.55, e)
-
-        // The large title sits on the plane. A veil of the page ground under
-        // the bar keeps it legible without a hard edge.
-        let title = state.topInset
-        let veil = bands.strength
-        let veilProfile: [(y: CGFloat, strength: CGFloat)] = [
-            (0, 0.4), (title - 70, 0.6), (title - 15, 0.55), (title + 35, 0),
-        ]
-
-        // Only the surfaces tick; the masks, the fade and the veil stay put
-        // and are not rebuilt every frame.
-        return IsometricEdgeEffects(bands: bands, size: size, ground: SettingsTemplate.pageBackground, glows: glows) { layer in
-            HeatmapHeroSurface(
-                textures: textures,
-                layer: layer,
-                settings: settings,
-                drift: drift,
-                moves: drifts
-            )
+        .visualEffect { content, proxy in
+            let arguments: [Shader.Argument] = [
+                .float2(proxy.size), .float(Float(topEnd)),
+                .float(Float(lowerStart)), .float(Float(lowerEnd)),
+                .float(Float(effectStrength)), .float(samplingScale)
+            ]
+            return content
+                .layerEffect(Shader(function: ShaderFunction(library: .default, name: "performanceHeroBlur"),
+                                    arguments: arguments + [.float2(1, 0)]),
+                             maxSampleOffset: CGSize(width: 44.1, height: 0))
+                .layerEffect(Shader(function: ShaderFunction(library: .default, name: "performanceHeroBlur"),
+                                    arguments: arguments + [.float2(0, 1)]),
+                             maxSampleOffset: CGSize(width: 0, height: 44.1))
         }
         .overlay {
-            SettingsTemplate.pageBackground
+            Color(uiColor: .systemBackground)
                 .mask {
-                    IsometricBands.band(size: size, degrees: 0) { y in
-                        IsometricBands.interpolate(veilProfile, at: y) * veil
-                    }
+                    LinearGradient(stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .clear, location: min(1, topEnd / size.height)),
+                        .init(color: .clear, location: min(1, lowerStart / size.height)),
+                        .init(color: .black, location: min(1, lowerEnd / size.height))
+                    ], startPoint: .top, endPoint: .bottom)
                 }
+                .opacity(effectStrength)
                 .allowsHitTesting(false)
         }
         .frame(width: size.width, height: size.height)
+        .clipped()
         .offset(x: -inset, y: -top)
         .accessibilityHidden(true)
     }
@@ -439,7 +440,7 @@ private struct HeatmapHeroSurface: View {
         let travel = drift.travel(at: date)
 
         ZStack(alignment: .topLeading) {
-            SettingsTemplate.pageBackground
+            Color(uiColor: .systemBackground)
             ZStack(alignment: .topLeading) {
                 let pattern = self.pattern
                 // Every other copy, fading first so one heatmap is left to

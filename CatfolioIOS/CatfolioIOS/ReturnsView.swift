@@ -21,7 +21,7 @@ struct ReturnsView: View {
     #endif
 
     var body: some View {
-        SettingsPage {
+        SettingsPage(pageBackground: Color(uiColor: .systemBackground)) {
             // The heatmap lives on the tab itself, not behind a row: it reads
             // the same holdings and daily changes the home list already has.
             // It starts lying on an isometric plane; a pull stands it up.
@@ -35,19 +35,50 @@ struct ReturnsView: View {
                     topInset: heroScroll.topInset,
                     isOnScreen: heroScroll.isHeroOnScreen,
                     isScrolling: isScrolling,
-                    onToggle: toggleHeatmap
+                    onToggle: toggleHeatmap,
+                    collapsedHeight: 100
                 )
             )
             .accessibilityIdentifier("performance.heatmap")
-            SettingsSectionHeader(L10n.text("Performance"))
-            ReturnsSourceCards(store: sourcePreviews)
-            SettingsCard {
-                ForEach(ReturnsChartDestination.allCases.filter { ![.heatmap, .contributors, .losses].contains($0) }) { chart in
-                    SettingsNavigationRow(icon: .symbol(chart.icon), title: chart.title) {
-                        ReturnsChartPage(chart: chart)
-                    }
-                    .accessibilityIdentifier("performance.chart.\(chart.rawValue)")
+            HStack(alignment: .center) {
+                Text(L10n.text("Performance"))
+                    .font(.system(size: 34, weight: .bold))
+                Spacer(minLength: 12)
+                Button(action: toggleHeatmap) {
+                    Label(L10n.text("持仓热力图"), systemImage: heatmapExpanded ? "chevron.up" : "play.fill")
+                        .font(.system(size: 13, weight: .semibold))
                 }
+                .buttonStyle(.bordered)
+                .tint(.primary)
+                .buttonBorderShape(.capsule)
+                // The hero morph lasts 0.7s; the control must reflect its
+                // destination state immediately, without retaining the play
+                // symbol in the native button's animated content snapshot.
+                .transaction { transaction in
+                    transaction.animation = nil
+                    transaction.disablesAnimations = true
+                }
+                .accessibilityIdentifier("performance.heatmap.toggle")
+            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 10)
+            ReturnsSourceCards(store: sourcePreviews)
+            HStack(spacing: 16) {
+                ReturnsNavigationCard(title: ReturnsChartDestination.comparison.title,
+                                      icon: ReturnsChartDestination.comparison.icon, identifier: "comparison") {
+                    ReturnsChartPage(chart: .comparison)
+                }
+                ReturnsNavigationCard(title: L10n.text("周期对比"),
+                                      icon: "clock.arrow.trianglehead.counterclockwise.rotate.90", identifier: "cycle") {
+                    CycleComparisonView()
+                }
+            }
+            SettingsCard {
+                SettingsNavigationRow(icon: .symbol(ReturnsChartDestination.valuation.icon),
+                                      title: ReturnsChartDestination.valuation.title) {
+                    ReturnsChartPage(chart: .valuation)
+                }
+                .accessibilityIdentifier("performance.chart.valuation")
             }
             TodayAttentionPreview()
             JEVTodayAttentionEntry()
@@ -90,8 +121,8 @@ struct ReturnsView: View {
         .onDisappear { isScrolling = false }
         .accessibilityIdentifier("returns-root")
         .softTopScrollEdge()
-        .navigationTitle(L10n.text("Performance"))
-        .navigationBarTitleDisplayMode(.large)
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
         .sheet(item: $selectedHolding) { holding in
             HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
@@ -107,6 +138,21 @@ struct ReturnsView: View {
             ReturnsChartPage(chart: chart)
         }
         #endif
+    }
+}
+
+private struct ReturnsNavigationCard<Destination: View>: View {
+    let title: String
+    let icon: String
+    let identifier: String
+    @ViewBuilder var destination: () -> Destination
+
+    var body: some View {
+        NavigationLink(destination: destination) {
+            ReturnsComparisonEntryArtwork(title: title, isCycle: identifier == "cycle")
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("performance.chart.\(identifier)")
     }
 }
 
@@ -203,12 +249,14 @@ struct ReturnsChartPage: View {
                 }
             }
         }
-        .background(Color(uiColor: .systemBackground))
+        .background(chart == .contributors ? ReturnsSourceChartStyle.incomeFooter : Color(uiColor: .systemBackground))
         .softTopScrollEdge()
+        .toolbarColorScheme(chart == .contributors ? .dark : nil, for: .navigationBar)
+        .tint(chart == .contributors ? .white : .accentColor)
         .navigationTitle(chart.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(chart == .comparison ? .hidden : .visible, for: .navigationBar)
-        .preferredColorScheme(chart == .comparison ? .dark : nil)
+        .toolbarVisibility(.hidden, for: .tabBar)
         .refreshable {
             if chart == .contributors || chart == .losses {
                 holdingHistoryRefreshRevision &+= 1
@@ -257,11 +305,19 @@ struct ReturnsChartPage: View {
     }
 }
 
+private struct ComparisonZeroPositionKey: PreferenceKey {
+    static var defaultValue: CGFloat? = nil
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
+        if let next = nextValue() { value = next }
+    }
+}
+
 struct ReturnsComparisonPanel: View {
     @Environment(\.locale) private var appLocale
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
     @State private var chartMode: ReturnsChartMode = {
         let arguments = LaunchArguments.all
         if arguments.contains("--show-cash-flow") { return .cashFlowMatched }
@@ -292,6 +348,7 @@ struct ReturnsComparisonPanel: View {
     @State private var showsBenchmarkPicker = false
     /// The list the comparison on screen was computed for.
     @State private var computedBenchmarks = ComparisonBenchmarkCatalog.symbols
+    @State private var zeroPosition: CGFloat = 230
 
     var body: some View {
         ScrollView {
@@ -325,21 +382,27 @@ struct ReturnsComparisonPanel: View {
         // The header rides over the chart as the page scrolls, with the
         // same soft blurred edge the other chart pages get from their bar.
         .comparisonTopBar { header }
+        .background { ComparisonSwipeBackSupport().frame(width: 0, height: 0) }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .foregroundStyle(.white)
+        .coordinateSpace(name: "comparison-page")
+        .onPreferenceChange(ComparisonZeroPositionKey.self) { value in
+            if let value { zeroPosition = value }
+        }
         .background {
-            LinearGradient(
-                stops: [
-                    .init(color: Color(red: 0.360386, green: 0.194594, blue: 0.834078), location: 0),
-                    .init(color: Color(red: 30 / 255, green: 16 / 255, blue: 69 / 255), location: 0.66),
-                    .init(color: Color(red: 13 / 255, green: 7 / 255, blue: 32 / 255), location: 0.85),
-                    .init(color: .black, location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            GeometryReader { geometry in
+                let top = geometry.frame(in: .named("comparison-page")).minY
+                let center = min(0.95, max(0.05, (zeroPosition - top) / max(1, geometry.size.height)))
+                LinearGradient(stops: [
+                    .init(color: Color(red: 91 / 255, green: 49 / 255, blue: 210 / 255), location: 0),
+                    .init(color: Color(red: 0.025, green: 0.012, blue: 0.065), location: center),
+                    .init(color: Color(red: 92 / 255, green: 50 / 255, blue: 213 / 255), location: 1)
+                ], startPoint: .top, endPoint: .bottom)
+            }
             .ignoresSafeArea()
         }
+        .environment(\.colorScheme, .dark)
+        .toolbarColorScheme(.dark, for: .navigationBar)
         .task { selectDrawableModeIfNeeded() }
         .onChange(of: model.comparisonRevision) { _, _ in
             computedBenchmarks = ComparisonBenchmarkCatalog.symbols
@@ -408,13 +471,15 @@ struct ReturnsComparisonPanel: View {
                         } label: {
                             Text(mode == .cashFlowMatched ? "Mirror" : mode.displayTitle)
                                 .font(.system(size: 15, weight: isSelected ? .semibold : .medium))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.primary)
                                 .frame(width: 90, height: 48)
                                 .background {
                                     if isSelected {
                                         Capsule()
                                             .fill(.white.opacity(0.22))
-                                            .overlay { Capsule().strokeBorder(.white.opacity(0.33), lineWidth: 1) }
+                                            .overlay {
+                                                Capsule().strokeBorder(Color.white.opacity(0.33), lineWidth: 1)
+                                            }
                                     }
                                 }
                         }
@@ -433,7 +498,7 @@ struct ReturnsComparisonPanel: View {
                             .font(.system(size: 15, weight: .semibold))
                         Image(systemName: "chevron.down")
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(.primary.opacity(0.7))
                     }
                     .frame(width: 110, height: 48)
                 }
@@ -498,15 +563,20 @@ private extension View {
     }
 }
 
+/// On the light page the faint dark-page glass would vanish: there the
+/// buttons are fuller glass over a white wash.
 private struct ReturnsHeaderCircleGlass: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
     @ViewBuilder
     func body(content: Content) -> some View {
+        let isDark = colorScheme == .dark
         if #available(iOS 26.0, *) {
             content.background {
                 ZStack {
-                    Circle().fill(.white.opacity(0.025))
-                    Color.clear.glassEffect(.regular.interactive(), in: Circle()).opacity(0.16)
-                    Circle().strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                    Circle().fill(.white.opacity(isDark ? 0.025 : 0.55))
+                    Color.clear.glassEffect(.regular.interactive(), in: Circle()).opacity(isDark ? 0.16 : 1)
+                    Circle().strokeBorder(isDark ? Color.white.opacity(0.12) : Color.black.opacity(0.05), lineWidth: 1)
                 }
             }
         } else {
@@ -516,15 +586,18 @@ private struct ReturnsHeaderCircleGlass: ViewModifier {
 }
 
 private struct ReturnsSwitcherGlass: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
     @ViewBuilder
     func body(content: Content) -> some View {
+        let isDark = colorScheme == .dark
         if #available(iOS 26.0, *) {
             content
                 .background {
                     ZStack {
-                        Capsule().fill(.white.opacity(0.03))
-                        Color.clear.glassEffect(.regular.interactive(), in: Capsule()).opacity(0.70)
-                        Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                        Capsule().fill(.white.opacity(isDark ? 0.03 : 0.45))
+                        Color.clear.glassEffect(.regular.interactive(), in: Capsule()).opacity(isDark ? 0.70 : 1)
+                        Capsule().strokeBorder(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 1)
                     }
                 }
         } else {
@@ -554,7 +627,7 @@ private typealias ReturnsTypography = LegacyType
 
 private enum ReturnsChartLayout {
     static let contentHorizontalInset: CGFloat = 20
-    static let plotHeight: CGFloat = 371
+    static let plotHeight: CGFloat = 392
     static let rangePickerHeight: CGFloat = 44
 }
 
@@ -563,7 +636,7 @@ private struct ReturnsTimeRangeControl: View {
     var isDisabled = false
 
     var body: some View {
-        ChartTimeRangePicker(selection: $selection, isDisabled: isDisabled)
+        ChartTimeRangePicker(selection: $selection, isDisabled: isDisabled, isOnComparisonField: true)
         .frame(height: ReturnsChartLayout.rangePickerHeight)
         .accessibilityLabel(L10n.text("收益图表时间范围"))
     }
@@ -661,7 +734,7 @@ private struct ReturnsComparisonPlaceholder: View {
                     }
                     .padding(.horizontal, 16)
                     .frame(height: 65)
-                    .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 16))
+                    .background { ReturnsGlassCardSurface() }
                     .opacity(isLoading ? 0.5 : 1)
                 }
             }
@@ -880,7 +953,7 @@ private struct ReturnsChart: View {
                     }
                     .buttonStyle(.plain)
                 }
-                .opacity(highlightedSeries == nil || isHighlighted ? 1 : 0.45)
+                .returnsDimmed(highlightedSeries != nil && !isHighlighted)
                 .accessibilityValue(item.isVisible ? L10n.text("已显示") : L10n.text("已隐藏"))
                 .accessibilityAction(named: isHighlighted ? L10n.text("取消高亮") : L10n.text("高亮曲线")) {
                     toggleHighlight(item.series)
@@ -1094,6 +1167,7 @@ enum ReturnsAxisLabels {
 
 private struct FastReturnsPlot: View {
     @Environment(\.locale) private var appLocale
+    @Environment(\.colorScheme) private var colorScheme
     let data: ReturnsDisplayData
     let transitionKey: String
     let rangeTransitionKey: String
@@ -1144,8 +1218,8 @@ private struct FastReturnsPlot: View {
             rangeSeriesIDs: [ReturnsSeriesStyle.portfolio],
             rangePrimarySeriesID: ReturnsSeriesStyle.portfolio,
             yAxisFont: .system(size: 14, weight: .regular, design: .rounded).italic(),
-            yAxisColor: .white.opacity(0.20),
-            yAxisLabel: axisLabel,
+            yAxisColor: .primary.opacity(0.20),
+            yAxisLabel: { _ in "" },
             xAxisLabel: shortDate,
             onSelect: onSelect,
             onMeasure: onMeasure,
@@ -1155,16 +1229,40 @@ private struct FastReturnsPlot: View {
             // Each line ends in its ring; the labels stand apart in the axis
             // column, shifted vertically to keep neighbouring tickers apart.
             GeometryReader { geometry in
+                let span = max(domain.upperBound - domain.lowerBound, 0.000001)
+                let zeroY = CGFloat(domain.upperBound / span) * geometry.size.height
+                Color.clear.preference(key: ComparisonZeroPositionKey.self,
+                    value: geometry.frame(in: .named("comparison-page")).minY + zeroY)
+                let zeroIndex = prepared.yTicks.indices.min {
+                    abs(prepared.yTicks[$0]) < abs(prepared.yTicks[$1])
+                }
+                ForEach(prepared.yTicks.indices, id: \.self) { index in
+                    let value = domain.contains(0) && index == zeroIndex ? 0 : prepared.yTicks[index]
+                    Text(axisLabel(value))
+                        .font(.system(size: 14, weight: .regular, design: .rounded))
+                        .tracking(2)
+                        .foregroundStyle(Color.white.opacity(0.3))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .frame(width: 50, alignment: .leading)
+                        .position(x: 45, y: min(geometry.size.height - 8, max(8,
+                            CGFloat((domain.upperBound - value) / span) * geometry.size.height)))
+                }
                 ForEach(endpointLayouts(height: geometry.size.height)) { endpoint in
+                    // Set back behind a highlighted line, a label darkens
+                    // but stays solid: see-through, the lines behind it
+                    // showed through the capsule.
+                    let isDimmed = highlightedSeries != nil && highlightedSeries != endpoint.id
                     Text(endpoint.text)
                         .font(Typography.text(size: 10, weight: .bold))
-                        .foregroundStyle(CatfolioTheme.blackTextOnColor)
+                        .foregroundStyle(isDimmed ? Color.primary.opacity(0.45) : CatfolioTheme.blackTextOnColor)
                         .lineLimit(1)
                         .minimumScaleFactor(0.72)
                         .frame(width: axisWidth, height: 18)
-                        .background(endpoint.color, in: Capsule())
-                        .opacity(highlightedSeries == nil || highlightedSeries == endpoint.id
-                                 ? 1 : ReturnsPlotSeriesCache.fadedOpacity)
+                        .background(isDimmed ? endpoint.color.mix(with: colorScheme == .dark ? .black : .white, by: 0.68)
+                                             : endpoint.color,
+                                    in: Capsule())
+                        .zIndex(highlightedSeries == endpoint.id ? 1 : 0)
                         .position(
                             x: geometry.size.width - axisWidth / 2,
                             y: endpoint.y
@@ -1286,7 +1384,7 @@ private final class ReturnsPlotSeriesCache {
                     StandardLineChartPoint(id: "\(name)|\($0.id)", date: $0.date, value: $0.value)
                 },
                 color: ReturnsSeriesStyle.color(for: name).opacity(isFaded ? Self.fadedOpacity : 1),
-                lineWidth: highlighted == name ? 2.6 : 2,
+                lineWidth: 2,
                 dash: Self.dashPattern(for: name, in: order, enabled: differentiateWithoutColor),
                 selectionRadius: name == ReturnsSeriesStyle.portfolio ? 3.6 : 2.8,
                 latestPointRadius: name == ReturnsSeriesStyle.portfolio ? 5 : 4,
@@ -1696,7 +1794,7 @@ private struct ReturnsRankingRow: View {
                     .lineLimit(1)
                 Text(item.amountValue.map { DisplayFormat.money($0) } ?? "—")
                     .font(.system(size: 15, weight: .regular, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.primary.opacity(0.5))
                     .lineLimit(1)
             }
 
@@ -1706,7 +1804,7 @@ private struct ReturnsRankingRow: View {
                 HStack(spacing: 0) {
                     Text("\(value >= 0 ? "+" : "")\((value * 100).formatted(.number.precision(.fractionLength(1))))")
                     Text("%")
-                        .foregroundStyle(.white.opacity(0.3))
+                        .foregroundStyle(.primary.opacity(0.3))
                 }
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .monospacedDigit()
@@ -1717,219 +1815,16 @@ private struct ReturnsRankingRow: View {
         }
         .padding(.horizontal, 16)
         .frame(height: 65)
-        .background { ReturnsGlassCardSurface(glow: isPortfolio ? color : nil) }
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.white.opacity(0.1))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(.white.opacity(0.05), lineWidth: 1)
+                }
+        }
         .opacity(item.isVisible ? 1 : 0.20)
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-}
-
-/// A ranking row that swipes: right to highlight its line (again to clear
-/// it), left to take the symbol out of the comparison. The portfolio's own
-/// row only highlights.
-private struct ReturnsSwipeRow<Content: View>: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
-    let color: Color
-    let isHighlighted: Bool
-    let canRemove: Bool
-    let onHighlight: () -> Void
-    let onRemove: () -> Void
-    @ViewBuilder let content: Content
-
-    @State private var offset: CGFloat = 0
-    @State private var isRemoving = false
-
-    private static var threshold: CGFloat { 76 }
-    private var isPastThreshold: Bool {
-        offset >= Self.threshold || (canRemove && offset <= -Self.threshold)
-    }
-
-    var body: some View {
-        content
-            .offset(x: offset)
-            .background { actions }
-            .gesture(ReturnsHorizontalPan(onChange: drag, onEnd: end))
-            .sensoryFeedback(.impact(weight: .light), trigger: isPastThreshold) { wasPast, isPast in
-                hapticsEnabled && !wasPast && isPast
-            }
-    }
-
-    private var actions: some View {
-        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
-        return ZStack {
-            if offset > 0 {
-                action(icon: "highlighter",
-                       title: isHighlighted ? L10n.text("取消高亮") : L10n.text("高亮"),
-                       tint: color, armedText: CatfolioTheme.blackTextOnColor, width: offset)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else if offset < 0, canRemove {
-                action(icon: "trash", title: L10n.text("移除"), tint: CatfolioStyle.red, armedText: .white,
-                       width: -offset)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            }
-        }
-        .clipShape(shape)
-    }
-
-    private func action(icon: String, title: String, tint: Color, armedText: Color, width: CGFloat) -> some View {
-        let isArmed = width >= Self.threshold
-        return VStack(spacing: 3) {
-            Image(systemName: icon)
-                .font(.system(size: 17, weight: .semibold))
-            Text(title)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .foregroundStyle(isArmed ? armedText : .white)
-        .scaleEffect(isArmed ? 1 : 0.86)
-        .opacity(min(1, Double(width / 44)))
-        .frame(width: max(0, width - 8))
-        .frame(maxHeight: .infinity)
-        .background(tint.opacity(isArmed ? 1 : 0.35),
-                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: isArmed)
-    }
-
-    private func drag(_ translation: CGFloat) {
-        guard !isRemoving else { return }
-        // Past the threshold, and wherever there is no action, the row resists.
-        func resisted(_ value: CGFloat, limit: CGFloat) -> CGFloat {
-            abs(value) <= limit ? value : (value > 0 ? 1 : -1) * (limit + (abs(value) - limit) * 0.3)
-        }
-        if translation < 0, !canRemove {
-            offset = resisted(translation, limit: 0)
-        } else {
-            offset = resisted(translation, limit: Self.threshold + 24)
-        }
-    }
-
-    private func end(_ translation: CGFloat, _ velocity: CGFloat) {
-        guard !isRemoving else { return }
-        let settle: Animation? = reduceMotion ? nil : .spring(duration: 0.32, bounce: 0.18)
-        if offset >= Self.threshold || (offset > 30 && velocity > 700) {
-            onHighlight()
-            withAnimation(settle) { offset = 0 }
-        } else if canRemove, offset <= -Self.threshold || (offset < -30 && velocity < -700) {
-            isRemoving = true
-            withAnimation(reduceMotion ? nil : .easeIn(duration: 0.2)) { offset = -500 } completion: {
-                onRemove()
-            }
-        } else {
-            withAnimation(settle) { offset = 0 }
-        }
-    }
-}
-
-/// A pan that only starts on a mostly sideways drag, so the page above still
-/// scrolls when the finger lands on a row.
-private struct ReturnsHorizontalPan: UIGestureRecognizerRepresentable {
-    let onChange: (CGFloat) -> Void
-    let onEnd: (CGFloat, CGFloat) -> Void
-
-    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
-
-    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
-        let pan = UIPanGestureRecognizer()
-        pan.delegate = context.coordinator
-        return pan
-    }
-
-    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
-        let translation = recognizer.translation(in: recognizer.view).x
-        switch recognizer.state {
-        case .changed:
-            onChange(translation)
-        case .ended, .cancelled, .failed:
-            onEnd(translation, recognizer.velocity(in: recognizer.view).x)
-        default:
-            break
-        }
-    }
-
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
-            guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
-            let velocity = pan.velocity(in: pan.view)
-            return abs(velocity.x) > abs(velocity.y) * 1.3
-        }
-    }
-}
-
-private struct ReturnsRankBadge: View {
-    let rank: Int
-    let color: Color
-    let isPortfolio: Bool
-
-    var body: some View {
-        ZStack {
-            if isPortfolio {
-                Circle().fill(
-                    RadialGradient(
-                        stops: [
-                            .init(color: Color(red: 52 / 255, green: 199 / 255, blue: 89 / 255), location: 0),
-                            .init(color: Color(red: 39 / 255, green: 148 / 255, blue: 66 / 255), location: 0.5),
-                            .init(color: Color(red: 25 / 255, green: 97 / 255, blue: 43 / 255), location: 1),
-                        ],
-                        center: .bottom,
-                        startRadius: 0,
-                        endRadius: 24
-                    )
-                )
-                // Figma's 16 × 11 ellipse starts 1.5 pt below the ball's top.
-                Ellipse()
-                    .fill(LinearGradient(colors: [.white.opacity(0.6), .clear],
-                                         startPoint: .top, endPoint: .bottom))
-                    .frame(width: 16, height: 11)
-                    .offset(y: -5)
-            } else {
-                Circle().fill(color.opacity(0.88))
-                if #available(iOS 26.0, *) {
-                    Color.clear
-                        .glassEffect(.clear.tint(color.opacity(0.28)), in: Circle())
-                } else {
-                    Circle().fill(.ultraThinMaterial).opacity(0.30)
-                }
-                Ellipse()
-                    .fill(LinearGradient(colors: [.white.opacity(0.52), .clear],
-                                         startPoint: .top, endPoint: .bottom))
-                    .frame(width: 16, height: 9)
-                    .offset(y: -6)
-            }
-
-            Text("\(rank)")
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .foregroundStyle(isPortfolio ? .white : Color(red: 0.004, green: 0.004, blue: 0.008))
-        }
-        .frame(width: 24, height: 24)
-        .overlay { Circle().strokeBorder(isPortfolio ? .black.opacity(0.1) : .white.opacity(0.06), lineWidth: 1) }
-        .shadow(color: .black.opacity(isPortfolio ? 0.25 : 0), radius: 7, y: 4)
-        .shadow(color: .black.opacity(isPortfolio ? 0.20 : 0), radius: 1.5, y: 2)
-    }
-}
-
-private struct ReturnsGlassCardSurface: View {
-    var glow: Color?
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
-        ZStack {
-            if #available(iOS 26.0, *) {
-                Color.clear
-                    .glassEffect(.clear.tint(.white.opacity(0.035)), in: shape)
-                    .opacity(0.25)
-            } else {
-                shape.fill(.ultraThinMaterial)
-            }
-            shape.fill(.white.opacity(0.08))
-            if let glow {
-                RadialGradient(colors: [glow.opacity(0.30), .clear],
-                               center: .leading, startRadius: 0, endRadius: 110)
-                    .clipShape(shape)
-            }
-            shape.strokeBorder(.white.opacity(0.05), lineWidth: 1)
-        }
-        .allowsHitTesting(false)
     }
 }
 
