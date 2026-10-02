@@ -200,6 +200,8 @@ struct HistoryView: View {
 
     @State private var scopedHoldings: [Holding] = []
     @State private var feeCharges: [HistoryFeeCharge] = []
+    /// Purchase id → value now less cost, USD. Waits for the scoped holdings.
+    @State private var buyGains: [String: Double] = [:]
     /// This calendar year's dividends: received so far, plus what today's
     /// holdings paid over the rest of the year last year.
     @State private var dividendForecastUSD: Double?
@@ -251,7 +253,7 @@ struct HistoryView: View {
             } else {
                 HistoryPagingView(selection: $category, contentID: HistoryPageContentID(
                     ledger: preparedLedger.contentID, basis: taxYearBasisRaw,
-                    year: selectedTaxYear, forecast: dividendForecastUSD
+                    year: selectedTaxYear, forecast: dividendForecastUSD, gains: buyGains.count
                 )) { pageCategory in
                     AnyView(historyList(for: pageCategory))
                 }
@@ -710,8 +712,12 @@ struct HistoryView: View {
         }
     }
 
+    /// Logo and name; "买入 · 10 股 · 账户" beneath. The amount on the right,
+    /// with what the order has made or lost beneath it.
     private func activityRow(_ activity: PortfolioActivity) -> some View {
         let presentation = preparedLedger.rowPresentations[activity.id] ?? HistoryRowPresentation(activity)
+        let isOrder = activity.kind == .buy || activity.kind == .sell
+        let gain = rowGain(activity)
         return HStack(spacing: 12) {
             activityIcon(activity)
 
@@ -720,17 +726,10 @@ struct HistoryView: View {
                     .font(.body.weight(.semibold))
                     .lineLimit(1)
 
-                HStack(spacing: 7) {
-                    Text(activity.kind.title)
-                        .lineLimit(1)
-
-                    if selectedAccounts.count > 1,
-                       let account = account(for: activity.transaction.accountKey) {
-                        accountTag(account)
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Text(subtitle(activity, presentation: presentation))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
 
                 if let disposal = matchedDisposals[activity.transaction.id] {
                     matchingNote(disposal)
@@ -740,26 +739,44 @@ struct HistoryView: View {
             Spacer(minLength: 8)
 
             VStack(alignment: .trailing, spacing: 4) {
-                let isOrder = activity.kind == .buy || activity.kind == .sell
                 Text(presentation.amount)
-                .appNumber(.subheading, weight: .semibold)
-                .foregroundStyle(isOrder ? CatfolioTheme.primaryText : amountColor(activity.nativeAmount))
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
+                    .appNumber(.subheading, weight: .semibold)
+                    .foregroundStyle(isOrder ? CatfolioTheme.primaryText : amountColor(activity.nativeAmount))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
 
-                if isOrder {
-                    Text(presentation.quantity)
-                        .appNumber(.caption)
-                        .foregroundStyle(.secondary)
+                if let gain {
+                    Text(gain.text)
+                        .appNumber(.caption, weight: .medium)
+                        .foregroundStyle(amountColor(gain.value))
                         .lineLimit(1)
-                } else if activity.kind == .dividend, activity.transaction.ticker != "CASH" {
-                    Text(activity.transaction.ticker)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
                 }
             }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    private func subtitle(_ activity: PortfolioActivity, presentation: HistoryRowPresentation) -> String {
+        var parts = [activity.kind.title]
+        if !presentation.quantity.isEmpty { parts.append(presentation.quantity) }
+        if let account = account(for: activity.transaction.accountKey) {
+            parts.append(accountTagTitle(account))
+        } else if let name = activity.transaction.accountName, !name.isEmpty {
+            parts.append(name)
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    /// A sale's realised result; for a purchase, what it is worth now against
+    /// what it cost.
+    private func rowGain(_ activity: PortfolioActivity) -> HistoryRowGain? {
+        switch activity.kind {
+        case .sell: preparedLedger.saleGains[activity.id]
+        case .buy: buyGains[activity.id].map {
+            HistoryRowGain(text: DisplayFormat.money($0, signed: true), value: $0)
+        }
+        default: nil
+        }
     }
 
     /// States which acquisitions a disposal was matched against.
@@ -832,21 +849,6 @@ struct HistoryView: View {
                     .stroke(Color(uiColor: .systemBackground), lineWidth: 1.5)
             }
             .accessibilityHidden(true)
-    }
-
-    private func accountTag(_ account: PortfolioAccount) -> some View {
-        Button {
-            if effectiveAccountIDs == [account.id] {
-                selectedAccountIDs = nil
-            } else {
-                selectedAccountIDs = [account.id]
-            }
-        } label: {
-            Text(accountTagTitle(account))
-                .lineLimit(1)
-        }
-        .buttonStyle(.borderless)
-        .accessibilityHint("Filter History to this account; tap again to show all accounts")
     }
 
     private var currentPage: HistoryActivityPage {
@@ -1006,8 +1008,10 @@ struct HistoryView: View {
             let allHoldings = (try? await scopedPositions) ?? []
             let holdings = allHoldings.filter { ticker == nil || $0.ticker.uppercased() == ticker }
             try Task.checkCancellation()
-            let charges = await Task.detached(priority: .userInitiated) {
-                HistoryFeeCharge.build(holdings: holdings)
+            let activities = prepared.page(category: .orders, basis: .calendar, year: nil).activities
+            let (charges, gains) = await Task.detached(priority: .userInitiated) {
+                (HistoryFeeCharge.build(holdings: holdings),
+                 HistoryRowGain.purchaseGains(activities, holdings: holdings))
             }.value
             try Task.checkCancellation()
             preparedLedger = prepared
@@ -1020,6 +1024,7 @@ struct HistoryView: View {
             }
             scopedHoldings = holdings
             feeCharges = charges
+            buyGains = gains
             withAnimation(.easeOut(duration: 0.2)) { isLoading = false }
             // After the lists are up: the schedules are a request per
             // holding, the first time each day.
@@ -1351,11 +1356,59 @@ struct HistoryRowPresentation {
     }
 }
 
+/// What an order has made or lost, ready to print under its amount.
+struct HistoryRowGain: Equatable, Sendable {
+    let text: String
+    /// Only the sign is read: it picks the colour.
+    let value: Double
+
+    init(text: String, value: Double) {
+        self.text = text
+        self.value = value
+    }
+
+    /// The broker's own figure stays in its own currency.
+    init?(_ outcome: RealisedSale.Outcome) {
+        switch outcome {
+        case let .broker(value, currency, _):
+            let amount = NSDecimalNumber(decimal: value).doubleValue
+            self.init(text: DisplayFormat.money(amount, currency: currency, signed: true, fractionDigits: 2), value: amount)
+        case let .estimated(usd):
+            guard usd.isFinite else { return nil }
+            self.init(text: DisplayFormat.money(usd, signed: true, fractionDigits: 2), value: usd)
+        case .unavailable:
+            return nil
+        }
+    }
+
+    /// Each purchase at today's quote, on today's share basis, in USD.
+    /// Skipped when the security is no longer held or either side lacks a rate.
+    static func purchaseGains(_ activities: [PortfolioActivity], holdings: [Holding]) -> [String: Double] {
+        let quotes = Dictionary(holdings.map { ($0.ticker.uppercased(), $0) }, uniquingKeysWith: { first, _ in first })
+        let splits = try? StockSplitCatalog.bundled.get()
+        var gains: [String: Double] = [:]
+        for activity in activities where activity.kind == .buy {
+            let transaction = activity.transaction
+            guard let holding = quotes[transaction.ticker.uppercased()], holding.quotePrice > 0,
+                  let quoteRate = LocalPortfolioEngine.usdRate(for: holding.quoteCurrency ?? transaction.currency),
+                  let costRate = LocalPortfolioEngine.usdRate(for: transaction.currency) else { continue }
+            let split = splits?.adjustment(ticker: transaction.ticker, from: transaction.date) ?? 1
+            guard split > 0 else { continue }
+            let quantity = abs(transaction.quantity) * split
+            let cost = transaction.price / split
+            let gain = (holding.quotePrice * quoteRate - cost * costRate) * quantity
+            if gain.isFinite { gains[activity.id] = gain }
+        }
+        return gains
+    }
+}
+
 private struct HistoryPageContentID: Hashable {
     let ledger: UUID
     let basis: String
     let year: String?
     let forecast: Double?
+    let gains: Int
 }
 
 struct HistoryPreparedLedger {
@@ -1370,6 +1423,7 @@ struct HistoryPreparedLedger {
     var realisedByTaxYear: [TaxYearBasis: [(label: String, summary: RealisedProfitSummary)]] = [:]
     var matchedDisposals: [String: UKShareMatching.Disposal] = [:]
     var rowPresentations: [String: HistoryRowPresentation] = [:]
+    var saleGains: [String: HistoryRowGain] = [:]
 
     func page(category: HistoryCategory, basis: TaxYearBasis, year: String?) -> HistoryActivityPage {
         let period = year.map { Period(basis: basis, year: $0) } ?? Period()
@@ -1398,7 +1452,12 @@ struct HistoryPreparedLedger {
             try Task.checkCancellation()
             result.rowPresentations[activity.id] = HistoryRowPresentation(activity)
         }
-        result.realisedTotal = RealisedProfitCalculator.summarize(transactions: transactions)
+        let sales = RealisedProfitCalculator.sales(transactions: transactions)
+        result.realisedTotal = RealisedProfitCalculator.summarize(sales: sales)
+        for sale in sales {
+            guard let id = sale.transactionID, let gain = HistoryRowGain(sale.outcome) else { continue }
+            result.saleGains[id] = gain
+        }
         for basis in TaxYearBasis.allCases {
             try Task.checkCancellation()
             result.realisedByTaxYear[basis] = RealisedProfitCalculator

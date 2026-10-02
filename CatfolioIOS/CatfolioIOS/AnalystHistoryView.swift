@@ -1,5 +1,4 @@
 import SwiftUI
-import Charts
 
 struct AnalystHistorySnapshot: Decodable {
     let symbol: String
@@ -66,8 +65,14 @@ struct AnalystHistoryView: View {
     @State private var ratings = false
     @State private var months = 0
     @State private var selection: String?
+    /// Lines the reader turned off. Every line starts on.
+    @State private var hidden: Set<String> = []
     private var labels: [String] { [L10n.text("卖出"), L10n.text("持有"), L10n.text("买入"), L10n.text("强烈买入")] }
-    private let colors: [Color] = [CatfolioStyle.red.opacity(0.65), Color.yellow.opacity(0.35), CatfolioStyle.green.opacity(0.5), CatfolioStyle.green]
+    /// Opaque, because the ratings stack by painting over one another.
+    private let colors: [Color] = [
+        Color(red: 0.937, green: 0.384, blue: 0.384), Color(red: 1.000, green: 0.800, blue: 0.290),
+        Color(red: 0.561, green: 0.835, blue: 0.561), Color(red: 0.204, green: 0.659, blue: 0.325),
+    ]
     private var points: [AnalystHistoryPoint] {
         let all = (snapshot?.points ?? []).filter { !ratings || $0.hasRatings }.sorted { $0.date < $1.date }
         return months == 0 ? all : Array(all.suffix(months))
@@ -97,12 +102,12 @@ struct AnalystHistoryView: View {
                 if snapshot != nil, !points.isEmpty {
                     VStack(alignment: .leading, spacing: 16) {
                         readout
-                        if ratings { ratingsChart } else if points.contains(where: { $0.price != nil || $0.validTargets }) { targetsChart } else {
+                        if ratings || points.contains(where: { $0.price != nil || $0.validTargets }) { chart } else {
                             Text(L10n.text("来源暂无目标价和股价，可切换查看推荐建议。"))
                                 .foregroundStyle(.secondary).frame(height: 160)
                         }
                         legend
-                        Text(L10n.text(ratings ? "左轴：评级数量 · 右轴：股价 USD" : "单位 USD · 阴影为最低至最高目标价"))
+                        Text(L10n.text(ratings ? "纵轴：评级数量，自下而上累计" : "单位 USD · 虚线为最高与最低目标价"))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     .padding(20)
@@ -131,7 +136,10 @@ struct AnalystHistoryView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.text("关闭")) { dismiss() } } }
         .task(id: symbol) { snapshot = AnalystHistorySnapshot.load(symbol: symbol) }
-        .onChange(of: ratings) { _, _ in selection = nil }
+        .onChange(of: ratings) { _, _ in
+            selection = nil
+            hidden = []
+        }
         .onChange(of: months) { _, _ in selection = nil }
     }
 
@@ -150,79 +158,140 @@ struct AnalystHistoryView: View {
             }
         }.frame(minHeight: 92, alignment: .topLeading)
     }
-    private func priceSegment(for point: AnalystHistoryPoint) -> String {
-        String(points.prefix { $0.date <= point.date }.filter { $0.price == nil }.count)
+    // MARK: Chart
+
+    /// One drawn line and its legend chip.
+    private struct Line: Identifiable {
+        let id: String
+        let title: String
+        let color: Color
+        var lineWidth: CGFloat = 2
+        var dash: [CGFloat] = []
+        /// Filled down to zero, drawn largest first, so the ratings stack.
+        var fill: Color? = nil
+        let value: (AnalystHistoryPoint) -> Double?
+        let text: (AnalystHistoryPoint) -> String
     }
-    private func segment(for point: AnalystHistoryPoint) -> String {
-        String(points.prefix { $0.date <= point.date }.filter { !$0.validTargets }.count)
-    }
-    private var targetsChart: some View {
-        StandardLineChartEntrance(appearanceID: "analyst-targets|\(symbol)") { phase in
-        Chart(Array(points.enumerated()), id: \.element.id) { item in
-            let p = item.element
-            let fraction = Double(item.offset) / Double(max(1, points.count - 1))
-            if let low = p.low, let high = p.high, let mean = p.mean {
-                AreaMark(x: .value("Month", p.date),
-                    yStart: .value("Low", phase.value(low, fraction: fraction, domain: 0...priceCeiling)),
-                    yEnd: .value("High", phase.value(high, fraction: fraction, domain: 0...priceCeiling)), series: .value("Segment", segment(for: p)))
-                    .foregroundStyle(CatfolioStyle.blue.opacity(0.12))
-                LineMark(x: .value("Month", p.date), y: .value("USD", phase.value(mean, fraction: fraction, domain: 0...priceCeiling)), series: .value("Series", "Consensus-" + segment(for: p)))
-                    .foregroundStyle(CatfolioStyle.blue.opacity(0.45)).lineStyle(StrokeStyle(lineWidth: 2))
-            }
-            if let price = p.price {
-                LineMark(x: .value("Month", p.date), y: .value("USD", phase.value(price, fraction: fraction, domain: 0...priceCeiling, seriesIndex: 1, seriesCount: 2)), series: .value("Series", "Price-" + priceSegment(for: p)))
-                    .foregroundStyle(CatfolioStyle.blue).lineStyle(StrokeStyle(lineWidth: 3))
+
+    private var lines: [Line] {
+        if ratings {
+            // Cumulative from the bottom: sell, then hold above it, and so on.
+            // Each is filled to zero and drawn over the taller ones.
+            return (0..<4).reversed().map { index in
+                Line(id: "rating-\(index)", title: labels[index], color: colors[index], lineWidth: 0,
+                     fill: colors[index],
+                     value: { $0.hasRatings ? Double($0.counts.prefix(index + 1).reduce(0, +)) : nil },
+                     text: { $0.hasRatings ? "\($0.counts[index])" : "—" })
             }
         }
-        .chartYScale(domain: 0...priceCeiling)
-        .chartXAxis { AxisMarks(values: axisDates) { value in AxisValueLabel { if let d = value.as(String.self) { Text(String(d.prefix(7))).font(.system(size: 9)) } } } }
-        .chartXSelection(value: $selection)
+        return [
+            Line(id: "price", title: L10n.text("股价"), color: CatfolioStyle.blue, lineWidth: 2.5,
+                 value: \.price, text: { money($0.price) }),
+            Line(id: "mean", title: L10n.text("共识目标价"), color: Self.consensusColor, lineWidth: 2,
+                 value: { $0.validTargets ? $0.mean : nil }, text: { money($0.validTargets ? $0.mean : nil) }),
+            Line(id: "high", title: L10n.text("最高目标价"), color: CatfolioTheme.positive, lineWidth: 1.5, dash: [4, 3],
+                 value: { $0.validTargets ? $0.high : nil }, text: { money($0.validTargets ? $0.high : nil) }),
+            Line(id: "low", title: L10n.text("最低目标价"), color: CatfolioTheme.danger, lineWidth: 1.5, dash: [4, 3],
+                 value: { $0.validTargets ? $0.low : nil }, text: { money($0.validTargets ? $0.low : nil) }),
+        ]
+    }
+
+    private static let consensusColor = Color(red: 1.000, green: 0.584, blue: 0.000)
+
+    private func date(_ point: AnalystHistoryPoint) -> Date {
+        DayDateCodec.date(from: point.date) ?? .distantPast
+    }
+
+    /// A line breaks where the source left a month empty rather than joining
+    /// across it.
+    private func series(_ line: Line) -> [StandardLineChartSeries] {
+        var runs: [[StandardLineChartPoint]] = [[]]
+        for point in points {
+            if let value = line.value(point), value.isFinite {
+                runs[runs.count - 1].append(StandardLineChartPoint(id: "\(line.id)|\(point.date)", date: date(point), value: value))
+            } else if !(runs.last?.isEmpty ?? true) {
+                runs.append([])
+            }
+        }
+        return runs.enumerated().filter { !$0.element.isEmpty }.map { index, run in
+            StandardLineChartSeries(
+                id: "\(line.id)|\(index)", points: run, color: line.color,
+                lineWidth: line.fill == nil ? line.lineWidth : 0.01, dash: line.dash,
+                areaFill: line.fill, areaBaseline: line.fill == nil ? nil : 0,
+                selectionRadius: line.fill == nil ? 3 : 0, latestPointRadius: nil,
+                latestPointUsesGlass: false)
+        }
+    }
+
+    private var chart: some View {
+        let visible = lines.filter { !hidden.contains($0.id) }
+        let ceiling = ratings ? countCeiling : priceCeiling
+        let drawn = visible.flatMap(series)
+        return StandardLineChart(
+            series: drawn,
+            interactionDates: points.map(date),
+            domain: 0...ceiling,
+            yTicks: [0, ceiling / 2, ceiling],
+            transitionKey: "\(ratings)|\(months)|\(hidden.sorted().joined(separator: ","))",
+            appearanceID: "analyst-history|\(symbol)",
+            selectedDate: selection.flatMap { DayDateCodec.date(from: $0) },
+            selectionIndicatorLabel: selected.map { String($0.date.prefix(7)) },
+            selectionSeriesIDs: ratings ? [] : Set(drawn.map(\.id)),
+            yAxisLabel: { ratings ? "\(Int($0.rounded()))" : "$\(Int($0.rounded()))" },
+            xAxisLabel: { DayDateCodec.string(from: $0).prefix(7).description },
+            onSelect: { date in
+                let text = DayDateCodec.string(from: date)
+                selection = points.first { $0.date == text }?.date
+            },
+            onInteractionEnded: { _ in selection = nil }
+        )
         .frame(height: 250)
-        }
+        .accessibilityLabel(L10n.text(ratings ? "推荐建议历史" : "目标价历史"))
     }
-    private var ratingsChart: some View {
-        StandardLineChartEntrance(appearanceID: "analyst-ratings|\(symbol)") { phase in
-        Chart {
-            ForEach(Array(points.enumerated()), id: \.element.id) { item in
-                let p = item.element
-                ForEach(0..<4, id: \.self) { i in
-                    BarMark(x: .value("Month", p.date), yStart: .value("Count", Double(p.counts.prefix(i).reduce(0, +)) / countCeiling), yEnd: .value("Count", Double(p.counts.prefix(i + 1).reduce(0, +)) / countCeiling))
-                        .foregroundStyle(colors[i])
-                }
-                if let price = p.price {
-                    LineMark(x: .value("Month", p.date), y: .value("Price", phase.value(price / priceCeiling,
-                        fraction: Double(item.offset) / Double(max(1, points.count - 1)), domain: 0...1)), series: .value("Segment", priceSegment(for: p)))
-                        .foregroundStyle(CatfolioStyle.blue).lineStyle(StrokeStyle(lineWidth: 3))
-                }
-            }
-        }
-        .chartYScale(domain: 0...1)
-        .chartYAxis {
-            AxisMarks(position: .leading, values: [0.0, 0.25, 0.5, 0.75, 1.0]) { value in
-                AxisGridLine()
-                AxisValueLabel { if let n = value.as(Double.self) { Text("\(Int((n * countCeiling).rounded()))") } }
-            }
-            AxisMarks(position: .trailing, values: [0.0, 0.25, 0.5, 0.75, 1.0]) { value in
-                AxisValueLabel { if let n = value.as(Double.self) { Text("$\(Int((n * priceCeiling).rounded()))") } }
-            }
-        }
-        .chartXAxis { AxisMarks(values: axisDates) { value in AxisValueLabel { if let d = value.as(String.self) { Text(String(d.prefix(7))).font(.system(size: 9)) } } } }
-        .chartXSelection(value: $selection)
-        .frame(height: 250)
-        }
-    }
-    private var axisDates: [String] {
-        let step = max(1, points.count / 4)
-        return points.enumerated().filter { $0.offset % step == 0 }.map { $0.element.date }
-    }
+
+    // MARK: Legend
+
+    /// One chip per line with its value at the month being read; a tap shows
+    /// or hides the line. The same chips as the cycle comparison.
     private var legend: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if ratings {
-                HStack { ForEach(0..<4, id: \.self) { i in
-                    HStack(spacing: 3) { Circle().fill(colors[i]).frame(width: 7, height: 7); Text(labels[i]) }
-                } }.font(.caption2)
-            } else { Text(L10n.text("浅蓝：共识目标价 · 阴影：目标价范围")).font(.caption2).foregroundStyle(.secondary) }
-            HStack { Capsule().fill(CatfolioStyle.blue).frame(width: 16, height: 3); Text(L10n.text("股价（来源月度图表）")).font(.caption2) }
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8)], alignment: .leading, spacing: 8) {
+            ForEach(ratings ? Array(lines.reversed()) : lines) { line in
+                chip(line)
+            }
         }
+    }
+
+    private func chip(_ line: Line) -> some View {
+        let isShown = !hidden.contains(line.id)
+        let valueText = selected.map(line.text) ?? "—"
+        return Button {
+            if isShown { hidden.insert(line.id) } else { hidden.remove(line.id) }
+            selection = nil
+        } label: {
+            HStack(spacing: 6) {
+                Circle()
+                    .strokeBorder(line.color, lineWidth: 2)
+                    .background(Circle().fill(isShown ? line.color : .clear))
+                    .frame(width: 10, height: 10)
+                Text(line.title)
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Spacer(minLength: 4)
+                Text(valueText)
+                    .font(.caption.weight(.semibold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .foregroundStyle(isShown ? CatfolioTheme.primaryText : Color.secondary)
+            .padding(.horizontal, 10)
+            .frame(height: 32)
+            .background(Capsule().fill(Color.primary.opacity(isShown ? 0.07 : 0.03)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(line.title)
+        .accessibilityValue((isShown ? L10n.text("已显示") : L10n.text("已隐藏")) + " · " + valueText)
     }
 }

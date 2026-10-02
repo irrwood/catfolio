@@ -406,7 +406,7 @@ enum StandardLineChartDataTransition: Equatable {
 private struct StandardLineChartRevision: Equatable {
     let transitionKey: String
     let rangeTransitionKey: String?
-    let contentFingerprint: String
+    let contentFingerprint: Int
 }
 
 private struct StandardLineChartTransitionDriver<Content: View>: View, Animatable {
@@ -807,29 +807,42 @@ struct StandardLineChart: View {
         }
     }
 
+    /// Evaluated on every update, a crosshair drag's included, so it hashes
+    /// rather than formatting: the earlier string built every series' colour
+    /// and sampled values into text on each frame of a drag.
     private var revision: StandardLineChartRevision {
-        let seriesParts = series.map { item in
-            let first = item.points.first
-            let last = item.points.last
-            let sampleStep = max(1, item.points.count / 8)
-            let samples = item.points.indices.compactMap { index -> String? in
-                guard index.isMultiple(of: sampleStep) || index == item.points.index(before: item.points.endIndex) else {
-                    return nil
-                }
-                let point = item.points[index]
-                return "\(point.id):\(point.value)"
-            }
+        var hasher = Hasher()
+        hasher.combine(interactionDates.count)
+        hasher.combine(interactionDates.first)
+        hasher.combine(interactionDates.last)
+        hasher.combine(domain.lowerBound)
+        hasher.combine(domain.upperBound)
+        for item in series {
+            hasher.combine(item.id)
+            hasher.combine(item.points.count)
+            hasher.combine(item.points.first?.id)
+            hasher.combine(item.points.last?.id)
             // The paint too: a band set back behind a highlighted one keeps
             // its points and must still redraw.
-            let paint = "\(item.color)|\(item.areaFill.map { "\($0)" } ?? "-")|\(item.lineWidth)"
-            return "\(item.id):\(item.points.count):\(first?.id ?? "-"):\(last?.id ?? "-"):\(paint):\(samples.joined(separator: ","))"
+            hasher.combine(item.color)
+            hasher.combine(item.areaFill)
+            hasher.combine(item.lineWidth)
+            let sampleStep = max(1, item.points.count / 8)
+            for index in stride(from: 0, to: item.points.count, by: sampleStep) {
+                hasher.combine(item.points[index].id)
+                hasher.combine(item.points[index].value)
+            }
+            if let last = item.points.last { hasher.combine(last.value) }
         }
-        let markerParts = markers.map { "\($0.id):\($0.point.id):\($0.point.value)" }
-        let scalePart = "\(interactionDates.count):\(interactionDates.first?.timeIntervalSinceReferenceDate ?? 0):\(interactionDates.last?.timeIntervalSinceReferenceDate ?? 0):\(domain.lowerBound):\(domain.upperBound)"
+        for marker in markers {
+            hasher.combine(marker.id)
+            hasher.combine(marker.point.id)
+            hasher.combine(marker.point.value)
+        }
         return StandardLineChartRevision(
             transitionKey: transitionKey,
             rangeTransitionKey: rangeTransitionKey,
-            contentFingerprint: ([scalePart] + seriesParts + markerParts).joined(separator: "|")
+            contentFingerprint: hasher.finalize()
         )
     }
 

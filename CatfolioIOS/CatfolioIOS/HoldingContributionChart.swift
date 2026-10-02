@@ -339,28 +339,32 @@ struct HoldingContributionChart: View {
         .sensoryFeedback(.selection, trigger: "\(hiddenTickers.sorted())|\(showsPrincipal)|\(showsOthers)") { _, _ in hapticsEnabled }
     }
 
+    /// The gain is the headline — what the holdings have made — with the
+    /// value and principal it is the difference of on the line beneath.
     private func header(_ row: HoldingContributionStack.Row) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        let gain = row.total - row.principal
+        return VStack(alignment: .leading, spacing: 4) {
             Text(row.date.formatted(.dateTime.year().month(.abbreviated).day()))
                 .appText(.caption, weight: .medium)
                 .foregroundStyle(heroSecondary)
             CatfolioDisplayAmountText(
-                text: DisplayFormat.money(row.total, fractionDigits: 0),
+                text: DisplayFormat.money(gain, signed: true, fractionDigits: 0),
                 size: 34,
                 symbolSize: 22,
                 color: heroPrimary
             )
             // As on the home page: the digits roll to the new figure as the
             // reader moves along the chart or changes the range.
-            .contentTransition(.numericText(value: row.total))
-            .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: row.total)
+            .contentTransition(.numericText(value: gain))
+            .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: gain)
             HStack(spacing: 4) {
-                // The sign carries the direction here; on the tinted field
-                // the line reads as one sentence rather than a green figure.
-                Text(DisplayFormat.money(row.total - row.principal, signed: true, fractionDigits: 0))
+                Text(L10n.text("市值"))
+                    .appText(.footnote, weight: .medium)
+                    .foregroundStyle(heroSecondary)
+                Text(DisplayFormat.money(row.total, fractionDigits: 0))
                     .foregroundStyle(heroPrimary)
-                    .contentTransition(.numericText(value: row.total - row.principal))
-                    .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: row.total - row.principal)
+                    .contentTransition(.numericText(value: row.total))
+                    .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: row.total)
                 Text("·").foregroundStyle(heroSecondary)
                 Text(L10n.text("本金"))
                     .appText(.footnote, weight: .medium)

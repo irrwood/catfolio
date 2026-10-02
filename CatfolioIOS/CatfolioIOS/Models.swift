@@ -374,6 +374,9 @@ struct SecurityTrade: Equatable, Identifiable, Sendable {
         let currency: String
         let profit: Double?
         let profitCurrency: String?
+        /// When the fill executed, where the broker says; places it on the
+        /// intraday line.
+        var executedAt: Date? = nil
     }
 
     let dateText: String
@@ -414,7 +417,8 @@ struct SecurityTrade: Equatable, Identifiable, Sendable {
                             amount: amount.isFinite && row.price > 0 && !currency.isEmpty ? amount : nil,
                             currency: currency,
                             profit: row.realisedProfitLoss.flatMap { $0.isFinite ? $0 : nil },
-                            profitCurrency: profitCurrency?.isEmpty == false ? profitCurrency : nil)
+                            profitCurrency: profitCurrency?.isEmpty == false ? profitCurrency : nil,
+                            executedAt: row.executedAt.flatMap(Self.executionDate))
                     })
             }.sorted { $0.id < $1.id }
     }
@@ -431,6 +435,15 @@ struct SecurityTrade: Equatable, Identifiable, Sendable {
 
     var id: String { "\(dateText)|\(action)" }
     var date: Date { DayDateCodec.date(from: dateText) ?? .distantPast }
+    /// The earliest known execution time of the day's fills.
+    var executedAt: Date? { executions.compactMap(\.executedAt).min() }
+
+    private static func executionDate(_ text: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        if let date = formatter.date(from: text) { return date }
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: text)
+    }
     var isBuy: Bool { Self.canonicalAction(action) == "BUY" }
     var isSell: Bool { Self.canonicalAction(action) == "SELL" }
 

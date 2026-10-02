@@ -3718,3 +3718,22 @@
 "交易历史" = "Transaction History";
 
 "未实现盈亏比例" = "Unrealized return";
+"买入、卖出与股息" = "Buys, sells and dividends";
+"%@ 个相关盘口" = "%@ related markets";
+"Polymarket 相关盘口" = "Related Polymarket markets";
+"股价" = "Price";
+"共识目标价" = "Consensus target";
+"最高目标价" = "High target";
+"最低目标价" = "Low target";
+"纵轴：评级数量，自下而上累计" = "Axis: number of ratings, stacked from the bottom";
+"单位 USD · 虚线为最高与最低目标价" = "USD · dashed lines are the high and low targets";
+"金矿股" = "Gold miners";
+"道琼斯" = "Dow Jones";
+"原材料" = "Materials";
+"在券商中打开此证券" = "Open this security at a broker";
+"测试" = "Testing";
+"流程" = "Flows";
+"实验页面" = "Experimental pages";
+"首次进入引导" = "First-launch guide";
+"付费墙" = "Paywall";
+"Lab 实验室" = "Lab";

@@ -704,6 +704,21 @@ struct HoldingDetailAccountContext: Equatable {
     let ticker: String
     let document: LocalPortfolioDocument
     let options: [HoldingDetailAccountOption]
+    /// Accounts that traded this security and have since sold all of it.
+    /// They hold no position, so they are not options to pick, but their
+    /// trades are still this security's history.
+    let closedAccountKeys: Set<String>
+
+    init(ticker: String, document: LocalPortfolioDocument, options: [HoldingDetailAccountOption]) {
+        self.ticker = ticker
+        self.document = document
+        self.options = options
+        let holding = Set(options.map(\.id))
+        closedAccountKeys = Set((document.transactions ?? []).lazy
+            .filter { $0.ticker.caseInsensitiveCompare(ticker) == .orderedSame }
+            .map(\.accountKey))
+            .subtracting(holding)
+    }
 
     var allAccountKeys: Set<String> {
         Set(options.map(\.id))
@@ -722,6 +737,15 @@ struct HoldingDetailAccountContext: Equatable {
 
     func document(for accountKeys: Set<String>) -> LocalPortfolioDocument {
         document.scoped(to: accountKeys.intersection(allAccountKeys))
+    }
+
+    /// Whose trades to show for a selection: with every holding account
+    /// selected, the closed accounts' trades too; a narrower pick is only
+    /// those accounts.
+    func tradeAccountKeys(for accountKeys: Set<String>) -> Set<String> {
+        let selected = accountKeys.intersection(allAccountKeys)
+        guard !selected.isEmpty, selected == allAccountKeys else { return selected }
+        return selected.union(closedAccountKeys)
     }
 }
 

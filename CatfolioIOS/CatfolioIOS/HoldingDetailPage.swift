@@ -145,6 +145,7 @@ struct HoldingDetailContentView: View {
                                 priceHistoryError: priceHistoryError,
                                 averageCost: averageCostInQuoteCurrency,
                                 selectedAccountKeys: selectedAccountKeys,
+                                tradeAccountKeys: accountContext?.tradeAccountKeys(for: selectedAccountKeys),
                                 accountOptions: accountContext?.options ?? [],
                                 onSelectAll: selectAllDetailAccounts,
                                 onToggleAccount: toggleDetailAccount,
@@ -223,20 +224,15 @@ struct HoldingDetailContentView: View {
                         .id("\(holding.ticker)|\(appLocale.identifier)")
 
                         Button { showsTransactionHistory = true } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "clock.arrow.circlepath")
-                                Text(L10n.text("交易历史"))
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(20)
-                            .background(SettingsTemplate.card, in: RoundedRectangle(cornerRadius: 20))
+                            HoldingDetailActionCardLabel(
+                                title: L10n.text("交易历史"),
+                                subtitle: L10n.text("买入、卖出与股息")
+                            )
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("holding.transaction-history")
                         .padding(.horizontal, HoldingDetailCardStyle.pageInset)
-                        .padding(.top, 24)
+                        .padding(.top, HoldingDetailCardStyle.spacing)
                         .padding(.bottom, 72)
                     }
                     }
@@ -355,6 +351,7 @@ struct HoldingDetailContentView: View {
                 if priceHistory == nil, let cached = try? await model.marketPriceHistory(
                     for: holding.ticker, currency: holding.quoteCurrency ?? "USD", cachedOnly: true),
                    !Task.isCancelled {
+                    selectedAccountKeys = Set(cached.trades.flatMap(\.accountKeys))
                     priceHistory = cached
                     if !forceRefresh { isLoadingMarketData = false }
                 }
@@ -366,6 +363,9 @@ struct HoldingDetailContentView: View {
                 )
                 guard !Task.isCancelled else { return }
                 accountContext = nil
+                // No position to pick accounts from: mark every account's
+                // past trades, so a closed position keeps its points.
+                selectedAccountKeys = Set(loaded.trades.flatMap(\.accountKeys))
                 priceHistory = loaded
                 priceHistoryError = nil
                 return
@@ -1189,6 +1189,10 @@ extension HoldingDetailContentView {
             } catch LocalPortfolioError.noPortfolio {
                 history = try? await model.marketPriceHistory(
                     for: holding.ticker, currency: holding.quoteCurrency ?? "USD", cachedOnly: true)
+                accountKeys = Set(history?.trades.flatMap(\.accountKeys) ?? [])
+                if content.accountContext == nil, content.selectedAccountKeys.isEmpty {
+                    content.selectedAccountKeys = accountKeys
+                }
             } catch {
                 return
             }
@@ -1197,12 +1201,13 @@ extension HoldingDetailContentView {
             // The chart, prepared exactly as the page will ask for it, so the
             // page takes it from the cache instead of preparing it again.
             let averageCost = hasAccounts ? averageCostInQuoteCurrency(of: shown) : nil
+            let tradeKeys = content.accountContext?.tradeAccountKeys(for: accountKeys) ?? accountKeys
             let request = SecurityPricePreparationRequest(history: history, averageCost: averageCost,
-                                                          accountKeys: accountKeys)
+                                                          accountKeys: tradeKeys)
             guard content.preparedChart?.request != request else { return }
             let prepared = await Task.detached(priority: .userInitiated) {
                 SecurityPricePreparedData(history: history, averageCost: averageCost,
-                                          selectedAccountKeys: accountKeys)
+                                          selectedAccountKeys: tradeKeys)
             }.value
             if content.preparedChart == nil {
                 content.preparedChart = (request, prepared)

@@ -177,6 +177,9 @@ struct MoomooOAuthView: View {
             .navigationTitle(context.isCreating ? L10n.text("新建 Moomoo 账户") : "Moomoo")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                if context.isCreating {
+                    ToolbarItem(placement: .cancellationAction) { AccountProviderBackButton() }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     AppModalDoneButton { dismiss() }
                 }

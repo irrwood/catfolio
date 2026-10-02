@@ -34,22 +34,6 @@ struct HoldingResearchSection: View {
         _predictionMarkets = State(initialValue: cached?.predictionMarkets)
     }
 
-    /// Every caveat the visible sections carry, in page order. They are
-    /// gathered here in small print rather than interrupting the cards.
-    private var disclaimers: [String] {
-        var lines = [L10n.text("期权持仓不代表成交量、买卖方向或必然的支撑与阻力。")]
-        if visibility.shows(.predictionMarkets) {
-            lines.append(L10n.text("Prediction-market probabilities are based on trading prices and are not facts or investment advice."))
-        }
-        if visibility.shows(.developments) {
-            lines.append(L10n.text("事实附原文摘录；影响解读和观察项是分析，不代表已发生。"))
-        }
-        if visibility.shows(.consensus) {
-            lines.append(L10n.text("目标价是分析师观点，不是收益承诺或 Catfolio 的买卖建议。"))
-        }
-        return lines
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             if visibility.hasVisibleModules || ManagementDeliveryRules.isEligible(holding) {
@@ -97,20 +81,6 @@ struct HoldingResearchSection: View {
                 .accessibilityIdentifier("holding-research-section")
             }
 
-            // Only under research cards: a fund with none keeps a zero-height
-            // section, and the OI caveat stays in the wall's own ⓘ.
-            if visibility.hasVisibleModules || ManagementDeliveryRules.isEligible(holding) {
-                // One running paragraph, not a line per caveat.
-                Text(L10n.sentences(disclaimers))
-                .appText(.micro, weight: .regular)
-                .foregroundStyle(.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, HoldingDetailCardStyle.pageInset)
-                .padding(.top, 40)
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("holding-detail-disclaimers")
-            }
         }
         // This task also runs when the group has no visible cards. Missing
         // caches are unknown, never persisted as proof that a fund has no data.
@@ -209,6 +179,12 @@ struct HoldingPredictionMarketsCard: View {
     @State private var markets: [PolymarketRelatedMarket] = []
     @State private var errorMessage: String?
     @State private var isLoading = true
+    @State private var isExpanded = false
+
+    private var predictionSubtitle: String {
+        let count = PolymarketRelatedEvent.grouped(markets).count
+        return count > 0 ? L10n.text("\(count) 个相关盘口") : L10n.text("Polymarket 相关盘口")
+    }
 
     private var taskID: String {
         "\(holding.ticker)|\(holding.displayName)|\(appLocale.identifier)"
@@ -219,24 +195,14 @@ struct HoldingPredictionMarketsCard: View {
         // 20pt under — with the refresh where the others put their chevron.
         // Its own header, in a minimum-height row centred on the title, sat
         // the title lower than every other card's.
-        HoldingDetailSectionCard(title: L10n.text("Predicting markets")) {
-            if isLoading {
-                ChartSkeletonShape(width: 18, height: 18, cornerRadius: 9).frame(width: 24, height: 24).chartLoadingShimmer()
-            } else {
-                Button {
-                    Task { await load(forceRefresh: true) }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 13, weight: .semibold))
-                        .frame(width: 24, height: 24)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.tertiary)
-                .accessibilityLabel(L10n.text("Refresh predicting markets"))
-            }
-        } content: {
-            Group {
+        // Collapsed like the other research cards; the refresh moves inside.
+        HoldingDetailDisclosureCard(
+            title: L10n.text("Predicting markets"),
+            subtitle: predictionSubtitle,
+            isExpanded: $isExpanded,
+            isLoading: isLoading
+        ) {
+            VStack(alignment: .leading, spacing: 20) {
                 if isLoading && markets.isEmpty {
                     predictionLoadingRows
                 } else if markets.isEmpty {
@@ -244,8 +210,17 @@ struct HoldingPredictionMarketsCard: View {
                 } else {
                     predictionRows
                 }
+                if !isLoading {
+                    Button {
+                        Task { await load(forceRefresh: true) }
+                    } label: {
+                        Label(L10n.text("Refresh predicting markets"), systemImage: "arrow.clockwise")
+                            .font(.footnote.weight(.medium))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                }
             }
-            // Its caveat is in the page's footer with the others.
         }
         .task(id: taskID) {
             if usesCachedContentOnlyInitially {

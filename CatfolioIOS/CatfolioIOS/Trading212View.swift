@@ -69,6 +69,10 @@ struct Trading212View: View {
                         .disabled(isWorking)
                         .accessibilityIdentifier("account-guide-back")
                     }
+                } else if context.isCreating {
+                    ToolbarItem(placement: .cancellationAction) {
+                        AccountProviderBackButton().disabled(isWorking)
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     AppModalDoneButton { stopWaiting(); dismiss() }

@@ -103,6 +103,9 @@ struct CSVImportView: View {
             .navigationTitle(context.isCreating ? L10n.text("新建 CSV 账户") : L10n.text("CSV 导入"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                if context.isCreating {
+                    ToolbarItem(placement: .cancellationAction) { AccountProviderBackButton() }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     AppModalDoneButton { dismiss() }
                 }

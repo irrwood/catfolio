@@ -42,10 +42,38 @@ struct AddAccountView: View {
                 }
             }
         }
+        // A provider's first step goes back to this list, not out of the sheet.
+        .environment(\.accountProviderBack, provider == nil ? nil : { provider = nil })
         .tint(CatfolioTheme.accent)
     }
 
     private func row(_ title: String, _ icon: String, _ selection: Provider) -> some View {
         SettingsButtonRow(icon: .symbol(icon), title: title) { provider = selection }
+    }
+}
+
+private struct AccountProviderBackKey: EnvironmentKey {
+    static let defaultValue: (() -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    /// Set while a provider was chosen from 添加账户: its first step returns there.
+    var accountProviderBack: (() -> Void)? {
+        get { self[AccountProviderBackKey.self] }
+        set { self[AccountProviderBackKey.self] = newValue }
+    }
+}
+
+/// The 上一步 a provider's first step shows when opened from 添加账户.
+struct AccountProviderBackButton: View {
+    @Environment(\.accountProviderBack) private var back
+
+    var body: some View {
+        if let back {
+            Button(action: back) {
+                Label(L10n.text("上一步"), systemImage: "chevron.left")
+            }
+            .accessibilityIdentifier("account-provider-back")
+        }
     }
 }

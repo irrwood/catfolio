@@ -41,6 +41,9 @@ enum IndustrySentimentEngine {
         let volatilitySymbol: String
         let priceSymbol: String
         var exposure: [String] = []
+        /// No Cboe index exists for the market: its volatility is the price's
+        /// own 20-day realised volatility, annualised, in percent.
+        var usesRealizedVolatility = false
         var id: String { key }
         /// Localised on read: the table is data, the wording is the page's.
         var title: String {
@@ -55,6 +58,19 @@ enum IndustrySentimentEngine {
             case "emerging-markets": L10n.text("新兴市场")
             case "china": L10n.text("中国")
             case "brazil": L10n.text("巴西")
+            case "gold-miners": L10n.text("金矿股")
+            case "dow": L10n.text("道琼斯")
+            case "technology": L10n.text("科技")
+            case "financials": L10n.text("金融")
+            case "health-care": L10n.text("医疗保健")
+            case "energy": L10n.text("能源")
+            case "industrials": L10n.text("工业")
+            case "consumer-discretionary": L10n.text("可选消费")
+            case "consumer-staples": L10n.text("必需消费")
+            case "utilities": L10n.text("公用事业")
+            case "materials": L10n.text("原材料")
+            case "real-estate": L10n.text("房地产")
+            case "communication-services": L10n.text("通信服务")
             default: key
             }
         }
@@ -71,7 +87,34 @@ enum IndustrySentimentEngine {
         Sector(key: "emerging-markets", volatilitySymbol: "VXEEM", priceSymbol: "EEM"),
         Sector(key: "china", volatilitySymbol: "VXFXI", priceSymbol: "FXI"),
         Sector(key: "brazil", volatilitySymbol: "VXEWZ", priceSymbol: "EWZ"),
+        Sector(key: "gold-miners", volatilitySymbol: "VXGDX", priceSymbol: "GDX"),
+        Sector(key: "dow", volatilitySymbol: "VXD", priceSymbol: "DIA"),
+    ] + sectorFunds.map { key, fund in
+        Sector(key: key, volatilitySymbol: "\(fund) RV20", priceSymbol: fund, usesRealizedVolatility: true)
+    }
+
+    /// The eleven GICS sectors, each through its SPDR fund. Cboe publishes
+    /// no volatility index for them, so these are read from realised moves.
+    static let sectorFunds: [(String, String)] = [
+        ("technology", "XLK"), ("financials", "XLF"), ("health-care", "XLV"), ("energy", "XLE"),
+        ("industrials", "XLI"), ("consumer-discretionary", "XLY"), ("consumer-staples", "XLP"),
+        ("utilities", "XLU"), ("materials", "XLB"), ("real-estate", "XLRE"), ("communication-services", "XLC"),
     ]
+
+    /// Close-to-close volatility over the trailing 20 sessions, annualised
+    /// over 252, in percent: the same scale a Cboe index is quoted on.
+    static func realizedVolatility(_ prices: [PriceDay], window: Int = 20) -> [VolatilityDay] {
+        let sorted = prices.sorted { $0.date < $1.date }
+        guard sorted.count > window else { return [] }
+        let returns = zip(sorted, sorted.dropFirst()).map { log($1.close / $0.close) }
+        return (window..<sorted.count).compactMap { index in
+            let slice = returns[(index - window)..<index]
+            let mean = slice.reduce(0, +) / Double(window)
+            let variance = slice.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(window - 1)
+            let value = (variance * 252).squareRoot() * 100
+            return value.isFinite && value > 0 ? VolatilityDay(date: sorted[index].date, close: value) : nil
+        }
+    }
 
     static func sector(_ key: String) -> Sector? { sectors.first { $0.key == key } }
 
@@ -212,7 +255,7 @@ struct IndustrySentimentClient {
     /// and for writing to the page's cache.
     func snapshotData(sector: IndustrySentimentEngine.Sector = IndustrySentimentEngine.sectors[0],
                       now: Date = Date()) async throws -> Data {
-        async let volatilityRaw = Self.get(Self.volatilityURL(sector))
+        async let volatilityRaw = Self.volatilityData(sector)
         async let pricesRaw = Self.get(Self.pricesURL(sector))
         let (vxData, smhData) = try await (volatilityRaw, pricesRaw)
 
@@ -228,13 +271,6 @@ struct IndustrySentimentClient {
             ? newYork.date(byAdding: .day, value: 1, to: today)! : today
         let cutoff = formatter.string(from: cutoffDay)
 
-        let volatility: [IndustrySentimentEngine.VolatilityDay]
-        do {
-            volatility = try Self.parseVolatility(vxData, symbol: sector.volatilitySymbol).filter { $0.date < cutoff }
-        } catch {
-            DataSourceHealth.reportUnusable(DataSource.of(Self.volatilityURL(sector)), issue: .invalidFormat)
-            throw error
-        }
         let prices: [IndustrySentimentEngine.PriceDay]
         do {
             prices = try Self.parsePrices(smhData, symbol: sector.priceSymbol, formatter: formatter)
@@ -242,6 +278,17 @@ struct IndustrySentimentClient {
         } catch {
             DataSourceHealth.reportUnusable(DataSource.of(Self.pricesURL(sector)), issue: .invalidFormat)
             throw error
+        }
+        let volatility: [IndustrySentimentEngine.VolatilityDay]
+        if let vxData {
+            do {
+                volatility = try Self.parseVolatility(vxData, symbol: sector.volatilitySymbol).filter { $0.date < cutoff }
+            } catch {
+                DataSourceHealth.reportUnusable(DataSource.of(Self.volatilityURL(sector)), issue: .invalidFormat)
+                throw error
+            }
+        } else {
+            volatility = IndustrySentimentEngine.realizedVolatility(prices)
         }
         let asOf = formatter.string(from: now)
         let object = try IndustrySentimentEngine.evaluate(volatility: volatility, prices: prices,
@@ -312,6 +359,10 @@ struct IndustrySentimentClient {
             return .init(date: formatter.string(from: Date(timeIntervalSince1970: TimeInterval(stamp))),
                          open: open, high: high, low: low, close: close, volume: volume)
         }
+    }
+
+    private static func volatilityData(_ sector: IndustrySentimentEngine.Sector) async throws -> Data? {
+        sector.usesRealizedVolatility ? nil : try await get(volatilityURL(sector))
     }
 
     private static func get(_ url: URL) async throws -> Data {

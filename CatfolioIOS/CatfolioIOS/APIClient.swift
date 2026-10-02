@@ -568,15 +568,24 @@ final class AppModel {
         return history
     }
 
-    /// A security held in no account — one opened from search, or found only
-    /// inside an ETF: its market history alone, with no trades to mark.
+    /// A security held in no account — one opened from search, found only
+    /// inside an ETF, or sold out of entirely. Its market history, with the
+    /// ledger's past trades in it marked, so a closed position keeps its
+    /// buy and sell points.
     func marketPriceHistory(for ticker: String, currency: String, forceRefresh: Bool = false,
                             cachedOnly: Bool = false) async throws -> SecurityPriceHistory {
         let source = portfolioSource
+        var ledger = LocalPortfolioDocument.empty
+        if let loaded = try? await loadActiveDocument() {
+            let scoped = await selectedDocument(from: loaded)
+            ledger.transactions = (scoped.transactions ?? []).filter {
+                $0.ticker.caseInsensitiveCompare(ticker) == .orderedSame
+            }
+        }
         let history = try await LocalMarketDataClient().securityPriceHistory(
             ticker: ticker,
             currency: currency,
-            document: .empty,
+            document: ledger,
             forceRefresh: forceRefresh,
             cachedOnly: cachedOnly
         )
@@ -661,7 +670,9 @@ final class AppModel {
     ) async throws -> SecurityPriceHistory {
         let source = portfolioSource
         let context = try await holdingDetailAccountContext(for: ticker)
-        let scoped = context.document(for: accountKeys)
+        // Positions from the picked accounts; trades also from any account
+        // that has since sold out, so their buys and sells stay marked.
+        let scoped = context.document.scoped(to: context.tradeAccountKeys(for: accountKeys))
         let scopedHolding = context.holding(for: accountKeys)
         let history = try await LocalMarketDataClient().securityPriceHistory(
             ticker: ticker,

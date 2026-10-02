@@ -105,7 +105,6 @@ struct SettingsView: View {
     @AppStorage(AssetLogoStyle.preferenceKey) private var assetLogoStyleRawValue = AssetLogoStyle.automatic.rawValue
     @AppStorage(HomeBackgroundStyle.preferenceKey) private var homeBackgroundStyleRawValue = HomeBackgroundStyle.flowing.rawValue
     @State private var showsPaywallPreview = false
-    @State private var showsFirstLaunchGuide = false
     @State private var showsAddAccount = false
     @State private var showsCSVImport = false
     @State private var showsTrading212 = false
@@ -135,22 +134,6 @@ struct SettingsView: View {
 
     var body: some View {
         SettingsPage(title: L10n.text("设置")) {
-            GlassPrimaryButton(title: L10n.text("添加账户"), systemImage: "plus") {
-                showsAddAccount = true
-            }
-            .accessibilityIdentifier("settings-add-account")
-
-            SettingsCard {
-                SettingsButtonRow(icon: .symbol("play.rectangle"), title: L10n.text("首次进入引导（测试）")) {
-                    showsFirstLaunchGuide = true
-                }
-                .accessibilityIdentifier("settings-test-first-launch-guide")
-                SettingsButtonRow(icon: .symbol("crown"), title: L10n.text("付费墙（测试）")) {
-                    showsPaywallPreview = true
-                }
-                .accessibilityIdentifier("settings-test-paywall")
-            }
-
             PublicInvestorSettingsSection()
 
             if !model.accounts.isEmpty {
@@ -345,6 +328,14 @@ struct SettingsView: View {
             // is kept in IsometricHeatmapLab.swift; DEBUG builds still open it
             // with --show-isometric-heatmap.
 
+            // Features still being tried out, kept together off the main pages.
+            SettingsCard {
+                SettingsNavigationRow(icon: .symbol("flask"), title: L10n.text("Lab 实验室")) {
+                    SettingsLabView()
+                }
+                .accessibilityIdentifier("settings-lab")
+            }
+
             SettingsSection(L10n.text("关于")) {
                 SettingsValueRow(
                     icon: .symbol("info.circle"),
@@ -352,6 +343,11 @@ struct SettingsView: View {
                     value: appVersion,
                     valueIsNumeric: true
                 )
+                // Every test entry lives on this one page.
+                SettingsNavigationRow(icon: .symbol("testtube.2"), title: L10n.text("测试")) {
+                    SettingsTestView()
+                }
+                .accessibilityIdentifier("settings-test")
             }
         }
         .tracksRootTabBarScroll()
@@ -384,6 +380,14 @@ struct SettingsView: View {
                             .labelStyle(.iconOnly)
                             .accessibilityLabel(L10n.text("关闭设置"))
                     }
+                }
+                // Floating in the bar's top-right glass rather than a full-width
+                // button over the page.
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(L10n.text("添加账户"), systemImage: "plus") { showsAddAccount = true }
+                        .labelStyle(.iconOnly)
+                        .accessibilityLabel(L10n.text("添加账户"))
+                        .accessibilityIdentifier("settings-add-account")
                 }
             }
             .task {
@@ -422,10 +426,6 @@ struct SettingsView: View {
             }
             .fullScreenCover(isPresented: $showsPaywallPreview) {
                 PaywallView()
-            }
-            .fullScreenCover(isPresented: $showsFirstLaunchGuide) {
-                // Reuse the launch flow without resetting its seen flag or any credentials.
-                ServiceAPIOnboardingView()
             }
             .appSheet(isPresented: $showsAddAccount) {
                 AddAccountView().environment(model)
@@ -2246,5 +2246,80 @@ private struct NewsSettingsView: View {
 
     private func remove(_ site: String) {
         blockedSitesText = blockedSites.filter { $0 != site }.joined(separator: "\n")
+    }
+}
+
+/// Previews and lab pages, kept out of the settings a reader uses.
+private struct SettingsTestView: View {
+    @Environment(AppModel.self) private var model
+    @State private var showsFirstLaunchGuide = false
+    @State private var showsPaywall = false
+
+    var body: some View {
+        SettingsPage(bottomInset: 32, topInset: SettingsTemplate.sectionSpacing) {
+            SettingsSection(L10n.text("流程")) {
+                SettingsButtonRow(icon: .symbol("play.rectangle"), title: L10n.text("首次进入引导")) {
+                    showsFirstLaunchGuide = true
+                }
+                .accessibilityIdentifier("settings-test-first-launch-guide")
+                SettingsButtonRow(icon: .symbol("crown"), title: L10n.text("付费墙")) {
+                    showsPaywall = true
+                }
+                .accessibilityIdentifier("settings-test-paywall")
+            }
+            SettingsSection(L10n.text("实验页面")) {
+                SettingsNavigationRow(icon: .symbol("cube"), title: L10n.text("等距热力图")) {
+                    IsometricHeatmapLabView().environment(model)
+                }
+                SettingsNavigationRow(icon: .symbol("chart.bar.xaxis"), title: L10n.text("OI 布局验证")) {
+                    ScrollView { OptionsOIView(symbol: "TEST", currency: "USD", price: 108, costUSD: 104).padding(24) }
+                        .softTopScrollEdge()
+                        .navigationTitle(L10n.text("OI 布局验证"))
+                }
+            }
+        }
+        .navigationTitle(L10n.text("测试"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarVisibility(.hidden, for: .tabBar)
+        .fullScreenCover(isPresented: $showsPaywall) { PaywallView() }
+        .fullScreenCover(isPresented: $showsFirstLaunchGuide) {
+            // Reuse the launch flow without resetting its seen flag or any credentials.
+            ServiceAPIOnboardingView()
+        }
+    }
+}
+
+/// Experimental features: reachable, but not yet on the pages they belong to.
+private struct SettingsLabView: View {
+    @Environment(AppModel.self) private var model
+    @State private var showsPolicyComposer = LaunchArguments.contains("--show-policy-composer")
+
+    var body: some View {
+        SettingsPage(bottomInset: 32, topInset: SettingsTemplate.sectionSpacing) {
+            SettingsCard {
+                SettingsNavigationRow(icon: .symbol(ReturnsChartDestination.valuation.icon),
+                                      title: ReturnsChartDestination.valuation.title) {
+                    ReturnsChartPage(chart: .valuation).environment(model)
+                }
+                .accessibilityIdentifier("lab.valuation")
+                SettingsNavigationRow(icon: .symbol("line.3.horizontal.decrease"), title: L10n.text("AI 持仓筛选")) {
+                    StockScreenerView().environment(model)
+                }
+                .accessibilityIdentifier("lab.screener")
+                SettingsButtonRow(icon: .symbol("slider.horizontal.3"), title: L10n.text("策略编曲家")) {
+                    showsPolicyComposer = true
+                }
+                .accessibilityIdentifier("lab.policy-composer")
+                SettingsValueRow(icon: .symbol("number.square"), title: L10n.text("税务计算"), value: nil)
+                    .disabled(true)
+                    .accessibilityHint(L10n.text("功能暂未开放"))
+            }
+        }
+        .navigationTitle(L10n.text("Lab 实验室"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarVisibility(.hidden, for: .tabBar)
+        .appFullScreenCover(isPresented: $showsPolicyComposer) {
+            PolicyComposerEntry().environment(model)
+        }
     }
 }

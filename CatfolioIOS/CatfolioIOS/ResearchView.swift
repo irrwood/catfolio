@@ -454,7 +454,6 @@ struct ResearchView: View {
     @State private var analysisRequestID = UUID()
     @State private var analysisError: String?
     @State private var showsRules = false
-    @State private var showsPolicyComposer = false
     @State private var showsDCA = false
     @AppStorage("research.highAttentionOnly") private var highAttentionOnly = false
     @AppStorage("research.maximumResults") private var maximumResults = 6
@@ -561,9 +560,6 @@ struct ResearchView: View {
                 } }
             }
         }
-        .appFullScreenCover(isPresented: $showsPolicyComposer) {
-            PolicyComposerEntry()
-        }
         .navigationDestination(isPresented: $showsDCA) {
             DCACalculatorView()
                 .toolbarVisibility(.hidden, for: .tabBar)
@@ -587,7 +583,6 @@ struct ResearchView: View {
         #if DEBUG
         .task {
             if !showsAttention && LaunchArguments.contains("--show-dca") { showsDCA = true }
-            if !showsAttention && LaunchArguments.contains("--show-policy-composer") { showsPolicyComposer = true }
         }
         #endif
         .modifier(ResearchMarketRefreshModifier(enabled: !showsAttention, refresh: refreshMarkets))
@@ -645,7 +640,6 @@ struct ResearchView: View {
                                            snapshot: markets.first { $0.id == symbol }, isLoading: isLoading)
                     }
                 }
-                SettingsFootnote(L10n.text("最近可用收盘，非盘中实时行情。账户范围沿用设置中的选择。"))
                 SettingsSection(L10n.text("行情")) {
                     SettingsNavigationRow(icon: .symbol("chart.xyaxis.line"), title: L10n.text("板块轮动")) {
                         SectorRotationView()
@@ -663,15 +657,7 @@ struct ResearchView: View {
                         DCACalculatorView()
                     }
                     .accessibilityIdentifier("research.dca")
-                    SettingsNavigationRow(icon: .symbol("line.3.horizontal.decrease"), title: L10n.text("AI 持仓筛选")) {
-                        StockScreenerView()
-                    }
-                    SettingsButtonRow(icon: .symbol("slider.horizontal.3"), title: L10n.text("策略编曲家")) {
-                        showsPolicyComposer = true
-                    }
-                    SettingsValueRow(icon: .symbol("number.square"), title: L10n.text("税务计算"), value: nil)
-                        .disabled(true)
-                        .accessibilityHint(L10n.text("功能暂未开放"))
+                    // AI 持仓筛选, 策略编曲家 and 税务计算 are in 设置 › Lab 实验室.
                 }
             }
         }
@@ -831,7 +817,6 @@ struct ResearchView: View {
                     }
                 }
             }
-            SettingsFootnote(L10n.text("离线证券目录：美股与主要海外市场的股票和 ETF。轻点查看个股页。"))
         }
     }
 

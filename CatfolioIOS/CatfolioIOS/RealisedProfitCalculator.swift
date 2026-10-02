@@ -54,6 +54,8 @@ struct RealisedSale: Equatable, Sendable {
 
     let date: String
     let outcome: Outcome
+    /// The sale this result belongs to, so a ledger row can show its own result.
+    var transactionID: String? = nil
 }
 
 /// Which calendar a realised gain is reported against. The UK runs 6 April to
@@ -218,7 +220,7 @@ enum RealisedProfitCalculator {
                 let usd = brokerRate.flatMap { $0.isFinite ? broker.raw * $0 : nil }
                 sales.append(RealisedSale(date: transaction.date, outcome: .broker(
                     value: broker.value, currency: broker.currency, usd: usd
-                )))
+                ), transactionID: transaction.id))
                 continue
             }
 
@@ -226,15 +228,15 @@ enum RealisedProfitCalculator {
             // a partial basis would understate cost and overstate profit.
             let matchedEverything = remaining <= max(0.000_000_1, saleQuantity * 0.000_001)
             guard let rate, rate.isFinite, matchedEverything else {
-                sales.append(RealisedSale(date: transaction.date, outcome: .unavailable))
+                sales.append(RealisedSale(date: transaction.date, outcome: .unavailable, transactionID: transaction.id))
                 continue
             }
             let profit = price * rate * saleQuantity - matchedCostUSD
             guard profit.isFinite else {
-                sales.append(RealisedSale(date: transaction.date, outcome: .unavailable))
+                sales.append(RealisedSale(date: transaction.date, outcome: .unavailable, transactionID: transaction.id))
                 continue
             }
-            sales.append(RealisedSale(date: transaction.date, outcome: .estimated(usd: profit)))
+            sales.append(RealisedSale(date: transaction.date, outcome: .estimated(usd: profit), transactionID: transaction.id))
         }
 
         return sales
@@ -265,7 +267,7 @@ struct HoldingDetailRealisedProfitRequest: Equatable {
 
     func summary() -> RealisedProfitSummary? {
         guard let context else { return nil }
-        let keys = accountKeys.intersection(context.allAccountKeys)
+        let keys = context.tradeAccountKeys(for: accountKeys)
         guard !keys.isEmpty else { return nil }
         let transactions = (context.document.transactions ?? []).filter {
             keys.contains($0.accountKey)

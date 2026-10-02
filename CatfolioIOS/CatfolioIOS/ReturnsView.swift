@@ -73,13 +73,7 @@ struct ReturnsView: View {
                     CycleComparisonView()
                 }
             }
-            SettingsCard {
-                SettingsNavigationRow(icon: .symbol(ReturnsChartDestination.valuation.icon),
-                                      title: ReturnsChartDestination.valuation.title) {
-                    ReturnsChartPage(chart: .valuation)
-                }
-                .accessibilityIdentifier("performance.chart.valuation")
-            }
+            // 估值 · 成长 · 质量 is in 设置 › Lab 实验室.
             TodayAttentionPreview()
             JEVTodayAttentionEntry()
         }

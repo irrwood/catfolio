@@ -322,9 +322,11 @@ struct IndustrySentimentView: View {
     private var sectorPicker: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
-                ForEach(file?.sectors ?? []) { entry in
-                    let selected = entry.sector == snapshot?.sector
-                    Button { sectorKey = entry.sector } label: {
+                // Every market the app knows, not only those already read:
+                // choosing one that has never been read fetches it.
+                ForEach(IndustrySentimentEngine.sectors) { entry in
+                    let selected = entry.key == sectorKey
+                    Button { sectorKey = entry.key } label: {
                         Text(entry.title)
                             .appText(.footnote, weight: .medium)
                             .foregroundStyle(mechanicalDial ? (selected ? Color.black : Color.white) : (selected ? Color.white : SettingsTemplate.secondaryText))

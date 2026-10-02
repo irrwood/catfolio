@@ -99,6 +99,10 @@ struct IBKRFlexView: View {
                         }
                         .disabled(isWorking)
                     }
+                } else if context.isCreating && snapshot == nil {
+                    ToolbarItem(placement: .cancellationAction) {
+                        AccountProviderBackButton().disabled(isWorking)
+                    }
                 }
 
                 ToolbarItem(placement: .confirmationAction) {

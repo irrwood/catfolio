@@ -12,6 +12,9 @@ struct HoldingDetailPriceSection: View {
     let priceHistoryError: String?
     let averageCost: Double?
     let selectedAccountKeys: Set<String>
+    /// Whose trades the chart marks; the selection plus, under 全部, accounts
+    /// that have sold out. Defaults to the selection.
+    var tradeAccountKeys: Set<String>? = nil
     var accountOptions: [HoldingDetailAccountOption] = []
     var onSelectAll: () -> Void = {}
     var onToggleAccount: (String) -> Void = { _ in }
@@ -55,7 +58,7 @@ struct HoldingDetailPriceSection: View {
                 SecurityPriceChart(
                     history: priceHistory,
                     averageCost: averageCost,
-                    selectedAccountKeys: selectedAccountKeys,
+                    selectedAccountKeys: tradeAccountKeys ?? selectedAccountKeys,
                     cachedContent: cachedContent,
                     followsPlaceholder: startedWithoutHistory ?? false,
                     onSelectionChange: { selection in
@@ -138,7 +141,7 @@ struct HoldingDetailPriceSection: View {
     }
 
     private func updateTradeReadoutReservations() {
-        let trades = (priceHistory?.trades ?? []).compactMap { $0.filtered(accounts: selectedAccountKeys) }
+        let trades = (priceHistory?.trades ?? []).compactMap { $0.filtered(accounts: tradeAccountKeys ?? selectedAccountKeys) }
         tradeReadoutReservations = SecurityTradeReadout.reservationCandidates(for: trades)
     }
 }
@@ -255,13 +258,19 @@ struct SecurityPriceChart: View {
         self.onSelectionChange = onSelectionChange
         let request = SecurityPricePreparationRequest(history: history, averageCost: averageCost, accountKeys: selectedAccountKeys)
         let cached = cachedContent?.preparedChart.flatMap { $0.request == request ? $0.data : nil }
-        _prepared = State(initialValue: cached)
-        _isPreparing = State(initialValue: cached == nil)
-        _startedWithoutPreparedData = State(initialValue: cached == nil)
         let arguments = LaunchArguments.all
         // Every new detail/preview opens on the latest session, including
         // cache-backed opens. Range changes stay local to this presentation.
-        _range = State(initialValue: arguments.contains("--show-security-chart-max") ? .maximum : .oneDay)
+        let openingRange: ChartTimeRange = arguments.contains("--show-security-chart-max") ? .maximum : .oneDay
+        _range = State(initialValue: openingRange)
+        // With a history in hand the line is drawn in the first frame, as it
+        // is, without the placeholder or its entrance: only the opening range
+        // is built here, the others off the main actor.
+        let opening = cached ?? SecurityPricePreparedData(history: history, averageCost: averageCost,
+            selectedAccountKeys: selectedAccountKeys, only: openingRange)
+        _prepared = State(initialValue: opening)
+        _isPreparing = State(initialValue: !opening.isComplete)
+        _startedWithoutPreparedData = State(initialValue: false)
     }
 
     private var data: SecurityPriceRangeData {
@@ -341,7 +350,7 @@ struct SecurityPriceChart: View {
                 onSelectionChange(rangeSelection)
                 return
             }
-            isPreparing = prepared == nil
+            isPreparing = !(prepared?.isComplete ?? false)
             let request = preparationRequest
             let history = history
             let averageCost = averageCost
@@ -358,7 +367,7 @@ struct SecurityPriceChart: View {
                 // history, typically. With nothing on screen yet it still
                 // beats the placeholder: it was thrown away, and the line
                 // waited for a second preparation of the newer history.
-                if self.prepared == nil {
+                if !(self.prepared?.isComplete ?? false) {
                     self.prepared = prepared
                 }
                 return
@@ -659,13 +668,18 @@ final class SecurityPricePlotSeriesCache {
 
 final class SecurityPricePreparedData: @unchecked Sendable {
     private let ranges: [ChartTimeRange: SecurityPriceRangeData]
+    /// False while only the opening range is built; the rest follow off the
+    /// main actor.
+    let isComplete: Bool
 
     init(
         history: SecurityPriceHistory,
         averageCost: Double?,
-        selectedAccountKeys: Set<String>
+        selectedAccountKeys: Set<String>,
+        only openingRange: ChartTimeRange? = nil
     ) {
-        ranges = Dictionary(uniqueKeysWithValues: ChartTimeRange.allCases.map {
+        isComplete = openingRange == nil
+        ranges = Dictionary(uniqueKeysWithValues: (openingRange.map { [$0] } ?? ChartTimeRange.allCases).map {
             ($0, SecurityPriceRangeData(
                 history: history,
                 range: $0,
@@ -773,9 +787,21 @@ struct SecurityPriceRangeData: @unchecked Sendable {
 
         let visibleStart = normalizedPoints.first?.date ?? .distantFuture
         let visibleEnd = normalizedPoints.last?.date ?? .distantPast
-        let visibleTrades: [TradePoint] = usesIntraday ? [] : history.trades.compactMap { trade -> TradePoint? in
+        let sessionDay = usesIntraday ? normalizedPoints.last.map { DayDateCodec.string(from: $0.date) } : nil
+        let visibleTrades: [TradePoint] = history.trades.compactMap { trade -> TradePoint? in
             guard let trade = trade.filtered(accounts: selectedAccountKeys) else { return nil }
-            guard trade.date >= visibleStart, trade.date <= visibleEnd,
+            if usesIntraday {
+                // Today's fills on today's line, at their execution time
+                // where known, otherwise at the latest minute.
+                guard trade.dateText == sessionDay,
+                      let point = trade.executedAt.flatMap({ Self.nearestPoint(to: $0, in: normalizedPoints) })
+                        ?? normalizedPoints.last else { return nil }
+                return TradePoint(trade: trade, point: point)
+            }
+            // A fill newer than the last daily close (a feed a session or a
+            // weekend behind) still belongs on the line's latest point.
+            let latestAccepted = visibleEnd.addingTimeInterval(7 * 86_400)
+            guard trade.date >= visibleStart, trade.date <= latestAccepted,
                   let point = Self.nearestPoint(to: trade.date, in: normalizedPoints) else { return nil }
             return TradePoint(trade: trade, point: point)
         }

@@ -147,7 +147,21 @@ struct HoldingDetailHeader: View {
         if holding.shares > 0 {
             Text(DisplayFormat.shares(holding.shares)).appNumber(.label, monospaced: false)
         }
-        Text(holding.ticker.uppercased()).appCaps(.label)
+        // A tap on the ticker offers the security's page at each broker.
+        Menu {
+            ForEach(SecurityBrokerLink.links(for: holding.ticker)) { link in
+                Link(destination: link.url) {
+                    Label(link.title, systemImage: "arrow.up.right.square")
+                }
+            }
+        } label: {
+            Text(holding.ticker.uppercased()).appCaps(.label)
+                .foregroundStyle(.secondary)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(L10n.text("在券商中打开此证券"))
+        .accessibilityIdentifier("holding-detail-ticker-links")
         // The home list's badges, written out: "Acc", "Class A".
         SecurityClassBadges(markers: holding.classLabels)
     }
@@ -681,5 +695,39 @@ struct HoldingDataRow: View {
     private var alternatingBackground: Color {
         guard isAlternating else { return .clear }
         return colorScheme == .dark ? .white.opacity(0.05) : .black.opacity(0.03)
+    }
+}
+
+/// Where a security has its own public page at a broker.
+struct SecurityBrokerLink: Identifiable, Equatable {
+    let title: String
+    let url: URL
+    var id: String { title }
+
+    /// Catfolio's tickers are Yahoo's: bare for US listings, ".L", ".DE" and
+    /// so on elsewhere. Brokers that list only US shares are offered only for
+    /// a bare ticker.
+    static func links(for ticker: String) -> [Self] {
+        let symbol = ticker.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !symbol.isEmpty, symbol != "CASH" else { return [] }
+        let isUS = !symbol.contains(".") || symbol.hasSuffix(".B") || symbol.hasSuffix(".A")
+        let encoded = symbol.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? symbol
+        var links: [Self] = []
+        let trading212 = isUS ? "\(encoded.replacingOccurrences(of: ".", with: "_")).US" : encoded
+        if let url = URL(string: "https://www.trading212.com/trading-instruments/invest/\(trading212)") {
+            links.append(Self(title: "Trading 212", url: url))
+        }
+        if isUS {
+            if let url = URL(string: "https://www.moomoo.com/stock/\(encoded)-US") {
+                links.append(Self(title: "Moomoo", url: url))
+            }
+            if let url = URL(string: "https://robinhood.com/stocks/\(encoded)") {
+                links.append(Self(title: "Robinhood", url: url))
+            }
+        }
+        if let url = URL(string: "https://finance.yahoo.com/quote/\(encoded)") {
+            links.append(Self(title: "Yahoo Finance", url: url))
+        }
+        return links
     }
 }

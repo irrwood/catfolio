@@ -192,7 +192,10 @@ struct RobinhoodConnectionView: View {
                 Text(L10n.text("仅更新所选 Robinhood 账户的股票持仓；不导入现金、期权或历史成交。"))
             }
             .navigationTitle("Robinhood")
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { AccountProviderBackButton() }
+                ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { dismiss() } }
+            }
             .task {
                 connected = await RobinhoodMCPClient.shared.isConnected()
                 if connected {

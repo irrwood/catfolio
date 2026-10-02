@@ -140,6 +140,8 @@ struct SnapTradeView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     if busy {
                         Button(L10n.text("停止等待")) { stopWaiting() }
+                    } else if context.isCreating {
+                        AccountProviderBackButton()
                     }
                 }
             }
