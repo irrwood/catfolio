@@ -23,6 +23,9 @@ struct TodayContributionCard: View {
     let holdings: [Holding]
     let dailyChanges: [String: Double]
     let benchmarkChange: Double?
+    /// The market session the changes are from, yyyy-MM-dd; it names the
+    /// card — 今天, 昨天, 周五.
+    var sessionDate: String? = nil
     let isLoading: Bool
     /// Cached contributions are on screen while fresh quotes arrive.
     let isRefreshingBehindCache: Bool
@@ -57,6 +60,7 @@ struct TodayContributionCard: View {
         holdings: [Holding],
         dailyChanges: [String: Double],
         benchmarkChange: Double?,
+        sessionDate: String? = nil,
         isLoading: Bool,
         isRefreshingBehindCache: Bool = false,
         onOpenDetail: (() -> Void)? = nil,
@@ -69,6 +73,7 @@ struct TodayContributionCard: View {
         self.holdings = holdings
         self.dailyChanges = dailyChanges
         self.benchmarkChange = benchmarkChange
+        self.sessionDate = sessionDate
         self.isLoading = isLoading
         self.isRefreshingBehindCache = isRefreshingBehindCache
         self.onOpenDetail = onOpenDetail
@@ -127,7 +132,7 @@ struct TodayContributionCard: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .center, spacing: 2) {
-                        Text(L10n.text("TODAY"))
+                        Text(sessionDate.map { DataDayLabel.text(for: $0, locale: appLocale) } ?? L10n.text("TODAY"))
                             .appCaps(.caption, weight: .semibold)
                             .foregroundStyle(CatfolioTheme.primaryText)
                         if onOpenDetail != nil {

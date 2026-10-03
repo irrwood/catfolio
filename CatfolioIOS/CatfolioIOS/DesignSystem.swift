@@ -1483,6 +1483,7 @@ enum ChartTimeRange: String, CaseIterable, Identifiable {
     case sixMonths = "6M"
     case oneYear = "1Y"
     case twoYears = "2Y"
+    case threeYears = "3Y"
     case fiveYears = "5Y"
     case maximum = "MAX"
 
@@ -1491,11 +1492,11 @@ enum ChartTimeRange: String, CaseIterable, Identifiable {
 
     static let choiceGroups: [[ChartTimeRange]] = [
         // A tap on the selected slot steps through its group: 1W → 1D → 3D,
-        // 1M → 2M → 3M.
+        // 1M → 2M → 3M, 1Y → 2Y → 3Y.
         [.oneWeek, .oneDay, .threeDays],
         [.oneMonth, .twoMonths, .threeMonths],
         [.yearToDate, .sixMonths],
-        [.oneYear, .twoYears],
+        [.oneYear, .twoYears, .threeYears],
         // Paired like every other slot. MAX was the only singleton, so it
         // was the one place a tap did nothing.
         [.maximum, .fiveYears],
@@ -1529,6 +1530,8 @@ enum ChartTimeRange: String, CaseIterable, Identifiable {
             start = calendar.date(byAdding: .year, value: -1, to: lastDate)
         case .twoYears:
             start = calendar.date(byAdding: .year, value: -2, to: lastDate)
+        case .threeYears:
+            start = calendar.date(byAdding: .year, value: -3, to: lastDate)
         case .fiveYears:
             start = calendar.date(byAdding: .year, value: -5, to: lastDate)
         case .maximum:

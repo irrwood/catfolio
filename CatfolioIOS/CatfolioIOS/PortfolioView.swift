@@ -81,6 +81,7 @@ struct PortfolioView: View {
                                             holdings: model.holdings,
                                             dailyChanges: model.holdingDailyChanges,
                                             benchmarkChange: model.benchmarkDailyChange,
+                                            sessionDate: model.portfolioChart?.marketDates.flatMap(DataDayLabel.latestSession(in:)),
                                             isLoading: model.isHoldingDailyChangesLoading,
                                             isRefreshingBehindCache: model.isHomeRefreshingBehindCache,
                                             onOpenDetail: { showsTodayDetail = true },

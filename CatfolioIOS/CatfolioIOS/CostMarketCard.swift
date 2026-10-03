@@ -34,7 +34,6 @@ struct CostMarketCard: View {
     @State private var selectedDate: Date?
     @State private var measuredRange: ChartDateRange?
     @State private var showsNetDeposit = true
-    @State private var showsAccountBasis = false
     /// Whether the all-time figure counts profit already taken. The reader's
     /// choice, kept between launches.
     @AppStorage("home.profitIncludesRealised") private var includesRealisedProfit = false
@@ -72,24 +71,14 @@ struct CostMarketCard: View {
             .first { $0.rows.count > 1 } ?? chosen
     }
 
-    /// When the figures are not from today's session — a weekend, a holiday,
-    /// a cache read before the market opened — the header says which day they
-    /// are from instead of the app's name.
+    /// The day the figures are from, while no held market is trading — a
+    /// weekend, a holiday, the hours after the close. Live, the header keeps
+    /// the app's name.
     private var dataDayLabel: String? {
-        let today = DayDateCodec.string(from: Date())
-        let latest = response.marketDates?.max() ?? rangeData.rows.last?.dateText
-        guard let latest, latest < today, let date = DayDateCodec.date(from: latest),
-              let now = DayDateCodec.date(from: today) else { return nil }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        let days = calendar.dateComponents([.day], from: date, to: now).day ?? 0
-        var style = Date.FormatStyle(date: .omitted, time: .omitted).locale(appLocale)
-        style.timeZone = calendar.timeZone
-        switch days {
-        case 1: return L10n.text("昨天")
-        case 2...6: return date.formatted(style.weekday(.wide))
-        default: return date.formatted(style.month(.abbreviated).day())
-        }
+        guard !DataDayLabel.isLive(model.holdings) else { return nil }
+        let latest = DataDayLabel.latestSession(in: response.marketDates ?? [])
+            ?? DataDayLabel.latestSession(in: rangeData.rows.map(\.dateText))
+        return latest.map { DataDayLabel.text(for: $0, locale: appLocale) }
     }
 
     private var selectedPoint: CostMarketPlotPoint? {
@@ -231,13 +220,6 @@ struct CostMarketCard: View {
                 // total that is not theirs.
                 Text(portfolioOwnerName ?? dataDayLabel ?? "CATFOLIO")
                     .appCaps(.caption, weight: .semibold)
-                if response.accountNAV != nil {
-                    Button { showsAccountBasis = true } label: {
-                        Image(systemName: "info.circle").font(.caption)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(L10n.text("账户资产与收益口径"))
-                }
             }
             .lineLimit(1)
             .foregroundStyle(CatfolioTheme.primaryText)
@@ -340,13 +322,6 @@ struct CostMarketCard: View {
         }
         .frame(height: PortfolioHeroChartLayout.sectionHeight, alignment: .topLeading)
         .preference(key: PortfolioHeroReadyPreference.self, value: !isChartLoading && hasPreparedAllRanges)
-        .alert(L10n.text("账户资产与收益口径"), isPresented: $showsAccountBasis) {
-            Button(L10n.text("知道了"), role: .cancel) { }
-        } message: {
-            // Paragraph by paragraph, so each is found in the catalogue.
-            Text(warning.map { $0.components(separatedBy: "\n\n").map { L10n.message($0) }.joined(separator: "\n\n") }
-                 ?? L10n.text("账户历史暂不可用。"))
-        }
         .task(id: "\(model.portfolioChartRevision)-\(isAwaitingEnrichedHistory)") {
             // Keep the last prepared curve mounted during background refresh.
             // Interim snapshot-only responses must not replace enriched history.
@@ -833,4 +808,47 @@ func costMarketChange(
 ) -> (amount: Double, percentage: Double) {
     let amount = (end.marketValue - start.marketValue) - (end.cost - start.cost)
     return (amount, start.marketValue == 0 ? 0 : amount / start.marketValue * 100)
+}
+
+/// Names the day a set of figures belongs to, the way a person would:
+/// 今天, 昨天, the weekday within the past week, the date before that.
+enum DataDayLabel {
+    /// `now` is read on the reader's own calendar: just past midnight is
+    /// already the next day for them, whatever the date is in UTC.
+    static func text(for dayKey: String, locale: Locale, now: Date = Date(),
+                     timeZone: TimeZone = .current) -> String {
+        var local = Calendar(identifier: .gregorian)
+        local.timeZone = timeZone
+        let parts = local.dateComponents([.year, .month, .day], from: now)
+        let today = String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+        guard let date = DayDateCodec.date(from: dayKey),
+              let current = DayDateCodec.date(from: today) else { return dayKey }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        var style = Date.FormatStyle(date: .omitted, time: .omitted).locale(locale)
+        style.timeZone = calendar.timeZone
+        switch calendar.dateComponents([.day], from: date, to: current).day ?? 0 {
+        case ...0: return L10n.text("今天")
+        case 1: return L10n.text("昨天")
+        case 2...6: return date.formatted(style.weekday(.abbreviated))
+        default: return date.formatted(style.month(.abbreviated).day())
+        }
+    }
+
+    /// The latest trading day among these dates. A snapshot taken on a
+    /// Saturday is dated Saturday, but its prices are Friday's.
+    static func latestSession(in dates: [String]) -> String? {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return dates.filter { key in
+            guard let date = DayDateCodec.date(from: key) else { return false }
+            return !calendar.isDateInWeekend(date)
+        }.max()
+    }
+
+    /// True while any held listing's market is in session, so its prices are
+    /// moving now.
+    static func isLive(_ holdings: [Holding], at date: Date = Date()) -> Bool {
+        holdings.contains { MarketHours.isOpen(ticker: $0.ticker, at: date) }
+    }
 }

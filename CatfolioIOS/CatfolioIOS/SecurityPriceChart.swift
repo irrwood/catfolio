@@ -883,6 +883,7 @@ struct SecurityPriceRangeData: @unchecked Sendable {
         case .sixMonths: start = calendar.date(byAdding: .month, value: -6, to: last)
         case .oneYear: start = calendar.date(byAdding: .year, value: -1, to: last)
         case .twoYears: start = calendar.date(byAdding: .year, value: -2, to: last)
+        case .threeYears: start = calendar.date(byAdding: .year, value: -3, to: last)
         case .fiveYears: start = calendar.date(byAdding: .year, value: -5, to: last)
         case .maximum: start = nil
         }
