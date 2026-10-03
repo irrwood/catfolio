@@ -81,40 +81,33 @@ struct CorporateEventsCard: View {
 
     var body: some View {
         let scope = scope
-        VStack(alignment: .leading, spacing: 12) {
+        // Titled like the security page's entry cards; the title opens the
+        // calendar, and the next dates sit under it.
+        VStack(alignment: .leading, spacing: 0) {
             NavigationLink { CorporateCalendarView(holdings: holdings) } label: {
-                HStack(spacing: 4) {
-                    Text(L10n.text("公司日历"))
-                    Image(systemName: "chevron.right").font(.caption.weight(.semibold))
-                }
-                .appText(.body, weight: .medium)
-                .foregroundStyle(SettingsTemplate.sectionHeader)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            if upcoming.isEmpty {
-                Text(L10n.text(store.isLoading ? "正在读取财报与股息日期…" : "近期没有财报或除息"))
-                    .appText(.callout)
-                    .foregroundStyle(SettingsTemplate.secondaryText)
-                    .padding(.vertical, 8)
-            } else {
-                ForEach(upcoming) { event in
-                    CorporateEventCardRow(event: event, holding: scope.holding(event))
-                }
-            }
-
-            NavigationLink { CorporateCalendarView(holdings: holdings) } label: {
-                Text(L10n.text("查看全部"))
-                    .appText(.body, weight: .medium)
-                    .foregroundStyle(CatfolioTheme.primaryText)
-                    .frame(maxWidth: .infinity, minHeight: 36)
+                HoldingDetailCardHeader(title: L10n.text("公司日历"), subtitle: L10n.text("财报、除息与派息日期"),
+                    symbol: "chevron.right", isLoading: store.isLoading && upcoming.isEmpty)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityIdentifier("corporate-calendar.see-all")
+            .accessibilityIdentifier("corporate-calendar.open")
+
+            if !upcoming.isEmpty {
+                VStack(spacing: 12) {
+                    ForEach(upcoming) { event in
+                        CorporateEventCardRow(event: event, holding: scope.holding(event))
+                    }
+                }
+                .padding(.horizontal, HoldingDetailCardStyle.contentInset)
+                .padding(.bottom, HoldingDetailCardStyle.contentInset)
+            } else if !store.isLoading {
+                Text(L10n.text("近期没有财报或除息"))
+                    .appText(.callout)
+                    .foregroundStyle(SettingsTemplate.secondaryText)
+                    .padding(.horizontal, HoldingDetailCardStyle.contentInset)
+                    .padding(.bottom, HoldingDetailCardStyle.contentInset)
+            }
         }
-        .padding(20)
         .holdingDetailCard()
         .accessibilityIdentifier("corporate-calendar.card")
         .task(id: scope.tickers.joined(separator: ",")) { await store.load(tickers: scope.tickers) }

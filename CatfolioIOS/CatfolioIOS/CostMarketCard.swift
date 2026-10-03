@@ -39,8 +39,6 @@ struct CostMarketCard: View {
     /// choice, kept between launches.
     @AppStorage("home.profitIncludesRealised") private var includesRealisedProfit = false
     /// What the last tap did, shown for a moment and then gone.
-    @State private var profitNote: String?
-    @State private var profitNoteID = UUID()
     @Environment(\.colorScheme) private var colorScheme
 
     private var forcesChartLoadingState: Bool {
@@ -63,7 +61,35 @@ struct CostMarketCard: View {
     }
 
     private var rangeData: CostMarketRangeData {
-        prepared?.data(for: range) ?? .empty
+        guard let prepared else { return .empty }
+        let chosen = prepared.data(for: range)
+        guard chosen.rows.count <= 1 else { return chosen }
+        // Too little for this window — a closed market, or history still on
+        // its way. The nearest window the saved history does fill stands in,
+        // rather than an empty chart over data the app already has.
+        let fallbacks: [ChartTimeRange] = [.threeDays, .oneWeek, .oneMonth, .threeMonths, .yearToDate, .maximum]
+        return fallbacks.lazy.filter { $0 != range }.map { prepared.data(for: $0) }
+            .first { $0.rows.count > 1 } ?? chosen
+    }
+
+    /// When the figures are not from today's session — a weekend, a holiday,
+    /// a cache read before the market opened — the header says which day they
+    /// are from instead of the app's name.
+    private var dataDayLabel: String? {
+        let today = DayDateCodec.string(from: Date())
+        let latest = response.marketDates?.max() ?? rangeData.rows.last?.dateText
+        guard let latest, latest < today, let date = DayDateCodec.date(from: latest),
+              let now = DayDateCodec.date(from: today) else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let days = calendar.dateComponents([.day], from: date, to: now).day ?? 0
+        var style = Date.FormatStyle(date: .omitted, time: .omitted).locale(appLocale)
+        style.timeZone = calendar.timeZone
+        switch days {
+        case 1: return L10n.text("昨天")
+        case 2...6: return date.formatted(style.weekday(.wide))
+        default: return date.formatted(style.month(.abbreviated).day())
+        }
     }
 
     private var selectedPoint: CostMarketPlotPoint? {
@@ -158,33 +184,26 @@ struct CostMarketCard: View {
     /// A tap turns profit already taken on and off, and says what it did.
     private func toggleProfitBasis() {
         guard showsLifetimeProfit else {
-            show(note: L10n.text("这里是所选区间的涨跌。切到全部可以加上已实现利润。"))
+            show(note: L10n.text("切到「全部」可计入已实现利润"))
             return
         }
         guard model.realisedProfit.isFinite else {
-            show(note: L10n.text("还没有带券商结果的卖出记录，只能显示未实现利润。"))
+            show(note: L10n.text("暂无已实现利润"))
             return
         }
         includesRealisedProfit.toggle()
         if includesRealisedProfit {
             let gaps = model.realisedProfitGaps
             show(note: gaps > 0
-                 ? L10n.text("已实现 + 未实现利润。有 \(gaps) 笔卖出没有券商结果，未计入。")
-                 : L10n.text("已实现 + 未实现利润。不含股息和利息。"))
+                 ? L10n.text("已计入已实现利润 · \(gaps) 笔未计")
+                 : L10n.text("已计入已实现利润"))
         } else {
-            show(note: L10n.text("只算当前持仓的未实现利润。"))
+            show(note: L10n.text("仅未实现利润"))
         }
     }
 
     private func show(note: String) {
-        let id = UUID()
-        profitNoteID = id
-        withAnimation(.easeOut(duration: 0.18)) { profitNote = note }
-        Task {
-            try? await Task.sleep(for: .seconds(4))
-            guard profitNoteID == id else { return }
-            withAnimation(.easeInOut(duration: 0.35)) { profitNote = nil }
-        }
+        ToastCenter.shared.show(note, kind: .info)
     }
 
     private var financialAccent: Color {
@@ -210,10 +229,8 @@ struct CostMarketCard: View {
                 // labels someone else's holdings with the reader's own app
                 // name, which is exactly the wrong thing to say above a
                 // total that is not theirs.
-                Text(portfolioOwnerName ?? "CATFOLIO")
+                Text(portfolioOwnerName ?? dataDayLabel ?? "CATFOLIO")
                     .appCaps(.caption, weight: .semibold)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 6, weight: .bold))
                 if response.accountNAV != nil {
                     Button { showsAccountBasis = true } label: {
                         Image(systemName: "info.circle").font(.caption)
@@ -297,18 +314,6 @@ struct CostMarketCard: View {
             .lineLimit(1)
             .minimumScaleFactor(0.62)
             .offset(x: CatfolioStyle.pageHorizontalInset, y: 82)
-
-            if let profitNote {
-                Text(profitNote)
-                    .appText(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 320, alignment: .leading)
-                    .offset(x: CatfolioStyle.pageHorizontalInset, y: 100)
-                    .transition(.opacity)
-                    .allowsHitTesting(false)
-                    .accessibilityAddTraits(.updatesFrequently)
-            }
 
             chartContent(data: data)
                 .frame(height: PortfolioHeroChartLayout.plotHeight)

@@ -652,7 +652,8 @@ struct HoldingContributionChart: View {
                            Color(red: 0.898, green: 0.529, blue: 0.149),   // #E58726
                            Color(red: 0.984, green: 0.886, blue: 0.333),   // #FBE255
                            Color(red: 0.529, green: 0.745, blue: 0.937),   // #87BEEF
-                           CatfolioPalette.coral200, CatfolioPalette.green200]
+                           CatfolioPalette.coral200, CatfolioPalette.green200,
+                           Color(red: 0.776, green: 0.616, blue: 0.976)]   // #C69DF9
             return palette[colour % palette.count]
         }
     }
@@ -879,11 +880,8 @@ struct HoldingContributionStack {
         }
     }
 
-    /// No more bands than this, however even the gains.
-    static let maximumNamed = 6
-    /// A holding earns its own band while its gain is at least this share of
-    /// all the gains; the first one always does.
-    static let minimumShare = 0.06
+    /// The seven largest gains get their own band; the rest are the others.
+    static let maximumNamed = 7
 
     let bands: [Band]
     let rows: [Row]
@@ -894,19 +892,10 @@ struct HoldingContributionStack {
     /// separately so they can be turned back on.
     let hidden: [(ticker: String, name: String)]
 
-    /// How many of the gains, largest first, get their own band: while each
-    /// is at least `minimumShare` of all the positive gains, up to
-    /// `maximumNamed`, and at least one when anything gained at all.
+    /// How many of the gains, largest first, get their own band: every
+    /// positive one, up to `maximumNamed`.
     static func namedCount(_ gains: [Double]) -> Int {
-        let positive = gains.filter { $0 > 0 }.sorted(by: >)
-        let total = positive.reduce(0, +)
-        guard total > 0 else { return 0 }
-        var count = 0
-        for gain in positive.prefix(maximumNamed) {
-            guard count == 0 || gain / total >= minimumShare else { break }
-            count += 1
-        }
-        return count
+        min(maximumNamed, gains.filter { $0 > 0 }.count)
     }
 
     /// `holdings` only supplies display names; the ranking and gains come

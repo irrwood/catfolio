@@ -423,6 +423,15 @@ struct ReturnsComparisonPanel: View {
     private var header: some View {
         HStack(spacing: 12) {
             backButton.modifier(ReturnsHeaderCircleGlass())
+            // The page draws its own bar, so it sets its own title; it gives
+            // way while the mode switcher is open and needs the room.
+            if !isModeSwitcherExpanded {
+                Text(L10n.text("收益对比"))
+                    .font(.system(size: 17, weight: .semibold))
+                    .lineLimit(1)
+                    .accessibilityAddTraits(.isHeader)
+                    .transition(.opacity)
+            }
 
             Spacer(minLength: 8)
             if !isModeSwitcherExpanded {
@@ -830,8 +839,8 @@ private struct ReturnsChart: View {
                 .padding(.trailing, ReturnsChartLayout.contentHorizontalInset)
             } else if !hasDrawableLine {
                 ReturnsPlotPlaceholder(
-                    title: L10n.text("暂无可绘制数据"),
-                    message: emptyChartDescription,
+                    title: visibleSeries.isEmpty ? L10n.text("已隐藏全部曲线") : L10n.text("暂无可绘制数据"),
+                    message: visibleSeries.isEmpty ? L10n.text("轻点下方条目重新显示") : emptyChartDescription,
                     isLoading: false
                 )
                 .frame(height: ReturnsChartLayout.plotHeight)
@@ -1013,7 +1022,8 @@ private struct ReturnsChart: View {
 
     private func toggleSeries(_ series: String) {
         if visibleSeries.contains(series) {
-            guard visibleSeries.count > 2 else { return }
+            // Every line may go, the portfolio's included; the rows stay to
+            // bring them back.
             visibleSeries.remove(series)
             if highlightedSeries == series { highlightedSeries = nil }
         } else {

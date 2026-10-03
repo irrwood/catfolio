@@ -10,6 +10,17 @@ enum TickerRenames {
     /// Former code → current code, both exchange-qualified.
     private static let current: [String: String] = [
         "PHNX.L": "SDLF.L",  // Phoenix Group Holdings → Standard Life plc, 2026
+        // De-SPACs. The SPAC's code is retired at the merger and the shares
+        // become the company's, but brokers — Trading 212 and Robinhood UK
+        // especially — can go on labelling an old position with it.
+        "IPOA": "SPCE",  // Social Capital Hedosophia → Virgin Galactic, 2019
+        "IPOB": "OPEN",  // Social Capital Hedosophia II → Opendoor, 2020
+        "IPOC": "CLOV",  // Social Capital Hedosophia III → Clover Health, 2021
+        "IPOE": "SOFI",  // Social Capital Hedosophia V → SoFi Technologies, 2021
+        "DEAC": "DKNG",  // Diamond Eagle Acquisition → DraftKings, 2020
+        "CCIV": "LCID",  // Churchill Capital IV → Lucid Group, 2021
+        "GGPI": "PSNY",  // Gores Guggenheim → Polestar, 2022
+        "DWAC": "DJT",   // Digital World Acquisition → Trump Media & Technology, 2024
     ]
 
     private static let former: [String: [String]] = Dictionary(

@@ -83,6 +83,16 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
     /// that stretches the system's blur from the top of the screen down to the
     /// bar, and the large title sitting between the two was blurred with it.
     private let headerFade = CAGradientLayer()
+    /// By night the blur is darkened to black rather than the system's grey.
+    private let headerShade = UIView()
+
+    private var isDark: Bool { traitCollection.userInterfaceStyle == .dark }
+
+    private func applyHeaderAppearance() {
+        headerMaterial.effect = UIBlurEffect(style: isDark ? .systemUltraThinMaterialDark : .systemChromeMaterial)
+        headerShade.backgroundColor = isDark ? UIColor.black.withAlphaComponent(0.62) : .clear
+        headerShade.frame = headerMaterial.contentView.bounds
+    }
 
     init(selection: HistoryCategory, categories: [HistoryCategory] = HistoryCategory.allCases) {
         let categories = categories.isEmpty ? [.all] : categories
@@ -115,6 +125,14 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
         headerMaterial.accessibilityIdentifier = "history-header-material"
         headerFade.colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor]
         headerMaterial.layer.mask = headerFade
+        headerShade.isUserInteractionEnabled = false
+        headerShade.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        headerMaterial.contentView.addSubview(headerShade)
+        applyHeaderAppearance()
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (controller: HistoryPagingController, _: UITraitCollection) in
+            controller.applyHeaderAppearance()
+            controller.view.setNeedsLayout()
+        }
         view.addSubview(headerMaterial)
         view.addSubview(categoryBar)
         categoryBar.onSelect = { [weak self] index in
@@ -178,8 +196,10 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
         // Extend the same material to the physical top edge, underneath (not
         // over) the navigation controller's native title and glass buttons.
         let top = min(0, view.window.map { view.convert($0.bounds, from: $0).minY } ?? 0)
-        headerMaterial.frame = CGRect(x: 0, y: top, width: size.width,
-                                      height: categoryBar.frame.maxY - top + Self.headerFadeLength)
+        // By night the blur stops short, fading out by the middle of the
+        // category chips, so the black reads as a soft edge, not a band.
+        let materialBottom = isDark ? categoryBar.frame.midY : categoryBar.frame.maxY + Self.headerFadeLength
+        headerMaterial.frame = CGRect(x: 0, y: top, width: size.width, height: materialBottom - top)
         CATransaction.begin(); CATransaction.setDisableActions(true)
         headerFade.frame = headerMaterial.bounds
         let solidEnd = max(0, headerMaterial.bounds.height - Self.headerFadeLength)

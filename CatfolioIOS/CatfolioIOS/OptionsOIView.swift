@@ -950,16 +950,23 @@ struct OptionsOIDistributionPlot: View {
                         axis.addLine(to: CGPoint(x: center, y: canvas.height))
                         context.stroke(axis, with: .color(.secondary.opacity(0.22)), lineWidth: 0.5)
                     }
-                    markerRules(geometry: geometry, size: size)
-                    markerLane(call: false, geometry: geometry, size: size, width: laneWidth)
-                    markerLane(call: true, geometry: geometry, size: size, width: laneWidth)
+                    // The walls step aside while a finger reads a strike, so
+                    // the one line on the chart is the selection.
+                    Group {
+                        markerRules(geometry: geometry, size: size)
+                        markerLane(call: false, geometry: geometry, size: size, width: laneWidth)
+                        markerLane(call: true, geometry: geometry, size: size, width: laneWidth)
+                    }
+                    .opacity(selectedStrike == nil ? 1 : 0)
+                    .animation(.easeOut(duration: 0.15), value: selectedStrike == nil)
                     if let selectedStrike, let row = geometry.nearest(to: selectedStrike) {
                         let selectedY = y(row.strike, geometry, size.height)
                         // The readout goes to the side the finger is not on.
                         let onLeft = (touchX ?? 0) > size.width / 2
                         ForEach(Array(ruleSegments(y: selectedY,
                             from: onLeft ? axisWidth + 6 : 6,
-                            to: onLeft ? size.width - 6 : size.width - axisWidth - 6).enumerated()), id: \.offset) { _, segment in
+                            to: onLeft ? size.width - 6 : size.width - axisWidth - 6,
+                            only: "selection").enumerated()), id: \.offset) { _, segment in
                             glassRule(color: selectionColor, width: segment.upperBound - segment.lowerBound, interactive: true)
                                 .position(x: (segment.lowerBound + segment.upperBound) / 2, y: selectedY)
                                 .opacity(pillFrames["selection"] == nil ? 0 : 1)
@@ -1113,10 +1120,13 @@ struct OptionsOIDistributionPlot: View {
         .allowsHitTesting(false)
     }
 
-    private func ruleSegments(y: CGFloat, from start: CGFloat, to end: CGFloat) -> [ClosedRange<CGFloat>] {
-        guard end > start, !pillFrames.isEmpty else { return [] }
+    /// `only` names the one pill the rule must clear; otherwise it clears all.
+    private func ruleSegments(y: CGFloat, from start: CGFloat, to end: CGFloat,
+                              only: String? = nil) -> [ClosedRange<CGFloat>] {
+        let frames = only.map { key in pillFrames[key].map { [$0] } ?? [] } ?? Array(pillFrames.values)
+        guard end > start, !frames.isEmpty else { return [] }
         return OIPlotGeometry.uncoveredLineIntervals(from: start, to: end, at: y,
-            excluding: Array(pillFrames.values), lineWidth: 5)
+            excluding: frames, lineWidth: 5)
     }
 
     private func pillFrameReader(_ id: String) -> some View {

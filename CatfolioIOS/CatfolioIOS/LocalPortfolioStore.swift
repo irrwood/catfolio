@@ -184,7 +184,7 @@ struct ObservedMarketQuote: Sendable {
 struct LocalPositionRecord: Codable, Equatable {
     var publicDisclosure: PublicAccountDisclosure? = nil
     var quoteObservedAt: Date? = nil
-    let ticker: String
+    var ticker: String
     let name: String
     let shares: Double
     let averageCost: Double
@@ -425,7 +425,7 @@ struct LocalTransactionRecord: Codable, Equatable, Identifiable {
     let date: String
     var executedAt: String? = nil
     let action: String
-    let ticker: String
+    var ticker: String
     let quantity: Double
     let price: Double
     let currency: String
@@ -1455,9 +1455,26 @@ actor LocalPortfolioStore {
             recoveryNotice = L10n.text("组合文件无法读取，已备份为 \(backup.lastPathComponent)。请重新导入组合；原始数据保留在本机备份中。")
             return .empty
         }
-        let migrated = try migrateKnownInstrumentCurrencies(in: document)
+        let migrated = Self.currentTickers(in: try migrateKnownInstrumentCurrencies(in: document))
         if migrated != document { try save(migrated) }
         return migrated
+    }
+
+    /// A listing renamed since the broker last reported it is kept under its
+    /// current code, positions and trades alike, so a lot bought as IPOE and
+    /// one bought as SOFI are one holding with one history and one quote.
+    static func currentTickers(in document: LocalPortfolioDocument) -> LocalPortfolioDocument {
+        var document = document
+        for index in document.positions.indices {
+            document.positions[index].ticker = TickerRenames.currentSymbol(for: document.positions[index].ticker)
+        }
+        if var transactions = document.transactions {
+            for index in transactions.indices {
+                transactions[index].ticker = TickerRenames.currentSymbol(for: transactions[index].ticker)
+            }
+            document.transactions = transactions
+        }
+        return document
     }
 
     /// Move before resetting so a failed backup never destroys the original.
@@ -1770,6 +1787,7 @@ actor LocalPortfolioStore {
     }
 
     private func save(_ document: LocalPortfolioDocument) throws {
+        let document = Self.currentTickers(in: document)
         do {
             try FileManager.default.createDirectory(
                 at: fileURL.deletingLastPathComponent(),

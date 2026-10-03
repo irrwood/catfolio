@@ -152,14 +152,19 @@ struct IndustrySentimentView: View {
     @State private var selectedDate: Date?
     @State private var importing = false
     @State private var error: String?
-    /// A fresh read from Cboe and Yahoo is running behind the figures on screen.
-    @State private var isRefreshing = false
+    /// The markets being read from Cboe and Yahoo right now. Per market, so
+    /// a read still running for the last choice never blocks the next one.
+    @State private var refreshing: Set<String> = []
+    private var isRefreshing: Bool { refreshing.contains(sectorKey) }
     private let cacheURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("industry-sentiment.json")
 
     /// The market on screen: the one chosen, or the first the file carries.
     private var snapshot: IndustrySentimentSnapshot? {
-        file?.sectors.first { $0.sector == sectorKey } ?? file?.sectors.first
+        if let chosen = file?.sectors.first(where: { $0.sector == sectorKey }) { return chosen }
+        // A known market not read yet shows its own empty dial while it
+        // loads, never another market's score.
+        return IndustrySentimentEngine.sector(sectorKey) == nil ? file?.sectors.first : nil
     }
 
     var body: some View {
@@ -173,6 +178,9 @@ struct IndustrySentimentView: View {
                 gaugeCard(snapshot)
                 trendCard(snapshot)
                 portfolioInsight(snapshot)
+            } else if file != nil {
+                sectorPicker
+                loadingDial(mechanical: false)
             } else {
                 ContentUnavailableView(L10n.text("暂无行情数据"), systemImage: "chart.xyaxis.line")
             }
@@ -224,6 +232,16 @@ struct IndustrySentimentView: View {
         }
     }
 
+    /// The chosen market's dial before its first read: no needle, no score,
+    /// and a spinner while the read runs.
+    private func loadingDial(mechanical: Bool) -> some View {
+        VStack(spacing: 12) {
+            SentimentGauge(score: nil, mechanical: mechanical, headerOnly: mechanical)
+            if isRefreshing { ProgressView() }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     private var mechanicalPage: some View {
         GeometryReader { geometry in
             ScrollView {
@@ -236,6 +254,11 @@ struct IndustrySentimentView: View {
                         mechanicalMetrics(snapshot).padding(.horizontal, 16)
                         sectorPicker.padding(.horizontal, 18).padding(.top, 12)
                         trendCard(snapshot).padding(16)
+                    } else if file != nil {
+                        loadingDial(mechanical: true)
+                            .padding(.horizontal, 22)
+                            .padding(.top, -37)
+                        sectorPicker.padding(.horizontal, 18).padding(.top, 12)
                     } else {
                         ContentUnavailableView(L10n.text("暂无行情数据"), systemImage: "chart.xyaxis.line")
                     }
@@ -353,22 +376,24 @@ struct IndustrySentimentView: View {
     /// charts nobody is looking at. What's on screen stays up while it runs,
     /// and stays up if it fails; only a newer or equal day replaces it.
     private func refresh() async {
-        guard !isRefreshing, let sector = IndustrySentimentEngine.sector(sectorKey)
+        let key = sectorKey
+        guard !refreshing.contains(key), let sector = IndustrySentimentEngine.sector(key)
             ?? snapshot?.definition else { return }
-        isRefreshing = true
-        defer { isRefreshing = false }
+        refreshing.insert(key)
+        defer { refreshing.remove(key) }
         do {
             let data = try await IndustrySentimentClient().snapshotData(sector: sector)
             let incoming = try await Task.detached(priority: .utility) {
                 try IndustrySentimentFile.decode(data)
             }.value
-            guard !Task.isCancelled else { return }
+            // Kept even if the reader has moved on: it is that market's data,
+            // and switching back should find it.
             try? FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(),
                                                      withIntermediateDirectories: true)
             try store(file.map { $0.merging(incoming) } ?? incoming)
-            error = nil
+            if key == sectorKey { error = nil }
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, key == sectorKey else { return }
             self.error = snapshot == nil
                 ? L10n.text("暂无行情数据")
                 : L10n.text("无法更新行情，显示的是 \(snapshot?.asOf ?? "") 的数据。下拉可重试。")

@@ -126,17 +126,19 @@ struct TodayContributionCard: View {
         ZStack(alignment: .topLeading) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 4) {
+                    HStack(alignment: .center, spacing: 2) {
                         Text(L10n.text("TODAY"))
                             .appCaps(.caption, weight: .semibold)
                             .foregroundStyle(CatfolioTheme.primaryText)
                         if onOpenDetail != nil {
+                            // Small and close: it marks the title as a way in,
+                            // centred on the capitals rather than their line box.
                             Image(systemName: "chevron.right")
-                                .font(.caption2.weight(.semibold))
+                                .font(.system(size: 9, weight: .bold))
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .frame(height: 17, alignment: .topLeading)
+                    .frame(height: 17, alignment: .leading)
                     .onGeometryChange(for: CGFloat.self) { geometry in
                         geometry.frame(in: .global).maxY
                     } action: { _, newValue in
@@ -203,10 +205,9 @@ struct TodayContributionCard: View {
                     TodayContributionLoadingBars(isAnimating: true)
                         .frame(height: 167, alignment: .top)
                 } else if contributions.isEmpty {
-                    emptyNote(L10n.text("行情暂不可用"), systemImage: "exclamationmark.circle")
+                    emptyNote(L10n.text("行情暂不可用"), retries: true)
                 } else if visibleContributions.isEmpty {
-                    emptyNote(direction == .gains ? L10n.text("今天没有上涨") : L10n.text("今天没有下跌"),
-                              systemImage: direction == .gains ? "arrow.up.right" : "arrow.down.right")
+                    emptyNote(direction == .gains ? L10n.text("今天没有上涨") : L10n.text("今天没有下跌"))
                 } else {
                     contributionBars
                         .frame(height: 167)
@@ -297,28 +298,25 @@ struct TodayContributionCard: View {
     }
 
     /// One quiet line where the bars would be: what is missing, and 刷新.
-    private func emptyNote(_ text: String, systemImage: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: systemImage)
-                .font(.footnote.weight(.semibold))
+    /// One quiet line where the bars would stand. Only a failed quote offers
+    /// a retry; an empty side of the day has nothing to retry.
+    private func emptyNote(_ text: String, retries: Bool = false) -> some View {
+        HStack(spacing: 10) {
             Text(text)
                 .appText(.footnote, weight: .medium)
-            Spacer(minLength: 8)
-            if let onRefresh {
-                Button(action: onRefresh) {
-                    Label(L10n.text("刷新"), systemImage: "arrow.clockwise")
-                        .appText(.footnote, weight: .semibold)
-                        .foregroundStyle(CatfolioTheme.primaryText)
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            if retries, let onRefresh {
+                Button(L10n.text("重试"), action: onRefresh)
+                    .appText(.footnote, weight: .semibold)
+                    .foregroundStyle(CatfolioTheme.primaryText)
+                    .buttonStyle(.plain)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
             }
         }
-        .foregroundStyle(.secondary)
         .lineLimit(1)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 167, alignment: .top)
+        .frame(maxWidth: .infinity)
+        .frame(height: 167)
     }
 
     @ViewBuilder

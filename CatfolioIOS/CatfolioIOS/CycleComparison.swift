@@ -153,9 +153,15 @@ struct CycleComparison: Equatable, Sendable {
 
     /// One of the four steps each side of zero on the axis: a round number
     /// that fits the widest move in view.
-    static func axisStep(for cycles: [Cycle]) -> Double {
-        let widest = cycles.flatMap(\.points).map { abs($0.value) }.max() ?? 0
-        return roundStep(widest / 4)
+    /// The value range the chart shows: the lines' own low and high, zero
+    /// always among them, with a little room so no line touches an edge.
+    /// The step is the one labelled ticks use, about five across the range.
+    static func axis(for cycles: [Cycle]) -> (domain: ClosedRange<Double>, step: Double) {
+        let values = cycles.flatMap(\.points).map(\.value).filter(\.isFinite)
+        let low = min(0, values.min() ?? 0), high = max(0, values.max() ?? 0)
+        let span = max(high - low, 1)
+        let padding = span * 0.08
+        return ((low - padding)...(high + padding), roundStep(span / 5))
     }
 
     static func roundStep(_ raw: Double) -> Double {
@@ -230,6 +236,8 @@ struct CycleComparisonView: View {
     @State private var failures: [Subject: String] = [:]
     /// Lines the reader turned off. Every line starts on.
     @State private var hidden: Set<String> = []
+    /// The one line a right swipe on its row brought forward; the rest fade.
+    @State private var highlighted: String?
     @State private var selectedDate: Date?
 
     private var subject: Subject { Subject(rawValue: subjectID) ?? .spx }
@@ -353,6 +361,7 @@ struct CycleComparisonView: View {
         .sensoryFeedback(.selection, trigger: startMonth) { _, _ in hapticsEnabled }
         .onChange(of: subjectID) { _, _ in
             hidden = []
+            highlighted = nil
             selectedDate = nil
         }
         .task(id: subject) {
@@ -376,20 +385,21 @@ struct CycleComparisonView: View {
         return GeometryReader { geometry in
             let height = geometry.size.height
             ZStack(alignment: .topLeading) {
+                let axis = CycleComparison.axis(for: visible.map(\.cycle))
+                let zeroY = Self.y(0, in: axis.domain, height: height)
                 columns
-                // The half below zero sits a shade darker, fading downward.
+                // Below zero sits a shade darker, fading downward.
                 LinearGradient(
                     stops: [.init(color: .primary, location: 0.14), .init(color: .primary.opacity(0), location: 1)],
                     startPoint: .top, endPoint: .bottom
                 )
                 .opacity(0.05)
-                .frame(height: height / 2)
-                .offset(y: height / 2)
+                .frame(height: max(0, height - zeroY))
+                .offset(y: zeroY)
 
                 if !visible.isEmpty {
-                    let step = CycleComparison.axisStep(for: visible.map(\.cycle))
-                    plot(visible, step: step)
-                    yLabels(step: step, height: height)
+                    plot(visible, domain: axis.domain)
+                    yLabels(domain: axis.domain, step: axis.step, height: height)
                         .frame(width: 23)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                         .padding(.trailing, 5)
@@ -428,19 +438,21 @@ struct CycleComparisonView: View {
         .allowsHitTesting(false)
     }
 
-    /// Four steps each side of zero occupy the middle three quarters of the
-    /// height; the lines may still run past them.
-    private static let labelledShare = 192.0 / 255.0
+    /// Where a value sits, top to bottom, with the domain filling the height.
+    private static func y(_ value: Double, in domain: ClosedRange<Double>, height: CGFloat) -> CGFloat {
+        let span = domain.upperBound - domain.lowerBound
+        guard span > 0 else { return height / 2 }
+        return CGFloat((domain.upperBound - value) / span) * height
+    }
 
-    private func plot(_ lines: [Line], step: Double) -> some View {
-        let half = 4 * step / Self.labelledShare
+    private func plot(_ lines: [Line], domain: ClosedRange<Double>) -> some View {
         let series = lines.map { line in
             StandardLineChartSeries(
                 id: line.id,
                 points: line.cycle.points.map {
                     StandardLineChartPoint(id: "\(line.id)|\($0.fraction)", date: Self.date(for: $0.fraction), value: $0.value)
                 },
-                color: line.color,
+                color: highlighted == nil || highlighted == line.id ? line.color : line.color.opacity(0.22),
                 lineWidth: line.isNow || line.id == Self.averageLineID ? 2.5 : 2,
                 dash: line.dash,
                 selectionRadius: line.isNow ? 3.6 : 2.8,
@@ -451,7 +463,7 @@ struct CycleComparisonView: View {
         return StandardLineChart(
             series: series,
             interactionDates: (0...CycleComparison.steps).map { Self.date(for: Double($0) / Double(CycleComparison.steps)) },
-            domain: -half...half,
+            domain: domain,
             yTicks: [0],
             axisWidth: 0,
             topInset: 0,
@@ -473,17 +485,24 @@ struct CycleComparisonView: View {
         .accessibilityLabel(L10n.text("\(subject.title) 最近 \(years) 年的逐年走势对比"))
     }
 
-    private func yLabels(step: Double, height: CGFloat) -> some View {
-        let unit = height / 2 * Self.labelledShare / 4
+    /// Every multiple of the step inside the range, clear of the top edge
+    /// and of the month labels along the bottom.
+    private func yLabels(domain: ClosedRange<Double>, step: Double, height: CGFloat) -> some View {
+        let first = Int((domain.lowerBound / step).rounded(.up))
+        let last = Int((domain.upperBound / step).rounded(.down))
+        let ticks = first <= last ? Array(first...last) : []
         return ZStack {
-            ForEach(-4...4, id: \.self) { index in
-                Text(Self.axisText(Double(index) * step))
-                    .font(Typography.number(size: 14, weight: .medium))
-                    .tracking(0.7)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .position(x: 11.5, y: height / 2 - CGFloat(index) * unit)
+            ForEach(ticks, id: \.self) { index in
+                let y = Self.y(Double(index) * step, in: domain, height: height)
+                if y > 12, y < height - 38 {
+                    Text(Self.axisText(Double(index) * step))
+                        .font(Typography.number(size: 14, weight: .medium))
+                        .tracking(0.7)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .position(x: 11.5, y: y)
+                }
             }
         }
         .allowsHitTesting(false)
@@ -565,9 +584,17 @@ struct CycleComparisonView: View {
 
     private func row(_ line: Line, value: Double?, rank: Int) -> some View {
         let isShown = !hidden.contains(line.id)
-        return Button {
-            if isShown { hidden.insert(line.id) } else { hidden.remove(line.id) }
-            selectedDate = nil
+        let isHighlighted = highlighted == line.id
+        // The returns comparison's rows: a swipe right brings the line
+        // forward, a swipe left hides it, a tap shows or hides it.
+        return ReturnsSwipeRow(
+            color: line.color, isHighlighted: isHighlighted, canRemove: isShown,
+            removeTitle: L10n.text("隐藏此项"), removeIcon: "eye.slash", removeSlidesOut: false,
+            onHighlight: { toggleHighlight(line.id) },
+            onRemove: { setShown(line.id, false) }
+        ) {
+        Button {
+            setShown(line.id, !isShown)
         } label: {
             HStack(spacing: 16) {
                 ReturnsRankBadge(rank: rank, color: line.color, isPortfolio: line.id == Self.portfolioLineID)
@@ -595,9 +622,28 @@ struct CycleComparisonView: View {
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
+        }
+        .returnsDimmed(highlighted != nil && !isHighlighted)
         .accessibilityLabel(line.title)
         .accessibilityValue((isShown ? L10n.text("已显示") : L10n.text("已隐藏")) + " · "
             + (value.map { DisplayFormat.percent($0) } ?? "—"))
+        .accessibilityAction(named: isHighlighted ? L10n.text("取消高亮") : L10n.text("高亮曲线")) {
+            toggleHighlight(line.id)
+        }
+    }
+
+    private func setShown(_ id: String, _ shown: Bool) {
+        if shown { hidden.remove(id) } else { hidden.insert(id) }
+        if !shown, highlighted == id { highlighted = nil }
+        selectedDate = nil
+    }
+
+    private func toggleHighlight(_ id: String) {
+        withAnimation(.smooth(duration: 0.25)) {
+            highlighted = highlighted == id ? nil : id
+        }
+        // A hidden line cannot stand out; bring it back first.
+        if highlighted == id { hidden.remove(id) }
     }
 
     // MARK: Values

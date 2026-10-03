@@ -520,11 +520,11 @@ final class HoldingContributionTests: XCTestCase {
         add(attachment)
     }
 
-    func testBigGainersGetBandsUntilTheNextIsASmallShare() {
+    func testEveryGainerGetsABandUpToSeven() {
         let stack = HoldingContributionStack(history: history())
-        // Gains: A 300, C 200, E 100, B 50, F 20, D -10. F is 3% of the 670
-        // gained, under the 6% bar, so it and D stay in the others.
-        XCTAssertEqual(stack.bands.map(\.title), [L10n.text("本金"), L10n.text("其他收益"), "B", "E", "C", "A"])
+        // Gains: A 300, C 200, E 100, B 50, F 20, D -10. Each of the five
+        // gainers gets its own band, however small; D's loss is the others.
+        XCTAssertEqual(stack.bands.map(\.title), [L10n.text("本金"), L10n.text("其他收益"), "F", "B", "E", "C", "A"])
         XCTAssertEqual(stack.bands[0].kind, .principal)
         XCTAssertEqual(stack.bands[1].kind, .others)
         XCTAssertEqual(stack.bands.last?.kind, .holding(colour: 0))
@@ -539,24 +539,25 @@ final class HoldingContributionTests: XCTestCase {
             XCTAssertEqual(row.principal, source.cost)
         }
         let last = try XCTUnwrap(stack.rows.last)
-        XCTAssertEqual(last.bands, [600, 10, 50, 100, 200, 300])
-        XCTAssertEqual(last.othersGain, 20 - 10, accuracy: 0.0001)
+        // The others are D alone, a loss, which comes out of the principal.
+        XCTAssertEqual(last.bands, [590, 0, 20, 50, 100, 200, 300])
+        XCTAssertEqual(last.othersGain, -10, accuracy: 0.0001)
     }
 
     func testAHiddenHoldingLeavesTheChartAndTheNextTakesItsPlace() throws {
         let stack = HoldingContributionStack(history: history(), hiding: ["A"])
-        // Without A: C 200, E 100, B 50, F 20 of 370 gained. F is 5.4%, still
-        // under the bar.
-        XCTAssertEqual(stack.bands.map(\.title), [L10n.text("本金"), L10n.text("其他收益"), "B", "E", "C"])
-        // The rest keep their colours: C 1, E 2, B 3.
-        XCTAssertEqual(stack.bands.dropFirst(2).map(\.kind), [.holding(colour: 3), .holding(colour: 2), .holding(colour: 1)])
+        // Without A: C 200, E 100, B 50, F 20, each still its own band.
+        XCTAssertEqual(stack.bands.map(\.title), [L10n.text("本金"), L10n.text("其他收益"), "F", "B", "E", "C"])
+        // The rest keep their colours: C 1, E 2, B 3, F 4.
+        XCTAssertEqual(stack.bands.dropFirst(2).map(\.kind),
+                       [.holding(colour: 4), .holding(colour: 3), .holding(colour: 2), .holding(colour: 1)])
         XCTAssertEqual(stack.hidden.map(\.ticker), ["A"])
         XCTAssertEqual(stack.hidden.first?.name, "Alpha")
         let last = try XCTUnwrap(stack.rows.last)
-        XCTAssertEqual(last.othersGain, 20 - 10, accuracy: 0.0001)
-        XCTAssertEqual(last.bands, [600, 10, 50, 100, 200])
+        XCTAssertEqual(last.othersGain, -10, accuracy: 0.0001)
+        XCTAssertEqual(last.bands, [590, 0, 20, 50, 100, 200])
         XCTAssertEqual(last.bands.reduce(0, +), 960, accuracy: 0.0001)
-        XCTAssertEqual(stack.bands[1].subtitle, L10n.text("2 项持仓合计"))
+        XCTAssertEqual(stack.bands[1].subtitle, L10n.text("1 项持仓合计"))
         XCTAssertEqual(last.total, 1260, accuracy: 0.0001)
     }
 
@@ -567,7 +568,8 @@ final class HoldingContributionTests: XCTestCase {
         XCTAssertEqual(gainRow.bands.reduce(0, +), 1240)
         let hiddenLoss = HoldingContributionStack(history: history(), hiding: ["D"])
         let lossRow = try XCTUnwrap(hiddenLoss.rows.last)
-        XCTAssertEqual(lossRow.othersGain, 20)
+        // D was the only holding in the others; every gainer has a band.
+        XCTAssertEqual(lossRow.othersGain, 0)
         XCTAssertEqual(lossRow.bands.reduce(0, +), 1270)
         XCTAssertEqual(lossRow.total, 1260, "Visibility must not change the portfolio header")
     }
@@ -631,29 +633,29 @@ final class HoldingContributionTests: XCTestCase {
     }
 
     func testAHoldingSteppingInTakesTheFreedColour() {
-        // Seven even gainers: the six-band cap leaves G7 out until G2 is hidden.
-        let tickers = (1...7).map { "G\($0)" }
+        // Eight even gainers: the seven-band cap leaves G8 out until G2 is hidden.
+        let tickers = (1...8).map { "G\($0)" }
         let costs = Dictionary(uniqueKeysWithValues: tickers.map { ($0, 100.0) })
         let even = HoldingValueHistory(rows: [
-            .init(dateText: "2026-01-02", cost: 700, values: costs, costs: costs),
-            .init(dateText: "2026-01-05", cost: 700, values: costs.mapValues { $0 + 10 }, costs: costs),
+            .init(dateText: "2026-01-02", cost: 800, values: costs, costs: costs),
+            .init(dateText: "2026-01-05", cost: 800, values: costs.mapValues { $0 + 10 }, costs: costs),
         ], costs: costs, names: [:])
-        XCTAssertFalse(HoldingContributionStack(history: even).bands.map(\.title).contains("G7"))
+        XCTAssertFalse(HoldingContributionStack(history: even).bands.map(\.title).contains("G8"))
 
         let stack = HoldingContributionStack(history: even, hiding: ["G2"])
         let colours = Dictionary(uniqueKeysWithValues: stack.bands.dropFirst(2).map { ($0.title, $0.kind) })
-        XCTAssertEqual(colours["G7"], .holding(colour: 1), "G7 takes G2's colour")
+        XCTAssertEqual(colours["G8"], .holding(colour: 1), "G8 takes G2's colour")
         XCTAssertEqual(colours["G1"], .holding(colour: 0))
         XCTAssertEqual(colours["G3"], .holding(colour: 2))
         XCTAssertNil(colours["G2"])
         XCTAssertEqual(stack.holdingRanks["G2"], 2, "The hidden holding keeps its original rank")
-        XCTAssertEqual(stack.holdingRanks["G7"], 7, "A promoted holding keeps its rank, not the freed colour's rank")
-        XCTAssertEqual(stack.bands.reversed().compactMap { stack.rank(for: $0) }, [1, 3, 4, 5, 6, 7])
+        XCTAssertEqual(stack.holdingRanks["G8"], 8, "A promoted holding keeps its rank, not the freed colour's rank")
+        XCTAssertEqual(stack.bands.reversed().compactMap { stack.rank(for: $0) }, [1, 3, 4, 5, 6, 7, 8])
     }
 
     func testGainRanksFollowHoldingsThroughHideAndRestore() {
         let original = HoldingContributionStack(history: history())
-        XCTAssertEqual(original.bands.reversed().compactMap { original.rank(for: $0) }, [1, 2, 3, 4])
+        XCTAssertEqual(original.bands.reversed().compactMap { original.rank(for: $0) }, [1, 2, 3, 4, 5])
         XCTAssertNil(original.rank(for: original.bands[0]), "Principal is not a ranked holding")
         XCTAssertNil(original.rank(for: original.bands[1]), "Other gains is an aggregate")
 
@@ -665,13 +667,13 @@ final class HoldingContributionTests: XCTestCase {
 
         let restored = HoldingContributionStack(history: history(), hiding: ["E", "B"])
         XCTAssertEqual(restored.holdingRanks, original.holdingRanks)
-        XCTAssertEqual(restored.bands.reversed().compactMap { restored.rank(for: $0) }, [1, 2])
+        XCTAssertEqual(restored.bands.reversed().compactMap { restored.rank(for: $0) }, [1, 2, 5])
     }
 
     func testHidingSomethingNotHeldChangesNothing() {
         let stack = HoldingContributionStack(history: history(), hiding: ["ZZZ"])
         XCTAssertTrue(stack.hidden.isEmpty)
-        XCTAssertEqual(stack.bands.count, 6)
+        XCTAssertEqual(stack.bands.count, 7)
     }
 
     func testTheOthersLossesComeOutOfThePrincipalBand() throws {
@@ -691,7 +693,7 @@ final class HoldingContributionTests: XCTestCase {
     func testNamedCount() {
         XCTAssertEqual(HoldingContributionStack.namedCount([]), 0)
         XCTAssertEqual(HoldingContributionStack.namedCount([-5, 0]), 0)
-        XCTAssertEqual(HoldingContributionStack.namedCount([1, 100]), 1, "The first always counts; 1% does not")
-        XCTAssertEqual(HoldingContributionStack.namedCount(Array(repeating: 10, count: 10)), 6)
+        XCTAssertEqual(HoldingContributionStack.namedCount([1, 100]), 2, "Every gain counts, however small")
+        XCTAssertEqual(HoldingContributionStack.namedCount(Array(repeating: 10, count: 10)), 7)
     }
 }

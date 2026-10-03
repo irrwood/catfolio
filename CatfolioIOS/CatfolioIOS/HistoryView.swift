@@ -192,6 +192,8 @@ struct HistoryView: View {
     @State private var ledgerRevision = 0
     @State private var preparedLedger = HistoryPreparedLedger()
     @AppStorage("history.taxYearBasis") private var taxYearBasisRaw = TaxYearBasis.calendar.rawValue
+    /// Dividends listed under each security rather than by date.
+    @AppStorage("history.dividendsByStock") private var dividendsByStock = false
     @State private var selectedTaxYear: String?
 
     private var taxYearBasis: TaxYearBasis {
@@ -354,9 +356,15 @@ struct HistoryView: View {
 
     /// On a security's own history, only the tabs with something in them:
     /// a share pays no interest, and most have no fund charge. The whole
-    /// ledger keeps every tab, so its layout does not move with the data.
+    /// ledger keeps its tabs too, except interest for an account that has
+    /// never earned any.
     private var visibleCategories: [HistoryCategory] {
-        guard ticker != nil else { return HistoryCategory.allCases }
+        guard ticker != nil else {
+            return HistoryCategory.allCases.filter { category in
+                category != .interest
+                    || !preparedLedger.page(category: .interest, basis: taxYearBasis, year: nil).activities.isEmpty
+            }
+        }
         return HistoryCategory.allCases.filter { category in
             switch category {
             case .all: true
@@ -397,7 +405,19 @@ struct HistoryView: View {
                         .listRowBackground(Color.clear)
                     }
                 } else {
-                    ForEach(page.groups) { group in
+                    if pageCategory == .dividends {
+                        Section {
+                            Picker(L10n.text("分组"), selection: $dividendsByStock) {
+                                Text(L10n.text("按日期")).tag(false)
+                                Text(L10n.text("按股票")).tag(true)
+                            }
+                            .pickerStyle(.segmented)
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                        }
+                    }
+                    ForEach(pageCategory == .dividends && dividendsByStock
+                            ? Self.groupsByStock(page.activities) : page.groups) { group in
                         Section {
                             ForEach(group.activities) { activity in
                                 activityRow(activity)
@@ -710,6 +730,22 @@ struct HistoryView: View {
         .accessibilityLabel(L10n.text("Account filter"))
         .accessibilityValue(accountFilterTitle)
         .accessibilityIdentifier("history-accounts")
+    }
+
+    /// One section per security, the largest payer first, each headed with
+    /// its total; inside, the payments newest first.
+    static func groupsByStock(_ activities: [PortfolioActivity]) -> [ActivityDateGroup] {
+        let bySecurity = Dictionary(grouping: activities) { $0.transaction.ticker.uppercased() }
+        return bySecurity.map { ticker, payments -> (ActivityDateGroup, Double) in
+            let total = payments.reduce(0) { $0 + ($1.amountUSD.isFinite ? $1.amountUSD : 0) }
+            let name = payments.first?.securityName.isEmpty == false ? payments[0].securityName : ticker
+            let sorted = payments.sorted { $0.transaction.date > $1.transaction.date }
+            return (ActivityDateGroup(id: "stock-\(ticker)",
+                                      title: "\(name) · \(DisplayFormat.money(total, fractionDigits: 2))",
+                                      activities: sorted), total)
+        }
+        .sorted { $0.1 > $1.1 }
+        .map(\.0)
     }
 
     private func dividendContributionSection(_ page: HistoryActivityPage) -> some View {

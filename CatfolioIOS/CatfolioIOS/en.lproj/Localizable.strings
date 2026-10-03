@@ -3800,7 +3800,7 @@
 "除息" = "Ex-dividend";
 "派息" = "Dividend paid";
 "公司日历" = "Corporate events";
-"正在读取财报与股息日期…" = "Loading earnings and dividend dates…";
+"财报、除息与派息日期" = "Earnings, ex-dividend and payment dates";
 "近期没有财报或除息" = "No upcoming earnings or ex-dividend dates";
 "查看全部" = "See all";
 "类型" = "Type";
@@ -3812,3 +3812,14 @@
 "约 %@" = "About %@";
 "%@ 次派息" = "%@ payments";
 "%@ 次除息" = "%@ ex-dividend dates";
+"切到「全部」可计入已实现利润" = "Switch to All to include realised profit";
+"暂无已实现利润" = "No realised profit yet";
+"已计入已实现利润 · %@ 笔未计" = "Realised profit included · %@ sales missing";
+"已计入已实现利润" = "Realised profit included";
+"仅未实现利润" = "Unrealised profit only";
+"昨天" = "Yesterday";
+"已隐藏全部曲线" = "All lines hidden";
+"轻点下方条目重新显示" = "Tap a row below to show it again";
+"分组" = "Group";
+"按日期" = "By date";
+"按股票" = "By stock";
