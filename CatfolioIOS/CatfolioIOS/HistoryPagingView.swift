@@ -83,15 +83,16 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
     /// that stretches the system's blur from the top of the screen down to the
     /// bar, and the large title sitting between the two was blurred with it.
     private let headerFade = CAGradientLayer()
-    /// By night the blur is darkened to black rather than the system's grey.
-    private let headerShade = UIView()
+    /// By night: solid black over the title, fading to clear across the top
+    /// half of the category chips, laid over a blur that fades with it.
+    private let headerShade = CAGradientLayer()
 
     private var isDark: Bool { traitCollection.userInterfaceStyle == .dark }
 
     private func applyHeaderAppearance() {
         headerMaterial.effect = UIBlurEffect(style: isDark ? .systemUltraThinMaterialDark : .systemChromeMaterial)
-        headerShade.backgroundColor = isDark ? UIColor.black.withAlphaComponent(0.62) : .clear
-        headerShade.frame = headerMaterial.contentView.bounds
+        headerShade.isHidden = !isDark
+        headerShade.colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.black.withAlphaComponent(0).cgColor]
     }
 
     init(selection: HistoryCategory, categories: [HistoryCategory] = HistoryCategory.allCases) {
@@ -125,9 +126,7 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
         headerMaterial.accessibilityIdentifier = "history-header-material"
         headerFade.colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor]
         headerMaterial.layer.mask = headerFade
-        headerShade.isUserInteractionEnabled = false
-        headerShade.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        headerMaterial.contentView.addSubview(headerShade)
+        headerMaterial.contentView.layer.addSublayer(headerShade)
         applyHeaderAppearance()
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (controller: HistoryPagingController, _: UITraitCollection) in
             controller.applyHeaderAppearance()
@@ -202,9 +201,15 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
         headerMaterial.frame = CGRect(x: 0, y: top, width: size.width, height: materialBottom - top)
         CATransaction.begin(); CATransaction.setDisableActions(true)
         headerFade.frame = headerMaterial.bounds
-        let solidEnd = max(0, headerMaterial.bounds.height - Self.headerFadeLength)
-            / max(1, headerMaterial.bounds.height)
+        let height = max(1, headerMaterial.bounds.height)
+        // By day the material fades over its last 28 pt. By night black and
+        // blur are solid down to the chips' top edge and fade out together by
+        // their middle.
+        let fadeStart = isDark ? categoryBar.frame.minY - top : height - Self.headerFadeLength
+        let solidEnd = min(1, max(0, fadeStart / height))
         headerFade.locations = [0, NSNumber(value: Double(solidEnd)), 1]
+        headerShade.frame = headerMaterial.bounds
+        headerShade.locations = [0, NSNumber(value: Double(solidEnd)), 1]
         CATransaction.commit()
         updateHeader()
         categoryBar.setProgress(pageProgress)

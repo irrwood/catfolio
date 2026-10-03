@@ -26,7 +26,8 @@ enum IBKRFlexQueryBrief {
 
 struct IBKRFlexView: View {
     @Environment(\.locale) private var appLocale
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var dismissPage
+    @Environment(\.accountFlowClose) private var accountFlowClose
     @Environment(AppModel.self) private var model
 
     let context: AccountConnectorContext
@@ -77,8 +78,13 @@ struct IBKRFlexView: View {
         context.account?.id == Self.pendingAccountID
     }
 
+    /// Inside 添加账户 this closes the whole flow; on its own, the page.
+    private func dismiss() {
+        if let accountFlowClose { accountFlowClose() } else { dismissPage() }
+    }
+
     var body: some View {
-        NavigationStack {
+        AccountFlowStack {
             SettingsPage(bottomInset: 32) {
                 if context.isCreating && guideStep < 3 {
                     IBKRAccountGuide(step: guideStep) { guideStep += 1 } skip: { guideStep = 3 }
@@ -88,6 +94,8 @@ struct IBKRFlexView: View {
             }
             .softTopScrollEdge()
             .navigationTitle(context.isCreating ? L10n.text("新建 IBKR 账户") : "IBKR Flex")
+            // Past the first step the guide's own 上一步 is the back button.
+            .navigationBarBackButtonHidden(context.isCreating && guideStep > 0 && snapshot == nil)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if context.isCreating && guideStep > 0 && snapshot == nil {
@@ -97,6 +105,7 @@ struct IBKRFlexView: View {
                         } label: {
                             Label(L10n.text("上一步"), systemImage: "chevron.left")
                         }
+                        .tint(CatfolioTheme.primaryText)
                         .disabled(isWorking)
                     }
                 } else if context.isCreating && snapshot == nil {

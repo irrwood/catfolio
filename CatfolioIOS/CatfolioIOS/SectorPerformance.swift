@@ -181,6 +181,7 @@ struct SectorGlassCard: View {
     @ViewBuilder private var surface: some View {
         if !usesGlass {
             content.background(SettingsTemplate.card, in: shape)
+                .overlay(shape.strokeBorder(SettingsTemplate.cardBorder, lineWidth: SettingsTemplate.cardBorderWidth))
         } else if reduceTransparency {
             content.background(SettingsTemplate.card, in: shape)
                 .overlay(shape.strokeBorder(tint, lineWidth: 1))

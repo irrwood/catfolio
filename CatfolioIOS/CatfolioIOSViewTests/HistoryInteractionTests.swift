@@ -585,7 +585,7 @@ final class HistoryInteractionTests: XCTestCase {
         let context = try XCTUnwrap(CGContext(data: &pixel, width: 1, height: 1, bitsPerComponent: 8,
             bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
         context.draw(crop, in: CGRect(x: 0, y: 0, width: 1, height: 1))
-        // The page ground itself (#EEEFEF light, black dark), carried
+        // The page ground itself (#F7F7F7 light, black dark), carried
         // through the home-indicator area rather than a separate bottom bar.
         var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
         SettingsTemplate.uiPageBackground

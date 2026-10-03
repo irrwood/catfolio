@@ -2,7 +2,8 @@ import SwiftUI
 
 struct Trading212View: View {
     @Environment(\.locale) private var appLocale
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var dismissPage
+    @Environment(\.accountFlowClose) private var accountFlowClose
     @Environment(AppModel.self) private var model
 
     let context: AccountConnectorContext
@@ -35,8 +36,13 @@ struct Trading212View: View {
     private static func apiKeyKey(slot: Int) -> String { "trading212.account-\(slot).api-key" }
     private static func apiSecretKey(slot: Int) -> String { "trading212.account-\(slot).api-secret" }
 
+    /// Inside 添加账户 this closes the whole flow; on its own, the page.
+    private func dismiss() {
+        if let accountFlowClose { accountFlowClose() } else { dismissPage() }
+    }
+
     var body: some View {
-        NavigationStack {
+        AccountFlowStack {
             SettingsPage(bottomInset: 32) {
                 if context.isCreating {
                     Trading212GuideProgress(step: guideStep)
@@ -56,6 +62,9 @@ struct Trading212View: View {
             .disabled(isWorking)
             .softTopScrollEdge()
             .navigationTitle(context.isCreating ? L10n.text("新建 Trading 212 账户") : "Trading 212")
+            // Past the first step the guide's own 上一步 is the back button;
+            // the bar's, which leaves the guide, would make two.
+            .navigationBarBackButtonHidden(context.isCreating && guideStep.previous != nil)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if context.isCreating, let previous = guideStep.previous {
@@ -66,6 +75,7 @@ struct Trading212View: View {
                         } label: {
                             Label(L10n.text("上一步"), systemImage: "chevron.left")
                         }
+                        .tint(CatfolioTheme.primaryText)
                         .disabled(isWorking)
                         .accessibilityIdentifier("account-guide-back")
                     }

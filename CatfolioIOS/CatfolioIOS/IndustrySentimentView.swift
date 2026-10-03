@@ -434,10 +434,7 @@ struct IndustrySentimentView: View {
         VStack(alignment: .leading, spacing: 20, content: content)
             .padding(SettingsTemplate.rowHorizontalPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                SettingsTemplate.card,
-                in: RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius, style: .continuous)
-            )
+            .settingsCardSurface()
     }
 
     @ViewBuilder

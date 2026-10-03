@@ -3,7 +3,8 @@ import UniformTypeIdentifiers
 
 struct CSVImportView: View {
     @Environment(\.locale) private var appLocale
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var dismissPage
+    @Environment(\.accountFlowClose) private var accountFlowClose
     @Environment(AppModel.self) private var model
 
     let context: AccountConnectorContext
@@ -23,8 +24,13 @@ struct CSVImportView: View {
         self.context = context
     }
 
+    /// Inside 添加账户 this closes the whole flow; on its own, the page.
+    private func dismiss() {
+        if let accountFlowClose { accountFlowClose() } else { dismissPage() }
+    }
+
     var body: some View {
-        NavigationStack {
+        AccountFlowStack {
             SettingsPage(bottomInset: 32) {
                 if context.isCreating {
                     SettingsSectionHeader(L10n.text("账户昵称"))

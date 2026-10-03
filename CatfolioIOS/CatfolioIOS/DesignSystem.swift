@@ -6,7 +6,9 @@ import UIKit
 /// A slightly raised ground for app-owned modal pages in dark appearance.
 /// Keep this separate from the security detail's designed presentation.
 enum AppModalStyle {
-    static let uiDarkBackground = UIColor(red: 0x18 / 255.0, green: 0x18 / 255.0, blue: 0x1A / 255.0, alpha: 1)
+    /// A sheet's night ground: `#141515`, the card's own hue (`#1D1E1E`) a
+    /// step darker, so cards lift off it without a shift in colour.
+    static let uiDarkBackground = UIColor(red: 0x14 / 255.0, green: 0x15 / 255.0, blue: 0x15 / 255.0, alpha: 1)
     static let darkBackground = Color(uiColor: uiDarkBackground)
     static let systemBackground = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark ? uiDarkBackground : .systemBackground
@@ -18,16 +20,22 @@ struct AppModalDoneButton: View {
     var expands = false
     let action: () -> Void
 
+    private static let label = Color(uiColor: UIColor { trait in
+        trait.userInterfaceStyle == .dark ? .black : .white
+    })
+
     var body: some View {
         Button(action: action) {
             Text(L10n.text("完成"))
                 .appText(.callout, weight: .semibold)
-                .foregroundStyle(.white)
+                .foregroundStyle(Self.label)
                 .frame(maxWidth: expands ? .infinity : nil, minHeight: expands ? 36 : nil)
         }
         .buttonStyle(.borderedProminent)
         .buttonBorderShape(.capsule)
-        .tint(.black)
+        // The ink colour: a black pill by day, a white one at night, with the
+        // label in the opposite colour, so it never sinks into a dark sheet.
+        .tint(CatfolioTheme.primaryText)
     }
 }
 
@@ -214,10 +222,13 @@ struct HoldingPressButtonStyle: ButtonStyle {
     }
 }
 
+/// A pressed row turns grey under the finger — the settings rows' pressed
+/// fill, reaching a little past the row's content — rather than changing size.
+///
 /// SwiftUI reports a button in a scroll view as pressed only after a short
-/// wait, to tell a tap from a scroll. The shrink follows the finger itself:
-/// it starts on touch-down and lets go as soon as the touch moves away,
-/// ends, or the scroll takes it.
+/// wait, to tell a tap from a scroll, so the grey follows the finger itself:
+/// it shows on touch-down and clears as soon as the touch moves away, ends,
+/// or the scroll takes it.
 private struct HoldingPressBody: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let configuration: ButtonStyleConfiguration
@@ -227,13 +238,15 @@ private struct HoldingPressBody: View {
 
     var body: some View {
         configuration.label
-            .scaleEffect(isPressed && !reduceMotion ? 0.97 : 1)
-            // In quickly, so the press shows under the finger; out on a
-            // spring, so the release still settles softly.
-            .animation(reduceMotion ? nil : isPressed
-                           ? .easeOut(duration: 0.08)
-                           : .spring(response: 0.3, dampingFraction: 0.8),
-                       value: isPressed)
+            .background {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(SettingsTemplate.rowPressed)
+                    .padding(.horizontal, -10)
+                    .padding(.vertical, -2)
+                    .opacity(isPressed ? 1 : 0)
+                    // On at once; off with a short fade, as a system row does.
+                    .animation(isPressed || reduceMotion ? nil : .easeOut(duration: 0.25), value: isPressed)
+            }
             .gesture(ImmediateTouchDown { touchDown = $0 })
     }
 }
@@ -1323,10 +1336,10 @@ struct ContentCard: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(20)
-            .background(SettingsTemplate.card, in: RoundedRectangle(cornerRadius: CatfolioStyle.cardRadius, style: .continuous))
+            .background(SettingsTemplate.card, in: RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: CatfolioStyle.cardRadius, style: .continuous)
-                    .stroke(Color.primary.opacity(0.055), lineWidth: 1)
+                RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius, style: .continuous)
+                    .strokeBorder(SettingsTemplate.cardBorder, lineWidth: SettingsTemplate.cardBorderWidth)
             }
     }
 }
@@ -2043,6 +2056,10 @@ struct AssetLogo: View {
                 AssetLogoArtwork(image: image,
                     layout: AssetLogoLayout(insetFraction: 0, usesWhiteCanvas: false),
                     size: size)
+                    // Light tiles carry a white ground in the file itself;
+                    // multiplying by the tile colour lays them on it, as the
+                    // logo workbench shows them.
+                    .colorMultiply(usesLightTile ? Self.lightTile : .white)
             } else if let brandfetchURL {
                 ZStack {
                     // A plain tile while the icon loads, not the coloured
@@ -2050,7 +2067,7 @@ struct AssetLogo: View {
                     // on each open — flashed the letter before the brand's
                     // icon arrived. The letter is for a confirmed miss, which
                     // clears `brandfetchURL` and lands in `fallback` below.
-                    SettingsTemplate.card
+                    usesLightTile ? Self.lightTile : SettingsTemplate.card
                     BrandfetchLogoImage(url: brandfetchURL) {
                         BrandfetchMissCache.shared.clear(logoSymbol ?? ticker)
                         brandfetchLoaded = true
@@ -2074,7 +2091,8 @@ struct AssetLogo: View {
             }
         }
         .frame(width: size, height: size)
-        .background(SettingsTemplate.card, in: RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
+        .background(usesLightTile ? Self.lightTile : SettingsTemplate.card,
+                    in: RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous)
                 .stroke(
@@ -2139,7 +2157,7 @@ struct AssetLogo: View {
         let style = AssetLogoStyle(rawValue: logoStyleRaw) ?? .automatic
         let dark = style.usesDarkLogo(darkAppearance: colorScheme == .dark)
         return ZStack {
-            dark ? fallbackColor : Color.white
+            dark ? fallbackColor : Self.lightTile
             Text(String(ticker.prefix(1)).uppercased())
                 .font(.system(size: max(10, size * 0.42), weight: .bold, design: .rounded))
                 .foregroundStyle(dark ? Color(red: 0xF3 / 255, green: 0xF6 / 255, blue: 0xF9 / 255) : fallbackColor)
@@ -2148,6 +2166,16 @@ struct AssetLogo: View {
 
     private var fallbackColor: Color {
         AssetBrandColor.fallback(for: logoSymbol ?? ticker)
+    }
+
+    /// The pale grey every light logo sits on — the workbench's #F7F8FA —
+    /// so a white logo never merges into a white card.
+    static let lightTile = Color(red: 247 / 255, green: 248 / 255, blue: 250 / 255)
+
+    /// True when the light version of the logo is the one shown.
+    private var usesLightTile: Bool {
+        let style = AssetLogoStyle(rawValue: logoStyleRaw) ?? .automatic
+        return !style.usesDarkLogo(darkAppearance: colorScheme == .dark)
     }
 
     /// Reviewed export first, then the older built-in logo set, then Brandfetch.

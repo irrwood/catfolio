@@ -385,7 +385,7 @@ struct HistoryView: View {
                 } else {
                     Section {
                         ForEach(summaryMetrics(for: pageCategory)) { metric in
-                            summaryRow(metric)
+                            summaryRow(metric).settingsListRow()
                         }
                     } footer: {
                         if let explanation = realisedExplanation(for: pageCategory) {
@@ -420,7 +420,7 @@ struct HistoryView: View {
                             ? Self.groupsByStock(page.activities) : page.groups) { group in
                         Section {
                             ForEach(group.activities) { activity in
-                                activityRow(activity)
+                                activityRow(activity).settingsListRow()
                             }
                         } header: {
                             Text(group.title)
@@ -1322,7 +1322,7 @@ struct HistoryDividendCard: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
         }
-        .background(SettingsTemplate.card, in: RoundedRectangle(cornerRadius: 24))
+        .settingsCardSurface()
     }
 
     private func segmentColor(_ row: HistoryDividendBreakdown.Row) -> Color {

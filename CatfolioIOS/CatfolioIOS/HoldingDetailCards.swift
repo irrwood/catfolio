@@ -128,7 +128,11 @@ struct HoldingDetailCardModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background(SettingsTemplate.card, in: shape)
-            .overlay { shape.strokeBorder(Color.black.opacity(0.05), lineWidth: 1) }
+            // The standard cell's outline, 5% of the ink in either appearance.
+            .overlay {
+                shape.strokeBorder(SettingsTemplate.cardBorder, lineWidth: SettingsTemplate.cardBorderWidth)
+                    .allowsHitTesting(false)
+            }
     }
 }
 

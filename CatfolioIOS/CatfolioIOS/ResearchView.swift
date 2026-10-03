@@ -71,7 +71,6 @@ struct ResearchMetricCard: View {
     let title: String
     let snapshot: ResearchMarketSnapshot?
     var isLoading = false
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .subheadline) private var titleSize = 16.0
     @ScaledMetric(relativeTo: .title3) private var valueSize = 20.0
@@ -89,10 +88,6 @@ struct ResearchMetricCard: View {
     private var displayTitle: String {
         symbol == "^TNX" ? L10n.text("美国 10 年期国债") : title
     }
-    private var changeColor: Color {
-        guard let change = snapshot?.changePercent, change != 0 else { return .secondary }
-        return change > 0 ? CatfolioTheme.positive : CatfolioPalette.rose500
-    }
     private var showsSkeleton: Bool { isLoading && snapshot == nil }
 
     var body: some View {
@@ -106,16 +101,11 @@ struct ResearchMetricCard: View {
                     .redacted(reason: showsSkeleton ? .placeholder : [])
                     .chartLoadingShimmer(active: showsSkeleton, appearanceID: "research-metric|\(symbol)")
 
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 6) {
-                        directionBadge
-                        quote.fixedSize()
-                        change
-                    }
-                    VStack(alignment: .leading, spacing: 6) {
-                        quote
-                        HStack(spacing: 6) { directionBadge; change }
-                    }
+                // Set like the macro cards below: the value, then its move
+                // in quiet grey on the same baseline.
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    quote
+                    change
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .chartLoadingShimmer(active: showsSkeleton, appearanceID: "research-metric|\(symbol)")
@@ -154,26 +144,10 @@ struct ResearchMetricCard: View {
             ChartSkeletonShape(width: 42, height: changeSize)
         } else if let value = snapshot?.changePercent {
             Text(DisplayFormat.percent(value, signed: true))
-                .font(.system(size: changeSize, weight: .bold, design: .rounded))
+                .font(.system(size: changeSize, weight: .semibold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(changeColor)
+                .foregroundStyle(.secondary)
                 .fixedSize()
-        }
-    }
-
-    @ViewBuilder private var directionBadge: some View {
-        if showsSkeleton {
-            ChartSkeletonShape(width: 20, height: 20, cornerRadius: 10)
-        } else if let value = snapshot?.changePercent, value != 0 {
-            Image("ResearchMetricChevron")
-                .renderingMode(.template)
-                .resizable()
-                .frame(width: 12, height: 12)
-                .rotationEffect(.degrees(value > 0 ? 180 : 0))
-                .foregroundStyle(changeColor)
-                .frame(width: 20, height: 20)
-                .background(changeColor.opacity(colorScheme == .dark ? 0.18 : 0.06), in: Circle())
-                .accessibilityHidden(true)
         }
     }
 

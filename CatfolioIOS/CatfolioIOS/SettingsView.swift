@@ -390,6 +390,8 @@ struct SettingsView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(L10n.text("添加账户"), systemImage: "plus") { showsAddAccount = true }
                         .labelStyle(.iconOnly)
+                        // The ink colour: black by day, white at night.
+                        .tint(CatfolioTheme.primaryText)
                         .accessibilityLabel(L10n.text("添加账户"))
                         .accessibilityIdentifier("settings-add-account")
                 }
@@ -738,13 +740,10 @@ private struct AccountDetailView: View {
             }
         }
         .toolbar(.hidden, for: .tabBar)
-        .alert(L10n.text("编辑账户名称"), isPresented: $showsRenamePrompt) {
-            TextField(L10n.text("账户名称"), text: $accountNameDraft)
-            Button(L10n.text("取消"), role: .cancel) {}
-            Button(L10n.text("保存")) { renameAccount() }
-                .disabled(accountNameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        } message: {
-            Text(L10n.text("名称只保存在这台 iPhone 上。"))
+        // A sheet rather than a text-field alert: the alert insets its title
+        // to the field's text, not its edge, and the two never line up.
+        .appSheet(isPresented: $showsRenamePrompt) {
+            AccountRenameSheet(name: $accountNameDraft) { renameAccount() }
         }
         .alert(L10n.text("删除账户？"), isPresented: $showsDeleteConfirmation) {
             Button(L10n.text("取消"), role: .cancel) {}
@@ -912,8 +911,8 @@ private struct SettingsHistoryOverviewTile: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.system(size: 17, weight: .semibold))
-                    .frame(width: 18, height: 24)
+                    .font(.system(size: 22, weight: .regular))
+                    .frame(width: 26, height: 26)
                     .accessibilityHidden(true)
                 Spacer(minLength: 0)
                 // One line: a wrapped caption would push this tile's figures
@@ -993,13 +992,13 @@ private struct SettingsHistoryOverview: View {
         VStack(alignment: .leading, spacing: 12) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12),
                                      count: typeSize.isAccessibilitySize ? 1 : 2), spacing: 12) {
-                overviewCard(.orders, title: L10n.text("已实现盈亏"), icon: "arrow.up.arrow.down",
+                overviewCard(.orders, title: L10n.text("已实现盈亏"), icon: "chart.line.uptrend.xyaxis.circle.fill",
                              caption: realisedCaption, amount: realisedAmount, signed: true)
-                overviewCard(.dividends, title: L10n.text("股息"), icon: "banknote",
+                overviewCard(.dividends, title: L10n.text("股息"), icon: "dollarsign.circle.fill",
                              caption: "", amount: total(for: .dividends))
-                overviewCard(.interest, title: L10n.text("利息"), icon: "percent",
+                overviewCard(.interest, title: L10n.text("利息"), icon: "building.columns.circle.fill",
                              caption: "", amount: total(for: .interest))
-                overviewCard(.fees, title: L10n.text("年费用"), icon: "creditcard",
+                overviewCard(.fees, title: L10n.text("年费用"), icon: "creditcard.circle.fill",
                              caption: "", amount: annualFees)
             }
             SettingsCard {
@@ -1034,7 +1033,8 @@ private struct SettingsHistoryOverview: View {
 
     private var realisedCaption: String {
         guard let calculation = prepared?.realisedTotal else { return "" }
-        if calculation.saleCount == 0 { return L10n.text("暂无卖出") }
+        // Nothing sold is not a state to announce; the empty figure says it.
+        if calculation.saleCount == 0 { return "" }
         if !calculation.isComplete { return L10n.text("部分数据") }
         return ""
     }
@@ -1383,13 +1383,23 @@ private struct LocalServiceRowLabel: View {
     let subtitle: String
     let status: String
     let statusColor: Color
+    /// Configured or connected: a check stands in for the words, which the
+    /// row still gives VoiceOver.
+    var isReady = false
 
-    private var statusText: some View {
-        Text(status)
-            .appText(.subheading)
-            .foregroundStyle(statusColor)
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: true)
+    @ViewBuilder private var statusText: some View {
+        if isReady {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(statusColor)
+                .accessibilityLabel(status)
+        } else {
+            Text(status)
+                .appText(.subheading)
+                .foregroundStyle(statusColor)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: true)
+        }
     }
 
     var body: some View {
@@ -1523,7 +1533,8 @@ private struct LocalServicesSettingsView: View {
             LocalServiceRowLabel(iconName: "bubble.left.and.text.bubble.right",
                 title: "ChatGPT Codex", subtitle: L10n.text("使用 ChatGPT 订阅进行组合问答"),
                 status: codexConnected ? L10n.text("已连接") : L10n.text("未连接"),
-                statusColor: codexConnected ? CatfolioTheme.positive : SettingsTemplate.readOnlyValue)
+                statusColor: codexConnected ? CatfolioTheme.positive : SettingsTemplate.readOnlyValue,
+                isReady: codexConnected)
         }
         .buttonStyle(SettingsRowButtonStyle())
         .accessibilityLabel(L10n.text("ChatGPT Codex，使用 ChatGPT 订阅进行组合问答"))
@@ -1538,7 +1549,8 @@ private struct LocalServicesSettingsView: View {
             LocalServiceRowLabel(iconName: provider.iconName,
                 title: provider.shortTitle, subtitle: provider.purpose,
                 status: status.title,
-                statusColor: status == .unconfigured ? SettingsTemplate.readOnlyValue : status.color)
+                statusColor: status == .unconfigured ? SettingsTemplate.readOnlyValue : status.color,
+                isReady: status != .unconfigured)
         }
         .buttonStyle(SettingsRowButtonStyle())
         .accessibilityElement(children: .combine)
@@ -2433,5 +2445,51 @@ private struct AIModelPickerView: View {
             self.error = error.localizedDescription
         }
         isLoading = false
+    }
+}
+
+/// The account's name, edited on its own small sheet.
+private struct AccountRenameSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var name: String
+    let onSave: () -> Void
+    @FocusState private var focused: Bool
+
+    private var canSave: Bool { !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    var body: some View {
+        NavigationStack {
+            SettingsPage(bottomInset: 24, topInset: SettingsTemplate.sectionSpacing) {
+                SettingsCard {
+                    TextField(L10n.text("账户名称"), text: $name)
+                        .appText(.body)
+                        .focused($focused)
+                        .submitLabel(.done)
+                        .onSubmit(save)
+                        .padding(.horizontal, SettingsTemplate.rowHorizontalPadding)
+                        .frame(minHeight: SettingsTemplate.rowMinHeight)
+                }
+                SettingsFootnote(L10n.text("名称只保存在这台 iPhone 上。"))
+            }
+            .navigationTitle(L10n.text("编辑账户名称"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.text("取消")) { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    AppModalDoneButton(action: save).disabled(!canSave)
+                }
+            }
+        }
+        .presentationDetents([.height(250)])
+        .presentationDragIndicator(.visible)
+        .onAppear { focused = true }
+    }
+
+    private func save() {
+        guard canSave else { return }
+        onSave()
+        dismiss()
     }
 }

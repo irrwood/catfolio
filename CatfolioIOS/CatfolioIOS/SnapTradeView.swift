@@ -3,7 +3,8 @@ import SafariServices
 
 struct SnapTradeView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var dismissPage
+    @Environment(\.accountFlowClose) private var accountFlowClose
     let context: AccountConnectorContext
     @State private var clientID = ""
     @State private var consumerKey = ""
@@ -29,8 +30,13 @@ struct SnapTradeView: View {
         }
     }
 
+    /// Inside 添加账户 this closes the whole flow; on its own, the page.
+    private func dismiss() {
+        if let accountFlowClose { accountFlowClose() } else { dismissPage() }
+    }
+
     var body: some View {
-        NavigationStack {
+        AccountFlowStack {
             SettingsPage(bottomInset: 32) {
                 Group {
                     if context.isCreating {

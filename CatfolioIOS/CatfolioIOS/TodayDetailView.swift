@@ -344,7 +344,7 @@ struct TodayDetailView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .modifier(ContentCard())
-            .contentShape(RoundedRectangle(cornerRadius: CatfolioStyle.cardRadius))
+            .contentShape(RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius))
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)

@@ -118,27 +118,37 @@ enum SettingsTemplate {
     /// `UIView` — it needs the same greys as the rows above it, and this is
     /// what keeps it from carrying a second copy of them.
 
-    /// `#EEEFEF`. Not `systemGroupedBackground`: that is `#F2F2F7`, a colder
-    /// grey. This one is a shade deeper than the near-white it started at, so
-    /// the white cards read as lifted off it rather than floating in fog.
+    /// `#F7F7F7` by day, black at night (Figma 571:5939 / 571:6350). The
+    /// cards carry their own hairline outline, so the ground no longer has to
+    /// be a deep grey for them to read as lifted off it.
     static let uiPageBackground = UIColor { trait in
         trait.userInterfaceStyle == .dark
             ? .black
-            : UIColor(red: 0xEE / 255, green: 0xEF / 255, blue: 0xEF / 255, alpha: 1)
+            : UIColor(white: 0xF7 / 255, alpha: 1)
     }
     static let pageBackground = Color(uiColor: uiPageBackground)
 
-    /// The card fill: white, and at night #151517 — a step under the system's
-    /// grouped-row grey (#1C1C1E), which read too light on the black page.
+    /// The card fill: white, and at night `#1D1E1E` — the standard cell's
+    /// fill, a step above both the black page and a sheet's `#141515` ground.
     /// Every card surface in the app uses this, so the two stay one colour.
     /// Also the selected chip in the category bar, which is a card the size of
     /// a word.
     static let uiCard = UIColor { trait in
         trait.userInterfaceStyle == .dark
-            ? UIColor(red: 21 / 255, green: 21 / 255, blue: 23 / 255, alpha: 1)
+            ? UIColor(red: 0x1D / 255, green: 0x1E / 255, blue: 0x1E / 255, alpha: 1)
             : .white
     }
     static let card = Color(uiColor: uiCard)
+
+    /// The card's faint outline, 1 pt all round: 5% of the ink — black by
+    /// day, white at night.
+    static let uiCardBorder = UIColor { trait in
+        trait.userInterfaceStyle == .dark
+            ? UIColor(white: 1, alpha: 0.05)
+            : UIColor(white: 0, alpha: 0.05)
+    }
+    static let cardBorder = Color(uiColor: uiCardBorder)
+    static let cardBorderWidth: CGFloat = 1
 
     /// `#8E8E93` — `systemGray`, which resolves the same in both appearances.
     /// A row's subtitle, an unselected chip and, since the drawing moved it
@@ -165,21 +175,24 @@ enum SettingsTemplate {
     }
     static let rowPressed = Color(uiColor: uiRowPressed)
 
-    /// The rule between two rows of the same card. It runs the full width of
-    /// the card, and it is the page's own ground colour — not a grey of its
-    /// own — so it reads as the card being cut rather than a line drawn on it.
-    /// Pointing at the token rather than copying its value means the rule
-    /// follows the ground if the ground ever moves again.
+    /// The rule between two rows of the same card, running its full width:
+    /// `#EEEFEF` by day; at night 5% white over the card, which is `#282929`.
+    /// Opaque, so it reads the same on any card fill underneath.
     ///
     /// Nothing under the last row: the card's edge already ends the group.
-    static let uiSeparator = uiPageBackground
-    static let separator = pageBackground
+    static let uiSeparator = UIColor { trait in
+        trait.userInterfaceStyle == .dark
+            ? UIColor(red: 0x28 / 255, green: 0x29 / 255, blue: 0x29 / 255, alpha: 1)
+            : UIColor(red: 0xEE / 255, green: 0xEF / 255, blue: 0xEF / 255, alpha: 1)
+    }
+    static let separator = Color(uiColor: uiSeparator)
     static let separatorHeight: CGFloat = 1
 
-    /// `#727272` for the subtitle under a title. Apple's own
-    /// labels-vibrant/secondary, so it takes the role and gets the dark
-    /// variant with it.
-    static let subtitleText = Color(uiColor: .secondaryLabel)
+    /// The 13 pt line under a row's title: `#8E8E93` by day, white at 30%
+    /// at night.
+    static let subtitleText = Color(uiColor: UIColor { trait in
+        trait.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.3) : .systemGray
+    })
 
     /// The disclosure chevron and the menu caret. `#E0E0E0` is close to
     /// `systemGray5` in light; the dark side takes the same step from the card.
@@ -490,6 +503,9 @@ struct SettingsSectionHeader: View {
         Text(title)
             .appText(.body, weight: .medium)
             .foregroundStyle(SettingsTemplate.sectionHeader)
+            // Inset to the rows' text column, 20 pt in from the card's edge,
+            // as the standard cell's frame sets it (Figma 571:5951).
+            .padding(.leading, SettingsTemplate.rowHorizontalPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, SettingsTemplate.sectionHeaderTopSpacing)
     }
@@ -512,8 +528,31 @@ struct SettingsCard<Content: View>: View {
         // how SwiftUI exposes a container's children for exactly this; if it
         // ever goes away, the fallback is an explicit `isLast` on every row.
         _VariadicView.Tree(SettingsCardRows()) { content }
-            .background(SettingsTemplate.card)
-            .clipShape(RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius, style: .continuous))
+            .settingsCardSurface()
+    }
+}
+
+extension View {
+    /// A row of a grouped `List` set as the standard cell: the card's fill
+    /// and a rule in the card's divider colour running the row's full width.
+    func settingsListRow() -> some View {
+        listRowBackground(SettingsTemplate.card)
+            .listRowSeparatorTint(SettingsTemplate.separator)
+            .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+            .alignmentGuide(.listRowSeparatorTrailing) { dimensions in dimensions.width }
+    }
+
+    /// The standard cell's card: its fill, its radius and its faint 1 pt
+    /// outline (Figma 571:5939 / 571:6350). For any surface drawn as a card
+    /// outside `SettingsCard`, so every card in the app is one card.
+    func settingsCardSurface(cornerRadius: CGFloat = SettingsTemplate.cardRadius) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        return background(SettingsTemplate.card)
+            .clipShape(shape)
+            .overlay {
+                shape.strokeBorder(SettingsTemplate.cardBorder, lineWidth: SettingsTemplate.cardBorderWidth)
+                    .allowsHitTesting(false)
+            }
     }
 }
 
@@ -614,7 +653,7 @@ struct SettingsRowLabel: View {
     /// Overridden only where the drawing sets a different one — the invoice
     /// row stacks its two lines at 2 rather than 4.
     var subtitleSpacing: CGFloat = SettingsTemplate.subtitleSpacing
-    var subtitleColor: Color = SettingsTemplate.secondaryText
+    var subtitleColor: Color = SettingsTemplate.subtitleText
     /// A figure-bearing subtitle ("78 项 · $22,106") goes through the number
     /// token so its digits match the rest of the app.
     var subtitleIsNumeric = false
@@ -1030,7 +1069,7 @@ struct SettingsSelectionRow<Destination: View>: View {
     let isSelected: Bool
     let title: String
     var subtitle: String?
-    var subtitleColor: Color = SettingsTemplate.secondaryText
+    var subtitleColor: Color = SettingsTemplate.subtitleText
     var selectionAccessibilityLabel: String
     var selectionAccessibilityHint: String?
     let toggle: () -> Void
@@ -1041,7 +1080,7 @@ struct SettingsSelectionRow<Destination: View>: View {
         isSelected: Bool,
         title: String,
         subtitle: String? = nil,
-        subtitleColor: Color = SettingsTemplate.secondaryText,
+        subtitleColor: Color = SettingsTemplate.subtitleText,
         selectionAccessibilityLabel: String,
         selectionAccessibilityHint: String? = nil,
         toggle: @escaping () -> Void,
@@ -1130,7 +1169,7 @@ extension SettingsSelectionRow where Destination == EmptyView {
         self.isSelected = isSelected
         self.title = title
         self.subtitle = subtitle
-        self.subtitleColor = SettingsTemplate.secondaryText
+        self.subtitleColor = SettingsTemplate.subtitleText
         self.selectionAccessibilityLabel = selectionAccessibilityLabel
         self.selectionAccessibilityHint = selectionAccessibilityHint
         self.toggle = toggle

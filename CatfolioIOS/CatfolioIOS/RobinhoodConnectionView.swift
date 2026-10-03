@@ -3,7 +3,8 @@ import SwiftUI
 /// Connection and read-only inspection. Portfolio snapshots do not create
 /// synthetic transactions or overwrite Catfolio's cost-basis ledger.
 struct RobinhoodConnectionView: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var dismissPage
+    @Environment(\.accountFlowClose) private var accountFlowClose
     @Environment(AppModel.self) private var model
     let context: AccountConnectorContext
     @State private var accounts: [RobinhoodAccount] = []
@@ -34,8 +35,13 @@ struct RobinhoodConnectionView: View {
     @State private var rows: [RobinhoodDataRow] = []
     @State private var resultTitle = ""
 
+    /// Inside 添加账户 this closes the whole flow; on its own, the page.
+    private func dismiss() {
+        if let accountFlowClose { accountFlowClose() } else { dismissPage() }
+    }
+
     var body: some View {
-        NavigationStack {
+        AccountFlowStack {
             SettingsPage(bottomInset: 32) {
                 SettingsSection(L10n.text("连接")) {
                     SettingsValueRow(title: "Robinhood", value: connected ? L10n.text("已连接") : L10n.text("尚未连接"), valueIsNumeric: false)
