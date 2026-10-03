@@ -25,7 +25,7 @@ struct PortfolioHomeTopBackground: View {
 
 struct PortfolioHomePageBackdrop: View {
     @Environment(\.locale) private var appLocale
-    @AppStorage(HomeBackgroundStyle.preferenceKey) private var backgroundStyleRawValue = HomeBackgroundStyle.flowing.rawValue
+    @AppStorage(HomeBackgroundStyle.preferenceKey) private var backgroundStyleRawValue = HomeBackgroundStyle.defaultStyle.rawValue
     /// The tab keeps this view alive while another tab is showing; the
     /// shader's clock stops then rather than drawing frames nobody sees.
     @State private var isOnScreen = false
@@ -33,7 +33,7 @@ struct PortfolioHomePageBackdrop: View {
     let scrollState: PortfolioHomeScrollState
 
     private var backgroundStyle: HomeBackgroundStyle {
-        HomeBackgroundStyle(rawValue: backgroundStyleRawValue) ?? .flowing
+        HomeBackgroundStyle(rawValue: backgroundStyleRawValue) ?? .defaultStyle
     }
 
     /// The hero chart, plot top to range-picker bottom, on screen at rest.

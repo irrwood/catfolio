@@ -45,8 +45,10 @@ struct ReturnsView: View {
                     .font(.system(size: 34, weight: .bold))
                 Spacer(minLength: 12)
                 Button(action: toggleHeatmap) {
-                    Label(L10n.text("持仓热力图"), systemImage: heatmapExpanded ? "chevron.up" : "play.fill")
+                    Label(L10n.text("热力图"), systemImage: heatmapExpanded ? "chevron.up" : "play.fill")
                         .font(.system(size: 13, weight: .semibold))
+                        .padding(.horizontal, 8)
+                        .frame(minWidth: 96, minHeight: 28)
                 }
                 .buttonStyle(.bordered)
                 .tint(.primary)
@@ -76,6 +78,7 @@ struct ReturnsView: View {
             // 估值 · 成长 · 质量 is in 设置 › Lab 实验室.
             // The analysis and JEV, as two tabs of one section.
             TodayAttentionTabs()
+            CorporateEventsCard(holdings: model.holdings)
         }
         // Only what the hero needs, so ordinary scrolling does not redraw
         // the page: the pull past the top, the bar's height, and whether the

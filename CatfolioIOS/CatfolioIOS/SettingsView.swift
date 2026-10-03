@@ -103,7 +103,7 @@ struct SettingsView: View {
     @AppStorage(DisplayCurrency.preferenceKey) private var displayCurrencyRawValue = DisplayCurrency.usd.rawValue
     @AppStorage(CompanyNameDisplay.preferenceKey) private var companyNameDisplayRawValue = CompanyNameDisplay.original.rawValue
     @AppStorage(AssetLogoStyle.preferenceKey) private var assetLogoStyleRawValue = AssetLogoStyle.automatic.rawValue
-    @AppStorage(HomeBackgroundStyle.preferenceKey) private var homeBackgroundStyleRawValue = HomeBackgroundStyle.flowing.rawValue
+    @AppStorage(HomeBackgroundStyle.preferenceKey) private var homeBackgroundStyleRawValue = HomeBackgroundStyle.defaultStyle.rawValue
     @State private var showsPaywallPreview = false
     @State private var showsAddAccount = false
     @State private var showsCSVImport = false
@@ -201,7 +201,7 @@ struct SettingsView: View {
                 SettingsMenuRow(
                     icon: .symbol("sparkles"),
                     title: L10n.text("首页背景"),
-                    value: HomeBackgroundStyle(rawValue: homeBackgroundStyleRawValue)?.title ?? HomeBackgroundStyle.flowing.title,
+                    value: HomeBackgroundStyle(rawValue: homeBackgroundStyleRawValue)?.title ?? HomeBackgroundStyle.defaultStyle.title,
                     selection: $homeBackgroundStyleRawValue
                 ) {
                     ForEach(HomeBackgroundStyle.allCases) { style in

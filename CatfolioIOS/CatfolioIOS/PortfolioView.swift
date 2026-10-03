@@ -131,6 +131,10 @@ struct PortfolioView: View {
                         // settle fully in view instead of ending beneath it.
                         .padding(.bottom, 96)
                         .coordinateSpace(name: "portfolio-home-content")
+                        // Rows answer a touch at once instead of after the
+                        // scroll view's touch-down delay; a drag still
+                        // cancels the press and scrolls.
+                        .background(SettingsImmediateTouchFeedback())
                         .background {
                             PortfolioHomeScrollBridge(
                                 controller: homeScrollController,

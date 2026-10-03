@@ -35,6 +35,8 @@ enum HomeBackgroundStyle: String, CaseIterable, Identifiable {
     case classic
 
     static let preferenceKey = "catfolio.homeBackgroundStyle"
+    /// What a reader who has never picked a backdrop sees.
+    static let defaultStyle = HomeBackgroundStyle.classic
 
     var id: String { rawValue }
 

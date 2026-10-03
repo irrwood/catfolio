@@ -223,6 +223,9 @@ struct HoldingDetailContentView: View {
                             cachedContent: cachedContent)
                         .id("\(holding.ticker)|\(appLocale.identifier)")
 
+                        DividendIncomeCalculatorCard(ticker: holding.ticker, heldShares: showsPosition ? displayedHolding.shares : 0)
+                            .padding(.horizontal, HoldingDetailCardStyle.pageInset)
+
                         Button { showsTransactionHistory = true } label: {
                             HoldingDetailActionCardLabel(
                                 title: L10n.text("交易历史"),

@@ -610,10 +610,15 @@ struct SectorRotationTimeline: UIViewRepresentable {
     let dates: [String]
     var centersSelection = false
     var isPlaying = false
+    /// How far a flick glides on, in ticks, and the longest it takes to settle.
+    var coast: (ticks: CGFloat, duration: TimeInterval) = (24, 0.45)
+    var accessibilityName: String? = nil
     var onInteraction: () -> Void = {}
     let onSelection: (Int) -> Void
     func makeUIView(context: Context) -> SectorRotationTimelineControl { SectorRotationTimelineControl() }
     func updateUIView(_ view: SectorRotationTimelineControl, context: Context) {
+        view.coast = coast
+        if let accessibilityName { view.accessibilityLabel = accessibilityName }
         view.dates = dates
         view.centersSelection = centersSelection
         view.reducesMotion = reduceMotion
@@ -634,6 +639,7 @@ final class SectorRotationTimelineControl: UIControl, UIGestureRecognizerDelegat
     private var motion: (start: CGFloat, target: CGFloat, duration: TimeInterval, elapsed: TimeInterval, selectsDates: Bool)?
     private var updatingSelection = false
     var selectionFeedback = UISelectionFeedbackGenerator()
+    var coast: (ticks: CGFloat, duration: TimeInterval) = (24, 0.45)
     var isAnimating: Bool { motion != nil }
     var reducesMotion = UIAccessibility.isReduceMotionEnabled {
         didSet { if reducesMotion && !oldValue { cancelScrubbing() } }
@@ -646,7 +652,9 @@ final class SectorRotationTimelineControl: UIControl, UIGestureRecognizerDelegat
         didSet {
             guard oldValue != index else { return }
             if dragStart == nil && !updatingSelection {
-                move(to: CGFloat(index), duration: 0.22, selectsDates: false)
+                // A long jump — a reset, a typed value — glides a little longer.
+                let distance = Double(abs(CGFloat(index) - position))
+                move(to: CGFloat(index), duration: min(0.5, 0.22 + distance * 0.003), selectsDates: false)
             }
             setNeedsDisplay()
             updateAccessibility()
@@ -759,9 +767,9 @@ final class SectorRotationTimelineControl: UIControl, UIGestureRecognizerDelegat
         guard dragStart != nil else { return }
         dragStart = nil
         // A short, bounded coast, followed by an exact stop on a trading day.
-        let travel = reducesMotion ? 0 : min(24, max(-24, velocity * 0.16 / Self.tickSpacing))
+        let travel = reducesMotion ? 0 : min(coast.ticks, max(-coast.ticks, velocity * 0.16 / Self.tickSpacing))
         let target = CGFloat(clampedIndex(Int((position - travel).rounded())))
-        let duration = min(0.45, 0.18 + Double(abs(target - position)) * 0.018)
+        let duration = min(coast.duration, 0.18 + Double(abs(target - position)) * 0.018)
         move(to: target, duration: duration, selectsDates: true)
     }
     private func cancelScrubbing() {

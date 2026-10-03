@@ -209,13 +209,84 @@ enum SecurityDetailPresentation {
 /// Keeps financial colours intact while the row responds to a press. Button
 /// owns recognition and cancellation, so starting a scroll never opens it.
 struct HoldingPressButtonStyle: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     func makeBody(configuration: Configuration) -> some View {
+        HoldingPressBody(configuration: configuration)
+    }
+}
+
+/// SwiftUI reports a button in a scroll view as pressed only after a short
+/// wait, to tell a tap from a scroll. The shrink follows the finger itself:
+/// it starts on touch-down and lets go as soon as the touch moves away,
+/// ends, or the scroll takes it.
+private struct HoldingPressBody: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let configuration: ButtonStyleConfiguration
+    @State private var touchDown = false
+
+    private var isPressed: Bool { touchDown || configuration.isPressed }
+
+    var body: some View {
         configuration.label
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
-            .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82),
-                       value: configuration.isPressed)
+            .scaleEffect(isPressed && !reduceMotion ? 0.97 : 1)
+            // In quickly, so the press shows under the finger; out on a
+            // spring, so the release still settles softly.
+            .animation(reduceMotion ? nil : isPressed
+                           ? .easeOut(duration: 0.08)
+                           : .spring(response: 0.3, dampingFraction: 0.8),
+                       value: isPressed)
+            .gesture(ImmediateTouchDown { touchDown = $0 })
+    }
+}
+
+/// Reports a touch the instant it lands and again when it is over. It never
+/// recognizes, so it cannot take a tap from the button or a drag from the
+/// scroll view.
+struct ImmediateTouchDown: UIGestureRecognizerRepresentable {
+    let onChange: (Bool) -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> Observer { Observer() }
+
+    func updateUIGestureRecognizer(_ recognizer: Observer, context: Context) {
+        recognizer.onChange = onChange
+    }
+
+    final class Observer: UIGestureRecognizer {
+        var onChange: (Bool) -> Void = { _ in }
+        private var start: CGPoint?
+
+        init() {
+            super.init(target: nil, action: nil)
+            cancelsTouchesInView = false
+            delaysTouchesBegan = false
+            delaysTouchesEnded = false
+        }
+
+        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+            guard start == nil, let touch = touches.first else { return }
+            start = touch.location(in: view)
+            onChange(true)
+        }
+
+        override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+            guard let start, let point = touches.first?.location(in: view) else { return }
+            // A finger travelling this far is scrolling, not pressing.
+            if hypot(point.x - start.x, point.y - start.y) > 10 { finish() }
+        }
+
+        override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) { finish() }
+        override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) { finish() }
+        override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+        override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+
+        override func reset() {
+            super.reset()
+            if start != nil { start = nil; onChange(false) }
+        }
+
+        private func finish() {
+            if start != nil { start = nil; onChange(false) }
+            state = .failed
+        }
     }
 }
 
