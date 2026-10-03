@@ -21,6 +21,8 @@ struct CycleComparison: Equatable, Sendable {
         let length: Int
         let points: [Point]
         let isCurrent: Bool
+        /// The month each cycle begins in; 1 for calendar years.
+        var startMonth = 1
         /// The first day of a history that began after the cycle did; the
         /// line is measured from there.
         var joined: String? = nil
@@ -39,7 +41,12 @@ struct CycleComparison: Equatable, Sendable {
         }
 
         var title: String {
-            length == 1 ? "\(startYear)" : "\(startYear)–\(String(startYear + length - 1).suffix(2))"
+            // A year starting in April runs into the next: 2025/26.
+            let endYear = startYear + length - (startMonth == 1 ? 1 : 0)
+            if endYear == startYear { return "\(startYear)" }
+            return length == 1 && startMonth != 1
+                ? "\(startYear)/\(String(endYear).suffix(2))"
+                : "\(startYear)–\(String(endYear).suffix(2))"
         }
     }
 
@@ -60,8 +67,9 @@ struct CycleComparison: Equatable, Sendable {
     ///     within.
     ///   - allowsLateStart: retains partial portfolio cycles, starting on
     ///     the first available day and ending where the history ends.
+    ///   - startMonth: the month every cycle begins in, 1 to 12.
     static func make(closes: [String: Double], length: Int, lookback: Int, today: Date = Date(),
-                     allowsLateStart: Bool = false) -> CycleComparison {
+                     allowsLateStart: Bool = false, startMonth: Int = 1) -> CycleComparison {
         let dates = closes.keys.sorted()
         guard length > 0, let latest = dates.last, let year = Int(DayDateCodec.string(from: today).prefix(4)) else {
             return CycleComparison(cycles: [])
@@ -78,14 +86,18 @@ struct CycleComparison: Equatable, Sendable {
             return low > 0 ? low - 1 : nil
         }
 
-        let currentStart = year - ((year % length) + length) % length
+        let month = min(12, max(1, startMonth))
+        let todayMonth = Int(DayDateCodec.string(from: today).dropFirst(5).prefix(2)) ?? 1
+        // Before this year's start month, the running cycle began last year.
+        let cycleYear = todayMonth < month ? year - 1 : year
+        let currentStart = cycleYear - ((cycleYear % length) + length) % length
         let pastStarts = stride(from: currentStart - length, through: currentStart - lookback, by: -length).reversed()
         var cycles: [Cycle] = []
         for start in Array(pastStarts) + [currentStart] {
             let isCurrent = start == currentStart
-            let startText = String(format: "%04d-01-01", start)
+            let startText = String(format: "%04d-%02d-01", start, month)
             guard let startDate = DayDateCodec.date(from: startText),
-                  let endDate = DayDateCodec.date(from: String(format: "%04d-01-01", start + length)) else { continue }
+                  let endDate = DayDateCodec.date(from: String(format: "%04d-%02d-01", start + length, month)) else { continue }
             let span = endDate.timeIntervalSince(startDate)
             let before = index(onOrBefore: startText, strictly: true)
             let base: Double
@@ -131,8 +143,10 @@ struct CycleComparison: Equatable, Sendable {
                 // A past cycle is drawn whole or not at all.
                 guard points.count == steps + 1 else { continue }
             }
-            cycles.append(Cycle(startYear: start, length: length, points: points, isCurrent: isCurrent,
-                                joined: joined, ended: ended))
+            var cycle = Cycle(startYear: start, length: length, points: points, isCurrent: isCurrent,
+                              joined: joined, ended: ended)
+            cycle.startMonth = month
+            cycles.append(cycle)
         }
         return CycleComparison(cycles: cycles)
     }
@@ -196,7 +210,7 @@ struct CycleComparisonView: View {
     }
 
     /// How many earlier years are laid over this one.
-    static let yearChoices = [2, 5, 10]
+    static let yearChoices = [1, 2, 3, 5, 10]
     /// Early enough for ten earlier years and the close before the first.
     private static let historyStart = "2014-12-01"
     private static let portfolioLineID = "my"
@@ -208,6 +222,10 @@ struct CycleComparisonView: View {
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @AppStorage("research.cycle.subject") private var subjectID = Subject.spx.rawValue
     @AppStorage("research.cycle.years") private var years = 5
+    /// The month every cycle starts in; dragging the month axis moves it.
+    @AppStorage("research.cycle.startMonth") private var startMonth = 1
+    /// The axis drag's starting month and how many columns it has moved.
+    @State private var axisDragStart: Int?
     @State private var histories: [Subject: [String: Double]] = [:]
     @State private var failures: [Subject: String] = [:]
     /// Lines the reader turned off. Every line starts on.
@@ -220,8 +238,8 @@ struct CycleComparisonView: View {
     /// first, then this year, then the portfolio's on top.
     private var lines: [Line]? {
         guard let closes = histories[subject] else { return nil }
-        let comparison = CycleComparison.make(closes: closes, length: 1, lookback: years,
-                                              allowsLateStart: subject == .portfolio)
+        let comparison = CycleComparison.make(closes: closes, length: 1, lookback: effectiveYears,
+                                              allowsLateStart: subject == .portfolio, startMonth: startMonth)
         let past = comparison.cycles.filter { !$0.isCurrent }
         var lines = past.enumerated().map { index, cycle in
             Line(id: "\(cycle.startYear)", title: cycle.title + cycle.coverageLabel, cycle: cycle,
@@ -249,10 +267,28 @@ struct CycleComparisonView: View {
             }
         }
         if subject != .portfolio, let closes = histories[.portfolio],
-           let mine = CycleComparison.make(closes: closes, length: 1, lookback: 0, allowsLateStart: true).current {
+           let mine = CycleComparison.make(closes: closes, length: 1, lookback: 0, allowsLateStart: true,
+                                           startMonth: startMonth).current {
             lines.append(portfolioLine(mine))
         }
         return lines
+    }
+
+    /// The year counts that draw something more: up to the earlier years the
+    /// history actually covers, and the first count that reaches all of them.
+    /// The portfolio's own history is often only a year or two long.
+    private var availableYearChoices: Set<Int> {
+        guard let closes = histories[subject] else { return Set(Self.yearChoices) }
+        let available = CycleComparison.make(closes: closes, length: 1, lookback: Self.yearChoices.max() ?? 10,
+                                             allowsLateStart: subject == .portfolio, startMonth: startMonth)
+            .cycles.filter { !$0.isCurrent }.count
+        let cap = Self.yearChoices.first { $0 >= available } ?? Self.yearChoices.max() ?? 10
+        return Set(Self.yearChoices.filter { $0 <= cap })
+    }
+
+    private var effectiveYears: Int {
+        let choices = availableYearChoices
+        return choices.contains(years) ? years : choices.filter { $0 < years }.max() ?? years
     }
 
     private func portfolioLine(_ cycle: CycleComparison.Cycle) -> Line {
@@ -263,29 +299,23 @@ struct CycleComparisonView: View {
     /// The day the legend reads: the one pressed, or today.
     private var readFraction: Double {
         if let selectedDate { return Self.fraction(for: selectedDate) }
-        return Self.fraction(ofYearAt: Date())
+        return fraction(ofCycleAt: Date())
     }
 
     var body: some View {
         let lines = self.lines
         ScrollView {
             VStack(spacing: 0) {
-                VStack(spacing: 16) {
-                    Picker(L10n.text("对比对象"), selection: $subjectID) {
-                        ForEach(Subject.allCases) { Text($0.title).tag($0.rawValue) }
-                    }
-                    Picker(L10n.text("对比年数"), selection: $years) {
-                        ForEach(Self.yearChoices, id: \.self) { Text("\($0)Y").tag($0) }
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-
                 chart(lines ?? [])
                     .frame(height: 510)
                     .padding(.top, 16)
+
+                // The charts' own range strip, counted in years.
+                // A count the history cannot fill shows as the largest it can;
+                // the stored choice stays for the indices with longer history.
+                CycleYearsPicker(selection: Binding(get: { effectiveYears }, set: { years = $0 }),
+                                 choices: Self.yearChoices, enabled: availableYearChoices)
+                    .frame(height: 62)
 
                 if let lines, !lines.isEmpty {
                     legend(lines)
@@ -293,20 +323,34 @@ struct CycleComparisonView: View {
                         .padding(.top, 16)
                 }
 
-                Text(footnote)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 14)
-                    .padding(.bottom, 40)
+                Color.clear.frame(height: 40)
             }
         }
         .background(Color(uiColor: .systemBackground))
         .navigationTitle(L10n.text("周期对比"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
+        .toolbar {
+            // What the years are measured on, picked from the corner.
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Picker(L10n.text("对比对象"), selection: $subjectID) {
+                        ForEach(Subject.allCases) { Text($0.title).tag($0.rawValue) }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(subject.title).font(.subheadline.weight(.semibold))
+                        Image(systemName: "chevron.down").font(.caption.weight(.semibold))
+                    }
+                }
+                .accessibilityLabel(L10n.text("对比对象"))
+                .accessibilityValue(subject.title)
+            }
+        }
         .onChange(of: years) { _, _ in selectedDate = nil }
+        .onChange(of: startMonth) { _, _ in selectedDate = nil }
+
+        .sensoryFeedback(.selection, trigger: startMonth) { _, _ in hapticsEnabled }
         .onChange(of: subjectID) { _, _ in
             hidden = []
             selectedDate = nil
@@ -445,18 +489,43 @@ struct CycleComparisonView: View {
         .allowsHitTesting(false)
     }
 
-    /// The months.
+    /// The months, from the one the cycles start in. Drag them sideways to
+    /// start the cycles a month earlier or later — a fiscal year, say.
     private var xLabels: some View {
-        HStack(spacing: 0) {
-            ForEach(1...12, id: \.self) { month in
-                Text("\(month)")
-                    .font(Typography.number(size: 14, weight: .medium))
-                    .tracking(0.7)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
+        GeometryReader { geometry in
+            let column = geometry.size.width / 12
+            HStack(spacing: 0) {
+                ForEach(0..<12, id: \.self) { offset in
+                    let month = (startMonth - 1 + offset) % 12 + 1
+                    Text("\(month)")
+                        .font(Typography.number(size: 14, weight: offset == 0 ? .semibold : .medium))
+                        .tracking(0.7)
+                        .foregroundStyle(offset == 0 ? Color.primary : Color.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 6)
+                .onChanged { value in
+                    let start = axisDragStart ?? startMonth
+                    if axisDragStart == nil { axisDragStart = start }
+                    // Dragging left brings later months to the front.
+                    let steps = Int((-value.translation.width / column).rounded())
+                    let month = ((start - 1 + steps) % 12 + 12) % 12 + 1
+                    if month != startMonth { startMonth = month }
+                }
+                .onEnded { _ in axisDragStart = nil })
+        }
+        .accessibilityElement()
+        .accessibilityLabel(L10n.text("周期起始月份"))
+        .accessibilityValue(L10n.text("\(startMonth) 月"))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: startMonth = startMonth % 12 + 1
+            case .decrement: startMonth = (startMonth + 10) % 12 + 1
+            @unknown default: break
             }
         }
-        .allowsHitTesting(false)
     }
 
     @ViewBuilder
@@ -480,60 +549,55 @@ struct CycleComparisonView: View {
 
     // MARK: Legend
 
-    /// The day being read, then one chip per line — the portfolio first,
-    /// then this year, then the earlier years from the most recent — each
-    /// with its move to that day. A tap shows or hides the line.
+    /// One row per line, ranked by its move to the day being read — the
+    /// same rows as the returns comparison. A tap shows or hides the line.
     private func legend(_ lines: [Line]) -> some View {
         let fraction = readFraction
-        let ordered = lines.filter { $0.id == Self.portfolioLineID }
-            + lines.filter { $0.id == Self.currentLineID }
-            + lines.filter { $0.id == Self.averageLineID }
-            + lines.filter { !$0.isNow && $0.id != Self.averageLineID }.reversed()
-        return VStack(alignment: .leading, spacing: 10) {
-            Text(dayText(for: fraction))
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
-                .contentTransition(.numericText())
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], alignment: .leading, spacing: 8) {
-                ForEach(ordered) { line in
-                    chip(line, value: line.value(at: fraction))
-                }
+        let ranked = lines.map { (line: $0, value: $0.value(at: fraction)) }.sorted {
+            ($0.value ?? -.infinity) > ($1.value ?? -.infinity)
+        }
+        return VStack(spacing: 12) {
+            ForEach(Array(ranked.enumerated()), id: \.element.line.id) { index, entry in
+                row(entry.line, value: entry.value, rank: index + 1)
             }
         }
     }
 
-    private func chip(_ line: Line, value: Double?) -> some View {
+    private func row(_ line: Line, value: Double?, rank: Int) -> some View {
         let isShown = !hidden.contains(line.id)
-        let valueText = value.map { DisplayFormat.percent($0) } ?? "—"
         return Button {
             if isShown { hidden.insert(line.id) } else { hidden.remove(line.id) }
             selectedDate = nil
         } label: {
-            HStack(spacing: 6) {
-                Circle()
-                    .strokeBorder(line.color, lineWidth: 2)
-                    .background(Circle().fill(isShown ? line.color : .clear))
-                    .frame(width: 10, height: 10)
+            HStack(spacing: 16) {
+                ReturnsRankBadge(rank: rank, color: line.color, isPortfolio: line.id == Self.portfolioLineID)
                 Text(line.title)
-                    .font(.caption.weight(line.isNow ? .semibold : .medium))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                Spacer(minLength: 4)
-                Text(valueText)
-                    .font(.caption.weight(.semibold))
+                Spacer(minLength: 8)
+                if let value {
+                    HStack(spacing: 0) {
+                        Text("\(value >= 0 ? "+" : "")\(value.formatted(.number.precision(.fractionLength(1))))")
+                        Text("%").foregroundStyle(.primary.opacity(0.3))
+                    }
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .lineLimit(1)
-                    .fixedSize()
+                } else {
+                    Text("—").font(.system(size: 15, weight: .semibold, design: .rounded))
+                }
             }
-            .foregroundStyle(isShown ? CatfolioTheme.primaryText : Color.secondary)
-            .padding(.horizontal, 10)
-            .frame(height: 32)
-            .background(Capsule().fill(Color.primary.opacity(isShown ? 0.07 : 0.03)))
-            .contentShape(Capsule())
+            .foregroundStyle(CatfolioTheme.primaryText)
+            .padding(.horizontal, 16)
+            .frame(height: 65)
+            .background { ReturnsGlassCardSurface() }
+            .opacity(isShown ? 1 : 0.2)
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(line.title)
-        .accessibilityValue((isShown ? L10n.text("已显示") : L10n.text("已隐藏")) + " · " + valueText)
+        .accessibilityValue((isShown ? L10n.text("已显示") : L10n.text("已隐藏")) + " · "
+            + (value.map { DisplayFormat.percent($0) } ?? "—"))
     }
 
     // MARK: Values
@@ -563,20 +627,28 @@ struct CycleComparisonView: View {
         date.timeIntervalSinceReferenceDate / 1_000_000
     }
 
-    /// How far through its calendar year a day is.
-    private static func fraction(ofYearAt date: Date) -> Double {
-        let year = String(DayDateCodec.string(from: date).prefix(4))
-        guard let start = DayDateCodec.date(from: "\(year)-01-01"),
-              let end = DayDateCodec.date(from: "\((Int(year) ?? 0) + 1)-01-01") else { return 0 }
-        return min(1, max(0, date.timeIntervalSince(start) / end.timeIntervalSince(start)))
+    /// The running cycle's first day: this year's start month, or last
+    /// year's before it comes round.
+    private func currentCycleStart(_ date: Date = Date()) -> (start: Date, end: Date)? {
+        let text = DayDateCodec.string(from: date)
+        guard let year = Int(text.prefix(4)), let month = Int(text.dropFirst(5).prefix(2)) else { return nil }
+        let startYear = month < startMonth ? year - 1 : year
+        guard let start = DayDateCodec.date(from: String(format: "%04d-%02d-01", startYear, startMonth)),
+              let end = DayDateCodec.date(from: String(format: "%04d-%02d-01", startYear + 1, startMonth))
+        else { return nil }
+        return (start, end)
     }
 
-    /// A point in the year as a month and day of this year.
+    /// How far through its cycle a day is.
+    private func fraction(ofCycleAt date: Date) -> Double {
+        guard let cycle = currentCycleStart(date) else { return 0 }
+        return min(1, max(0, date.timeIntervalSince(cycle.start) / cycle.end.timeIntervalSince(cycle.start)))
+    }
+
+    /// A point in the cycle as a month and day of the running one.
     private func dayText(for fraction: Double) -> String {
-        let year = String(DayDateCodec.string(from: Date()).prefix(4))
-        guard let start = DayDateCodec.date(from: "\(year)-01-01"),
-              let end = DayDateCodec.date(from: "\((Int(year) ?? 0) + 1)-01-01") else { return "" }
-        let day = start.addingTimeInterval(end.timeIntervalSince(start) * fraction)
+        guard let cycle = currentCycleStart() else { return "" }
+        let day = cycle.start.addingTimeInterval(cycle.end.timeIntervalSince(cycle.start) * fraction)
         var style = Date.FormatStyle.dateTime.month(.abbreviated).day().locale(appLocale)
         style.timeZone = TimeZone(secondsFromGMT: 0)!
         return day.formatted(style)
@@ -584,14 +656,6 @@ struct CycleComparisonView: View {
 
     static func axisText(_ value: Double) -> String {
         value.rounded() == value ? String(Int(value)) : value.formatted(.number.precision(.fractionLength(1)))
-    }
-
-    private var footnote: String {
-        let basis = subject == .portfolio
-            ? L10n.text("我的组合按每日 TWR 计算。")
-            : L10n.text("指数为价格指数，不含股息；我的组合按每日 TWR 计算。")
-        return basis + L10n.text("每条线是一个自然年，从上一年最后一个收盘价起计涨跌；横轴为 1–12 月。")
-            + L10n.text("组合历史不足一年的部分按实际日期展示，缺少年初基准时从首日归零；多年均值只包含完整年份。")
     }
 
     // MARK: Loading
@@ -636,5 +700,46 @@ struct CycleComparisonView: View {
             histories[.portfolio] = nil
             failures[.portfolio] = model.isReturnsLoading ? nil : L10n.text("还没有可用的组合收益历史。")
         }
+    }
+}
+
+/// The shared range strip's look — 44 × 30 pills on the page's subtle fill —
+/// for a choice counted in years.
+struct CycleYearsPicker: View {
+    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
+    @Environment(\.colorScheme) private var colorScheme
+    @Binding var selection: Int
+    let choices: [Int]
+    /// Counts beyond the history there is show, greyed, but cannot be chosen.
+    var enabled: Set<Int>? = nil
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(choices, id: \.self) { years in
+                let isSelected = selection == years
+                let isEnabled = enabled?.contains(years) ?? true
+                Button { selection = years } label: {
+                    Text(L10n.text("\(years)年"))
+                        .appText(.footnote, weight: isSelected ? .semibold : .medium)
+                        .foregroundStyle(isSelected ? (colorScheme == .light ? Color.black : Color.white)
+                                         : isEnabled ? Color.secondary : Color.secondary.opacity(0.35))
+                        .lineLimit(1)
+                        .frame(width: 44, height: 30)
+                        .background {
+                            if isSelected {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(CatfolioTheme.subtleFill)
+                            }
+                        }
+                        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(!isEnabled)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
+        .padding(.horizontal, 16)
+        .sensoryFeedback(.selection, trigger: selection) { _, _ in hapticsEnabled }
+        .accessibilityLabel(L10n.text("对比年数"))
     }
 }

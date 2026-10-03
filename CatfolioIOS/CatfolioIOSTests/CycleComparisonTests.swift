@@ -129,4 +129,21 @@ final class CycleComparisonTests: XCTestCase {
         XCTAssertEqual(CycleComparison.roundStep(0.2), 1, "never finer than one point")
         XCTAssertEqual(CycleComparison.roundStep(34), 50)
     }
+
+    func testCyclesCanStartInAnyMonth() {
+        // 12 September: an April year has been running since April.
+        let result = CycleComparison.make(closes: closes(from: "2019-12-01", to: "2026-09-12"),
+                                          length: 1, lookback: 2, today: today, startMonth: 4)
+        XCTAssertEqual(result.cycles.map(\.startYear), [2024, 2025, 2026])
+        XCTAssertEqual(result.current?.title, "2026/27")
+        XCTAssertEqual(result.cycles.first?.title, "2024/25")
+        // Five and a half months of twelve.
+        XCTAssertEqual(result.current?.points.last?.fraction ?? 0, 0.45, accuracy: 0.02)
+        XCTAssertEqual(result.completePastCycles.count, 2)
+
+        // Before November comes round, a November year is last year's.
+        let november = CycleComparison.make(closes: closes(from: "2019-12-01", to: "2026-09-12"),
+                                            length: 1, lookback: 1, today: today, startMonth: 11)
+        XCTAssertEqual(november.current?.startYear, 2025)
+    }
 }

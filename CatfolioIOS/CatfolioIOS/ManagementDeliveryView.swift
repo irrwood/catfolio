@@ -127,9 +127,39 @@ struct ManagementDeliveryCard: View {
     private var cacheID: String { "\(ticker)|\(quarters)|\(locale.identifier)|\(language)" }
 
     var body: some View {
-        HoldingDetailDisclosureCard(title: L10n.text("管理层兑现情况"),
-            subtitle: L10n.text("过去的承诺，后来的结果"), isExpanded: $expanded, isLoading: store.busy) {
-            VStack(alignment: .leading, spacing: 20) {
+        // A row like the other research cards; the check opens in its own
+        // sheet rather than growing the security page.
+        Button { expanded = true } label: {
+            HoldingDetailActionCardLabel(title: L10n.text("管理层兑现情况"),
+                subtitle: L10n.text("过去的承诺，后来的结果"), isLoading: store.busy)
+        }
+        .buttonStyle(.plain)
+        .appSheet(isPresented: $expanded) {
+            NavigationStack {
+                ScrollView {
+                    sheetContent
+                        .padding(20)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .navigationTitle(L10n.text("管理层兑现情况"))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { AppModalDoneButton { expanded = false } } }
+                .appSheet(item: $selectedSource) { document in ManagementDeliverySourceView(document: document) }
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .accessibilityIdentifier("management-delivery")
+        .task(id: cacheID) { await store.restore(ticker: ticker, quarters: quarters, language: language) }
+        .onChange(of: scenePhase) { _, phase in
+            modelStatus = AIProviderPreference.current.readiness
+            if phase == .background { store.cancel() }
+        }
+        .onDisappear { store.cancel() }
+    }
+
+    private var sheetContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
                 Text(privacyNote)
                     .font(.caption).foregroundStyle(.secondary)
                 Picker(L10n.text("核对范围"), selection: $quarters) {
@@ -189,16 +219,7 @@ struct ManagementDeliveryCard: View {
                         }
                     }
                 }
-            }
         }
-        .accessibilityIdentifier("management-delivery")
-        .task(id: cacheID) { await store.restore(ticker: ticker, quarters: quarters, language: language) }
-        .onChange(of: scenePhase) { _, phase in
-            modelStatus = AIProviderPreference.current.readiness
-            if phase == .background { store.cancel() }
-        }
-        .onDisappear { store.cancel() }
-        .appSheet(item: $selectedSource) { document in ManagementDeliverySourceView(document: document) }
     }
 }
 

@@ -1839,10 +1839,20 @@ private struct JEVScoreRow: View {
 /// The entry on the 收益 page: the last report's tally, or how to start.
 struct JEVTodayAttentionEntry: View {
     @Environment(AppModel.self) private var model
+    /// Off when a tabbed header above it already names the section.
+    var showsHeader = true
 
     var body: some View {
+        if showsHeader {
+            SettingsSection(L10n.text("JEV 今日关注")) { row }
+        } else {
+            SettingsCard { row }
+        }
+    }
+
+    private var row: some View {
         let report = JEVReportCache.load(scope: JEVReportCache.scope(model: model))
-        SettingsSection(L10n.text("JEV 今日关注")) {
+        return Group {
             SettingsNavigationRow(
                 icon: .symbol("bolt.fill"),
                 title: report.map { report in
@@ -1857,5 +1867,56 @@ struct JEVTodayAttentionEntry: View {
             }
             .accessibilityIdentifier("performance.jev-attention")
         }
+    }
+}
+
+/// Today's attention and JEV's, as two tabs of one section: the analysis's
+/// cards, or JEV's structured call on each holding.
+struct TodayAttentionTabs: View {
+    enum Tab: String { case analysis, jev }
+    @AppStorage("performance.attention.tab") private var tabRawValue = Tab.analysis.rawValue
+    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
+
+    private var tab: Tab { Tab(rawValue: tabRawValue) ?? .analysis }
+
+    var body: some View {
+        Group {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
+                tabButton(.analysis, title: L10n.text("今天值得关注"))
+                tabButton(.jev, title: "JEV")
+                Spacer(minLength: 12)
+                NavigationLink {
+                    if tab == .jev { JEVTodayAttentionView() } else { TodayAttentionView() }
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(L10n.text("更多"))
+                        Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                    }
+                    .appText(.footnote, weight: .medium)
+                    .foregroundStyle(SettingsTemplate.sectionHeader)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("performance.today-attention")
+            }
+            .padding(.top, SettingsTemplate.sectionHeaderTopSpacing)
+
+            switch tab {
+            case .analysis: TodayAttentionPreview(showsHeader: false)
+            case .jev: JEVTodayAttentionEntry(showsHeader: false)
+            }
+        }
+        .sensoryFeedback(.selection, trigger: tabRawValue) { _, _ in hapticsEnabled }
+    }
+
+    private func tabButton(_ value: Tab, title: String) -> some View {
+        let isSelected = tab == value
+        return Button { tabRawValue = value.rawValue } label: {
+            Text(title)
+                .appText(.body, weight: isSelected ? .semibold : .medium)
+                .foregroundStyle(isSelected ? CatfolioTheme.primaryText : SettingsTemplate.sectionHeader)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

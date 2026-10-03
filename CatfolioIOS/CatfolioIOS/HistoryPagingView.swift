@@ -6,6 +6,9 @@ import UIKit
 struct HistoryPagingView: UIViewControllerRepresentable {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var selection: HistoryCategory
+    /// The tabs, in order. Fixed for the controller's life: a different set
+    /// is a different pager (the caller keys the view by it).
+    var categories: [HistoryCategory] = HistoryCategory.allCases
     var contentID: AnyHashable
     var page: (HistoryCategory) -> AnyView
 
@@ -19,7 +22,7 @@ struct HistoryPagingView: UIViewControllerRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(selection: selection) }
 
     func makeUIViewController(context: Context) -> HistoryPagingController {
-        let controller = HistoryPagingController(selection: selection)
+        let controller = HistoryPagingController(selection: selection, categories: categories)
         updateUIViewController(controller, context: context)
         return controller
     }
@@ -38,7 +41,7 @@ struct HistoryPagingView: UIViewControllerRepresentable {
             context.coordinator.contentID = contentID
             context.coordinator.environmentID = environmentID
             let height = HistoryCategoryBar.preferredHeight
-            controller.updatePages(HistoryCategory.allCases.map {
+            controller.updatePages(controller.categories.map {
                 AnyView(page($0)
                     .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: height) }
                     .environment(\.self, environment))
@@ -53,7 +56,8 @@ struct HistoryPagingView: UIViewControllerRepresentable {
 
 final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
     let pager = HistoryPagingScrollView()
-    let categoryBar = HistoryCategoryBar()
+    let categories: [HistoryCategory]
+    let categoryBar: HistoryCategoryBar
     let headerMaterial = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
     private(set) var selection: HistoryCategory
     var onSelection: ((HistoryCategory) -> Void)?
@@ -80,8 +84,11 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
     /// bar, and the large title sitting between the two was blurred with it.
     private let headerFade = CAGradientLayer()
 
-    init(selection: HistoryCategory) {
-        self.selection = selection
+    init(selection: HistoryCategory, categories: [HistoryCategory] = HistoryCategory.allCases) {
+        let categories = categories.isEmpty ? [.all] : categories
+        self.categories = categories
+        self.selection = categories.contains(selection) ? selection : categories[0]
+        categoryBar = HistoryCategoryBar(categories: categories)
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -112,7 +119,7 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
         view.addSubview(categoryBar)
         categoryBar.onSelect = { [weak self] index in
             guard let self else { return }
-            self.select(HistoryCategory.allCases[index], animated: !self.reduceMotion)
+            self.select(self.categories[index], animated: !self.reduceMotion)
         }
     }
 
@@ -232,7 +239,7 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
     }
 
     private func neighbourhood(of index: Int) -> Set<Int> {
-        Set([index - 1, index, index + 1].filter { HistoryCategory.allCases.indices.contains($0) })
+        Set([index - 1, index, index + 1].filter { categories.indices.contains($0) })
     }
 
     /// Gives placeholder pages their content.
@@ -253,14 +260,14 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
         }
     }
 
-    private var selectedIndex: Int { HistoryCategory.allCases.firstIndex(of: selection) ?? 0 }
+    private var selectedIndex: Int { categories.firstIndex(of: selection) ?? 0 }
     var pageProgress: CGFloat {
         guard pager.bounds.width > 0 else { return CGFloat(selectedIndex) }
         return min(CGFloat(hosts.count - 1), max(0, pager.contentOffset.x / pager.bounds.width))
     }
 
     func select(_ category: HistoryCategory, animated: Bool) {
-        let index = HistoryCategory.allCases.firstIndex(of: category) ?? 0
+        let index = categories.firstIndex(of: category) ?? 0
         preparePages(neighbourhood(of: index))
         let target = CGPoint(x: CGFloat(index) * pager.bounds.width, y: 0)
         // Tapping the current tab during deceleration should return to it,
@@ -306,7 +313,7 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
         guard !hosts.isEmpty else { return }
         let index = min(hosts.count - 1, max(0, Int(pageProgress.rounded())))
         requestedIndex = nil
-        selection = HistoryCategory.allCases[index]
+        selection = categories[index]
         for (pageIndex, host) in hosts.enumerated() {
             host.view.accessibilityElementsHidden = pageIndex != index
         }
@@ -403,8 +410,11 @@ final class HistoryCategoryBar: UIView {
         )
     }
 
-    override init(frame: CGRect) {
-        super.init(frame: frame)
+    let categories: [HistoryCategory]
+
+    init(categories: [HistoryCategory] = HistoryCategory.allCases) {
+        self.categories = categories
+        super.init(frame: .zero)
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.scrollsToTop = false
         scrollView.contentInsetAdjustmentBehavior = .never
@@ -414,7 +424,7 @@ final class HistoryCategoryBar: UIView {
         pill.isUserInteractionEnabled = false
         pill.accessibilityIdentifier = "history-category-pill"
         scrollView.addSubview(pill)
-        for (index, category) in HistoryCategory.allCases.enumerated() {
+        for (index, category) in categories.enumerated() {
             let button = UIButton(type: .custom)
             button.accessibilityIdentifier = "history-category-\(category.rawValue.lowercased())"
             button.addAction(UIAction { [weak self] _ in self?.onSelect?(index) }, for: .touchUpInside)
@@ -434,7 +444,7 @@ final class HistoryCategoryBar: UIView {
             .traits: [UIFontDescriptor.TraitKey.weight: UIFont.Weight.medium]
         ]), size: 0)
         for (index, button) in buttons.enumerated() {
-            button.setTitle(L10n.label(HistoryCategory.allCases[index].rawValue), for: .normal)
+            button.setTitle(L10n.label(categories[index].rawValue), for: .normal)
             button.titleLabel?.font = font
             button.titleLabel?.adjustsFontForContentSizeCategory = true
             button.titleLabel?.numberOfLines = 1

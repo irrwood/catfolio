@@ -468,23 +468,7 @@ struct AnalystConsensusContent: View {
                 AnalystMetricsLayout {
                     metrics(low: low, mean: mean, high: high)
                 }
-                let minimum = min(low, data.current ?? low)
-                let maximum = max(high, data.current ?? high)
-                GeometryReader { geo in
-                    let width = max(0, geo.size.width - 18)
-                    Capsule().fill(.quaternary).frame(height: 6).offset(y: 8)
-                    ForEach(Array([low, mean, high].enumerated()), id: \.offset) { item in
-                        Circle().fill(item.offset == 1 ? Color.blue : Color.secondary)
-                            .frame(width: 10, height: 10)
-                            .offset(x: 4 + width * AnalystConsensusData.position(item.element, low: minimum, high: maximum), y: 6)
-                    }
-                    if let current = data.current {
-                        Circle().fill(Color(uiColor: .systemBackground))
-                            .overlay(Circle().strokeBorder(Color.primary, lineWidth: 3))
-                            .frame(width: 18, height: 18)
-                            .offset(x: width * AnalystConsensusData.position(current, low: minimum, high: maximum), y: 2)
-                    }
-                }.frame(height: 22).accessibilityHidden(true)
+                AnalystTargetBar(low: low, mean: mean, high: high, current: data.current)
             } else { Text(L10n.text("暂无可核验的目标价区间")).foregroundStyle(.secondary) }
             Text(L10n.text("\(data.source) · 读取于 \(data.fetchedAt.formatted(date: .abbreviated, time: .shortened))"))
                 .font(.caption).foregroundStyle(.secondary)
@@ -513,17 +497,21 @@ struct AnalystConsensusContent: View {
     }
 
     @ViewBuilder private func metrics(low: Double, mean: Double, high: Double) -> some View {
-        metric(L10n.text("最低目标"), value: low)
-        metric(L10n.text("当前报价"), value: data.current)
-        metric(L10n.text("平均目标"), value: mean)
-        metric(L10n.text("最高目标"), value: high)
+        metric(L10n.text("最低目标"), value: low, marker: .range)
+        metric(L10n.text("当前报价"), value: data.current, marker: .current)
+        metric(L10n.text("平均目标"), value: mean, marker: .mean)
+        metric(L10n.text("最高目标"), value: high, marker: .range)
     }
-    private func metric(_ title: String, value: Double?) -> some View {
+    private func metric(_ title: String, value: Double?, marker: AnalystTargetBar.Marker) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(value.map { $0.formatted(.currency(code: "USD")) } ?? "—").appNumber(.callout, weight: .semibold)
                 .lineLimit(1).minimumScaleFactor(0.8)
                 .researchLayoutFrame("analyst.value.\(title)")
-            Text(title).font(.caption).foregroundStyle(.secondary)
+            // The round legend is the mark this figure has on the line below.
+            HStack(spacing: 5) {
+                AnalystTargetBar.legend(marker)
+                Text(title).font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
 }
@@ -573,6 +561,63 @@ private struct AnalystMetricsLayout: Layout {
             let y = layout.rowHeights.prefix(row).reduce(0, +) + CGFloat(row) * 16
             subviews[index].place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y), anchor: .topLeading,
                                  proposal: .init(width: layout.widths[column], height: layout.rowHeights[row]))
+        }
+    }
+}
+
+/// The home list's 52-week bar, laid on its side: a grey track, the targets'
+/// span from lowest to highest in blue, the current quote as the dark dot
+/// and the mean target as the white one.
+struct AnalystTargetBar: View {
+    enum Marker { case range, current, mean }
+
+    let low: Double
+    let mean: Double
+    let high: Double
+    let current: Double?
+
+    static let rangeColor = Color(red: 52 / 255, green: 117 / 255, blue: 1)
+    private static let height: CGFloat = 8
+
+    var body: some View {
+        let minimum = min(low, current ?? low)
+        let maximum = max(high, current ?? high)
+        func x(_ value: Double, in width: CGFloat) -> CGFloat {
+            CGFloat(AnalystConsensusData.position(value, low: minimum, high: maximum)) * max(0, width - Self.height)
+        }
+        return GeometryReader { geometry in
+            let width = geometry.size.width
+            ZStack(alignment: .leading) {
+                Capsule().fill(CatfolioTheme.primaryText.opacity(0.10))
+                let start = x(low, in: width), end = x(high, in: width)
+                Capsule().fill(Self.rangeColor)
+                    .frame(width: end - start + Self.height)
+                    .offset(x: start)
+                Circle().fill(.white)
+                    .frame(width: 4, height: 4)
+                    .offset(x: x(mean, in: width) + 2)
+                if let current {
+                    Circle().fill(CatfolioPalette.blue900)
+                        .frame(width: 6, height: 6)
+                        .offset(x: x(current, in: width) + 1)
+                }
+            }
+        }
+        .frame(height: Self.height)
+        .accessibilityHidden(true)
+    }
+
+    /// The entry's mark, at legend size.
+    @ViewBuilder static func legend(_ marker: Marker) -> some View {
+        switch marker {
+        case .range:
+            Circle().fill(rangeColor).frame(width: 8, height: 8)
+        case .current:
+            Circle().fill(CatfolioPalette.blue900).frame(width: 8, height: 8)
+        case .mean:
+            Circle().fill(.white)
+                .overlay(Circle().strokeBorder(rangeColor, lineWidth: 2))
+                .frame(width: 8, height: 8)
         }
     }
 }

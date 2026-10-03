@@ -106,7 +106,7 @@ struct RootTabView: View {
                 NavigationStack { SettingsView() }
             } label: {
                 tabIcon(for: .settings, selected: "TabSettingsSelected",
-                        unselected: "TabSettingsUnselected", label: L10n.text("设置"))
+                        unselected: "TabSettingsUnselected", label: L10n.text("账户"))
             }
 
             // The search role is the system's own separate circle at the end

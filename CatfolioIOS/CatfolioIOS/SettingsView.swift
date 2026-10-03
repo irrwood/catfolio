@@ -133,12 +133,16 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        SettingsPage(title: L10n.text("设置")) {
+        SettingsPage(title: L10n.text("账户")) {
+            // The ledger first — the quick history tiles and 全部历史 — then
+            // which accounts are shown, then the settings themselves.
+            if !model.accounts.isEmpty {
+                SettingsHistoryOverview()
+            }
+
             PublicInvestorSettingsSection()
 
             if !model.accounts.isEmpty {
-                SettingsHistoryOverview()
-
                 SettingsSection(L10n.text("账户范围")) {
                     allAccountsRow
                     ForEach(model.accounts) { account in
@@ -1812,10 +1816,20 @@ struct LocalServiceDetailView: View {
     @State private var hasLoaded = false
     @State private var validationTask: Task<Void, Never>?
     @AppStorage(LocalServiceKeys.openRouterModel) private var openRouterModel = ""
+    @AppStorage(LocalServiceKeys.deepSeekModel) private var deepSeekModel = ""
+    @State private var showsModelPicker = false
     @AppStorage(LocalServiceKeys.cloudflareAccountIDKey) private var cloudflareAccountID = ""
 
     private var trimmedKey: String {
         apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var modelBinding: Binding<String> {
+        provider == .deepSeek ? $deepSeekModel : $openRouterModel
+    }
+
+    private var defaultModel: String {
+        provider == .deepSeek ? LocalServiceKeys.defaultDeepSeekModel : LocalServiceKeys.defaultOpenRouterModel
     }
 
     private var keyPlaceholder: String {
@@ -1894,11 +1908,16 @@ struct LocalServiceDetailView: View {
                 SettingsFootnote(L10n.text("Account ID 和 API Token 可在 Cloudflare 控制台获取。"))
             }
 
-            if provider == .openRouter {
+            if AIModelCatalog.supports(provider) {
                 SettingsSectionHeader(L10n.text("模型"))
                 SettingsCard {
+                    SettingsButtonRow(icon: .symbol("list.bullet.rectangle"), title: L10n.text("获取模型"),
+                                      value: modelBinding.wrappedValue.isEmpty ? L10n.text("默认") : modelBinding.wrappedValue) {
+                        showsModelPicker = true
+                    }
+                    .accessibilityIdentifier("local-service.model-picker")
                     SettingsRowContainer {
-                        TextField(LocalServiceKeys.defaultOpenRouterModel, text: $openRouterModel)
+                        TextField(defaultModel, text: modelBinding)
                             .font(.body.monospaced())
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
@@ -1906,7 +1925,7 @@ struct LocalServiceDetailView: View {
                             .submitLabel(.done)
                     }
                 }
-                SettingsFootnote(L10n.text("填写模型 ID；留空自动选择。"))
+                SettingsFootnote(L10n.text("从服务商读取可用模型后选择，也可直接填写模型 ID；留空使用 \(defaultModel)。"))
             }
 
             if let feedback {
@@ -1973,6 +1992,10 @@ struct LocalServiceDetailView: View {
         .onChange(of: apiKey) { _, newValue in
             let edited = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
             if edited != originalKey { feedback = nil }
+        }
+        .appSheet(isPresented: $showsModelPicker) {
+            AIModelPickerView(provider: provider, key: trimmedKey.isEmpty ? nil : trimmedKey,
+                              defaultModel: defaultModel, selection: modelBinding)
         }
         .confirmationDialog(
             L10n.text("移除 \(provider.title) 密钥？"),
@@ -2321,5 +2344,94 @@ private struct SettingsLabView: View {
         .appFullScreenCover(isPresented: $showsPolicyComposer) {
             PolicyComposerEntry().environment(model)
         }
+    }
+}
+
+/// The provider's current models, read when the sheet opens, searchable;
+/// a tap picks one and closes.
+private struct AIModelPickerView: View {
+    @Environment(\.dismiss) private var dismiss
+    let provider: LocalServiceProvider
+    /// The key typed on the page, before it is saved; else the stored one.
+    let key: String?
+    let defaultModel: String
+    @Binding var selection: String
+    @State private var models: [AIModelOption] = []
+    @State private var query = ""
+    @State private var isLoading = true
+    @State private var error: String?
+
+    private var filtered: [AIModelOption] {
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return models }
+        return models.filter { $0.id.localizedCaseInsensitiveContains(text) || $0.name.localizedCaseInsensitiveContains(text) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    row(id: "", title: L10n.text("默认（\(defaultModel)）"), subtitle: nil)
+                }
+                if isLoading {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                        Text(L10n.text("正在获取模型…")).foregroundStyle(.secondary)
+                    }
+                } else if let error {
+                    Section {
+                        Text(L10n.message(error)).foregroundStyle(.secondary)
+                        Button(L10n.text("重试")) { Task { await load() } }
+                    }
+                } else {
+                    Section(L10n.text("\(models.count) 个模型")) {
+                        ForEach(filtered) { model in
+                            row(id: model.id, title: model.name, subtitle: model.name == model.id ? nil : model.id)
+                        }
+                    }
+                }
+            }
+            .searchable(text: $query, prompt: L10n.text("搜索模型"))
+            .navigationTitle(L10n.text("选择模型"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { AppModalDoneButton { dismiss() } }
+            }
+            .task { await load() }
+        }
+    }
+
+    private func row(id: String, title: String, subtitle: String?) -> some View {
+        Button {
+            selection = id
+            dismiss()
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).foregroundStyle(CatfolioTheme.primaryText)
+                    if let subtitle {
+                        Text(subtitle).font(.caption.monospaced()).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 8)
+                if selection.trimmingCharacters(in: .whitespacesAndNewlines) == id {
+                    Image(systemName: "checkmark").foregroundStyle(CatfolioTheme.accent)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func load() async {
+        isLoading = true
+        error = nil
+        let storedKey = KeychainStore.string(for: provider.keychainKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            models = try await AIModelCatalog.fetch(provider, key: key ?? storedKey)
+        } catch {
+            self.error = error.localizedDescription
+        }
+        isLoading = false
     }
 }

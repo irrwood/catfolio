@@ -5,7 +5,6 @@ import SwiftUI
 struct HoldingInsiderTradesCard: View {
     let holding: Holding
     @State private var showsTrades = false
-    @Namespace private var zoom
 
     var body: some View {
         Button {
@@ -17,11 +16,10 @@ struct HoldingInsiderTradesCard: View {
             )
         }
         .buttonStyle(.plain)
-        .matchedTransitionSource(id: "insiders-\(holding.ticker)", in: zoom)
         .accessibilityIdentifier("holding-insider-trades")
         .appSheet(isPresented: $showsTrades) {
+            // A plain sheet sliding up, like the other research cards'.
             InsiderTradesSheet(symbol: holding.ticker)
-                .navigationTransition(.zoom(sourceID: "insiders-\(holding.ticker)", in: zoom))
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }

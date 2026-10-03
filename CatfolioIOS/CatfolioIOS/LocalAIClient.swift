@@ -646,7 +646,7 @@ struct LocalAIClient {
         } catch {
             try Task.checkCancellation()
             emit(.searchStatus(""))
-            emit(.text(L10n.text("联网搜索暂不可用（需连接支持搜索的 Codex），以下回答仅基于已有数据。") + "\n\n"))
+            emit(.text(L10n.text("联网搜索暂不可用（需连接 ChatGPT，或在服务商中填写 OpenRouter Key），以下回答仅基于已有数据。") + "\n\n"))
             return try await streamResearch(question, context: context + "\nWeb search failed. Do not claim that this answer used live search.", emit: emit)
         }
         emit(.searchStatus(L10n.text("已获取来源，正在整理回答…")))
@@ -768,7 +768,7 @@ struct LocalAIClient {
                 throw LocalServiceError.missingAIKey
             }
             return Self(name: "DeepSeek", url: URL(string: "https://api.deepseek.com/chat/completions")!,
-                        key: key, model: "deepseek-chat")
+                        key: key, model: LocalServiceKeys.deepSeekModelID)
         }
 
         /// OpenRouter normalises every model's thinking into `reasoning`,

@@ -69,11 +69,18 @@ final class SecurityBrokerLinkTests: XCTestCase {
     func testUSListingOpensTrading212AndUSBrokers() {
         let links = SecurityBrokerLink.links(for: "nvda")
         XCTAssertEqual(links.first?.url.absoluteString, "https://www.trading212.com/trading-instruments/invest/NVDA.US")
-        XCTAssertEqual(links.map(\.title), ["Trading 212", "Moomoo", "Robinhood", "Yahoo Finance"])
+        XCTAssertEqual(links.map(\.title), ["Trading 212", "Moomoo", "Robinhood", "TradingView", "Yahoo Finance"])
+        XCTAssertEqual(links[3].url.absoluteString, "https://www.tradingview.com/chart/?symbol=NVDA")
     }
 
     func testLondonListingSkipsUSOnlyBrokers() {
-        XCTAssertEqual(SecurityBrokerLink.links(for: "VUSA.L").map(\.title), ["Trading 212", "Yahoo Finance"])
+        let london = SecurityBrokerLink.links(for: "VUSA.L")
+        XCTAssertEqual(london.map(\.title), ["Trading 212", "TradingView", "Yahoo Finance"])
+        XCTAssertEqual(london[0].url.absoluteString, "https://www.trading212.com/trading-instruments/invest/VUSA.GB")
+        XCTAssertEqual(SecurityBrokerLink.trading212Path("ASML.AS", isUS: false), "ASML.NL")
+        XCTAssertEqual(SecurityBrokerLink.trading212Path("SAP.DE", isUS: false), "SAP.DE")
+        XCTAssertNil(SecurityBrokerLink.trading212Path("0700.HK", isUS: false))
+        XCTAssertEqual(london[1].url.absoluteString, "https://www.tradingview.com/chart/?symbol=LSE:VUSA")
         XCTAssertTrue(SecurityBrokerLink.links(for: "CASH").isEmpty)
     }
 }
@@ -136,5 +143,35 @@ final class ClosedAccountTradeTests: XCTestCase {
         XCTAssertEqual(HoldingDetailRealisedProfitRequest(context: context, accountKeys: [held]).summary()?.combinedUSD ?? .nan,
                        10, accuracy: 1e-9)
         XCTAssertTrue(context.tradeAccountKeys(for: []).isEmpty)
+    }
+}
+
+final class HoldingVolumeRangeTests: XCTestCase {
+    private func holding(_ ticker: String, price: Double, cost: Double) -> Holding {
+        Holding(ticker: ticker, logoSymbol: nil, displayName: ticker, sector: nil, source: nil, shares: 1,
+            averageCost: cost, costCurrency: "USD", quotePrice: price, quoteCurrency: "USD", todayChangePercent: nil,
+            marketValue: price, weight: 0.5, unrealized: 0, unrealizedPercent: 0, fxPnl: nil, fxPnlPercent: nil,
+            fxPnlStatus: nil, fxPnlSource: nil)
+    }
+
+    private let range = HoldingVolumeRange(
+        bins: [.init(low: 90, high: 100, volume: 5), .init(low: 100, high: 110, volume: 20), .init(low: 110, high: 120, volume: 3)],
+        valueAreaLow: 95, pointOfControl: 105, valueAreaHigh: 115, currency: "USD")
+
+    func testPriceAndCostArePlacedInTheValueArea() {
+        let prices = HoldingVolumePrices(holding: holding("A", price: 115, cost: 95), range: range)
+        XCTAssertEqual(prices.current, 115)
+        XCTAssertEqual(prices.cost, 95)
+        XCTAssertEqual(prices.valueAreaPosition, 1)
+        XCTAssertEqual(range.valueAreaPosition(of: 95), 0)
+        XCTAssertEqual(range.valueAreaPosition(of: 125), 1.5)
+        XCTAssertNil(range.valueAreaPosition(of: nil))
+    }
+
+    func testValueAreaPositionSortsTheList() {
+        let items = PortfolioHoldingListItem.make(holdings: [holding("A", price: 100, cost: 90), holding("B", price: 118, cost: 90)],
+                                                  period: .today, dailyChanges: [:])
+        XCTAssertEqual(PortfolioHoldingListItem.sorted(items, by: .volumeArea, ascending: false,
+                                                       volumeRanges: ["A": range, "B": range]).map(\.ticker), ["B", "A"])
     }
 }

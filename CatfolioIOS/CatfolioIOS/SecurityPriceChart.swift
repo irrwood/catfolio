@@ -30,6 +30,9 @@ struct HoldingDetailPriceSection: View {
     /// Whether this section first drew the placeholder line — then the line
     /// grows out of it when the history comes, instead of replacing it.
     @State private var startedWithoutHistory: Bool?
+    /// The loading line waits a moment: a cached history arrives in a few
+    /// milliseconds and is then drawn as it is, with no placeholder before it.
+    @State private var showsLoadingPlaceholder = false
 
     private var movement: SecurityPriceMoveContext? {
         guard let priceHistory else { return nil }
@@ -60,7 +63,8 @@ struct HoldingDetailPriceSection: View {
                     averageCost: averageCost,
                     selectedAccountKeys: tradeAccountKeys ?? selectedAccountKeys,
                     cachedContent: cachedContent,
-                    followsPlaceholder: startedWithoutHistory ?? false,
+                    // Grows out of the loading line only if that line was on screen.
+                    followsPlaceholder: (startedWithoutHistory ?? false) && showsLoadingPlaceholder,
                     onSelectionChange: { selection in
                         guard priceSelection != selection else { return }
                         priceSelection = selection
@@ -72,13 +76,21 @@ struct HoldingDetailPriceSection: View {
                     message: priceHistoryError,
                     isLoading: false
                 )
-            } else {
+            } else if showsLoadingPlaceholder {
                 SecurityPriceChartState(
                     title: L10n.text("正在读取价格走势"),
                     message: L10n.text("正在整理历史行情与买卖记录"),
                     isLoading: true,
                     appearanceID: "security-price|\(holding.ticker)|\(holding.quoteCurrency ?? "USD")"
                 )
+            } else {
+                Color.clear
+                    .frame(height: SecurityPriceChartState.fixedHeight)
+                    .task {
+                        try? await Task.sleep(for: .milliseconds(250))
+                        guard !Task.isCancelled, priceHistory == nil else { return }
+                        showsLoadingPlaceholder = true
+                    }
             }
 
             // A held security keeps the accounts' place from the first frame:
@@ -854,9 +866,12 @@ struct SecurityPriceRangeData: @unchecked Sendable {
         guard let last = points.last?.date else { return [] }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        // Three sessions and the close before them, which the change is
+        // measured from; calendar days would leave a weekend nearly empty.
+        if range == .threeDays { return Array(points.suffix(4)) }
         let start: Date?
         switch range {
-        case .oneDay: start = nil
+        case .oneDay, .threeDays: start = nil
         case .oneWeek: start = calendar.date(byAdding: .day, value: -7, to: last)
         case .oneMonth: start = calendar.date(byAdding: .month, value: -1, to: last)
         case .twoMonths: start = calendar.date(byAdding: .month, value: -2, to: last)

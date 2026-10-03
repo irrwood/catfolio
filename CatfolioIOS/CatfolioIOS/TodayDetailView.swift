@@ -175,18 +175,6 @@ struct TodayDetailView: View {
     private var sectorRows: [SectorBreakdown] { sectorTotals.rows }
     private var unclassifiedShare: Double { sectorTotals.unclassifiedWeight }
 
-    private var sectorFootnote: String {
-        var parts: [String] = []
-        if sectorTotals.lookThroughUsed {
-            parts.append(L10n.text("指数基金按其成分股的行业构成分摊，非逐只成分的当日涨跌"))
-        }
-        if unclassifiedShare > 0.005 {
-            let pct = (unclassifiedShare * 100).formatted(.number.precision(.fractionLength(0)))
-            parts.append(L10n.text("未分类占当前市值 \(pct)%，主要是非美股上市标的，行业资料暂未覆盖"))
-        }
-        return parts.isEmpty ? L10n.text("行业来自打包的美股公司资料，用于当前归类，不适用于历史回溯。") : L10n.sentences(parts)
-    }
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
@@ -211,13 +199,6 @@ struct TodayDetailView: View {
                         systemImage: "chart.bar.xaxis",
                         description: Text(L10n.text("持仓的当日涨跌还没有读取到。"))
                     )
-                } else {
-                    Text(L10n.text("按持仓当前市值和当日涨跌推算，未计入今日的买入卖出。行情为各标的最近可用报价。"))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .modifier(ContentCard())
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -249,6 +230,17 @@ struct TodayDetailView: View {
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
+            if !contributions.isEmpty {
+                // What the net is made of: the rising holdings' gain and the
+                // falling ones' loss, each with how many there are.
+                HStack(spacing: 12) {
+                    splitMetric(title: L10n.text("盈利"), amount: gainTotal, count: gainCount,
+                                color: CatfolioTheme.positive)
+                    splitMetric(title: L10n.text("亏损"), amount: lossTotal, count: lossCount,
+                                color: CatfolioTheme.danger)
+                }
+                .padding(.top, 8)
+            }
             if let benchmarkChange, benchmarkChange.isFinite {
                 HStack(spacing: 5) {
                     Image(systemName: "chart.line.uptrend.xyaxis")
@@ -275,6 +267,28 @@ struct TodayDetailView: View {
         .modifier(ContentCard())
     }
 
+    private var gainTotal: Double { contributions.filter { $0.amount > 0 }.reduce(0) { $0 + $1.amount } }
+    private var lossTotal: Double { contributions.filter { $0.amount < 0 }.reduce(0) { $0 + $1.amount } }
+    private var gainCount: Int { contributions.filter { $0.amount > 0 }.count }
+    private var lossCount: Int { contributions.filter { $0.amount < 0 }.count }
+
+    private func splitMetric(title: String, amount: Double, count: Int, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(L10n.text("\(title) · \(count) 只"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text(DisplayFormat.money(amount, signed: amount != 0, fractionDigits: 2))
+                .appNumber(.heading, weight: .semibold)
+                .foregroundStyle(count == 0 ? Color.secondary : color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(color.opacity(count == 0 ? 0.04 : 0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+
     private var sectorSection: some View {
         let rows = sectorRows
         let columns = typeSize >= .xxxLarge ? 1 : 2
@@ -295,10 +309,6 @@ struct TodayDetailView: View {
                     }
                 }
             }
-            Text(sectorFootnote)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

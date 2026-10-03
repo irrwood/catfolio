@@ -512,6 +512,7 @@ struct OptionsOIView: View {
     @State private var selectedStrike: Double?
     @State private var plotRange: OIPlotRange = .main
     @State private var showsWalls = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(symbol: String, currency: String?, price: Double?, costUSD: Double?, refreshRevision: Int = 0,
          initialSnapshots: [Int: OISnapshot] = [:], onSnapshot: @escaping (Int, OISnapshot) -> Void = { _, _ in }) {
@@ -707,11 +708,23 @@ struct OptionsOIView: View {
         colorScheme == .dark ? .white.opacity(0.06) : Color(red: 248 / 255, green: 248 / 255, blue: 248 / 255)
     }
 
+    private var rangeTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        let zoomingIn = plotRange == .main
+        return .asymmetric(
+            insertion: .opacity.combined(with: .scale(scale: zoomingIn ? 0.86 : 1.16)),
+            removal: .opacity.combined(with: .scale(scale: zoomingIn ? 1.16 : 0.86)))
+    }
+
     /// One pill with two states (Figma 300:10594). It names what a tap does:
     /// ZOOM IN narrows to the main distribution, ZOOM OUT shows every strike.
     private var rangeToggle: some View {
         let zoomsIn = plotRange == .all
-        return Button { plotRange = zoomsIn ? .main : .all } label: {
+        return Button {
+            withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy(duration: 0.38)) {
+                plotRange = zoomsIn ? .main : .all
+            }
+        } label: {
             HStack(spacing: 2) {
                 Image(systemName: zoomsIn ? "arrow.up.left.and.arrow.down.right" : "arrow.down.right.and.arrow.up.left")
                     .font(.system(size: 13, weight: .semibold))
@@ -753,6 +766,11 @@ struct OptionsOIView: View {
                         OptionsOIDistributionPlot(distribution: distribution, currentPrice: price, holdingCost: costUSD,
                                                   selectedStrike: $selectedStrike, range: plotRange)
                             .onAppear { ChartAppearanceHistory.record("options-oi|\(symbol)") }
+                            // A zoom between the two ranges: zooming in, the
+                            // old plot grows past the frame as the new one
+                            // settles from small; zooming out, the reverse.
+                            .id(plotRange)
+                            .transition(rangeTransition)
                     } else {
                         plotMessage(L10n.text("所选范围没有可用的正 OI，暂无持仓墙。"))
                     }
@@ -768,6 +786,8 @@ struct OptionsOIView: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 397)
+            // The zoom between ranges stays inside the plot's own frame.
+            .clipped()
 
             if showsWalls, let distribution {
                 Rectangle()

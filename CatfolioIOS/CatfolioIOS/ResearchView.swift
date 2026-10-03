@@ -288,6 +288,8 @@ struct TodayAttentionPreview: View {
     @Environment(AppModel.self) private var model
     @State private var report: PortfolioAttentionReport?
     @State private var hasLoaded = false
+    /// Off when a tabbed header above it already names the section.
+    var showsHeader = true
 
     private static let limit = 3
 
@@ -300,6 +302,7 @@ struct TodayAttentionPreview: View {
 
     var body: some View {
         Group {
+            if showsHeader {
             HStack(alignment: .firstTextBaseline) {
                 Text(L10n.text("今天值得关注"))
                     .appText(.body, weight: .medium)
@@ -321,6 +324,11 @@ struct TodayAttentionPreview: View {
                 .accessibilityIdentifier("performance.today-attention")
             }
             .padding(.top, SettingsTemplate.sectionHeaderTopSpacing)
+            } else {
+                // Without its header the group can be empty until the report
+                // loads, and an empty group carries no task to load it.
+                Color.clear.frame(height: 0).accessibilityHidden(true)
+            }
 
             if !rows.isEmpty {
                 // A row of cards, one screen wide less a glimpse of the next,
@@ -455,6 +463,8 @@ struct ResearchView: View {
     @State private var analysisError: String?
     @State private var showsRules = false
     @State private var showsDCA = false
+    /// The first refresh is the page opening; later ones are pulls.
+    @State private var hasRefreshedMarkets = false
     @AppStorage("research.highAttentionOnly") private var highAttentionOnly = false
     @AppStorage("research.maximumResults") private var maximumResults = 6
     @AppStorage(AttentionEvidenceRules.maximumAgeKey) private var evidenceMaximumAge = 30
@@ -640,6 +650,7 @@ struct ResearchView: View {
                                            snapshot: markets.first { $0.id == symbol }, isLoading: isLoading)
                     }
                 }
+                MacroIndicatorSection()
                 SettingsSection(L10n.text("行情")) {
                     SettingsNavigationRow(icon: .symbol("chart.xyaxis.line"), title: L10n.text("板块轮动")) {
                         SectorRotationView()
@@ -651,6 +662,10 @@ struct ResearchView: View {
                     SettingsNavigationRow(icon: .symbol("gauge.with.dots.needle.50percent"), title: L10n.text("行业情绪")) {
                         IndustrySentimentView()
                     }
+                    SettingsNavigationRow(icon: .symbol("chart.line.uptrend.xyaxis"), title: L10n.text("美债收益率曲线")) {
+                        TreasuryYieldCurveView()
+                    }
+                    .accessibilityIdentifier("research.treasury-curve")
                 }
                 SettingsSection(L10n.text("工具")) {
                     SettingsNavigationRow(icon: .symbol("calendar.badge.clock"), title: L10n.text("定投计算器")) {
@@ -863,7 +878,10 @@ struct ResearchView: View {
         // The keyboard would otherwise stay up over the sheet and cover half
         // the page. The query stays, so closing the sheet returns to the list.
         isSearchFocused = false
-        selectedSecurity = heldHolding(result.ticker) ?? result.holding
+        let holding = heldHolding(result.ticker) ?? result.holding
+        // Read the cached chart while the sheet is still opening.
+        HoldingDetailContentView.prefetch(holding, model: model)
+        selectedSecurity = holding
     }
 
     /// Off the main thread: the directory holds some twenty thousand
@@ -903,20 +921,33 @@ struct ResearchView: View {
         guard !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
+        // Macro figures refresh with the page, on a pull; their own cache
+        // keeps an ordinary visit from asking again.
+        async let macro: Void = MacroIndicatorStore.shared.load(force: hasRefreshedMarkets)
+        defer { hasRefreshedMarkets = true }
         let end = Date()
         let start = Calendar.current.date(byAdding: .day, value: -14, to: end) ?? end
         let definitions = Self.benchmarks
         let histories = await LocalMarketDataClient().historicalCloses(
             symbols: definitions.map(\.0), from: DayDateCodec.string(from: start), to: DayDateCodec.string(from: end)
         )
+        // The 10-year from the Treasury's own published curve where it can be
+        // read; Yahoo's ^TNX stands in when it cannot.
+        var official: [String: Double] = [:]
+        if let curve = try? await TreasuryYieldClient.shared.curve() {
+            let since = DayDateCodec.string(from: start)
+            official = curve.history(.tenYears).filter { $0.key >= since }
+        }
         guard !Task.isCancelled else { return }
         // A failed refresh must not erase previously available values.
         for (symbol, title) in definitions {
-            guard let history = histories[symbol], !history.isEmpty else { continue }
+            let history = symbol == "^TNX" && official.count > 1 ? official : histories[symbol]
+            guard let history, !history.isEmpty else { continue }
             let snapshot = ResearchMarketSnapshot(id: symbol, title: title, history: history)
             markets.removeAll { $0.id == symbol }
             markets.append(snapshot)
         }
+        await macro
     }
 
     @MainActor private func analyze() {

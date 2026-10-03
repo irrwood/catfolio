@@ -164,6 +164,8 @@ struct HoldingDetailHeader: View {
         .accessibilityIdentifier("holding-detail-ticker-links")
         // The home list's badges, written out: "Acc", "Class A".
         SecurityClassBadges(markers: holding.classLabels)
+        // Outside the trading session: the price above is the last close.
+        MarketClosedBadge(ticker: holding.ticker)
     }
 
     private var quote: some View {
@@ -467,7 +469,9 @@ struct HoldingPositionDetails: View {
             .init(
                 title: L10n.text("Return"),
                 icon: .returnValue,
-                value: DisplayFormat.percent(holding.unrealizedPercent)
+                value: DisplayFormat.percent(holding.unrealizedPercent),
+                // Green or red like the unrealised P&L rows below.
+                color: profitColor
             ),
             .init(
                 title: L10n.text("Shares"),
@@ -493,6 +497,7 @@ struct HoldingPositionDetails: View {
                 value: fxValue,
                 color: fxColor
             ),
+        ] + fxPercentRow + [
             .init(
                 title: L10n.text("Proportion"),
                 icon: .proportion,
@@ -553,9 +558,14 @@ struct HoldingPositionDetails: View {
         guard let value = holding.fxPnl else {
             return holding.fxPnlStatus == "unavailable" ? L10n.text("缺少数据") : "—"
         }
-        let amount = DisplayFormat.money(value, signed: true)
-        guard let percent = holding.fxPnlPercent else { return amount }
-        return "\(amount)  ·  \(DisplayFormat.percent(percent))"
+        return DisplayFormat.money(value, signed: true)
+    }
+
+    /// The percentage on a row of its own, as the unrealised P&L has.
+    private var fxPercentRow: [HoldingDataRow.Model] {
+        guard holding.fxPnl != nil, let percent = holding.fxPnlPercent, percent.isFinite else { return [] }
+        return [.init(title: L10n.text("汇率影响率"), icon: .fxImpact,
+                      value: DisplayFormat.percent(percent), color: fxColor)]
     }
 
     private var fxColor: Color {
@@ -713,8 +723,8 @@ struct SecurityBrokerLink: Identifiable, Equatable {
         let isUS = !symbol.contains(".") || symbol.hasSuffix(".B") || symbol.hasSuffix(".A")
         let encoded = symbol.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? symbol
         var links: [Self] = []
-        let trading212 = isUS ? "\(encoded.replacingOccurrences(of: ".", with: "_")).US" : encoded
-        if let url = URL(string: "https://www.trading212.com/trading-instruments/invest/\(trading212)") {
+        if let trading212 = trading212Path(symbol, isUS: isUS),
+           let url = URL(string: "https://www.trading212.com/trading-instruments/invest/\(trading212)") {
             links.append(Self(title: "Trading 212", url: url))
         }
         if isUS {
@@ -725,9 +735,40 @@ struct SecurityBrokerLink: Identifiable, Equatable {
                 links.append(Self(title: "Robinhood", url: url))
             }
         }
+        if let url = tradingViewURL(symbol) {
+            links.append(Self(title: "TradingView", url: url))
+        }
         if let url = URL(string: "https://finance.yahoo.com/quote/\(encoded)") {
             links.append(Self(title: "Yahoo Finance", url: url))
         }
         return links
+    }
+
+    /// Trading 212's pages are TICKER.COUNTRY — NVDA.US, VUSA.GB, ASML.NL,
+    /// SAP.DE — not Yahoo's exchange suffix: VUSA.L was its error page.
+    static func trading212Path(_ symbol: String, isUS: Bool) -> String? {
+        if isUS { return "\(symbol).US" }
+        let countries = [".L": "GB", ".DE": "DE", ".F": "DE", ".PA": "FR", ".AS": "NL", ".SW": "CH",
+                         ".MI": "IT", ".MC": "ES", ".BR": "BE", ".LS": "PT", ".VI": "AT", ".TO": "CA"]
+        for (suffix, country) in countries where symbol.hasSuffix(suffix) {
+            return "\(symbol.dropLast(suffix.count)).\(country)"
+        }
+        // A market Trading 212 does not list, or one it names differently:
+        // no link rather than its error page.
+        return nil
+    }
+
+    /// TradingView names a listing by exchange; a bare US ticker resolves on
+    /// its own.
+    private static func tradingViewURL(_ symbol: String) -> URL? {
+        let exchanges = [".L": "LSE", ".DE": "XETR", ".PA": "EURONEXT", ".AS": "EURONEXT", ".MI": "MIL",
+                         ".SW": "SIX", ".MC": "BME", ".CO": "OMXCOP", ".TO": "TSX", ".HK": "HKEX"]
+        var tvSymbol = symbol.replacingOccurrences(of: ".", with: "_")
+        for (suffix, exchange) in exchanges where symbol.hasSuffix(suffix) {
+            tvSymbol = "\(exchange):\(symbol.dropLast(suffix.count))"
+        }
+        var components = URLComponents(string: "https://www.tradingview.com/chart/")
+        components?.queryItems = [URLQueryItem(name: "symbol", value: tvSymbol)]
+        return components?.url
     }
 }

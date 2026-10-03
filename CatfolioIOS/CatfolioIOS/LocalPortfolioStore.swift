@@ -2403,9 +2403,28 @@ enum LocalCSVImporter {
         return requiredColumnKeys.filter { resolved[$0] == nil }
     }
 
+    /// The ISINs a statement names in its ticker column, each with the
+    /// currency it was traded in, for the identity layer to resolve first.
+    static func isinRequests(in data: Data) -> [(isin: String, currency: String?)] {
+        guard let text = decodedText(from: data)?.replacingOccurrences(of: "\u{feff}", with: "") else { return [] }
+        let records = parseRecords(text)
+        guard let headerIndex = headerRowIndex(in: records) else { return [] }
+        let columns = columns(in: records[headerIndex])
+        guard let tickerColumn = columns["ticker"] else { return [] }
+        let currencyColumn = columns["currency"]
+        return records.dropFirst(headerIndex + 1).compactMap { row in
+            guard row.indices.contains(tickerColumn) else { return nil }
+            let value = row[tickerColumn].trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard SecurityIdentityResolver.isISIN(value) else { return nil }
+            let currency = currencyColumn.flatMap { row.indices.contains($0) ? row[$0].trimmingCharacters(in: .whitespacesAndNewlines) : nil }
+            return (value, currency)
+        }
+    }
+
     static func parse(
         _ data: Data,
-        splitCatalog: StockSplitCatalog? = try? StockSplitCatalog.bundled.get()
+        splitCatalog: StockSplitCatalog? = try? StockSplitCatalog.bundled.get(),
+        resolvedISINs: [String: String] = [:]
     ) throws -> ([LocalPositionRecord], [LocalTransactionRecord], CSVImportResult) {
         guard var text = decodedText(from: data) else {
             throw LocalPortfolioError.invalidCSV(L10n.text("文件编码无法识别，请使用 UTF-8 或 UTF-16"))
@@ -2450,8 +2469,12 @@ enum LocalCSVImporter {
                 guard !field("action").isEmpty else { continue }
                 let action = normalizedAction(field("action")) ?? "UNSUPPORTED: \(field("action"))"
                 let isTrade = action == "BUY" || action == "SELL"
-                let rawTicker = field("ticker")
-                let ticker = rawTicker.isEmpty && !isTrade ? "CASH" : Trading212Position.catfolioTicker(rawTicker)
+                let statedTicker = field("ticker")
+                // An ISIN becomes the listing's ticker, where the identity
+                // layer found one; otherwise it stays as it was given.
+                let rawTicker = resolvedISINs[statedTicker.uppercased()] ?? statedTicker
+                let ticker = rawTicker.isEmpty && !isTrade ? "CASH"
+                    : resolvedISINs[statedTicker.uppercased()] ?? Trading212Position.catfolioTicker(rawTicker)
                 guard !ticker.isEmpty else { throw LocalPortfolioError.invalidCSV(L10n.text("交易缺少股票代码")) }
                 let quantity = isTrade ? abs(try number(field("quantity"))) : 1
                 let price = isTrade ? try number(field("price")) : (numericValue(field("total")) ?? numericValue(field("netCash")) ?? numericValue(field("price")) ?? 0)

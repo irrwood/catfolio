@@ -74,8 +74,8 @@ struct ReturnsView: View {
                 }
             }
             // 估值 · 成长 · 质量 is in 设置 › Lab 实验室.
-            TodayAttentionPreview()
-            JEVTodayAttentionEntry()
+            // The analysis and JEV, as two tabs of one section.
+            TodayAttentionTabs()
         }
         // Only what the hero needs, so ordinary scrolling does not redraw
         // the page: the pull past the top, the bar's height, and whether the
@@ -880,34 +880,6 @@ private struct ReturnsChart: View {
 
             seriesCards(valuesAtDate)
 
-            if mode == .twr, hasDrawableLine,
-               let note = comparison.warnings?.first(where: { $0.hasPrefix("每日 TWR") }) {
-                Text(L10n.message(note))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
-                    .padding(.vertical, 8)
-            }
-            if mode == .mwr, hasDrawableLine,
-               let note = comparison.warnings?.first(where: { $0.hasPrefix("MWR：") }) {
-                Text(L10n.message(note)).font(.caption).foregroundStyle(.secondary)
-                    .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
-                    .padding(.vertical, 8)
-            }
-            if mode == .cashFlowMatched, hasDrawableLine,
-               let note = comparison.warnings?.first(where: { $0.hasPrefix("现金流镜像：") }) {
-                Text(L10n.message(note)).font(.caption).foregroundStyle(.secondary)
-                    .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
-                    .padding(.vertical, 8)
-            }
-            // Whatever the metric: part of the account's cash was implied.
-            if hasDrawableLine,
-               let note = comparison.warnings?.first(where: { $0.hasPrefix("资金流水不完整") }) {
-                Text(L10n.message(note)).font(.caption).foregroundStyle(.secondary)
-                    .padding(.horizontal, ReturnsChartLayout.contentHorizontalInset)
-                    .padding(.bottom, 8)
-            }
-
         }
         .onChange(of: mode) { _, _ in
             measuredRange = nil
@@ -964,14 +936,6 @@ private struct ReturnsChart: View {
                     }
                 }
             }
-            Button(action: onAddBenchmark) {
-                Label(L10n.text("添加对比"), systemImage: "plus")
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background { ReturnsGlassCardSurface() }
-            }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 20)
         .padding(.top, 23)
@@ -1778,14 +1742,31 @@ private struct ReturnsRankingRow: View {
     private var color: Color { ReturnsSeriesStyle.color(for: item.series) }
     private var isPortfolio: Bool { item.series == ReturnsSeriesStyle.portfolio }
 
+    /// The catalogue's own names are translated; one remembered from a
+    /// search is shown as found.
+    private var benchmarkName: String? {
+        guard let name = ComparisonBenchmarkCatalog.name(for: item.series) else { return nil }
+        return ComparisonBenchmarkCatalog.names[item.series] == name ? L10n.label(name) : name
+    }
+
     var body: some View {
         HStack(spacing: 16) {
             ReturnsRankBadge(rank: rank, color: color, isPortfolio: isPortfolio)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(isPortfolio ? "MY Portfolio" : item.series)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .lineLimit(1)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(isPortfolio ? "MY Portfolio" : item.series)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .lineLimit(1)
+                        .layoutPriority(1)
+                    // What the symbol is: "SPY 标普500".
+                    if !isPortfolio, let name = benchmarkName {
+                        Text(name)
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .foregroundStyle(.primary.opacity(0.5))
+                            .lineLimit(1)
+                    }
+                }
                 Text(item.amountValue.map { DisplayFormat.money($0) } ?? "—")
                     .font(.system(size: 15, weight: .regular, design: .rounded))
                     .foregroundStyle(.primary.opacity(0.5))

@@ -1159,8 +1159,10 @@ final class AppModel {
         source: String = "CSV",
         replacingAccountsOnly: Bool = false
     ) async throws -> CSVImportResult {
+        let isins = LocalCSVImporter.isinRequests(in: data)
+        let resolved = isins.isEmpty ? [:] : await SecurityIdentityResolver.shared.tickers(forISINs: isins)
         let (positions, transactions, result) = try await Task.detached(priority: .userInitiated) {
-            try LocalCSVImporter.parse(data)
+            try LocalCSVImporter.parse(data, resolvedISINs: resolved)
         }.value
         let namedPositions: [LocalPositionRecord]
         let namedTransactions: [LocalTransactionRecord]

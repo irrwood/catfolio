@@ -660,6 +660,13 @@ struct LocalMarketDataClient {
         }
     }
 
+    /// The volume profile from the same cached daily bars as the 52-week range.
+    func volumeRange(ticker: String, currency: String) async throws -> HoldingVolumeRange {
+        guard let range = HoldingVolumeRange(profile: try await volumeProfile(ticker: ticker, currency: currency))
+        else { throw LocalServiceError.noMarketData }
+        return range
+    }
+
     private func withVolumeBars<Value>(ticker: String, currency: String,
                                       forceRefresh: Bool = false, cachedOnly: Bool = false,
                                       transform: ([MarketDailyBar]) throws -> Value) async throws -> Value {

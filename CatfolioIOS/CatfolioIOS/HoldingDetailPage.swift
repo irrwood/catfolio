@@ -621,6 +621,9 @@ struct HoldingDetailAccountSelector: View {
             .padding(.vertical, 12)
         }
         .scrollIndicators(.hidden)
+        // Only a row wider than the screen takes horizontal drags. One that
+        // fits still bounced, and so caught a swipe back that began on it.
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
         .accessibilityElement(children: .contain)
     }
 
@@ -886,6 +889,7 @@ struct HoldingDetailLoadingPlaceholder: View {
                     .padding(.vertical, 14)
                 }
                 .scrollIndicators(.hidden)
+                .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
                 .frame(height: 92)
             }
             .padding(.top, 15)

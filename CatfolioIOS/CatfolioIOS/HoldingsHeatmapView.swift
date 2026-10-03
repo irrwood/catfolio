@@ -563,6 +563,7 @@ private struct HoldingsHeatmapRemainderDetail: View {
     @State private var loadingQuotes = false
     @State private var selectedHolding: Holding?
     @State private var isHoldingPresented = false
+    @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
@@ -640,6 +641,7 @@ private struct HoldingsHeatmapRemainderDetail: View {
     private func openHolding(_ holding: Holding) {
         guard selectedHolding == nil, !isHoldingPresented else { return }
         isHoldingPresented = true
+        HoldingDetailContentView.prefetch(holding, model: appModel)
         selectedHolding = holding
     }
 

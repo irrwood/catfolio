@@ -18,6 +18,16 @@ enum LocalServiceKeys {
     /// OpenRouter's own router, which picks a model for each request.
     static let defaultOpenRouterModel = "openrouter/auto"
 
+    /// Not a secret, so in UserDefaults: which DeepSeek model answers.
+    static let deepSeekModel = "catfolio.deepseek.model"
+    static let defaultDeepSeekModel = "deepseek-chat"
+
+    static var deepSeekModelID: String {
+        let stored = UserDefaults.standard.string(forKey: deepSeekModel)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return stored.isEmpty ? defaultDeepSeekModel : stored
+    }
+
     static var openRouterModelID: String {
         let stored = UserDefaults.standard.string(forKey: openRouterModel)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -235,5 +245,52 @@ extension Array where Element: Hashable {
     func uniqued() -> [Element] {
         var seen = Set<Element>()
         return filter { seen.insert($0).inserted }
+    }
+}
+
+/// A model a provider offers, as its `/models` endpoint lists it.
+struct AIModelOption: Identifiable, Hashable, Sendable {
+    let id: String
+    let name: String
+}
+
+/// Reads the models an AI provider currently offers, so one can be picked
+/// rather than typed.
+enum AIModelCatalog {
+    static func supports(_ provider: LocalServiceProvider) -> Bool {
+        provider == .openRouter || provider == .deepSeek
+    }
+
+    static func fetch(_ provider: LocalServiceProvider, key: String?) async throws -> [AIModelOption] {
+        let url: URL
+        switch provider {
+        case .openRouter: url = URL(string: "https://openrouter.ai/api/v1/models")!
+        case .deepSeek: url = URL(string: "https://api.deepseek.com/models")!
+        default: return []
+        }
+        var request = URLRequest(url: url, timeoutInterval: 20)
+        if let key, !key.isEmpty { request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            throw http.statusCode == 401
+                ? LocalServiceError.remote(L10n.text("API Key 无效或未填写，无法获取模型列表。"))
+                : LocalServiceError.invalidResponse
+        }
+        return try decode(data)
+    }
+
+    static func decode(_ data: Data) throws -> [AIModelOption] {
+        struct Payload: Decodable {
+            struct Model: Decodable { let id: String; let name: String? }
+            let data: [Model]
+        }
+        let models = try JSONDecoder().decode(Payload.self, from: data).data
+        var seen = Set<String>()
+        return models.compactMap { model in
+            let id = model.id.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !id.isEmpty, seen.insert(id).inserted else { return nil }
+            return AIModelOption(id: id, name: model.name?.isEmpty == false ? model.name! : id)
+        }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 }

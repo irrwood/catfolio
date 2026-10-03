@@ -251,13 +251,15 @@ struct HistoryView: View {
                     description: Text(L10n.message(errorMessage))
                 )
             } else {
-                HistoryPagingView(selection: $category, contentID: HistoryPageContentID(
+                HistoryPagingView(selection: $category, categories: visibleCategories, contentID: HistoryPageContentID(
                     ledger: preparedLedger.contentID, basis: taxYearBasisRaw,
                     year: selectedTaxYear, forecast: dividendForecastUSD, gains: buyGains.count
                 )) { pageCategory in
                     AnyView(historyList(for: pageCategory))
                 }
                 .ignoresSafeArea(.container, edges: [.top, .bottom])
+                // A different set of tabs is a different pager.
+                .id(visibleCategories)
             }
         }
         // Cover the home-indicator safe area, not just the list's safe frame.
@@ -346,6 +348,20 @@ struct HistoryView: View {
                     break
                 }
                 await synchronizeTrading212History()
+            }
+        }
+    }
+
+    /// On a security's own history, only the tabs with something in them:
+    /// a share pays no interest, and most have no fund charge. The whole
+    /// ledger keeps every tab, so its layout does not move with the data.
+    private var visibleCategories: [HistoryCategory] {
+        guard ticker != nil else { return HistoryCategory.allCases }
+        return HistoryCategory.allCases.filter { category in
+            switch category {
+            case .all: true
+            case .fees: !feeCharges.isEmpty
+            default: !preparedLedger.page(category: category, basis: taxYearBasis, year: nil).activities.isEmpty
             }
         }
     }
@@ -1218,7 +1234,8 @@ struct HistoryDividendCard: View {
                                 Text(percentage(row)).appNumber(.subheading, weight: .regular)
                                     .opacity(0.5).fixedSize()
                             }
-                            .foregroundStyle(CatfolioPalette.dividendSelection)
+                            // The same colour as the selected holding's segment.
+                            .foregroundStyle(segmentColor(row))
                         }
                     }
                     .accessibilityLabel(L10n.text("股息来源占比"))
@@ -1270,6 +1287,13 @@ struct HistoryDividendCard: View {
             .padding(.vertical, 16)
         }
         .background(SettingsTemplate.card, in: RoundedRectangle(cornerRadius: 24))
+    }
+
+    private func segmentColor(_ row: HistoryDividendBreakdown.Row) -> Color {
+        guard let index = breakdown.rows.firstIndex(where: { $0.id == row.id }) else {
+            return CatfolioPalette.dividendSelection
+        }
+        return CatfolioPalette.dividendSeries[index % CatfolioPalette.dividendSeries.count]
     }
 
     private func percentage(_ row: HistoryDividendBreakdown.Row) -> String {

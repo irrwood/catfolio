@@ -133,3 +133,99 @@ struct Holding52WeekPositions {
         self.start = start.map(y)
     }
 }
+
+/// The volume counterpart of the 52-week range: where the price and the
+/// cost sit within the volume profile — the prices the last 160 sessions
+/// actually traded at — rather than within the year's high and low.
+struct HoldingVolumeRange: Equatable, Sendable {
+    struct Bin: Equatable, Sendable {
+        let low: Double
+        let high: Double
+        let volume: Double
+    }
+
+    let bins: [Bin]
+    let valueAreaLow: Double
+    let pointOfControl: Double
+    let valueAreaHigh: Double
+    let currency: String
+
+    init(bins: [Bin], valueAreaLow: Double, pointOfControl: Double, valueAreaHigh: Double, currency: String) {
+        self.bins = bins
+        self.valueAreaLow = valueAreaLow
+        self.pointOfControl = pointOfControl
+        self.valueAreaHigh = valueAreaHigh
+        self.currency = currency
+    }
+
+    init?(profile: VolumeProfile) {
+        let bins = (profile.bins ?? []).compactMap { bin -> Bin? in
+            guard bin.priceLow.isFinite, bin.priceHigh.isFinite, bin.volume.isFinite,
+                  bin.priceLow > 0, bin.priceHigh >= bin.priceLow, bin.volume >= 0 else { return nil }
+            return Bin(low: bin.priceLow, high: bin.priceHigh, volume: bin.volume)
+        }
+        guard profile.available, !bins.isEmpty,
+              [profile.valueAreaLow, profile.pointOfControl, profile.valueAreaHigh].allSatisfy({ $0.isFinite && $0 > 0 }),
+              profile.valueAreaLow <= profile.valueAreaHigh else { return nil }
+        self.init(bins: bins, valueAreaLow: profile.valueAreaLow, pointOfControl: profile.pointOfControl,
+                  valueAreaHigh: profile.valueAreaHigh, currency: profile.currency)
+    }
+
+    /// Where a price sits in the value area: 0 at its low edge, 1 at its high;
+    /// below 0 or above 1 outside it, where volume thins out.
+    func valueAreaPosition(of price: Double?) -> Double? {
+        guard let price, price.isFinite, price > 0, valueAreaHigh > valueAreaLow else { return nil }
+        let position = (price - valueAreaLow) / (valueAreaHigh - valueAreaLow)
+        return position.isFinite ? position : nil
+    }
+
+    static func load(_ requests: [Holding52WeekRequest],
+                     fetch: @escaping @Sendable (Holding52WeekRequest) async throws -> Self = {
+                         try await LocalMarketDataClient().volumeRange(ticker: $0.ticker, currency: $0.currency)
+                     }) async -> [String: Self] {
+        await withTaskGroup(of: (String, Self?).self) { group in
+            var iterator = requests.makeIterator()
+            var result: [String: Self] = [:]
+            for _ in 0..<min(4, requests.count) {
+                guard !Task.isCancelled, let request = iterator.next() else { break }
+                group.addTask { (request.ticker, try? await fetch(request)) }
+            }
+            for await (ticker, range) in group {
+                guard !Task.isCancelled else { group.cancelAll(); break }
+                if let range { result[ticker] = range }
+                if let request = iterator.next() {
+                    group.addTask { (request.ticker, try? await fetch(request)) }
+                }
+            }
+            return result
+        }
+    }
+}
+
+/// Price and cost against a volume profile, in the profile's currency.
+struct HoldingVolumePrices {
+    let current: Double?
+    let cost: Double?
+    let currency: String?
+    let range: HoldingVolumeRange?
+
+    init(holding: Holding?, range: HoldingVolumeRange?,
+         usdRate: (String) -> Double? = LocalPortfolioEngine.usdRate(for:)) {
+        let prices = Holding52WeekPrices(holding: holding, range: nil, usdRate: usdRate)
+        self.range = range
+        currency = range?.currency ?? prices.currency
+        if let range, let from = prices.currency {
+            current = prices.current.flatMap {
+                VolumeProfileInterpretation.convertedPrice($0, from: from, to: range.currency, usdRate: usdRate)
+            }
+            cost = prices.cost.flatMap {
+                VolumeProfileInterpretation.convertedPrice($0, from: from, to: range.currency, usdRate: usdRate)
+            }
+        } else {
+            current = prices.current
+            cost = prices.cost
+        }
+    }
+
+    var valueAreaPosition: Double? { range?.valueAreaPosition(of: current) }
+}

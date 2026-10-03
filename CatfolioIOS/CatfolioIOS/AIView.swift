@@ -1773,17 +1773,34 @@ private struct PortfolioAttentionCardContent: View {
     static let cornerRadius: CGFloat = 24
 
     @Environment(\.locale) private var appLocale
+    @Environment(AppModel.self) private var model: AppModel?
     let row: PortfolioAttentionHolding
     var prominent = false
 
+    /// The held position, for the home list's logo and name.
+    private var holding: Holding? {
+        model?.holdings.first { $0.ticker.caseInsensitiveCompare(row.ticker) == .orderedSame }
+    }
+
+    /// Named as the home list names it: the company, then the ticker.
+    private var companyName: String {
+        holding?.shortName ?? CompanyNameCatalog.displayName(ticker: row.ticker, fallback: row.displayName)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: prominent ? 16 : 10) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(row.ticker).font(prominent ? .title2.bold() : .headline)
-                    Text(row.displayName).font(prominent ? .subheadline : .caption).foregroundStyle(.secondary)
+            HStack(alignment: .center, spacing: 10) {
+                AssetLogo(ticker: row.ticker, logoSymbol: holding?.logoSymbol ?? row.ticker,
+                          size: prominent ? 48 : 44, cornerRadius: 12)
+                VStack(alignment: .leading, spacing: 2) {
+                    SecurityDisplayName(name: companyName, scale: prominent ? .heading : .body, weight: .semibold,
+                                        showsClassMarkers: false)
+                    Text(row.ticker)
+                        .appText(.footnote, weight: .medium)
+                        .foregroundStyle(Color(red: 142 / 255, green: 142 / 255, blue: 147 / 255))
+                        .lineLimit(1)
                 }
-                Spacer()
+                Spacer(minLength: 8)
                 HStack(spacing: 10) {
                     // A dot and a word in the level's colour, as the reader
                     // opens with — not a bordered pill competing with the
@@ -2272,9 +2289,11 @@ private struct AIComposer: View {
             // press effect, and the text field inside waited seconds for it.
             standardComposer
                 .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay(alignment: .bottomTrailing) { composerActionButton.padding(6) }
         } else {
             standardComposer
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay(alignment: .bottomTrailing) { composerActionButton.padding(6) }
         }
     }
 
@@ -2289,9 +2308,8 @@ private struct AIComposer: View {
                 .padding(.vertical, 11)
                 .submitLabel(.send)
                 .onSubmit(onSend)
-
-            composerActionButton
-                .padding(6)
+                // Room for the send button, drawn over the surface.
+                .padding(.trailing, 6 + 32 + 6)
         }
     }
 
@@ -2394,13 +2412,11 @@ private struct AIComposer: View {
                 .focused(focus)
                 .submitLabel(.send)
                 .onSubmit(onSend)
-
-            composerActionButton
         }
-        // Clear of the capsule's curve on the left; on the right the send
-        // button sits 8pt in all round, concentric with the capsule's end.
+        // Clear of the capsule's curve on the left; on the right, room for
+        // the send button, which sits 8pt in all round over the glass.
         .padding(.leading, 18)
-        .padding(.trailing, 8)
+        .padding(.trailing, 8 + 32 + 8)
         .padding(.vertical, 8)
         .frame(minHeight: 48)
     }
@@ -2412,6 +2428,11 @@ private struct AIComposer: View {
     private var floatingTextFieldSurface: some View {
         floatingTextField
             .floatingGlassSurface(in: Capsule(), isInteractive: false)
+            // Over the glass, not in it: glass blends what it holds, and the
+            // black circle came out a washed-out grey that read as disabled.
+            .overlay(alignment: .bottomTrailing) {
+                composerActionButton.padding(8)
+            }
     }
 
     private var canSend: Bool {

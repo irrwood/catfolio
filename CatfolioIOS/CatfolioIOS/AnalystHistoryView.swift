@@ -107,21 +107,11 @@ struct AnalystHistoryView: View {
                                 .foregroundStyle(.secondary).frame(height: 160)
                         }
                         legend
-                        Text(L10n.text(ratings ? "纵轴：评级数量，自下而上累计" : "单位 USD · 虚线为最高与最低目标价"))
-                            .font(.caption).foregroundStyle(.secondary)
                     }
                     .padding(20)
                     .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 20))
                     .overlay { RoundedRectangle(cornerRadius: 20).stroke(Color.primary.opacity(0.06)) }
-                    Text(L10n.text("每月推荐建议为该月份对应的过去一年评级分布，并非当月新增评级。股价来自同一来源的月度图表，不是当日收盘价。月份统计窗口与拆股调整口径尚未确认，不用于预测准确率计算。"))
-                        .font(.caption).foregroundStyle(.secondary)
-                    if snapshot?.warnings?.isEmpty == false {
-                        Text(L10n.text("部分月份目标价异常，已留空；未补值或连接缺失区间。"))
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
                     if let snapshot {
-                        Text(L10n.text("本地快照 · 采集于 ") + snapshot.retrievedOn)
-                            .font(.caption).foregroundStyle(.secondary)
                         Link("MarketBeat · " + symbol + " ↗", destination: URL(string: snapshot.sourceURL)!)
                             .font(.caption)
                     }

@@ -107,6 +107,8 @@ struct EarningsHistoryContent: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             chart.frame(width: max(geometry.size.width, CGFloat(points.count) * columnWidth))
                         }
+                        // Leaves a swipe back alone unless there is more to scroll.
+                        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
                     }
                     .frame(height: chartHeight)
                     .onAppear { ChartAppearanceHistory.record("earnings|\(symbol)") }

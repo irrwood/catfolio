@@ -1390,6 +1390,7 @@ private enum ChartTimeRangePickerMetrics {
 /// Tapping a selected grouped slot advances to its next range.
 enum ChartTimeRange: String, CaseIterable, Identifiable {
     case oneDay = "1D"
+    case threeDays = "3D"
     case oneWeek = "1W"
     case oneMonth = "1M"
     case twoMonths = "2M"
@@ -1405,8 +1406,10 @@ enum ChartTimeRange: String, CaseIterable, Identifiable {
     var title: String { L10n.label(rawValue) }
 
     static let choiceGroups: [[ChartTimeRange]] = [
-        [.oneWeek, .oneDay],
-        [.oneMonth, .twoMonths],
+        // A tap on the selected slot steps through its group: 1W → 1D → 3D,
+        // 1M → 2M → 3M.
+        [.oneWeek, .oneDay, .threeDays],
+        [.oneMonth, .twoMonths, .threeMonths],
         [.yearToDate, .sixMonths],
         [.oneYear, .twoYears],
         // Paired like every other slot. MAX was the only singleton, so it
@@ -1424,6 +1427,8 @@ enum ChartTimeRange: String, CaseIterable, Identifiable {
         switch self {
         case .oneDay:
             start = previousTradingDate ?? lastDate
+        case .threeDays:
+            start = calendar.date(byAdding: .day, value: -3, to: lastDate)
         case .oneWeek:
             start = calendar.date(byAdding: .day, value: -7, to: lastDate)
         case .oneMonth:
@@ -2056,12 +2061,17 @@ struct AssetLogo: View {
         onBrandColorResolved?(exportedThemeColor ?? AssetBrandColor.resolved(from: decoded.value, fallbackKey: logoSymbol ?? ticker))
     }
 
+    /// The letter tile in the exported logos' two versions, following the
+    /// same Logo 样式: light is a white tile with the letter in the brand
+    /// colour; dark is a brand-colour tile with an off-white letter.
     private var fallback: some View {
-        ZStack {
-            fallbackColor
+        let style = AssetLogoStyle(rawValue: logoStyleRaw) ?? .automatic
+        let dark = style.usesDarkLogo(darkAppearance: colorScheme == .dark)
+        return ZStack {
+            dark ? fallbackColor : Color.white
             Text(String(ticker.prefix(1)).uppercased())
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.white)
+                .font(.system(size: max(10, size * 0.42), weight: .bold, design: .rounded))
+                .foregroundStyle(dark ? Color(red: 0xF3 / 255, green: 0xF6 / 255, blue: 0xF9 / 255) : fallbackColor)
         }
     }
 

@@ -31,6 +31,7 @@ struct PortfolioDetailsCard: View {
     }
     @AppStorage("portfolio.holdings.mergeETF") private var mergesETF = false
     @AppStorage("portfolio.holdings.shows52Week") private var shows52Week = false
+    @AppStorage("portfolio.holdings.showsVolume") private var showsVolume = false
     @State private var selectedMergedRow: ETFLookThroughRow?
     private var showsMergedHoldings: Bool {
         mergesETF || LaunchArguments.contains("--show-merged-etf") || LaunchArguments.contains("--show-etf")
@@ -55,6 +56,9 @@ struct PortfolioDetailsCard: View {
     @State private var week52SortRanges: [String: Holding52WeekRange] = [:]
     @State private var isLoadingWeek52Sort = false
     @State private var week52SortGeneration = 0
+    @State private var volumeSortRanges: [String: HoldingVolumeRange] = [:]
+    @State private var isLoadingVolumeSort = false
+    @State private var volumeSortGeneration = 0
     @State private var heatmapPerformancePeriod: HoldingPerformancePeriod = .today
     @State private var heatmapGroupsBySector = LaunchArguments.all
         .contains("--group-heatmap-by-sector")
@@ -122,6 +126,16 @@ struct PortfolioDetailsCard: View {
             guard !Task.isCancelled, generation == week52SortGeneration else { return }
             week52SortRanges = ranges
         }
+        .task(id: volumeSortLoadKey) {
+            volumeSortGeneration &+= 1
+            let generation = volumeSortGeneration
+            guard !volumeSortLoadKey.isEmpty else { isLoadingVolumeSort = false; return }
+            isLoadingVolumeSort = true
+            defer { if generation == volumeSortGeneration { isLoadingVolumeSort = false } }
+            let ranges = await HoldingVolumeRange.load(week52SortRequests)
+            guard !Task.isCancelled, generation == volumeSortGeneration else { return }
+            volumeSortRanges = ranges
+        }
         .appSheet(item: $selectedMergedRow) { row in
             HoldingAmountSourcesPage(ticker: row.ticker, initialRow: row)
         }
@@ -185,7 +199,15 @@ struct PortfolioDetailsCard: View {
                     Label(L10n.text("ETF 穿透"), systemImage: showsMergedHoldings ? "checkmark" : "square.3.layers.3d")
                 }
                 Divider()
-                Toggle(L10n.text("52 周"), isOn: $shows52Week)
+                // One of the two at a time: they share the row's right side.
+                Toggle(L10n.text("52 周"), isOn: Binding(get: { shows52Week && !showsVolume }, set: {
+                    shows52Week = $0
+                    if $0 { showsVolume = false }
+                }))
+                Toggle(L10n.text("成交量"), isOn: Binding(get: { showsVolume }, set: {
+                    showsVolume = $0
+                    if $0 { shows52Week = false }
+                }))
             } label: {
                 // The list's name, then its count with the day in small
                 // type — the title no longer carries the app's name.
@@ -206,7 +228,10 @@ struct PortfolioDetailsCard: View {
             .buttonStyle(.plain)
 
             Spacer()
-            if isLoadingWeek52Sort {
+            if isLoadingVolumeSort {
+                ProgressView().controlSize(.small)
+                    .accessibilityLabel(L10n.text("正在读取成交量分布…"))
+            } else if isLoadingWeek52Sort {
                 ProgressView().controlSize(.small)
                     .accessibilityLabel(L10n.text("正在读取 52 周范围…"))
             }
@@ -289,7 +314,13 @@ struct PortfolioDetailsCard: View {
 
     private var listItems: [PortfolioHoldingListItem] {
         PortfolioHoldingListItem.sorted(unsortedListItems, by: holdingSortField, ascending: holdingSortAscending,
-            week52Ranges: week52SortRanges)
+            week52Ranges: week52SortRanges, volumeRanges: volumeSortRanges)
+    }
+
+    private var volumeSortLoadKey: String {
+        guard !showsHeatmap, holdingSortField == .volumeArea else { return "" }
+        return "\(model.localUpdatedAt?.timeIntervalSince1970 ?? 0)|"
+            + week52SortRequests.map { "\($0.ticker):\($0.currency)" }.joined(separator: "|")
     }
 
     private var week52SortRequests: [Holding52WeekRequest] {
@@ -323,7 +354,11 @@ struct PortfolioDetailsCard: View {
                     if let detail { onSelect(detail) }
                     else if case let .exposure(row, _, _, _) = item { selectedMergedRow = row }
                 } label: {
-                    if shows52Week {
+                    if showsVolume {
+                        HoldingVolumeRow(item: item, performancePeriod: holdingPerformancePeriod,
+                            suppliedRange: holdingSortField == .volumeArea ? volumeSortRanges[item.ticker.uppercased()] : nil,
+                            loadsRange: holdingSortField != .volumeArea)
+                    } else if shows52Week {
                         Holding52WeekRow(item: item, performancePeriod: holdingPerformancePeriod,
                             suppliedRange: holdingSortField == .week52Position ? week52SortRanges[item.ticker.uppercased()] : nil,
                             loadsRange: holdingSortField != .week52Position)
@@ -409,6 +444,7 @@ enum HoldingSortField: String, CaseIterable, Identifiable {
     case unrealized
     case unrealizedPercent
     case week52Position
+    case volumeArea
     case name
 
     var id: String { rawValue }
@@ -419,6 +455,7 @@ enum HoldingSortField: String, CaseIterable, Identifiable {
         case .unrealized: L10n.text("盈利")
         case .unrealizedPercent: L10n.text("收益率")
         case .week52Position: L10n.text("52 周位置")
+        case .volumeArea: L10n.text("成交密集区位置")
         case .name: L10n.text("名称")
         }
     }
@@ -429,6 +466,7 @@ enum HoldingSortField: String, CaseIterable, Identifiable {
         case .unrealized: L10n.text("P&L")
         case .unrealizedPercent: L10n.text("Return")
         case .week52Position: L10n.text("52 周位置")
+        case .volumeArea: L10n.text("成交密集区位置")
         case .name: L10n.text("Name")
         }
     }
@@ -689,12 +727,14 @@ struct HoldingRow: View {
     let item: PortfolioHoldingListItem
     let performancePeriod: HoldingPerformancePeriod
     let week52: Holding52WeekPrices?
+    let volume: HoldingVolumePrices?
 
     init(item: PortfolioHoldingListItem, performancePeriod: HoldingPerformancePeriod,
-         week52: Holding52WeekPrices? = nil) {
+         week52: Holding52WeekPrices? = nil, volume: HoldingVolumePrices? = nil) {
         self.item = item
         self.performancePeriod = performancePeriod
         self.week52 = week52
+        self.volume = volume
     }
 
     init(holding: Holding, performancePeriod: HoldingPerformancePeriod, dailyChangePercent: Double?) {
@@ -704,7 +744,13 @@ struct HoldingRow: View {
 
     @ViewBuilder
     var body: some View {
-        if let week52 {
+        if let volume {
+            content
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(item.name + "，" + item.ticker)
+                .accessibilityValue(volumeDescription(volume))
+                .accessibilityHint(L10n.text(item.ticker == "ETF 其他" ? "金额来源" : "打开个股"))
+        } else if let week52 {
             content
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(item.name + "，" + item.ticker)
@@ -736,7 +782,9 @@ struct HoldingRow: View {
                                     .layoutPriority(1)
                                 Spacer(minLength: 4)
                                 // Keep the existing 1pt optical alignment of the number.
-                                if let week52 {
+                                if let volume {
+                                    price(volume.current, currency: volume.currency, isCost: false).offset(y: -1)
+                                } else if let week52 {
                                     price(week52.current, currency: week52.currency, isCost: false).offset(y: -1)
                                 } else {
                                     amount.offset(y: -1)
@@ -745,7 +793,9 @@ struct HoldingRow: View {
                             HStack(alignment: .center, spacing: 5) {
                                 subtitle
                                 Spacer(minLength: 2)
-                                if let week52 {
+                                if let volume {
+                                    price(volume.cost, currency: volume.currency, isCost: true)
+                                } else if let week52 {
                                     price(week52.cost, currency: week52.currency, isCost: true)
                                 } else {
                                     HoldingPerformanceLabel(performance: item.performance)
@@ -753,7 +803,8 @@ struct HoldingRow: View {
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        if let week52 { Holding52WeekBar(positions: week52.positions) }
+                        if let volume { HoldingVolumeProfileBar(prices: volume) }
+                        else if let week52 { Holding52WeekBar(positions: week52.positions) }
                     }
                 }
             }
@@ -773,7 +824,18 @@ struct HoldingRow: View {
                     SecurityDisplayName(name: item.name, scale: .body, weight: .semibold, singleLine: false)
                 }
             }
-            if let week52 {
+            if let volume {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(L10n.text("现价") + " " + priceText(volume.current, currency: volume.currency))
+                            .appNumber(.callout, weight: .semibold)
+                        Text(L10n.text("成本价") + " " + priceText(volume.cost, currency: volume.currency))
+                            .appNumber(.footnote, weight: .medium).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    HoldingVolumeProfileBar(prices: volume)
+                }
+            } else if let week52 {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(L10n.text("现价") + " " + priceText(week52.current, currency: week52.currency))
@@ -853,6 +915,19 @@ struct HoldingRow: View {
         return DisplayFormat.money(value, currency: currency)
     }
 
+    private func volumeDescription(_ prices: HoldingVolumePrices) -> String {
+        var parts = [L10n.text("现价") + " " + priceText(prices.current, currency: prices.currency),
+                     L10n.text("成本价") + " " + priceText(prices.cost, currency: prices.currency)]
+        if let range = prices.range {
+            parts.append(L10n.text("成交密集区") + " " + priceText(range.valueAreaLow, currency: range.currency)
+                + " – " + priceText(range.valueAreaHigh, currency: range.currency))
+            parts.append(L10n.text("成交最密集") + " " + priceText(range.pointOfControl, currency: range.currency))
+        } else {
+            parts.append(L10n.text("成交量分布暂无数据"))
+        }
+        return parts.joined(separator: "，")
+    }
+
     private func week52Description(_ prices: Holding52WeekPrices) -> String {
         var parts = [L10n.text("现价") + " " + priceText(prices.current, currency: prices.currency),
                      L10n.text("成本价") + " " + priceText(prices.cost, currency: prices.currency)]
@@ -923,7 +998,7 @@ struct HoldingPerformanceLabel: View {
     }
 }
 
-private struct SecurityDisplayName: View {
+struct SecurityDisplayName: View {
     let name: String
     let scale: TypeScale
     let weight: Font.Weight
@@ -1048,5 +1123,75 @@ struct HoldingMetrics: View {
         guard let performance else { return L10n.text("\(period.title)暂无数据") }
         return "\(DisplayFormat.money(performance.amount, signed: true, fractionDigits: 2)) "
             + "· \(DisplayFormat.percent(performance.percent))"
+    }
+}
+
+/// Whether a listing's exchange is in its regular session now, from the
+/// ticker's market suffix. Weekends count as closed; exchange holidays are
+/// not known here and read as open.
+enum MarketHours {
+    private struct Session {
+        let timeZone: String
+        let open: Int   // minutes after midnight, local
+        let close: Int
+    }
+
+    private static func session(for ticker: String) -> Session {
+        let symbol = ticker.uppercased()
+        func local(_ zone: String, _ open: (Int, Int), _ close: (Int, Int)) -> Session {
+            Session(timeZone: zone, open: open.0 * 60 + open.1, close: close.0 * 60 + close.1)
+        }
+        if symbol.hasSuffix(".L") { return local("Europe/London", (8, 0), (16, 30)) }
+        if symbol.hasSuffix(".DE") || symbol.hasSuffix(".F") { return local("Europe/Berlin", (9, 0), (17, 30)) }
+        if symbol.hasSuffix(".PA") || symbol.hasSuffix(".AS") || symbol.hasSuffix(".BR") || symbol.hasSuffix(".LS") {
+            return local("Europe/Paris", (9, 0), (17, 30))
+        }
+        if symbol.hasSuffix(".MI") { return local("Europe/Rome", (9, 0), (17, 30)) }
+        if symbol.hasSuffix(".MC") { return local("Europe/Madrid", (9, 0), (17, 30)) }
+        if symbol.hasSuffix(".SW") { return local("Europe/Zurich", (9, 0), (17, 30)) }
+        if symbol.hasSuffix(".CO") { return local("Europe/Copenhagen", (9, 0), (17, 0)) }
+        if symbol.hasSuffix(".ST") { return local("Europe/Stockholm", (9, 0), (17, 30)) }
+        if symbol.hasSuffix(".HK") { return local("Asia/Hong_Kong", (9, 30), (16, 0)) }
+        if symbol.hasSuffix(".T") { return local("Asia/Tokyo", (9, 0), (15, 30)) }
+        if symbol.hasSuffix(".TO") { return local("America/Toronto", (9, 30), (16, 0)) }
+        return local("America/New_York", (9, 30), (16, 0))
+    }
+
+    static func isOpen(ticker: String, at date: Date = Date()) -> Bool {
+        let session = session(for: ticker)
+        guard let zone = TimeZone(identifier: session.timeZone) else { return true }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let parts = calendar.dateComponents([.weekday, .hour, .minute], from: date)
+        guard let weekday = parts.weekday, (2...6).contains(weekday) else { return false }
+        let minute = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        return minute >= session.open && minute < session.close
+    }
+}
+
+/// Outside the listing's trading session: a moon, in the class badge's shape,
+/// purple on a pale purple ground. Checks again every minute.
+struct MarketClosedBadge: View {
+    let ticker: String
+    @Environment(\.colorScheme) private var colorScheme
+    @ScaledMetric(relativeTo: .caption) private var badgeHeight: CGFloat = 18
+    private let purple = Color(red: 0.545, green: 0.361, blue: 0.965)
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            if !MarketHours.isOpen(ticker: ticker, at: context.date) {
+                HStack(spacing: 2) {
+                    Image(systemName: "moon.fill").font(.system(size: 9, weight: .semibold))
+                    Text(L10n.text("休市")).appText(.caption, weight: .medium)
+                }
+                .foregroundStyle(purple)
+                .padding(.horizontal, 4)
+                .frame(height: badgeHeight)
+                .background(purple.opacity(colorScheme == .dark ? 0.24 : 0.12), in: RoundedRectangle(cornerRadius: 3))
+                .fixedSize()
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(L10n.text("非交易时段"))
+            }
+        }
     }
 }
