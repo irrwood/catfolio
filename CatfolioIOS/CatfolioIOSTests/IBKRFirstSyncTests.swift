@@ -3,6 +3,43 @@ import XCTest
 
 /// The parts of a new IBKR account's first sync that do not need IBKR.
 final class IBKRFirstSyncTests: XCTestCase {
+    private enum SaveFailure: Error { case denied }
+
+    func testSavingExistingAccountUsesItsKeysAndTrimmedCredentials() throws {
+        let credentials = try IBKRFlexCredentials(token: " 123456 ", queryID: " 789 ")
+        var saved: [String: String] = [:]
+        try IBKRFlexKeys.save(credentials, accountID: "U123") { saved[$1] = $0 }
+        XCTAssertEqual(saved, ["ibkr.flex.account.U123.token": "123456",
+                               "ibkr.flex.account.U123.query-id": "789"])
+    }
+
+    func testSavingBeforeFirstSyncUsesPendingKeys() throws {
+        let credentials = try IBKRFlexCredentials(token: "123456", queryID: "789")
+        var saved: [String: String] = [:]
+        try IBKRFlexKeys.save(credentials, accountID: nil) { saved[$1] = $0 }
+        XCTAssertEqual(saved, [IBKRFlexKeys.pendingToken: "123456",
+                               IBKRFlexKeys.pendingQueryID: "789"])
+    }
+
+    func testTokenWriteFailureStopsSaveAndPropagates() throws {
+        let credentials = try IBKRFlexCredentials(token: "123456", queryID: "789")
+        var attemptedKeys: [String] = []
+        XCTAssertThrowsError(try IBKRFlexKeys.save(credentials, accountID: "U123") { _, key in
+            attemptedKeys.append(key)
+            throw SaveFailure.denied
+        }) { XCTAssertTrue($0 is SaveFailure) }
+        XCTAssertEqual(attemptedKeys, [IBKRFlexKeys.token(accountID: "U123")])
+    }
+
+    func testQueryWriteFailureCannotReportSuccessfulPendingSave() throws {
+        let credentials = try IBKRFlexCredentials(token: "123456", queryID: "789")
+        var attemptedKeys: [String] = []
+        XCTAssertThrowsError(try IBKRFlexKeys.save(credentials, accountID: nil) { _, key in
+            attemptedKeys.append(key)
+            if key == IBKRFlexKeys.pendingQueryID { throw SaveFailure.denied }
+        }) { XCTAssertTrue($0 is SaveFailure) }
+        XCTAssertEqual(attemptedKeys, [IBKRFlexKeys.pendingToken, IBKRFlexKeys.pendingQueryID])
+    }
     private func position(_ account: String, _ symbol: String) -> IBKRFlexPosition {
         IBKRFlexPosition(accountID: account, symbol: symbol, name: symbol, currency: "USD", assetCategory: "STK",
                          quantity: 1, markPrice: 10, marketValue: 10, averageCost: 8, costBasis: 8,

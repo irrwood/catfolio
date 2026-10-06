@@ -109,6 +109,17 @@ struct PortfolioChartResponse: Codable {
         case marketDates = "market_dates"
     }
 
+    var isCurrentHoldingsOnly: Bool {
+        accountNAV == nil && positionHistory.rows.isEmpty
+    }
+
+    static func currentHoldings(overview: PortfolioOverview, positionCount: Int) -> Self {
+        Self(positionCount: positionCount, positionHistory: .init(available: false, rows: []),
+            currentPoint: .init(dateText: DayDateCodec.string(from: Date()),
+                marketValue: overview.summary.marketValue, cost: overview.summary.totalCost),
+            warning: L10n.text("历史行情缓存不完整，当前显示所选账户的持仓市值与成本。"))
+    }
+
     static func unavailableAccountHistory(positionCount: Int, reason: String) -> Self {
         Self(positionCount: positionCount, positionHistory: .init(available: false, rows: []),
             currentPoint: .init(dateText: "", marketValue: .nan, cost: .nan), warning: reason, accountNAV: [:])

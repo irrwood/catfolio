@@ -15,6 +15,8 @@ struct AIView: View {
     /// of whichever one is open; it is folded back in on every save and on
     /// every switch, so the two never drift.
     @State private var conversations: [AIConversation] = []
+    @State private var importedSecurityDebateKeys: Set<String> = []
+    @State private var debateStore = SecurityDebateStore.shared
     @State private var activeConversationID: UUID?
     @State private var showsSidebar = false
     /// How far the peeking conversation card is being dragged, negative up.
@@ -97,6 +99,10 @@ struct AIView: View {
                         }
                 }
             }
+        }
+        .task(id: appLocale.identifier) { await debateStore.restore() }
+        .onChange(of: debateStore.recent.map(\.conversationKey)) { _, _ in
+            importSecurityDebateConversations()
         }
         .confirmationDialog(L10n.text("清空本机 AI 对话？"), isPresented: $showsClearConfirmation) {
             Button(L10n.text("清空对话"), role: .destructive, action: clearConversation)
@@ -206,14 +212,6 @@ struct AIView: View {
                             }
                     }
 
-                    // Debates started from a security sheet finish in
-                    // SecurityDebateStore, not in any conversation: they are
-                    // listed on the new-chat page only, beside the presets,
-                    // rather than atop every conversation.
-                    if messages.isEmpty {
-                        SecurityDebateInbox()
-                    }
-
                     if hiddenMessageCount > 0 {
                         Button {
                             visibleMessageLimit += Self.messagePage
@@ -230,7 +228,9 @@ struct AIView: View {
                     ForEach(messages.suffix(visibleMessageLimit)) { message in
                         ChatBubble(
                             message: message,
-                            attentionReport: attentionReports[message.id]
+                            attentionReport: attentionReports[message.id],
+                            securityDebate: message.id == conversations.first(where: { $0.id == activeConversationID })?.securityDebateMessageID
+                                ? conversations.first(where: { $0.id == activeConversationID })?.securityDebate : nil
                         )
                             .id(message.id.uuidString)
                     }
@@ -391,13 +391,24 @@ struct AIView: View {
 
     private var conversationList: some View {
         Group {
-            if sidebarConversations.isEmpty {
+            if sidebarConversations.isEmpty && debateStore.runningTickers.isEmpty {
                 Text(L10n.text("还没有对话"))
                     .appText(.footnote)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
+                    ForEach(debateStore.runningTickers, id: \.self) { ticker in
+                        HStack(spacing: 10) {
+                            ProgressView().controlSize(.small)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("\(ticker) · \(L10n.text("个股关键变化"))").appText(.body)
+                                Text(L10n.text("\(ticker) 正在分析…")).appText(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(20)
+                        .listRowSeparator(.hidden)
+                    }
                     ForEach(sidebarConversations) { conversation in
                         Button {
                             openConversation(conversation.id)
@@ -574,6 +585,7 @@ struct AIView: View {
         defer {
             resetConversationScrollPosition()
             isRestoringHistory = false
+            importSecurityDebateConversations()
         }
 
         // Demo and public-investor modes never touch the library on disk, so
@@ -585,6 +597,7 @@ struct AIView: View {
             attentionReports = [:]
             lastAttentionContext = nil
             conversations = []
+            importedSecurityDebateKeys = []
             activeConversationID = UUID()
             return
         }
@@ -596,6 +609,7 @@ struct AIView: View {
             lastAttentionContext = FakeAIContent.attentionReport.contextSummary
             errorMessage = nil
             conversations = []
+            importedSecurityDebateKeys = []
             activeConversationID = UUID()
             foldActiveConversationIntoLibrary()
             return
@@ -610,6 +624,7 @@ struct AIView: View {
                 LocalChatLibraryCache.library = library
             }
             conversations = library.conversations
+            importedSecurityDebateKeys = library.importedSecurityDebateKeys
             let opened = library.active ?? library.sortedByRecency.first
             // A device with no history still needs somewhere to put the first
             // message, so an empty library opens an unsaved conversation.
@@ -800,7 +815,9 @@ struct AIView: View {
             title: existing?.title ?? AIConversation.derivedTitle(from: messages),
             messages: messages,
             attentionReports: attentionReports,
-            updatedAt: .now
+            updatedAt: .now,
+            securityDebate: existing?.securityDebate,
+            securityDebateMessageID: existing?.securityDebateMessageID
         )
         if let index = conversations.firstIndex(where: { $0.id == activeConversationID }) {
             conversations[index] = updated
@@ -813,12 +830,24 @@ struct AIView: View {
         guard !model.isFakeDataMode && !model.isPublicInvestorMode else { return }
         foldActiveConversationIntoLibrary()
         do {
-            let library = LocalChatLibrary(conversations: conversations, activeID: activeConversationID)
+            let library = LocalChatLibrary(conversations: conversations, activeID: activeConversationID,
+                importedSecurityDebateKeys: importedSecurityDebateKeys)
             LocalChatLibraryCache.library = library
             try await LocalChatStore.shared.save(library)
         } catch {
             errorMessage = L10n.text("无法保存本机对话：\(error.localizedDescription)")
         }
+    }
+
+    private func importSecurityDebateConversations() {
+        guard !isRestoringHistory else { return }
+        foldActiveConversationIntoLibrary()
+        var library = LocalChatLibrary(conversations: conversations, activeID: activeConversationID,
+            importedSecurityDebateKeys: importedSecurityDebateKeys)
+        guard library.importSecurityDebates(debateStore.recent) else { return }
+        conversations = library.conversations
+        importedSecurityDebateKeys = library.importedSecurityDebateKeys
+        Task { await persistLibrary() }
     }
 
     /// Opens an empty conversation. The current one is kept.
@@ -871,7 +900,8 @@ struct AIView: View {
     private func persistLibrary() async {
         guard !model.isFakeDataMode && !model.isPublicInvestorMode else { return }
         do {
-            let library = LocalChatLibrary(conversations: conversations, activeID: activeConversationID)
+            let library = LocalChatLibrary(conversations: conversations, activeID: activeConversationID,
+                importedSecurityDebateKeys: importedSecurityDebateKeys)
             LocalChatLibraryCache.library = library
             try await LocalChatStore.shared.save(library)
         } catch {
@@ -1078,6 +1108,7 @@ private struct ChatBubble: View {
     @Environment(\.locale) private var appLocale
     let message: ChatMessage
     let attentionReport: PortfolioAttentionReport?
+    var securityDebate: SecurityDebate? = nil
 
     @ViewBuilder
     var body: some View {
@@ -1104,7 +1135,9 @@ private struct ChatBubble: View {
 
     @ViewBuilder
     private var messageContent: some View {
-        if let attentionReport, message.role == .assistant {
+        if let securityDebate, message.role == .assistant {
+            SecurityDebateSection(debate: securityDebate)
+        } else if let attentionReport, message.role == .assistant {
             PortfolioAttentionReportView(report: attentionReport)
         } else if message.role == .assistant {
             VStack(alignment: .leading, spacing: 12) {
@@ -1340,7 +1373,7 @@ private struct PortfolioAttentionDetail: View {
         .softTopScrollEdge()
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
-        .toolbarVisibility(.hidden, for: .tabBar)
+        .hidesTabBarWhenPushed()
         .overlay(alignment: .trailing) {
             // Keep the additional left-swipe gesture at the right edge so the
             // article keeps its normal scrolling gestures.

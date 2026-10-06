@@ -117,13 +117,13 @@ enum AIProviderPreference: String, CaseIterable, Identifiable {
         case .apple:
             return (LocalAIClient.appleModelStatus.isAvailable, LocalAIClient.appleModelStatus.message)
         case .codex:
-            return (CodexOAuthClient.cachedConnected, L10n.text("Codex 尚未连接"))
+            return AIProviderPreference.automatic.readiness
         case .deepSeek:
             return (hasDeepSeekKey, L10n.text("DeepSeek 模式需要 API Key。请在设置中填写，Key 只保存在此 iPhone。"))
         case .openRouter:
             return (LocalServiceKeys.hasOpenRouterKey, L10n.text("OpenRouter 需要 API Key，请在设置 › 服务商中填写。"))
         case .automatic:
-            let ready = LocalAIClient.appleModelStatus.isAvailable || CodexOAuthClient.cachedConnected
+            let ready = LocalAIClient.appleModelStatus.isAvailable
                 || LocalServiceKeys.hasOpenRouterKey || hasDeepSeekKey
             return (ready, L10n.text("没有可用的 AI：请在设置 › 服务商中连接一个模型。"))
         }

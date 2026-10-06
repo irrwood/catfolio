@@ -41,13 +41,13 @@ struct HoldingDetailHeader: View {
             HoldingQuoteTradeLayout(quoteColumnWidth: quoteColumnWidth) {
                 if let onRefresh {
                     Button {
+                        guard !isRefreshing else { return }
                         refreshTaps += 1
                         onRefresh()
                     } label: {
                         quote
                     }
                     .buttonStyle(.plain)
-                    .disabled(isRefreshing)
                     .sensoryFeedback(.impact(weight: .light), trigger: refreshTaps) { _, _ in hapticsEnabled }
                     .accessibilityHint(L10n.text("刷新行情"))
                     .accessibilityIdentifier("holding-detail-refresh")
@@ -177,9 +177,6 @@ struct HoldingDetailHeader: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.65)
                         .allowsTightening(true)
-                    if isRefreshing {
-                        ChartSkeletonShape(width: 16, height: 16, cornerRadius: 8).chartLoadingShimmer()
-                    }
                 }
                 // 0 until the day's move is known, then counts to it in place:
                 // the line never appears, disappears or changes size.

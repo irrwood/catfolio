@@ -25,7 +25,7 @@ struct RootTabView: View {
             initialSelection = .assistant
         } else if arguments.contains("--show-returns-page") || arguments.contains("--show-heatmap") {
             initialSelection = .returns
-        } else if arguments.contains("--show-research-tab") || arguments.contains("--show-policy-composer") || arguments.contains("--show-dca") {
+        } else if arguments.contains("--show-research-tab") || arguments.contains("--show-dca") {
             initialSelection = .research
         } else if arguments.contains("--show-settings") || showsLocalServiceRoute {
             initialSelection = .settings
@@ -220,5 +220,49 @@ extension View {
         onOffsetChange: @escaping (CGFloat) -> Void = { _ in }
     ) -> some View {
         modifier(RootTabBarScrollTracking(onOffsetChange: onOffsetChange, onPhaseChange: onPhaseChange))
+    }
+}
+
+/// UIKit's `hidesBottomBarWhenPushed` for a SwiftUI page: the tab bar slides
+/// away with the page beneath as this one pushes in, and slides back with it
+/// on the way out, following an interactive swipe — the system's own push.
+/// SwiftUI also needs an explicit visibility preference: marking the hosting
+/// controller alone does not reliably hide the bar in a SwiftUI TabView.
+private struct TabBarHidingAnchor: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> Anchor { Anchor() }
+    func updateUIViewController(_ controller: Anchor, context: Context) {}
+
+    final class Anchor: UIViewController {
+        override func willMove(toParent parent: UIViewController?) {
+            super.willMove(toParent: parent)
+            markPage(from: parent)
+        }
+
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            markPage(from: parent)
+        }
+
+        /// The controller the navigation stack pushed is the one whose
+        /// parent is the navigation controller; that is the one to mark.
+        private func markPage(from start: UIViewController?) {
+            var current = start
+            while let controller = current {
+                if controller.parent is UINavigationController {
+                    controller.hidesBottomBarWhenPushed = true
+                    return
+                }
+                current = controller.parent
+            }
+        }
+    }
+}
+
+extension View {
+    /// Hides the tab bar while this page is on screen, with the system's
+    /// push animation.
+    func hidesTabBarWhenPushed() -> some View {
+        toolbarVisibility(.hidden, for: .tabBar)
+            .background(TabBarHidingAnchor().frame(width: 0, height: 0).accessibilityHidden(true))
     }
 }

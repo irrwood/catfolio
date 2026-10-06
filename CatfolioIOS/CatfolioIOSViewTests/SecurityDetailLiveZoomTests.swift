@@ -5,6 +5,31 @@ import XCTest
 
 @MainActor
 final class SecurityDetailLiveZoomTests: XCTestCase {
+    func testProductionSecurityPageOpenLatency() async throws {
+        let defaults = UserDefaults(suiteName: "security-open-latency-\(UUID())")!
+        defaults.set(true, forKey: "catfolio.fakeDataMode")
+        defaults.set(false, forKey: PublicInvestorPreferences.enabledKey)
+        let model = AppModel(defaults: defaults, personalDocumentLoader: { FakePortfolioGenerator.make() })
+        await model.refreshPortfolio(refreshMarketData: false)
+        let holding = try XCTUnwrap(model.holdings.first)
+        try await withSource(inNavigationStack: true) { presenter, key, transition in
+            let stack = try XCTUnwrap(presenter as? UINavigationController)
+            let root = try XCTUnwrap(stack.topViewController)
+            let start = CACurrentMediaTime()
+            HoldingDetailContentView.prefetch(holding, model: model)
+            XCTAssertTrue(transition.open(id: key.id, namespace: key.namespace, page: { close in
+                AnyView(HoldingDetailView(holding: holding, onClose: close).environment(model))
+            }, didEnd: {}))
+            let synchronous = CACurrentMediaTime() - start
+            print(String(format: "[SecurityOpenLatency] synchronous=%.2fms", synchronous * 1000))
+            XCTAssertLessThan(synchronous, 0.5, "Opening must not synchronously wait for network data")
+            try await self.waitUntil { stack.topViewController !== root && stack.transitionCoordinator == nil }
+            print(String(format: "[SecurityOpenLatency] settled=%.2fms", (CACurrentMediaTime() - start) * 1000))
+            transition.close()
+            try await self.waitUntil { stack.topViewController === root && stack.transitionCoordinator == nil }
+        }
+    }
+
     func testNavigationZoomHidesTabBarAndRestoresItOnReturn() async throws {
         try await checkTabBarVisibility(initiallyHidden: false)
     }
@@ -85,7 +110,7 @@ final class SecurityDetailLiveZoomTests: XCTestCase {
             let logo = self.sourceLogo(of: key)
             try await self.waitUntil { logo?.window != nil }
             let opened = self.standInCount(in: logo)
-            XCTAssertLessThanOrEqual(opened, 1, "at most one stand-in, whether or not a picture exists")
+            XCTAssertEqual(opened, 1, "First open must have an artwork source even without a cached logo")
 
             // The second open, before the first page has finished going: the
             // other page's closure is replaced, so its stand-in must be cleared

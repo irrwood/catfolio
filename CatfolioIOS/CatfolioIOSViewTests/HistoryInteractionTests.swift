@@ -272,6 +272,58 @@ final class HistoryInteractionTests: XCTestCase {
     }
 
     @MainActor
+    func testDividendGroupingPickerRefreshesVisibleRows() async throws {
+        let key = "history.dividendsByStock"
+        let previous = UserDefaults.standard.object(forKey: key)
+        UserDefaults.standard.set(false, forKey: key)
+        defer {
+            if let previous { UserDefaults.standard.set(previous, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+        let input = ledger([
+            entry("DIVIDEND", date: "2026-04-06", price: 3, ticker: "AAA"),
+            entry("DIVIDEND", date: "2026-03-06", price: 2, ticker: "AAA"),
+            entry("DIVIDEND", date: "2026-02-06", price: 1, ticker: "BBB")
+        ])
+        let prepared = try prepare(input)
+        let controller = UIHostingController(rootView: NavigationStack {
+            HistoryView(previewLedger: input, prepared: prepared)
+        }.environment(AppModel()))
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previousWindow = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previousWindow?.makeKeyAndVisible() }
+        try await Task.sleep(for: .milliseconds(700))
+        let categories = try XCTUnwrap(descendants(controller.view, of: HistoryCategoryBar.self).first)
+        categories.buttons[2].sendActions(for: .touchUpInside)
+        try await Task.sleep(for: .milliseconds(700))
+        let picker = try XCTUnwrap(descendants(controller.view, of: UISegmentedControl.self).first)
+        XCTAssertEqual(picker.selectedSegmentIndex, 0)
+        let pickerBottom = picker.convert(picker.bounds, to: controller.view).maxY + 10
+        let rows = CGRect(x: 16, y: pickerBottom, width: controller.view.bounds.width - 32,
+                          height: controller.view.bounds.height - pickerBottom - 40)
+        XCTAssertGreaterThan(rows.height, 100)
+        let byDate = snapshot(controller.view)
+        picker.selectedSegmentIndex = 1
+        picker.sendActions(for: .valueChanged)
+        try await Task.sleep(for: .milliseconds(500))
+        XCTAssertTrue(UserDefaults.standard.bool(forKey: key))
+        let byStock = snapshot(controller.view)
+        XCTAssertGreaterThan(try patchDifference(byDate, rows, byStock, rows), 1,
+                             "Switching grouping must redraw the rows below the picker")
+        attach(controller.view, name: "History-dividends-by-stock")
+        let restoredPicker = try XCTUnwrap(descendants(controller.view, of: UISegmentedControl.self).first)
+        restoredPicker.selectedSegmentIndex = 0
+        restoredPicker.sendActions(for: .valueChanged)
+        try await Task.sleep(for: .milliseconds(500))
+        XCTAssertFalse(UserDefaults.standard.bool(forKey: key))
+        XCTAssertGreaterThan(try patchDifference(byStock, rows, snapshot(controller.view), rows), 1,
+                             "Switching back to dates must also refresh the rows")
+    }
+
+    @MainActor
     func testChangingCategoryDoesNotRebuildPagesButNewContentDoes() async throws {
         let probe = HistoryPagerContentProbe()
         let controller = UIHostingController(rootView: HistoryPagerContentHarness(probe: probe))
@@ -319,7 +371,8 @@ final class HistoryInteractionTests: XCTestCase {
         XCTAssertEqual(controller.selection, .all, "Dragging has not committed a category")
         let bar = controller.categoryBar
         for button in bar.buttons {
-            XCTAssertEqual(button.bounds.width, bar.buttons[0].bounds.width, accuracy: 0.5)
+            // Each tab is as wide as its own title, not an equal slot.
+            XCTAssertGreaterThanOrEqual(button.bounds.width, button.titleLabel?.intrinsicContentSize.width ?? 0)
             XCTAssertEqual(button.bounds.height, bar.buttons[0].bounds.height, accuracy: 0.5)
         }
         XCTAssertEqual(bar.pill.frame.minX,
@@ -559,10 +612,12 @@ final class HistoryInteractionTests: XCTestCase {
         let categoryBar = try XCTUnwrap(descendants(controller.view, of: HistoryCategoryBar.self).first)
         let materialFrame = material.convert(material.bounds, to: controller.view)
         XCTAssertLessThanOrEqual(materialFrame.minY, 0)
-        // Solid down to the category bar, then a deliberate fade past it so
-        // rows dissolve into the header instead of meeting a hard line.
-        XCTAssertEqual(materialFrame.maxY, categoryBar.convert(categoryBar.bounds, to: controller.view).maxY
-                       + HistoryPagingController.headerFadeLength, accuracy: 1)
+        // The light header fades past the bar; the dark header's existing
+        // mask ends halfway through it so the black page continues below.
+        let categoryFrame = categoryBar.convert(categoryBar.bounds, to: controller.view)
+        let expectedMaterialBottom = dark ? categoryFrame.midY
+            : categoryFrame.maxY + HistoryPagingController.headerFadeLength
+        XCTAssertEqual(materialFrame.maxY, expectedMaterialBottom, accuracy: 1)
         XCTAssertEqual(material.alpha, 1)
         XCTAssertFalse(material.isUserInteractionEnabled)
         attach(controller.view, name: "History-\(dark ? "dark" : "light")-inline-scrolled")
@@ -619,8 +674,13 @@ final class HistoryInteractionTests: XCTestCase {
     private func patchDifference(_ first: UIImage, _ firstRect: CGRect,
                                  _ second: UIImage, _ secondRect: CGRect) throws -> Double {
         func pixels(_ image: UIImage, rect: CGRect) throws -> [UInt8] {
-            let crop = try XCTUnwrap(image.cgImage?.cropping(to: rect.applying(
-                CGAffineTransform(scaleX: image.scale, y: image.scale))))
+            // Pixel-aligned translations must preserve the patch dimensions.
+            // CGImage otherwise rounds each fractional edge separately.
+            let cropRect = CGRect(x: (rect.minX * image.scale).rounded(),
+                y: (rect.minY * image.scale).rounded(),
+                width: (rect.width * image.scale).rounded(),
+                height: (rect.height * image.scale).rounded())
+            let crop = try XCTUnwrap(image.cgImage?.cropping(to: cropRect))
             var data = [UInt8](repeating: 0, count: crop.width * crop.height * 4)
             let context = try XCTUnwrap(CGContext(data: &data, width: crop.width, height: crop.height,
                 bitsPerComponent: 8, bytesPerRow: crop.width * 4, space: CGColorSpaceCreateDeviceRGB(),

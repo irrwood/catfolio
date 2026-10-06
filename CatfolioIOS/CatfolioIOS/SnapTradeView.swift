@@ -8,8 +8,6 @@ struct SnapTradeView: View {
     let context: AccountConnectorContext
     @State private var clientID = ""
     @State private var consumerKey = ""
-    @State private var nickname = ""
-    @State private var nicknameEdited = false
     @State private var accounts: [SnapTradeAccount] = []
     @State private var selectedID = ""
     @State private var preview: SnapTradeSnapshot?
@@ -39,12 +37,6 @@ struct SnapTradeView: View {
         AccountFlowStack {
             SettingsPage(bottomInset: 32) {
                 Group {
-                    if context.isCreating {
-                        SettingsSectionHeader(L10n.text("账户昵称"))
-                        SettingsCard {
-                            SettingsRowContainer { AccountNicknameField(nickname: $nickname, edited: $nicknameEdited) }
-                        }
-                    }
                     SettingsSectionHeader(L10n.text("SnapTrade 个人 API"))
                     SettingsCard {
                         SettingsFieldRow("Client ID", text: $clientID, isMonospaced: true)
@@ -118,7 +110,7 @@ struct SnapTradeView: View {
                             }
                             SettingsRowContainer {
                                 GlassPrimaryButton(title: context.isCreating ? L10n.text("创建账户") : L10n.text("同步并更新"),
-                                    systemImage: "tray.and.arrow.down", isDisabled: nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                                    systemImage: "tray.and.arrow.down",
                                     isBusy: busy) { confirmsSync = true }
                             }
                         }
@@ -140,8 +132,10 @@ struct SnapTradeView: View {
             .navigationTitle(L10n.text("链接 2000+交易所"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    AppModalDoneButton { stopWaiting(); dismiss() }
+                if !context.isCreating {
+                    ToolbarItem(placement: .confirmationAction) {
+                        AppModalDoneButton { stopWaiting(); dismiss() }
+                    }
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     if busy {
@@ -153,7 +147,6 @@ struct SnapTradeView: View {
             }
             .onDisappear { operation.cancel() }
             .task {
-                nickname = context.account?.name ?? model.suggestedAccountNickname()
                 if let saved = SnapTradeCredentials.load(accountID: context.account?.accountID) {
                     clientID = saved.clientID; consumerKey = saved.consumerKey
                 }
@@ -213,7 +206,7 @@ struct SnapTradeView: View {
         try preview.validate(context: context, existing: model.accounts)
         try Task.checkCancellation()
         try saved.save(accountID: preview.account.id)
-        _ = try await model.importSnapTrade(preview, context: context, nickname: nickname)
+        _ = try await model.importSnapTrade(preview, context: context, nickname: model.suggestedAccountNickname())
         try Task.checkCancellation()
         if context.isCreating { try? KeychainStore.set("", for: SnapTradeCredentials.key(accountID: nil)) }
         dismiss()

@@ -39,7 +39,7 @@ struct IsometricHeatmapLabView: View {
         }
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
-        .toolbar(.hidden, for: .tabBar)
+        .hidesTabBarWhenPushed()
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L10n.text("等距热力图"))

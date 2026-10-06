@@ -13,9 +13,6 @@ struct Trading212View: View {
     @State private var apiKey = ""
     @State private var apiSecret = ""
     @State private var accountSlot = 1
-    /// Nil until the person chooses. Trading 212's API cannot answer this, and
-    /// guessing from the credential slot is what labelled ISA accounts Invest.
-    @State private var accountType: Trading212AccountType?
     @State private var nickname = ""
     @State private var nicknameEdited = false
     @State private var snapshot: Trading212Snapshot?
@@ -84,8 +81,10 @@ struct Trading212View: View {
                         AccountProviderBackButton().disabled(isWorking)
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    AppModalDoneButton { stopWaiting(); dismiss() }
+                if !context.isCreating {
+                    ToolbarItem(placement: .confirmationAction) {
+                        AppModalDoneButton { stopWaiting(); dismiss() }
+                    }
                 }
             }
             .task { prepareAccount() }
@@ -137,23 +136,6 @@ struct Trading212View: View {
                 }
             }
             SettingsFootnote(L10n.text("请使用只读 Key；凭证仅存于此 iPhone。"))
-        }
-
-        // Only while connecting: an existing account's type is edited from its
-        // own settings row, which saves the choice without a sync.
-        if context.isCreating, guideStep == .credentials {
-            SettingsSectionHeader(L10n.text("账户类型"))
-            SettingsCard {
-                ForEach(Trading212AccountType.allCases) { type in
-                    SettingsSelectionRow(
-                        isSelected: accountType == type,
-                        title: type.displayName,
-                        selectionAccessibilityLabel: L10n.text("账户类型：\(type.displayName)"),
-                        toggle: { accountType = type }
-                    )
-                }
-            }
-            SettingsFootnote(L10n.text("Trading 212 的 API 只报告账户号和币种，不报告账户类型。请按 212 App 中该账户的类型选择；它只影响 Catfolio 的显示。"))
         }
 
         if context.isCreating, snapshot != nil {
@@ -227,11 +209,13 @@ struct Trading212View: View {
             SettingsCard {
                 SettingsValueRow(title: L10n.text("账户"), value: L10n.text("\(snapshot.accountCount) 个"))
                 SettingsValueRow(title: L10n.text("持仓"), value: L10n.text("\(snapshot.positions.count) 项"))
-                SettingsValueRow(
-                    title: L10n.text("账户类型"),
-                    value: (accountType ?? context.account?.chosenAccountType)?.displayName ?? L10n.label("未设置"),
-                    valueIsNumeric: false
-                )
+                if let account = context.account {
+                    SettingsValueRow(
+                        title: L10n.text("账户类型"),
+                        value: L10n.label(account.accountType),
+                        valueIsNumeric: false
+                    )
+                }
 
                 ForEach(snapshot.positions.prefix(10)) { position in
                     SettingsRowContainer {
@@ -452,7 +436,6 @@ struct Trading212View: View {
         let result = try await model.importTrading212(
             currentSnapshot,
             accountNames: accountNames,
-            accountTypeOverrides: accountType.map { [accountID: $0.rawValue] } ?? [:],
             replacingAccountsOnly: true
         )
         // Cancellation cannot roll back a completed local import, but a

@@ -132,7 +132,7 @@ struct TodayContributionCard: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .center, spacing: 2) {
-                        Text(sessionDate.map { DataDayLabel.text(for: $0, locale: appLocale) } ?? L10n.text("TODAY"))
+                        Text(L10n.text("今日变化"))
                             .appCaps(.caption, weight: .semibold)
                             .foregroundStyle(CatfolioTheme.primaryText)
                         if onOpenDetail != nil {
@@ -143,7 +143,7 @@ struct TodayContributionCard: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .frame(height: 17, alignment: .leading)
+                    .frame(height: 17, alignment: .topLeading)
                     .onGeometryChange(for: CGFloat.self) { geometry in
                         geometry.frame(in: .global).maxY
                     } action: { _, newValue in
@@ -443,12 +443,13 @@ struct TodayContributionBar: View {
                             .overlay {
                                 ContributionStripePattern(color: .black)
                                     .blendMode(.overlay)
-                                    // Figma uses a pure-black stripe group at
-                                    // 40% opacity. The base green-to-white
-                                    // gradient makes the texture fade naturally;
-                                    // an additional opacity mask darkens the
-                                    // middle of the bar and must not be added.
-                                    .opacity(0.40)
+                                    // A pure-black stripe group, at 25% — a
+                                    // shade under Figma's 40%, which read
+                                    // heavy on the bars. The base gradient makes
+                                    // the texture fade naturally; an additional
+                                    // opacity mask darkens the middle of the bar
+                                    // and must not be added.
+                                    .opacity(0.25)
                             }
                             .compositingGroup()
                             .opacity(growth)

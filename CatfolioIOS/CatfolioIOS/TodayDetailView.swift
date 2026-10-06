@@ -2,10 +2,8 @@ import SwiftUI
 
 /// The full attribution behind the TODAY figure on the home page.
 ///
-/// Everything here is arithmetic on data the app already holds: each holding's
-/// market value and its daily change. Nothing is fetched, and nothing is
-/// generated — the summary line is a sort, not a model's opinion, so it cannot
-/// be wrong in a way the numbers beside it are not.
+/// All attribution is arithmetic on the page's holdings and daily quotes.
+/// The top brief narrates those computed facts and can expand with sourced news.
 struct TodayDetailView: View {
     @Environment(\.locale) private var appLocale
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -22,8 +20,35 @@ struct TodayDetailView: View {
     let holdings: [Holding]
     let dailyChanges: [String: Double]
     let benchmarkChange: Double?
+    var sessionDate: String? = nil
+    var briefStore: TodayBriefStore = .shared
+    private let contributions: [Contribution]
+    private let sectorTotals: (rows: [SectorBreakdown], lookThroughUsed: Bool, unclassifiedWeight: Double)
 
-    private var contributions: [Contribution] {
+    init(holdings: [Holding], dailyChanges: [String: Double], benchmarkChange: Double?,
+         sessionDate: String? = nil, briefStore: TodayBriefStore = .shared) {
+        self.holdings = holdings
+        self.dailyChanges = dailyChanges
+        self.benchmarkChange = benchmarkChange
+        self.sessionDate = sessionDate
+        self.briefStore = briefStore
+        let contributions = Self.makeContributions(holdings: holdings, dailyChanges: dailyChanges)
+        self.contributions = contributions
+        self.sectorTotals = Self.makeSectorTotals(contributions)
+    }
+
+    private var briefContext: TodayBriefContext {
+        TodayBriefContext(sessionDate: sessionDate, total: total,
+            benchmarkChange: benchmarkChange.flatMap { $0.isFinite ? $0 : nil },
+            stocks: contributions.map { .init(ticker: $0.holding.ticker.uppercased(),
+                name: $0.holding.shortName, logoSymbol: $0.holding.logoSymbol,
+                changePercent: $0.changePercent, amount: $0.amount) },
+            sectors: sectorRows.map { .init(id: $0.id, name: $0.displayName,
+                icon: $0.symbolName, amount: $0.amount,
+                tickers: $0.components.map { $0.holding.ticker.uppercased() }) }, language: appLocale.identifier)
+    }
+
+    private static func makeContributions(holdings: [Holding], dailyChanges: [String: Double]) -> [Contribution] {
         holdings.compactMap { holding in
             let key = holding.ticker.uppercased()
             guard let change = dailyChanges[key] ?? holding.todayChangePercent,
@@ -111,7 +136,7 @@ struct TodayDetailView: View {
     /// Each holding's move is spread by its own sector split, so a fund
     /// contributes to several sectors and a single stock to one. The part no
     /// source can classify is kept aside rather than redistributed.
-    private var sectorTotals: (rows: [SectorBreakdown], lookThroughUsed: Bool, unclassifiedWeight: Double) {
+    private static func makeSectorTotals(_ contributions: [Contribution]) -> (rows: [SectorBreakdown], lookThroughUsed: Bool, unclassifiedWeight: Double) {
         var totals: [PortfolioSector: Double] = [:]
         var members: [PortfolioSector: [SectorBreakdown.Component]] = [:]
         var unclassified = 0.0
@@ -175,9 +200,16 @@ struct TodayDetailView: View {
     private var sectorRows: [SectorBreakdown] { sectorTotals.rows }
     private var unclassifiedShare: Double { sectorTotals.unclassifiedWeight }
 
+    private var appDisclaimer: String {
+        briefContext.language.hasPrefix("zh") ? "非投资建议" : "Not investment advice"
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
+                if !contributions.isEmpty, !holdings.contains(where: { $0.publicDisclosure != nil }) {
+                    TodayBriefView(context: briefContext, store: briefStore)
+                }
                 summary
 
                 if !sectorRows.isEmpty {
@@ -200,13 +232,15 @@ struct TodayDetailView: View {
                         description: Text(L10n.text("持仓的当日涨跌还没有读取到。"))
                     )
                 }
+                Text(appDisclaimer)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(SettingsTemplate.secondaryText)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(CatfolioStyle.pageHorizontalInset)
         }
-        // ScrollView does not supply List's grouped page and row surfaces.
-        // Keep the shared card fill distinct from the page in either theme.
-        .background(Color(uiColor: .systemGroupedBackground))
+        // The standard cell's ground, so the cards read as they do in Settings.
+        .background(SettingsTemplate.pageBackground)
         .accessibilityIdentifier("today-detail-scroll")
         .navigationDestination(isPresented: $showsSectorMembers) {
             if let selectedSector {
@@ -216,55 +250,59 @@ struct TodayDetailView: View {
         .softTopScrollEdge()
         .navigationTitle(L10n.text("今日"))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarVisibility(.hidden, for: .tabBar)
+        .hidesTabBarWhenPushed()
     }
 
     private var summary: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(L10n.text("今日盈亏"))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Text(DisplayFormat.money(total, signed: true, fractionDigits: 2))
-                .appNumber(.display, weight: .bold)
-                .foregroundStyle(total >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.65)
+        // One card, read top to bottom: the net, then what it is made of —
+        // the gainers and the losers side by side under a hairline, each a
+        // quiet label over its figure, split by a thin rule.
+        VStack(spacing: 0) {
+            VStack(spacing: 6) {
+                Text(L10n.text("今日盈亏"))
+                    .appText(.callout, weight: .medium)
+                    .foregroundStyle(SettingsTemplate.secondaryText)
+                Text(DisplayFormat.money(total, signed: true, fractionDigits: 2))
+                    .appNumber(.display, weight: .bold)
+                    .foregroundStyle(total >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                if let benchmarkChange, benchmarkChange.isFinite {
+                    Text("SPY " + DisplayFormat.percent(benchmarkChange, signed: true))
+                        .appNumber(.footnote, weight: .medium)
+                        .foregroundStyle(SettingsTemplate.secondaryText)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 22)
+
             if !contributions.isEmpty {
-                // What the net is made of: the rising holdings' gain and the
-                // falling ones' loss, each with how many there are.
-                HStack(spacing: 12) {
+                SettingsTemplate.separator.frame(height: SettingsTemplate.separatorHeight)
+                HStack(spacing: 0) {
                     splitMetric(title: L10n.text("盈利"), amount: gainTotal, count: gainCount,
                                 color: CatfolioTheme.positive)
+                    SettingsTemplate.separator
+                        .frame(width: SettingsTemplate.separatorHeight)
+                        .padding(.vertical, 18)
                     splitMetric(title: L10n.text("亏损"), amount: lossTotal, count: lossCount,
                                 color: CatfolioTheme.danger)
                 }
-                .padding(.top, 8)
+                .fixedSize(horizontal: false, vertical: true)
             }
-            if let benchmarkChange, benchmarkChange.isFinite {
-                HStack(spacing: 5) {
-                    Image(systemName: "chart.line.uptrend.xyaxis")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(CatfolioTheme.accent)
-                    Text("SPY")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                    Text(DisplayFormat.percent(benchmarkChange, signed: true))
-                        .appNumber(.callout, weight: .medium)
-                        .foregroundStyle(benchmarkChange >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
-                }
-                .padding(.top, 2)
-            }
+
             if let headline {
+                SettingsTemplate.separator.frame(height: SettingsTemplate.separatorHeight)
                 Text(headline)
                     .currencyFont(.footnote)
+                    .foregroundStyle(SettingsTemplate.secondaryText)
+                    .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 4)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, SettingsTemplate.rowHorizontalPadding)
+                    .padding(.vertical, 14)
             }
         }
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .modifier(ContentCard())
+        .settingsCardSurface()
     }
 
     private var gainTotal: Double { contributions.filter { $0.amount > 0 }.reduce(0) { $0 + $1.amount } }
@@ -272,20 +310,21 @@ struct TodayDetailView: View {
     private var gainCount: Int { contributions.filter { $0.amount > 0 }.count }
     private var lossCount: Int { contributions.filter { $0.amount < 0 }.count }
 
+    /// One column under the net: a quiet label, the figure beneath it.
     private func splitMetric(title: String, amount: Double, count: Int, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(spacing: 6) {
             Text(L10n.text("\(title) · \(count) 只"))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .appText(.callout, weight: .medium)
+                .foregroundStyle(SettingsTemplate.secondaryText)
             Text(DisplayFormat.money(amount, signed: amount != 0, fractionDigits: 2))
-                .appNumber(.heading, weight: .semibold)
-                .foregroundStyle(count == 0 ? Color.secondary : color)
+                .appNumber(.title, weight: .semibold)
+                .foregroundStyle(count == 0 ? SettingsTemplate.secondaryText : color)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.6)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(color.opacity(count == 0 ? 0.04 : 0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+        .padding(.horizontal, 8)
         .accessibilityElement(children: .combine)
     }
 
@@ -351,18 +390,16 @@ struct TodayDetailView: View {
         .accessibilityIdentifier("today-sector.\(row.id)")
     }
 
+    /// The standard cell: a section title over one card, a row per holding,
+    /// divided full width by the card itself.
     private func ranking(_ rows: [Contribution], title: String) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(title + " · %")
-                .font(.headline)
-            VStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: SettingsTemplate.sectionSpacing) {
+            SettingsSectionHeader(title + " · %")
+            SettingsCard {
                 ForEach(rows) { contribution in
                     contributionRow(contribution)
-                    if contribution.id != rows.last?.id { Divider() }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .modifier(ContentCard())
         }
     }
 
@@ -377,7 +414,8 @@ struct TodayDetailView: View {
             AssetLogo(ticker: contribution.holding.ticker, logoSymbol: contribution.holding.logoSymbol, size: 36)
             contributionDetail(contribution, value: value, tint: tint, money: money, percentage: percentage)
         }
-        .padding(.vertical, 3)
+        .padding(.horizontal, SettingsTemplate.rowHorizontalPadding)
+        .padding(.vertical, SettingsTemplate.rowVerticalPadding)
     }
 
     private func contributionDetail(_ contribution: Contribution, value: Double, tint: Color,
@@ -464,6 +502,7 @@ private struct SectorMembersView: View {
                         .foregroundStyle(breakdown.amount >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
                 }
                 .padding(.vertical, 6)
+                .settingsListRow()
             }
 
             Section {
@@ -493,6 +532,7 @@ private struct SectorMembersView: View {
                     }
                     }
                     .padding(.vertical, 2)
+                    .settingsListRow()
                 }
             } header: {
                 Text(L10n.text("\(breakdown.components.count) 项持仓"))
@@ -502,10 +542,12 @@ private struct SectorMembersView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(SettingsTemplate.pageBackground)
         .softTopScrollEdge()
         .navigationTitle(breakdown.displayName)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarVisibility(.hidden, for: .tabBar)
+        .hidesTabBarWhenPushed()
     }
 
     private func percentText(_ fraction: Double) -> String {

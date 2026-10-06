@@ -225,7 +225,10 @@ final class PageLoadAndJitterTests: XCTestCase {
         let previousWindow = scene.windows.first(where: \.isKeyWindow)
         let host = UIHostingController(rootView:
             NavigationStack {
-                TodayDetailView(holdings: holdings, dailyChanges: [:], benchmarkChange: 0.5)
+                TodayDetailView(holdings: holdings, dailyChanges: [:], benchmarkChange: 0.5,
+                    briefStore: TodayBriefStore(generate: { request, _ in
+                        .init(text: request.context.seed, sources: [])
+                    }))
             }
             .environment(\.dynamicTypeSize, typeSize)
             .environment(\.colorScheme, scheme)

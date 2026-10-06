@@ -79,7 +79,7 @@ struct SectorPerformancePanel: View {
                 ForEach(SectorPerformanceDefinition.all) { definition in
                     NavigationLink {
                         SectorPerformanceDetailView(definition: definition, store: store, rotation: rotation)
-                            .toolbarVisibility(.hidden, for: .tabBar)
+                            .hidesTabBarWhenPushed()
                     } label: {
                         SectorPerformanceCard(definition: definition, market: store.markets[definition.symbol])
                     }

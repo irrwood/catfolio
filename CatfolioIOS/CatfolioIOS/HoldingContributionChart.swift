@@ -271,15 +271,21 @@ struct HoldingContributionChart: View {
         }
 
         VStack(alignment: .leading, spacing: 18) {
-            if let prepared, prepared.window.rows.count > 1 {
+            if let prepared, !prepared.window.rows.isEmpty {
                 let shown = prepared.window.row(nearest: selectedDate) ?? prepared.window.rows.last!
                 // Figma 357:2257 / 362:14796: the figures, the chart and the
                 // range strip share one tinted field that runs to all three
                 // screen edges; the holdings list sits on the page's own
                 // surface below it.
-                let chart = plot(prepared: prepared)
+                let chart = Group {
+                    if prepared.window.rows.count > 1 { plot(prepared: prepared) }
+                    else { Color.clear }
+                }
                 ReturnsSourceChartHero(range: $range, header: header(shown), plot: chart,
-                                       axis: axisLabels(top: prepared.top), isIncome: true)
+                                       axis: Group {
+                                           if prepared.window.rows.count > 1 { axisLabels(top: prepared.top) }
+                                           else { Color.clear }
+                                       }, isIncome: true)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { incomeHeroHeight = $0 }
                 legend(stack: prepared.stack, row: shown)
                     .padding(.horizontal, ReturnsSourceChartStyle.inset)
@@ -292,9 +298,7 @@ struct HoldingContributionChart: View {
                     .buttonStyle(.bordered)
                     .frame(maxWidth: .infinity)
             } else if loading.history != nil {
-                StandardLineChartPlaceholder(title: L10n.text("历史数据不足"),
-                                             message: L10n.text("该时间范围内没有足够的市值记录。"), isLoading: false,
-                                             hint: L10n.text("下拉刷新会重新计算这段历史。"))
+                Color.clear
                     .frame(height: 300)
                     .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
             } else {

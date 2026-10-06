@@ -3,6 +3,13 @@ import XCTest
 @testable import CatfolioIOS
 
 final class AIWebSearchTests: XCTestCase {
+    func testResearchDoesNotDependOnCodexEvenWhenPreviouslySelected() {
+        XCTAssertFalse(LocalAIClient().allowsCodex)
+        XCTAssertEqual(LocalAIClient.researchProvider(preference: .codex), .automatic)
+        XCTAssertEqual(LocalAIClient.researchProvider(preference: .deepSeek), .deepSeek)
+        XCTAssertEqual(LocalAIClient.researchProvider(preference: .openRouter), .openRouter)
+    }
+
     func testCitationsUseServerAnnotationsDeduplicateAndRejectUnsafeLinks() throws {
         let annotations: [[String: Any]] = [
             ["type": "url_citation", "title": "Report [2026]", "url": "https://example.com/report"],
@@ -16,6 +23,12 @@ final class AIWebSearchTests: XCTestCase {
         let stream = Data(("data: " + String(decoding: json, as: UTF8.self) + "\n\ndata: [DONE]\n").utf8)
         let links = AIWebSearch.sourceLinks(in: stream)
         XCTAssertEqual(links, "- [Report \\[2026\\]](<https://example.com/report>)")
+    }
+
+    func testNewsRequestRequiresSearchRatherThanAnOptionalModelChoice() {
+        let body = CodexOAuthClient.completionRequestBody(prompt: "今天有什么动静？", webSearch: true)
+        XCTAssertEqual(body["tool_choice"] as? String, "required")
+        XCTAssertEqual((body["tools"] as? [[String: String]])?.first?["type"], "web_search")
     }
 
     func testTextAndMalformedEventsCannotBecomeCitations() {

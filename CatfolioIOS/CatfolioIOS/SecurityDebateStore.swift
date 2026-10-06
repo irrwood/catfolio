@@ -10,9 +10,8 @@ import Observation
 /// it needs. A person taps, goes back to the portfolio, and comes back to a
 /// finished answer, or opens the AI tab and finds it there.
 ///
-/// Results are kept in this store's own file rather than folded into the chat
-/// library, so the conversation document's schema and migrations are left
-/// alone; the AI tab reads the same store the security sheet writes.
+/// Results are kept here for the security page. The AI tab also imports each
+/// finished result as an independent conversation with its evidence.
 @MainActor
 @Observable
 final class SecurityDebateStore {
@@ -96,6 +95,12 @@ final class SecurityDebateStore {
     /// Every debate on the device, newest first — what the AI tab lists.
     var recent: [SecurityDebate] {
         completed.values.filter { $0.language == AppLanguage.currentIdentifier }.sorted { $0.generatedAt > $1.generatedAt }
+    }
+
+    var runningTickers: [String] {
+        let prefix = "\(AppLanguage.currentIdentifier)|"
+        return progress.filter { $0.key.hasPrefix(prefix) && $0.value.isWorking }
+            .keys.map { String($0.dropFirst(prefix.count)) }.sorted()
     }
 
     func restore() async {
@@ -541,30 +546,39 @@ final class SecurityDailyMoveStore {
         guard context.isFundIntroduction || (!SecurityDailyMoveSkill.instructions.isEmpty && SecurityDailyMoveSkill.routing.version != "fallback") else {
             throw LocalServiceError.invalidResponse
         }
-        let ai = LocalAIClient()
-        if let answer = try? await ai.researchAnswerWithNativeSearch(context.notePrompt),
+        return try await researchNote(ticker: context.ticker, name: context.name, prompt: context.notePrompt,
+            sessionDate: context.endDate, focus: context.noteFocus,
+            isFundIntroduction: context.isFundIntroduction, emptyNote: noEvidenceNote(context))
+    }
+
+    /// Shared pipeline for the stock paper and portfolio inline expansions.
+    nonisolated static func researchNote(ticker: String, name: String, prompt: String,
+        sessionDate: Date, focus: SecurityDailyMoveSkill.Focus, isFundIntroduction: Bool = false,
+        emptyNote: SecurityDailyMoveNote) async throws -> SecurityDailyMoveNote {
+        let ai = LocalAIClient(allowsCodex: false)
+        if let answer = try? await ai.researchAnswerWithNativeSearch(prompt),
            answer.searched, let note = try? SecurityDailyMoveNote.parse(answer.text), !note.sources.isEmpty {
             return note
         }
         // Providers without native search get dated, readable public sources.
         let research = SecurityDebateResearch()
-        var sources = await research.sources(ticker: context.ticker, name: context.name)
+        var sources = await research.sources(ticker: ticker, name: name)
         var documents: [SecurityResearchDocument]
-        if context.isFundIntroduction {
-            if let entry = (try? CompanyReferenceCatalog.bundled.get())?.entry(brokerSymbol: context.ticker),
+        if isFundIntroduction {
+            if let entry = (try? CompanyReferenceCatalog.bundled.get())?.entry(brokerSymbol: ticker),
                let url = entry.websiteURL {
-                sources.insert(PortfolioAttentionSource(id: "fund-product", title: context.name,
-                    publisher: url.host ?? context.name, url: url, publishedAt: nil, tier: "primary"), at: 0)
+                sources.insert(PortfolioAttentionSource(id: "fund-product", title: name,
+                    publisher: url.host ?? name, url: url, publishedAt: nil, tier: "primary"), at: 0)
             }
-            documents = await research.documents(sources: sources, ticker: context.ticker, name: context.name,
+            documents = await research.documents(sources: sources, ticker: ticker, name: name,
                 requiresRecentPublication: false)
         } else {
             let now = Date()
             let config = SecurityDailyMoveSkill.routing
-            let anchor = context.noteFocus == .priceMove ? context.endDate : now
+            let anchor = focus == .priceMove ? sessionDate : now
             // Allow subsequent reporting to describe an earlier event; the Skill
             // separately enforces that causal news was public before the price observation.
-            let cutoff = context.noteFocus == .priceMove ? min(now, context.endDate.addingTimeInterval(2 * 86400)) : now
+            let cutoff = focus == .priceMove ? min(now, sessionDate.addingTimeInterval(2 * 86400)) : now
             func candidates(days: Int) -> [PortfolioAttentionSource] {
                 sources.filter {
                     guard let date = $0.publishedAt else { return false }
@@ -572,22 +586,22 @@ final class SecurityDailyMoveStore {
                 }
             }
             let recent = candidates(days: config.recentDays)
-            documents = await research.documents(sources: Array(recent.prefix(6)), ticker: context.ticker, name: context.name)
-            if documents.isEmpty && context.noteFocus != .priceMove {
+            documents = await research.documents(sources: Array(recent.prefix(6)), ticker: ticker, name: name)
+            if documents.isEmpty && focus != .priceMove {
                 let older = candidates(days: config.extendedDays).filter { source in !recent.contains(where: { $0.url == source.url }) }
-                documents = await research.documents(sources: Array(older.prefix(6)), ticker: context.ticker, name: context.name)
+                documents = await research.documents(sources: Array(older.prefix(6)), ticker: ticker, name: name)
             }
         }
-        guard !documents.isEmpty else { return noEvidenceNote(context) }
+        guard !documents.isEmpty else { return emptyNote }
         let evidence = documents.map {
             "\($0.source.title) | \($0.source.url.absoluteString) | published: \($0.source.publishedAt.map { ISO8601DateFormatter().string(from: $0) } ?? "unknown")\n\($0.text.prefix(5000))"
         }.joined(separator: "\n\n")
-        let raw = try await ai.researchAnswer(context.notePrompt + "\nNative search unavailable. Use ONLY the following evidence; do not claim you searched.", context: evidence, structured: true)
+        let raw = try await ai.researchAnswer(prompt + "\nNative search unavailable. Use ONLY the following evidence; do not claim you searched.", context: evidence, structured: true)
         let note = try SecurityDailyMoveNote.parse(raw)
         let allowed = Set(documents.map { $0.source.url })
         guard note.sources.allSatisfy({ allowed.contains($0.url) }) else { throw LocalServiceError.invalidResponse }
         // No cited evidence must never turn into an unsupported factual paragraph.
-        return note.sources.isEmpty ? noEvidenceNote(context) : note
+        return note.sources.isEmpty ? emptyNote : note
     }
 
     nonisolated static func noEvidenceNote(_ context: SecurityPriceMoveContext) -> SecurityDailyMoveNote {

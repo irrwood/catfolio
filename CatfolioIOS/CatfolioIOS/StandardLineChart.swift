@@ -342,7 +342,7 @@ private final class StandardLineChartPresentationProgress {
 
 /// A value that remains visually anchored to the chart while every consumer
 /// continues to share the same plot geometry, interaction and dimming rules.
-/// The line is rendered as material instead of being faked by a dashed series.
+/// The line is rendered behind the price series as a plain color.
 struct StandardLineChartReferenceLine: Identifiable {
     let id: String
     let value: Double
@@ -662,6 +662,9 @@ struct StandardLineChart: View {
                     let reveal = reduceMotion || initialRevealCancelled ? CGFloat(1) : Self.easeOutQuart(rawReveal)
                     ZStack(alignment: .topLeading) {
                         StandardLineChartTransitionDriver(progress: transitionProgress) { progress in
+                            referenceLineLayer(plot: plot, progress: min(1, max(0, progress)))
+                        }
+                        StandardLineChartTransitionDriver(progress: transitionProgress) { progress in
                             Canvas { context, _ in
                                 let settledProgress = min(1, max(0, progress))
                                 let viewportProgress = settledProgress
@@ -716,10 +719,6 @@ struct StandardLineChart: View {
                                               viewportProgress: min(1, max(0, progress)),
                                               bounceProgress: progress)
                             }
-                        }
-
-                        StandardLineChartTransitionDriver(progress: transitionProgress) { progress in
-                            referenceLineLayer(plot: plot, progress: min(1, max(0, progress)))
                         }
                     }
                 }
@@ -2054,7 +2053,7 @@ struct StandardLineChart: View {
     @ViewBuilder
     private func referenceLineLayer(plot: CGRect, progress: CGFloat) -> some View {
         ForEach(referenceLines) { reference in
-            StandardLineChartGlassReferenceLine(tint: reference.color)
+            Capsule().fill(reference.color)
                 .frame(width: plot.width, height: reference.lineWidth)
                 .position(x: plot.midX, y: referenceY(reference.value, plot: plot, progress: progress))
         }
@@ -2241,36 +2240,6 @@ private struct StandardLineChartGlassGuide: View {
                 .overlay {
                     shape
                         .stroke(Color.white.opacity(0.28), lineWidth: 0.35)
-                }
-        }
-    }
-}
-
-private struct StandardLineChartGlassReferenceLine: View {
-    let tint: Color
-
-    @ViewBuilder
-    var body: some View {
-        let shape = Capsule()
-        let line = Color.clear
-
-        if #available(iOS 26.0, *) {
-            line
-                .glassEffect(.clear.tint(tint.opacity(0.22)), in: shape)
-                .overlay {
-                    shape
-                        .fill(Color.white.opacity(0.045))
-                }
-        } else {
-            line
-                .background(.ultraThinMaterial, in: shape)
-                .overlay {
-                    shape
-                        .fill(tint.opacity(0.12))
-                }
-                .overlay {
-                    shape
-                        .stroke(Color.white.opacity(0.24), lineWidth: 0.35)
                 }
         }
     }

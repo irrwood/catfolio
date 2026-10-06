@@ -30,7 +30,19 @@ struct CodexOAuthClient: Sendable {
     private static let clientID = "app_EMoamEEZ73f0CkXaXp7hrann"
     private static let authBaseURL = URL(string: "https://auth.openai.com")!
     private static let codexResponsesURL = URL(string: "https://chatgpt.com/backend-api/codex/responses")!
-    private static let model = "gpt-5.4"
+    private static let codexModelsURL = URL(string: "https://chatgpt.com/backend-api/codex/models")!
+    /// The reader's chosen model, or the one adopted after the last choice
+    /// was withdrawn. Empty means the default.
+    static let modelStorageKey = "catfolio.codex.model"
+    /// Used until a model is chosen or read from the account's own list.
+    /// ChatGPT retires these names; a rejected one is replaced automatically.
+    static let defaultModel = "gpt-5"
+
+    static var model: String {
+        let chosen = UserDefaults.standard.string(forKey: modelStorageKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return chosen.isEmpty ? defaultModel : chosen
+    }
 
     static var cachedConnected: Bool {
         KeychainStore.string(for: credentialsKey) != nil
@@ -161,6 +173,9 @@ struct CodexOAuthClient: Sendable {
             // The backend is not the documented API; if it will not summarise
             // the reasoning, the answer still streams without it.
             try await requestStream(prompt: prompt, credentials: credentials, summarizesReasoning: false, emit: emit)
+        } catch CodexRequestError.modelUnavailable {
+            try await adoptAvailableModel(credentials: credentials)
+            try await requestStream(prompt: prompt, credentials: credentials, summarizesReasoning: true, emit: emit)
         }
     }
 
@@ -208,6 +223,7 @@ struct CodexOAuthClient: Sendable {
                 data.append(byte)
                 if data.count > 64_000 { break }
             }
+            if Self.isModelUnavailable(status: http.statusCode, data: data) { throw CodexRequestError.modelUnavailable }
             if summarizesReasoning, http.statusCode == 400 { throw ReasoningSummaryRejected() }
             try Self.requireSuccess(http, data: data, fallback: L10n.text("Codex 分析请求失败"))
             throw LocalServiceError.invalidResponse
@@ -245,7 +261,7 @@ struct CodexOAuthClient: Sendable {
     ///   search. Callers that tell the reader "this used live search" need to
     ///   know the difference, and the fallback below means asking is not the
     ///   same as getting it.
-    func completion(prompt: String, webSearch: Bool = false, instructions: String? = nil) async throws -> (text: String, searched: Bool) {
+    func completion(prompt: String, webSearch: Bool = false, instructions: String? = nil, allowUnsearchedFallback: Bool = true) async throws -> (text: String, searched: Bool) {
         guard var credentials = try Self.load(CodexCredentials.self, key: Self.credentialsKey) else {
             Self.cache(Self.disconnectedStatus)
             throw LocalServiceError.missingCodexConnection
@@ -260,7 +276,7 @@ struct CodexOAuthClient: Sendable {
             try await Task.sleep(for: .milliseconds(700))
             let text = try await run(prompt: prompt, credentials: credentials, webSearch: webSearch, instructions: instructions)
             return (text, webSearch)
-        } catch where webSearch {
+        } catch where webSearch && allowUnsearchedFallback {
             try Task.checkCancellation()
             // `web_search` is a hosted tool on the Responses API, so asking for
             // it costs no client-side loop — but this endpoint is the ChatGPT
@@ -288,7 +304,85 @@ struct CodexOAuthClient: Sendable {
             return try await requestCompletion(
                 prompt: prompt, credentials: refreshed, webSearch: webSearch, instructions: instructions
             )
+        } catch CodexRequestError.modelUnavailable {
+            try await adoptAvailableModel(credentials: credentials)
+            return try await requestCompletion(
+                prompt: prompt, credentials: credentials, webSearch: webSearch, instructions: instructions
+            )
         }
+    }
+
+    // MARK: Models
+
+    /// The models this ChatGPT account can use through Codex, best first.
+    func availableModels() async throws -> [AIModelOption] {
+        guard var credentials = try Self.load(CodexCredentials.self, key: Self.credentialsKey) else {
+            throw LocalServiceError.missingCodexConnection
+        }
+        if credentials.expiresAt.timeIntervalSinceNow < 5 * 60 {
+            credentials = try await refresh(credentials)
+        }
+        do {
+            return try await fetchModels(credentials)
+        } catch CodexRequestError.unauthorized {
+            return try await fetchModels(try await refresh(credentials, force: true))
+        }
+    }
+
+    private func fetchModels(_ credentials: CodexCredentials) async throws -> [AIModelOption] {
+        var components = URLComponents(url: Self.codexModelsURL, resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "client_version", value: "0.99.0")]
+        var request = URLRequest(url: components.url!, timeoutInterval: 20)
+        request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(credentials.accountID, forHTTPHeaderField: "chatgpt-account-id")
+        request.setValue("catfolio_ios", forHTTPHeaderField: "originator")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await Self.session.recordedData(for: request)
+        guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
+        if http.statusCode == 401 { throw CodexRequestError.unauthorized }
+        try Self.requireSuccess(http, data: data, fallback: L10n.text("无法获取 Codex 模型列表"))
+        let models = Self.decodeModels(data)
+        guard !models.isEmpty else { throw LocalServiceError.remote(L10n.text("Codex 没有返回可用模型")) }
+        return models
+    }
+
+    /// Reads `{"models": [...]}` (or `data`), each entry named by `slug` or
+    /// `id`; hidden entries are skipped and a `priority` orders the rest.
+    static func decodeModels(_ data: Data) -> [AIModelOption] {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let entries = (object["models"] ?? object["data"]) as? [[String: Any]] else { return [] }
+        var seen = Set<String>()
+        return entries.enumerated().compactMap { index, entry -> (AIModelOption, Int)? in
+            guard let id = ((entry["slug"] ?? entry["id"]) as? String)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                  !id.isEmpty, seen.insert(id).inserted else { return nil }
+            if let visibility = entry["visibility"] as? String, ["hide", "hidden", "none"].contains(visibility) { return nil }
+            let name = (entry["display_name"] as? String) ?? (entry["name"] as? String) ?? id
+            return (AIModelOption(id: id, name: name.isEmpty ? id : name), (entry["priority"] as? Int) ?? index)
+        }
+        .sorted { $0.1 < $1.1 }
+        .map(\.0)
+    }
+
+    /// A rejected model is swapped for the account's best available one,
+    /// which is remembered, so the next question goes straight through.
+    private func adoptAvailableModel(credentials: CodexCredentials) async throws {
+        let rejected = Self.model
+        let models = try await fetchModels(credentials)
+        guard let next = models.first(where: { $0.id != rejected }) else {
+            throw LocalServiceError.remote(L10n.text("Codex 当前没有可用模型"))
+        }
+        UserDefaults.standard.set(next.id, forKey: Self.modelStorageKey)
+    }
+
+    /// The backend's answer when a model name is retired or not offered to
+    /// this account.
+    static func isModelUnavailable(status: Int, data: Data) -> Bool {
+        guard [400, 403, 404].contains(status) else { return false }
+        let text = (errorMessage(data) ?? String(data: data, encoding: .utf8) ?? "").lowercased()
+        guard text.contains("model") else { return false }
+        return ["not supported", "unsupported", "not available", "unavailable", "does not exist",
+                "not found", "not allowed", "不可用"].contains { text.contains($0) }
     }
 
     static func isTransientNetworkError(_ error: Error) -> Bool {
@@ -375,7 +469,7 @@ struct CodexOAuthClient: Sendable {
         ]
         if webSearch {
             body["tools"] = [["type": "web_search"]]
-            body["tool_choice"] = "auto"
+            body["tool_choice"] = "required"
         }
         return body
     }
@@ -400,6 +494,7 @@ struct CodexOAuthClient: Sendable {
         let (data, response) = try await Self.session.recordedData(for: request)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         if http.statusCode == 401 { throw CodexRequestError.unauthorized }
+        if Self.isModelUnavailable(status: http.statusCode, data: data) { throw CodexRequestError.modelUnavailable }
         try Self.requireSuccess(http, data: data, fallback: L10n.text("Codex 分析请求失败"))
         // A requested tool is not proof that the server actually searched.
         if webSearch, !Self.containsCompletedWebSearch(data) {
@@ -688,5 +783,5 @@ struct CodexOAuthClient: Sendable {
         let expiration: Date?
     }
 
-    private enum CodexRequestError: Error { case unauthorized }
+    private enum CodexRequestError: Error { case unauthorized, modelUnavailable }
 }

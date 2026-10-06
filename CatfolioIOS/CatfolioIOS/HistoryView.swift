@@ -247,15 +247,15 @@ struct HistoryView: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let errorMessage {
-                ContentUnavailableView(
-                    L10n.text("Unable to load History"),
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(L10n.message(errorMessage))
-                )
+                CatfolioEmptyState(title: L10n.text("Unable to load History"),
+                                   message: L10n.message(errorMessage),
+                                   icon: Image(systemName: "exclamationmark.triangle.fill"))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 HistoryPagingView(selection: $category, categories: visibleCategories, contentID: HistoryPageContentID(
                     ledger: preparedLedger.contentID, basis: taxYearBasisRaw,
-                    year: selectedTaxYear, forecast: dividendForecastUSD, gains: buyGains.count
+                    year: selectedTaxYear, forecast: dividendForecastUSD, gains: buyGains.count,
+                    dividendsByStock: dividendsByStock
                 )) { pageCategory in
                     AnyView(historyList(for: pageCategory))
                 }
@@ -269,7 +269,7 @@ struct HistoryView: View {
         .navigationTitle(ticker.map { "\($0) · \(L10n.text("History"))" } ?? L10n.text("History"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
-        .toolbarVisibility(.hidden, for: .tabBar)
+        .hidesTabBarWhenPushed()
         // The pager supplies one continuous material behind the native title
         // and category row. The navigation bar must not paint a second layer.
         .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
@@ -384,8 +384,9 @@ struct HistoryView: View {
                     dividendContributionSection(page)
                 } else {
                     Section {
-                        ForEach(summaryMetrics(for: pageCategory)) { metric in
-                            summaryRow(metric).settingsListRow()
+                        let metrics = summaryMetrics(for: pageCategory)
+                        ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
+                            summaryRow(metric).settingsListRow(isFirst: index == 0, isLast: index == metrics.count - 1)
                         }
                     } footer: {
                         if let explanation = realisedExplanation(for: pageCategory) {
@@ -396,13 +397,10 @@ struct HistoryView: View {
 
                 if page.activities.isEmpty {
                     Section {
-                        ContentUnavailableView(
-                            emptyTitle(for: pageCategory),
-                            systemImage: emptySystemImage,
-                            description: Text(emptyDescription)
-                        )
-                        .frame(maxWidth: .infinity)
-                        .listRowBackground(Color.clear)
+                        CatfolioEmptyState(title: emptyTitle(for: pageCategory), message: emptyDescription)
+                            .padding(.vertical, 56)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                     }
                 } else {
                     if pageCategory == .dividends {
@@ -419,8 +417,9 @@ struct HistoryView: View {
                     ForEach(pageCategory == .dividends && dividendsByStock
                             ? Self.groupsByStock(page.activities) : page.groups) { group in
                         Section {
-                            ForEach(group.activities) { activity in
-                                activityRow(activity).settingsListRow()
+                            ForEach(Array(group.activities.enumerated()), id: \.element.id) { index, activity in
+                                activityRow(activity, compactLabels: pageCategory == .all)
+                                    .settingsListRow(isFirst: index == 0, isLast: index == group.activities.count - 1)
                             }
                         } header: {
                             Text(group.title)
@@ -432,6 +431,8 @@ struct HistoryView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .listSectionSpacing(SettingsTemplate.sectionSpacing)
+        .contentMargins(.horizontal, SettingsTemplate.pageInset, for: .scrollContent)
         // The list draws its own grouped grey, which is #F2F2F7 and reads as a
         // seam against the template's #F7F7F7 under the chip row.
         .scrollContentBackground(.hidden)
@@ -458,41 +459,35 @@ struct HistoryView: View {
         let charges = feeCharges
         if charges.isEmpty {
             Section {
-                ContentUnavailableView(
-                    L10n.text("没有可计费的基金"),
-                    systemImage: "creditcard",
-                    description: Text(scopedHoldings.isEmpty
-                        ? L10n.text("所选账户暂无持仓。")
-                        : L10n.text("所选账户的持仓里没有找到已公布费率的基金。个股不收管理费。"))
-                )
-                .frame(maxWidth: .infinity)
-                .listRowBackground(Color.clear)
+                CatfolioEmptyState(title: L10n.text("没有可计费的基金"),
+                                   message: scopedHoldings.isEmpty
+                                       ? L10n.text("所选账户暂无持仓。")
+                                       : L10n.text("所选账户的持仓里没有找到已公布费率的基金。个股不收管理费。"))
+                    .padding(.vertical, 56)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             }
         } else {
             let total = charges.reduce(0) { $0 + $1.annual }
             let fundValue = charges.reduce(0) { $0 + $1.holding.marketValue }
             Section {
-                LabeledContent(L10n.text("年费用合计")) {
-                    Text(DisplayFormat.money(total, fractionDigits: 2))
-                        .appNumber(.body, weight: .semibold)
+                SettingsCard {
+                    SettingsValueRow(title: L10n.text("年费用合计"), value: DisplayFormat.money(total, fractionDigits: 2))
+                    SettingsValueRow(title: L10n.text("基金市值"), value: DisplayFormat.money(fundValue))
+                    SettingsValueRow(title: L10n.text("加权费率"), value: fundValue > 0
+                        ? (total / fundValue * 100).formatted(.number.precision(.fractionLength(2...3))) + "%"
+                        : "—")
                 }
-                LabeledContent(L10n.text("基金市值")) {
-                    Text(DisplayFormat.money(fundValue))
-                        .appNumber(.body)
-                }
-                LabeledContent(L10n.text("加权费率")) {
-                    Text(fundValue > 0
-                         ? (total / fundValue * 100).formatted(.number.precision(.fractionLength(2...3))) + "%"
-                         : "—")
-                        .appNumber(.body)
-                }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             } footer: {
                 Text(L10n.text("按当前市值和公布的年费率估算的运行成本，不是已扣除的金额。基金费用在基金内部按日计提，不会出现在交易流水里，也已经反映在净值中——不要再从收益里减一次。"))
             }
 
             Section(L10n.text("按持仓")) {
-                ForEach(charges, id: \.holding.id) { charge in
-                    feeRow(charge)
+                ForEach(Array(charges.enumerated()), id: \.element.holding.id) { index, charge in
+                    feeRow(charge).settingsListRow(isFirst: index == 0, isLast: index == charges.count - 1)
                 }
             }
         }
@@ -766,7 +761,7 @@ struct HistoryView: View {
 
     /// Logo and name; "买入 · 10 股 · 账户" beneath. The amount on the right,
     /// with what the order has made or lost beneath it.
-    private func activityRow(_ activity: PortfolioActivity) -> some View {
+    private func activityRow(_ activity: PortfolioActivity, compactLabels: Bool = false) -> some View {
         let presentation = preparedLedger.rowPresentations[activity.id] ?? HistoryRowPresentation(activity)
         let isOrder = activity.kind == .buy || activity.kind == .sell
         let gain = rowGain(activity)
@@ -779,7 +774,7 @@ struct HistoryView: View {
                     .lineLimit(1)
 
                 Text(subtitle(activity, presentation: presentation))
-                    .font(.caption)
+                    .font(compactLabels ? .caption2 : .caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
@@ -937,10 +932,6 @@ struct HistoryView: View {
 
     private func emptyTitle(for category: HistoryCategory) -> String {
         effectiveAccountIDs.isEmpty ? L10n.text("No accounts selected") : L10n.text("No \(L10n.label(category.rawValue))")
-    }
-
-    private var emptySystemImage: String {
-        effectiveAccountIDs.isEmpty ? "person.2.slash" : "tray"
     }
 
     private var emptyDescription: String {
@@ -1469,6 +1460,7 @@ private struct HistoryPageContentID: Hashable {
     let year: String?
     let forecast: Double?
     let gains: Int
+    let dividendsByStock: Bool
 }
 
 struct HistoryPreparedLedger {

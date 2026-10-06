@@ -122,15 +122,14 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
     private var isChangingAttachment = false
     /// When the latest touch came down on a list that was still moving.
     private var motionCaughtAt: CFTimeInterval?
+    private var touchSequence = 0
 
     /// Whether the touch now ending came down on a moving list — a flick
-    /// still decelerating, or the snap to a stop, which runs on its own clock
-    /// and does not stop for a touch the way UIKit's deceleration does. That
-    /// touch catches the list; it is not a tap on whichever row slid under
+    /// still decelerating, or the snap to a stop. That touch stops and catches
+    /// the list; it is not a tap on whichever row slid under
     /// the finger, which is how a tap used to open the row above or below.
     var touchCaughtMotion: Bool {
-        guard let motionCaughtAt else { return false }
-        return clock() - motionCaughtAt < 1
+        motionCaughtAt != nil
     }
 
     override init() {
@@ -165,7 +164,7 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
             scrollView = scroll
             let observer = PortfolioHomeTouchObserver()
             observer.onTouchBegan = { [weak self] in self?.touchBegan() }
-            observer.onTouchEnded = { [weak self] in self?.hasTouch = false }
+            observer.onTouchEnded = { [weak self] in self?.touchEnded() }
             scroll.addGestureRecognizer(observer)
             touchObserver = observer
             scroll.refreshControl = refreshControl
@@ -206,6 +205,7 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
         }
         hasTouch = false
         isMoving = false
+        motionCaughtAt = nil
     }
 
     private var offset: CGFloat {
@@ -222,16 +222,47 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
     func touchBegan() {
         guard !hasTouch, let scroll = scrollView else { return }
         hasTouch = true
+        touchSequence += 1
         gestureStart = offset
         motionCaughtAt = isSettling || isMoving || scroll.isDecelerating ? clock() : nil
         gate.beginTouch(offset: offset, isSettling: isSettling,
                         isMoving: isMoving || scroll.isDecelerating)
+        // Native deceleration stops under a finger; our display-link spring
+        // must do the same. Otherwise each further tap catches the still-moving
+        // sheet and is rejected until the spring eventually finishes.
+        if isSettling {
+            cancelSnap()
+            let stopped = min(maximum, max(0, offset))
+            scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x,
+                y: stopped - scroll.adjustedContentInset.top), animated: false)
+            isMoving = false
+        }
         // Removing the control for a locked gesture prevents even a partial
         // refresh indicator/inset, not just the eventual network callback.
         if !gate.isRefreshing {
             scroll.refreshControl = gate.permitsRefresh ? refreshControl : nil
         }
         alignRefreshControl()
+    }
+
+    func touchEnded() {
+        hasTouch = false
+        let sequence = touchSequence
+        // Keep the stopped-motion guard through this event's button callbacks,
+        // then release it so accessibility actions cannot inherit an old touch.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.hasTouch, self.touchSequence == sequence else { return }
+            self.motionCaughtAt = nil
+        }
+    }
+
+    private func cancelSnap() {
+        generation += 1
+        displayLink?.invalidate()
+        displayLink = nil
+        animation = nil
+        pendingTarget = nil
+        isSettling = false
     }
 
     /// The control is taken off and put back as touches lock and unlock
@@ -251,12 +282,7 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         if !hasTouch { touchBegan() }
-        generation += 1
-        displayLink?.invalidate()
-        displayLink = nil
-        animation = nil
-        pendingTarget = nil
-        isSettling = false
+        cancelSnap()
         // Snapshot permission is retained, even when interrupting an animation
         // exactly on the zero crossing. Only a new, settled touch can unlock it.
         gestureStart = offset

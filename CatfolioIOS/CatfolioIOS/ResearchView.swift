@@ -250,7 +250,7 @@ struct MarketSecurityResult: Identifiable, Equatable, Sendable {
 struct TodayAttentionView: View {
     var body: some View {
         ResearchView(showsAttention: true)
-            .toolbarVisibility(.hidden, for: .tabBar)
+            .hidesTabBarWhenPushed()
     }
 }
 
@@ -546,7 +546,7 @@ struct ResearchView: View {
         }
         .navigationDestination(isPresented: $showsDCA) {
             DCACalculatorView()
-                .toolbarVisibility(.hidden, for: .tabBar)
+                .hidesTabBarWhenPushed()
         }
         .sheet(item: $selectedSecurity) { holding in
             HoldingDetailView(holding: holding, onClose: { selectedSecurity = nil })

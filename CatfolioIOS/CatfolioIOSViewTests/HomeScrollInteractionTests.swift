@@ -49,10 +49,12 @@ final class HomeScrollInteractionTests: XCTestCase {
         func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap(descendants) }
         let scroll = try XCTUnwrap(descendants(host.view).compactMap { $0 as? UIScrollView }
             .max(by: { $0.contentSize.height < $1.contentSize.height }))
+        XCTAssertFalse(scroll.delaysContentTouches, "Home rows must receive touch-down without the native scroll delay")
         for (name, offset): (String, CGFloat) in [("initial", 0), ("floating", 1300), ("further", 1450), ("returned", 343)] {
             scroll.setContentOffset(CGPoint(x: 0, y: offset - scroll.adjustedContentInset.top), animated: false)
             try await Task.sleep(for: .milliseconds(400))
             XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, offset, accuracy: 1)
+            XCTAssertFalse(scroll.delaysContentTouches)
             let attachment = XCTAttachment(image: UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
                 window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
             })
@@ -339,6 +341,32 @@ final class HomeScrollInteractionTests: XCTestCase {
         controller.scrollViewWillBeginDragging(scroll)
         scroll.contentOffset.y = -60 - scroll.adjustedContentInset.top
         XCTAssertEqual(controller.refreshControl.frame.width, scroll.bounds.width, "Re-held while pulling")
+    }
+
+    @MainActor
+    func testTouchStopsSnapAndNextTapDoesNotWaitForItsDuration() {
+        let controller = PortfolioHomeScrollController()
+        let scroll = nativeScroll(controller)
+        defer { controller.detach() }
+        controller.clock = { 100 }
+        scroll.contentOffset.y = -scroll.adjustedContentInset.top
+        controller.startSnap(to: 343)
+        controller.advanceSnap(at: 100.08)
+        XCTAssertTrue(controller.isSettling)
+        let caughtOffset = scroll.contentOffset.y
+        controller.touchBegan()
+        XCTAssertTrue(controller.touchCaughtMotion, "The touch stopping a moving row must not open it")
+        XCTAssertFalse(controller.isSettling)
+        XCTAssertFalse(controller.gate.permitsRefresh)
+        controller.advanceSnap(at: 100.2)
+        XCTAssertEqual(scroll.contentOffset.y, caughtOffset, accuracy: 0.01,
+                       "A finger must stop the custom spring just as it stops native deceleration")
+        controller.clock = { 102 }
+        XCTAssertTrue(controller.touchCaughtMotion, "A held touch that stopped motion must not become a row tap after one second")
+        controller.touchEnded()
+        controller.touchBegan()
+        XCTAssertFalse(controller.touchCaughtMotion,
+                       "The next tap on the now-stationary row must be accepted without a timer")
     }
 
     @MainActor

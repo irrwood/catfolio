@@ -37,6 +37,10 @@ struct CostMarketCard: View {
     /// Whether the all-time figure counts profit already taken. The reader's
     /// choice, kept between launches.
     @AppStorage("home.profitIncludesRealised") private var includesRealisedProfit = false
+    /// The last profit pair that could be computed. While a refresh rebuilds
+    /// the history the period's ends can briefly be missing, and the row
+    /// would otherwise drop to "— · TWR —" until the new figures land.
+    @State private var lastValidProfit: ProfitFigures?
     /// What the last tap did, shown for a moment and then gone.
     @Environment(\.colorScheme) private var colorScheme
 
@@ -71,14 +75,14 @@ struct CostMarketCard: View {
             .first { $0.rows.count > 1 } ?? chosen
     }
 
-    /// The day the figures are from, while no held market is trading — a
-    /// weekend, a holiday, the hours after the close. Live, the header keeps
-    /// the app's name.
-    private var dataDayLabel: String? {
-        guard !DataDayLabel.isLive(model.holdings) else { return nil }
+    /// The latest figures keep the app's name even after the market closes.
+    /// A historical selection labels the day being inspected instead.
+    private func headerLabel(at date: Date) -> String {
         let latest = DataDayLabel.latestSession(in: response.marketDates ?? [])
-            ?? DataDayLabel.latestSession(in: rangeData.rows.map(\.dateText))
-        return latest.map { DataDayLabel.text(for: $0, locale: appLocale) }
+            ?? rangeData.rows.last?.dateText
+        let displayed = selectedDate != nil || measuredRange != nil ? selectedPoint?.dateText : nil
+        return DataDayLabel.homeTitle(displayedDay: displayed, latestDay: latest,
+            locale: appLocale, now: date)
     }
 
     private var selectedPoint: CostMarketPlotPoint? {
@@ -173,7 +177,10 @@ struct CostMarketCard: View {
     /// A tap turns profit already taken on and off, and says what it did.
     private func toggleProfitBasis() {
         guard showsLifetimeProfit else {
-            show(note: L10n.text("切到「全部」可计入已实现利润"))
+            range = .maximum
+            selectedDate = nil
+            measuredRange = nil
+            includesRealisedProfit = model.realisedProfit.isFinite
             return
         }
         guard model.realisedProfit.isFinite else {
@@ -195,8 +202,23 @@ struct CostMarketCard: View {
         ToastCenter.shared.show(note, kind: .info)
     }
 
+    private struct ProfitFigures: Equatable {
+        let amount: Double
+        let percentage: Double
+        var isValid: Bool { amount.isFinite && percentage.isFinite }
+    }
+
+    /// The header's profit, or while it cannot be computed, the last one
+    /// that could — never a pair of dashes in the middle of a refresh.
+    private var shownProfit: (amount: Double, percentage: Double) {
+        let current = ProfitFigures(amount: headerProfit.amount, percentage: headerProfit.percentage)
+        if current.isValid { return headerProfit }
+        if let lastValidProfit { return (lastValidProfit.amount, lastValidProfit.percentage) }
+        return headerProfit
+    }
+
     private var financialAccent: Color {
-        let amount = headerProfit.amount
+        let amount = shownProfit.amount
         if !amount.isFinite { return .secondary }
         return CatfolioTheme.heroPerformance(for: amount, scheme: colorScheme)
     }
@@ -213,13 +235,25 @@ struct CostMarketCard: View {
     var body: some View {
         let data = rangeData
         ZStack(alignment: .topLeading) {
-            HStack(spacing: 4) {
-                // Whose portfolio this is. Left as "CATFOLIO" the header
-                // labels someone else's holdings with the reader's own app
-                // name, which is exactly the wrong thing to say above a
-                // total that is not theirs.
-                Text(portfolioOwnerName ?? dataDayLabel ?? "CATFOLIO")
-                    .appCaps(.caption, weight: .semibold)
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                let isClosed = !model.holdings.isEmpty && !DataDayLabel.isLive(model.holdings, at: context.date)
+                HStack(spacing: 4) {
+                    // Public portfolios keep their owner's name.
+                    Text(portfolioOwnerName ?? headerLabel(at: context.date))
+                        .appCaps(.caption, weight: .semibold)
+                    if response.isCurrentHoldingsOnly {
+                        Text(L10n.text("持仓市值"))
+                            .appCaps(.caption, weight: .semibold)
+                            .foregroundStyle(.secondary)
+                    }
+                    if portfolioOwnerName == nil, isClosed {
+                        Image(systemName: "moon.fill")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel(L10n.text("休市"))
+                    }
+                }
+                .accessibilityElement(children: .combine)
             }
             .lineLimit(1)
             .foregroundStyle(CatfolioTheme.primaryText)
@@ -243,7 +277,7 @@ struct CostMarketCard: View {
 
             HStack(spacing: 4) {
                 let summaryAccent = financialAccent
-                let profit = headerProfit
+                let profit = shownProfit
                 Group {
                     Button(action: toggleProfitBasis) {
                         HStack(spacing: 4) {
@@ -269,16 +303,15 @@ struct CostMarketCard: View {
                     Text("·")
                         .foregroundStyle(.tertiary)
                 }
-                // Held back, not shown as "—", until the history behind it is
-                // prepared, so the row does not change twice at launch.
-                .opacity(prepared == nil ? 0 : 1)
+                // Known holdings figures can render before history preparation.
+                .opacity(shownProfit.amount.isFinite && shownProfit.percentage.isFinite ? 1 : 0)
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: prepared == nil)
 
                 Button {
                     showsNetDeposit.toggle()
                 } label: {
                     HStack(spacing: 4) {
-                        Text(L10n.text("NET DEPOSIT"))
+                        Text(L10n.text(response.accountNAV != nil ? "NET DEPOSIT" : "成本"))
                             .appCaps(.footnote)
                         Text(DisplayFormat.money(displayedCost))
                             .numericTransition(displayedCost)
@@ -322,10 +355,13 @@ struct CostMarketCard: View {
         }
         .frame(height: PortfolioHeroChartLayout.sectionHeight, alignment: .topLeading)
         .preference(key: PortfolioHeroReadyPreference.self, value: !isChartLoading && hasPreparedAllRanges)
+        .onChange(of: ProfitFigures(amount: headerProfit.amount, percentage: headerProfit.percentage),
+                  initial: true) { _, figures in
+            if figures.isValid { lastValidProfit = figures }
+        }
         .task(id: "\(model.portfolioChartRevision)-\(isAwaitingEnrichedHistory)") {
-            // Keep the last prepared curve mounted during background refresh.
-            // Interim snapshot-only responses must not replace enriched history.
-            guard !isAwaitingEnrichedHistory else { return }
+            // Prepare locally available data even while history is refreshing.
+            // Keep a complete mounted curve over interim snapshot-only responses.
             let response = response
             let initialRange = range
             let initialRanges: [ChartTimeRange] = initialRange == .maximum
@@ -359,6 +395,9 @@ struct CostMarketCard: View {
                 CostMarketPreparedData(source: source)
             }.value
             guard !Task.isCancelled else { return }
+            // A snapshot-only refresh must not discard the already mounted
+            // cached curve. Account changes give this card a new identity.
+            if !CostMarketPreparedData.shouldReplace(prepared, with: complete) { return }
             self.prepared = complete
             hasPreparedAllRanges = true
             if complete.data(for: range).rows.count <= 1,
@@ -392,12 +431,12 @@ struct CostMarketCard: View {
                 .accessibilityElement()
                 .accessibilityLabel(L10n.text("正在准备历史数据"))
 
-        } else if data.rows.count > 1 {
+        } else if !data.rows.isEmpty {
             FastCostMarketPlot(
                 data: data,
                 showsNetDeposit: showsNetDeposit,
                 transitionKey: range.rawValue,
-                showsLatestPoint: range != .oneDay,
+                showsLatestPoint: range != .oneDay || data.rows.count == 1,
                 selectedPoint: selectedDate == nil && measuredRange == nil ? nil : selectedPoint,
                 measuredRange: measuredRange,
                 selectionIndicatorLabel: selectionIndicatorLabel,
@@ -419,12 +458,9 @@ struct CostMarketCard: View {
             )
             .accessibilityLabel(response.accountNAV != nil ? L10n.text("账户资产与净入金对比图，长按查看单日，双指测量区间") : L10n.text("成本与市值对比图，长按后单指拖动查看单日，保持第一指并加入第二指测量区间"))
         } else {
-            StandardLineChartPlaceholder(
-                title: L10n.text("历史数据不足"),
-                message: warning ?? L10n.text("该时间范围内没有足够的成本与市值记录。"),
-                isLoading: false,
-                hint: L10n.text("下拉刷新会重新计算这段历史。")
-            )
+            // The header still shows the available account figures. No
+            // historical curve is implied when no real observations exist.
+            Color.clear
         }
     }
 
@@ -699,6 +735,10 @@ final class CostMarketPreparedData: @unchecked Sendable {
         ranges[range] ?? ranges[.maximum] ?? .empty
     }
 
+    static func shouldReplace(_ cached: CostMarketPreparedData?, with fresh: CostMarketPreparedData) -> Bool {
+        !(fresh.data(for: .maximum).rows.count <= 1 && (cached?.data(for: .maximum).rows.count ?? 0) > 1)
+    }
+
     func accountPerformance(from startDate: String, to endDate: String) -> (amount: Double, percentage: Double) {
         guard let accountNAV, let start = accountRowsByDate[startDate],
               let end = accountRowsByDate[endDate], startDate <= endDate,
@@ -835,6 +875,14 @@ enum DataDayLabel {
         }
     }
 
+    /// No selection, or the newest available session, keeps the home title.
+    /// Market opening hours do not determine whether data is the latest.
+    static func homeTitle(displayedDay: String?, latestDay: String?, locale: Locale,
+                          now: Date = Date(), timeZone: TimeZone = .current) -> String {
+        guard let displayedDay, let latestDay, displayedDay < latestDay else { return "CATFOLIO" }
+        return text(for: displayedDay, locale: locale, now: now, timeZone: timeZone)
+    }
+
     /// The latest trading day among these dates. A snapshot taken on a
     /// Saturday is dated Saturday, but its prices are Friday's.
     static func latestSession(in dates: [String]) -> String? {
@@ -852,3 +900,4 @@ enum DataDayLabel {
         holdings.contains { MarketHours.isOpen(ticker: $0.ticker, at: date) }
     }
 }
+

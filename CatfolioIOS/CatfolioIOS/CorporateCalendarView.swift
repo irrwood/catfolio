@@ -117,36 +117,13 @@ struct CorporateEventsCard: View {
 private struct CorporateEventCardRow: View {
     let event: CorporateEvent
     let holding: Holding?
-    /// The logo's theme colour, once the logo has loaded.
-    @State private var brand: Color?
-
-    /// The theme colour, faded. A black, white or grey brand has no hue to
-    /// fade, so it becomes a faint neutral that works in both appearances.
-    static func wash(_ color: Color) -> Color {
-        var saturation: CGFloat = 0
-        UIColor(color).getHue(nil, saturation: &saturation, brightness: nil, alpha: nil)
-        return saturation < 0.15 ? Color.primary.opacity(0.06) : color.opacity(0.16)
-    }
-
     var body: some View {
         let date = CorporateCalendarDay.date(event.date, calendar: .current) ?? Date()
         HStack(spacing: 12) {
-            VStack(spacing: 0) {
-                Text(String(Int(event.date.suffix(2)) ?? 0))
-                    .appNumber(.title, weight: .bold)
-                    .lineLimit(1)
-                Text(date, format: .dateTime.month(.abbreviated))
-                    .appText(.footnote)
-                    .foregroundStyle(SettingsTemplate.secondaryText)
-            }
-            .frame(width: 52)
+            CorporateEventDateTile(date: date, day: Int(event.date.suffix(2)) ?? 0)
 
             HStack(spacing: 12) {
-                AssetLogo(ticker: event.ticker, logoSymbol: holding?.logoSymbol, size: 40, cornerRadius: 20,
-                          onBrandColorResolved: { color in
-                              guard brand != color else { return }
-                              withAnimation(.easeOut(duration: 0.25)) { brand = color }
-                          })
+                AssetLogo(ticker: event.ticker, logoSymbol: holding?.logoSymbol, size: 40, cornerRadius: 20)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(holding?.shortName ?? event.ticker)
                         .appText(.body, weight: .medium)
@@ -165,8 +142,6 @@ private struct CorporateEventCardRow: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(brand.map(Self.wash) ?? event.tint,
-                        in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .accessibilityElement(children: .combine)
     }
@@ -408,5 +383,35 @@ struct CorporateCalendarView: View {
             month = next
             selectedDay = monthDays.contains(todayKey) ? todayKey : nil
         }
+    }
+}
+
+/// The date as a calendar icon: a small tile with the month in red over the
+/// day, the way a calendar app marks a day.
+private struct CorporateEventDateTile: View {
+    @Environment(\.locale) private var appLocale
+    let date: Date
+    let day: Int
+
+    private static let monthRed = Color(red: 0.78, green: 0.24, blue: 0.24)
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        VStack(spacing: 0) {
+            Text(date.formatted(.dateTime.month(.abbreviated).locale(appLocale)).uppercased(with: appLocale))
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(Self.monthRed)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(String(day))
+                .appNumber(.title, weight: .medium)
+                .foregroundStyle(CatfolioTheme.primaryText)
+                .lineLimit(1)
+        }
+        .frame(width: 52, height: 56)
+        .background(SettingsTemplate.card, in: shape)
+        .overlay { shape.strokeBorder(SettingsTemplate.cardBorder, lineWidth: SettingsTemplate.cardBorderWidth) }
+        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+        .accessibilityHidden(true)
     }
 }

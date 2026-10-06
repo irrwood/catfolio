@@ -908,7 +908,7 @@ struct LocalMarketDataClient {
         request.timeoutInterval = 9
         request.setValue("Mozilla/5.0 Catfolio-iOS", forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await Self.yahooSession.recordedData(for: request)
+        let (data, response) = try await MarketRequestCoalescer.shared.data(for: request, session: Self.yahooSession)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             throw LocalServiceError.remote("Yahoo 日内行情请求失败（\(http.statusCode)）")
@@ -1129,7 +1129,7 @@ struct LocalMarketDataClient {
         request.timeoutInterval = 9
         request.setValue("Mozilla/5.0 Catfolio-iOS", forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await Self.yahooSession.recordedData(for: request)
+        let (data, response) = try await MarketRequestCoalescer.shared.data(for: request, session: Self.yahooSession)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             throw LocalServiceError.remote("Yahoo 成交量请求失败（\(http.statusCode)）")
@@ -1745,7 +1745,7 @@ struct LocalMarketDataClient {
             guard let cached else { throw LocalServiceError.noHistoricalPrices }
             return cached
         }
-        if !forceRefresh, let cached, Date().timeIntervalSince(cached.fetchedAt) < 12 * 3600 { return cached }
+        if !forceRefresh, let cached, MarketCacheFreshness.isFresh(fetchedAt: cached.fetchedAt, lifetime: MarketCacheFreshness.history) { return cached }
         guard let start = DayDateCodec.date(from: from), let end = DayDateCodec.date(from: to) else { throw LocalServiceError.invalidResponse }
         var url = URLComponents(string: "https://query1.finance.yahoo.com/v8/finance/chart/")!
         url.path += symbol
@@ -1756,7 +1756,7 @@ struct LocalMarketDataClient {
         request.timeoutInterval = 15
         request.setValue("Mozilla/5.0 Catfolio-iOS", forHTTPHeaderField: "User-Agent")
         do {
-            let (data, response) = try await Self.yahooSession.recordedData(for: request)
+            let (data, response) = try await MarketRequestCoalescer.shared.data(for: request, session: Self.yahooSession)
             guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw LocalServiceError.invalidResponse }
             guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let chart = root["chart"] as? [String: Any],
@@ -1963,7 +1963,7 @@ struct LocalMarketDataClient {
         request.timeoutInterval = 9
         request.setValue("Mozilla/5.0 Catfolio-iOS", forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await Self.yahooSession.recordedData(for: request)
+        let (data, response) = try await MarketRequestCoalescer.shared.data(for: request, session: Self.yahooSession)
         guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             throw LocalServiceError.remote("Yahoo 历史行情请求失败（\(http.statusCode)）")
@@ -2012,7 +2012,7 @@ struct LocalMarketDataClient {
         request.timeoutInterval = 9
         request.setValue("Mozilla/5.0 Catfolio-iOS", forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await Self.yahooSession.recordedData(for: request)
+        let (data, response) = try await MarketRequestCoalescer.shared.data(for: request, session: Self.yahooSession)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw LocalServiceError.remote("Yahoo 股息记录请求失败")
         }

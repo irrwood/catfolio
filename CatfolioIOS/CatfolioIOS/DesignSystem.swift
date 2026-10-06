@@ -216,7 +216,7 @@ enum SecurityDetailPresentation {
 
 /// Keeps financial colours intact while the row responds to a press. Button
 /// owns recognition and cancellation, so starting a scroll never opens it.
-struct HoldingPressButtonStyle: ButtonStyle {
+struct HoldingPressButtonStyle: PrimitiveButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         HoldingPressBody(configuration: configuration)
     }
@@ -230,11 +230,12 @@ struct HoldingPressButtonStyle: ButtonStyle {
 /// it shows on touch-down and clears as soon as the touch moves away, ends,
 /// or the scroll takes it.
 private struct HoldingPressBody: View {
+    @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let configuration: ButtonStyleConfiguration
+    let configuration: PrimitiveButtonStyleConfiguration
     @State private var touchDown = false
 
-    private var isPressed: Bool { touchDown || configuration.isPressed }
+    private var isPressed: Bool { touchDown }
 
     var body: some View {
         configuration.label
@@ -247,7 +248,9 @@ private struct HoldingPressBody: View {
                     // On at once; off with a short fade, as a system row does.
                     .animation(isPressed || reduceMotion ? nil : .easeOut(duration: 0.25), value: isPressed)
             }
-            .gesture(ImmediateTouchDown { touchDown = $0 })
+            .gesture(ImmediateTouchDown(onChange: { touchDown = $0 }, onTap: { if isEnabled { configuration.trigger() } }))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { if isEnabled { configuration.trigger() } }
     }
 }
 
@@ -256,15 +259,18 @@ private struct HoldingPressBody: View {
 /// scroll view.
 struct ImmediateTouchDown: UIGestureRecognizerRepresentable {
     let onChange: (Bool) -> Void
+    var onTap: () -> Void = {}
 
     func makeUIGestureRecognizer(context: Context) -> Observer { Observer() }
 
     func updateUIGestureRecognizer(_ recognizer: Observer, context: Context) {
         recognizer.onChange = onChange
+        recognizer.onTap = onTap
     }
 
     final class Observer: UIGestureRecognizer {
         var onChange: (Bool) -> Void = { _ in }
+        var onTap: () -> Void = {}
         private var start: CGPoint?
 
         init() {
@@ -275,19 +281,34 @@ struct ImmediateTouchDown: UIGestureRecognizerRepresentable {
         }
 
         override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-            guard start == nil, let touch = touches.first else { return }
-            start = touch.location(in: view)
-            onChange(true)
+            guard let touch = touches.first else { return }
+            beginTouch(at: touch.location(in: view))
         }
 
         override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
-            guard let start, let point = touches.first?.location(in: view) else { return }
-            // A finger travelling this far is scrolling, not pressing.
+            guard let touch = touches.first else { return }
+            moveTouch(to: touch.location(in: view))
+        }
+
+        override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) { endTouch(cancelled: false) }
+        override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) { endTouch(cancelled: true) }
+
+        func beginTouch(at point: CGPoint) {
+            guard start == nil else { return }
+            start = point
+            onChange(true)
+        }
+
+        func moveTouch(to point: CGPoint) {
+            guard let start else { return }
             if hypot(point.x - start.x, point.y - start.y) > 10 { finish() }
         }
 
-        override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) { finish() }
-        override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) { finish() }
+        func endTouch(cancelled: Bool) {
+            let isTap = start != nil && !cancelled
+            finish()
+            if isTap { onTap() }
+        }
         override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool { false }
         override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
 
@@ -1985,12 +2006,32 @@ private final class AssetLogoImageCache: @unchecked Sendable {
     }
 }
 
-private actor AssetLogoRepository {
+actor AssetLogoRepository {
     struct DecodedImage: @unchecked Sendable {
         let value: UIImage
     }
 
     static let shared = AssetLogoRepository()
+    private let lightTransitionImages = NSCache<UIImage, UIImage>()
+
+    /// Rasterize once off the main actor at the decoded image's own scale.
+    func transitionImage(_ image: DecodedImage, light: Bool) -> DecodedImage {
+        guard light else { return image }
+        if let saved = lightTransitionImages.object(forKey: image.value) { return DecodedImage(value: saved) }
+        let format = image.value.imageRendererFormat
+        format.scale = image.value.scale
+        let shown = UIGraphicsImageRenderer(size: image.value.size, format: format).image { context in
+            image.value.draw(at: .zero)
+            context.cgContext.setBlendMode(.multiply)
+            context.cgContext.setFillColor(UIColor(red: 247 / 255, green: 248 / 255, blue: 250 / 255, alpha: 1).cgColor)
+            context.cgContext.fill(CGRect(origin: .zero, size: image.value.size))
+        }
+        lightTransitionImages.countLimit = 120
+        lightTransitionImages.totalCostLimit = 18 * 1_024 * 1_024
+        lightTransitionImages.setObject(shown, forKey: image.value,
+            cost: Int(shown.size.width * shown.size.height * shown.scale * shown.scale * 4))
+        return DecodedImage(value: shown)
+    }
 
     func image(for url: URL) async throws -> DecodedImage {
         if let cached = AssetLogoImageCache.shared.image(for: url) {
@@ -2106,6 +2147,7 @@ struct AssetLogo: View {
         .clipShape(RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
         .accessibilityHidden(true)
         .onChange(of: displayedImage, initial: true) { _, image in recordShownImage(image) }
+        .onChange(of: usesLightTile) { _, _ in recordShownImage(displayedImage) }
         .task(id: logoURL ?? brandfetchURL) {
             // SwiftUI may reuse this view when a ranked chart slot changes
             // ticker. Clear the old decoded image before resolving the new URL.
@@ -2124,7 +2166,12 @@ struct AssetLogo: View {
     /// The artwork on screen, for a transition to fly without redrawing it.
     private func recordShownImage(_ image: UIImage?) {
         guard let image else { return }
-        AssetLogoShownImages.shared.record(image, for: ticker)
+        let light = usesLightTile
+        Task {
+            let shown = await AssetLogoRepository.shared.transitionImage(.init(value: image), light: light)
+            guard displayedImage === image, usesLightTile == light else { return }
+            AssetLogoShownImages.shared.record(shown.value, for: ticker)
+        }
     }
 
     private var displayedImage: UIImage? {

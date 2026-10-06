@@ -9,6 +9,7 @@ struct PortfolioView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var selectedHolding: Holding?
     @State private var showsTodayDetail = false
@@ -81,7 +82,7 @@ struct PortfolioView: View {
                                             holdings: model.holdings,
                                             dailyChanges: model.holdingDailyChanges,
                                             benchmarkChange: model.benchmarkDailyChange,
-                                            sessionDate: model.portfolioChart?.marketDates.flatMap(DataDayLabel.latestSession(in:)),
+                                            sessionDate: model.latestSessionDate,
                                             isLoading: model.isHoldingDailyChangesLoading,
                                             isRefreshingBehindCache: model.isHomeRefreshingBehindCache,
                                             onOpenDetail: { showsTodayDetail = true },
@@ -112,19 +113,11 @@ struct PortfolioView: View {
                                     }
                                 }
                                 .zIndex(1)
-                            } else if model.isPortfolioLoading {
-                                PortfolioLoadingView(scrollState: homeScrollState)
-                            } else if let error = model.portfolioError {
-                                ContentUnavailableView {
-                                    Label(L10n.text("暂时无法加载"), systemImage: "wifi.exclamationmark")
-                                } description: {
-                                    Text(L10n.message(error))
-                                } actions: {
-                                    Button(L10n.text("重试")) { Task { await refreshFromUser() } }
-                                }
-                                .frame(minHeight: 420)
                             } else {
-                                PortfolioLoadingView(scrollState: homeScrollState)
+                                // Loading, failed, or not yet started: the
+                                // skeleton; a pull starts or retries a load.
+                                PortfolioLoadingView(isAnimating: model.isPortfolioLoading,
+                                                     scrollState: homeScrollState)
                             }
                         }
                         // Leave a deliberate scroll tail above the floating
@@ -160,6 +153,19 @@ struct PortfolioView: View {
                     // by a new touch at the completely settled lower stop.
                     .scrollBounceBehavior(.always, axes: .vertical)
                     .accessibilityIdentifier("portfolio-scroll")
+                    // The portfolio and its saved home are protected files,
+                    // unreadable while the phone is locked. iOS can launch the
+                    // app in the background before first unlock — after an
+                    // update, say — and that first load fails. Load again the
+                    // moment the files open, or the app comes forward still
+                    // showing nothing, rather than waiting for a pull.
+                    .onReceive(NotificationCenter.default.publisher(
+                        for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
+                        reloadIfEmpty()
+                    }
+                    .onChange(of: scenePhase) { _, phase in
+                        if phase == .active { reloadIfEmpty() }
+                    }
                     .task {
                         if model.overview == nil && !model.isPortfolioLoading {
                             await model.refreshPortfolio()
@@ -191,7 +197,8 @@ struct PortfolioView: View {
                     TodayDetailView(
                         holdings: model.holdings,
                         dailyChanges: model.holdingDailyChanges,
-                        benchmarkChange: model.benchmarkDailyChange
+                        benchmarkChange: model.benchmarkDailyChange,
+                        sessionDate: model.latestSessionDate
                     )
                 }
             }
@@ -212,6 +219,7 @@ struct PortfolioView: View {
         // A page flying back does not block the tap: the next one opens at once.
         guard selectedHolding == nil, !SecurityDetailLiveZoom.shared.isShowingPage,
               !homeScrollController.touchCaughtMotion else { return }
+        openFeedback()
         HoldingDetailContentView.prefetch(holding, model: model)
         let opened = SecurityDetailLiveZoom.shared.open(
             id: holding.ticker, namespace: namespace,
@@ -224,7 +232,6 @@ struct PortfolioView: View {
                     .tint(CatfolioTheme.accent))
             },
             didEnd: {})
-        openFeedback()
         if !opened { selectedHolding = holding }
     }
 
@@ -233,6 +240,13 @@ struct PortfolioView: View {
     private func openFeedback() {
         guard hapticsEnabled else { return }
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 0.8)
+    }
+
+    /// Nothing on screen and no load running: start one. A home that is
+    /// already showing data is left to its own refresh.
+    @MainActor private func reloadIfEmpty() {
+        guard model.overview == nil, !model.isPortfolioLoading else { return }
+        Task { await model.refreshPortfolio() }
     }
 
     @MainActor private func refreshFromUser() async {

@@ -1105,6 +1105,16 @@ private struct VolumeDistributionPlot: View {
             let axisPillX = size.width - axisPillWidth / 2
 
             ZStack(alignment: .topLeading) {
+                // The cost: a plain 1pt rule under the profile, read through
+                // it rather than laid over it as the glass rules are.
+                if let costY {
+                    Rectangle()
+                        .fill(volumeCostGreen)
+                        .frame(width: max(0, costRuleEndX - edgeLabelLeading), height: 1)
+                        .position(x: (edgeLabelLeading + costRuleEndX) / 2, y: costY)
+                        .allowsHitTesting(false)
+                }
+
                 Canvas { context, canvasSize in
                     let bins = drawableProfile(
                         lowerBound: domain.lowerBound,
@@ -1173,11 +1183,6 @@ private struct VolumeDistributionPlot: View {
 
                 if let currentY {
                     segmentedRule(y: currentY, from: edgeLabelLeading, to: currentRuleEndX, color: currentPriceTint)
-                        .zIndex(1)
-                }
-
-                if let costY {
-                    segmentedRule(y: costY, from: edgeLabelLeading, to: costRuleEndX, color: volumeCostGreen)
                         .zIndex(1)
                 }
 

@@ -18,15 +18,16 @@ final class HoldingHistoryState {
         revision &+= 1
 
         func publish(_ value: HoldingValueHistory) {
+            if value.rows.count <= 1, (history?.rows.count ?? 0) > 1 { return }
             history = value
             errorMessage = nil
             revision &+= 1
         }
 
         if let cached = try? await fetch(true), !Task.isCancelled,
-           request == generation, cached.rows.count > 1 {
+           request == generation, !cached.rows.isEmpty {
             publish(cached)
-            if !forceRefresh { return }
+            if !forceRefresh, cached.rows.count > 1 { return }
         }
         guard !Task.isCancelled, request == generation else { return }
 
@@ -34,7 +35,7 @@ final class HoldingHistoryState {
             do {
                 let fresh = try await fetch(false)
                 guard !Task.isCancelled, request == generation else { return }
-                guard fresh.rows.count > 1 else { throw LocalServiceError.noHistoricalPrices }
+                guard !fresh.rows.isEmpty else { throw LocalServiceError.noHistoricalPrices }
                 publish(fresh)
                 return
             } catch is CancellationError {

@@ -13,19 +13,26 @@ struct AIConversation: Identifiable, Sendable {
     var messages: [ChatMessage]
     var attentionReports: [UUID: PortfolioAttentionReport]
     var updatedAt: Date
+    var securityDebate: SecurityDebate?
+    var securityDebateMessageID: UUID?
 
     init(
         id: UUID = UUID(),
         title: String? = nil,
         messages: [ChatMessage] = [],
         attentionReports: [UUID: PortfolioAttentionReport] = [:],
-        updatedAt: Date = .now
+        updatedAt: Date = .now,
+        securityDebate: SecurityDebate? = nil,
+        securityDebateMessageID: UUID? = nil
     ) {
         self.id = id
         self.title = title
         self.messages = messages
         self.attentionReports = attentionReports
         self.updatedAt = updatedAt
+        self.securityDebate = securityDebate
+        self.securityDebateMessageID = securityDebateMessageID
+            ?? (securityDebate == nil ? nil : messages.first(where: { $0.role == .assistant })?.id)
     }
 
     var isEmpty: Bool { messages.isEmpty }
@@ -51,6 +58,27 @@ struct AIConversation: Identifiable, Sendable {
 struct LocalChatLibrary: Sendable {
     var conversations: [AIConversation]
     var activeID: UUID?
+    /// Keep import identities after deletion so a removed analysis stays removed.
+    var importedSecurityDebateKeys: Set<String> = []
+
+    @discardableResult
+    mutating func importSecurityDebates(_ debates: [SecurityDebate]) -> Bool {
+        var changed = false
+        for debate in debates where !debate.questions.isEmpty {
+            guard importedSecurityDebateKeys.insert(debate.conversationKey).inserted else { continue }
+            conversations.append(AIConversation(
+                title: "\(debate.ticker) · \(L10n.text("个股关键变化"))",
+                messages: [
+                    ChatMessage(role: .user, text: "\(debate.name) (\(debate.ticker)) · \(L10n.text("个股关键变化"))", createdAt: debate.generatedAt),
+                    ChatMessage(role: .assistant, text: debate.conversationMarkdown, createdAt: debate.generatedAt)
+                ],
+                updatedAt: debate.generatedAt,
+                securityDebate: debate
+            ))
+            changed = true
+        }
+        return changed
+    }
 
     static let empty = LocalChatLibrary(conversations: [], activeID: nil)
 
@@ -98,6 +126,8 @@ actor LocalChatStore {
         let messages: [ChatMessage]
         let attentionReports: [StoredAttentionReport]?
         let updatedAt: Date
+        var securityDebate: SecurityDebate? = nil
+        var securityDebateMessageID: UUID? = nil
     }
 
     /// Schema 3 holds a library. Schemas 1 and 2 held exactly one
@@ -109,6 +139,7 @@ actor LocalChatStore {
         let attentionReports: [StoredAttentionReport]?
         let conversations: [StoredConversation]?
         let activeConversationID: UUID?
+        var importedSecurityDebateKeys: [String]? = nil
     }
 
     static let shared = LocalChatStore()
@@ -146,13 +177,16 @@ actor LocalChatStore {
                         uniqueKeysWithValues: (conversation.attentionReports ?? [])
                             .map { ($0.messageID, $0.report) }
                     ),
-                    updatedAt: conversation.updatedAt
+                    updatedAt: conversation.updatedAt,
+                    securityDebate: conversation.securityDebate,
+                    securityDebateMessageID: conversation.securityDebateMessageID
                 )
             }
             let activeID = document.activeConversationID.flatMap { id in
                 conversations.contains { $0.id == id } ? id : nil
             }
-            return LocalChatLibrary(conversations: conversations, activeID: activeID)
+            return LocalChatLibrary(conversations: conversations, activeID: activeID,
+                importedSecurityDebateKeys: Set(document.importedSecurityDebateKeys ?? []))
         }
 
         return migrated(from: document)
@@ -222,7 +256,9 @@ actor LocalChatStore {
                     .filter { ids.contains($0.key) }
                     .map { StoredAttentionReport(messageID: $0.key, report: $0.value) }
                     .sorted { $0.messageID.uuidString < $1.messageID.uuidString },
-                updatedAt: conversation.updatedAt
+                updatedAt: conversation.updatedAt,
+                securityDebate: ids.contains(conversation.securityDebateMessageID ?? UUID()) ? conversation.securityDebate : nil,
+                securityDebateMessageID: conversation.securityDebateMessageID
             )
         }
 
@@ -236,7 +272,8 @@ actor LocalChatStore {
             conversations: stored,
             activeConversationID: library.activeID.flatMap { id in
                 stored.contains { $0.id == id } ? id : nil
-            }
+            },
+            importedSecurityDebateKeys: library.importedSecurityDebateKeys.sorted()
         )
         let data = try encoder.encode(document)
         try data.write(to: fileURL, options: [.atomic, .completeFileProtection])

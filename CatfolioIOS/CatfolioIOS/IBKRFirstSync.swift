@@ -15,6 +15,18 @@ enum IBKRFlexKeys {
     static func token(accountID: String) -> String { "ibkr.flex.account.\(accountID).token" }
     static func queryID(accountID: String) -> String { "ibkr.flex.account.\(accountID).query-id" }
 
+    /// Both writes must succeed before the caller acknowledges the save.
+    static func save(
+        _ credentials: IBKRFlexCredentials,
+        accountID: String?,
+        write: (String, String) throws -> Void = { try KeychainStore.set($0, for: $1) }
+    ) throws {
+        let tokenKey = accountID.map { token(accountID: $0) } ?? pendingToken
+        let queryKey = accountID.map { queryID(accountID: $0) } ?? pendingQueryID
+        try write(credentials.token, tokenKey)
+        try write(credentials.queryID, queryKey)
+    }
+
     static var pendingTokenValue: String { KeychainStore.string(for: pendingToken) ?? "" }
     static var pendingQueryIDValue: String { KeychainStore.string(for: pendingQueryID) ?? "" }
 

@@ -40,4 +40,23 @@ final class DataDayLabelTests: XCTestCase {
     func testNoHoldingsIsNeverLive() {
         XCTAssertFalse(DataDayLabel.isLive([]))
     }
+
+    func testLatestAvailableFridayKeepsHomeTitleOverTheWeekend() throws {
+        let sunday = try now("2026-10-04")
+        let utc = TimeZone(secondsFromGMT: 0)!
+        for displayed in [nil, "2026-10-02", "2026-10-03"] as [String?] {
+            XCTAssertEqual(DataDayLabel.homeTitle(displayedDay: displayed, latestDay: "2026-10-02",
+                locale: zh, now: sunday, timeZone: utc), "CATFOLIO")
+        }
+    }
+
+    func testHistoricalSelectionShowsItsOwnDateInsteadOfLastSession() throws {
+        let sunday = try now("2026-10-04")
+        let utc = TimeZone(secondsFromGMT: 0)!
+        let label = DataDayLabel.homeTitle(displayedDay: "2026-10-01", latestDay: "2026-10-02",
+            locale: zh, now: sunday, timeZone: utc)
+        XCTAssertEqual(label, DataDayLabel.text(for: "2026-10-01", locale: zh, now: sunday, timeZone: utc))
+        XCTAssertNotEqual(label, "CATFOLIO")
+    }
+
 }

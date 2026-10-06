@@ -75,8 +75,6 @@ struct Trading212GuideLesson: View {
             case .permissions:
                 instruction("checklist", L10n.text("勾选读取权限"),
                             L10n.text("开启 Portfolio、Account data 和 History 的读取权限，包括历史订单、股息与交易记录。不要开启下单或修改订单权限。"))
-                instruction("network", L10n.text("检查 IP 限制"),
-                            L10n.text("如设置了 IP 白名单，需要允许此 iPhone 当前网络的公网 IP；切换网络后可能需要更新。"))
                 instruction("key", L10n.text("保存 Key 与 Secret"),
                             L10n.text("生成后会显示 API Key 和 API Secret。Secret 只显示一次，请安全保存，再返回 Catfolio 填写。"))
             default:

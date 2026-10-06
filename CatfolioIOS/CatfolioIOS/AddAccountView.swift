@@ -16,22 +16,24 @@ struct AddAccountView: View {
             SettingsPage(bottomInset: 32) {
                 SettingsSectionHeader(L10n.text("选择券商或导入方式"))
                 SettingsCard {
-                    row("Trading 212", "chart.line.uptrend.xyaxis", .trading212)
-                    row("Interactive Brokers", "doc.text", .ibkr)
-                    row("Moomoo", "person.badge.key", .moomoo)
-                    row("Robinhood", "link", .robinhood)
-                    row(L10n.text("链接 2000+交易所"), "link", .snaptrade)
+                    row("Trading 212", .brandAsset("BrokerTrading212"), .trading212)
+                    row("Interactive Brokers", .brandAsset("BrokerIBKR"), .ibkr)
+                    row("Moomoo", .brandAsset("BrokerMoomoo"), .moomoo)
+                    row("Robinhood", .brandAsset("BrokerRobinhood"), .robinhood)
+                    row(L10n.text("链接 2000+交易所"), .brandAsset("BrokerSnapTrade"), .snaptrade)
                 }
                 SettingsCard {
-                    row(L10n.text("CSV 导入"), "doc.badge.plus", .csv)
+                    row(L10n.text("CSV 导入"), .symbol("doc.badge.plus"), .csv)
                 }
                 SettingsFootnote(L10n.text("Trading 212 和 IBKR 提供逐步连接教程。已有凭证可以直接填写。"))
             }
             .navigationTitle(L10n.text("添加账户"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    AppModalDoneButton { dismiss() }
+                if provider == nil {
+                    ToolbarItem(placement: .confirmationAction) {
+                        AppModalDoneButton { dismiss() }
+                    }
                 }
             }
             .navigationDestination(item: $provider) { provider in
@@ -54,8 +56,8 @@ struct AddAccountView: View {
         }
     }
 
-    private func row(_ title: String, _ icon: String, _ selection: Provider) -> some View {
-        SettingsButtonRow(icon: .symbol(icon), title: title) { provider = selection }
+    private func row(_ title: String, _ icon: SettingsIconSource, _ selection: Provider) -> some View {
+        SettingsButtonRow(icon: icon, title: title) { provider = selection }
     }
 }
 

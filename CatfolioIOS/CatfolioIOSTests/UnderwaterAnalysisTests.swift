@@ -17,6 +17,29 @@ final class UnderwaterAnalysisTests: XCTestCase {
     }
 
     @MainActor
+    func testSingleCachedObservationKeepsFiguresWhenHistoryRefreshFails() async {
+        let state = HoldingHistoryState()
+        let complete = history(["A": [100, 110, 90, 95, 96, 99]])
+        let snapshot = HoldingValueHistory(rows: Array(complete.rows.suffix(1)), costs: complete.costs, names: complete.names)
+        await state.load { cachedOnly in
+            if cachedOnly { return snapshot }
+            throw LocalServiceError.noHistoricalPrices
+        }
+        XCTAssertEqual(state.history?.rows.last?.values["A"], 99)
+        XCTAssertNil(state.errorMessage)
+    }
+
+    @MainActor
+    func testSnapshotOnlyRefreshCannotReplaceACompleteCachedCurve() async {
+        let state = HoldingHistoryState()
+        let complete = history(["A": [100, 110, 90, 95, 96, 99]])
+        let snapshot = HoldingValueHistory(rows: Array(complete.rows.suffix(1)), costs: complete.costs, names: complete.names)
+        await state.load(forceRefresh: true) { cachedOnly in cachedOnly ? complete : snapshot }
+        XCTAssertEqual(state.history?.rows.count, complete.rows.count)
+        XCTAssertNil(state.errorMessage)
+    }
+
+    @MainActor
     func testSavedHistoryIsVisibleBeforeNetworkCompletes() async {
         let state = HoldingHistoryState()
         let saved = history(["A": [100, 110, 90, 95, 96, 99]])
@@ -86,7 +109,7 @@ final class UnderwaterAnalysisTests: XCTestCase {
         let fresh = history(["B": [200, 220, 180, 190, 192, 198]])
         var resume: CheckedContinuation<HoldingValueHistory, Never>?
         let task = Task {
-            await state.load { cachedOnly in
+            await state.load(forceRefresh: true) { cachedOnly in
                 if cachedOnly { return old }
                 return await withCheckedContinuation { resume = $0 }
             }

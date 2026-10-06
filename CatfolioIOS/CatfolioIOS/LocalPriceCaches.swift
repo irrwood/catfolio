@@ -74,7 +74,7 @@ actor LocalHistoricalPriceCache {
         guard !filtered.isEmpty else { return nil }
         return Hit(
             values: filtered,
-            isFresh: Date().timeIntervalSince(entry.fetchedAt) < 12 * 60 * 60
+            isFresh: MarketCacheFreshness.isFresh(fetchedAt: entry.fetchedAt, lifetime: MarketCacheFreshness.history)
                 && entry.requestedFrom.map { $0 <= from } == true
                 && entry.requestedTo.map { $0 >= to } == true,
             coversStart: entry.requestedFrom.map { $0 <= from } == true,
@@ -244,7 +244,7 @@ actor LocalIntradayPriceCache {
         guard let entry = entries[symbol.uppercased()], entry.bars.count > 1 else { return nil }
         return Hit(
             bars: entry.bars,
-            isFresh: Date().timeIntervalSince(entry.fetchedAt) < 5 * 60
+            isFresh: MarketCacheFreshness.isFresh(fetchedAt: entry.fetchedAt, lifetime: MarketCacheFreshness.intraday)
         )
     }
 
@@ -344,7 +344,7 @@ actor LocalVolumeBarCache {
         guard let entry = entries[symbol.uppercased()], !entry.bars.isEmpty else { return nil }
         return Hit(
             bars: entry.bars,
-            isFresh: Date().timeIntervalSince(entry.fetchedAt) < 24 * 60 * 60
+            isFresh: MarketCacheFreshness.isFresh(fetchedAt: entry.fetchedAt, lifetime: MarketCacheFreshness.volume)
         )
     }
 

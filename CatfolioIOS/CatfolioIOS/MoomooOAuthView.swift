@@ -16,6 +16,7 @@ struct MoomooOAuthView: View {
     @State private var isConnected = false
     @State private var showsDisconnectConfirmation = false
     @State private var showsSyncConfirmation = false
+    @State private var hasCreatedAccount = false
     @State private var nickname = ""
     @State private var nicknameEdited = false
 
@@ -186,8 +187,10 @@ struct MoomooOAuthView: View {
                 if context.isCreating {
                     ToolbarItem(placement: .cancellationAction) { AccountProviderBackButton() }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    AppModalDoneButton { dismiss() }
+                if !context.isCreating || hasCreatedAccount {
+                    ToolbarItem(placement: .confirmationAction) {
+                        AppModalDoneButton { dismiss() }
+                    }
                 }
             }
             .task { prepareNickname() }
@@ -337,6 +340,7 @@ struct MoomooOAuthView: View {
                 accountNames: accountNames,
                 replacingAccountsOnly: true
             )
+            if context.isCreating { hasCreatedAccount = true }
             let warningText = result.warnings.isEmpty ? "" : L10n.text("，\(result.warnings.count) 条提示")
             status = .success(context.isCreating
                 ? L10n.text("已创建账户，导入 \(result.holdingsCount) 个持仓\(warningText)")

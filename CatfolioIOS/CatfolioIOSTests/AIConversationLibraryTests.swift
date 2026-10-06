@@ -201,4 +201,52 @@ final class AIConversationLibraryTests: XCTestCase {
         let history = try await store.load()
         XCTAssertEqual(history.messages.first?.text, "old")
     }
+
+    private func debate(at date: Date = Date(timeIntervalSince1970: 1_800_000_000.456)) -> SecurityDebate {
+        SecurityDebate(ticker: "TEST", name: "Test Company", generatedAt: date,
+            questions: [.init(question: "Revenue changed", whatChanged: "Revenue grew 10%",
+                whyItMatters: "Demand improved", watchNext: "Next quarter", uncertainty: "Margins remain uncertain",
+                evidence: [.init(sourceID: "source", quote: "Revenue grew 10%")])],
+            sources: [.init(id: "source", title: "Earnings", publisher: "Issuer",
+                url: URL(string: "https://example.com/earnings")!, publishedAt: nil, tier: "primary")],
+            language: "en")
+    }
+
+    func testSecurityAnalysisBecomesSeparateConversationAndKeepsActiveChat() {
+        let active = AIConversation(messages: [message(.user, "My draft conversation")])
+        var library = LocalChatLibrary(conversations: [active], activeID: active.id)
+        XCTAssertTrue(library.importSecurityDebates([debate()]))
+        XCTAssertEqual(library.conversations.count, 2)
+        XCTAssertEqual(library.activeID, active.id)
+        let analysis = library.conversations[1]
+        XCTAssertNotEqual(analysis.id, active.id)
+        XCTAssertEqual(analysis.messages.map(\.role), [.user, .assistant])
+        XCTAssertTrue(analysis.messages[1].text.contains("Revenue grew 10%"))
+        XCTAssertTrue(analysis.messages[1].text.contains("https://example.com/earnings"))
+        XCTAssertEqual(analysis.securityDebateMessageID, analysis.messages[1].id)
+        XCTAssertFalse(library.importSecurityDebates([debate()]))
+    }
+
+    func testAnalysisAndFollowUpPersistAndDeletionDoesNotReimportIt() async throws {
+        let store = store()
+        var library = LocalChatLibrary.empty
+        library.importSecurityDebates([debate()])
+        library.conversations[0].messages.append(message(.user, "What should I watch?"))
+        let id = library.conversations[0].id
+        library.activeID = id
+        try await store.save(library)
+        var loaded = try await store.loadLibrary()
+        XCTAssertEqual(loaded.activeID, id)
+        XCTAssertEqual(loaded.conversations[0].messages.last?.text, "What should I watch?")
+        XCTAssertEqual(loaded.conversations[0].securityDebate?.sources.first?.id, "source")
+        XCTAssertFalse(loaded.importSecurityDebates([debate(at: Date(timeIntervalSince1970: 1_800_000_000))]))
+        loaded.conversations.removeAll()
+        loaded.activeID = nil
+        try await store.save(loaded)
+        loaded = try await store.loadLibrary()
+        XCTAssertFalse(loaded.importSecurityDebates([debate()]))
+        XCTAssertTrue(loaded.conversations.isEmpty)
+        XCTAssertTrue(loaded.importSecurityDebates([debate(at: Date(timeIntervalSince1970: 1_800_000_100))]))
+    }
+
 }

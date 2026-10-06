@@ -137,7 +137,58 @@ final class PortfolioPresentationCacheTests: XCTestCase {
         await model.refreshPortfolio(refreshMarketData: false)
         XCTAssertEqual(model.holdings.first?.shares, 10)
         XCTAssertNil(model.portfolioCachedAt)
-        XCTAssertTrue(model.portfolioChart?.currentPoint.marketValue.isNaN == true)
+        XCTAssertEqual(model.portfolioChart?.currentPoint.marketValue, 1200)
+        XCTAssertEqual(model.portfolioChart?.currentPoint.cost, 1000)
+        XCTAssertNil(model.portfolioChart?.accountNAV)
+    }
+
+    func testHomeWithoutHistoryUsesKnownHoldingsFigures() async throws {
+        let input = fixture()
+        let model = AppModel(defaults: defaults, personalDocumentLoader: { input },
+            presentationCache: PortfolioPresentationCache(directory: directory))
+        await model.refreshPortfolio(refreshMarketData: false)
+        let chart = try XCTUnwrap(model.portfolioChart)
+        XCTAssertEqual(chart.currentPoint.marketValue, 1800)
+        XCTAssertEqual(chart.currentPoint.cost, 1500)
+        XCTAssertTrue(chart.isCurrentHoldingsOnly)
+        XCTAssertNil(chart.accountNAV, "Holding cost return must not be labeled account TWR")
+        XCTAssertEqual(chart.positionHistory.rows.count, 0, "Do not invent a historical curve")
+    }
+
+    func testHoldingsFiguresFollowNewQuotesBeforeHistoryIsAvailable() async throws {
+        let input = fixture()
+        let loader = HomeNumbersDocumentLoader(input)
+        let model = AppModel(defaults: defaults, personalDocumentLoader: { await loader.load() },
+            presentationCache: PortfolioPresentationCache(directory: directory))
+        await model.refreshPortfolio(refreshMarketData: false)
+        XCTAssertEqual(model.portfolioChart?.currentPoint.marketValue, 1800)
+        var updated = input
+        updated.positions = updated.positions.map { $0.withQuotePrice(130, observedAt: Date()) }
+        await loader.set(updated)
+        await model.refreshPortfolio(refreshMarketData: false)
+        XCTAssertEqual(model.portfolioChart?.currentPoint.marketValue, 1950)
+        XCTAssertEqual(model.portfolioChart?.currentPoint.cost, 1500)
+        XCTAssertNil(model.portfolioChart?.accountNAV)
+    }
+
+    func testCachedCurvePreparesWhileHistoryRefreshIsPending() async throws {
+        let input = fixture()
+        let cached = try snapshot(input)
+        let model = AppModel(defaults: defaults, personalDocumentLoader: { input })
+        let ready = expectation(description: "Cached chart prepared during background history loading")
+        var fulfilled = false
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        let host = UIHostingController(rootView: CostMarketCard(overview: cached.overview,
+            response: cached.chart, isAwaitingEnrichedHistory: true).environment(model)
+            .onPreferenceChange(PortfolioHeroReadyPreference.self) { value in
+                if value && !fulfilled { fulfilled = true; ready.fulfill() }
+            })
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; window.rootViewController = nil; previous?.makeKeyAndVisible() }
+        await fulfillment(of: [ready], timeout: 5)
     }
 
     func testModesLanguagesAndSelectionsAreIsolated() async throws {
@@ -226,4 +277,11 @@ final class PortfolioPresentationCacheTests: XCTestCase {
         XCTAssertNil(personal)
         XCTAssertNotNil(demo)
     }
+}
+
+private actor HomeNumbersDocumentLoader {
+    private var document: LocalPortfolioDocument
+    init(_ document: LocalPortfolioDocument) { self.document = document }
+    func load() -> LocalPortfolioDocument { document }
+    func set(_ document: LocalPortfolioDocument) { self.document = document }
 }

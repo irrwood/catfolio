@@ -290,12 +290,14 @@ struct PortfolioDetailsCard: View {
         return exposures.count
     }
 
-    /// Count, date and weekday share one secondary caption treatment.
+    /// The count, then what the rows measure: the day the latest figures are
+    /// from — named as the header and the Today card name it — or 持有期.
     private var headerSubtitle: some View {
-        let date = model.localUpdatedAt ?? Date()
-        let day = date.formatted(.dateTime.month(.abbreviated).day().locale(appLocale))
-        let weekday = date.formatted(.dateTime.weekday(.abbreviated).locale(appLocale))
-        let parts = [tableCount.map(String.init), day, weekday].compactMap { $0 }
+        let period: String? = switch activePerformancePeriod {
+        case .today: model.latestSessionDate.map { DataDayLabel.text(for: $0, locale: appLocale) }
+        case .holdingPeriod: L10n.text("持有期")
+        }
+        let parts = [tableCount.map(String.init), period].compactMap { $0 }
         return Text(parts.joined(separator: " · "))
             .appText(.caption, weight: .medium)
             .foregroundStyle(.secondary)

@@ -200,7 +200,9 @@ struct RobinhoodConnectionView: View {
             .navigationTitle("Robinhood")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { AccountProviderBackButton() }
-                ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { dismiss() } }
+                if !context.isCreating {
+                    ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { dismiss() } }
+                }
             }
             .task {
                 connected = await RobinhoodMCPClient.shared.isConnected()

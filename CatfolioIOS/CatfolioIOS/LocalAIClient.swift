@@ -4,6 +4,16 @@ import FoundationModels
 import OSLog
 
 struct LocalAIClient {
+    var allowsCodex = false
+
+    var researchProvider: AIProviderPreference {
+        Self.researchProvider(preference: AIProviderPreference.current, allowsCodex: allowsCodex)
+    }
+
+    static func researchProvider(preference: AIProviderPreference, allowsCodex: Bool = false) -> AIProviderPreference {
+        !allowsCodex && preference == .codex ? .automatic : preference
+    }
+
     static var appleModelStatus: AppleFoundationModelStatus {
         guard #available(iOS 26.0, *) else { return .requiresNewerOS }
         switch SystemLanguageModel.default.availability {
@@ -232,7 +242,7 @@ struct LocalAIClient {
             + L10n.responseLanguageInstruction
             + "\n\n读者的问题：\(question)"
         let preference = AIProviderPreference.current
-        if (preference == .codex || preference == .automatic), CodexOAuthClient.cachedConnected {
+        if allowsCodex, (preference == .codex || preference == .automatic), CodexOAuthClient.cachedConnected {
             do {
                 return try await CodexOAuthClient().completion(prompt: "\(context)\n\n\(prompt)", webSearch: true)
             } catch where preference == .automatic {
@@ -394,7 +404,7 @@ struct LocalAIClient {
     /// the fallback rather than the first try.
     func researchAnswer(_ question: String, context: String, structured: Bool = false,
                         cloudFirst: Bool = false) async throws -> String {
-        switch AIProviderPreference.current {
+        switch researchProvider {
         case .apple:
             if #available(iOS 26.0, *) {
                 return try await completeWithApple(question: question, context: context, structured: structured)
@@ -408,7 +418,7 @@ struct LocalAIClient {
             return try await completeWithCodex(question: question, context: context, structured: structured)
         case .automatic:
             var appleFailure = Self.appleModelStatus.message
-            let hasCloud = CodexOAuthClient.cachedConnected || LocalServiceKeys.hasOpenRouterKey
+            let hasCloud = (allowsCodex && CodexOAuthClient.cachedConnected) || LocalServiceKeys.hasOpenRouterKey
                 || !(KeychainStore.string(for: LocalServiceKeys.deepSeek)?
                     .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
             if #available(iOS 26.0, *), Self.appleModelStatus.isAvailable, !(cloudFirst && hasCloud) {
@@ -420,7 +430,7 @@ struct LocalAIClient {
                 }
             }
             var codexFailure = L10n.text("Codex 尚未连接")
-            if CodexOAuthClient.cachedConnected {
+            if allowsCodex && CodexOAuthClient.cachedConnected {
                 do {
                     return try await completeWithCodex(question: question, context: context, structured: structured)
                 } catch {
@@ -453,24 +463,11 @@ struct LocalAIClient {
         }
     }
 
-    /// Research where the model is also allowed to look things up itself.
-    ///
-    /// Only one of the three providers can: Apple's on-device model has no
-    /// network at all, DeepSeek's API is chat completions with no hosted tool,
-    /// and Codex reaches an endpoint that may or may not honour `web_search`.
-    /// So Codex is preferred for this one job when it is connected, rather than
-    /// following the usual Apple-first order — the sources gathered locally are
-    /// the floor, and live search is the part only it can add.
-    ///
-    /// - Returns: the answer, and whether search actually happened.
-    /// Daily notes need evidence before accepting any answer. Skip an ungrounded
-    /// completion when native search is unavailable; the caller supplies articles next.
+    /// News uses OpenRouter search or the caller's public article pipeline.
+    /// ChatGPT Codex is not required for company research.
     func researchAnswerWithNativeSearch(_ question: String) async throws -> (text: String, searched: Bool) {
-        let preference = AIProviderPreference.current
-        guard (preference == .codex || preference == .automatic), CodexOAuthClient.cachedConnected else {
-            throw LocalServiceError.missingCodexConnection
-        }
-        return try await CodexOAuthClient().completion(prompt: question, webSearch: true)
+        guard LocalServiceKeys.hasOpenRouterKey else { throw LocalServiceError.missingOpenRouterKey }
+        return (try await AIWebSearch.openRouterSearch(question), true)
     }
 
     private func portfolioContext(document: LocalPortfolioDocument) throws -> String {
@@ -646,7 +643,7 @@ struct LocalAIClient {
         } catch {
             try Task.checkCancellation()
             emit(.searchStatus(""))
-            emit(.text(L10n.text("联网搜索暂不可用（需连接 ChatGPT，或在服务商中填写 OpenRouter Key），以下回答仅基于已有数据。") + "\n\n"))
+            emit(.text(L10n.text("联网搜索暂不可用（请检查 OpenRouter 配置），以下回答仅基于已有数据。") + "\n\n"))
             return try await streamResearch(question, context: context + "\nWeb search failed. Do not claim that this answer used live search.", emit: emit)
         }
         emit(.searchStatus(L10n.text("已获取来源，正在整理回答…")))
@@ -665,7 +662,7 @@ struct LocalAIClient {
         emit: @escaping @Sendable (AIStreamEvent) -> Void
     ) async throws {
         let prompt = "\(context)\n\n问题：\(question)"
-        switch AIProviderPreference.current {
+        switch researchProvider {
         case .apple:
             if #available(iOS 26.0, *) {
                 return try await streamWithApple(prompt: prompt, emit: emit)
@@ -683,7 +680,7 @@ struct LocalAIClient {
             // screen; a stream that fails part-way through fails as it is.
             let started = StreamStartFlag()
             let tracked: @Sendable (AIStreamEvent) -> Void = { event in
-                started.set()
+                if case .text(let text) = event, !text.isEmpty { started.set() }
                 emit(event)
             }
             func canFallBack(_ error: Error) -> Bool {
@@ -699,7 +696,7 @@ struct LocalAIClient {
                 }
             }
             var codexFailure = L10n.text("Codex 尚未连接")
-            if CodexOAuthClient.cachedConnected {
+            if allowsCodex && CodexOAuthClient.cachedConnected {
                 do {
                     return try await CodexOAuthClient().streamCompletion(prompt: prompt, emit: tracked)
                 } catch where canFallBack(error) {

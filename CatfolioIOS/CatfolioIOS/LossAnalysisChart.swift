@@ -40,13 +40,19 @@ struct LossAnalysisChart: View {
         let stack = preparedRanges?[range]
 
         VStack(alignment: .leading, spacing: 18) {
-            if let stack, stack.rows.count > 1 {
+            if let stack, !stack.rows.isEmpty {
                 let shown = stack.row(nearest: selectedDate) ?? stack.rows.last!
                 let visible = visibleBands(stack)
                 let bottom = floor(stack, visible: visible)
                 ReturnsSourceChartHero(range: $range, header: header(shown),
-                                       plot: plot(stack: stack, visible: visible, bottom: bottom),
-                                       axis: axisLabels(bottom: bottom))
+                                       plot: Group {
+                                           if stack.rows.count > 1 { plot(stack: stack, visible: visible, bottom: bottom) }
+                                           else { Color.clear }
+                                       },
+                                       axis: Group {
+                                           if stack.rows.count > 1 { axisLabels(bottom: bottom) }
+                                           else { Color.clear }
+                                       })
                 if let drawdown, drawdown.points.count > 1 {
                     DrawdownStatistics(series: drawdown)
                         .padding(.horizontal, ReturnsSourceChartStyle.inset)
@@ -56,7 +62,7 @@ struct LossAnalysisChart: View {
                     if stack.bands.count > 1 || !stack.hidden.isEmpty {
                         legend(stack: stack, row: shown)
                     } else {
-                        Text(L10n.text("这段时间里没有持仓低于成本。"))
+                        Text(L10n.text(stack.rows.count > 1 ? "这段时间里没有持仓低于成本。" : "当前没有持仓低于成本。"))
                             .appText(.callout)
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 12)
@@ -72,8 +78,7 @@ struct LossAnalysisChart: View {
                     .buttonStyle(.bordered)
                     .frame(maxWidth: .infinity)
             } else if preparedRanges != nil {
-                StandardLineChartPlaceholder(title: L10n.text("历史数据不足"),
-                                             message: L10n.text("该时间范围内没有足够的市值记录。"), isLoading: false)
+                Color.clear
                     .frame(height: 300)
                     .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
             } else {

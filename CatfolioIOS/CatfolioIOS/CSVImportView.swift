@@ -112,8 +112,10 @@ struct CSVImportView: View {
                 if context.isCreating {
                     ToolbarItem(placement: .cancellationAction) { AccountProviderBackButton() }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    AppModalDoneButton { dismiss() }
+                if !context.isCreating || importResult != nil {
+                    ToolbarItem(placement: .confirmationAction) {
+                        AppModalDoneButton { dismiss() }
+                    }
                 }
             }
             .fileImporter(

@@ -388,7 +388,7 @@ struct StockScreenerView: View {
                     ForEach(results) { stock in
                         NavigationLink {
                             ScreenStockDetail(stock: stock, rules: rules)
-                                .toolbarVisibility(.hidden, for: .tabBar)
+                                .hidesTabBarWhenPushed()
                                 .navigationTransition(.zoom(sourceID: stock.id, in: zoom))
                         } label: {
                             VStack(alignment: .leading) {

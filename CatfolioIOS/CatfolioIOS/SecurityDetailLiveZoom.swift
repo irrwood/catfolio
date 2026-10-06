@@ -80,28 +80,30 @@ final class SecurityDetailLiveZoom {
         // The logo the page grows out of, cornered like the list draws it so
         // the crop starts and ends as that logo's rounded square, and holding
         // the logo's picture for the system to grow and cross-fade.
-        let origin = source.logo ?? source.row
+        var origin = source.row
         var picture: UIImageView?
         if let logo = source.logo {
-            // The corner is the list's, and it is the frame the zoom grows from
-            // whether or not a picture is available for it: a security whose
-            // logo is not bundled still zooms, out of the logo view itself.
-            roundedLogo = (logo, logo.layer.cornerRadius, logo.clipsToBounds)
-            logo.layer.cornerRadius = min(Self.rowLogoCornerRadius, logo.bounds.width / 2)
-            logo.layer.cornerCurve = .continuous
-            logo.clipsToBounds = true
-            // The picture only when the list has one: it is what the system
-            // grows and cross-fades, and the plain logo view draws nothing
-            // under that treatment.
-            if let shown = (id.base as? String).flatMap(AssetLogoShownImages.shared.image(for:)) {
+            // Restore a previous interrupted return before keeping this source's state.
+            restoreLogoAppearance()
+            let shown = (id.base as? String).flatMap(AssetLogoShownImages.shared.image(for:))
+                ?? Self.visibleLogoSnapshot(logo, in: window)
+            if let shown {
+                roundedLogo = (logo, logo.layer.cornerRadius, logo.clipsToBounds)
                 let image = Self.rounded(shown, cornerFraction: Self.rowLogoCornerRadius / Self.rowLogoSize)
                 let view = UIImageView(image: image)
                 view.frame = logo.bounds
                 view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-                view.contentMode = .scaleAspectFill
+                view.contentMode = .scaleToFill
                 view.isUserInteractionEnabled = false
+                // The bitmap already carries the 12/44 corner ratio. A second
+                // fixed-radius source mask can become circular when UIKit's
+                // interactive spring undershoots the destination size.
+                logo.layer.cornerRadius = 0
+                logo.clipsToBounds = false
                 logo.addSubview(view)
                 picture = view
+                // Snapshot the artwork directly, without the marker container.
+                origin = view
             }
         }
 
@@ -110,6 +112,8 @@ final class SecurityDetailLiveZoom {
             #if DEBUG
             Self.note("BLOCKED: no presenter and no stack")
             #endif
+            picture?.removeFromSuperview()
+            restoreLogoAppearance()
             return false
         }
 
@@ -226,6 +230,21 @@ final class SecurityDetailLiveZoom {
         self.roundedLogo = nil
     }
 
+    /// First-open logos may still be loading and have no decoded-image cache.
+    /// Capture exactly the visible tile, including its fallback and grey ground.
+    static func visibleLogoSnapshot(_ logo: UIView, in window: UIWindow) -> UIImage? {
+        let rect = logo.convert(logo.bounds, to: window)
+        guard rect.width > 1, rect.height > 1 else { return nil }
+        let format = UIGraphicsImageRendererFormat()
+        format.opaque = false
+        format.scale = window.screen.scale
+        return UIGraphicsImageRenderer(size: rect.size, format: format).image { context in
+            context.cgContext.translateBy(x: -rect.minX, y: -rect.minY)
+            context.cgContext.clip(to: rect)
+            window.layer.render(in: context.cgContext)
+        }
+    }
+
     /// A list row's logo and its corner (`PortfolioDetailsCard`).
     private static let rowLogoSize: CGFloat = 44
     private static let rowLogoCornerRadius: CGFloat = 12
@@ -306,15 +325,15 @@ final class SecurityDetailLiveZoom {
             super.viewWillAppear(animated)
             // The home stack hides its bar; a pushed page must too.
             navigationController?.setNavigationBarHidden(true, animated: false)
-            // This UIKit push is outside SwiftUI's navigation path. Control
-            // its owning tab container directly; a SwiftUI toolbar preference
-            // can remain stuck after UIKit pops this hosting controller.
-            owningTabBarController?.setTabBarHidden(true, animated: animated)
+            transitionTabBar(hidden: true, animated: animated)
         }
 
         override func viewWillDisappear(_ animated: Bool) {
             super.viewWillDisappear(animated)
             popping = isMovingFromParent
+            if popping {
+                transitionTabBar(hidden: previousTabBarHidden, animated: animated)
+            }
             #if DEBUG
             if isMovingFromParent || isBeingDismissed {
                 let now = CACurrentMediaTime()
@@ -323,15 +342,38 @@ final class SecurityDetailLiveZoom {
                     + " interactive=\(transitionCoordinator?.isInteractive == true)")
             }
             #endif
-            if popping {
-                owningTabBarController?.setTabBarHidden(previousTabBarHidden, animated: animated)
+        }
+
+        /// SwiftUI's tab container ignores the UIKit push's bottom-bar flag.
+        /// Enroll its visibility change in the page's transition so scrubbing
+        /// and cancelling a return also scrub and restore the tab bar.
+        private func transitionTabBar(hidden: Bool, animated: Bool) {
+            guard let tabs = owningTabBarController else { return }
+            guard animated, let coordinator = transitionCoordinator else {
+                tabs.setTabBarHidden(hidden, animated: false)
+                return
             }
+            let wasHidden = tabs.isTabBarHidden
+            if coordinator.isInteractive {
+                // Keep the home layout and zoom destination stable while the
+                // finger scrubs. Changing SwiftUI's tab container here can
+                // rebuild the destination on the first interactive frame.
+                coordinator.animate(alongsideTransition: nil) { context in
+                    tabs.setTabBarHidden(context.isCancelled ? wasHidden : hidden, animated: false)
+                }
+                return
+            }
+            let enrolled = coordinator.animate(alongsideTransition: { _ in
+                tabs.setTabBarHidden(hidden, animated: true)
+            }, completion: { context in
+                tabs.setTabBarHidden(context.isCancelled ? wasHidden : hidden, animated: false)
+            })
+            if !enrolled { tabs.setTabBarHidden(hidden, animated: animated) }
         }
 
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
             navigationController?.setNavigationBarHidden(true, animated: false)
-            owningTabBarController?.setTabBarHidden(true, animated: false)
             popping = false // A pull that was let go of.
             #if DEBUG
             if appearedAt == nil {

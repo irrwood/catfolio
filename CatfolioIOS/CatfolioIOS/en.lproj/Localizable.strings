@@ -3824,3 +3824,16 @@
 "分组" = "Group";
 "按日期" = "By date";
 "按股票" = "By stock";
+"列表来自你的 ChatGPT 账户。所选模型下线时，会自动换成可用的模型。" = "The list comes from your ChatGPT account. If the chosen model is retired, an available one is used instead.";
+"无法获取 Codex 模型列表" = "Couldn't load Codex models";
+"Codex 没有返回可用模型" = "Codex returned no available models";
+"Codex 当前没有可用模型" = "No Codex model is available right now";
+
+"今日变化" = "Today";
+"今日简报" = "Daily brief";
+"正在展开…" = "Taking a closer look…";
+"点击金额、股票或板块继续展开" = "Tap an amount, stock or sector to explore";
+"继续展开简报" = "Expand this part of the brief";
+"当前没有持仓低于成本。" = "No holdings are currently below cost.";
+
+"持仓市值" = "Holdings value";

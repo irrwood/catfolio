@@ -114,8 +114,10 @@ struct IBKRFlexView: View {
                     }
                 }
 
-                ToolbarItem(placement: .confirmationAction) {
-                    AppModalDoneButton { dismiss() }
+                if !context.isCreating {
+                    ToolbarItem(placement: .confirmationAction) {
+                        AppModalDoneButton { dismiss() }
+                    }
                 }
             }
             .appSheet(isPresented: $showsSetupGuide) {
@@ -396,16 +398,23 @@ struct IBKRFlexView: View {
     /// Stores the credentials and, when creating, puts the account on screen
     /// straight away rather than making the first report a precondition.
     private func saveAndClose() async {
-        if let accountID = context.account?.accountID {
+        guard !isWorking else { return }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            try IBKRFlexKeys.save(try credentials(),
+                                 accountID: isPendingAccount ? nil : context.account?.accountID)
+        } catch {
+            status = .failure(L10n.text("无法保存凭证：\(error.localizedDescription)"))
+            return
+        }
+        if context.account?.accountID != nil && !isPendingAccount {
             // An account that has synced before keeps its credentials under
             // its own ID, not in the placeholder's slot.
-            try? KeychainStore.set(token.trimmingCharacters(in: .whitespacesAndNewlines), for: Self.tokenKey(accountID: accountID))
-            try? KeychainStore.set(queryID.trimmingCharacters(in: .whitespacesAndNewlines), for: Self.queryIDKey(accountID: accountID))
             status = .success(L10n.text("凭证已保存。"))
             dismiss()
             return
         }
-        savePendingCredentials()
         guard context.isCreating else {
             // The placeholder, reopened: fetch its first report again with
             // what was just saved.
@@ -414,8 +423,6 @@ struct IBKRFlexView: View {
             dismiss()
             return
         }
-        isWorking = true
-        defer { isWorking = false }
         do {
             try await model.registerPendingAccount(
                 id: Self.pendingAccountID,
@@ -432,19 +439,13 @@ struct IBKRFlexView: View {
         }
     }
 
-    private func savePendingCredentials() {
-        try? KeychainStore.set(token.trimmingCharacters(in: .whitespacesAndNewlines), for: Self.pendingTokenKey)
-        try? KeychainStore.set(queryID.trimmingCharacters(in: .whitespacesAndNewlines), for: Self.pendingQueryIDKey)
-    }
-
     private func credentials() throws -> IBKRFlexCredentials {
         try IBKRFlexCredentials(token: token, queryID: queryID)
     }
 
     private func saveCredentials(_ credentials: IBKRFlexCredentials, accountIDs: Set<String>) throws {
         for accountID in accountIDs where !accountID.isEmpty {
-            try KeychainStore.set(credentials.token, for: Self.tokenKey(accountID: accountID))
-            try KeychainStore.set(credentials.queryID, for: Self.queryIDKey(accountID: accountID))
+            try IBKRFlexKeys.save(credentials, accountID: accountID)
         }
         usesLegacyCredentials = false
         try? KeychainStore.set("", for: Self.pendingTokenKey)

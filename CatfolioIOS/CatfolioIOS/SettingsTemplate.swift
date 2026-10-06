@@ -229,6 +229,7 @@ enum SettingsTemplate {
 enum SettingsIconSource: Equatable {
     case symbol(String)
     case asset(String)
+    case brandAsset(String)
 }
 
 struct SettingsRowIcon: View {
@@ -247,6 +248,12 @@ struct SettingsRowIcon: View {
                     // symbol at its natural 24pt weight reads thinner beside
                     // them, so it is set one step heavier.
                     .font(.system(size: 19, weight: .medium))
+            case .brandAsset(let name):
+                Image(name)
+                    .renderingMode(.original)
+                    .resizable()
+                    .scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
             case .asset(let name):
                 Image(name)
                     .renderingMode(.template)
@@ -450,6 +457,13 @@ struct SettingsPageSubtitle: View {
 }
 
 extension View {
+    func settingsListRow() -> some View {
+        listRowBackground(SettingsTemplate.card)
+            .listRowSeparatorTint(SettingsTemplate.separator)
+            .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+            .alignmentGuide(.listRowSeparatorTrailing) { dimensions in dimensions.width }
+    }
+
     /// Names the screen on the navigation bar.
     ///
     /// The display mode is set beside the title rather than left to the call
@@ -533,10 +547,32 @@ struct SettingsCard<Content: View>: View {
 }
 
 extension View {
-    /// A row of a grouped `List` set as the standard cell: the card's fill
-    /// and a rule in the card's divider colour running the row's full width.
-    func settingsListRow() -> some View {
-        listRowBackground(SettingsTemplate.card)
+    /// A virtualized list row forms one slice of the same surface as SettingsCard.
+    /// Extend hidden corners beyond interior rows so only the group's outer
+    /// border is drawn, without building every transaction in a single cell.
+    func settingsListRow(isFirst: Bool, isLast: Bool) -> some View {
+        frame(minHeight: SettingsTemplate.rowMinHeight - 2 * SettingsTemplate.rowVerticalPadding)
+            .listRowInsets(EdgeInsets(top: SettingsTemplate.rowVerticalPadding,
+                leading: SettingsTemplate.rowHorizontalPadding,
+                bottom: SettingsTemplate.rowVerticalPadding,
+                trailing: SettingsTemplate.rowHorizontalPadding))
+            .listRowBackground(
+                GeometryReader { geometry in
+                    let top = isFirst ? CGFloat.zero : SettingsTemplate.cardRadius
+                    let bottom = isLast ? CGFloat.zero : SettingsTemplate.cardRadius
+                    let shape = RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius, style: .continuous)
+                    shape.fill(SettingsTemplate.card)
+                        .overlay {
+                            shape.strokeBorder(SettingsTemplate.cardBorder, lineWidth: SettingsTemplate.cardBorderWidth)
+                        }
+                        .frame(height: geometry.size.height + top + bottom)
+                        .offset(y: -top)
+                }
+                .clipped()
+                .allowsHitTesting(false)
+            )
+            .listRowSeparator(isLast ? .hidden : .visible, edges: .bottom)
+            .listRowSeparator(.hidden, edges: .top)
             .listRowSeparatorTint(SettingsTemplate.separator)
             .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
             .alignmentGuide(.listRowSeparatorTrailing) { dimensions in dimensions.width }
@@ -775,7 +811,7 @@ struct SettingsNavigationRow<Destination: View>: View {
     var body: some View {
         NavigationLink {
             destination
-                .toolbarVisibility(.hidden, for: .tabBar)
+                .hidesTabBarWhenPushed()
         } label: {
             SettingsRowContainer {
                 HStack(spacing: SettingsTemplate.iconSpacing) {
@@ -1118,7 +1154,7 @@ struct SettingsSelectionRow<Destination: View>: View {
                 if opensDestination {
                     NavigationLink {
                         destination
-                            .toolbarVisibility(.hidden, for: .tabBar)
+                            .hidesTabBarWhenPushed()
                     } label: {
                         HStack(spacing: SettingsTemplate.iconSpacing) {
                             stackedText
@@ -1175,5 +1211,59 @@ extension SettingsSelectionRow where Destination == EmptyView {
         self.toggle = toggle
         self.opensDestination = false
         self.destination = EmptyView()
+    }
+}
+
+/// An empty page's message (Figma 577:6506): a 64 pt grey disc with the
+/// icon, a 17 pt title, and the explanation at 40% ink, centred in 284 pt.
+struct CatfolioEmptyState: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let title: String
+    let message: String
+    var icon: Image = Image("EmptyStateInbox")
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Circle()
+                .fill(LinearGradient(colors: discColors, startPoint: .top, endPoint: .bottom))
+                .overlay { Circle().strokeBorder(SettingsTemplate.cardBorder, lineWidth: 1) }
+                .overlay {
+                    icon
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 32, height: 32)
+                        .foregroundStyle(iconColors)
+                }
+                .frame(width: 64, height: 64)
+                .accessibilityHidden(true)
+            Text(title)
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundStyle(CatfolioTheme.primaryText)
+                .multilineTextAlignment(.center)
+            Text(message)
+                .font(.system(size: 17, weight: .regular, design: .rounded))
+                .foregroundStyle(CatfolioTheme.primaryText.opacity(0.4))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: 284)
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// `#F3F3F3` to `#C3C3C3` by day; the same fall in light at night.
+    private var discColors: [Color] {
+        colorScheme == .dark
+            ? [Color(white: 0x3A / 255), Color(white: 0x1E / 255)]
+            : [Color(white: 0xF3 / 255), Color(white: 0xC3 / 255)]
+    }
+
+    /// For a template symbol in place of the drawn inbox, which carries its
+    /// own gradient.
+    private var iconColors: LinearGradient {
+        LinearGradient(colors: colorScheme == .dark
+                ? [Color(white: 0.95), Color(white: 0.6)]
+                : [Color(white: 0x1E / 255), Color(white: 0x6D / 255)],
+            startPoint: .top, endPoint: .bottom)
     }
 }

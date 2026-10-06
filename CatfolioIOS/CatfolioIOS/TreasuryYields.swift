@@ -214,7 +214,7 @@ struct TreasuryYieldCurveView: View {
         }
         .navigationTitle(L10n.text("美债收益率曲线"))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarVisibility(.hidden, for: .tabBar)
+        .hidesTabBarWhenPushed()
         .task { await load() }
         .refreshable { await load() }
     }

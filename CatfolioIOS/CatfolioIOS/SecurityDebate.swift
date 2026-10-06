@@ -36,6 +36,28 @@ struct SecurityResearchDocument: Sendable {
 }
 
 extension SecurityDebate {
+    var conversationKey: String {
+        "\(ticker)|\(language ?? "")|\(Int(generatedAt.timeIntervalSince1970))"
+    }
+
+    /// The same evidence is sent with a follow-up as is shown in the rich report.
+    var conversationMarkdown: String {
+        var sections = ["# \(name) (\(ticker))"]
+        for question in questions {
+            sections.append("## \(question.question)")
+            sections.append(question.whatChanged)
+            sections.append(question.whyItMatters)
+            sections.append(question.watchNext)
+            sections.append(question.uncertainty)
+            for citation in question.evidence {
+                if let source = sources.first(where: { $0.id == citation.sourceID }) {
+                    sections.append("> \(citation.quote)\n\n[\(source.title)](\(source.url.absoluteString))")
+                }
+            }
+        }
+        return sections.joined(separator: "\n\n")
+    }
+
     func sources(for question: SecurityDebateQuestion) -> [PortfolioAttentionSource] {
         let ids = Set(question.evidence.map(\.sourceID))
         return sources.filter { ids.contains($0.id) }

@@ -344,7 +344,7 @@ struct SecurityPriceChart: View {
                 }
             }
             .frame(height: SecurityPriceChartState.plotHeight)
-            .accessibilityLabel(L10n.text("\(history.ticker) 价格走势，买入点为绿色圆环，卖出点为黄色圆环，横向玻璃线为持仓成本"))
+            .accessibilityLabel(L10n.text("\(history.ticker) 价格走势，买入点为绿色圆环，卖出点为黄色圆环，横向细线为持仓成本"))
 
             ChartTimeRangePicker(selection: $range)
             .frame(height: 62)
@@ -493,7 +493,7 @@ struct SecurityPricePlot: View {
                 value: $0,
                 color: CatfolioPalette.tradeBuy,
                 label: axisPriceLabel($0),
-                lineWidth: 2,
+                lineWidth: 1,
                 minimumAxisLabelSpacing: 20
             )
         }
@@ -508,7 +508,7 @@ struct SecurityPricePlot: View {
             // The first price is also the return baseline; keep it visible.
             leadingLineOverflow: 0,
             gridOpacity: 0.08,
-            transitionKey: transitionKey,
+            transitionKey: "\(transitionKey)|\(prepared.geometryFingerprint)",
             appearanceID: appearanceID,
             dataTransition: .viewportZoom,
             // Out of the placeholder's shape only when the placeholder was
@@ -582,6 +582,9 @@ final class SecurityPricePlotSeriesCache {
         /// Decimals the axis labels need so that no two read the same.
         let yTickDecimals: Int
         let markers: [StandardLineChartMarker]
+        /// Computed once per prepared geometry, not on every selection frame.
+        /// Refreshes use the same morph as range changes; identical reloads stay still.
+        let geometryFingerprint: Int
     }
 
     private struct Key: Equatable {
@@ -669,8 +672,23 @@ final class SecurityPricePlotSeriesCache {
             let clearance = 30 / plotHeight * (high - low)
             axis.ticks.removeAll { cost.isAbove ? $0 > high - clearance : $0 < low + clearance }
         }
+        var geometryHasher = Hasher()
+        geometryHasher.combine(data.domain.lowerBound)
+        geometryHasher.combine(data.domain.upperBound)
+        geometryHasher.combine(scheme)
+        for point in priceSeries.points {
+            geometryHasher.combine(point.date)
+            geometryHasher.combine(point.value)
+        }
+        for point in data.points { geometryHasher.combine(point.date) }
+        for marker in markers {
+            geometryHasher.combine(marker.id)
+            geometryHasher.combine(marker.point.date)
+            geometryHasher.combine(marker.point.value)
+        }
         let value = Prepared(priceSeries: priceSeries, interactionDates: data.points.map(\.date),
-                             yTicks: axis.ticks, yTickDecimals: axis.decimals, markers: markers)
+                             yTicks: axis.ticks, yTickDecimals: axis.decimals, markers: markers,
+                             geometryFingerprint: geometryHasher.finalize())
         cachedKey = key
         cachedValue = value
         rebuildCount &+= 1

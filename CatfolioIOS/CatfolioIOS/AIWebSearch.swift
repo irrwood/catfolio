@@ -21,19 +21,10 @@ actor AIWebSearch {
         Question:
         \(key)
         """
-        // The search runs wherever it can: ChatGPT's own tool, else
-        // OpenRouter's web plugin. DeepSeek and Apple's model then answer
-        // from this evidence — neither can browse by itself.
+        // OpenRouter supplies web evidence; company notes also have a public article fallback.
         let text: String
-        if CodexOAuthClient.cachedConnected {
-            let result = try await CodexOAuthClient().completion(prompt: prompt, webSearch: true)
-            guard result.searched else { throw LocalServiceError.invalidResponse }
-            text = result.text
-        } else if LocalServiceKeys.hasOpenRouterKey {
-            text = try await Self.openRouterSearch(prompt)
-        } else {
-            throw LocalServiceError.missingCodexConnection
-        }
+        guard LocalServiceKeys.hasOpenRouterKey else { throw LocalServiceError.missingOpenRouterKey }
+        text = try await Self.openRouterSearch(prompt)
         try Task.checkCancellation()
         let parts = text.components(separatedBy: Self.sourceMarker)
         let evidence = AIWebEvidence(text: parts[0], sources: parts.count > 1 ? parts[1] : "", fetchedAt: Date())

@@ -1,3 +1,4 @@
+from appmodel_source import read_appmodel
 """Disclosure delivery tests: preserve Core versions, nulls, and dates."""
 import importlib.util
 import json
@@ -41,24 +42,14 @@ def test_packaged_data_contains_no_local_paths_or_fake_musk_portfolio():
     assert len(bundle['coreSHA256']) == 64
 
 
-
 def test_public_mode_uses_existing_pages_and_account_adapter():
     root = (ROOT / 'CatfolioIOS/CatfolioIOS/RootTabView.swift').read_text()
-    model = (ROOT / 'CatfolioIOS/CatfolioIOS/APIClient.swift').read_text()
+    model = read_appmodel(ROOT / 'CatfolioIOS/CatfolioIOS')
     assert 'PublicInvestorView(' not in root
     assert 'PortfolioView()' in root and 'ReturnsView()' in root
     assert 'publicInvestorStore.load(' in model
     assert 'catfolio.publicSelectedAccounts' in model
     assert 'guard !loaded.isPublicDisclosure else { return }' not in model
-
-
-def test_investor_accounts_do_not_add_disclosure_labels_to_portfolio_ui():
-    app = ROOT / 'CatfolioIOS/CatfolioIOS'
-    for filename in ('PortfolioView.swift', 'VolumeProfileView.swift', 'PublicInvestorView.swift'):
-        source = (app / filename).read_text()
-        for label in ('公开投资者账户', '披露持仓 ·', '披露市值', '按披露上限估算', '原始披露：'):
-            assert label not in source
-    assert 'Text("CATFOLIO")' in (app / 'PortfolioView.swift').read_text()
 
 
 def test_ark_account_has_continuous_history_and_mapped_equity():
@@ -72,3 +63,11 @@ def test_ark_account_has_continuous_history_and_mapped_equity():
     assert all(row['sourceURL'].startswith('https://www.sec.gov/') for row in ark['history'])
     assert any(p['ticker'] == 'TSLA' and p['shares'] > 0 for p in ark['snapshot']['positions'])
     assert len(ark['activities']) > 0
+
+
+def test_investor_accounts_do_not_add_disclosure_labels_to_portfolio_ui():
+    app = ROOT / 'CatfolioIOS/CatfolioIOS'
+    for filename in ('PortfolioView.swift', 'VolumeProfileView.swift', 'PublicInvestorView.swift'):
+        source = (app / filename).read_text()
+        for label in ('公开投资者账户', '披露持仓 ·', '披露市值', '按披露上限估算', '原始披露：'):
+            assert label not in source

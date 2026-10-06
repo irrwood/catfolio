@@ -83,6 +83,15 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
     /// that stretches the system's blur from the top of the screen down to the
     /// bar, and the large title sitting between the two was blurred with it.
     private let headerFade = CAGradientLayer()
+    /// Registers the category chips with the selected list's top edge effect.
+    @available(iOS 26.0, *)
+    private var chipsEdgeElement: UIScrollEdgeElementContainerInteraction {
+        if let existing = chipsEdgeElementStorage as? UIScrollEdgeElementContainerInteraction { return existing }
+        let interaction = UIScrollEdgeElementContainerInteraction()
+        chipsEdgeElementStorage = interaction
+        return interaction
+    }
+    private var chipsEdgeElementStorage: AnyObject?
     /// By night: solid black over the title, fading to clear across the top
     /// half of the category chips, laid over a blur that fades with it.
     private let headerShade = CAGradientLayer()
@@ -122,6 +131,9 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
         pager.accessibilityIdentifier = "history-pager"
         view.addSubview(pager)
         headerMaterial.alpha = 0
+        // Superseded by the system's hard scroll edge on each list; kept
+        // hidden so the layout code that sizes it stays inert.
+        headerMaterial.isHidden = true
         headerMaterial.isUserInteractionEnabled = false
         headerMaterial.accessibilityIdentifier = "history-header-material"
         headerFade.colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor]
@@ -134,6 +146,10 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
         }
         view.addSubview(headerMaterial)
         view.addSubview(categoryBar)
+        if #available(iOS 26.0, *) {
+            chipsEdgeElement.edge = .top
+            categoryBar.addInteraction(chipsEdgeElement)
+        }
         categoryBar.onSelect = { [weak self] index in
             guard let self else { return }
             self.select(self.categories[index], animated: !self.reduceMotion)
@@ -356,9 +372,12 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
         // These lists are SwiftUI's, but they live in hosting controllers
         // under a UIKit pager, so the style is set on the scroll view itself
         // rather than trusted to reach it through the environment.
-        // The pager owns one continuous material for every category. A
-        // second native edge effect made each List's header look different.
-        if #available(iOS 26.0, *) { list.topEdgeEffect.isHidden = true }
+        // The system's hard top edge: the content under the bar and the
+        // category chips is blurred, and the blur ends on a crisp line.
+        if #available(iOS 26.0, *) {
+            list.topEdgeEffect.isHidden = false
+            list.topEdgeEffect.style = .hard
+        }
         list.scrollsToTop = index == selectedIndex
         hosts[index].view.accessibilityElementsHidden = index != selectedIndex
         observations[index] = list.observe(\.contentOffset, options: [.new]) { [weak self] _, _ in
@@ -377,6 +396,9 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
     private func observeSelectedList() {
         guard let list = lists[selectedIndex] else { return }
         for (index, other) in lists { other.scrollsToTop = index == selectedIndex }
+
+        // The chips sit inside the hard edge, so the blur reaches below them.
+        if #available(iOS 26.0, *) { chipsEdgeElement.scrollView = list }
 
         // Explicitly nominate the vertical list, never the horizontal pager,
         // for the native large title and scroll-edge appearance.
@@ -423,9 +445,22 @@ final class HistoryPagingScrollView: UIScrollView {
 
 /// Equal-size category slots share typography and a single moving capsule.
 /// Long translations and Dynamic Type scroll rather than changing each slot's shape.
+/// The categories as Revolut sets its section tabs: plain words, each as
+/// wide as its own title, and the chosen one inside a glass capsule that
+/// slides with the page.
 final class HistoryCategoryBar: UIView {
     let scrollView = UIScrollView()
-    let pill = UIView()
+    let pill: UIVisualEffectView = {
+        if #available(iOS 26.0, *) {
+            let glass = UIGlassEffect()
+            glass.isInteractive = false
+            return UIVisualEffectView(effect: glass)
+        }
+        return UIVisualEffectView(effect: nil)
+    }()
+    /// Space between two tabs' capsules, and inside one around its title.
+    private static let tabSpacing: CGFloat = 4
+    private static let tabPadding: CGFloat = 18
     private(set) var buttons: [UIButton] = []
     var onSelect: ((Int) -> Void)?
     private var progress: CGFloat = 0
@@ -444,7 +479,11 @@ final class HistoryCategoryBar: UIView {
         scrollView.scrollsToTop = false
         scrollView.contentInsetAdjustmentBehavior = .never
         addSubview(scrollView)
-        pill.backgroundColor = SettingsTemplate.uiCard
+        if #available(iOS 26.0, *) {
+            pill.cornerConfiguration = .capsule()
+        } else {
+            pill.backgroundColor = SettingsTemplate.uiCard
+        }
         pill.layer.cornerCurve = .continuous
         pill.isUserInteractionEnabled = false
         pill.accessibilityIdentifier = "history-category-pill"
@@ -482,16 +521,17 @@ final class HistoryCategoryBar: UIView {
         super.layoutSubviews()
         scrollView.frame = bounds
         let inset = SettingsTemplate.pageInset
-        let chipPadding = SettingsTemplate.segmentHorizontalPadding * 2
         let barPadding = SettingsTemplate.segmentBarVerticalPadding
-        let measuredWidth = buttons.map { ceil($0.intrinsicContentSize.width) + chipPadding }.max() ?? 60
-        let slotWidth = max(60, measuredWidth, (bounds.width - inset * 2) / CGFloat(buttons.count))
+        // Each tab hugs its title, as Revolut's do; equal slots left short
+        // labels floating in wide boxes.
         var x = inset
         for button in buttons {
-            button.frame = CGRect(x: x, y: barPadding, width: slotWidth,
+            let width = ceil(button.titleLabel?.intrinsicContentSize.width ?? 40) + Self.tabPadding * 2
+            button.frame = CGRect(x: x, y: barPadding, width: width,
                                   height: bounds.height - barPadding * 2)
-            x = button.frame.maxX
+            x = button.frame.maxX + Self.tabSpacing
         }
+        x -= Self.tabSpacing
         scrollView.contentSize = CGSize(width: x + inset, height: bounds.height)
         scrollView.bounces = scrollView.contentSize.width > bounds.width
         updatePill()
@@ -517,7 +557,7 @@ final class HistoryCategoryBar: UIView {
         let b = buttons[upper].frame
         pill.frame = CGRect(x: a.minX + (b.minX - a.minX) * fraction, y: a.minY,
                             width: a.width + (b.width - a.width) * fraction, height: a.height)
-        pill.layer.cornerRadius = pill.bounds.height / 2
+        if #unavailable(iOS 26.0) { pill.layer.cornerRadius = pill.bounds.height / 2 }
         for (index, button) in buttons.enumerated() {
             let weight = max(0, 1 - abs(progress - CGFloat(index)))
             button.setTitleColor(SettingsTemplate.segmentTitleColor(weight: weight), for: .normal)

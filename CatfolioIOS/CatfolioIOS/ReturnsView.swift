@@ -253,7 +253,7 @@ struct ReturnsChartPage: View {
         .navigationTitle(chart.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(chart == .comparison ? .hidden : .visible, for: .navigationBar)
-        .toolbarVisibility(.hidden, for: .tabBar)
+        .hidesTabBarWhenPushed()
         .refreshable {
             if chart == .contributors || chart == .losses {
                 holdingHistoryRefreshRevision &+= 1

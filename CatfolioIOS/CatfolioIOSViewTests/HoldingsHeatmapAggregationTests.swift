@@ -176,6 +176,7 @@ final class HoldingsHeatmapAggregationTests: XCTestCase {
         let resolved = expectation(description: "Logo invalidates the heatmap texture")
         var resolvedURL: URL?
         let host = UIHostingController(rootView: AssetLogo(ticker: "NVDA", logoSymbol: "NVDA", size: 96)
+            .environment(\.colorScheme, .light)
             .environment(\.assetLogoDidResolve) { url in
                 resolvedURL = url
                 resolved.fulfill()
@@ -189,7 +190,8 @@ final class HoldingsHeatmapAggregationTests: XCTestCase {
 
         // ImageRenderer does not run the logo's async task. After the live
         // logo resolves, its synchronous cache must also supply the texture.
-        let renderer = ImageRenderer(content: AssetLogo(ticker: "NVDA", logoSymbol: "NVDA", size: 96))
+        let renderer = ImageRenderer(content: AssetLogo(ticker: "NVDA", logoSymbol: "NVDA", size: 96)
+            .environment(\.colorScheme, .light))
         renderer.scale = 1
         let rendered = try XCTUnwrap(renderer.uiImage)
         let attachment = XCTAttachment(image: rendered)
