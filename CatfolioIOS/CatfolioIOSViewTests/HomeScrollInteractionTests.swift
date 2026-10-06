@@ -432,6 +432,9 @@ final class HomeScrollInteractionTests: XCTestCase {
     @MainActor
     func testEligibleNativeRefreshShowsSpinnerAndRunsOnceUntilCompletion() async throws {
         let controller = PortfolioHomeScrollController()
+        controller.reduceMotion = true
+        var renderedPull: CGFloat = 0
+        controller.onOffset = { _, pull in renderedPull = pull }
         let scroll = nativeScroll(controller)
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let previous = scene.windows.first(where: \.isKeyWindow)
@@ -465,10 +468,43 @@ final class HomeScrollInteractionTests: XCTestCase {
         XCTAssertEqual(requests, 1)
         XCTAssertTrue(controller.refreshControl.isRefreshing)
         XCTAssertTrue(controller.gate.isRefreshing)
+        controller.scrollViewDidEndDragging(scroll, willDecelerate: false)
         finish?.resume()
         for _ in 0..<20 where controller.gate.isRefreshing { await Task.yield() }
         XCTAssertFalse(controller.refreshControl.isRefreshing)
         XCTAssertFalse(controller.gate.isRefreshing)
+        XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, 0, accuracy: 0.5,
+                       "Finishing refresh must return a released pull to its resting height")
+        XCTAssertEqual(renderedPull, 0, accuracy: 0.5,
+                       "The header must not retain its last stretched layout")
+    }
+
+    @MainActor
+    func testRefreshCompletionPreservesHeldPullAndScrolledPosition() async {
+        for held in [true, false] {
+            let controller = PortfolioHomeScrollController()
+            controller.reduceMotion = true
+            let scroll = nativeScroll(controller)
+            var finish: CheckedContinuation<Void, Never>?
+            controller.refresh = { await withCheckedContinuation { finish = $0 } }
+            controller.touchBegan()
+            controller.scrollViewWillBeginDragging(scroll)
+            scroll.contentOffset.y = -90 - scroll.adjustedContentInset.top
+            controller.refreshControl.beginRefreshing()
+            controller.requestRefresh()
+            for _ in 0..<20 where finish == nil { await Task.yield() }
+            if !held {
+                controller.scrollViewDidEndDragging(scroll, willDecelerate: false)
+                scroll.contentOffset.y = 120 - scroll.adjustedContentInset.top
+            }
+            let position = scroll.contentOffset.y + scroll.adjustedContentInset.top
+            finish?.resume()
+            for _ in 0..<20 where controller.gate.isRefreshing { await Task.yield() }
+            XCTAssertFalse(controller.gate.isRefreshing)
+            XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, position, accuracy: 0.5,
+                           held ? "Completion must not move a held gesture" : "Completion must not jump a scrolled list")
+            controller.detach()
+        }
     }
 
     @MainActor

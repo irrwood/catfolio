@@ -1224,15 +1224,11 @@ private struct FastReturnsPlot: View {
                     // but stays solid: see-through, the lines behind it
                     // showed through the capsule.
                     let isDimmed = highlightedSeries != nil && highlightedSeries != endpoint.id
-                    Text(endpoint.text)
-                        .font(Typography.text(size: 10, weight: .bold))
-                        .foregroundStyle(isDimmed ? Color.primary.opacity(0.45) : CatfolioTheme.blackTextOnColor)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.72)
-                        .frame(width: axisWidth, height: 18)
-                        .background(isDimmed ? endpoint.color.mix(with: colorScheme == .dark ? .black : .white, by: 0.68)
-                                             : endpoint.color,
-                                    in: Capsule())
+                    let badgeColor = isDimmed
+                        ? endpoint.color.mix(with: colorScheme == .dark ? .black : .white, by: 0.68)
+                        : endpoint.color
+                    ReturnsChartBadge(text: endpoint.text, color: badgeColor,
+                                      width: axisWidth, height: 18, fontSize: 10)
                         .zIndex(highlightedSeries == endpoint.id ? 1 : 0)
                         .position(
                             x: geometry.size.width - axisWidth / 2,

@@ -113,6 +113,7 @@ final class AppModel {
         return values.isEmpty ? nil : values.joined(separator: "\n")
     }
 
+    @ObservationIgnored let historyPreparationCache = HistoryPreparationCache()
     @ObservationIgnored var document = LocalPortfolioDocument.empty
     @ObservationIgnored var fullDocument = LocalPortfolioDocument.empty
     @ObservationIgnored var portfolioRequestGeneration = 0

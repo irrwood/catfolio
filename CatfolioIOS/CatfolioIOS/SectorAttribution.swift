@@ -40,10 +40,10 @@ enum PortfolioSector: String, CaseIterable, Hashable, Sendable {
         switch self {
         case .technology: "cpu"
         case .healthcare: "cross.case.fill"
-        case .financials: "banknote.fill"
+        case .financials: "building.columns.fill"
         case .consumerCyclical: "cart.fill"
         case .consumerDefensive: "basket.fill"
-        case .industrials: "gearshape.fill"
+        case .industrials: "building.2.fill"
         case .energy: "fuelpump.fill"
         case .materials: "cube.fill"
         case .realEstate: "house.fill"

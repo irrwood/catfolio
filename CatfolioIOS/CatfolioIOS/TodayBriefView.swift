@@ -9,15 +9,6 @@ struct TodayBriefView: View {
     var body: some View {
         let entry = store.entry(for: context)
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 6) {
-                Spacer()
-                if let date = context.sessionDate {
-                    Text(DataDayLabel.text(for: date, locale: Locale(identifier: context.language)))
-                }
-            }
-            .font(.system(.caption, design: .rounded, weight: .medium))
-            .foregroundStyle(SettingsTemplate.secondaryText)
-
             if entry.paragraphs.isEmpty {
                 paragraph(context.seed, generating: false, entry: entry)
             } else {
@@ -31,11 +22,6 @@ struct TodayBriefView: View {
                     }
                 }
             }
-
-            Text(entry.failure ?? L10n.text("点击金额、股票或板块继续展开"))
-                .font(.system(.caption, design: .rounded))
-                .foregroundStyle(SettingsTemplate.secondaryText)
-                .accessibilityIdentifier("today.brief-hint")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 8)

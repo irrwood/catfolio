@@ -119,9 +119,6 @@ struct SettingsHistoryOverview: View {
                 }
                 .font(.caption)
                 .tint(.primary)
-            } else if prepared == nil {
-                ProgressView(L10n.text("正在读取历史汇总…"))
-                    .font(.caption)
             }
         }
         .accessibilityIdentifier("settings.history-overview")
@@ -186,20 +183,17 @@ struct SettingsHistoryOverview: View {
             let accountIDs = Set(ledger.accounts.map(\.id))
             let locale = locale
             async let holdings = model.holdings(forAccounts: accountIDs)
-            let worker = Task.detached(priority: .utility) {
-                try HistoryPreparedLedger.build(ledger: ledger, accountIDs: accountIDs, locale: locale)
-            }
-            let result = try await withTaskCancellationHandler {
-                try await worker.value
-            } onCancel: { worker.cancel() }
+            let result = try await model.historyPreparationCache.prepared(
+                ledger: ledger, accountIDs: accountIDs, locale: locale)
+            try Task.checkCancellation()
+            prepared = result
+            loadedKey = requestKey
             let positions = try? await holdings
             try Task.checkCancellation()
             if let positions {
                 let charges = HistoryFeeCharge.build(holdings: positions)
                 annualFees = charges.isEmpty ? nil : charges.reduce(0) { $0 + $1.annual }
             }
-            prepared = result
-            loadedKey = requestKey
         } catch {
             guard !Task.isCancelled else { return }
             failed = true

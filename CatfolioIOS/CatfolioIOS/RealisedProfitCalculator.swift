@@ -69,7 +69,7 @@ enum TaxYearBasis: String, CaseIterable, Identifiable, Sendable {
     var title: String {
         switch self {
         case .calendar: L10n.text("日历年")
-        case .uk: L10n.text("英国税年 · 4/6–4/5")
+        case .uk: L10n.text("英国税年")
         }
     }
 

@@ -308,6 +308,17 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
         }
         forwardedDelegate?.scrollViewDidScroll?(scrollView)
         if raw < 0 { alignRefreshControl() }
+        publishOffset()
+    }
+
+    func scrollViewDidChangeAdjustedContentInset(_ scrollView: UIScrollView) {
+        forwardedDelegate?.scrollViewDidChangeAdjustedContentInset?(scrollView)
+        // Refresh completion can change the inset without a didScroll event.
+        // Keep the header's cached geometry in sync with that native change.
+        publishOffset()
+    }
+
+    private func publishOffset() {
         // Signed animation offsets also pin the hero during the lower-stop
         // overshoot. Only eligible native pulls are exposed as pull distance.
         onOffset(isSettling || (!gate.permitsRefresh && !gate.isRefreshing) ? offset : max(0, offset),
@@ -415,10 +426,23 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
         }
         refreshTask = Task { [weak self] in
             guard let self else { return }
+            let refreshingScroll = self.scrollView
             await self.refresh()
             self.refreshControl.endRefreshing()
             self.gate.finishRefresh()
             self.refreshTask = nil
+            guard let scroll = self.scrollView, scroll === refreshingScroll else { return }
+            // endRefreshing hides the spinner, but a refresh that rebuilt the
+            // content can leave a released scroll parked below its top. Return
+            // only that idle overscroll; never move an active touch or a list
+            // the reader has already scrolled away from the header.
+            if !self.hasTouch && !scroll.isTracking && !scroll.isDragging
+                && !scroll.isDecelerating && self.offset < 0 {
+                self.isMoving = false
+                scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x,
+                    y: -scroll.adjustedContentInset.top), animated: !self.reduceMotion)
+            }
+            self.publishOffset()
         }
     }
 }

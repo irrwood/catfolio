@@ -275,18 +275,12 @@ struct HistoryView: View {
         .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
         .toolbarVisibility(.hidden, for: .bottomBar)
         .accessibilityIdentifier("page.history")
-        .overlay(alignment: .bottomLeading) {
-            if ledger.accounts.count > 1 {
-                floatingAccountFilter
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                accountFilter
                     .disabled(isLoading)
                     .tint(.primary)
-                    .buttonBorderShape(.circle)
-                    .controlSize(.large)
-                    .padding(.leading, 26)
-                    .padding(.bottom, 10)
             }
-        }
-        .toolbar {
             ToolbarItem(id: "history-scope", placement: .topBarTrailing) {
                 taxYearPicker
                     .disabled(isLoading)
@@ -688,15 +682,6 @@ struct HistoryView: View {
         }
     }
 
-    @ViewBuilder
-    private var floatingAccountFilter: some View {
-        if #available(iOS 26.0, *) {
-            accountFilter.buttonStyle(.glass)
-        } else {
-            accountFilter.buttonStyle(.bordered)
-        }
-    }
-
     private var accountFilter: some View {
         Menu {
             Button {
@@ -718,9 +703,17 @@ struct HistoryView: View {
                 }
             }
         } label: {
-            Label(accountFilterTitle, systemImage: "person.2")
-                .labelStyle(.iconOnly)
+            HStack(spacing: 5) {
+                Text(accountFilterTitle)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .accessibilityHidden(true)
+            }
         }
+        .buttonStyle(.plain)
         .menuActionDismissBehavior(.disabled)
         .accessibilityLabel(L10n.text("Account filter"))
         .accessibilityValue(accountFilterTitle)
@@ -842,8 +835,8 @@ struct HistoryView: View {
         HStack(alignment: .firstTextBaseline, spacing: 5) {
             Image(systemName: "arrow.triangle.2.circlepath")
                 .font(.caption2)
-            Text(matchingText(sameDay: sameDay, later: later))
-                .fixedSize(horizontal: false, vertical: true)
+            Text(L10n.text("英国配对"))
+                .accessibilityLabel(matchingText(sameDay: sameDay, later: later))
         }
         .font(.caption2)
         .foregroundStyle(.secondary)
@@ -1039,36 +1032,37 @@ struct HistoryView: View {
         let accountIDs = effectiveAccountIDs
         let locale = appLocale
         let ticker = ticker
-        let worker = Task.detached(priority: .userInitiated) {
-            try HistoryPreparedLedger.build(ledger: ledger, accountIDs: accountIDs, locale: locale, ticker: ticker)
-        }
         async let scopedPositions = model.holdings(forAccounts: accountIDs)
         do {
-            let prepared = try await withTaskCancellationHandler {
-                try await worker.value
-            } onCancel: { worker.cancel() }
+            let prepared = try await model.historyPreparationCache.prepared(
+                ledger: ledger, accountIDs: accountIDs, locale: locale, ticker: ticker)
             try Task.checkCancellation()
+            preparedLedger = prepared
+            if isLoading {
+                // A new scope cannot show the previous account's market figures.
+                // Same-scope refreshes retain their figures while updating.
+                scopedHoldings = []
+                feeCharges = []
+                buyGains = [:]
+                dividendForecastUSD = nil
+                let settle = Duration.milliseconds(450) - appearedAt.duration(to: .now)
+                if settle > .zero { try await Task.sleep(for: settle) }
+                try Task.checkCancellation()
+            }
+            withAnimation(.easeOut(duration: 0.2)) { isLoading = false }
+
             let allHoldings = (try? await scopedPositions) ?? []
-            let holdings = allHoldings.filter { ticker == nil || $0.ticker.uppercased() == ticker }
             try Task.checkCancellation()
+            let holdings = allHoldings.filter { ticker == nil || $0.ticker.uppercased() == ticker }
             let activities = prepared.page(category: .orders, basis: .calendar, year: nil).activities
             let (charges, gains) = await Task.detached(priority: .userInitiated) {
                 (HistoryFeeCharge.build(holdings: holdings),
                  HistoryRowGain.purchaseGains(activities, holdings: holdings))
             }.value
             try Task.checkCancellation()
-            preparedLedger = prepared
-            if isLoading {
-                // The lists are built once the push has landed, and fade in:
-                // swapped in part-way through, they caught the animation.
-                let settle = Duration.milliseconds(450) - appearedAt.duration(to: .now)
-                if settle > .zero { try await Task.sleep(for: settle) }
-                try Task.checkCancellation()
-            }
             scopedHoldings = holdings
             feeCharges = charges
             buyGains = gains
-            withAnimation(.easeOut(duration: 0.2)) { isLoading = false }
             // After the lists are up: the schedules are a request per
             // holding, the first time each day.
             let year = String(DayDateCodec.string(from: Date()).prefix(4))

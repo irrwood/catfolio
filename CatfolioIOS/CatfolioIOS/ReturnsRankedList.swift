@@ -145,125 +145,69 @@ struct ReturnsHorizontalPan: UIGestureRecognizerRepresentable {
     }
 }
 
-struct ReturnsRankBadge: View {
-    /// Nil for a row outside the ranking, such as the others or the principal.
-    let rank: Int?
+/// Shared capsule for chart labels and ranking numbers. The opaque tint keeps
+/// text contrast independent of the chart or glass underneath it.
+struct ReturnsChartBadge: View {
+    let text: String
     let color: Color
-    let isPortfolio: Bool
-    /// The others' band: white under the chart's diagonal stripes, as the
-    /// band itself is painted.
+    var width: CGFloat = 36
+    var height: CGFloat = 28
+    var fontSize: CGFloat = 16
     var isStriped = false
-    var usesTintedGlass = false
     @Environment(\.self) private var environment
 
     var body: some View {
-        if usesTintedGlass {
-            tintedGlassBadge
-        } else {
-            legacyBadge
-        }
-    }
-
-    /// Two digits keep the design's 16pt type; longer ranks shrink inside the
-    /// same slot, so the row's text never moves as the rank changes.
-    private var rankText: some View {
-        Text(rank.map(String.init) ?? "")
-            .font(.system(size: 16, weight: .semibold, design: .rounded))
+        Text(text)
+            .font(.system(size: fontSize, weight: .semibold, design: .rounded))
             .monospacedDigit()
             .lineLimit(1)
             .minimumScaleFactor(0.4)
-            .foregroundStyle(labelColor)
-            .frame(width: 20, height: 28)
-            .padding(.horizontal, 8)
-    }
-
-    @ViewBuilder
-    private var tintedGlassBadge: some View {
-        if #available(iOS 26.0, *) {
-            rankText.glassEffect(.regular.tint(color.opacity(0.8)), in: Capsule())
-        } else {
-            rankText.background(.ultraThinMaterial, in: Capsule())
-                .background(color.opacity(0.8), in: Capsule())
-        }
-    }
-
-    private var legacyBadge: some View {
-        ZStack {
-            if isStriped {
-                Circle().fill(.white)
-                Canvas { context, size in
-                    var stripes = Path()
-                    for x in stride(from: -size.height, through: size.width, by: 6) {
-                        stripes.move(to: CGPoint(x: x - 4, y: size.height + 4))
-                        stripes.addLine(to: CGPoint(x: x + size.height + 4, y: -4))
+            .padding(.horizontal, 4)
+            .frame(width: width, height: height)
+            .foregroundStyle(Self.textColor(on: background, environment: environment))
+            .background(background, in: Capsule())
+            .overlay {
+                if isStriped {
+                    Canvas { context, size in
+                        var stripes = Path()
+                        for x in stride(from: -size.height, through: size.width, by: 6) {
+                            stripes.move(to: CGPoint(x: x, y: size.height))
+                            stripes.addLine(to: CGPoint(x: x + size.height, y: 0))
+                        }
+                        context.stroke(stripes, with: .color(color.opacity(0.25)), lineWidth: 2)
                     }
-                    // Stronger than the band's 10%: on a 24pt ball the
-                    // band's own tint would not read at all.
-                    context.stroke(stripes, with: .color(Color(red: 92 / 255, green: 187 / 255, blue: 253 / 255).opacity(0.35)),
-                                   lineWidth: 2.2)
+                    .clipShape(Capsule())
+                    .allowsHitTesting(false)
                 }
-                .clipShape(Circle())
-                Ellipse()
-                    .fill(LinearGradient(colors: [.white.opacity(0.52), .clear],
-                                         startPoint: .top, endPoint: .bottom))
-                    .frame(width: 16, height: 9)
-                    .offset(y: -6)
-            } else if isPortfolio {
-                Circle().fill(
-                    RadialGradient(
-                        stops: [
-                            .init(color: Color(red: 52 / 255, green: 199 / 255, blue: 89 / 255), location: 0),
-                            .init(color: Color(red: 39 / 255, green: 148 / 255, blue: 66 / 255), location: 0.5),
-                            .init(color: Color(red: 25 / 255, green: 97 / 255, blue: 43 / 255), location: 1),
-                        ],
-                        center: .bottom,
-                        startRadius: 0,
-                        endRadius: 24
-                    )
-                )
-                // Figma's 16 × 11 ellipse starts 1.5 pt below the ball's top.
-                Ellipse()
-                    .fill(LinearGradient(colors: [.white.opacity(0.6), .clear],
-                                         startPoint: .top, endPoint: .bottom))
-                    .frame(width: 16, height: 11)
-                    .offset(y: -5)
-            } else {
-                Circle().fill(color.opacity(0.88))
-                if #available(iOS 26.0, *) {
-                    Color.clear
-                        .glassEffect(.clear.tint(color.opacity(0.28)), in: Circle())
-                } else {
-                    Circle().fill(.ultraThinMaterial).opacity(0.30)
-                }
-                Ellipse()
-                    .fill(LinearGradient(colors: [.white.opacity(0.52), .clear],
-                                         startPoint: .top, endPoint: .bottom))
-                    .frame(width: 16, height: 9)
-                    .offset(y: -6)
             }
-
-            Text(rank.map(String.init) ?? "")
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .foregroundStyle(labelColor)
-        }
-        .frame(width: 24, height: 24)
-        .overlay {
-            Circle().strokeBorder(isPortfolio || isStriped ? .black.opacity(0.1) : .white.opacity(0.06), lineWidth: 1)
-        }
-        .shadow(color: .black.opacity(isPortfolio ? 0.25 : 0), radius: 7, y: 4)
-        .shadow(color: .black.opacity(isPortfolio ? 0.20 : 0), radius: 1.5, y: 2)
-    }
-    private var labelColor: Color {
-        guard usesTintedGlass else {
-            return isPortfolio ? .white : Color(red: 0.004, green: 0.004, blue: 0.008)
-        }
-        let resolved = color.resolve(in: environment)
-        let brightness = 0.2126 * resolved.red + 0.7152 * resolved.green + 0.0722 * resolved.blue
-        return brightness < 0.7 ? .white : Color(white: 0.05)
+            .overlay { Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 0.5) }
     }
 
+    private var background: Color { isStriped ? .white : color }
+
+    static func textColor(on color: Color, environment: EnvironmentValues) -> Color {
+        let value = color.resolve(in: environment)
+        func linear(_ channel: Float) -> Double {
+            let c = Double(channel)
+            return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        let luminance = 0.2126 * linear(value.red) + 0.7152 * linear(value.green) + 0.0722 * linear(value.blue)
+        // Choose whichever foreground provides the stronger contrast ratio.
+        return (luminance + 0.05) / 0.05 >= 1.05 / (luminance + 0.05) ? .black : .white
+    }
+}
+
+struct ReturnsRankBadge: View {
+    let rank: Int?
+    let color: Color
+    let isPortfolio: Bool
+    var isStriped = false
+    // Kept for existing previews; every ranking now uses the shared capsule.
+    var usesTintedGlass = true
+
+    var body: some View {
+        ReturnsChartBadge(text: rank.map(String.init) ?? "", color: color, isStriped: isStriped)
+    }
 }
 
 /// The ranking rows' card: faint glass on the comparison's dark field, and a
