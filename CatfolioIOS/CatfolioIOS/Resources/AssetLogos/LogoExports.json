@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-27T18:55:19.524890+00:00",
+  "generatedAt": "2026-10-03T23:14:45.724092+00:00",
   "canvasSize": 192,
   "opticalMethod": "alpha-bounds-plus-ink-centroid-50-percent-x-20-percent-y; solid-plate-as-background; equal-area-56-percent-side-with-density; up-to-80-percent-ink-box; 10-percent-min-margin",
   "logos": {
@@ -609,7 +609,7 @@
       "kind": "stock",
       "sourceId": "8839072471",
       "themeColor": "#031795",
-      "darkBackgroundColor": "#1B1B1B",
+      "darkBackgroundColor": "#00051F",
       "darkInkLightened": [
         "#031795"
       ],
@@ -628,8 +628,8 @@
         "dark": {
           "svg": "AAL.L.dark.svg",
           "png": "AAL.L.dark.png",
-          "svgSha256": "b00d7b7355affb5375a220a40fc02109dd5b4aa1304f576af15d8beed9125ec5",
-          "pngSha256": "246f9525f14d7ad3bf1ef73dea7b2bcc3b8a7f953ce319c28055b340dbd07dbf"
+          "svgSha256": "630580acb7b1c3195f24285c560e1c7864d443a226fb0d7cdb7438e9f1ea1c25",
+          "pngSha256": "7bf5c063f9bbb626e587a9737ec75adc76f95990dc4be6c25157191de72cdb7c"
         }
       }
     },
@@ -962,28 +962,54 @@
         }
       }
     },
+    "ADC": {
+      "kind": "stock",
+      "sourceId": "0000917251",
+      "themeColor": "#1D4289",
+      "darkBackgroundColor": "#132A58",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "756cd8189587085a8a0de6648042647d0864cce1775447273ef6176f6960f02b",
+        "dark": "1dedae407587df122569542fd737e2df9bcd87f9a25b7d47d1d2f77369709348"
+      },
+      "files": {
+        "light": {
+          "svg": "ADC.light.svg",
+          "png": "ADC.light.png",
+          "svgSha256": "ab79b9047e2a9a6d2b2fe9617d8b39999a0c6d12c9dbb5149d13dcb2d05c24b6",
+          "pngSha256": "4b19513a84d9e40a9ce6169a2c68399821ff775cbf22695e4dd9a38b81541b7f"
+        },
+        "dark": {
+          "svg": "ADC.dark.svg",
+          "png": "ADC.dark.png",
+          "svgSha256": "49eb528bc4511491c15b37b873f3218c2f68da3f71826340202ef4fdcc4d5374",
+          "pngSha256": "34761d90b7ac7bdd21e1d8a06b253a790ce889bd8d67395b32c81d441a975bc5"
+        }
+      }
+    },
     "ADI": {
       "kind": "stock",
       "sourceId": "0000006281",
       "themeColor": "#231F20",
-      "darkBackgroundColor": "#231F20",
-      "selectionOrigin": "manual_default",
+      "darkBackgroundColor": "#0167B9",
+      "darkInkTint": "#F2F7FC",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "0993df463d3ecc816922c983141ae323d650c0496fe6186ae42892a10fa3020c",
-        "dark": "ca113308cee9cda7850c7af2c3cc5d84b4384599a547bd5526599215cd267f59"
+        "light": "0b4da1fa283160470d38139a9b462bcf02c6616ea186b44993c7ed0e80c8474c",
+        "dark": "bbf7cce80ab64a97cc61f5265de5a7b0470858ee3444287a797dfa76f768c1a5"
       },
       "files": {
         "light": {
           "svg": "ADI.light.svg",
           "png": "ADI.light.png",
-          "svgSha256": "c94cc5d425c0db16e6eef02d2ae5f5cfd867ecaf4d8880a1ba206f55d8d0befe",
-          "pngSha256": "bcff7088581fa33f4ab5e6a96f8184d682853e592d9c290c3d98f696b9699d4f"
+          "svgSha256": "c5f137e0c22b93530d6db9b73819ea18de97b207c406a329fedde3b77e65f7b9",
+          "pngSha256": "376694099a3526618e9827846bb516ccffeee997902614059d09dd34f535ccf4"
         },
         "dark": {
           "svg": "ADI.dark.svg",
           "png": "ADI.dark.png",
-          "svgSha256": "0526ab143b9869df6d28811c8b2c6c336d960eacd2284658716e0b7f24dcc3e4",
-          "pngSha256": "3e5f6d14228244f11cffe954c45197e914ebf6bc71c8cf77eaa2ea58629be3af"
+          "svgSha256": "8c93f5d772654aaafef54df838c1307fc18160d55134af651637ecd7139e4ab3",
+          "pngSha256": "29cfc426d54786173850fe48feb877480b7cf1abc1299b97a9d7c2e7ce47032f"
         }
       }
     },
@@ -1267,14 +1293,11 @@
       "kind": "stock",
       "sourceId": "0000004904",
       "themeColor": "#EC1C24",
-      "darkBackgroundColor": "#951217",
-      "darkInkLightened": [
-        "#951217"
-      ],
+      "darkBackgroundColor": "#EC1C24",
       "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "84b0a46335e999ef8309ab54d89da0021719570e153caf65ca88b03359273d9a",
-        "dark": "ad26deffe8e6aabd60d09e17e4ff2c73b93be7e303f10c95bf37731f128d1c81"
+        "dark": "aed46018bab6494396b66b5b42bfa8074e4f2057a02eac217435b4af57bb4a66"
       },
       "files": {
         "light": {
@@ -1286,8 +1309,8 @@
         "dark": {
           "svg": "AEP.dark.svg",
           "png": "AEP.dark.png",
-          "svgSha256": "0cde04f433f8e8805a025b6952c4595dc71132ab5629a1f7c31a882fc7b6e1a2",
-          "pngSha256": "8b04ec972ad35e010c48356ce7304c60c494f6736cdec3d6ddedf70709ed15ce"
+          "svgSha256": "bd9cbe2aae2cd13455e87b563ffb86e8efe2c2195d60b97ddd0341f5e8045e59",
+          "pngSha256": "cd3ed57630c3e93ed8d20aab482e6ae6d773b3e6fc5079d9a98d0814d0ac48b8"
         }
       }
     },
@@ -1322,7 +1345,7 @@
       "themeColor": "#9776FF",
       "darkBackgroundColor": "#FFFFFF",
       "lightBackgroundColor": "#FFFFFF",
-      "selectionOrigin": "manual_default",
+      "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "ee87b1a1c335a58f1cfd3024f91014accbb4f53c6d6eca0ddfb1fd88bb229efb",
         "dark": "ee87b1a1c335a58f1cfd3024f91014accbb4f53c6d6eca0ddfb1fd88bb229efb"
@@ -1572,25 +1595,25 @@
     "AJG": {
       "kind": "stock",
       "sourceId": "0000354190",
-      "themeColor": "#91C3E6",
+      "themeColor": "#293740",
       "darkBackgroundColor": "#91C3E6",
-      "selectionOrigin": "manual_default",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "dd53df428e737c3a7906a876e6418b63a7d8c56e65f6c9e4ef08aa4faeba5651",
-        "dark": "2dee2c3a47364a10993e4e70a20ee8b7cc0906bf9d13e5c35154d85319df10c0"
+        "light": "d4174ef56dc819fd46a8ecff8cf87b849e7031ba74f67bf9ec426072752cd492",
+        "dark": "fa4fe919f0bd6e07fba8d119dc7a2036953aae504067e20a519f75e0b3f97ea4"
       },
       "files": {
         "light": {
           "svg": "AJG.light.svg",
           "png": "AJG.light.png",
-          "svgSha256": "6cb3d449c8db0879af450ed57e3753d10bf19c9e29fcf871a41396823b80df66",
-          "pngSha256": "f58903e32b05a13e6bd17dff6169327790e49eedf31ea9d64b82d1421754e89f"
+          "svgSha256": "e2acd21d5d3df4a9ec9474e6fe7970b838bad9d7e4b718e49fe942604fe748ae",
+          "pngSha256": "c98b8dd9b42ac2c25aaa5b488064eff746a00dfbeadff43d7cda4ef60288a647"
         },
         "dark": {
           "svg": "AJG.dark.svg",
           "png": "AJG.dark.png",
-          "svgSha256": "25e81efffe5c4444a21cc621feb0c3f6c81e5a8cf9d425ea5431e2d57f4b01ad",
-          "pngSha256": "cda5df95c918cb14cea5931f8397023c15bd4eae80536d646a99eec1774db812"
+          "svgSha256": "9d8e282ea0698490e018ffc8e278b5a509c86f3254015f7067f48db3d9d3a023",
+          "pngSha256": "bf108161f76bf989a036ae826c906e4421def92a7553df234ea5e49f11687a92"
         }
       }
     },
@@ -1932,27 +1955,25 @@
       "kind": "stock",
       "sourceId": "8338296206",
       "themeColor": "#000000",
-      "darkBackgroundColor": "#1B1B1B",
-      "darkInkLightened": [
-        "#000000"
-      ],
-      "selectionOrigin": "auto_europe_popular",
+      "darkBackgroundColor": "#415D80",
+      "darkInkTint": "#F6F7F9",
+      "selectionOrigin": "manual_svg_edit",
       "sourceSha256": {
-        "light": "fc28b31bd473cf3759bd6b670c47e09b31c0ab0b9db88dafea6c2379ba9773a3",
-        "dark": "fc28b31bd473cf3759bd6b670c47e09b31c0ab0b9db88dafea6c2379ba9773a3"
+        "light": "02edd2ae61ad86a6b73dd2b8cc1564bbd7d0f1ded3f05f895fef27bced0f154f",
+        "dark": "f7eaa9ef1f43697043fe80bdb70d567b5567424fa228fac825757e0c50fd9c09"
       },
       "files": {
         "light": {
           "svg": "AM.PA.light.svg",
           "png": "AM.PA.light.png",
-          "svgSha256": "36116f713f5329054534ed88480ecca6d7cb00d961b62c2d757d6a1f18225909",
-          "pngSha256": "f4476ae7250227db421274fb0f8321d53e3ea2c41acac9eada8337f395b1e081"
+          "svgSha256": "a1e9908561aaea0bc4fcdcbf1eb8f49a4b8a8e46d7f347a14c036dbad8415dc3",
+          "pngSha256": "d779510b26c98470585973d532533b3f61df81b28fe30e84d2a9d6777e930919"
         },
         "dark": {
           "svg": "AM.PA.dark.svg",
           "png": "AM.PA.dark.png",
-          "svgSha256": "3980949fe853b7e38d67538b82e791089c8620a4f8c65503c36f4088075f369f",
-          "pngSha256": "ca74590ce4f8e7657675d4aede3c18fa09d03dd85b0496ca66d7f8b7739ef79d"
+          "svgSha256": "e4508be3048ff3531b301ec8e4c2a5f386042eee84f4c9d31d3b7f0f34aa315c",
+          "pngSha256": "07ec50ebbddf85732d61cce3e58959f4c2c46508cbc1daa7efe91bbeb3995fa6"
         }
       }
     },
@@ -1985,24 +2006,24 @@
       "kind": "stock",
       "sourceId": "0001748790",
       "themeColor": "#000000",
-      "darkBackgroundColor": "#1B1B1B",
+      "darkBackgroundColor": "#196C42",
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "123877a0c6bd500f42fab99d8081cd733ea5f729e6f6c5e7e0ca808d2f0c636a",
-        "dark": "3e73586b7b0ef27f5cb2bccdfbb64e46a00dd4ebdcfb23c6853dd3c6a3f085f9"
+        "light": "1e67b7dd11895d53233e2fc279c37dac20ebd4b7f45f7be4849886442c1a3a44",
+        "dark": "1e67b7dd11895d53233e2fc279c37dac20ebd4b7f45f7be4849886442c1a3a44"
       },
       "files": {
         "light": {
           "svg": "AMCR.light.svg",
           "png": "AMCR.light.png",
-          "svgSha256": "d00cb961ce7c6123162c79740704441b10433cb5c00f9090562642cff194e355",
-          "pngSha256": "89bb131f670040c05618c915df8a54ed5efc28879ec2b3a25428446ddfab1378"
+          "svgSha256": "3f3128d72d144a547d8645f794a330398c1b21ffc9c55fb2a5808c753f62150c",
+          "pngSha256": "ea70f7a6b0c3708413276c80f9dd98efb21ce30b9539455ff5cd61dced0a48c5"
         },
         "dark": {
           "svg": "AMCR.dark.svg",
           "png": "AMCR.dark.png",
-          "svgSha256": "0dabde481290fa3e2be7ea5bcc0d527c257907e38fc6969c27d98895e40225ea",
-          "pngSha256": "07c317d54cebd756d1a45ee77db4ff2210d3f144f13615247bd6465781404ae1"
+          "svgSha256": "8abcec8c1f12c6f0a0bc0103e430c0ee48b47f6a993f61fe96a38d4883409e0b",
+          "pngSha256": "c91f2766b017c952e2226ba2c126f9785920527d750a10c934e9d903269087a3"
         }
       }
     },
@@ -3304,11 +3325,11 @@
       "kind": "stock",
       "sourceId": "0000756894",
       "themeColor": "#005581",
-      "darkBackgroundColor": "#1B1B1B",
-      "selectionOrigin": "auto_neutral_multicolor",
+      "darkBackgroundColor": "#141414",
+      "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "f8613f549462f6239b44d51af7f6df2292e3bddee0a13b3b07521b520e8e8348",
-        "dark": "f8613f549462f6239b44d51af7f6df2292e3bddee0a13b3b07521b520e8e8348"
+        "dark": "b41b8cee4ff7342ab52546e01048bf9abb10d77acda5a8b114dc31b78d37bb4e"
       },
       "files": {
         "light": {
@@ -3320,8 +3341,8 @@
         "dark": {
           "svg": "B.dark.svg",
           "png": "B.dark.png",
-          "svgSha256": "34ea685fd2ecdd8357ba9d5a9ad71ae95e2a5a65a2faa110a764fba5f1e467c0",
-          "pngSha256": "0684f8b2990de227c0c10399cd51a99b01b4626c7e0809046bb1a26c53beed94"
+          "svgSha256": "497590698505576e6a46a4738cdbcfeb3c8605f4895bd898d508488a68fdc92b",
+          "pngSha256": "ebdc0a4f04e8cb7573a33eeb5c0441dbbce63371096b2985ae836e6273d9ae7a"
         }
       }
     },
@@ -3350,6 +3371,31 @@
         }
       }
     },
+    "BABA": {
+      "kind": "stock",
+      "sourceId": "0001577552",
+      "themeColor": "#FF5A00",
+      "darkBackgroundColor": "#C44500",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "718ba66f9673c8b86925968731a3080573626fc465158efe0a96efe459f5c5ed",
+        "dark": "83d06ca428a1ed428f3404b15cbdca0b01596da75c3a962df69f42d0217f3edc"
+      },
+      "files": {
+        "light": {
+          "svg": "BABA.light.svg",
+          "png": "BABA.light.png",
+          "svgSha256": "aa71d46e78f6da5339b4441b4542bbd778af23a6a9c22d218cb8c314f8087c89",
+          "pngSha256": "1a62b346b14048e123bdc5d3a8b2430d64d184fc09d3e9ab9c793107cb5e29a9"
+        },
+        "dark": {
+          "svg": "BABA.dark.svg",
+          "png": "BABA.dark.png",
+          "svgSha256": "77f736fcc4034812036e379aacfc72430c26b58500400b3f391bb6be3eaa8212",
+          "pngSha256": "c6139c25a625881addf97a8935a1990e75238ab6e8f9fbb9cb74c599c5cbf280"
+        }
+      }
+    },
     "BAC": {
       "kind": "stock",
       "sourceId": "0000070858",
@@ -3375,6 +3421,31 @@
           "png": "BAC.dark.png",
           "svgSha256": "b8d342331899c8816090540864df1e84105a07772ec1d32686ba59affc8633a0",
           "pngSha256": "36beadf80dea84ecd4c3d461149f2d6e8fd5c3dc8b15d949bfbe7af65d4e3b72"
+        }
+      }
+    },
+    "BAH": {
+      "kind": "stock",
+      "sourceId": "0001443646",
+      "themeColor": "#25D2D7",
+      "darkBackgroundColor": "#25D2D7",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "a18627500df1454c057fea8c1521057f6bf126957e5d8f2ff41950e697054fcb",
+        "dark": "28f899458735142bd477aad45d420d7c9f962bc3a1e15ad8197f8405adcc595d"
+      },
+      "files": {
+        "light": {
+          "svg": "BAH.light.svg",
+          "png": "BAH.light.png",
+          "svgSha256": "ecea1559e2bc4864ae4b2e262c3b8e5f0279a5cc50f57bc1ea0e59f9a83217a7",
+          "pngSha256": "e6721081f9f3e4cc1366e0771f8e99154ed6e5b7ff2eb3702eac26b0fd5b69a0"
+        },
+        "dark": {
+          "svg": "BAH.dark.svg",
+          "png": "BAH.dark.png",
+          "svgSha256": "008f384519b24acfd60e423e929caea96c13d44e7ce15481efcb1e3e3f5839db",
+          "pngSha256": "c755cf676e5170614abe47307458436a60a2f53178f86dfe92a582e088e67d16"
         }
       }
     },
@@ -3638,7 +3709,7 @@
       "sourceId": "0001664703",
       "themeColor": "#30D060",
       "darkBackgroundColor": "#3DAE2B",
-      "selectionOrigin": "manual_default",
+      "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "42b7eae7b6c043fb0d9d4199e0e5c754415fd8394b3abd84e6dd9866b58b0759",
         "dark": "d8d4bf35f4d8a405b59389009ba498cecf25e2223ecfe6dae09c59b078de382b"
@@ -4290,6 +4361,34 @@
         }
       }
     },
+    "BRKR": {
+      "kind": "stock",
+      "sourceId": "0001109354",
+      "themeColor": "#0069B3",
+      "darkBackgroundColor": "#1B1B1B",
+      "darkInkLightened": [
+        "#1D1D1B"
+      ],
+      "selectionOrigin": "auto_official_svg_priority",
+      "sourceSha256": {
+        "light": "5dafd21b8ffd20c0722afdc16e575a92bf112bf4aefe1c4168f4949f0e736ff2",
+        "dark": "5dafd21b8ffd20c0722afdc16e575a92bf112bf4aefe1c4168f4949f0e736ff2"
+      },
+      "files": {
+        "light": {
+          "svg": "BRKR.light.svg",
+          "png": "BRKR.light.png",
+          "svgSha256": "d187636f9d3550b900ccd70317e609af828bb4e7abd05f702bdb710e7e57388e",
+          "pngSha256": "2d13ae58976020e97c32063723b95d9c1c9226b319febdd7a3a7392ccb887797"
+        },
+        "dark": {
+          "svg": "BRKR.dark.svg",
+          "png": "BRKR.dark.png",
+          "svgSha256": "cf7a2a07d37a15c1df36cbbe2c05b42bc7ded661db8f3047159058a549c6c0c9",
+          "pngSha256": "6851295acccf2bcf2e38a785a3ca0a00d4e92c892e39d77a023169ddc30f567e"
+        }
+      }
+    },
     "BRO": {
       "kind": "stock",
       "sourceId": "0000079282",
@@ -4465,6 +4564,32 @@
           "png": "BSY.dark.png",
           "svgSha256": "8dbd155fccd9b882aef259e28080be1a00028a4d577c8e545d7342ce42efa40c",
           "pngSha256": "c4cabd64f17009669369ee2a76a4842c900b4186e974833fd1aa271f383b0577"
+        }
+      }
+    },
+    "BTI": {
+      "kind": "stock",
+      "sourceId": "0001303523",
+      "themeColor": "#24336B",
+      "darkBackgroundColor": "#24336B",
+      "darkInkTint": "#F4F5F8",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "910b366a50354d7abc932291b869135092452eba36870456bd5ac35da842c978",
+        "dark": "8845efe57ef90556caacc1fbd2cc67036674a3b08a649e4e2c2b36592d2e03f2"
+      },
+      "files": {
+        "light": {
+          "svg": "BTI.light.svg",
+          "png": "BTI.light.png",
+          "svgSha256": "d53d51037f36601c1dfb1b84e4b4ab7588ead3f0411e90bf5372b7dab59194ff",
+          "pngSha256": "31537f3e22634ac50007cb5b5adc950c3a46e1d85bed254e540f098190aef5fd"
+        },
+        "dark": {
+          "svg": "BTI.dark.svg",
+          "png": "BTI.dark.png",
+          "svgSha256": "f2c3cca64f4dc1ccff3ceb5a932a8b845ed83cb181faada819ca19ad2481ee2d",
+          "pngSha256": "d45c843eb660f62a27dbe32ec9bd513e0cbb1436c58a7c563bc5d6713648bd8e"
         }
       }
     },
@@ -5136,25 +5261,24 @@
       "kind": "stock",
       "sourceId": "0000815097",
       "themeColor": "#F2031A",
-      "darkBackgroundColor": "#F2031A",
-      "lightBackgroundColor": "#F2031A",
+      "darkBackgroundColor": "#114C79",
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "189c9ad82477ccfb8dc4ba864261e7159eaddeaaa45ee73afd9f848922a86ecd",
-        "dark": "189c9ad82477ccfb8dc4ba864261e7159eaddeaaa45ee73afd9f848922a86ecd"
+        "light": "fc252d420fef51499d5b5cb9a4272955374699bb477c7026ab666564da32b3a9",
+        "dark": "fc252d420fef51499d5b5cb9a4272955374699bb477c7026ab666564da32b3a9"
       },
       "files": {
         "light": {
           "svg": "CCL.light.svg",
           "png": "CCL.light.png",
-          "svgSha256": "a97ca6a45646a8813b5cfe07c72c06fea4b3eddabde26de02d4afd0650dbf4cd",
-          "pngSha256": "2b3e1895af60056ce3b554e7018c14aef72f4482dfddcccde3a7ec1c196f4311"
+          "svgSha256": "ba9bd453301d60efed66de09aab3c0d1a5365d054650491c1ba57d823f21938c",
+          "pngSha256": "da105679a15f27ada1e18a4abafd45b9fe0a8cebf3051d91c17e66a4320010fe"
         },
         "dark": {
           "svg": "CCL.dark.svg",
           "png": "CCL.dark.png",
-          "svgSha256": "a97ca6a45646a8813b5cfe07c72c06fea4b3eddabde26de02d4afd0650dbf4cd",
-          "pngSha256": "2b3e1895af60056ce3b554e7018c14aef72f4482dfddcccde3a7ec1c196f4311"
+          "svgSha256": "fc3ab22a4dca227ddd5e9798f33c7eabbef36abc1b97ffc646001bb02e854e05",
+          "pngSha256": "c34ae40f731dc2210d2dab6a1c008ed7a1811643cc556892477b9ded17fb851b"
         }
       }
     },
@@ -5263,24 +5387,24 @@
       "kind": "stock",
       "sourceId": "0001868275",
       "themeColor": "#000000",
-      "darkBackgroundColor": "#1B1B1B",
-      "selectionOrigin": "manual_default",
+      "darkBackgroundColor": "#242833",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "d6149db6b30a242eeabbe3aae27cdbb85307c93b7ce9ed2ca6f203828f2e2f5c",
-        "dark": "e6f6ac30af178553cfcc4c265250a7a8fee84abc17352ab4287459e5dbf37f3c"
+        "light": "7f293bd8463a49cd6eeb498dee8fbc46ab7668525884a5b2d39da109261181e3",
+        "dark": "7f293bd8463a49cd6eeb498dee8fbc46ab7668525884a5b2d39da109261181e3"
       },
       "files": {
         "light": {
           "svg": "CEG.light.svg",
           "png": "CEG.light.png",
-          "svgSha256": "4b6fcdbeaa1a9d1c868e73927bb8773bbd90f695ace6ad3cdbd2405b49906e82",
-          "pngSha256": "16ea957129084b87df48328431132a57f29ae4011dc56832f13981b35269ce6d"
+          "svgSha256": "4dd0f43856b6afa567713be61a40e96e9f2c8d61603a28482915a851f50e9f71",
+          "pngSha256": "03dc0b331794329738afde77db4fb96f0b08bc72a22e91560bc419879e11ac1e"
         },
         "dark": {
           "svg": "CEG.dark.svg",
           "png": "CEG.dark.png",
-          "svgSha256": "b1c3aee2de5f3e221155bfd80bc34e3b43321b38cdb27d66e2f6137905b16821",
-          "pngSha256": "8ecd2b75b218cb04d3ace3c3e747350b8bd5dc46f1ce6cbe3fa7219b9148ffbc"
+          "svgSha256": "37c5f4c5406d149628dc40e28a8ee948bc8be8effab17bd2c41c9a823cd681dc",
+          "pngSha256": "90ebb3bff237e64377826a2d6a03c371ac8e99add6eeb200cda415261a199ea7"
         }
       }
     },
@@ -5331,6 +5455,31 @@
           "png": "CFG.dark.png",
           "svgSha256": "32d20178e120188b935e9b7b421fd870ce2e9d85dc5489e9b067a12ffcfb53f3",
           "pngSha256": "2f50c2f18d9eba4ec5fecc027559316821ee7c11a4250e63fd4d1cd781eba0a2"
+        }
+      }
+    },
+    "CFR": {
+      "kind": "stock",
+      "sourceId": "0000039263",
+      "themeColor": "#1A1918",
+      "darkBackgroundColor": "#383838",
+      "selectionOrigin": "manual_svg_edit",
+      "sourceSha256": {
+        "light": "40f3fdc957308c6dd6a2e3004286b59b96461b9aef3496a70dfb7ef0b75f09fc",
+        "dark": "8ed0d5834b7db80588bd89bc2c395683e661f914725f9b965786072d9500a484"
+      },
+      "files": {
+        "light": {
+          "svg": "CFR.light.svg",
+          "png": "CFR.light.png",
+          "svgSha256": "99ec66dbf114018a2b15584e948de0f3374d93da4c0daefc8b23692db21869d3",
+          "pngSha256": "7a85772977387bd581fb03a00207472756d1e7e4caac4d9fefb38ae63daf16a3"
+        },
+        "dark": {
+          "svg": "CFR.dark.svg",
+          "png": "CFR.dark.png",
+          "svgSha256": "35d841d9e9b8b8c527434a0f5bd066f45c295556084e0e48eca69b7ccca6db4a",
+          "pngSha256": "d2f31635941a2167c1b6d7bc5651bc6227f6596cb8cd9f838d1d355dfb422021"
         }
       }
     },
@@ -5672,25 +5821,28 @@
     "CLNX.MC": {
       "kind": "stock",
       "sourceId": "8173701614",
-      "themeColor": "#64A70B",
-      "darkBackgroundColor": "#64A70B",
+      "themeColor": "#485463",
+      "darkBackgroundColor": "#28301C",
+      "darkInkLightened": [
+        "#485463"
+      ],
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "d9bc063ff8ad98c884dc69d962c91c00892da7149466d243307e740c669f73e3",
-        "dark": "91845b6c8fad203e359ceae5b12c3b3da8a5b0cdae7f0e7b17e9b0acad071da2"
+        "light": "2d22638cc5fab10bc9c139fd12856475d73c87505420052da82fcd9a5b167a2a",
+        "dark": "2d22638cc5fab10bc9c139fd12856475d73c87505420052da82fcd9a5b167a2a"
       },
       "files": {
         "light": {
           "svg": "CLNX.MC.light.svg",
           "png": "CLNX.MC.light.png",
-          "svgSha256": "da7711c2ead27b5b5d6b1e0cf23843d4bbe127646aa37ab8defc48213563f052",
-          "pngSha256": "0bd02e92e50a095e06c5baa2024a9388b02155e5bb1ff9a73456717ac512cbd5"
+          "svgSha256": "38baf2959d74aee84bab449b47e47902a76201dac85b5f94425b0225387b70a6",
+          "pngSha256": "edf2ee9949e4a12e41c8bffaaf3def7a5a88c534d5fb6418bfa31c24cf198145"
         },
         "dark": {
           "svg": "CLNX.MC.dark.svg",
           "png": "CLNX.MC.dark.png",
-          "svgSha256": "1df89d15e66803bf5e20e45844debdc9db2cd22752eec52b5951e74e74d4ea79",
-          "pngSha256": "fddbfd20339e4b44a4c8b6b317b0d73b988f490ee52f0311f117d35ad346cc62"
+          "svgSha256": "b6f0a1a03decb4a3818c8a87fa561d8e58ec8a574126b2389265bf145bfb6a1b",
+          "pngSha256": "5773db8b020103693459af6885a2dac13171971510baf1e7ed27bacf095b976d"
         }
       }
     },
@@ -6035,24 +6187,25 @@
       "kind": "stock",
       "sourceId": "0000820318",
       "themeColor": "#000000",
-      "darkBackgroundColor": "#1B1B1B",
-      "selectionOrigin": "manual_default",
+      "darkBackgroundColor": "#0C2792",
+      "darkInkTint": "#F3F4FA",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "163882b4e4420f203db689b2b0f4537d4f2765fd5c1a0be41ea126c2910d26ef",
-        "dark": "9065db6e247e28601c9050116f159d48aef14493e9bc75916d399501ed77e476"
+        "light": "73637d67515cc1b8f84885ae445d928971b92fba6697819fd853ca8f19ef0b9f",
+        "dark": "908e0159dc7e5066776e7424af92f38d7edf4929cdd65113ada9c5da6783cfbc"
       },
       "files": {
         "light": {
           "svg": "COHR.light.svg",
           "png": "COHR.light.png",
-          "svgSha256": "d0f69ca1dd9ade74215c71f921336967dfb942221720f184a7a7d756ac6b8c94",
-          "pngSha256": "6cae8dd14ea4c3d2392a025a763a689af068d96de9c736378d7c0c4c8f13b6a9"
+          "svgSha256": "77921885946b65fcdedba26eeb2d1a3a226d3541b0bec373f4d5dcf333ca77b3",
+          "pngSha256": "6192c22a773a08d5efa608e8c0700cd5d026d7dcc6cd0ec5708fe6c9df009fc9"
         },
         "dark": {
           "svg": "COHR.dark.svg",
           "png": "COHR.dark.png",
-          "svgSha256": "58d094b6f5bd87a5557b6b2f69576e66e83eeee4b3472cf19804a5f891fad073",
-          "pngSha256": "2f12c105e96b2a986a950091538eb5aa9739402265afa7125011e06d819632a1"
+          "svgSha256": "cb62b2f0f84eb927b38b36b705567e50507c207f6425b508c3f2935bb912e418",
+          "pngSha256": "728eaf3b80321a85ddfcb7da7cc40b127359f8305d45c113db29b5133077284a"
         }
       }
     },
@@ -6359,6 +6512,31 @@
         }
       }
     },
+    "CR": {
+      "kind": "stock",
+      "sourceId": "0001944013",
+      "themeColor": "#DA2C30",
+      "darkBackgroundColor": "#1B1B1B",
+      "selectionOrigin": "auto_official_svg_priority",
+      "sourceSha256": {
+        "light": "07bd7d133289d9a8b3c96c10ab6acdca0f520f010df154788fc0d560f1b5ba93",
+        "dark": "07bd7d133289d9a8b3c96c10ab6acdca0f520f010df154788fc0d560f1b5ba93"
+      },
+      "files": {
+        "light": {
+          "svg": "CR.light.svg",
+          "png": "CR.light.png",
+          "svgSha256": "bb7a69d0df4ba560bb215b186dc19a7bff6d3b5a034ff155d79e999305a6a599",
+          "pngSha256": "3c2643c03084b2a3edf1ec9962e6ae455b45a2a549c093c8e6916c1ca8594917"
+        },
+        "dark": {
+          "svg": "CR.dark.svg",
+          "png": "CR.dark.png",
+          "svgSha256": "6945f8e315d7dd780945ef835bf22d10b02e9b49b0a6cde0b50502ff9c1d1dc1",
+          "pngSha256": "235b871f7c6d9969cb376749d085b13b583fe32b45bf43998557f8ca84808b0c"
+        }
+      }
+    },
     "CRCL": {
       "kind": "stock",
       "sourceId": "0001876042",
@@ -6615,23 +6793,24 @@
       "sourceId": "0000277948",
       "themeColor": "#104F8C",
       "darkBackgroundColor": "#104F8C",
+      "darkInkTint": "#F3F6F9",
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "00877327d972acc07a24e75d59e37c60861aa9452b152531eab714d1222a1e0b",
-        "dark": "e104a6a8e6af38e86b8b0b7437c465690beac16c9ebf8b66f67c9bab5f451917"
+        "light": "cdfd936869370df7d66b255e9e6c7416cf3a8660eef499f7f559c25ae7367d11",
+        "dark": "fd8573307e471314887612a66f9c39e0046e8524ed2c1a80b7711533ba433e25"
       },
       "files": {
         "light": {
           "svg": "CSX.light.svg",
           "png": "CSX.light.png",
-          "svgSha256": "48612a872a563e7648050dde0519560947f9729e02c13d6d0c515453e2fe7845",
-          "pngSha256": "aab0beacdb75618a2d91b8357ab0f8ee0588c34c759ebb9d73766bb9030a0716"
+          "svgSha256": "2f69c21677ba857f183877f41fcab22aa357d2c9a78ba2141415b8ae15bee3e5",
+          "pngSha256": "6255a7b6bda7cc922c0cbc1f4ba2662722b6d54ccac827522bb7e14a17313f1b"
         },
         "dark": {
           "svg": "CSX.dark.svg",
           "png": "CSX.dark.png",
-          "svgSha256": "7308be8c8b1ec3b3b861b378b0613782ad35fb9f985ad3d9bb14f0c7d9ae70d3",
-          "pngSha256": "37b5b40dd609a2d510d3884184a762025c2217400ab793d3e32d26b58a437a2a"
+          "svgSha256": "57b7b79ccaec044d4e554a049ca655dc8cf526260c8eeaf01822c9a5ab27e830",
+          "pngSha256": "374d08c47af47b1395160cecaa532fb0678e57cf79a22d9712744c58378844ff"
         }
       }
     },
@@ -6663,25 +6842,28 @@
     "CTEC.L": {
       "kind": "stock",
       "sourceId": "8000357038",
-      "themeColor": "#6F2595",
-      "darkBackgroundColor": "#1B1B1B",
-      "selectionOrigin": "auto_uk_popular",
+      "themeColor": "#CC6C9D",
+      "darkBackgroundColor": "#AA0061",
+      "darkInkLightened": [
+        "#AA0061"
+      ],
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "2aa6aec51c9b5774e7c6f314eace19ea962d67168667eafc98ba74d8b449000f",
-        "dark": "2aa6aec51c9b5774e7c6f314eace19ea962d67168667eafc98ba74d8b449000f"
+        "light": "4b735800796b19acbc884f8ad9e78c8dabc05371ba6337721877be920c34e2b6",
+        "dark": "7c988f9cff1760d2cd46ec04c2167801b8778444f843fbed22786e07efc15695"
       },
       "files": {
         "light": {
           "svg": "CTEC.L.light.svg",
           "png": "CTEC.L.light.png",
-          "svgSha256": "1d97f06edca680b15c4e84c2a3a77399f54848260704d79cc3a5b07667b098d8",
-          "pngSha256": "25435909ff046b483541e36dd552fe2c4865be0042d5e0ed798da4351d297e09"
+          "svgSha256": "864ddd0db9bc8f55fd7a2fa12f80e883e73e88017227efa1cdea72c3980db276",
+          "pngSha256": "792642c06e10bc34313a316268fd147c3938c3a46d65834015c8a615ae3311b4"
         },
         "dark": {
           "svg": "CTEC.L.dark.svg",
           "png": "CTEC.L.dark.png",
-          "svgSha256": "806401ade1ea753fdb0c0e3d96d667bc7ca741d7b64a56181b3bfe14469f0f10",
-          "pngSha256": "7a52cfa07f12770f5c775b6d99bbd64de02359ab9dd66f4e14914c5d9d268b97"
+          "svgSha256": "e4a601458b9e9c135bd8bd8862948e1200ea700214d0a455b410efd110ae67c6",
+          "pngSha256": "a4442409c54fcc3a6e8fb5a9ab318c544ab4df71d308bca134e02969431e7349"
         }
       }
     },
@@ -7220,7 +7402,7 @@
       "sourceId": "0000910521",
       "themeColor": "#333E47",
       "darkBackgroundColor": "#333E47",
-      "selectionOrigin": "manual_default",
+      "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "5a5e938d51d406fd32cb4d89a8adfb5191bda84e7a9114a34f67367ef0f21723",
         "dark": "3f566728684894f130b6e752e356dae244d1d8441eb2d180721349d847f152bb"
@@ -7784,25 +7966,25 @@
       "kind": "stock",
       "sourceId": "8724965750",
       "themeColor": "#002664",
-      "darkBackgroundColor": "#FFFFFF",
-      "lightBackgroundColor": "#FFFFFF",
+      "darkBackgroundColor": "#002664",
+      "darkInkTint": "#F2F4F7",
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "8d5e6ad08c4185922a2102c561dbaf20d862bffeffe77d5ceacb8ba46bded0f6",
-        "dark": "8d5e6ad08c4185922a2102c561dbaf20d862bffeffe77d5ceacb8ba46bded0f6"
+        "light": "47ce32dfae0afdbae554cc55e9a5e1b6c648fe0be061c51b00df463c1d987e50",
+        "dark": "6eabcb869749c5471674b1958ba64324e10a2329a52fade95afe861ef7bb8f5f"
       },
       "files": {
         "light": {
           "svg": "DSV.CO.light.svg",
           "png": "DSV.CO.light.png",
-          "svgSha256": "a4828432141b386d976a67e7c829cd3fdd7c597be73b8e1bbd3add3ef11f82ed",
-          "pngSha256": "0f375ff44b5c0e12a9c886f7f930d5db899887bd8a31e2f831b54964e7fd2dcf"
+          "svgSha256": "aa107c8a819122a8d4302c3b5a3e1f250858c0ee32e198f42308b86b69ee8910",
+          "pngSha256": "44d1045375e862a6ac2477a13acacf286da5cf7f7ffc470cd06e50f722d64036"
         },
         "dark": {
           "svg": "DSV.CO.dark.svg",
           "png": "DSV.CO.dark.png",
-          "svgSha256": "a4828432141b386d976a67e7c829cd3fdd7c597be73b8e1bbd3add3ef11f82ed",
-          "pngSha256": "0f375ff44b5c0e12a9c886f7f930d5db899887bd8a31e2f831b54964e7fd2dcf"
+          "svgSha256": "d9ef4a076567612d97f5b02aa9076d28aa9134678b869d3f66253e64554506b1",
+          "pngSha256": "11e928aff971f2b7c253d77177444c976d098e02e191b6f330141b2a5a2923c7"
         }
       }
     },
@@ -8236,6 +8418,31 @@
         }
       }
     },
+    "EEFT": {
+      "kind": "stock",
+      "sourceId": "0001029199",
+      "themeColor": "#234090",
+      "darkBackgroundColor": "#234090",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "fc2366e7fb632a9194228196df6e68afcdde4ee7dbc259f6e0d54830e7e7f61e",
+        "dark": "ff0caa8e2ce0557f76f210433623b7478e1c78addf5bd2999a557b7a43bb3538"
+      },
+      "files": {
+        "light": {
+          "svg": "EEFT.light.svg",
+          "png": "EEFT.light.png",
+          "svgSha256": "c4ee4dd6092350de4912db842ecd546688725674e20ca0e3e1b3a943791a60cf",
+          "pngSha256": "c220f9cb325fb3fca15defbb8d498ea75580592b69b444d4c9aeb9fda14b49b1"
+        },
+        "dark": {
+          "svg": "EEFT.dark.svg",
+          "png": "EEFT.dark.png",
+          "svgSha256": "438071859631ab0919415113acad3bc2adb6a3e2e8815c3e02a9ea9815ed204c",
+          "pngSha256": "cd2a0983d88d0f76fee8255da615d54e9ca80ef325da3e6f4492fe8ddfc8d7be"
+        }
+      }
+    },
     "EFX": {
       "kind": "stock",
       "sourceId": "0000033185",
@@ -8444,14 +8651,11 @@
       "kind": "stock",
       "sourceId": "0000915389",
       "themeColor": "#231F20",
-      "darkBackgroundColor": "#1B1B1B",
-      "darkInkLightened": [
-        "#231F20"
-      ],
+      "darkBackgroundColor": "#231F20",
       "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "dab81c2f611c3d4dbeedb729d9454a338bbfcdf376097307d91a0f4d11c4d75c",
-        "dark": "dab81c2f611c3d4dbeedb729d9454a338bbfcdf376097307d91a0f4d11c4d75c"
+        "dark": "aeb921dec2c75213f9b6fd3a9f624f2ddb68afdaf23a6819ce3c3b3627c8f566"
       },
       "files": {
         "light": {
@@ -8463,8 +8667,8 @@
         "dark": {
           "svg": "EMN.dark.svg",
           "png": "EMN.dark.png",
-          "svgSha256": "b6d55701c8716dd733bf6a2821ecb9c095fdf88b60c0fefcf1ba9c963da1ef6e",
-          "pngSha256": "2824de6bf1cac35290d25c4c66231aa8e72d32633c65b969720c5ac182c64437"
+          "svgSha256": "8d02d6a98135a32c7fe5570074e93661a2ca0e2afbf5824100977bfd509d2d79",
+          "pngSha256": "843c39b529b8a9a6b603b694e87e14ceab4ae114b984fc4d9b1fa85c8ad0318e"
         }
       }
     },
@@ -8708,13 +8912,10 @@
       "sourceId": "0001352010",
       "themeColor": "#00ABCD",
       "darkBackgroundColor": "#1B1B1B",
-      "darkInkLightened": [
-        "#464547"
-      ],
-      "selectionOrigin": "auto_svg_upgrade",
+      "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "c805501644ca5c43ecff415e037ff4fe12a3412930572badadae53e216489903",
-        "dark": "c805501644ca5c43ecff415e037ff4fe12a3412930572badadae53e216489903"
+        "dark": "291e487ed93c57b423406fe7ddbcaf0f066aaf34a3a851016ae2cac076ca4c63"
       },
       "files": {
         "light": {
@@ -8726,8 +8927,8 @@
         "dark": {
           "svg": "EPAM.dark.svg",
           "png": "EPAM.dark.png",
-          "svgSha256": "614055925478e90c2e44ff0138badb0695ef2ad57947ff55515825ebeefe4463",
-          "pngSha256": "9434094a0e3ef36ed97e974b639b9b70997161bf52f40f5314c6f39d8c69a593"
+          "svgSha256": "ddccd474f75856c3c2dc27169cdaf8eaccb32739e5e8c101017d6206a9fdc4bd",
+          "pngSha256": "8c62ede8a264b5af5c683d0ff93545570204f3d29ff23aa4bcfc2aeb9339ba48"
         }
       }
     },
@@ -8879,6 +9080,31 @@
           "png": "ES.dark.png",
           "svgSha256": "b3b5cc87d1fb90f904d5fad491988bc978869a62424b86c63db14e7553293d16",
           "pngSha256": "7b61c0d4eef9a35f332454c9a7c73547ca1dead6d2697ba921333d74d661b0ae"
+        }
+      }
+    },
+    "ESAB": {
+      "kind": "stock",
+      "sourceId": "0001877322",
+      "themeColor": "#000000",
+      "darkBackgroundColor": "#333333",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "047595af377d231c6c0729bd852daa79cd611d3e584ee27b8e81f5f8704f7881",
+        "dark": "2a12e7bc0051bbf271522bf5dad4861385ca322f7454d874c1a563659bb0bbec"
+      },
+      "files": {
+        "light": {
+          "svg": "ESAB.light.svg",
+          "png": "ESAB.light.png",
+          "svgSha256": "5ab7a4a2cf8eb0449282f143fde921681cc2c25fe490db507699d1133ae2b798",
+          "pngSha256": "963113f3978f08c3e59df81b8b085f92d2926c596d8e42abe7b8dfc25d891886"
+        },
+        "dark": {
+          "svg": "ESAB.dark.svg",
+          "png": "ESAB.dark.png",
+          "svgSha256": "60d4508e45058549d80225ce4e1050f6b29f18f452388ecac6a7471dc9ceb2c3",
+          "pngSha256": "956fb7a2adecf6d22e899c217457031ea07469ac56e98fe36189f98047a8e095"
         }
       }
     },
@@ -9114,27 +9340,24 @@
       "kind": "stock",
       "sourceId": "0001099800",
       "themeColor": "#898D8D",
-      "darkBackgroundColor": "#494B4B",
-      "darkInkLightened": [
-        "#494B4B"
-      ],
+      "darkBackgroundColor": "#4A443F",
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "b6b796d98f11c59f9d84945ba691872dddd31bc17e631dd301cc86cabf981dbb",
-        "dark": "4286fa850489cd74b60c9999b6b7638c71e477f69c92efab6a9de98af2085ea8"
+        "light": "938e3a6da7b034e6c9b8337cece1229560d1b5e7d945a13f68f0e45580d01dc5",
+        "dark": "938e3a6da7b034e6c9b8337cece1229560d1b5e7d945a13f68f0e45580d01dc5"
       },
       "files": {
         "light": {
           "svg": "EW.light.svg",
           "png": "EW.light.png",
-          "svgSha256": "91538eb501b5b02aa3ec252a8df494f1af48752a6e73a4d997077c80dbae6c32",
-          "pngSha256": "2da067efe13eb5b25dcc1c0fcb8476e165e75bb7bc133ef86a14069692a91d81"
+          "svgSha256": "3cb0d1746ce581720317f43b64ca10998083f0494b88ea23841fbdd34a01eede",
+          "pngSha256": "f12993fc82a455a38b42152655d2d54278b6208b51eac6ae1251ae6b43f51a52"
         },
         "dark": {
           "svg": "EW.dark.svg",
           "png": "EW.dark.png",
-          "svgSha256": "37416a198b12b7be0dea0ae84274ba381a1a47282c8f8cb43ca30dc1433d70ca",
-          "pngSha256": "6fb4249c8a05ce5bbae9c55e8f780bec7d27b61ca3a25b4d1612da4c87a49ea0"
+          "svgSha256": "64ede4c731315d9627da434696290cf303477fa4a532ea6aa1d08fed32497f7d",
+          "pngSha256": "9a67da68331468d1bda7173ec146f7228dffa340299d91d0381d48f7c6691b55"
         }
       }
     },
@@ -9363,6 +9586,31 @@
         }
       }
     },
+    "FAAA": {
+      "kind": "etf_issuer",
+      "sourceId": "fidelity",
+      "themeColor": "#006A4D",
+      "darkBackgroundColor": "#006A4D",
+      "selectionOrigin": "user_supplied_svg",
+      "sourceSha256": {
+        "light": "0aff15d1f5f3cf0a6ac3b368681b765e29f0e261f9e1c91a33575a740c8ac098",
+        "dark": "bf8eb7e424ec5676ae49f7fc0878226abc2ee1643b2844df0446a0e249e552ce"
+      },
+      "files": {
+        "light": {
+          "svg": "FAAA.light.svg",
+          "png": "FAAA.light.png",
+          "svgSha256": "c822634b4bc93e37e5e68eb3ffb55d91b6732624e7da99bcef88d489cf5b1489",
+          "pngSha256": "26d6702cf2c6d399a38459a7942b7fea37cf43b32c09e0151bfb297f0a3baf5d"
+        },
+        "dark": {
+          "svg": "FAAA.dark.svg",
+          "png": "FAAA.dark.png",
+          "svgSha256": "840fdd370a4a84abf2db0fcd415bee6f142289fc3f615f5541d58766baaaa8c6",
+          "pngSha256": "daa1f83ba420ea2faad6eb14a565150466e7f44fae73d57f690953deab8ee093"
+        }
+      }
+    },
     "FANG": {
       "kind": "stock",
       "sourceId": "0001539838",
@@ -9413,6 +9661,32 @@
           "png": "FAST.dark.png",
           "svgSha256": "716f8d3ffb742cd2b04551a5ed04dd10b822eb7a984d48a7665f383fc111d23a",
           "pngSha256": "f3c603eaa200af18fd74a47ee3db7eae9a9da5a41616fa73aeae74ebf0d37dab"
+        }
+      }
+    },
+    "FBIN": {
+      "kind": "stock",
+      "sourceId": "0001519751",
+      "themeColor": "#1D4D78",
+      "darkBackgroundColor": "#1D4D78",
+      "darkInkTint": "#F4F6F8",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "6dd45dbc4b9f4c61bb628c977aedd92f239b915bd024c83853fe811ae941ebfc",
+        "dark": "deecce4ce8f7d2924bc51947d36118d35f6f223c275232d355982c086670811f"
+      },
+      "files": {
+        "light": {
+          "svg": "FBIN.light.svg",
+          "png": "FBIN.light.png",
+          "svgSha256": "230be6cc751e6582024da97b83ba10010796019b7035c1e5470bf9b8e38225a3",
+          "pngSha256": "692fe920390b91df34f904858815f642cddcfa25c4b3098135a77dcb0d89ac2a"
+        },
+        "dark": {
+          "svg": "FBIN.dark.svg",
+          "png": "FBIN.dark.png",
+          "svgSha256": "44f3aa261c2ce8d4f0f6cf7f6eb1d1f38bace09f539964df3bb2a2d1df9c2d59",
+          "pngSha256": "3a2f83957b3c9015e75f981ab4d079a6d169326fcac328e47c32dd9183d8fa2a"
         }
       }
     },
@@ -9901,6 +10175,32 @@
         }
       }
     },
+    "FLS": {
+      "kind": "stock",
+      "sourceId": "0000030625",
+      "themeColor": "#E2231A",
+      "darkBackgroundColor": "#E2231A",
+      "darkInkTint": "#FEF4F4",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "b275a04ed1749b8782cc7f6228c9b71ecf39fcbbc3907b1d86628492325dca95",
+        "dark": "f08f59881ab9430dc24998b35857c3790fcade4b76dea85be15fc84144d510e6"
+      },
+      "files": {
+        "light": {
+          "svg": "FLS.light.svg",
+          "png": "FLS.light.png",
+          "svgSha256": "689468834009f4f19b95cc69c55d889b9e054c913417821cb1cd444b712c8a1f",
+          "pngSha256": "a3228c100725fe1e2ebe949d5fc607e1a9f572670f71f5dccd01f8bd6c3a7e91"
+        },
+        "dark": {
+          "svg": "FLS.dark.svg",
+          "png": "FLS.dark.png",
+          "svgSha256": "4dca487c3d7967895ada34bb123083fae3c0192e4760d6819eea5df940519998",
+          "pngSha256": "9d74292075abfd76d3b17b496ea94ae83daf4bb461581086de9ed4a84ecc4b54"
+        }
+      }
+    },
     "FLUT": {
       "kind": "stock",
       "sourceId": "0001635327",
@@ -10005,52 +10305,52 @@
       "kind": "stock",
       "sourceId": "8128356132",
       "themeColor": "#ED2735",
-      "darkBackgroundColor": "#1B1B1B",
-      "darkInkLightened": [
-        "#231F20"
-      ],
-      "selectionOrigin": "auto_uk_popular",
+      "darkBackgroundColor": "#ED2735",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "7df8ad41805e75771f2f5893c05945a249b72bb3b93df429b4c0e61db9ba8043",
-        "dark": "7df8ad41805e75771f2f5893c05945a249b72bb3b93df429b4c0e61db9ba8043"
+        "light": "3b4593b44676dae9a0dd51a8626bd5f4a185713c6d8b6fe6cbcb3252629bf7f5",
+        "dark": "46d3b3d08b7362e7cedd7b55aa74d67d4e53c673fd6e0f32cc8657ec85e201f0"
       },
       "files": {
         "light": {
           "svg": "FRES.L.light.svg",
           "png": "FRES.L.light.png",
-          "svgSha256": "e60f3a72a8d207cff32916e3e76c20757f55fee02b32526baa28b5f3dbaf3aac",
-          "pngSha256": "f9cf82de7e644056c5ae9b49dc12d7313fd28f395eb303c0cbe0e64dd4da71e5"
+          "svgSha256": "76ebd8909c560ad61c9fe1753b0706637f2a0fb489f9ecc2944416f89bfc8b5a",
+          "pngSha256": "6bef7714649db6c811a65d90eb2d38b0faa5b048e19254745d772dfff80fd5ca"
         },
         "dark": {
           "svg": "FRES.L.dark.svg",
           "png": "FRES.L.dark.png",
-          "svgSha256": "48f8122f693326e9637f1ad468b5ff6c3635d01984f3f3728b809820d6b2cd38",
-          "pngSha256": "eb2017b13e9e25a7d943e792a59d3e131e5508d200da888743e886c8bb2ceed1"
+          "svgSha256": "2a113eb22f548d04f8c4d9ea32c2c6363c062e2b4d088c69ca390e22d14126df",
+          "pngSha256": "c20c4574650a3d733b2601beb5b73986f64ed2f699d400a68994c0a438a42bf4"
         }
       }
     },
     "FRHC": {
       "kind": "stock",
       "sourceId": "0000924805",
-      "themeColor": "#4CB950",
-      "darkBackgroundColor": "#4CB950",
-      "selectionOrigin": "auto_us_popular",
+      "themeColor": "#4FB84F",
+      "darkBackgroundColor": "#002414",
+      "darkInkLightened": [
+        "#045433"
+      ],
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "caa3d87f7359e86aaba16a350d39531dfc8c75b8c609501c3c575d7a36687844",
-        "dark": "2d3a286c7abc30ac8c502547dc6738ca61eabccca4a8df6882d36d0c6d62a358"
+        "light": "f88d40f0993c404f3bb7cfbccb51ede02873dc5d6c1673daa0346a3c46b73998",
+        "dark": "f88d40f0993c404f3bb7cfbccb51ede02873dc5d6c1673daa0346a3c46b73998"
       },
       "files": {
         "light": {
           "svg": "FRHC.light.svg",
           "png": "FRHC.light.png",
-          "svgSha256": "04e257b800432149d5924989068fed79d08fa0d5fc73b826e85cc65e069b9b55",
-          "pngSha256": "57edc559d9d2efaaf93d9f6470c2fc39055ad0c9cd80d95799ac9efea54d3558"
+          "svgSha256": "c4715dd88cb3c34964e6dd4c00d68f166b081236d2de9ffd35d95c7ed11dabb7",
+          "pngSha256": "108f51352a3c0972a84dcf020bda4b898bd82ffe2f1c5017bd7910c91370fc54"
         },
         "dark": {
           "svg": "FRHC.dark.svg",
           "png": "FRHC.dark.png",
-          "svgSha256": "717470c6dede7669f8980f859dc4134c975ed31c8a4a6fb9a0ed9c0dcfeae2b3",
-          "pngSha256": "f432f47771d3cc7bd5df8482d3e5ee89afc675cd6eb1e98752bdf5b90c0c0df2"
+          "svgSha256": "618d46429665115bb4a1ef5f47068f9f245be232b83178b77f7b6be2da8cbd6b",
+          "pngSha256": "5823de0a0f016d2609d2306026b43b412763589ed33cb15824908b44fd660178"
         }
       }
     },
@@ -10265,24 +10565,24 @@
       "kind": "stock",
       "sourceId": "8813621190",
       "themeColor": "#FF5A00",
-      "darkBackgroundColor": "#1B1B1B",
-      "selectionOrigin": "auto_europe_popular",
+      "darkBackgroundColor": "#400C06",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "2f18faf9a7f1ec6ec1ff31bd8bbe40068daf2b2db03050cd57e00d838db6bebb",
-        "dark": "2f18faf9a7f1ec6ec1ff31bd8bbe40068daf2b2db03050cd57e00d838db6bebb"
+        "light": "50a0676b602b7598a358a6ac3694709f9f6a89e37e133c9ddfac14f80aae3f36",
+        "dark": "50a0676b602b7598a358a6ac3694709f9f6a89e37e133c9ddfac14f80aae3f36"
       },
       "files": {
         "light": {
           "svg": "GALP.LS.light.svg",
           "png": "GALP.LS.light.png",
-          "svgSha256": "9613699d13013f59017f5718da2676ccb19b6c0fb21bc57f0931c3e23ce147fe",
-          "pngSha256": "d512fe4a896a4a63c48aae21cd8d35d9da6dd99e28c87a85440e42eb73d7943c"
+          "svgSha256": "6cf6da76305d70342478393ae4ec4772dc5aa1fce9c1164a72ffe5eadd00fd78",
+          "pngSha256": "b2b732edeeb56af92dd24ecb09bc0bcafd786d648d99f938aaaa3085e07b222c"
         },
         "dark": {
           "svg": "GALP.LS.dark.svg",
           "png": "GALP.LS.dark.png",
-          "svgSha256": "c2fb30cf445f3e8cce0b341056ab8d67777df21280a880f0f96106ceafd76ff8",
-          "pngSha256": "d9fefb44b497f2e0e19e55f737bda1429bd0d78be25f5d7f61f7d45ea8329a4f"
+          "svgSha256": "13f38ead24ddf42375eca26a4d55a642fb7ff20cb452ee34f0e710a8e80031fa",
+          "pngSha256": "67a2b1dc463be6d69eafb4177eece3fc1cec5d901fe4c713d7902ac2d744f7f4"
         }
       }
     },
@@ -10384,6 +10684,31 @@
           "png": "GDDY.dark.png",
           "svgSha256": "66b241759ac028fe98b6fcb62944945f35df5a7a3cf2552169243bb62b97eeab",
           "pngSha256": "599e91005dc8237baa8a116d5422f2a2da0ee4a62b5fcb176cf307ff4129da9c"
+        }
+      }
+    },
+    "GDOT": {
+      "kind": "stock",
+      "sourceId": "0001386278",
+      "themeColor": "#02AE21",
+      "darkBackgroundColor": "#1B1B1B",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "796b1ce53db38beb45d2147131f901bb1924ab7d0b39aa77110b94f0d0ee6a55",
+        "dark": "796b1ce53db38beb45d2147131f901bb1924ab7d0b39aa77110b94f0d0ee6a55"
+      },
+      "files": {
+        "light": {
+          "svg": "GDOT.light.svg",
+          "png": "GDOT.light.png",
+          "svgSha256": "e11192bd885b05b915f107489559a0c31f811c11d29ae4e8adc6cdc897d36fb8",
+          "pngSha256": "79312a713b2354e42a55d78da61ef18aee30b8b18957e4f05d78153deb3b849a"
+        },
+        "dark": {
+          "svg": "GDOT.dark.svg",
+          "png": "GDOT.dark.png",
+          "svgSha256": "368ead92e3075472f1c4564ce8e2d092738c54ec6b01ac7f223d42bfc25d7358",
+          "pngSha256": "15cef11417f67727ef97444f28515b1c7d497eeea1850537ea1abc4b10b846e2"
         }
       }
     },
@@ -12113,24 +12438,24 @@
       "kind": "stock",
       "sourceId": "0001381197",
       "themeColor": "#D81222",
-      "darkBackgroundColor": "#5B080E",
-      "selectionOrigin": "manual_default",
+      "darkBackgroundColor": "#C71120",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "fb5b661415f66ec59781d48eafb49adad370f8adbd1c12573afba612dc68c3a1",
-        "dark": "3f5b9c4da79ed495fc6f7037c5858bc8df6a636f30c6d946807a1a1e39c9b707"
+        "light": "efd07d4bee86cb11ea6eb4fdec069612cdc2f40305301a417e79654329e221e9",
+        "dark": "debe7a40a79367a33df5afd7660bc999a2bcdd10dbbfc308353400295455e3b7"
       },
       "files": {
         "light": {
           "svg": "IBKR.light.svg",
           "png": "IBKR.light.png",
-          "svgSha256": "eff18fcce30cf607747b39e9d2a24f5bafa6bd095b2c3b6074e5e005843a213e",
-          "pngSha256": "9767a6b07da176796866c87c09fca7118c036812f8e4ad8976430c7c5e9ebd8b"
+          "svgSha256": "5af5ba703fc512878e1d07d824a11ca60f25a50e70c5cd40de5796249d9a265b",
+          "pngSha256": "dafcb48d883b8b6fb55c4a1c6873922aa8361dc281131ebb601a35abbdd10949"
         },
         "dark": {
           "svg": "IBKR.dark.svg",
           "png": "IBKR.dark.png",
-          "svgSha256": "55ed6951f7ad3e6f05b9ab2a010af8d47c0d39597eaae8a82e791965accd9315",
-          "pngSha256": "33c464bfeb77afe6bd21428ea6cd9172708c8bb58fc17f86c01519bbaff190e7"
+          "svgSha256": "e4abf42e43d81921fd5c10af509fdfff6ee9c3ab6a883028dd1009f7f6cf4c98",
+          "pngSha256": "cae6e0ea0560aaea6e54f0a014c1cca4ccb02b5f0d2a13f5dc713d86ba73f05d"
         }
       }
     },
@@ -13310,14 +13635,11 @@
       "kind": "stock",
       "sourceId": "8723510375",
       "themeColor": "#0097DB",
-      "darkBackgroundColor": "#1B1B1B",
-      "darkInkLightened": [
-        "#0D2A50"
-      ],
-      "selectionOrigin": "auto_europe_popular",
+      "darkBackgroundColor": "#141414",
+      "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "06fbe9832fa6826627f47f64b6612ef791f384bbe7a3f3f9dd4416f137f02176",
-        "dark": "06fbe9832fa6826627f47f64b6612ef791f384bbe7a3f3f9dd4416f137f02176"
+        "dark": "1a714cce968746fca7374d0a1997c28db7c50d888189c668b33c520f9cda7998"
       },
       "files": {
         "light": {
@@ -13329,8 +13651,8 @@
         "dark": {
           "svg": "KBC.BR.dark.svg",
           "png": "KBC.BR.dark.png",
-          "svgSha256": "6148d6aca0d7a9b8bc38fad83f05496079a03658b1d92a1fe2d23372609a1efb",
-          "pngSha256": "f1d97066f1e1018eabf9b38cd23788c4634f40b8801e820d8e005b656aaf3012"
+          "svgSha256": "c077c2802f7c3330ea3fe1dbd63eda5cbd7305c4c2a9704f0729adb174ad7326",
+          "pngSha256": "b57551ce604c0f0d7787c5b012793351f5850e4e4083b11cdfde59832021b498"
         }
       }
     },
@@ -13338,16 +13660,11 @@
       "kind": "stock",
       "sourceId": "0001357615",
       "themeColor": "#003E6A",
-      "darkBackgroundColor": "#1B1B1B",
-      "darkInkLightened": [
-        "#003E6A",
-        "#071F46",
-        "#1A1818"
-      ],
-      "selectionOrigin": "auto_neutral_multicolor",
+      "darkBackgroundColor": "#141414",
+      "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "ff20ebf02d2fd757a63696f9f151d8c81cb11fe056d921b7098911ab69326acb",
-        "dark": "ff20ebf02d2fd757a63696f9f151d8c81cb11fe056d921b7098911ab69326acb"
+        "dark": "30348f90b61cf11a37c33ee6e998f060d66c59b07694225091f0ab126dca9a44"
       },
       "files": {
         "light": {
@@ -13359,8 +13676,8 @@
         "dark": {
           "svg": "KBR.dark.svg",
           "png": "KBR.dark.png",
-          "svgSha256": "380f6aac9a93f86ab8742f50e3a6fdffdcedc8540ddb690e56f9d0d141f47d6a",
-          "pngSha256": "cfe8f76526ecad357678374828e01509f7903ea216ee1620915c41e01e4e2a41"
+          "svgSha256": "5aa7d0e61738bac7abc7cad872b2c3c76cb08448789f131f33cd2f04967a9838",
+          "pngSha256": "269ab120b961df7a5d2de03d3fbd8d9014c71e277750bfd3d1a1342cf1f8f266"
         }
       }
     },
@@ -13777,6 +14094,32 @@
         }
       }
     },
+    "KRC": {
+      "kind": "stock",
+      "sourceId": "0001025996",
+      "themeColor": "#C91235",
+      "darkBackgroundColor": "#C91235",
+      "lightBackgroundColor": "#C91235",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "a3bced091cda2f90e7a95d2022759aeedf75f864595f0155bd311f56704c8133",
+        "dark": "a3bced091cda2f90e7a95d2022759aeedf75f864595f0155bd311f56704c8133"
+      },
+      "files": {
+        "light": {
+          "svg": "KRC.light.svg",
+          "png": "KRC.light.png",
+          "svgSha256": "a574d6e7738e8f22a492e12fd04c6ea283fb67f6b4409e98be215e166442bd8a",
+          "pngSha256": "89e2fd18b0c0925cf42043cd06d8fa9aac25eee50aad8e7d5304f1f1464c7f74"
+        },
+        "dark": {
+          "svg": "KRC.dark.svg",
+          "png": "KRC.dark.png",
+          "svgSha256": "a574d6e7738e8f22a492e12fd04c6ea283fb67f6b4409e98be215e166442bd8a",
+          "pngSha256": "89e2fd18b0c0925cf42043cd06d8fa9aac25eee50aad8e7d5304f1f1464c7f74"
+        }
+      }
+    },
     "KRNY": {
       "kind": "stock",
       "sourceId": "0001617242",
@@ -13824,6 +14167,32 @@
           "png": "KRYS.dark.png",
           "svgSha256": "08f70007a3194f53078ef5aa45c2fc03cc72201e52cb1d6ee80e3d4bfa907b82",
           "pngSha256": "ceedf7f037e4a9bac1c0ecbb3e3e2d65836f39340ef7db14b60a3a65796e9e0d"
+        }
+      }
+    },
+    "KTOS": {
+      "kind": "stock",
+      "sourceId": "0001069258",
+      "themeColor": "#363636",
+      "darkBackgroundColor": "#731A35",
+      "darkInkTint": "#F8F4F5",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "c3be47fa1d1682a93333804d518cfb66ca340ae025b5f22e9becbadd1fdea8dc",
+        "dark": "210c9e47b448f0a18ba7e547b1c792e112788a8ce69913db92446fb851c72152"
+      },
+      "files": {
+        "light": {
+          "svg": "KTOS.light.svg",
+          "png": "KTOS.light.png",
+          "svgSha256": "65c8d0dd6732eef7679e2a49b9eee3341187e10110c352b3de3d8bf351a4bc17",
+          "pngSha256": "2f579b819b689aeba59f073987aee87213c2f38b8e6687f6843c0d1bfbcbcc38"
+        },
+        "dark": {
+          "svg": "KTOS.dark.svg",
+          "png": "KTOS.dark.png",
+          "svgSha256": "57baf4b6ada77a4024b441e68a2762aab7943248a00861642e91d8e89118630c",
+          "pngSha256": "a8f7172f1c4cff5cf64ecfed895abb1813669d236dc9dfb3e67d187474612a62"
         }
       }
     },
@@ -14490,6 +14859,32 @@
         }
       }
     },
+    "LPK.DE": {
+      "kind": "stock",
+      "sourceId": "8812763121",
+      "themeColor": "#1D5390",
+      "darkBackgroundColor": "#1D5390",
+      "darkInkTint": "#F4F6F9",
+      "selectionOrigin": "manual_default",
+      "sourceSha256": {
+        "light": "81ea3dd326741d72cb005a6149c0f41e0562d4d4aa8b98635d5bb41295b490a1",
+        "dark": "eb964d901d1c81922231c21cb073acaa1f51eab924fba57da09ac709646b129c"
+      },
+      "files": {
+        "light": {
+          "svg": "LPK.DE.light.svg",
+          "png": "LPK.DE.light.png",
+          "svgSha256": "985291656f58b855f992bbd01668e51cf95f01299588b0528802ba795e985261",
+          "pngSha256": "504493aa50e0e06c90a056afa302730d51dfbed8911b424115155804bcb332be"
+        },
+        "dark": {
+          "svg": "LPK.DE.dark.svg",
+          "png": "LPK.DE.dark.png",
+          "svgSha256": "09ca93b407b9ad0e148dad53623233ff5f0111d92e44e84040bdfee8e287406d",
+          "pngSha256": "a583e5780bc5711c1ab1c5fc5829718dd151ab264e55013d4cf126c20a8d44fd"
+        }
+      }
+    },
     "LRCX": {
       "kind": "stock",
       "sourceId": "0000707549",
@@ -14694,6 +15089,31 @@
         }
       }
     },
+    "LYG": {
+      "kind": "stock",
+      "sourceId": "0001160106",
+      "themeColor": "#000000",
+      "darkBackgroundColor": "#11B77A",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "bd2e3c9bc8e4aba3bfe2cd80bb512d57bb604c0066e7e9fcbde67e3486f1a267",
+        "dark": "bd2e3c9bc8e4aba3bfe2cd80bb512d57bb604c0066e7e9fcbde67e3486f1a267"
+      },
+      "files": {
+        "light": {
+          "svg": "LYG.light.svg",
+          "png": "LYG.light.png",
+          "svgSha256": "66f8797e45c18a390d3f9279800d63b20fc14e40190703e9c869b0336a792fa6",
+          "pngSha256": "e48a39bcb725569416284df02ff127341b62940874e4deb35e42dd6baa17eec1"
+        },
+        "dark": {
+          "svg": "LYG.dark.svg",
+          "png": "LYG.dark.png",
+          "svgSha256": "0e4e2e421bdef9788e44f9847a81f15bd20b34382a329a0c8d6ff28bdf434c72",
+          "pngSha256": "8d713d1b836715d956ec72892a49ec794892deb460a364e98a9894a69cc0d55a"
+        }
+      }
+    },
     "LYV": {
       "kind": "stock",
       "sourceId": "0001335258",
@@ -14723,25 +15143,25 @@
     "M": {
       "kind": "stock",
       "sourceId": "0000794367",
-      "themeColor": "#1A1818",
-      "darkBackgroundColor": "#1A1818",
-      "selectionOrigin": "auto_russell1000",
+      "themeColor": "#E21A2C",
+      "darkBackgroundColor": "#E21A2C",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "95b84c626da4bb80c8a0e2136a4fdd74d436b4b58a86971138bce7f439d785dd",
-        "dark": "9d9902dfa99556954b24528f2993010f21177983fbafa00b779a8544959bfdbe"
+        "light": "4bcd97ac329f118bd53b7096e27b3f0aa2f7de31cdeee37663116fd5cec8edea",
+        "dark": "d370721d1b0f3854c04f0c04485c1695be905c19e57359615660d8ce335550a1"
       },
       "files": {
         "light": {
           "svg": "M.light.svg",
           "png": "M.light.png",
-          "svgSha256": "0a305c56145de3823afc1231fdfebf4783063ddea3f81d135b5a98dd7e00843b",
-          "pngSha256": "afea22dd3345d6ca910e9f739711af41413a802fcf4c32b9e1a928c3fa358ad6"
+          "svgSha256": "bbdc624dd6be6c4b2772e75a77ca96237f527032638c4bd3b57a027824f0f748",
+          "pngSha256": "81ccca927cc1fcf93ddb3ccd62bf4c3b149724c2bc9e71056311eef3228a48f5"
         },
         "dark": {
           "svg": "M.dark.svg",
           "png": "M.dark.png",
-          "svgSha256": "a2d5768a9bfb813810e5c15d9790160b67f2d4ce578e2538eedf2ef524bee188",
-          "pngSha256": "c250bb2948aac3fe781ecf4a2d6e8790402b5b1656abc9db1338e68c8c0d07b0"
+          "svgSha256": "9cb1f9bea32da6f5d2dbb0081da5dd78575e3a3e70d4c90bc35a38dfff70380e",
+          "pngSha256": "cd656f7c490bab7cea8211de7eb4680b2ce0fcdb912920f64a98811fcd93d35b"
         }
       }
     },
@@ -14849,28 +15269,26 @@
     "MAIR": {
       "kind": "stock",
       "sourceId": "0002098430",
-      "themeColor": "#00365C",
-      "darkBackgroundColor": "#1B1B1B",
-      "darkInkLightened": [
-        "#00365C"
-      ],
-      "selectionOrigin": "auto_neutral_multicolor",
+      "themeColor": "#7CD14A",
+      "darkBackgroundColor": "#00365C",
+      "darkInkTint": "#F2F5F7",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "7688531681f1aa2e94ebfaf23d10a07ec061aafecb9ea9f51f946c076d784051",
-        "dark": "7688531681f1aa2e94ebfaf23d10a07ec061aafecb9ea9f51f946c076d784051"
+        "light": "1de5cb9c77a93927d033ccb21e151a585113016485b5d16d99f9159f48708e83",
+        "dark": "7ea45f973b1396aa599f281ca74f90a54ca943e96807f7b145b30e867a81982e"
       },
       "files": {
         "light": {
           "svg": "MAIR.light.svg",
           "png": "MAIR.light.png",
-          "svgSha256": "1eda221b09923f2f6858da2ce9815c6d389ecece5720f8a4266e7eca5db61db2",
-          "pngSha256": "3fc66237c86b3c75ef62984391d7f84f6834a3f9613a16cea65357185797bb45"
+          "svgSha256": "1452d662b2cfc1b85fb43586711fc100f5daea1eb26bbc8e854c0741986186db",
+          "pngSha256": "18c2596049d722d8c382612a558e86dbf113badeb3aaa65c6d03213d4e811ccb"
         },
         "dark": {
           "svg": "MAIR.dark.svg",
           "png": "MAIR.dark.png",
-          "svgSha256": "25fff25211da03a48dca6df6736301584aca83c1382fcc2841f64854890d6c3f",
-          "pngSha256": "f02b16709b1528e8863c9efa73350bdac45c6aab28f72cb6f05ec08fd01c00c3"
+          "svgSha256": "0873d66906b64394fd4a6832bd59cdb872974f9a5fadb9c46146daab83b5b56e",
+          "pngSha256": "b00c4344d8be8d1124d8c7d824c06aa8719f63694e371c3379a0ad9cd00f65e1"
         }
       }
     },
@@ -15154,23 +15572,24 @@
       "sourceId": "0001103982",
       "themeColor": "#4F2170",
       "darkBackgroundColor": "#4F2170",
-      "selectionOrigin": "manual",
+      "darkInkTint": "#F6F4F8",
+      "selectionOrigin": "manual_svg_edit",
       "sourceSha256": {
-        "light": "f9d26913476ae05215783a633cd69e245506503bcd8d7cd8601a0b184c5776fb",
-        "dark": "15b24c5c76610e29583c28102bced6da9e0550a8e2dfeecfa2ca3c1111c01b90"
+        "light": "44e19fadfb94090d056f67f5f5ac41f95f5ad2b4ae4b9d3a69db2df0ff56eb01",
+        "dark": "82daaa7f876f6742e262bb7ec0869860e42eb67c9afc114a6f7ca2aec51c7076"
       },
       "files": {
         "light": {
           "svg": "MDLZ.light.svg",
           "png": "MDLZ.light.png",
-          "svgSha256": "94731bfd521b42343a0b9044d662b49dcea34adf346b5d92d2d0598cec7c8e7a",
-          "pngSha256": "0a700bec3137752c7aff26cddb16a7e426431737957d3469d1c7e3a5ab5d56fc"
+          "svgSha256": "9457332e993d595627a8f3145323fe56bf99677dfa59ad20abb80d94cd02b9f1",
+          "pngSha256": "48c8f9b73a528a64e6f31d6c55772ad40bcb8b113f813cf2e0b2365d13ee88b9"
         },
         "dark": {
           "svg": "MDLZ.dark.svg",
           "png": "MDLZ.dark.png",
-          "svgSha256": "d896f5d93771df631c5065e32805554bc53c9426776b14c3ab1e99197b997366",
-          "pngSha256": "bd8fc398f69c916a7a074cb116051b8bb28c182726b872c3ead0497a5d3418b4"
+          "svgSha256": "02c551045871655d6f8bb3a8b72e86722c8a58ba44e450fa5c7289fc1fd3cf9e",
+          "pngSha256": "8e5ccdb44a76b8b11e30a68fdef371050c5aae444686ef2112657693ce79dfe1"
         }
       }
     },
@@ -15530,27 +15949,24 @@
       "kind": "stock",
       "sourceId": "8858115048",
       "themeColor": "#F14F11",
-      "darkBackgroundColor": "#1B1B1B",
-      "darkInkLightened": [
-        "#000000"
-      ],
-      "selectionOrigin": "auto_uk_popular",
+      "darkBackgroundColor": "#F14F11",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "90270a6070aa6137d39ff5373970b6087ee703f393aadb9c67b9303bcfe11c48",
-        "dark": "90270a6070aa6137d39ff5373970b6087ee703f393aadb9c67b9303bcfe11c48"
+        "light": "a1932bd66289ee8db87dae25a87eedc783cbf6cc8ab0d7d335e0ecddfd52e790",
+        "dark": "f4170795ba12c5c067a091c5568494f99205b2856ff2cb03cfd9bcbcaa3a2184"
       },
       "files": {
         "light": {
           "svg": "MNDI.L.light.svg",
           "png": "MNDI.L.light.png",
-          "svgSha256": "22998c20b29d10cd0139a0c0771ea702d05dfdc848521859ed2309fbebe7dd36",
-          "pngSha256": "2f969174c655231724df44cfd244a5debd4751d71b21fefaa917cc435eefdd38"
+          "svgSha256": "99096a64c688bc0a50961557269e7e78b1262d019d97342ed02e0d2e67a56506",
+          "pngSha256": "92a740b4d74395f38a4eb7c634052669278b683f5ec8ef082bc0b50e1c9e4ed5"
         },
         "dark": {
           "svg": "MNDI.L.dark.svg",
           "png": "MNDI.L.dark.png",
-          "svgSha256": "f814709104f40e01eddfce78a08961218e36c6fbea1b216833b5d79a24df73de",
-          "pngSha256": "ff61694230b97671d143e7e476d28a36086d527f644a26f67d1ae2a09226a14a"
+          "svgSha256": "5dab9b67b35da1311b2f22c8598e30b5dd519e6a1e506d42c7943ca9c025d285",
+          "pngSha256": "239dcdb966aa161d95d3f87b85838052effc4d7be38225b8d80f417200aa6c61"
         }
       }
     },
@@ -15689,21 +16105,21 @@
       "darkBackgroundColor": "#1B1B1B",
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "29d810b15be9686803b777fae90beed528580c2fb39b881df5bcb32d7913c8c7",
-        "dark": "f1faff286f60a86d196a00e606dc00831feed1c29919a2b46dea76d1e57c650e"
+        "light": "ca421143c939b0ab8ccb57e52667e96b83021bb83c4789f3cc01dec57e4c0629",
+        "dark": "f27ca11f9a96fbdbc41f3f074d038908cd57dee8269ca156efbc3b2712104612"
       },
       "files": {
         "light": {
           "svg": "MONC.MI.light.svg",
           "png": "MONC.MI.light.png",
-          "svgSha256": "6cf75c1aceab458bbd095cc24489b95aed0b57789af513165ab315f534198d52",
-          "pngSha256": "fbe1406c157c47f5ca4b16ca13c90757fee950724cc78ed5be515c4defbad970"
+          "svgSha256": "a49c19083aa1faddf6e06d3c845a1f573f7235169544f41769aaa83f5d15848e",
+          "pngSha256": "e4430f39cca454939cf1c178bc64732c3b00fbf69dd77beb0a90e9e036ec51f2"
         },
         "dark": {
           "svg": "MONC.MI.dark.svg",
           "png": "MONC.MI.dark.png",
-          "svgSha256": "52c1361ff08f29505e8610b441f6db2da803cfa0f509ff0ed3749ca5f33a8002",
-          "pngSha256": "ae1774c96eb4f7e9059b476654bf2310510cbd903122fb6cb6b7b29785768824"
+          "svgSha256": "7fa4b8c7ed5c2cc5c1b4b49b7ae7ecf912d4d67fa69d86479ae522fb6bd09e6a",
+          "pngSha256": "eef3cf643ee34706293d8f064d58ac14c2d12ee652b7c7ff85b69f7e16d8d560"
         }
       }
     },
@@ -16802,6 +17218,31 @@
         }
       }
     },
+    "NOV": {
+      "kind": "stock",
+      "sourceId": "0001021860",
+      "themeColor": "#ED3124",
+      "darkBackgroundColor": "#262626",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "abb224c8a39de448aa36c18a44887b4b8a1caa7e0a1cae0b9831f322c0d35c43",
+        "dark": "abb224c8a39de448aa36c18a44887b4b8a1caa7e0a1cae0b9831f322c0d35c43"
+      },
+      "files": {
+        "light": {
+          "svg": "NOV.light.svg",
+          "png": "NOV.light.png",
+          "svgSha256": "0807a8b7d3cdfa8a3ba0aef48e60e510e81e39439bc9e92b0386938d9bbc922d",
+          "pngSha256": "654ef738686346061aeb419003adce0485a4c999c1e84597638d5fd7bfc11707"
+        },
+        "dark": {
+          "svg": "NOV.dark.svg",
+          "png": "NOV.dark.png",
+          "svgSha256": "9657cbd216fcee11fdb957f0c5f8a8d2e8bcdb6e4617c7674c95508ea23fefda",
+          "pngSha256": "3b41248ada5f687e6b82356777b41e42c73074dc8757c1ad7e32ac079881eeca"
+        }
+      }
+    },
     "NOW": {
       "kind": "stock",
       "sourceId": "0001373715",
@@ -17192,21 +17633,21 @@
       "darkBackgroundColor": "#100F0D",
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "f169c56927932d24f6855c25dc5c04790121c78b41e4af74337e6d106acacade",
-        "dark": "78552c86046031eea08364b78e814b8825f9478820017e886c09396754955ca3"
+        "light": "1c3d5cbab160fbaa725b1905f02a2b5345d30429d1291b845c3399183a506685",
+        "dark": "1c3d5cbab160fbaa725b1905f02a2b5345d30429d1291b845c3399183a506685"
       },
       "files": {
         "light": {
           "svg": "NWS.light.svg",
           "png": "NWS.light.png",
-          "svgSha256": "684fba0d25a22e96ce628cd5773db8d406edb00a22a433612c616ed39c9bc0d0",
-          "pngSha256": "8dc47c10a59df531e62dbee5a3e7f79132632c62d8a2e1314dacbef5854b9e21"
+          "svgSha256": "2c2016a6663970a103b86d37fd44890d8cb4b7ddd28ddbf691893fb2dbfde42b",
+          "pngSha256": "c463e08d1e570b2a3d36a16e189d97be5cacf39a3fa0020c1c25464d7f922acc"
         },
         "dark": {
           "svg": "NWS.dark.svg",
           "png": "NWS.dark.png",
-          "svgSha256": "e9f2ff869bfbc3fad4446fb94bbe3145e82f8ff1fdd062604be3d101b0a2f42d",
-          "pngSha256": "78d6ba0d2edfca82f24710b0d337b293626790c6423ec021ca9721b66597529d"
+          "svgSha256": "4f08150b612738e2377da87238d28c4ea8faec2334382b41606c99b029ad71c0",
+          "pngSha256": "178ae1420e1fdcc086f67e253b2c46ea63e663efdfb8377b70805c97fb0e8550"
         }
       }
     },
@@ -17542,23 +17983,26 @@
       "sourceId": "0001097864",
       "themeColor": "#DA7F3A",
       "darkBackgroundColor": "#6B3E1C",
+      "darkInkLightened": [
+        "#301C0D"
+      ],
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "e1b6a06f884006e60bf98db3cb492aeec3c1340c80fb354bde74c2833b2b12ad",
-        "dark": "ea18164816c6ec86ea643acfbe58affd1e709b4ac22200db3be898bca11842e1"
+        "light": "9400628508d6feff1fcf95cc9364cea9fa9af85cd5758b6e19fa144f42786d3b",
+        "dark": "5b8ffaad76cd0b2364d6f9db60f123edb218e3df2eb72a82c3b57517d063b0dd"
       },
       "files": {
         "light": {
           "svg": "ON.light.svg",
           "png": "ON.light.png",
-          "svgSha256": "143f067eca106610d156d5a8f00e9b926df157cb3c6cf5a8a58bb7ad54d42e33",
-          "pngSha256": "bd84ab2f84bd8da051c4948c278a23733b44f9a02fd5416ef63995fc43e5de8d"
+          "svgSha256": "3f9a50de87a75638b27ab3f321970754d0c4bca5ddeebe4bacab3397c1b36af2",
+          "pngSha256": "efa717fba03722b66b23b060d68abc72dec0f0efddc53d7c55aff5a6e6ea562b"
         },
         "dark": {
           "svg": "ON.dark.svg",
           "png": "ON.dark.png",
-          "svgSha256": "14a3f24626b1ef1c39925460741d92905ccfdf2b15e1280b2bb02454d58802bf",
-          "pngSha256": "976dc2ab774d55fd1a44be0789d374385f0064a3246ca369b02904a379a62dc4"
+          "svgSha256": "01d03ef30f59aef8e2a6d4c1500940f595dc5827b9bdb94610a71e4afb833a81",
+          "pngSha256": "9067c7fbafa749588ebb00dfae6cdebfff8488db80a1d11314facff43a523d3d"
         }
       }
     },
@@ -17842,14 +18286,11 @@
       "kind": "stock",
       "sourceId": "0001070423",
       "themeColor": "#1D3058",
-      "darkBackgroundColor": "#1B1B1B",
-      "darkInkLightened": [
-        "#1D3058"
-      ],
+      "darkBackgroundColor": "#1A2B4E",
       "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "adc57b75fe9cee5f3e44c64ec8245bf50f080f2ace8cf65abb347e1483490415",
-        "dark": "adc57b75fe9cee5f3e44c64ec8245bf50f080f2ace8cf65abb347e1483490415"
+        "dark": "1906a3609ab21606a230bdabf7b22a234ad4777ceeb959f7fe88c9270ced5ca4"
       },
       "files": {
         "light": {
@@ -17861,8 +18302,8 @@
         "dark": {
           "svg": "PAA.dark.svg",
           "png": "PAA.dark.png",
-          "svgSha256": "7e148c554f02026a8986bfeeb33eb8eab32000b8b11a9b9d2ee74001ed642c6b",
-          "pngSha256": "575e61b1b1f5a576cfdabd55aa0cb974ff62237a86118ba0e31767e3d6a16ec8"
+          "svgSha256": "53a97b61a47bce610962264cec8fd91dfce6494fe783e77a36d69cd121988122",
+          "pngSha256": "d62c78ae2232316b86345b3dcfe3844e7983f1859ed0d153d21fc073e65fbe48"
         }
       }
     },
@@ -18052,24 +18493,24 @@
       "kind": "stock",
       "sourceId": "0001004980",
       "themeColor": "#1689C5",
-      "darkBackgroundColor": "#1B1B1B",
-      "selectionOrigin": "auto_neutral_multicolor",
+      "darkBackgroundColor": "#1789C5",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "c896095a905d0cb3ffc6b2caf48585990f55d21f38739bf5fa3b7909c1ababea",
-        "dark": "c896095a905d0cb3ffc6b2caf48585990f55d21f38739bf5fa3b7909c1ababea"
+        "light": "59be8a03a1d5c5a52ea381996fd89552059927b148e1aba80e676f0ad969f23f",
+        "dark": "59be8a03a1d5c5a52ea381996fd89552059927b148e1aba80e676f0ad969f23f"
       },
       "files": {
         "light": {
           "svg": "PCG.light.svg",
           "png": "PCG.light.png",
-          "svgSha256": "3eefad552afc8ceefff8c80bacd6e9795880fa098e6812cf0a0faa66ee23cc65",
-          "pngSha256": "61129d205904b95bf76f2362364d99ddf2799e531ef017f0fbb32fbb49a3e0f4"
+          "svgSha256": "4d8ff0c40f7df291b5ab17cd74b846799ee0633967522ad1e5b1df54597473cb",
+          "pngSha256": "ed45e7c5f98c85d791356afd6d4a53d1090819c47fc77d10e4de0487bc8b2230"
         },
         "dark": {
           "svg": "PCG.dark.svg",
           "png": "PCG.dark.png",
-          "svgSha256": "d01280a5b3588a1edf229e8789d5add0edfaa1f40cd13e0249dd3a1e337ba3dd",
-          "pngSha256": "fe7cf75fe135bb60b1c4310fbecd56d4849f08a8a28e1a6b20c579577e97eb74"
+          "svgSha256": "66d0262709a744bcf4b8d68702b392cb965093fe28f2f457c94ae7169f19dfd8",
+          "pngSha256": "b178fee024ab3693ac8b1e178ae72389c48af9939b79f6c934227b808f43e6f9"
         }
       }
     },
@@ -18356,14 +18797,11 @@
       "kind": "stock",
       "sourceId": "0000822416",
       "themeColor": "#EAC463",
-      "darkBackgroundColor": "#1B1B1B",
-      "darkInkLightened": [
-        "#223555"
-      ],
+      "darkBackgroundColor": "#223555",
       "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "c7d6e9b06d78d8061b1e760e0fab97ae2d121967784582a2f7813d678ba2c3e7",
-        "dark": "c7d6e9b06d78d8061b1e760e0fab97ae2d121967784582a2f7813d678ba2c3e7"
+        "dark": "ec4c1a6bc2a53f0678740f39fc296a8faa2e10e201b4ee437008b24878b647d9"
       },
       "files": {
         "light": {
@@ -18375,8 +18813,8 @@
         "dark": {
           "svg": "PHM.dark.svg",
           "png": "PHM.dark.png",
-          "svgSha256": "afcdd273c9adc9b701b2c2a66127527b3f27fd75d7da8ed6d5875e789e32047d",
-          "pngSha256": "5ade6a092a860074847d77b2616c160bbd87c6206c16bf2fa273652f3ae47ecc"
+          "svgSha256": "ec4145210fda134df3f4228a387212783152d95f73b97da46f7c5ed67499a4ac",
+          "pngSha256": "d496ab069682ca6866b3e0c9cba1ae8c2cf4f85035d14fda7da181e08702c958"
         }
       }
     },
@@ -18439,21 +18877,21 @@
       "darkInkTint": "#F3F5F8",
       "selectionOrigin": "auto_imported_svg_treatment",
       "sourceSha256": {
-        "light": "d99e2583a19b4cc9c8a8afec793b6d1af408d6f34b6e7872fb457426f5b8d1d5",
-        "dark": "7dab3937d5d271954a5459f83dcd8a5704b4cada3eaa65cb44c1958110e172fb"
+        "light": "e89ec66392f679a25c29d970e600a84a70fa653948b5eb787850bae4480ece66",
+        "dark": "dfaa63e3c48115d35d3eb450011dd049b34ae0b4852946c301a05f08cf1a6e43"
       },
       "files": {
         "light": {
           "svg": "PKG.light.svg",
           "png": "PKG.light.png",
-          "svgSha256": "fe5869d9e4166c71d6a79b5d10b5f4f0e715df6b1c7a97045334123e422c9de8",
-          "pngSha256": "c53ab93e2028b8e0a11655ab83fbb48556627140b9c8b478f71e45b87a92805d"
+          "svgSha256": "0072f7fcc26539d5730f2c2d9e3d123f188a3464a56150e6df18568c4e9e98b8",
+          "pngSha256": "ac311fb5b367c3975618cc5debf4684833a8e35dbf8769a6b1de67406d51c294"
         },
         "dark": {
           "svg": "PKG.dark.svg",
           "png": "PKG.dark.png",
-          "svgSha256": "2cdb559ddda389447b778dd7f196ba3fab3ce09bfe81b46c31f1518bd36b8385",
-          "pngSha256": "5881a89d04422b09793b246760d7fd67ede1e21fabaa9c67fddd85a32bff8952"
+          "svgSha256": "71dcb7e8ac7074f78c0abc3b08e7a8c63c28093d438c6487aed3b7d7605a9153",
+          "pngSha256": "b65e4196bfe4e6dbb576614e7b83f05553d4b4ec276923815438272eaab9f15b"
         }
       }
     },
@@ -18514,24 +18952,27 @@
       "kind": "stock",
       "sourceId": "0001045609",
       "themeColor": "#000000",
-      "darkBackgroundColor": "#1B1B1B",
-      "selectionOrigin": "auto_svg_favicon",
+      "darkBackgroundColor": "#152023",
+      "darkInkLightened": [
+        "#1B4D4A"
+      ],
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "0b6d0d5c4d6de057f52b25cd4e588a883d588b6080e88d64aa0dc22753e62860",
-        "dark": "d6ce47af7bdcc3d4b56e7c3314e884c7670278554270c79a2bd5af8dab22a804"
+        "light": "d99ef90f315b6298d0343eabce8cd22fdfbfff7f1c45163ac0a2a12dff7c3e91",
+        "dark": "d99ef90f315b6298d0343eabce8cd22fdfbfff7f1c45163ac0a2a12dff7c3e91"
       },
       "files": {
         "light": {
           "svg": "PLD.light.svg",
           "png": "PLD.light.png",
-          "svgSha256": "9e890925b1ce8e9b28f3c4d121797c56ffe7729a19b29807cb0109d49044d9e0",
-          "pngSha256": "1f26aa81095e4504d6f5b9b3a99a082ddd1d89471e20c22cd1707e25552c7c1a"
+          "svgSha256": "b7ceba4645e67aa14d2cb07212535a462f876d4d4ef7f7f2d552e51774d43eeb",
+          "pngSha256": "d8ebe2970996fd140f3988ca16d6e4ad8355e40d8b03087315300ae18c85af75"
         },
         "dark": {
           "svg": "PLD.dark.svg",
           "png": "PLD.dark.png",
-          "svgSha256": "f29eec5d2b7f62f84fdafaca1e4cac5893bbb68985466de1fbe58cb40471a53d",
-          "pngSha256": "9c4009738d7e4073916ca2287881d842ea563325e2b7d4292440223beee4cb6f"
+          "svgSha256": "15a54912663cfc5d4693cec90b5121a1b0195b5ab0beeba67064d134c1a18799",
+          "pngSha256": "54a7ae0b7bbf2e6bb05d6bf9b43b76facd1cf6db7133ad491d5e30febea24933"
         }
       }
     },
@@ -19095,6 +19536,32 @@
         }
       }
     },
+    "PVH": {
+      "kind": "stock",
+      "sourceId": "0000078239",
+      "themeColor": "#000000",
+      "darkBackgroundColor": "#1B1B1B",
+      "lightBackgroundColor": "#1B1B1B",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "53eebc24bd91e067bc82b8c077c98e45b40d403bf3def7eff8b6e69e99aeee7a",
+        "dark": "53eebc24bd91e067bc82b8c077c98e45b40d403bf3def7eff8b6e69e99aeee7a"
+      },
+      "files": {
+        "light": {
+          "svg": "PVH.light.svg",
+          "png": "PVH.light.png",
+          "svgSha256": "31ca19c4e33ab59ed24dce72a3aa63bd0c10d870f0c076e4b7d154e9b4196f4f",
+          "pngSha256": "87e2e4fe1a5d273a801d72ebf4b09c8d379a20a89945f266f3ba16badceebca2"
+        },
+        "dark": {
+          "svg": "PVH.dark.svg",
+          "png": "PVH.dark.png",
+          "svgSha256": "31ca19c4e33ab59ed24dce72a3aa63bd0c10d870f0c076e4b7d154e9b4196f4f",
+          "pngSha256": "87e2e4fe1a5d273a801d72ebf4b09c8d379a20a89945f266f3ba16badceebca2"
+        }
+      }
+    },
     "PWR": {
       "kind": "stock",
       "sourceId": "0001050915",
@@ -19149,24 +19616,24 @@
       "kind": "stock",
       "sourceId": "0002058873",
       "themeColor": "#000000",
-      "darkBackgroundColor": "#1B1B1B",
-      "selectionOrigin": "manual_default",
+      "darkBackgroundColor": "#BFFF00",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "259d7b9d8259f65cf833231d126c2de5f79afbdffac2d1c0590b00943510a279",
-        "dark": "f6a13901a6be9640dede4ecafdee0792205f369245650165a6c9d4bdc0e12cab"
+        "light": "782e372ad33433c9a41099f5ecaab287aa45e8ea2984acacd15e7e66dc86adeb",
+        "dark": "782e372ad33433c9a41099f5ecaab287aa45e8ea2984acacd15e7e66dc86adeb"
       },
       "files": {
         "light": {
           "svg": "Q.light.svg",
           "png": "Q.light.png",
-          "svgSha256": "fef58b031e5b26e51d1b585d8cd517cf0f50b135e65afaf76276f55b3d42b229",
-          "pngSha256": "3405166ecc532081b3fe3ab0e43c688eb42c413e8c6fb98b542454b4f6b3c244"
+          "svgSha256": "999f3e87c719319a466b4c9894e6e5e6fecc653225f58b344c45530c17c0846b",
+          "pngSha256": "adbd64ba1b6c8c40d6db319122ddd7b25643a178858f1cad366982d92f6e8aa7"
         },
         "dark": {
           "svg": "Q.dark.svg",
           "png": "Q.dark.png",
-          "svgSha256": "309c964fdc44e9c28278e28feef9767accdf30594588a43cafa6678f78d92d59",
-          "pngSha256": "acebdbb8601e39dfd347db929c8a63264fb0c0f1300d5caf88abf0de7423fe71"
+          "svgSha256": "1e1691455c2b021dc85177046a4dfae00a926ca1c3a4dcb75f55067d8cf58842",
+          "pngSha256": "46e0ff6c79a36ab1491deec10fefff978f94f4257b0c76c9a1c46e6b7a304fff"
         }
       }
     },
@@ -19498,25 +19965,25 @@
     "RGEN": {
       "kind": "stock",
       "sourceId": "0000730272",
-      "themeColor": "#1F69FF",
-      "darkBackgroundColor": "#1F69FF",
-      "selectionOrigin": "auto_us_popular",
+      "themeColor": "#00558F",
+      "darkBackgroundColor": "#000F1F",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "f303aa5c503adf2f9154571b4bfbccc025a2d55e2ef5adb497641a13547a03b0",
-        "dark": "95a890cd18137eb83d885bf4695998d922ed632f9676749b110b60198e80f78b"
+        "light": "257827f8e6d6c1919b42263663c9fcb8a994b5c3bfd74ddda284f4ea98c80c3f",
+        "dark": "adc6154440747f93601fc99814634e7c7090f130534e7a2f90d2ecc75b425199"
       },
       "files": {
         "light": {
           "svg": "RGEN.light.svg",
           "png": "RGEN.light.png",
-          "svgSha256": "27738b76dc0338e3d2af60a164c12ea5e9ec8674cf902caf82ff8a8f51d98fa0",
-          "pngSha256": "ac66fa9c5cbdbe1ea31bc63b7b7a29e8b714b2061268438c1c3250602f398e83"
+          "svgSha256": "d409b250250a30d0ba211f11afb89db616ed94b8f2d9ad6c433e91c56e19ab46",
+          "pngSha256": "6ae00e1fc2b8e9c5bb00428e5ac70a0d528bb3acd6e09b6a72ec607a4a71218a"
         },
         "dark": {
           "svg": "RGEN.dark.svg",
           "png": "RGEN.dark.png",
-          "svgSha256": "4c9d3a4444517aad14e956032a8f7ab8940724890eb4e57bfa38ddafd1d344e3",
-          "pngSha256": "d180f977f851f80fcc2cc1c1ea417b2275fac3c540a684332b8c8ed5f87a7e65"
+          "svgSha256": "d62188a2369aed9e0efa141a22057a377e8f435f89bbe5d29e5409be6b4be328",
+          "pngSha256": "6c65cc4df270f9103547a96a8bff1f44657fe40942f750083d4870976c2fba1f"
         }
       }
     },
@@ -19583,21 +20050,21 @@
       "darkInkTint": "#F3F4F6",
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "2787d6f5055eae75c2b8b1236881a445e5fb2146022ac4abb51b249481c82c87",
-        "dark": "69264d1bfc1b8a86ae2da13a9014ddb6c3f6742f6001b7498863d34028cfaf3f"
+        "light": "d7b8d8eac0cf2ebb83f377ee30c6b19591c66e53fb2aac632b4e4e047a6bab9a",
+        "dark": "727b796f55b06fd490882a16c5d01a26a1dc576cc728e0d635a9daead7982af8"
       },
       "files": {
         "light": {
           "svg": "RI.PA.light.svg",
           "png": "RI.PA.light.png",
-          "svgSha256": "be6afac38f8956abe3ccb7a74beaf67eed2b6ce59bb2727f955353805fb78bc4",
-          "pngSha256": "189a7ed25531d9ee7d1ce25eadb787ade4aab618092350c07a989dd1a9d09ca1"
+          "svgSha256": "8a876a57721c96ffc30decf05fe29e45f86a342d9554361b8524c0b27bfd2442",
+          "pngSha256": "f48ae967d0770fc55df04f7b793d8dbd7280e86706ee2abb2d88a02150f0df9d"
         },
         "dark": {
           "svg": "RI.PA.dark.svg",
           "png": "RI.PA.dark.png",
-          "svgSha256": "ae4a620f5fdc0c380b329b4beddeb9506fa4ba5dd9b2e8089846d39d0a1d2d7d",
-          "pngSha256": "6809ff264e4bd38db24f9dbedfad1845fbec55ce91058d1cc39e54fc0ae687a2"
+          "svgSha256": "212a52144c68f80ef9715d31dda19bb25b4a874f7c0950a7624d34758b66afa2",
+          "pngSha256": "2a30a24d1e9b85d17f12a56b7f3d3f9391d21332083e8f8541d98957fbd1e431"
         }
       }
     },
@@ -19699,6 +20166,32 @@
           "png": "RMS.PA.dark.png",
           "svgSha256": "f04895543ad888e59c2435d4e8a20dc6b0eae6ba3269124e38a5f36d9df893bf",
           "pngSha256": "fc37bc3ee49c154fdbc692f282cbc14832cabe09e35e6425df6301168f1adc48"
+        }
+      }
+    },
+    "RNG": {
+      "kind": "stock",
+      "sourceId": "0001384905",
+      "themeColor": "#2B2926",
+      "darkBackgroundColor": "#8E4A0B",
+      "darkInkTint": "#F9F6F3",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "e561fe17b5babe2e3f59a7c70d37e706c153b80b6f3a0da487cb2f7a8907b404",
+        "dark": "9a82a2819d07df5bbcb07c7ff84198ddf227d9810e38cc3d401b55089caad044"
+      },
+      "files": {
+        "light": {
+          "svg": "RNG.light.svg",
+          "png": "RNG.light.png",
+          "svgSha256": "9a58710ca9fdeb537fb526687428e37075bf1bb8107f22d7e6888a8d361131d8",
+          "pngSha256": "6e277ada9f685467fac815fd4ba3f81d7fd8bdc86a91f130f5033c28d5a68700"
+        },
+        "dark": {
+          "svg": "RNG.dark.svg",
+          "png": "RNG.dark.png",
+          "svgSha256": "ec6130216925e4b316c8ffecb46cb81f1c77713e2cdc58ccf312008d2a4c12ed",
+          "pngSha256": "a6e209e14fb1e5bfe4b407340fc7db3b2c18b75e264d13d435f349946dc72da7"
         }
       }
     },
@@ -20054,6 +20547,31 @@
         }
       }
     },
+    "RY": {
+      "kind": "stock",
+      "sourceId": "0001000275",
+      "themeColor": "#0059B3",
+      "darkBackgroundColor": "#03203F",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "f54202a741d61a3e5c947d6075a8fa6956050781115208728bf4a59313b6c82c",
+        "dark": "f54202a741d61a3e5c947d6075a8fa6956050781115208728bf4a59313b6c82c"
+      },
+      "files": {
+        "light": {
+          "svg": "RY.light.svg",
+          "png": "RY.light.png",
+          "svgSha256": "7ff1948739d28db14dd65e4093723d42e081e97c333ce40c582b5000f3d15235",
+          "pngSha256": "9bec040b2179966c2ebd83039b85aa3a714c2790fde3b911a1c0be38899b5ef2"
+        },
+        "dark": {
+          "svg": "RY.dark.svg",
+          "png": "RY.dark.png",
+          "svgSha256": "22d5186c063a85f4920abb6b9444d4ec9ad203ab5321b45f9910bfae3be925b7",
+          "pngSha256": "5bd1d0db207687832b045678bdf4ac99c3636d133942ea2664fe2c31583e5ec9"
+        }
+      }
+    },
     "RYA.IR": {
       "kind": "stock",
       "sourceId": "8080820322",
@@ -20101,6 +20619,32 @@
           "png": "RYAAY.dark.png",
           "svgSha256": "ae5c9e97ffc23fb5ce644248aaf51bd5148669f7effb3465f15ca9d5757f21a1",
           "pngSha256": "c794851de8637ddd5a38175a9a2e4593aa676e95f311cd9e684f1b437b3a2f5f"
+        }
+      }
+    },
+    "RYAN": {
+      "kind": "stock",
+      "sourceId": "0001849253",
+      "themeColor": "#2955A9",
+      "darkBackgroundColor": "#2955A9",
+      "darkInkTint": "#F4F6FB",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "89cb35294a92f9c31497971713e7c37b9bf2c86199706cdb916436104d71b91f",
+        "dark": "724a0098470ae87a773e34b130c6b65c47eaf11dab48169565c1ce25ef7fd0d0"
+      },
+      "files": {
+        "light": {
+          "svg": "RYAN.light.svg",
+          "png": "RYAN.light.png",
+          "svgSha256": "e225da8ac49e3784f322f709a114f31acfb36427fc777d91d1af7c46d6f04646",
+          "pngSha256": "6e8ab58a0ea29abecf5e1b5737ec61edb02ba4d57a70fef22012c1a01de54021"
+        },
+        "dark": {
+          "svg": "RYAN.dark.svg",
+          "png": "RYAN.dark.png",
+          "svgSha256": "910d6f119c25187885dd83d50997f279e3803cd08b8837dc9b5e9a1b6d3a4c3b",
+          "pngSha256": "249302f32c49d3e0606623ba1b131d6ce0d9a91ee37bd0bf5b853fdf1cb824e4"
         }
       }
     },
@@ -20159,24 +20703,24 @@
       "kind": "stock",
       "sourceId": "8777152962",
       "themeColor": "#000000",
-      "darkBackgroundColor": "#1B1B1B",
+      "darkBackgroundColor": "#404040",
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "3d14c5cb7df4995a3ae436c789df3a3b2b223411247317eabe01320a0053fa31",
-        "dark": "1d345c7541555f43d70bb9ba1a3e0c64e5f9496e5d8e5a24fc01211fb02c1257"
+        "light": "ca26e0e5fe0ba382d8ee251697e400a069482958f561496737418eec0ed68b62",
+        "dark": "36bf39fbc5e1f6f51dbd3fdc3eef44ae717497fb60d7090a20aad17d04c976d4"
       },
       "files": {
         "light": {
           "svg": "SAMPO.HE.light.svg",
           "png": "SAMPO.HE.light.png",
-          "svgSha256": "c165326cf6bcca1e337adcc9e3184547addc6d27b750f63835797fde2cae94e3",
-          "pngSha256": "6045b8e7b106df9755c1697dafea96b2389ff445fe9df8484f11d6a0873c9cd1"
+          "svgSha256": "0b39f7049a43bd11c3e14afe6213fd6e7603b88ca0984a39258b3861e34fd5dc",
+          "pngSha256": "3adc4071d95f06878486ffa75126af7a3d52b4e7442a58f56058e6c3d39ebc75"
         },
         "dark": {
           "svg": "SAMPO.HE.dark.svg",
           "png": "SAMPO.HE.dark.png",
-          "svgSha256": "ee61deace3cb058735a0489e5c86b48a447f29f87a3a6c779b66bbe0041aecdd",
-          "pngSha256": "804e0cf57e86056c5271d41a63d4c0e565e0eec045fa7a82e4f0018787795aa7"
+          "svgSha256": "5b72f57eac04f2c23acaacef518008da3272cccd887ee6e97a1ec3825f4330a1",
+          "pngSha256": "ce13a3c10d2a468b316eb0308fe1dc68afbf79eed79d7dd26372d754205d0a47"
         }
       }
     },
@@ -20210,23 +20754,23 @@
       "sourceId": "8580853853",
       "themeColor": "#101010",
       "darkBackgroundColor": "#101010",
-      "selectionOrigin": "manual",
+      "selectionOrigin": "manual_svg_edit",
       "sourceSha256": {
-        "light": "19c1c91437c24078bd2b5fa56fd466e988d308af2a2bb4b8518831771a175173",
-        "dark": "996a600bed435ca475648e9bbedf42120bd6d7ef1f6ababa0921ff1ada076179"
+        "light": "e7f6bbff9630d81c6655b1441308e7306034db39fd5d8d6e9bb9dc95b63b8f50",
+        "dark": "4c6780b64f96643b5d3af3ffe10168c5f7838fa063f7b5d9c63a8331ffc3a7cb"
       },
       "files": {
         "light": {
           "svg": "SAND.ST.light.svg",
           "png": "SAND.ST.light.png",
-          "svgSha256": "4cac60425390007daf763ab116f5b358ff6840a0c296d801d43a45c1a1b8edd1",
-          "pngSha256": "7b8efc9302345043131cbdbff8071fe4aea6f85f702d4b9b5fcb5246f3c8b17f"
+          "svgSha256": "cbc12eaf5018dedae274d574ef43a129010b6018d4d25b205ce07db9c02cc762",
+          "pngSha256": "689281bedd8ffcd8adebcee9857f9edfb64534ad3debe67639fba8cb027927f0"
         },
         "dark": {
           "svg": "SAND.ST.dark.svg",
           "png": "SAND.ST.dark.png",
-          "svgSha256": "66ca962c18db229b9670e596f15eca27ed01b0e446a927b58395db89b28559fb",
-          "pngSha256": "8939e50aab116cd0f372cf9aabc6bcba2ffac9f23de20d92bf6aabd1e94cd0e1"
+          "svgSha256": "408ec4b6fbf8aa1a9dd3c45c3d3eebdcd11d3d3acc542c02f6be38bea67d7e9e",
+          "pngSha256": "98640c34488bb44f3e9c31e156e7558abf4ae779e9576a331696bd7329f0b8d1"
         }
       }
     },
@@ -20486,6 +21030,56 @@
         }
       }
     },
+    "SFD": {
+      "kind": "stock",
+      "sourceId": "0000091388",
+      "themeColor": "#3D4543",
+      "darkBackgroundColor": "#D36228",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "5390331bc0f95668ff7bd03680a69ce637a10dd7c66107060d85c96a298a897e",
+        "dark": "32b098daa50ec5f7c2d963202d0de6cfb9c7d11cee092d19e92dc629599fcee3"
+      },
+      "files": {
+        "light": {
+          "svg": "SFD.light.svg",
+          "png": "SFD.light.png",
+          "svgSha256": "1d57c0968f71a71c6fea87b268a538f8218836df3e3e71a186e573977ae615d8",
+          "pngSha256": "2c91f2b4e792181090cadced2ccf511592050093699c265d7a442015717fd2bd"
+        },
+        "dark": {
+          "svg": "SFD.dark.svg",
+          "png": "SFD.dark.png",
+          "svgSha256": "ab58c3192c0803aba902f32ccc9f3c61809a8637776f97a9ce07fb1d7c27e72e",
+          "pngSha256": "264e1d15bd59afa8c7476ccf36f8f0a408907fef5ad142103f7aff7f3d87b2b7"
+        }
+      }
+    },
+    "SFM": {
+      "kind": "stock",
+      "sourceId": "0001575515",
+      "themeColor": "#6BB951",
+      "darkBackgroundColor": "#72BF54",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "bbfcc1c5361ccf0e5cf4b9256f8af3ea8dd3649c5e378ec4e70392928de061ad",
+        "dark": "fcf8eb617ebbd23c86f337bdab94157a169917389c7ae91acf44505a98000b53"
+      },
+      "files": {
+        "light": {
+          "svg": "SFM.light.svg",
+          "png": "SFM.light.png",
+          "svgSha256": "5eb3cf916538c83a1da83dd68940ba214523faa37c03e673f8c927a8192c3307",
+          "pngSha256": "6d41b9decb7db7a71a4a35284054a60f32c44d8cf190048fd13733b4063b1fc2"
+        },
+        "dark": {
+          "svg": "SFM.dark.svg",
+          "png": "SFM.dark.png",
+          "svgSha256": "5db298c30a4ccb48cb7c2cc120801cb632a138833e3b15a0bd85b9519fac6e19",
+          "pngSha256": "831f973664e25ed600f3d7deb8de6c14fbdb7789d3d7a975656651152c5a15f4"
+        }
+      }
+    },
     "SGE.L": {
       "kind": "stock",
       "sourceId": "8340957877",
@@ -20617,24 +21211,48 @@
       "sourceId": "8939775457",
       "themeColor": "#009999",
       "darkBackgroundColor": "#009999",
-      "lightBackgroundColor": "#009999",
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "f1f46ce572ca17d4b0a282da8d48350224ac06035271acfcfc67cc2b44be23f5",
-        "dark": "f1f46ce572ca17d4b0a282da8d48350224ac06035271acfcfc67cc2b44be23f5"
+        "light": "5df2f2aa0aeac03b8ed716c160e646a520cabbb0e39ab5cf1116765fb40eff5b",
+        "dark": "89d8424189118acc1cdf594dc34a407e64222ad0f29cc74860cbb3184e27f3da"
       },
       "files": {
         "light": {
           "svg": "SIE.DE.light.svg",
           "png": "SIE.DE.light.png",
-          "svgSha256": "23ba5df5f67d699b69fdf4999e852eea51e118ac7ac0ebed87b5dc85f21bf4b8",
-          "pngSha256": "d0c745b2536bbc64f1973a0dfdbe6c251ed810eef2c344daf07bc89a7c435725"
+          "svgSha256": "5c66da1628f5ab3a04510fa555bfdd0abedee987bec34b1395aa5f0e605a24eb",
+          "pngSha256": "740dc58a0d7389037b953c2f94e59c809b752459ad4908f5ae014fd6dbe2b8d3"
         },
         "dark": {
           "svg": "SIE.DE.dark.svg",
           "png": "SIE.DE.dark.png",
-          "svgSha256": "23ba5df5f67d699b69fdf4999e852eea51e118ac7ac0ebed87b5dc85f21bf4b8",
-          "pngSha256": "d0c745b2536bbc64f1973a0dfdbe6c251ed810eef2c344daf07bc89a7c435725"
+          "svgSha256": "72df0c8c79987b4997e575e81e35c32774a426fea6ee3bb3245b3b4a26017f12",
+          "pngSha256": "19cdd2fa56f659d52142b51aed452bcb2bf7253b92ef0b73482b94762feb9de8"
+        }
+      }
+    },
+    "SIRI": {
+      "kind": "stock",
+      "sourceId": "0000908937",
+      "themeColor": "#0101EC",
+      "darkBackgroundColor": "#0101EC",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "a8f714af5b11d3112eaffa49e88dfef6f38c495f5e743b3a322d105a100c4995",
+        "dark": "c8f1796efda48e6c596f183a99a5ed9e1951f0f17975a714f5800fe592cea937"
+      },
+      "files": {
+        "light": {
+          "svg": "SIRI.light.svg",
+          "png": "SIRI.light.png",
+          "svgSha256": "ad360169618a212a2700b9e4c738ae1f95c28d6de5d6cf7afc8e19601f278b65",
+          "pngSha256": "bc4b3e03d870891f8f771a6d78a7126a30fb0caff2b1d9971b7f56abee35027c"
+        },
+        "dark": {
+          "svg": "SIRI.dark.svg",
+          "png": "SIRI.dark.png",
+          "svgSha256": "a661c6d55f1c48fbaa87438671d7353427d21c93d2f2b12e6fc9c26c7cecc9b0",
+          "pngSha256": "82834ece852f2dca692d0e55e9532bd6479970b76537af07fc50a4f076f1f603"
         }
       }
     },
@@ -21475,6 +22093,31 @@
         }
       }
     },
+    "SSB": {
+      "kind": "stock",
+      "sourceId": "0000764038",
+      "themeColor": "#FEC03D",
+      "darkBackgroundColor": "#FEC03D",
+      "selectionOrigin": "manual_svg_edit",
+      "sourceSha256": {
+        "light": "c4afa0a8f43531e7f97fc3c87d05719ae3409e4892ef7d0ebf2fd0425770a638",
+        "dark": "d5d9b6c76f28bda2e32e3469004473751311e6c342be793dcb94deb1fd763914"
+      },
+      "files": {
+        "light": {
+          "svg": "SSB.light.svg",
+          "png": "SSB.light.png",
+          "svgSha256": "9ef37d3d987a5fb97313cb9b6be5d5de44dc13b4960ddde1d909f4c901a8cdf0",
+          "pngSha256": "f52aedb744d0a887f9ed93fdadef75e6f3560bafefe6503a434a51c06e5b1865"
+        },
+        "dark": {
+          "svg": "SSB.dark.svg",
+          "png": "SSB.dark.png",
+          "svgSha256": "dbb90516509dabc8645ab97bdea667e6f02b316c0525fbe539b4b6fde98bf872",
+          "pngSha256": "f70a9f1f259838cf3526d2c09ffffd5fa666b7e1fbd4a5d4c88adbb08f8249c0"
+        }
+      }
+    },
     "SSE.L": {
       "kind": "stock",
       "sourceId": "8989175269",
@@ -22060,8 +22703,8 @@
       "kind": "stock",
       "sourceId": "0001395064",
       "themeColor": "#E1242A",
-      "darkBackgroundColor": "#FFFFFF",
-      "selectionOrigin": "auto_official_svg_priority",
+      "darkBackgroundColor": "#E1242A",
+      "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "e7e92a896f627b403c7dfb742d98cd2e11bddb947d2b9829eae68eba6c036a39",
         "dark": "e7e92a896f627b403c7dfb742d98cd2e11bddb947d2b9829eae68eba6c036a39"
@@ -22076,8 +22719,8 @@
         "dark": {
           "svg": "TAK.dark.svg",
           "png": "TAK.dark.png",
-          "svgSha256": "5c7e786e2ba7981ae8a38320c01e6681e6e9acfbe8d5eca045ef6a7191bd3cfc",
-          "pngSha256": "057ab87524cac513f1c19bc2cbf35ff82dff2238ad49d69e8b7a5559e99df95e"
+          "svgSha256": "f92ec96aebe415d4047cbfe1b394a1eaa6f16ca0b631c8c1d632ff3cf7035db6",
+          "pngSha256": "15f611bb3a41c5d0a6518c302709d0755b074ffed2cbc2ab3a5a63909d1d76f2"
         }
       }
     },
@@ -22336,6 +22979,31 @@
         }
       }
     },
+    "TEM": {
+      "kind": "stock",
+      "sourceId": "0001717115",
+      "themeColor": "#000000",
+      "darkBackgroundColor": "#2E2E2E",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "688fde05863f69f6dc94536f85ed21b2f4df4890a621d5dd52862985f03aa562",
+        "dark": "c9fcf040d75ed574b5dd4bd28d4b0ae7b479ee3f7030511f80e0e672c71010f2"
+      },
+      "files": {
+        "light": {
+          "svg": "TEM.light.svg",
+          "png": "TEM.light.png",
+          "svgSha256": "f098904d913f49c31424751da7bc7d4047004f66adc2999a5a88e8a896c681d9",
+          "pngSha256": "c813903f711cdd6d5b5b6fa67f99cddca87df25258d30c4f8af244ab5dbf77e2"
+        },
+        "dark": {
+          "svg": "TEM.dark.svg",
+          "png": "TEM.dark.png",
+          "svgSha256": "362be132d9846c3c52dde6744966cf38ca0d69d70e02c377f87dab31b4ddd534",
+          "pngSha256": "e733bdd4ef54c8efa6315afe6425d9249e0a37c366efe02646d5e7c0eaefe28b"
+        }
+      }
+    },
     "TER": {
       "kind": "stock",
       "sourceId": "0000097210",
@@ -22417,27 +23085,25 @@
       "kind": "stock",
       "sourceId": "0000096943",
       "themeColor": "#00205B",
-      "darkBackgroundColor": "#1B1B1B",
-      "darkInkLightened": [
-        "#00205B"
-      ],
+      "darkBackgroundColor": "#00205B",
+      "darkInkTint": "#F2F4F7",
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "4d1cdbf9c70aee05f846efabb2f14e6198e0fe8a40acf7681d925dbe60c8b200",
-        "dark": "4d1cdbf9c70aee05f846efabb2f14e6198e0fe8a40acf7681d925dbe60c8b200"
+        "light": "6d485a2a18463556e0c3b9d0164202cfee48938530416226eae28f4603f88521",
+        "dark": "208ec7992125370f91033d8a6a51d96a0b8d226e0d79e5d40315131794d4a676"
       },
       "files": {
         "light": {
           "svg": "TFX.light.svg",
           "png": "TFX.light.png",
-          "svgSha256": "ab74a3061a322df104ac0430c667ba816c408ee1dd6e6062c49b844c9f24a125",
-          "pngSha256": "c583aba771046cbf38c0753d8f5f4365096ab5478614b273a998c8d8cd8e02be"
+          "svgSha256": "a15b890d3972832634d6122e1bf3ffd5b9e8aab9e24f2eef426cd51023c1f3eb",
+          "pngSha256": "9fdf354fa7bc1b26992596c7280b97fed335b5f49717b68449777f589b9dceb4"
         },
         "dark": {
           "svg": "TFX.dark.svg",
           "png": "TFX.dark.png",
-          "svgSha256": "f728988171d5d86d1a2d22787dd01b15d1c4a87549e5101c0a44e81400d24258",
-          "pngSha256": "b7fa09e50f0c178bf626b2930efb37b152199a85322eedc96494fe7ce7a497f6"
+          "svgSha256": "69e5f5e4eb6f2f7346b3f4aa525e0e3967cd4f455a2dccbe411ee77ba2cdfc87",
+          "pngSha256": "a28a051f9c6fc6942c22de253d13e2e9eb68e1df956382a140a3f2e05620f8a2"
         }
       }
     },
@@ -22927,26 +23593,23 @@
       "sourceId": "0000928876",
       "themeColor": "#0055A2",
       "darkBackgroundColor": "#1B1B1B",
-      "darkInkLightened": [
-        "#000000"
-      ],
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "70c70db00f20a8c6394b085766146c354f1925e33aef385d3b022e51ed0408ef",
-        "dark": "70c70db00f20a8c6394b085766146c354f1925e33aef385d3b022e51ed0408ef"
+        "light": "c69150c9ae4b449716ff5d77d4794cbba1122e65e7b32ad64906a07d705954ff",
+        "dark": "e0ac0968d58057816f75de458fc76319f5c911a518dbc09190f3d7a8b8ee9961"
       },
       "files": {
         "light": {
           "svg": "TSEM.light.svg",
           "png": "TSEM.light.png",
-          "svgSha256": "74ff171253cbbb1fd83f252d7915b8cf330abb8fab887a19acff9e0c866d42f3",
-          "pngSha256": "f06941e63e2e1ea3b9d22190e338e059b6c4e9e2e33923ae48bea3f44858c393"
+          "svgSha256": "e3ee24c0441f79e3b1b2449daebb9d1be712742721adf621e8d24ae6b75192a0",
+          "pngSha256": "49609852064f969cb76423f85f4b02cadd1bfae0749c38ac89a3da95903d70ac"
         },
         "dark": {
           "svg": "TSEM.dark.svg",
           "png": "TSEM.dark.png",
-          "svgSha256": "7e46e1b9aa5043d12f749124d98ec6c36482166ff2da6d197fa006d4ff828d8e",
-          "pngSha256": "3c32ceb7103031e294591c2d0a66a8bb4ac8e0590b39c1063e38d08ecbca5f4c"
+          "svgSha256": "e1b1a4e6eb8c8634164235c36ac25cecd04bdf2983569dbdac644647e9903e5b",
+          "pngSha256": "ec4bf733b81f681b81f2020ca04492adea3dead6fa773bce526418eef9e17941"
         }
       }
     },
@@ -23127,6 +23790,31 @@
           "png": "TTWO.dark.png",
           "svgSha256": "4989187793aff76462439d3df14d15b3ee202d5afa9639cc3b3b4fc997dc0d11",
           "pngSha256": "48ad30e19a725df503ead5090e688d7034011dd891ce29832c08107e7bcb8de0"
+        }
+      }
+    },
+    "TW.L": {
+      "kind": "stock",
+      "sourceId": "8323132163",
+      "themeColor": "#3B1953",
+      "darkBackgroundColor": "#3B1953",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "ebbb266dda80b80f14ee0f0606e64b99e6a6dc1c802bf03f8a65bb338b55e840",
+        "dark": "c90522558e54d711cc9d62fc6f27ace3008d45340c482f6f66563d65fde49c4b"
+      },
+      "files": {
+        "light": {
+          "svg": "TW.L.light.svg",
+          "png": "TW.L.light.png",
+          "svgSha256": "9d2e5979b693a1768d9e89cf579f18e5edfa2a6007f3fe5aee5e6f64ff2fb8d6",
+          "pngSha256": "f42ee21070e7abb828c410ef8450f2077753d4cb761966797d4c48545ff20f57"
+        },
+        "dark": {
+          "svg": "TW.L.dark.svg",
+          "png": "TW.L.dark.png",
+          "svgSha256": "2fd08d90ef968382e7f00e032546168b8a7e23afc8be1feca34a387d0cf13e49",
+          "pngSha256": "5bd2dbd31e2e60562dfa629bb3f437c783bc302b5fd651eb6ccf264cb01dfd14"
         }
       }
     },
@@ -23406,6 +24094,32 @@
         }
       }
     },
+    "UGI": {
+      "kind": "stock",
+      "sourceId": "0000884614",
+      "themeColor": "#002E6E",
+      "darkBackgroundColor": "#002E6E",
+      "darkInkTint": "#F2F5F8",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "864eb118cb2d2bedf9c14da39b81f0b95164095ae02b99f170d1986f6b30ce58",
+        "dark": "0c38cfec3f5937394cde873eb6bc3f16e05b93ded09dd048fc2210ab84554eb1"
+      },
+      "files": {
+        "light": {
+          "svg": "UGI.light.svg",
+          "png": "UGI.light.png",
+          "svgSha256": "8ad97e7b9dc0a174e5141003dd958ede7d0769452259665b14841951e561dd0e",
+          "pngSha256": "6e0eff1d7d199d6184cfc562d91d2b1d0da35bea331b1044967c29f1c15824fe"
+        },
+        "dark": {
+          "svg": "UGI.dark.svg",
+          "png": "UGI.dark.png",
+          "svgSha256": "09c9f1e63d9bca2e6ea18e7b45983ab63c492a8b52ad35c9f371b733dd546ea3",
+          "pngSha256": "113792e7677abbb2ed8ce9be2884e713409fbcf5f415b0f78c4dad045c58bb0d"
+        }
+      }
+    },
     "UHR.SW": {
       "kind": "stock",
       "sourceId": "8915398266",
@@ -23484,25 +24198,28 @@
     "UKW.L": {
       "kind": "stock",
       "sourceId": "8092586946",
-      "themeColor": "#000000",
-      "darkBackgroundColor": "#1B1B1B",
+      "themeColor": "#AFBD36",
+      "darkBackgroundColor": "#141414",
+      "darkInkLightened": [
+        "#000000"
+      ],
       "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "582387a7fd21743e185dab05afc15b3a0ed2b80289cbe164aed86d1dbab29975",
-        "dark": "582387a7fd21743e185dab05afc15b3a0ed2b80289cbe164aed86d1dbab29975"
+        "light": "072f3f2be4e1a54ffe3bfcf970adca1a49059207561a7e2bff599164b2a64ec8",
+        "dark": "072f3f2be4e1a54ffe3bfcf970adca1a49059207561a7e2bff599164b2a64ec8"
       },
       "files": {
         "light": {
           "svg": "UKW.L.light.svg",
           "png": "UKW.L.light.png",
-          "svgSha256": "c876be26db419ec4c669adb4163d17c3838bacb3ae94137b8d1df2c644d9f8a7",
-          "pngSha256": "c15009ea693ada5e4a25f719804e1be5cc048effde458588b0b854cd46b02151"
+          "svgSha256": "62ad90e925a37e94ee24c8c35bd0c3c71a806ca56b37686713660c0f54c93dc9",
+          "pngSha256": "1fd8488e761b09fb8dc15d6575859d08d0ec8a0305f24e297c44442282b0b2d8"
         },
         "dark": {
           "svg": "UKW.L.dark.svg",
           "png": "UKW.L.dark.png",
-          "svgSha256": "7f126ee661b3a141ccdae97ae84a276ffe36f311f48b6f3440cc14b54648289c",
-          "pngSha256": "6455db3024a2f641f299a4baced5e1022e9d72907c134b81932a0eb4db73b45c"
+          "svgSha256": "1f4b20866af079a7bf63bcc1d7d34063d0d73c57aae72c2b52872798efd47bf4",
+          "pngSha256": "ec6c9e3b76810c86c7bca71556f98d7f0aaa341bfa988643e8acc56dce5e6536"
         }
       }
     },
@@ -23679,6 +24396,31 @@
           "png": "UPM.HE.dark.png",
           "svgSha256": "f91b57baca469019bb2abb411e476247ec15286d6bbc4b9ff5fe70b4ca9a44e6",
           "pngSha256": "4865b38eaa36828eed4ee590b32cbdd1c8c787c77e850c0f721cb77e9d8a54bf"
+        }
+      }
+    },
+    "UPRO": {
+      "kind": "etf_issuer",
+      "sourceId": "proshares",
+      "themeColor": "#141414",
+      "darkBackgroundColor": "#141414",
+      "selectionOrigin": "user_supplied_svg",
+      "sourceSha256": {
+        "light": "5551412e15ea7f4cc258247cf172ed761a820894178ea00b58e5fd821defd990",
+        "dark": "a37c8349b2ffa33e9958d4e6c1c1d2c6ec8af7e140590bfc80d50490ff279500"
+      },
+      "files": {
+        "light": {
+          "svg": "UPRO.light.svg",
+          "png": "UPRO.light.png",
+          "svgSha256": "519afa80282f2bd3087ed468169baf35463ca86a806a6e93bccb4f7b5a3d8a11",
+          "pngSha256": "e7d1f8d3d3ca5934203418cd3025a751ccd4723397d886e2e95011da23830f73"
+        },
+        "dark": {
+          "svg": "UPRO.dark.svg",
+          "png": "UPRO.dark.png",
+          "svgSha256": "2c2d7b9a61c2a03b7f7c2a159358a3b9ece3b552ea683e4653c3dabb4e28c52d",
+          "pngSha256": "24f4ae81741ff723f6cfa38b74684123362ebdcf810b3c80204b964c3c46f482"
         }
       }
     },
@@ -24033,6 +24775,31 @@
         }
       }
     },
+    "VIRT": {
+      "kind": "stock",
+      "sourceId": "0001592386",
+      "themeColor": "#00CC99",
+      "darkBackgroundColor": "#1B1B1B",
+      "selectionOrigin": "auto_official_svg_priority",
+      "sourceSha256": {
+        "light": "55996ac0a3a694a57367e7a0d4e5f35dd2a990e12c1597609b168501a69f12cf",
+        "dark": "55996ac0a3a694a57367e7a0d4e5f35dd2a990e12c1597609b168501a69f12cf"
+      },
+      "files": {
+        "light": {
+          "svg": "VIRT.light.svg",
+          "png": "VIRT.light.png",
+          "svgSha256": "4ce879cd74fdbc6a4017edf6af59e2d7414b970607aab75dcf95aa3a3c61d4d5",
+          "pngSha256": "7e64fc8e7f72c078a90749b53f807117e3c1eb249129aee7a150c3f1a92ba4c7"
+        },
+        "dark": {
+          "svg": "VIRT.dark.svg",
+          "png": "VIRT.dark.png",
+          "svgSha256": "5709abbf1a56dbb01bed949de2d46e6dbb61fa37ae4f3ccb1b4a63464ad2c1c2",
+          "pngSha256": "59510cfd4c848190b923f411357c6df3f9c8ff8ffb8258313b66fa1e4e88b110"
+        }
+      }
+    },
     "VLO": {
       "kind": "stock",
       "sourceId": "0001035002",
@@ -24184,6 +24951,32 @@
           "png": "VNOM.dark.png",
           "svgSha256": "c85bbb893f39743b0c2248b830b485a6181d4c4d647dbfee3a65366d6265af91",
           "pngSha256": "c0699d9163647923444c73cec1db8814e2d78516323f1049e5929ad5f1de8d58"
+        }
+      }
+    },
+    "VNT": {
+      "kind": "stock",
+      "sourceId": "0001786842",
+      "themeColor": "#000000",
+      "darkBackgroundColor": "#00A39B",
+      "darkInkTint": "#F2FAFA",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "2c408ad7a9e594415dc4ad020fb45d767b6a3b1f24674bd52fd5fef2996e1fd4",
+        "dark": "476b640d3370aec9db8e6b2a2b5f896def3d58322d1c57770fcb505d9151608b"
+      },
+      "files": {
+        "light": {
+          "svg": "VNT.light.svg",
+          "png": "VNT.light.png",
+          "svgSha256": "81e0b1e08ab632f1d83a729e306bb9fcde5a97bfd148a2f9f4671414f0d07715",
+          "pngSha256": "37d2a865e3560f45ef9ffd4e3f64f0c785d9836cc1b51043b401142bb715f207"
+        },
+        "dark": {
+          "svg": "VNT.dark.svg",
+          "png": "VNT.dark.png",
+          "svgSha256": "897a8853ab726482d5b32b39599d4d6a49fee10895416c32a51ce7438c362e34",
+          "pngSha256": "720d29dec3a667047c019169dabda848273e6150e62e5bf54ffac6395c248e61"
         }
       }
     },
@@ -24385,6 +25178,31 @@
           "png": "VRTX.dark.png",
           "svgSha256": "4db52c85747d4d6c710ead53b0a7dd56b4d5e705e3130360847cb216160106e5",
           "pngSha256": "a18f2a4267c72a0b03e83d390f51614e76d3c639062583f6a2210e4b6409adaa"
+        }
+      }
+    },
+    "VSNT": {
+      "kind": "stock",
+      "sourceId": "0002067876",
+      "themeColor": "#C6CDDC",
+      "darkBackgroundColor": "#2A303C",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "c494a3ce7ab5cedf76e4c8ab82743469d7bec6379141c15d4fe99f7898ad091b",
+        "dark": "c494a3ce7ab5cedf76e4c8ab82743469d7bec6379141c15d4fe99f7898ad091b"
+      },
+      "files": {
+        "light": {
+          "svg": "VSNT.light.svg",
+          "png": "VSNT.light.png",
+          "svgSha256": "ae23e3862c6b465127dff8edd44317a782cad06a08cca26923e9aa6a5b90d5da",
+          "pngSha256": "fce4600d30eff03acbcc576fa0f0f9f8d156869802fa37fb2bd766b80da31f41"
+        },
+        "dark": {
+          "svg": "VSNT.dark.svg",
+          "png": "VSNT.dark.png",
+          "svgSha256": "fd71f52cbca7e6a8532a0e0994430f5718fe663bb7267e3acdec38808d9b02b9",
+          "pngSha256": "ed8bf19cbfafc3020bdbd97e4322bad5944e13dbba26dc48f3f9cad30753228b"
         }
       }
     },
@@ -24820,28 +25638,54 @@
         }
       }
     },
+    "WFRD": {
+      "kind": "stock",
+      "sourceId": "0001603923",
+      "themeColor": "#CE1141",
+      "darkBackgroundColor": "#CE1141",
+      "darkInkTint": "#FDF3F6",
+      "selectionOrigin": "manual",
+      "sourceSha256": {
+        "light": "b4b713f8d4bd751d0ace2e5e6cba32287b7d1df5cd7edea35301445db2dfe2de",
+        "dark": "a15df0c08f194ec5e96402de2e43b81a0d1c30314dabd927106b7c6c6b2e18a6"
+      },
+      "files": {
+        "light": {
+          "svg": "WFRD.light.svg",
+          "png": "WFRD.light.png",
+          "svgSha256": "56600440390fed44191f4f732ff13f21e8635ecfe4c19496a35077d13eaa894f",
+          "pngSha256": "c2a257ecbb4444d2a03459800fd8e4006b12c9d8846e960063135ea32c341ceb"
+        },
+        "dark": {
+          "svg": "WFRD.dark.svg",
+          "png": "WFRD.dark.png",
+          "svgSha256": "6559d1f01185d5486449d38f6bbe655c697d6a35775d69ef10caba4ac80e6914",
+          "pngSha256": "d396af311bb165d658d9404a3d6d1f92817ceda0776b319f2f2c305b662ab741"
+        }
+      }
+    },
     "WHR": {
       "kind": "stock",
       "sourceId": "0000106640",
-      "themeColor": "#000000",
-      "darkBackgroundColor": "#1B1B1B",
-      "selectionOrigin": "auto_russell1000",
+      "themeColor": "#EEB111",
+      "darkBackgroundColor": "#EEB111",
+      "selectionOrigin": "manual",
       "sourceSha256": {
-        "light": "68e8f1c5db219d2bd7f19913ed15b1234e97686db63083be5bdd9cb2d6827af6",
-        "dark": "ffbcf696183148a4f5991c83770757cf786165e760da047a206d6a50b384f632"
+        "light": "5e5093fb562b00db9e19e46801100187f276298452abf3819fb5635fc3372c6f",
+        "dark": "8d4436428c3ed5d1c166a9e3a25084a2432bacedd7d4eef2cff29746e43e2a48"
       },
       "files": {
         "light": {
           "svg": "WHR.light.svg",
           "png": "WHR.light.png",
-          "svgSha256": "b5f682f6e23db3f2c6108329be87055f40358271cd037ae45030452108c2b8ae",
-          "pngSha256": "1ece23978381ecce8262c626eb41b06d606cd512f85db1c04527cb7731050bbf"
+          "svgSha256": "00e63e97bb5db5bdfdfb53dc893ee39b5f53e6f9d3a9ff23d5a6d579dc1dbed4",
+          "pngSha256": "c159cdd55c2b3c4f62060efb713cfdbc79379ff5f3c9971b0a6c44509435bb9d"
         },
         "dark": {
           "svg": "WHR.dark.svg",
           "png": "WHR.dark.png",
-          "svgSha256": "79d426e49cabff757b10b1eb96f5ca8216cbaaa2d9b65659649f65089b94baf7",
-          "pngSha256": "ddd46a1cc54a8a60a74311f5c69c06eb79ef18c561b5347de930389fa5fa9173"
+          "svgSha256": "0cb184ffa2031f6f73e878ac7144e4b2d6a58bf35118b6fe19cbaeb1184db873",
+          "pngSha256": "391eccc4e1fdd31318cc95507322246f81a8aa879a744a4a6435f5c2db078ba1"
         }
       }
     },
@@ -25126,7 +25970,7 @@
       "sourceId": "0000719955",
       "themeColor": "#1A1A1A",
       "darkBackgroundColor": "#1A1A1A",
-      "selectionOrigin": "manual_default",
+      "selectionOrigin": "manual",
       "sourceSha256": {
         "light": "f3d67204ddec57c775365d5ae9b1595790d2532b45a00adefcbc2bce28241deb",
         "dark": "cc6662c74460c9a912c0778507df8b5b4136ff8493eb0939097e3abec5815ca1"
@@ -25873,6 +26717,8 @@
     "3SUU": "IVV",
     "4755.T": "4755.T",
     "4BRZ": "IVV",
+    "5ESE": "QQQ",
+    "5ESE.DE": "QQQ",
     "6460.T": "6460.T",
     "6501.T": "6501.T",
     "6701.T": "6701.T",
@@ -25889,6 +26735,8 @@
     "7936.T": "7936.T",
     "7951.T": "7951.T",
     "7974.T": "7974.T",
+    "8PSE": "QQQ",
+    "8PSE.DE": "QQQ",
     "9434.T": "9434.T",
     "9684.T": "9684.T",
     "9766.T": "9766.T",
@@ -25909,12 +26757,16 @@
     "ACGL": "ACGL",
     "ACM": "ACM",
     "ACN": "ACN",
+    "ACQQ": "UPRO",
+    "ACRT": "UPRO",
+    "ACSP": "UPRO",
     "ACSW": "IVV",
     "ACWI": "IVV",
     "ACWV": "IVV",
     "ACWX": "IVV",
     "AD.AS": "AD.AS",
     "ADBE": "ADBE",
+    "ADC": "ADC",
     "ADI": "ADI",
     "ADM": "ADM",
     "ADM.L": "ADM.L",
@@ -25957,6 +26809,7 @@
     "AGNCP": "AGNC",
     "AGNCZ": "AGNC",
     "AGNG": "BOTZ",
+    "AGQ": "UPRO",
     "AGSGDX": "IVV",
     "AGSGX": "IVV",
     "AGSKX": "IVV",
@@ -26006,6 +26859,7 @@
     "AMT": "AMT",
     "AMZN": "AMZN",
     "ANET": "ANET",
+    "ANEW": "UPRO",
     "ANGL": "SMH",
     "ANTO.L": "ANTO.L",
     "AOA": "IVV",
@@ -26048,7 +26902,15 @@
     "ASML.AS": "ASML",
     "ASSA-B.ST": "ASSA-B.ST",
     "ASTS": "ASTS",
+    "AT1D": "QQQ",
+    "AT1D.L": "QQQ",
+    "AT1S": "QQQ",
+    "AT1S.L": "QQQ",
     "ATCO-A.ST": "ATCO-A.ST",
+    "ATE1": "QQQ",
+    "ATE1.DE": "QQQ",
+    "ATEAG": "QQQ",
+    "ATEAG.DE": "QQQ",
     "ATO": "ATO",
     "ATR": "ATR",
     "AU": "AU",
@@ -26075,11 +26937,33 @@
     "B1GH": "IVV",
     "B1TA": "IVV",
     "B1UH": "IVV",
+    "B26G": "QQQ",
+    "B26G.L": "QQQ",
+    "B26X": "QQQ",
+    "B26X.L": "QQQ",
+    "B27G": "QQQ",
+    "B27G.L": "QQQ",
+    "B27X": "QQQ",
+    "B27X.L": "QQQ",
+    "B28G": "QQQ",
+    "B28G.L": "QQQ",
+    "B28X": "QQQ",
+    "B28X.L": "QQQ",
     "B29D": "IVV",
+    "B29G": "QQQ",
+    "B29G.L": "QQQ",
     "B29I": "IVV",
+    "B29X": "QQQ",
+    "B29X.L": "QQQ",
+    "B30G": "QQQ",
+    "B30G.L": "QQQ",
+    "B30X": "QQQ",
+    "B30X.L": "QQQ",
     "BA": "BA",
     "BAB": "QQQ",
+    "BABA": "BABA",
     "BAC": "BAC",
+    "BAH": "BAH",
     "BAI": "IVV",
     "BALI": "IVV",
     "BALL": "BALL",
@@ -26087,6 +26971,7 @@
     "BARC.L": "BCS",
     "BAS.DE": "BAS.DE",
     "BAT1": "IVV",
+    "BATS.L": "BTI",
     "BAX": "BAX",
     "BBAG": "BBAG",
     "BBAX": "BBAG",
@@ -26113,13 +26998,25 @@
     "BCLO": "IVV",
     "BCS": "BCS",
     "BD27": "IVV",
+    "BD30": "QQQ",
+    "BD30.DE": "QQQ",
     "BDVL": "IVV",
     "BDX": "BDX",
     "BDYN": "IVV",
     "BE": "BE",
+    "BE26": "QQQ",
+    "BE26.DE": "QQQ",
+    "BE27": "QQQ",
+    "BE27.DE": "QQQ",
+    "BE28": "QQQ",
+    "BE28.DE": "QQQ",
+    "BE29": "QQQ",
+    "BE29.DE": "QQQ",
     "BEI.DE": "BEI.DE",
     "BEMB": "IVV",
     "BEN": "BEN",
+    "BETE": "UPRO",
+    "BETH": "UPRO",
     "BEZ.L": "BEZ.L",
     "BF.B": "BF.B",
     "BFAM": "BFAM",
@@ -26128,6 +27025,7 @@
     "BGRN": "IVV",
     "BGRO": "IVV",
     "BHYB": "AH50",
+    "BIB": "UPRO",
     "BIDD": "IVV",
     "BIDU": "BIDU",
     "BIIB": "BIIB",
@@ -26139,8 +27037,12 @@
     "BINC": "IVV",
     "BIO": "BIO",
     "BIRG.IR": "BIRG.IR",
+    "BIS": "UPRO",
     "BITA": "IVV",
+    "BITI": "UPRO",
+    "BITO": "UPRO",
     "BITS": "BOTZ",
+    "BITU": "UPRO",
     "BIV": "VOO",
     "BIZD": "SMH",
     "BKCH": "BOTZ",
@@ -26150,7 +27052,6 @@
     "BKR": "BKR",
     "BLCR": "IVV",
     "BLCV": "IVV",
-    "BLDR": "IVV",
     "BLK": "BLK",
     "BLKC": "IVV",
     "BLSH": "BLSH",
@@ -26169,6 +27070,7 @@
     "BNKT": "IVV",
     "BNY": "BNY",
     "BNZL.L": "BNZL.L",
+    "BOIL": "UPRO",
     "BOTZ": "BOTZ",
     "BP": "BP",
     "BP.L": "BP",
@@ -26181,10 +27083,29 @@
     "BRHY": "IVV",
     "BRIC": "IVV",
     "BRK.B": "BRK.B",
+    "BRKR": "BRKR",
     "BRLN": "IVV",
     "BRO": "BRO",
     "BROS": "BROS",
     "BRTR": "IVV",
+    "BS0A": "QQQ",
+    "BS0A.L": "QQQ",
+    "BS27": "QQQ",
+    "BS27.L": "QQQ",
+    "BS28": "QQQ",
+    "BS28.L": "QQQ",
+    "BS29": "QQQ",
+    "BS29.L": "QQQ",
+    "BS30": "QQQ",
+    "BS30.L": "QQQ",
+    "BS6A": "QQQ",
+    "BS6A.L": "QQQ",
+    "BS7A": "QQQ",
+    "BS7A.L": "QQQ",
+    "BS8A": "QQQ",
+    "BS8A.L": "QQQ",
+    "BS9A": "QQQ",
+    "BS9A.L": "QQQ",
     "BSAC": "BSAC",
     "BSBR": "BSBR",
     "BSCA": "QQQ",
@@ -26198,6 +27119,16 @@
     "BSCX": "QQQ",
     "BSCY": "QQQ",
     "BSCZ": "QQQ",
+    "BSE0": "QQQ",
+    "BSE0.DE": "QQQ",
+    "BSE6": "QQQ",
+    "BSE6.DE": "QQQ",
+    "BSE7": "QQQ",
+    "BSE7.DE": "QQQ",
+    "BSE8": "QQQ",
+    "BSE8.DE": "QQQ",
+    "BSE9": "QQQ",
+    "BSE9.DE": "QQQ",
     "BSGR": "QQQ",
     "BSGT": "QQQ",
     "BSJQ": "QQQ",
@@ -26229,12 +27160,18 @@
     "BTCO": "QQQ",
     "BTEC": "IVV",
     "BTEE": "IVV",
+    "BTI": "BTI",
+    "BTIC": "QQQ",
+    "BTIC.L": "QQQ",
     "BTMA": "IVV",
     "BTMA.AS": "IVV",
     "BTOT": "IVV",
     "BTRN": "BOTZ",
+    "BU26": "QQQ",
+    "BU26.L": "QQQ",
     "BUG": "BOTZ",
     "BUSE": "BUSE",
+    "BUYB.L": "QQQ",
     "BUZZ": "SMH",
     "BWA": "BWA",
     "BWX": "SPY",
@@ -26242,7 +27179,12 @@
     "BX": "BX",
     "BXP": "BXP",
     "BYLD": "IVV",
+    "BZQ": "UPRO",
     "C": "C",
+    "C300": "QQQ",
+    "C300.L": "QQQ",
+    "C500": "QQQ",
+    "C500.L": "QQQ",
     "CA.PA": "CA.PA",
     "CABK.MC": "CABK.MC",
     "CAH": "CAH",
@@ -26397,6 +27339,7 @@
     "CEUX": "IVV",
     "CF": "CF",
     "CFG": "CFG",
+    "CFR": "CFR",
     "CFR.SW": "CFR.SW",
     "CGB": "AH50",
     "CGB.L": "AH50",
@@ -26427,13 +27370,18 @@
     "CLF": "CLF",
     "CLGH": "IVV",
     "CLIP": "BOTZ",
+    "CLIX": "UPRO",
     "CLJHX": "IVV",
     "CLNX.MC": "CLNX.MC",
-    "CLOA": "IVV",
+    "CLOA.DE": "QQQ",
     "CLOB": "SMH",
+    "CLOD": "QQQ",
+    "CLOD.L": "QQQ",
     "CLOI": "SMH",
     "CLOR": "IVV",
     "CLOU": "BOTZ",
+    "CLOX": "QQQ",
+    "CLOX.L": "QQQ",
     "CLS": "CLS",
     "CLUH": "IVV",
     "CLX": "CLX",
@@ -26449,6 +27397,10 @@
     "CMF": "IVV",
     "CMG": "CMG",
     "CMI": "CMI",
+    "CMOD": "QQQ",
+    "CMOD.L": "QQQ",
+    "CMOE": "QQQ",
+    "CMOE.MI": "QQQ",
     "CMS": "CMS",
     "CMSE": "IVV",
     "CMSE.PA": "IVV",
@@ -26482,6 +27434,7 @@
     "CNYE": "IVV",
     "COF": "COF",
     "COHR": "COHR",
+    "COIA": "UPRO",
     "COIN": "COIN",
     "COJDX": "IVV",
     "COJHX": "IVV",
@@ -26516,8 +27469,10 @@
     "CPXJCL.SN": "IVV",
     "CQP": "CQP",
     "CQQQ": "QQQ",
+    "CR": "CR",
     "CRAK": "SMH",
     "CRBN": "IVV",
+    "CRCA": "UPRO",
     "CRCL": "CRCL",
     "CRH": "CRH",
     "CRHG": "IVV",
@@ -26583,6 +27538,7 @@
     "CSKR.MI": "IVV",
     "CSKR.MX": "IVV",
     "CSKR.SW": "IVV",
+    "CSM": "UPRO",
     "CSMIB": "IVV",
     "CSMIB.MI": "IVV",
     "CSMIBX": "IVV",
@@ -26644,6 +27600,7 @@
     "CTCE": "IVV",
     "CTEC": "BOTZ",
     "CTEC.L": "CTEC.L",
+    "CTEX": "UPRO",
     "CTRE": "CTRE",
     "CTSH": "CTSH",
     "CTVA": "CTVA",
@@ -26688,6 +27645,7 @@
     "DAPP": "SMH",
     "DAR": "DAR",
     "DASH": "DASH",
+    "DAT": "UPRO",
     "DAVE": "DAVE",
     "DAX": "BOTZ",
     "DAXEX": "IVV",
@@ -26712,8 +27670,11 @@
     "DCSH": "IVV",
     "DD": "DD",
     "DDBB": "IVV",
+    "DDM": "UPRO",
     "DDOG": "DDOG",
     "DE": "DE",
+    "DEAM": "QQQ",
+    "DEAM.L": "QQQ",
     "DECK": "DECK",
     "DECO": "SPY",
     "DEEF": "AH50",
@@ -26741,6 +27702,7 @@
     "DHYG": "IVV",
     "DI35": "IVV",
     "DIA": "SPY",
+    "DIG": "UPRO",
     "DIS": "DIS",
     "DIV": "BOTZ",
     "DIVB": "IVV",
@@ -26770,6 +27732,7 @@
     "DOC": "DOC",
     "DOCN": "DOCN",
     "DOCU": "DOCU",
+    "DOG": "UPRO",
     "DOV": "DOV",
     "DOW": "DOW",
     "DPLM.L": "DPLM.L",
@@ -26793,6 +27756,7 @@
     "DTM": "DTM",
     "DTMXX": "IVV",
     "DUEE": "IVV",
+    "DUG": "UPRO",
     "DUK": "DUK",
     "DUOL": "DUOL",
     "DURA": "SMH",
@@ -26805,6 +27769,7 @@
     "DWAS": "QQQ",
     "DWX": "SPY",
     "DXCM": "DXCM",
+    "DXD": "UPRO",
     "DXPJ": "AH50",
     "DXPJ.L": "AH50",
     "DYLG": "BOTZ",
@@ -26813,18 +27778,38 @@
     "E0UA": "IVV",
     "E20Y": "IVV",
     "E20Y.SW": "IVV",
+    "E500": "QQQ",
+    "E500.DE": "QQQ",
     "E600": "IVV",
     "EAGG": "IVV",
     "EART": "BOTZ",
     "EASG": "AH50",
+    "EATG": "QQQ",
+    "EATG.L": "QQQ",
+    "EATU": "QQQ",
+    "EATU.L": "QQQ",
     "EBAY": "EBAY",
     "EBIZ": "BOTZ",
     "EBND": "SPY",
+    "EBXA": "QQQ",
+    "EBXA.DE": "QQQ",
+    "EBXG": "QQQ",
+    "EBXG.L": "QQQ",
+    "EBXU": "QQQ",
+    "EBXU.L": "QQQ",
     "ECAR": "IVV",
     "ECH": "IVV",
     "ECHO": "ECHO",
     "ECL": "ECL",
     "ECLU": "IVV",
+    "ECMA": "QQQ",
+    "ECMA.DE": "QQQ",
+    "ECMD": "QQQ",
+    "ECMD.DE": "QQQ",
+    "ECMF": "QQQ",
+    "ECMF.DE": "QQQ",
+    "ECMS": "QQQ",
+    "ECMS.DE": "QQQ",
     "ECNS": "IVV",
     "ECTA": "IVV",
     "ECTD": "IVV",
@@ -26845,6 +27830,7 @@
     "EDV": "VOO",
     "EEDM": "IVV",
     "EEDS": "IVV",
+    "EEFT": "EEFT",
     "EEJD": "IVV",
     "EELV": "QQQ",
     "EEM": "IVV",
@@ -26853,7 +27839,12 @@
     "EEMS": "IVV",
     "EEMV": "IVV",
     "EEMX": "SPY",
+    "EET": "UPRO",
+    "EETH": "UPRO",
     "EEUD": "IVV",
+    "EEUR": "QQQ",
+    "EEUR.L": "QQQ",
+    "EEV": "UPRO",
     "EEWD": "IVV",
     "EEX5": "IVV",
     "EEX5.SW": "IVV",
@@ -26861,32 +27852,54 @@
     "EEXF.L": "IVV",
     "EFA": "IVV",
     "EFAA": "QQQ",
+    "EFAD": "UPRO",
     "EFAS": "BOTZ",
     "EFAV": "IVV",
     "EFAX": "SPY",
     "EFG": "IVV",
     "EFIV": "SPY",
     "EFNL": "IVV",
+    "EFO": "UPRO",
     "EFRA": "IVV",
     "EFRB": "IVV",
     "EFRN": "IVV",
     "EFRW": "IVV",
+    "EFU": "UPRO",
     "EFV": "IVV",
     "EFX": "EFX",
+    "EFZ": "UPRO",
     "EG": "EG",
     "EGLE": "BOTZ",
     "EGLN": "IVV",
     "EGLN.L": "IVV",
     "EGUS": "IVV",
+    "EGVA": "QQQ",
+    "EGVA.DE": "QQQ",
+    "EGVD": "QQQ",
+    "EGVD.DE": "QQQ",
     "EH1D": "IVV",
     "EH1G": "IVV",
     "EH1H": "IVV",
     "EH1Y": "IVV",
+    "EHBG": "QQQ",
+    "EHBG.DE": "QQQ",
     "EHCC": "BOTZ",
     "EHEB": "IVV",
     "EHYA": "IVV",
+    "EHYB": "QQQ",
+    "EHYB.L": "QQQ",
     "EHYD": "IVV",
     "EHYG": "IVV",
+    "EIB3": "QQQ",
+    "EIB3.DE": "QQQ",
+    "EIB5": "QQQ",
+    "EIB5.DE": "QQQ",
+    "EIB7": "QQQ",
+    "EIB7.DE": "QQQ",
+    "EIBB": "QQQ",
+    "EIBB.DE": "QQQ",
+    "EIBX": "QQQ",
+    "EIBX.DE": "QQQ",
     "EIDO": "IVV",
     "EIMI": "IVV",
     "EIMI.L": "IVV",
@@ -26925,6 +27938,7 @@
     "EMCR.MX": "IVV",
     "EMCR.SW": "IVV",
     "EMCS": "AH50",
+    "EMDV": "UPRO",
     "EME": "EME",
     "EMEE": "IVV",
     "EMES": "IVV",
@@ -26932,6 +27946,8 @@
     "EMGA": "IVV",
     "EMGF": "IVV",
     "EMHC": "SPY",
+    "EMHD": "QQQ",
+    "EMHD.L": "QQQ",
     "EMHG": "IVV",
     "EMHY": "IVV",
     "EMID": "IVV",
@@ -26951,6 +27967,7 @@
     "EMPA": "IVV",
     "EMR": "EMR",
     "EMSA": "IVV",
+    "EMTY": "UPRO",
     "EMUC": "IVV",
     "EMUC.SW": "IVV",
     "EMUD": "IVV",
@@ -26988,13 +28005,27 @@
     "EPOL": "IVV",
     "EPP": "IVV",
     "EPU": "IVV",
+    "EPV": "UPRO",
+    "EQAC": "QQQ",
+    "EQAC.S": "QQQ",
     "EQAL": "QQQ",
+    "EQCH": "QQQ",
+    "EQCH.S": "QQQ",
     "EQDS": "IVV",
+    "EQGB": "QQQ",
+    "EQGB.L": "QQQ",
     "EQIX": "EQIX",
     "EQLT": "IVV",
+    "EQQD": "QQQ",
+    "EQQD.L": "QQQ",
+    "EQQJ": "QQQ",
+    "EQQJ.L": "QQQ",
     "EQQQ.L": "QQQ",
+    "EQQS": "QQQ",
+    "EQQS.L": "QQQ",
     "EQQU": "QQQ",
     "EQQU.L": "QQQ",
+    "EQRR": "UPRO",
     "EQT": "EQT",
     "EQWL": "QQQ",
     "ERAN": "IVV",
@@ -27026,11 +28057,20 @@
     "ES15": "IVV",
     "ES15.L": "IVV",
     "ES50": "IVV",
+    "ESAB": "ESAB",
     "ESCE": "IVV",
+    "ESEM": "QQQ",
+    "ESEM.L": "QQQ",
+    "ESEU": "QQQ",
+    "ESEU.L": "QQQ",
     "ESGD": "IVV",
     "ESGE": "IVV",
-    "ESGU": "IVV",
+    "ESGJ": "QQQ",
+    "ESGJ.L": "QQQ",
+    "ESGU.L": "QQQ",
     "ESGV": "VOO",
+    "ESGW": "QQQ",
+    "ESGW.L": "QQQ",
     "ESIC": "IVV",
     "ESIE": "IVV",
     "ESIF": "IVV",
@@ -27040,21 +28080,34 @@
     "ESIT": "IVV",
     "ESML": "IVV",
     "ESMV": "IVV",
+    "ESPB": "QQQ",
+    "ESPB.L": "QQQ",
+    "ESPJ": "QQQ",
+    "ESPJ.L": "QQQ",
     "ESPO": "SMH",
     "ESPX": "IVV",
     "ESS": "ESS",
     "ESSITY-B.ST": "ESSITY-B.ST",
+    "ESTAG": "QQQ",
+    "ESTAG.DE": "QQQ",
     "ESTC": "ESTC",
+    "ESTD": "QQQ",
+    "ESTD.DE": "QQQ",
+    "ESUD": "QQQ",
+    "ESUD.L": "QQQ",
     "ESWP": "IVV",
     "ETEC": "IVV",
     "ETHA": "IVV",
     "ETHB": "IVV",
+    "ETHD": "UPRO",
+    "ETHT": "UPRO",
     "ETHV": "SMH",
     "ETN": "ETN",
     "ETR": "ETR",
     "ETSY": "ETSY",
     "EU03": "IVV",
     "EUCL": "IVV",
+    "EUDV": "UPRO",
     "EUE": "IVV",
     "EUE.L": "IVV",
     "EUE.MI": "IVV",
@@ -27069,6 +28122,7 @@
     "EUFN": "IVV",
     "EUHY": "IVV",
     "EUIG": "IVV",
+    "EUM": "UPRO",
     "EUMD": "IVV",
     "EUN": "IVV",
     "EUN.L": "IVV",
@@ -27123,10 +28177,15 @@
     "EUNY.DE": "IVV",
     "EUNZ": "IVV",
     "EUNZ.DE": "IVV",
+    "EUO": "UPRO",
     "EUPB": "IVV",
     "EURP": "IVV",
     "EUSA": "IVV",
     "EUSB": "IVV",
+    "EUTA": "QQQ",
+    "EUTA.DE": "QQQ",
+    "EUTD": "QQQ",
+    "EUTD.DE": "QQQ",
     "EUXS": "IVV",
     "EUXS.L": "IVV",
     "EUXS.SW": "IVV",
@@ -27157,10 +28216,13 @@
     "EWS": "IVV",
     "EWSA": "IVV",
     "EWSD": "IVV",
+    "EWSDG": "QQQ",
+    "EWSDG.DE": "QQQ",
     "EWSP": "IVV",
     "EWT": "IVV",
     "EWU": "IVV",
     "EWUS": "IVV",
+    "EWV": "UPRO",
     "EWW": "IVV",
     "EWX": "SPY",
     "EWY": "IVV",
@@ -27237,29 +28299,94 @@
     "EXXY.DE": "IVV",
     "EXXY.MI": "IVV",
     "EYED": "IVV",
+    "EYLA": "QQQ",
+    "EYLA.DE": "QQQ",
+    "EYLD": "QQQ",
+    "EYLD.DE": "QQQ",
     "EZA": "IVV",
+    "EZJ": "UPRO",
     "EZJ.L": "EZJ.L",
     "EZU": "IVV",
     "F": "F",
+    "FAAA": "FAAA",
     "FACT": "IVV",
+    "FAGB": "QQQ",
+    "FAGB.L": "QQQ",
     "FALN": "IVV",
     "FANG": "FANG",
+    "FASA": "QQQ",
+    "FASA.L": "QQQ",
+    "FASE": "QQQ",
+    "FASE.L": "QQQ",
     "FAST": "FAST",
+    "FB": "UPRO",
+    "FBCG": "FAAA",
+    "FBCV": "FAAA",
+    "FBIN": "FBIN",
+    "FBND": "FAAA",
+    "FBOT": "FAAA",
+    "FBTC": "FAAA",
+    "FBUF": "FAAA",
+    "FCLD": "FAAA",
+    "FCLO": "FAAA",
     "FCN": "FCN",
     "FCNCA": "FCNCA",
+    "FCOM": "FAAA",
+    "FCOR": "FAAA",
+    "FCPI": "FAAA",
     "FCX": "FCX",
+    "FDCF": "FAAA",
+    "FDEM": "FAAA",
+    "FDEV": "FAAA",
+    "FDFF": "FAAA",
+    "FDHY": "FAAA",
+    "FDIF": "FAAA",
+    "FDIG": "FAAA",
     "FDIQ": "QQQ",
+    "FDIS": "FAAA",
+    "FDLO": "FAAA",
+    "FDMO": "FAAA",
+    "FDRR": "FAAA",
+    "FDRV": "FAAA",
     "FDS": "FDS",
+    "FDTX": "FAAA",
+    "FDVV": "FAAA",
     "FDX": "FDX",
     "FDXF": "FDXF",
     "FE": "FE",
+    "FEAC": "FAAA",
+    "FELC": "FAAA",
+    "FELG": "FAAA",
+    "FELV": "FAAA",
+    "FEMG": "FAAA",
+    "FEMR": "FAAA",
+    "FEMV": "FAAA",
+    "FENI": "FAAA",
+    "FENY": "FAAA",
     "FERG": "FERG",
+    "FESM": "FAAA",
+    "FETH": "FAAA",
     "FEZ": "SPY",
+    "FFDI": "FAAA",
+    "FFEM": "FAAA",
+    "FFGX": "FAAA",
     "FFIV": "FFIV",
+    "FFLC": "FAAA",
+    "FFLG": "FAAA",
+    "FFLV": "FAAA",
+    "FFSM": "FAAA",
+    "FFUT": "FAAA",
     "FHB": "FHB",
+    "FHEQ": "FAAA",
+    "FHLC": "FAAA",
     "FHN": "FHN",
     "FICO": "FICO",
+    "FIDI": "FAAA",
+    "FIDU": "FAAA",
     "FIG": "FIG",
+    "FIGB": "FAAA",
+    "FIMU": "FAAA",
+    "FINA": "FAAA",
     "FINV": "FINV",
     "FINX": "BOTZ",
     "FIS": "FIS",
@@ -27267,41 +28394,83 @@
     "FISV": "FISV",
     "FITB": "FITB",
     "FITE": "SPY",
+    "FIVA": "FAAA",
     "FIX": "FIX",
     "FLAG": "BOTZ",
+    "FLDB": "FAAA",
+    "FLDR": "FAAA",
     "FLEX": "FLEX",
     "FLOA": "IVV",
     "FLOE": "IVV",
     "FLOS": "IVV",
     "FLOT": "IVV",
     "FLOW": "BOTZ",
+    "FLRG": "FAAA",
     "FLRN": "SPY",
+    "FLS": "FLS",
+    "FLTB": "FAAA",
     "FLTR": "SMH",
     "FLUT": "FLUT",
     "FLXI": "QQQ",
+    "FMAG": "FAAA",
+    "FMAT": "FAAA",
+    "FMDE": "FAAA",
+    "FMED": "FAAA",
+    "FMET": "FAAA",
+    "FMUB": "FAAA",
+    "FMUN": "FAAA",
     "FNB": "FNB",
+    "FNCL": "FAAA",
     "FND": "FND",
     "FOX": "FOX",
     "FOXA": "FOX",
     "FP.PA": "TTE",
+    "FPFD": "FAAA",
+    "FPRO": "FAAA",
+    "FQAL": "FAAA",
+    "FREI": "FAAA",
+    "FREL": "FAAA",
     "FRES.L": "FRES.L",
     "FRGP": "IVV",
     "FRHC": "FRHC",
     "FRMXNX": "IVV",
+    "FRNW": "FAAA",
     "FROG": "FROG",
     "FRPT": "FRPT",
     "FRT": "FRT",
+    "FSEC": "FAAA",
+    "FSEG": "FAAA",
     "FSEU": "IVV",
     "FSEU.L": "IVV",
+    "FSEV": "FAAA",
     "FSLR": "FSLR",
+    "FSMD": "FAAA",
+    "FSOL": "FAAA",
+    "FSTA": "FAAA",
+    "FSTB": "FAAA",
     "FSWD": "IVV",
     "FSWD.L": "IVV",
+    "FSYD": "FAAA",
     "FTAW": "IVV",
+    "FTBD": "FAAA",
+    "FTEC": "FAAA",
     "FTNT": "FTNT",
     "FTSA": "IVV",
     "FTV": "FTV",
+    "FTWD": "QQQ",
+    "FTWD.L": "QQQ",
+    "FUTY": "FAAA",
+    "FVAL": "FAAA",
+    "FWCA": "QQQ",
+    "FWCA.S": "QQQ",
+    "FWEA": "QQQ",
+    "FWEA.DE": "QQQ",
     "FWONA": "FWONK",
     "FWONK": "FWONK",
+    "FWRA": "QQQ",
+    "FWRA.L": "QQQ",
+    "FWSD": "QQQ",
+    "FWSD.L": "QQQ",
     "FXA": "QQQ",
     "FXAC": "IVV",
     "FXB": "QQQ",
@@ -27312,8 +28481,12 @@
     "FXE": "QQQ",
     "FXF": "QQQ",
     "FXI": "IVV",
+    "FXP": "UPRO",
     "FXY": "QQQ",
+    "FYEE": "FAAA",
     "G.MI": "G.MI",
+    "G500": "QQQ",
+    "G500.L": "QQQ",
     "GAAA": "IVV",
     "GADUX": "IVV",
     "GAL": "SPY",
@@ -27321,8 +28494,25 @@
     "GAP": "GAP",
     "GARP": "IVV",
     "GAW.L": "GAW.L",
+    "GB1E": "QQQ",
+    "GB1E.DE": "QQQ",
+    "GBEG": "QQQ",
+    "GBEG.L": "QQQ",
+    "GBHA": "QQQ",
+    "GBHA.S": "QQQ",
+    "GBHG": "QQQ",
+    "GBHG.L": "QQQ",
+    "GBHY": "QQQ",
+    "GBHY.L": "QQQ",
+    "GCBE": "QQQ",
+    "GCBE.L": "QQQ",
+    "GCED": "QQQ",
+    "GCED.L": "QQQ",
+    "GCLE": "QQQ",
+    "GCLE.L": "QQQ",
     "GD": "GD",
     "GDDY": "GDDY",
+    "GDOT": "GDOT",
     "GDX": "SMH",
     "GDXJ": "SMH",
     "GE": "GE",
@@ -27331,7 +28521,15 @@
     "GENZ": "SMH",
     "GEV": "GEV",
     "GFS": "GFS",
+    "GGBD": "QQQ",
+    "GGBD.L": "QQQ",
+    "GGED": "QQQ",
+    "GGED.DE": "QQQ",
     "GGG": "GGG",
+    "GGGA": "QQQ",
+    "GGGA.L": "QQQ",
+    "GGGD": "QQQ",
+    "GGGD.L": "QQQ",
     "GGME": "QQQ",
     "GGOV": "IVV",
     "GH": "GH",
@@ -27352,7 +28550,14 @@
     "GLDM": "SPY",
     "GLEN.L": "GLEN.L",
     "GLIN": "SMH",
+    "GLL": "UPRO",
     "GLOF": "IVV",
+    "GLT5": "QQQ",
+    "GLT5.L": "QQQ",
+    "GLTA": "QQQ",
+    "GLTA.L": "QQQ",
+    "GLTP": "QQQ",
+    "GLTP.L": "QQQ",
     "GLUH": "IVV",
     "GLW": "GLW",
     "GM": "GM",
@@ -27364,6 +28569,8 @@
     "GNRC": "GNRC",
     "GNTX": "GNTX",
     "GOEX": "BOTZ",
+    "GONS": "QQQ",
+    "GONS.L": "QQQ",
     "GOOG": "GOOG",
     "GOOGL": "GOOG",
     "GOVI": "QQQ",
@@ -27387,6 +28594,8 @@
     "GSG": "IVV",
     "GSPX": "IVV",
     "GSY": "QQQ",
+    "GT15": "QQQ",
+    "GT15.L": "QQQ",
     "GTIL": "AH50",
     "GTIL.L": "AH50",
     "GTIS": "AH50",
@@ -27430,9 +28639,16 @@
     "HCEM": "IVV",
     "HCGH": "IVV",
     "HD": "HD",
+    "HDCH": "QQQ",
+    "HDCH.S": "QQQ",
     "HDEF": "AH50",
+    "HDEU": "QQQ",
+    "HDEU.L": "QQQ",
+    "HDG": "UPRO",
     "HDIQ": "IVV",
     "HDIQ.L": "IVV",
+    "HDLV": "QQQ",
+    "HDLV.L": "QQQ",
     "HDV": "IVV",
     "HECO": "SPY",
     "HEEM": "IVV",
@@ -27491,15 +28707,22 @@
     "HYCB": "IVV",
     "HYD": "SMH",
     "HYDB": "IVV",
+    "HYDE": "QQQ",
+    "HYDE.L": "QQQ",
     "HYDP": "IVV",
     "HYDR": "BOTZ",
     "HYDW": "AH50",
     "HYEM": "SMH",
+    "HYFA": "QQQ",
+    "HYFA.L": "QQQ",
+    "HYFC": "QQQ",
+    "HYFC.L": "QQQ",
     "HYG": "IVV",
     "HYGH": "IVV",
     "HYGU": "IVV",
     "HYGW": "IVV",
     "HYHE": "IVV",
+    "HYHG": "UPRO",
     "HYLA": "IVV",
     "HYLB": "AH50",
     "HYLD": "IVV",
@@ -27732,17 +28955,26 @@
     "IBZL.MI": "IVV",
     "ICBD": "IVV",
     "ICBH": "IVV",
+    "ICBR": "QQQ",
+    "ICBR.L": "QQQ",
     "ICBU": "IVV",
     "ICDU": "IVV",
     "ICDU.L": "IVV",
     "ICE": "ICE",
     "ICEH": "IVV",
     "ICF": "IVV",
+    "ICFP": "QQQ",
+    "ICFP.MI": "QQQ",
     "ICGP": "IVV",
     "ICHD": "IVV",
     "ICHN": "IVV",
+    "ICLG": "QQQ",
+    "ICLG.L": "QQQ",
     "ICLN": "IVV",
     "ICLO": "QQQ",
+    "ICLO.L": "QQQ",
+    "ICLU": "QQQ",
+    "ICLU.L": "QQQ",
     "ICOM": "IVV",
     "ICOP": "IVV",
     "ICOV": "IVV",
@@ -27784,6 +29016,8 @@
     "IDEV": "IVV",
     "IDFF": "IVV",
     "IDFF.L": "IVV",
+    "IDFN": "QQQ",
+    "IDFN.L": "QQQ",
     "IDFX": "IVV",
     "IDFX.L": "IVV",
     "IDFX.MX": "IVV",
@@ -27969,6 +29203,8 @@
     "IEVL.MI": "IVV",
     "IEVL.MX": "IVV",
     "IEVL.SW": "IVV",
+    "IEWQ": "QQQ",
+    "IEWQ.L": "QQQ",
     "IEX": "IEX",
     "IEXA": "IVV",
     "IEXF": "IVV",
@@ -28016,11 +29252,17 @@
     "IGAA": "IVV",
     "IGAE": "IVV",
     "IGBD": "IVV",
+    "IGBE": "QQQ",
+    "IGBE.L": "QQQ",
     "IGBG": "IVV",
     "IGBH": "IVV",
     "IGBS": "IVV",
     "IGBUX": "IVV",
     "IGBY": "IVV",
+    "IGCB": "QQQ",
+    "IGCB.L": "QQQ",
+    "IGDA": "QQQ",
+    "IGDA.L": "QQQ",
     "IGE": "IVV",
     "IGEA": "IVV",
     "IGEA.DE": "IVV",
@@ -28029,6 +29271,7 @@
     "IGEA.SW": "IVV",
     "IGEB": "IVV",
     "IGF": "IVV",
+    "IGHG": "UPRO",
     "IGHY": "IVV",
     "IGHY.L": "IVV",
     "IGIB": "IVV",
@@ -28205,7 +29448,15 @@
     "IMVU.L": "IVV",
     "IMVU.MX": "IVV",
     "INAA": "IVV",
+    "INAS": "QQQ",
+    "INAS.L": "QQQ",
+    "INAT1": "QQQ",
+    "INAT1.L": "QQQ",
+    "INBCHN": "QQQ",
+    "INBCHN.L": "QQQ",
     "INCI": "IVV",
+    "INCN50": "QQQ",
+    "INCN50.L": "QQQ",
     "INCU": "IVV",
     "INCY": "INCY",
     "IND": "AH50",
@@ -28224,6 +29475,10 @@
     "INGB": "IVV",
     "INGDX": "IVV",
     "INGH": "IVV",
+    "INGOLD": "QQQ",
+    "INGOLD.L": "QQQ",
+    "INICLA": "QQQ",
+    "INICLA.L": "QQQ",
     "INKM": "SPY",
     "INMU": "IVV",
     "INRA": "IVV",
@@ -28233,9 +29488,13 @@
     "INRG.MX": "IVV",
     "INRG.SW": "IVV",
     "INRO": "IVV",
+    "INSPXE": "QQQ",
+    "INSPXE.L": "QQQ",
     "INTC": "INTC",
     "INTF": "IVV",
     "INTM": "QQQ",
+    "INTRIA": "QQQ",
+    "INTRIA.L": "QQQ",
     "INTU": "INTU",
     "INVE-B.ST": "INVE-B.ST",
     "INVH": "INVH",
@@ -28247,14 +29506,19 @@
     "IOGP.L": "IVV",
     "IOGP.MX": "IVV",
     "IOGP.SW": "IVV",
+    "ION": "UPRO",
     "IONQ": "IONQ",
     "IOO": "IVV",
     "IP": "IP",
     "IPAB": "IVV",
     "IPAC": "IVV",
     "IPAV": "BOTZ",
+    "IPCMOC": "QQQ",
+    "IPCMOC.L": "QQQ",
     "IPDM": "IVV",
     "IPDM.L": "IVV",
+    "IPINSU": "QQQ",
+    "IPINSU.L": "QQQ",
     "IPKW": "QQQ",
     "IPLT": "IVV",
     "IPLT.L": "IVV",
@@ -28275,7 +29539,20 @@
     "IPRV.SW": "IVV",
     "IPXJ": "IVV",
     "IPXJ.L": "IVV",
+    "IQAW": "QQQ",
+    "IQAW.L": "QQQ",
+    "IQEA": "QQQ",
+    "IQEA.L": "QQQ",
+    "IQGA": "QQQ",
+    "IQGA.L": "QQQ",
+    "IQGE": "QQQ",
+    "IQGE.DE": "QQQ",
+    "IQGG": "QQQ",
+    "IQGG.L": "QQQ",
     "IQLT": "IVV",
+    "IQMM": "UPRO",
+    "IQMX": "QQQ",
+    "IQMX.L": "QQQ",
     "IQQ": "IVV",
     "IQQ0": "IVV",
     "IQQ0.DE": "IVV",
@@ -28329,7 +29606,17 @@
     "IQQX.DE": "IVV",
     "IQQY": "IVV",
     "IQQY.DE": "IVV",
+    "IQSA": "QQQ",
+    "IQSA.L": "QQQ",
+    "IQSD": "QQQ",
+    "IQSD.DE": "QQQ",
+    "IQSE": "QQQ",
+    "IQSE.DE": "QQQ",
     "IQSZ": "QQQ",
+    "IQUA": "QQQ",
+    "IQUA.L": "QQQ",
+    "IQUE": "QQQ",
+    "IQUE.DE": "QQQ",
     "IQV": "IQV",
     "IR": "IR",
     "IRCP": "IVV",
@@ -28470,10 +29757,13 @@
     "ISP6": "IVV",
     "ISP6.L": "IVV",
     "ISPE": "IVV",
+    "ISPY": "UPRO",
     "ISRA": "SMH",
     "ISRG": "ISRG",
     "ISTB": "IVV",
     "ISTM": "IVV",
+    "ISUN": "QQQ",
+    "ISUN.L": "QQQ",
     "ISUS": "IVV",
     "ISUS.L": "IVV",
     "ISUS.SW": "IVV",
@@ -28524,6 +29814,7 @@
     "ITWN.L": "IVV",
     "ITWN.MI": "IVV",
     "ITWN.SW": "IVV",
+    "ITWO": "UPRO",
     "ITX.MC": "ITX.MC",
     "IU0A": "IVV",
     "IU0E": "IVV",
@@ -28643,6 +29934,8 @@
     "IUVD": "IVV",
     "IUVE": "IVV",
     "IUVL": "IVV",
+    "IVAI": "QQQ",
+    "IVAI.L": "QQQ",
     "IVE": "IVV",
     "IVLU": "IVV",
     "IVOA": "IVV",
@@ -28859,14 +30152,18 @@
     "KO": "KO",
     "KOF": "KOF",
     "KOKU": "AH50",
+    "KOLD": "UPRO",
     "KOMP": "SPY",
     "KPN.AS": "KPN.AS",
     "KR": "KR",
+    "KRC": "KRC",
     "KRE": "SPY",
     "KRNY": "KRNY",
     "KROP": "BOTZ",
+    "KRYP": "UPRO",
     "KRYS": "KRYS",
     "KSA": "IVV",
+    "KTOS": "KTOS",
     "KVUE": "KVUE",
     "KWT": "IVV",
     "KXI": "IVV",
@@ -28902,6 +30199,7 @@
     "LITM": "IVV",
     "LKQ": "LKQ",
     "LLDR": "BOTZ",
+    "LLOY.L": "LYG",
     "LLY": "LLY",
     "LLYVK": "LLYVK",
     "LMP.L": "LMP.L",
@@ -28914,6 +30212,7 @@
     "LOCK": "IVV",
     "LOPE": "LOPE",
     "LOW": "LOW",
+    "LPK.DE": "LPK.DE",
     "LQD": "IVV",
     "LQDA": "IVV",
     "LQDA.AS": "IVV",
@@ -28943,14 +30242,22 @@
     "LTAM.AS": "IVV",
     "LTAM.L": "IVV",
     "LTAM.MI": "IVV",
+    "LTL": "UPRO",
     "LULU": "LULU",
     "LUV": "LUV",
     "LVDS": "BBAG",
+    "LVLC": "QQQ",
+    "LVLC.L": "QQQ",
+    "LVLD": "QQQ",
+    "LVLD.DE": "QQQ",
+    "LVLEG": "QQQ",
+    "LVLEG.DE": "QQQ",
     "LVLN": "SPY",
     "LVS": "LVS",
     "LW": "LW",
     "LYB": "LYB",
     "LYFT": "LYFT",
+    "LYG": "LYG",
     "LYV": "LYV",
     "M": "M",
     "MA": "MA",
@@ -28965,6 +30272,7 @@
     "MAGU": "IVV",
     "MAIN": "MAIN",
     "MAIR": "MAIR",
+    "MAKX": "UPRO",
     "MAMG": "IVV",
     "MANH": "MANH",
     "MAR": "MAR",
@@ -28982,7 +30290,11 @@
     "MCD": "MCD",
     "MCDS": "BBAG",
     "MCHI": "IVV",
+    "MCHIN": "QQQ",
+    "MCHIN.L": "QQQ",
     "MCHP": "MCHP",
+    "MCHT": "QQQ",
+    "MCHT.L": "QQQ",
     "MCK": "MCK",
     "MCO": "MCO",
     "MCTA": "IVV",
@@ -28997,16 +30309,19 @@
     "MDYG": "SPY",
     "MDYV": "SPY",
     "MEAR": "IVV",
+    "MEEQ": "QQQ",
+    "MEEQ.L": "QQQ",
     "MET": "MET",
     "META": "META",
     "METG": "IVV",
+    "MEWD": "QQQ",
+    "MEWD.DE": "QQQ",
     "MGA": "MGA",
     "MGC": "VOO",
     "MGK": "VOO",
     "MGM": "MGM",
     "MGV": "VOO",
     "MHK": "MHK",
-    "MIDD": "IVV",
     "MIDD.L": "IVV",
     "MIDD.SW": "IVV",
     "MIDE": "AH50",
@@ -29019,13 +30334,17 @@
     "MKL": "MKL",
     "MKS.L": "MKS.L",
     "MKTX": "MKTX",
+    "MKUW": "QQQ",
+    "MKUW.L": "QQQ",
     "ML.PA": "ML.PA",
     "MLDR": "BOTZ",
     "MLI": "MLI",
     "MLM": "MLM",
     "MLN": "SMH",
     "MLPA": "BOTZ",
-    "MLPD": "BOTZ",
+    "MLPD.L": "QQQ",
+    "MLPS": "QQQ",
+    "MLPS.L": "QQQ",
     "MLPX": "BOTZ",
     "MMAX": "IVV",
     "MMK": "SPY",
@@ -29053,6 +30372,7 @@
     "MPLX": "MPLX",
     "MPT": "MPT",
     "MPWR": "MPWR",
+    "MRGR": "UPRO",
     "MRK": "MRK",
     "MRK.DE": "MRK.DE",
     "MRNA": "MRNA",
@@ -29061,6 +30381,8 @@
     "MRSH": "MRSH",
     "MRVL": "MRVL",
     "MS": "MS",
+    "MSAU": "QQQ",
+    "MSAU.L": "QQQ",
     "MSCI": "MSCI",
     "MSFT": "MSFT",
     "MSI": "MSI",
@@ -29074,6 +30396,8 @@
     "MTUM": "IVV",
     "MU": "MU",
     "MUB": "IVV",
+    "MUNI": "QQQ",
+    "MUNI.L": "QQQ",
     "MUNY": "VOO",
     "MUSD": "IVV",
     "MUSG": "IVV",
@@ -29100,9 +30424,26 @@
     "MVUS": "IVV",
     "MVUS.L": "IVV",
     "MVUS.MI": "IVV",
+    "MVV": "UPRO",
     "MVWE": "IVV",
+    "MWEQ": "QQQ",
+    "MWEQ.L": "QQQ",
     "MWH": "MWH",
+    "MWIM": "QQQ",
+    "MWIM.L": "QQQ",
+    "MXFS": "QQQ",
+    "MXFS.L": "QQQ",
     "MXI": "IVV",
+    "MXJP": "QQQ",
+    "MXJP.L": "QQQ",
+    "MXUD": "QQQ",
+    "MXUD.L": "QQQ",
+    "MXUE": "QQQ",
+    "MXUE.DE": "QQQ",
+    "MXUS": "QQQ",
+    "MXUS.L": "QQQ",
+    "MXWS": "QQQ",
+    "MXWS.L": "QQQ",
     "MYCF": "SPY",
     "MYCG": "SPY",
     "MYCH": "SPY",
@@ -29124,8 +30465,16 @@
     "MYMI": "SPY",
     "MYMJ": "SPY",
     "MYMK": "SPY",
+    "MYY": "UPRO",
+    "MZZ": "UPRO",
     "N100": "IVV",
+    "N1EU": "QQQ",
+    "N1EU.DE": "QQQ",
     "N1UD": "IVV",
+    "N400": "QQQ",
+    "N400.L": "QQQ",
+    "N4US": "QQQ",
+    "N4US.L": "QQQ",
     "NANR": "SPY",
     "NBIS": "NBIS",
     "NCLH": "NCLH",
@@ -29134,6 +30483,8 @@
     "NEAR": "IVV",
     "NEE": "NEE",
     "NEM": "NEM",
+    "NESG": "QQQ",
+    "NESG.L": "QQQ",
     "NESN.SW": "NESN.SW",
     "NESTE.HE": "NESTE.HE",
     "NET": "NET",
@@ -29147,16 +30498,20 @@
     "NLR": "SMH",
     "NLY": "NLY",
     "NOAM": "IVV",
+    "NOBL": "UPRO",
     "NOC": "NOC",
     "NODE": "SMH",
     "NOK": "NOK",
     "NOKIA.HE": "NOK",
     "NORW": "BOTZ",
+    "NOV": "NOV",
     "NOVN.SW": "NVS",
     "NOW": "NOW",
     "NQSE": "IVV",
     "NRES": "AH50",
     "NRG": "NRG",
+    "NS4E": "QQQ",
+    "NS4E.DE": "QQQ",
     "NSC": "NSC",
     "NTAP": "NTAP",
     "NTDOY": "7974.T",
@@ -29168,6 +30523,7 @@
     "NUE": "NUE",
     "NUUR": "IVV",
     "NVDA": "NVDA",
+    "NVDB": "UPRO",
     "NVR": "NVR",
     "NVS": "NVS",
     "NVST": "NVST",
@@ -29189,6 +30545,7 @@
     "OGN": "OGN",
     "OHI": "OHI",
     "OIH": "SMH",
+    "OILK": "UPRO",
     "OKE": "OKE",
     "OKTA": "OKTA",
     "OLLI": "OLLI",
@@ -29200,9 +30557,12 @@
     "OMXSX": "IVV",
     "ON": "ON",
     "ONC": "ONC",
+    "OND": "UPRO",
     "ONEO": "SPY",
+    "ONEQ": "FAAA",
     "ONEV": "SPY",
     "ONEY": "SPY",
+    "ONLN": "UPRO",
     "ONOF": "BOTZ",
     "ONSMX": "IVV",
     "ONSW": "IVV",
@@ -29223,10 +30583,21 @@
     "PAAS": "PAAS",
     "PABD": "IVV",
     "PABU": "IVV",
+    "PAEM": "QQQ",
+    "PAEM.L": "QQQ",
+    "PAES": "QQQ",
+    "PAES.L": "QQQ",
     "PAGE.L": "PAGE.L",
+    "PAJP": "QQQ",
+    "PAJP.L": "QQQ",
     "PANW": "PANW",
     "PATH": "PATH",
+    "PAUS": "QQQ",
+    "PAUS.L": "QQQ",
     "PAVE": "BOTZ",
+    "PAWD": "QQQ",
+    "PAWD.L": "QQQ",
+    "PAWZ": "UPRO",
     "PAYC": "PAYC",
     "PAYX": "PAYX",
     "PBD": "QQQ",
@@ -29248,8 +30619,11 @@
     "PEG": "PEG",
     "PEGA": "PEGA",
     "PEJ": "QQQ",
+    "PEMD": "QQQ",
+    "PEMD.L": "QQQ",
     "PEP": "PEP",
     "PETS.L": "PETS.L",
+    "PEX": "UPRO",
     "PEY": "QQQ",
     "PEZ": "QQQ",
     "PFE": "PFE",
@@ -29290,6 +30664,7 @@
     "PL": "PL",
     "PLAY": "IVV",
     "PLD": "PLD",
+    "PLTA": "UPRO",
     "PLTR": "PLTR",
     "PLUS.L": "PLUS.L",
     "PM": "PM",
@@ -29304,11 +30679,19 @@
     "POWA": "QQQ",
     "POWR": "IVV",
     "PPA": "QQQ",
+    "PPEU": "QQQ",
+    "PPEU.MI": "QQQ",
     "PPG": "PPG",
     "PPH": "SMH",
     "PPL": "PPL",
+    "PQVM": "QQQ",
+    "PQVM.L": "QQQ",
     "PRAB": "SPY",
+    "PRAC": "QQQ",
+    "PRAC.L": "QQQ",
     "PRF": "QQQ",
+    "PRFD": "QQQ",
+    "PRFD.L": "QQQ",
     "PRFZ": "QQQ",
     "PRIV": "SPY",
     "PRN": "QQQ",
@@ -29326,6 +30709,8 @@
     "PSCM": "QQQ",
     "PSCT": "QQQ",
     "PSCU": "QQQ",
+    "PSFE": "QQQ",
+    "PSFE.DE": "QQQ",
     "PSI": "QQQ",
     "PSK": "SPY",
     "PSKY": "PSKY",
@@ -29334,7 +30719,17 @@
     "PSO": "PSO",
     "PSON.L": "PSO",
     "PSP": "QQQ",
+    "PSPRUS": "QQQ",
+    "PSPRUS.L": "QQQ",
+    "PSQ": "UPRO",
     "PSR": "QQQ",
+    "PSREG": "QQQ",
+    "PSREG.L": "QQQ",
+    "PSRM": "QQQ",
+    "PSRM.L": "QQQ",
+    "PSRW": "QQQ",
+    "PSRW.L": "QQQ",
+    "PST": "UPRO",
     "PSWD": "AH50",
     "PSX": "PSX",
     "PTC": "PTC",
@@ -29342,8 +30737,13 @@
     "PTH": "QQQ",
     "PUB.PA": "PUB.PA",
     "PUI": "QQQ",
+    "PUIG": "QQQ",
+    "PUIG.L": "QQQ",
+    "PUIP": "QQQ",
+    "PUIP.L": "QQQ",
     "PUK": "PUK",
     "PUM.DE": "PUM.DE",
+    "PVH": "PVH",
     "PVI": "QQQ",
     "PWB": "QQQ",
     "PWR": "PWR",
@@ -29362,6 +30762,7 @@
     "QANT": "IVV",
     "QARP": "AH50",
     "QAT": "IVV",
+    "QB": "UPRO",
     "QBIG": "QQQ",
     "QCLR": "BOTZ",
     "QCOM": "QCOM",
@@ -29394,18 +30795,26 @@
     "QEMM": "SPY",
     "QETH": "QQQ",
     "QEW": "QQQ",
+    "QID": "UPRO",
+    "QLD": "UPRO",
     "QLTA": "IVV",
     "QNDX": "SPY",
     "QNXT": "IVV",
     "QOWZ": "QQQ",
     "QQA": "QQQ",
+    "QQDN": "UPRO",
     "QQHG": "QQQ",
+    "QQIA": "QQQ",
+    "QQIA.L": "QQQ",
     "QQLV": "QQQ",
     "QQMG": "QQQ",
     "QQQ": "QQQ",
+    "QQQA": "UPRO",
     "QQQJ": "QQQ",
     "QQQM": "QQQ",
     "QQQS": "QQQ",
+    "QQUP": "UPRO",
+    "QQXL": "UPRO",
     "QRMI": "BOTZ",
     "QRVO": "QRVO",
     "QSOL": "QQQ",
@@ -29427,6 +30836,7 @@
     "RACE": "RACE",
     "RACE.MI": "RACE",
     "RACK": "SMH",
+    "RB": "UPRO",
     "RBLX": "RBLX",
     "RBOD": "IVV",
     "RBOT": "IVV",
@@ -29435,9 +30845,12 @@
     "RDIV": "QQQ",
     "REET": "IVV",
     "REG": "REG",
+    "REGL": "UPRO",
     "REGN": "REGN",
+    "REK": "UPRO",
     "REM": "IVV",
     "REMX": "SMH",
+    "REW": "UPRO",
     "REXR": "REXR",
     "REZ": "IVV",
     "RF": "RF",
@@ -29448,6 +30861,7 @@
     "RHI": "RHI",
     "RHM.DE": "RHM.DE",
     "RI.PA": "RI.PA",
+    "RINF": "UPRO",
     "RING": "IVV",
     "RISE": "IVV",
     "RISE.L": "IVV",
@@ -29457,6 +30871,7 @@
     "RMD": "RMD",
     "RMHY": "BOTZ",
     "RMS.PA": "RMS.PA",
+    "RNG": "RNG",
     "RNO.PA": "RNO.PA",
     "RNRG": "BOTZ",
     "RO.SW": "RO.SW",
@@ -29468,6 +30883,9 @@
     "ROKU": "ROKU",
     "ROL": "ROL",
     "ROLL": "IVV",
+    "ROM": "UPRO",
+    "RONS": "QQQ",
+    "RONS.DE": "QQQ",
     "ROP": "ROP",
     "ROST": "ROST",
     "RPG": "QQQ",
@@ -29494,6 +30912,8 @@
     "RSSL": "BOTZ",
     "RTH": "SMH",
     "RTX": "RTX",
+    "RTYS": "QQQ",
+    "RTYS.L": "QQQ",
     "RU2E": "IVV",
     "RU2K": "IVV",
     "RVNU": "AH50",
@@ -29502,17 +30922,31 @@
     "RWJ": "QQQ",
     "RWK": "QQQ",
     "RWL": "QQQ",
+    "RWM": "UPRO",
     "RWO": "SPY",
     "RWR": "SPY",
     "RWX": "SPY",
+    "RXD": "UPRO",
     "RXI": "IVV",
+    "RXL": "UPRO",
+    "RY": "RY",
     "RYA.IR": "RYA.IR",
     "RYAAY": "RYAAY",
+    "RYAN": "RYAN",
     "RYLD": "BOTZ",
     "RYLG": "BOTZ",
     "RZG": "QQQ",
     "RZV": "QQQ",
+    "S100": "QQQ",
+    "S100.L": "QQQ",
+    "S250": "QQQ",
+    "S250.L": "QQQ",
     "S2P0": "IVV",
+    "S600": "QQQ",
+    "S600.L": "QQQ",
+    "S7XP": "QQQ",
+    "S7XP.L": "QQQ",
+    "SAA": "UPRO",
     "SAAA": "IVV",
     "SAAA.L": "IVV",
     "SAAI": "IVV",
@@ -29541,18 +30975,27 @@
     "SAWG": "IVV",
     "SAWI": "IVV",
     "SBAC": "SBAC",
+    "SBB": "UPRO",
+    "SBIO": "QQQ",
+    "SBIO.L": "QQQ",
+    "SBIT": "UPRO",
     "SBRY.L": "SBRY.L",
     "SBSW": "SBSW",
     "SBUX": "SBUX",
+    "SCC": "UPRO",
     "SCDS": "BBAG",
     "SCHW": "SCHW",
     "SCJ": "IVV",
+    "SCO": "UPRO",
     "SCSH": "IVV",
+    "SCTB": "QQQ",
+    "SCTB.L": "QQQ",
     "SCWX": "AH50",
     "SCWX.L": "AH50",
     "SCXW": "AH50",
     "SCXW.L": "AH50",
     "SCZ": "IVV",
+    "SDD": "UPRO",
     "SDEM": "BOTZ",
     "SDEU": "IVV",
     "SDEU.L": "IVV",
@@ -29583,8 +31026,13 @@
     "SDIG.MX": "IVV",
     "SDIG.SW": "IVV",
     "SDIV": "BOTZ",
+    "SDJE5D": "QQQ",
+    "SDJE5D.DE": "QQQ",
     "SDJP": "IVV",
     "SDMXX": "IVV",
+    "SDOW": "UPRO",
+    "SDP": "UPRO",
+    "SDS": "UPRO",
     "SDUE": "IVV",
     "SDUS": "IVV",
     "SDWD": "IVV",
@@ -29604,6 +31052,7 @@
     "SEDY": "IVV",
     "SEDY.L": "IVV",
     "SEDY.SW": "IVV",
+    "SEF": "UPRO",
     "SEGA": "IVV",
     "SEGA.L": "IVV",
     "SEGA.MI": "IVV",
@@ -29621,23 +31070,31 @@
     "SEML.L": "IVV",
     "SEML.MI": "IVV",
     "SESW": "IVV",
+    "SETH": "UPRO",
     "SF": "SF",
+    "SFD": "SFD",
+    "SFM": "SFM",
     "SGE.L": "SGE.L",
     "SGEA": "IVV",
     "SGEA.L": "IVV",
     "SGIL": "IVV",
     "SGIL.L": "IVV",
+    "SGLD": "QQQ",
+    "SGLD.L": "QQQ",
     "SGLH": "IVV",
     "SGLN": "IVV",
     "SGLN.L": "IVV",
     "SGLN.MI": "IVV",
     "SGLO": "IVV",
     "SGLO.L": "IVV",
+    "SGLS": "QQQ",
+    "SGLS.L": "QQQ",
     "SGLU": "IVV",
     "SGOV": "IVV",
     "SGRO.L": "SGRO.L",
     "SGSU": "IVV",
     "SGWS": "IVV",
+    "SH": "UPRO",
     "SHE": "SPY",
     "SHEL": "SHEL",
     "SHEL.L": "SHEL",
@@ -29654,10 +31111,13 @@
     "SHYU": "IVV",
     "SHYU.L": "IVV",
     "SIE.DE": "SIE.DE",
+    "SIJ": "UPRO",
     "SIL": "BOTZ",
     "SIMS": "SPY",
+    "SIRI": "SIRI",
     "SITM": "SITM",
     "SIZE": "IVV",
+    "SJB": "UPRO",
     "SJM": "SJM",
     "SJNK": "SPY",
     "SJPA": "IVV",
@@ -29666,13 +31126,17 @@
     "SJPA.SW": "IVV",
     "SJPD": "IVV",
     "SJPE": "IVV",
+    "SKF": "UPRO",
+    "SKHU": "UPRO",
     "SKHY": "SKHY",
     "SKM": "SKM",
     "SKUK": "IVV",
+    "SKYU": "UPRO",
     "SLB": "SLB",
     "SLDR": "BOTZ",
     "SLGN": "SLGN",
     "SLMG": "IVV",
+    "SLON": "UPRO",
     "SLQD": "IVV",
     "SLV": "IVV",
     "SLVP": "IVV",
@@ -29688,9 +31152,13 @@
     "SMBS": "IVV",
     "SMBS.L": "IVV",
     "SMCI": "SMCI",
+    "SMDD": "UPRO",
+    "SMDV": "UPRO",
     "SMEA": "IVV",
     "SMEA.L": "IVV",
     "SMEA.MI": "IVV",
+    "SMEU": "QQQ",
+    "SMEU.L": "QQQ",
     "SMG": "SMG",
     "SMH": "SMH",
     "SMHC": "SMH",
@@ -29701,6 +31169,7 @@
     "SMLV": "SPY",
     "SMMD": "IVV",
     "SMMV": "IVV",
+    "SMN": "UPRO",
     "SMOG": "SMH",
     "SMOT": "SMH",
     "SMTC": "SMTC",
@@ -29725,12 +31194,16 @@
     "SO": "SO",
     "SOCL": "BOTZ",
     "SOFI": "SOFI",
+    "SOFTEK": "QQQ",
+    "SOFTEK.L": "QQQ",
     "SOJC": "SO",
     "SOJD": "SO",
     "SOJE": "SO",
     "SOLS": "SOLS",
     "SOLV": "SOLV",
     "SOMN": "SO",
+    "SOMXUK": "QQQ",
+    "SOMXUK.L": "QQQ",
     "SONY": "SONY",
     "SOXQ": "QQQ",
     "SOXX": "IVV",
@@ -29740,16 +31213,23 @@
     "SPAB": "SPY",
     "SPAG": "IVV",
     "SPAG.L": "IVV",
+    "SPAL": "QQQ",
+    "SPAL.L": "QQQ",
     "SPBO": "SPY",
     "SPC3": "IVV",
+    "SPCF": "UPRO",
     "SPCX": "SPCX",
     "SPDG": "SPY",
     "SPDM": "IVV",
     "SPDM.L": "IVV",
     "SPDM.MI": "IVV",
     "SPDW": "SPY",
+    "SPED": "QQQ",
+    "SPED.L": "QQQ",
     "SPEH": "IVV",
     "SPEM": "SPY",
+    "SPEQ": "QQQ",
+    "SPEQ.L": "QQQ",
     "SPEU": "SPY",
     "SPFF": "BOTZ",
     "SPG": "SPG",
@@ -29770,6 +31250,8 @@
     "SPLT.L": "IVV",
     "SPLT.MI": "IVV",
     "SPLV.SW": "IVV",
+    "SPLW": "QQQ",
+    "SPLW.L": "QQQ",
     "SPMB": "SPY",
     "SPMO": "QQQ",
     "SPMV": "IVV",
@@ -29784,6 +31266,12 @@
     "SPOL.SW": "IVV",
     "SPOT": "SPOT",
     "SPPB": "IVV",
+    "SPPT": "QQQ",
+    "SPPT.L": "QQQ",
+    "SPQG": "QQQ",
+    "SPQG.L": "QQQ",
+    "SPQP": "QQQ",
+    "SPQP.L": "QQQ",
     "SPSB": "SPY",
     "SPSM": "SPY",
     "SPTB": "SPY",
@@ -29793,11 +31281,20 @@
     "SPTS": "SPY",
     "SPTU": "SPY",
     "SPVM": "QQQ",
+    "SPWS": "QQQ",
+    "SPWS.L": "QQQ",
     "SPX.L": "SPX.L",
-    "SPXD": "AH50",
+    "SPXD.L": "QQQ",
+    "SPXE": "UPRO",
     "SPXJ": "IVV",
     "SPXJ.L": "IVV",
     "SPXJ.MI": "IVV",
+    "SPXN": "UPRO",
+    "SPXS": "QQQ",
+    "SPXS.L": "QQQ",
+    "SPXT": "UPRO",
+    "SPXU": "UPRO",
+    "SPXV": "UPRO",
     "SPY": "SPY",
     "SPYD": "SPY",
     "SPYG": "SPY",
@@ -29806,6 +31303,7 @@
     "SPYX": "SPY",
     "SQ": "XYZ",
     "SQLT": "IVV",
+    "SQQQ": "UPRO",
     "SRE": "SRE",
     "SREA": "SRE",
     "SREEEX": "IVV",
@@ -29814,18 +31312,25 @@
     "SRET": "BOTZ",
     "SRIL": "IVV",
     "SRLN": "SPY",
+    "SRS": "UPRO",
     "SRSA": "IVV",
     "SRSA.L": "IVV",
+    "SRTY": "UPRO",
     "SSAC": "IVV",
     "SSAC.AS": "IVV",
     "SSAC.L": "IVV",
     "SSAC.SW": "IVV",
     "SSACCHF": "IVV",
     "SSACCHF.SW": "IVV",
+    "SSB": "SSB",
     "SSE.L": "SSE.L",
+    "SSG": "UPRO",
     "SSLN": "IVV",
     "SSLN.L": "IVV",
     "SSLN.MI": "IVV",
+    "SSLV": "QQQ",
+    "SSLV.L": "QQQ",
+    "SSO": "UPRO",
     "SSTK": "SSTK",
     "SSXF": "IVV",
     "SSXF.L": "IVV",
@@ -29870,6 +31375,7 @@
     "SUOG": "IVV",
     "SUOP": "IVV",
     "SUOU": "IVV",
+    "SUPL": "UPRO",
     "SUSA": "IVV",
     "SUSB": "IVV",
     "SUSC": "IVV",
@@ -29890,6 +31396,7 @@
     "SUZ": "SUZ",
     "SVAL": "IVV",
     "SVT.L": "SVT.L",
+    "SVXY": "UPRO",
     "SW": "SW",
     "SWDA": "IVV",
     "SWDA.L": "IVV",
@@ -29901,6 +31408,8 @@
     "SX3PEX.SW": "IVV",
     "SX4PEX": "IVV",
     "SX4PEX.SW": "IVV",
+    "SX5S": "QQQ",
+    "SX5S.L": "QQQ",
     "SX6PEX": "IVV",
     "SX6PEX.SW": "IVV",
     "SX7EEX": "IVV",
@@ -29909,6 +31418,8 @@
     "SX8PEX.SW": "IVV",
     "SXAPEX": "IVV",
     "SXAPEX.SW": "IVV",
+    "SXEW": "QQQ",
+    "SXEW.L": "QQQ",
     "SXFPEX": "IVV",
     "SXFPEX.SW": "IVV",
     "SXIPEX": "IVV",
@@ -29976,15 +31487,28 @@
     "SYM": "SYM",
     "SYSB": "IVV",
     "SYY": "SYY",
+    "SZK": "UPRO",
     "T": "T",
+    "T1EU": "QQQ",
+    "T1EU.DE": "QQQ",
+    "T3GB": "QQQ",
+    "T3GB.L": "QQQ",
+    "T3RE": "QQQ",
+    "T3RE.DE": "QQQ",
+    "T7EU": "QQQ",
+    "T7EU.DE": "QQQ",
     "TAK": "TAK",
     "TAN": "QQQ",
     "TAP": "TAP",
     "TBB": "T",
+    "TBF": "UPRO",
     "TBLL": "QQQ",
+    "TBT": "UPRO",
+    "TBX": "UPRO",
     "TCHI": "IVV",
     "TD": "TD",
     "TDG": "TDG",
+    "TDV": "UPRO",
     "TDY": "TDY",
     "TEAM": "TEAM",
     "TECB": "IVV",
@@ -29995,6 +31519,7 @@
     "TEKX": "SPY",
     "TEL": "TEL",
     "TEL.OL": "TEL.OL",
+    "TEM": "TEM",
     "TEND": "IVV",
     "TENJ": "IVV",
     "TENM": "IVV",
@@ -30013,6 +31538,10 @@
     "TI5A": "IVV",
     "TI5G": "IVV",
     "TI5MX": "IVV",
+    "TIGB": "QQQ",
+    "TIGB.L": "QQQ",
+    "TINT": "UPRO",
+    "TINY": "UPRO",
     "TIP": "IVV",
     "TIP5": "IVV",
     "TIPX": "SPY",
@@ -30023,10 +31552,14 @@
     "TLT": "IVV",
     "TLTW": "IVV",
     "TLTX": "BOTZ",
+    "TMDV": "UPRO",
     "TMO": "TMO",
     "TMUS": "TMUS",
+    "TMX1X": "QQQ",
+    "TMX1X.CHI": "QQQ",
     "TOK": "IVV",
     "TOL": "TOL",
+    "TOLZ": "UPRO",
     "TOPC": "IVV",
     "TOPT": "IVV",
     "TOST": "TOST",
@@ -30036,15 +31569,47 @@
     "TPR": "TPR",
     "TPSA": "IVV",
     "TPSA.AS": "IVV",
+    "TQQQ": "UPRO",
+    "TR3A": "QQQ",
+    "TR3A.L": "QQQ",
+    "TR7A": "QQQ",
+    "TR7A.L": "QQQ",
+    "TR7S": "QQQ",
+    "TR7S.L": "QQQ",
+    "TRAU": "QQQ",
+    "TRAU.L": "QQQ",
+    "TRDE": "QQQ",
+    "TRDE.DE": "QQQ",
+    "TRE3": "QQQ",
+    "TRE3.L": "QQQ",
+    "TRE7": "QQQ",
+    "TRE7.L": "QQQ",
+    "TREI": "QQQ",
+    "TREI.L": "QQQ",
+    "TREL": "QQQ",
+    "TREL.L": "QQQ",
+    "TRES": "QQQ",
+    "TRES.L": "QQQ",
+    "TREX.L": "QQQ",
+    "TRFE": "QQQ",
+    "TRFE.DE": "QQQ",
+    "TRGB": "QQQ",
+    "TRGB.L": "QQQ",
     "TRGP": "TRGP",
     "TRIP": "TRIP",
+    "TRLA": "QQQ",
+    "TRLA.L": "QQQ",
+    "TRLG": "QQQ",
+    "TRLG.L": "QQQ",
     "TRMB": "TRMB",
     "TROT": "QQQ",
     "TROW": "TROW",
     "TRP": "TRP",
+    "TRSC": "QQQ",
+    "TRSC.S": "QQQ",
     "TRSY": "AH50",
     "TRUC": "SMH",
-    "TRUD": "SMH",
+    "TRUD.MI": "QQQ",
     "TRUF": "SMH",
     "TRUH": "SMH",
     "TRUI": "SMH",
@@ -30055,19 +31620,29 @@
     "TRUT": "SMH",
     "TRUU": "SMH",
     "TRV": "TRV",
+    "TRXA": "QQQ",
+    "TRXA.L": "QQQ",
+    "TRXC": "QQQ",
+    "TRXC.S": "QQQ",
+    "TRXS": "QQQ",
+    "TRXS.L": "QQQ",
     "TSCO": "TSCO",
     "TSCO.L": "TSCO.L",
     "TSEM": "TSEM",
     "TSLA": "TSLA",
+    "TSLI": "UPRO",
     "TSM": "TSM",
     "TSN": "TSN",
     "TT": "TT",
     "TTE": "TTE",
     "TTE.PA": "TTE",
     "TTEK": "TTEK",
+    "TTT": "UPRO",
     "TTWO": "TTWO",
     "TUR": "IVV",
+    "TW.L": "TW.L",
     "TWLO": "TWLO",
+    "TWM": "UPRO",
     "TWOX": "IVV",
     "TXN": "TXN",
     "TXT": "TXT",
@@ -30080,13 +31655,22 @@
     "UAL": "UAL",
     "UBER": "UBER",
     "UBI.PA": "UBI.PA",
+    "UBR": "UPRO",
     "UBS": "UBS",
     "UBSG.SW": "UBS",
+    "UBT": "UPRO",
     "UCBG": "SPY",
+    "UCC": "UPRO",
     "UCG.MI": "UCG.MI",
+    "UCLO": "QQQ",
+    "UCLO.L": "QQQ",
+    "UCO": "UPRO",
+    "UCOP": "UPRO",
     "UCTA": "IVV",
     "UCTD": "IVV",
+    "UCYB": "UPRO",
     "UDN": "QQQ",
+    "UDOW": "UPRO",
     "UDR": "UDR",
     "UEDA": "IVV",
     "UEDD": "IVV",
@@ -30095,39 +31679,56 @@
     "UEEH": "IVV",
     "UESD": "IVV",
     "UFSD": "IVV",
+    "UGE": "UPRO",
+    "UGI": "UGI",
+    "UGL": "UPRO",
     "UHEB": "IVV",
     "UHR.SW": "UHR.SW",
     "UHS": "UHS",
     "UI": "UI",
     "UIFS": "IVV",
     "UIFS.L": "IVV",
+    "UJB": "UPRO",
     "UKPH": "IVV",
     "UKRE": "IVV",
     "UKRE.L": "IVV",
     "UKW.L": "UKW.L",
     "UL": "UL",
+    "ULE": "UPRO",
     "ULST": "SPY",
     "ULTA": "ULTA",
     "ULVR.L": "UL",
     "UMBF": "UMBF",
+    "UMDD": "UPRO",
     "UMDV": "IVV",
     "UMG.AS": "UMG.AS",
     "UNH": "UNH",
     "UNP": "UNP",
+    "UONS": "QQQ",
+    "UONS.L": "QQQ",
     "UPAB": "IVV",
     "UPAD": "IVV",
+    "UPAL": "UPRO",
     "UPGD": "QQQ",
     "UPGR": "AH50",
+    "UPLT": "UPRO",
     "UPM.HE": "UPM.HE",
+    "UPRO": "UPRO",
     "UPS": "UPS",
+    "UPV": "UPRO",
+    "UPW": "UPRO",
     "UPWK": "UPWK",
     "URA": "BOTZ",
+    "URE": "UPRO",
     "URI": "URI",
+    "URSP": "UPRO",
     "URTH": "IVV",
+    "URTY": "UPRO",
     "US03": "IVV",
     "USB": "USB",
     "USCA": "AH50",
     "USCL": "IVV",
+    "USD": "UPRO",
     "USDB": "IVV",
     "USEB": "IVV",
     "USEE": "IVV",
@@ -30139,6 +31740,8 @@
     "USLD": "IVV",
     "USLN": "IVV",
     "USLP": "IVV",
+    "USML": "QQQ",
+    "USML.L": "QQQ",
     "USMV": "IVV",
     "USNZ": "AH50",
     "USOA": "AH50",
@@ -30148,10 +31751,23 @@
     "USOV": "IVV",
     "USRT": "IVV",
     "USSG": "AH50",
+    "UST": "UPRO",
     "USXF": "IVV",
     "UTHR": "UTHR",
     "UU.L": "UU.L",
     "UUP": "QQQ",
+    "UVXY": "UPRO",
+    "UWM": "UPRO",
+    "UXI": "UPRO",
+    "UXRP": "UPRO",
+    "UYG": "UPRO",
+    "UYLA": "QQQ",
+    "UYLA.L": "QQQ",
+    "UYLD": "QQQ",
+    "UYLD.L": "QQQ",
+    "UYLG": "QQQ",
+    "UYLG.L": "QQQ",
+    "UYM": "UPRO",
     "V": "V",
     "VAVX": "SMH",
     "VAW": "VOO",
@@ -30187,6 +31803,7 @@
     "VEEV": "VEEV",
     "VEFA": "SMH",
     "VEGI": "IVV",
+    "VERS": "UPRO",
     "VEU": "VOO",
     "VEUA.L": "VOO",
     "VEXC": "VOO",
@@ -30218,7 +31835,10 @@
     "VIOG": "VOO",
     "VIOO": "VOO",
     "VIOV": "VOO",
+    "VIRT": "VIRT",
     "VIS": "VOO",
+    "VIXM": "UPRO",
+    "VIXY": "UPRO",
     "VLO": "VLO",
     "VLTO": "VLTO",
     "VLU": "SPY",
@@ -30232,6 +31852,7 @@
     "VNOM": "VNOM",
     "VNQ": "VOO",
     "VNQI": "VOO",
+    "VNT": "VNT",
     "VO": "VOO",
     "VOD": "VOD",
     "VOD.L": "VOD",
@@ -30246,11 +31867,15 @@
     "VOT": "VOO",
     "VOW3.DE": "VOW3.DE",
     "VOX": "VOO",
+    "VPAC": "QQQ",
+    "VPAC.L": "QQQ",
     "VPL": "VOO",
     "VPLS": "VOO",
     "VPU": "VOO",
     "VRIG": "QQQ",
     "VRP": "QQQ",
+    "VRPS": "QQQ",
+    "VRPS.L": "QQQ",
     "VRSK": "VRSK",
     "VRSN": "VRSN",
     "VRT": "VRT",
@@ -30258,6 +31883,7 @@
     "VSDB": "VOO",
     "VSDM": "VOO",
     "VSGX": "VOO",
+    "VSNT": "VSNT",
     "VSOL": "SMH",
     "VSS": "VOO",
     "VST": "VST",
@@ -30312,8 +31938,14 @@
     "WCTD": "IVV",
     "WDAY": "WDAY",
     "WDC": "WDC",
+    "WDEE": "QQQ",
+    "WDEE.L": "QQQ",
+    "WDFE": "QQQ",
+    "WDFE.L": "QQQ",
     "WDIV": "SPY",
     "WDS": "WDS",
+    "WDTE": "QQQ",
+    "WDTE.L": "QQQ",
     "WEC": "WEC",
     "WELL": "WELL",
     "WENE": "IVV",
@@ -30322,7 +31954,10 @@
     "WEX": "WEX",
     "WFC": "WFC",
     "WFNS": "IVV",
+    "WFRD": "WFRD",
     "WHCA": "IVV",
+    "WHCE": "QQQ",
+    "WHCE.L": "QQQ",
     "WHCS": "IVV",
     "WHR": "WHR",
     "WIAU": "IVV",
@@ -30333,7 +31968,6 @@
     "WIMI.L": "AH50",
     "WINA": "IVV",
     "WINC": "IVV",
-    "WING": "IVV",
     "WING.L": "IVV",
     "WING.MI": "IVV",
     "WING.SW": "IVV",
@@ -30353,6 +31987,8 @@
     "WMT": "WMT",
     "WMTS": "IVV",
     "WMVG": "IVV",
+    "WNDE": "QQQ",
+    "WNDE.L": "QQQ",
     "WNGA": "IVV",
     "WNGE": "IVV",
     "WNSF": "IVV",
@@ -30390,21 +32026,37 @@
     "WYNN": "WYNN",
     "X2AG": "AH50",
     "X2AG.L": "AH50",
+    "X3PS": "QQQ",
+    "X3PS.DE": "QQQ",
+    "X4PS": "QQQ",
+    "X4PS.DE": "QQQ",
     "X5SP": "AH50",
     "X5SP.L": "AH50",
+    "X6PS": "QQQ",
+    "X6PS.DE": "QQQ",
     "X71U": "AH50",
     "X71U.L": "AH50",
     "X7GB": "AH50",
     "X7GB.L": "AH50",
+    "X7PP": "QQQ",
+    "X7PP.L": "QQQ",
+    "X8PS": "QQQ",
+    "X8PS.DE": "QQQ",
+    "XAAG": "QQQ",
+    "XAAG.DE": "QQQ",
     "XAID": "AH50",
     "XAID.L": "AH50",
     "XAIX": "AH50",
     "XAIX.L": "AH50",
+    "XAPS": "QQQ",
+    "XAPS.DE": "QQQ",
     "XAR": "SPY",
     "XASB": "AH50",
     "XASB.L": "AH50",
     "XASX": "AH50",
     "XASX.L": "AH50",
+    "XAT1": "QQQ",
+    "XAT1.DE": "QQQ",
     "XAUS": "AH50",
     "XAUS.L": "AH50",
     "XAXD": "AH50",
@@ -30550,6 +32202,8 @@
     "XDPGD.L": "AH50",
     "XDPP": "AH50",
     "XDPP.L": "AH50",
+    "XDPS": "QQQ",
+    "XDPS.DE": "QQQ",
     "XDPU": "AH50",
     "XDPU.L": "AH50",
     "XDRE": "AH50",
@@ -30620,6 +32274,8 @@
     "XEOU.L": "AH50",
     "XEPA": "AH50",
     "XEPA.L": "AH50",
+    "XEPS": "QQQ",
+    "XEPS.DE": "QQQ",
     "XEQL": "AH50",
     "XEQL.L": "AH50",
     "XES": "SPY",
@@ -30645,6 +32301,8 @@
     "XFFE.L": "AH50",
     "XFNT": "AH50",
     "XFNT.L": "AH50",
+    "XFPS": "QQQ",
+    "XFPS.DE": "QQQ",
     "XFSN": "AH50",
     "XFSN.L": "AH50",
     "XFVT": "AH50",
@@ -30712,6 +32370,8 @@
     "XIGB.L": "AH50",
     "XINF": "AH50",
     "XINF.L": "AH50",
+    "XIPS": "QQQ",
+    "XIPS.DE": "QQQ",
     "XISP": "AH50",
     "XISP.L": "AH50",
     "XITK": "SPY",
@@ -30721,38 +32381,60 @@
     "XJ2D.L": "AH50",
     "XJH": "IVV",
     "XJR": "IVV",
+    "XKPS": "QQQ",
+    "XKPS.DE": "QQQ",
     "XKS2": "AH50",
     "XKS2.L": "AH50",
     "XKSD": "AH50",
     "XKSD.L": "AH50",
     "XLB": "SPY",
     "XLBI": "SPY",
+    "XLBS": "QQQ",
+    "XLBS.L": "QQQ",
     "XLC": "SPY",
     "XLCI": "SPY",
+    "XLCS": "QQQ",
+    "XLCS.L": "QQQ",
     "XLDX": "AH50",
     "XLDX.L": "AH50",
     "XLE": "SPY",
     "XLEI": "SPY",
+    "XLES": "QQQ",
+    "XLES.L": "QQQ",
     "XLF": "SPY",
     "XLFI": "SPY",
+    "XLFS": "QQQ",
+    "XLFS.L": "QQQ",
     "XLG": "QQQ",
     "XLI": "SPY",
     "XLII": "SPY",
+    "XLIS": "QQQ",
+    "XLIS.L": "QQQ",
     "XLK": "SPY",
     "XLKI": "SPY",
+    "XLKS": "QQQ",
+    "XLKS.L": "QQQ",
     "XLP": "SPY",
     "XLPE": "AH50",
     "XLPE.L": "AH50",
+    "XLPS": "QQQ",
+    "XLPS.L": "QQQ",
     "XLRE": "SPY",
     "XLRI": "SPY",
     "XLSI": "SPY",
     "XLSR": "SPY",
     "XLU": "SPY",
     "XLUI": "SPY",
+    "XLUS": "QQQ",
+    "XLUS.L": "QQQ",
     "XLV": "SPY",
     "XLVI": "SPY",
+    "XLVS": "QQQ",
+    "XLVS.L": "QQQ",
     "XLY": "SPY",
     "XLYI": "SPY",
+    "XLYS": "QQQ",
+    "XLYS.L": "QQQ",
     "XM1D": "AH50",
     "XM1D.L": "AH50",
     "XMAD": "AH50",
@@ -30809,6 +32491,8 @@
     "XMN2.L": "AH50",
     "XMOV": "AH50",
     "XMOV.L": "AH50",
+    "XMPS": "QQQ",
+    "XMPS.DE": "QQQ",
     "XMPT": "SMH",
     "XMTD": "AH50",
     "XMTD.L": "AH50",
@@ -30847,6 +32531,8 @@
     "XNJG.L": "AH50",
     "XNNV": "AH50",
     "XNNV.L": "AH50",
+    "XNPS": "QQQ",
+    "XNPS.DE": "QQQ",
     "XNTK": "SPY",
     "XNZS": "AH50",
     "XNZS.L": "AH50",
@@ -30858,6 +32544,8 @@
     "XOEX": "AH50",
     "XOM": "XOM",
     "XOP": "SPY",
+    "XOPS": "QQQ",
+    "XOPS.DE": "QQQ",
     "XPEJ": "AH50",
     "XPEJ.L": "AH50",
     "XPEV": "XPEV",
@@ -30866,15 +32554,24 @@
     "XPHG.L": "AH50",
     "XPHI": "AH50",
     "XPHI.L": "AH50",
+    "XPP": "UPRO",
+    "XPPS": "QQQ",
+    "XPPS.DE": "QQQ",
     "XPXD": "AH50",
     "XPXD.L": "AH50",
     "XPXJ": "AH50",
     "XPXJ.L": "AH50",
+    "XQPS": "QQQ",
+    "XQPS.DE": "QQQ",
     "XQUA": "AH50",
     "XQUA.L": "AH50",
+    "XRES": "QQQ",
+    "XRES.L": "QQQ",
     "XRMI": "BOTZ",
     "XRMU": "AH50",
     "XRMU.L": "AH50",
+    "XRPS": "QQQ",
+    "XRPS.DE": "QQQ",
     "XRSG": "AH50",
     "XRSG.L": "AH50",
     "XRSS": "AH50",
@@ -30970,6 +32667,8 @@
     "XTMT": "AH50",
     "XTMT.L": "AH50",
     "XTN": "SPY",
+    "XTPS": "QQQ",
+    "XTPS.DE": "QQQ",
     "XTR": "BOTZ",
     "XU10": "AH50",
     "XU10.L": "AH50",
@@ -31131,10 +32830,13 @@
     "XZWG.L": "AH50",
     "XZWS": "AH50",
     "XZWS.L": "AH50",
+    "YCL": "UPRO",
+    "YCS": "UPRO",
     "YCSH": "IVV",
     "YELP": "YELP",
     "YETI": "YETI",
     "YUM": "YUM",
+    "YXI": "UPRO",
     "Z": "Z",
     "ZAL.DE": "ZAL.DE",
     "ZAP": "BOTZ",
@@ -31150,13 +32852,14 @@
     "ZION": "ZION",
     "ZM": "ZM",
     "ZS": "ZS",
+    "ZSL": "UPRO",
     "ZTS": "ZTS",
     "ZURN.SW": "ZURN.SW"
   },
   "counts": {
-    "logos": 1015,
-    "stocks": 1006,
-    "etfIssuers": 9,
-    "tickerAliases": 5345
+    "logos": 1049,
+    "stocks": 1038,
+    "etfIssuers": 11,
+    "tickerAliases": 6204
   }
 }

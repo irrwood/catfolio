@@ -1,0 +1,43 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192"><rect width="192" height="192" fill="#CE1141" /><svg version="1.1" id="svg3597" viewBox="-4.58526 -11.5965 199.291 142.651" fill="#FDF3F6" x="25.7777" y="44.0052" width="140.2423" height="100.2513">
+  <defs id="defs3599">
+    <clipPath id="clipPath3426">
+      <path d="M 0,792 612,792 612,0 0,0 0,792 z" id="path3428" />
+    </clipPath>
+  </defs>
+  <g transform="translate(-52.044649,-276.0821)" id="layer1">
+    <g transform="matrix(7.1160962,0,0,-7.1160962,-312.61739,1141.3445)" id="g3420">
+      <g id="g3422">
+        <g clip-path="url(#clipPath3426)" id="g3424">
+          <g transform="translate(68.9116,116.8012)" id="g3430">
+            <path d="M 0,0 -4.3,4.284 -8.584,0 -12.885,4.284 -17.169,0 -4.3,-12.852 8.584,0 4.284,4.284 0,0 z" id="path3432" fill="#FDF3F6" fill-opacity="1" fill-rule="nonzero" stroke="none" />
+          </g>
+          <g transform="translate(63.3425,80.2393)" id="g3434">
+            </g>
+          <g transform="translate(75.8319,90.6362)" id="g3438">
+            </g>
+          <g transform="translate(84.3338,86.1051)" id="g3442">
+            </g>
+          <g transform="translate(89.8206,82.8263)" id="g3446">
+            </g>
+          <g transform="translate(98.1413,88.7084)" id="g3450">
+            </g>
+          <g transform="translate(107.4836,90.6527)" id="g3454">
+            </g>
+          <g transform="translate(118.5065,92.8771)" id="g3458">
+            </g>
+          <g transform="translate(119.5116,80.2393)" id="g3462">
+            </g>
+          <g transform="translate(128.1288,90.6527)" id="g3466">
+            </g>
+          <g transform="translate(139.2342,92.8771)" id="g3470">
+            </g>
+          <g transform="translate(143.7321,90.0925)" id="g3474">
+            </g>
+          <g transform="translate(149.7793,95.8758)" id="g3478">
+            </g>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg></svg>
