@@ -30,6 +30,50 @@ final class SecurityDetailLiveZoomTests: XCTestCase {
         }
     }
 
+    func testActionSheetClosesBeforeStockPushAndReturn() async throws {
+        try await withSource(inNavigationStack: true) { presenter, key, transition in
+            let stack = try XCTUnwrap(presenter as? UINavigationController)
+            let root = try XCTUnwrap(stack.topViewController)
+            let overlay = UIAlertController(title: "Filter", message: nil, preferredStyle: .actionSheet)
+            overlay.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            overlay.popoverPresentationController?.sourceView = root.view
+            stack.present(overlay, animated: false)
+            try await self.waitUntil { overlay.view.window != nil }
+            var ends = 0
+            XCTAssertTrue(transition.open(id: key.id, namespace: key.namespace,
+                                          page: Self.page, didEnd: { ends += 1 }))
+            try await self.waitUntil {
+                stack.presentedViewController == nil && stack.topViewController !== root
+                    && stack.transitionCoordinator == nil
+            }
+            XCTAssertNil(overlay.presentedViewController, "The stock page must never belong to the transient overlay")
+            transition.close()
+            try await self.waitUntil { stack.topViewController === root && stack.transitionCoordinator == nil }
+            XCTAssertEqual(ends, 1)
+        }
+    }
+
+    func testNormalPresentedPageIsPreservedAndConsumesTap() async throws {
+        try await withSource(inNavigationStack: true) { presenter, key, transition in
+            let stack = try XCTUnwrap(presenter as? UINavigationController)
+            let root = try XCTUnwrap(stack.topViewController)
+            let sheet = UIViewController()
+            sheet.modalPresentationStyle = .overFullScreen
+            stack.present(sheet, animated: false)
+            try await self.waitUntil { sheet.view.window != nil }
+            var builds = 0
+            XCTAssertTrue(transition.open(id: key.id, namespace: key.namespace, page: { close in
+                builds += 1
+                return Self.page(close: close)
+            }, didEnd: { XCTFail("No stock page was opened") }))
+            XCTAssertTrue(stack.presentedViewController === sheet)
+            XCTAssertTrue(stack.topViewController === root)
+            XCTAssertEqual(builds, 0)
+            XCTAssertFalse(transition.isShowingPage)
+            sheet.dismiss(animated: false)
+        }
+    }
+
     func testNavigationZoomHidesTabBarAndRestoresItOnReturn() async throws {
         try await checkTabBarVisibility(initiallyHidden: false)
     }

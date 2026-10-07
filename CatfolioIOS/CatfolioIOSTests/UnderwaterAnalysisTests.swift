@@ -56,6 +56,51 @@ final class UnderwaterAnalysisTests: XCTestCase {
         XCTAssertNil(state.errorMessage)
     }
 
+    /// The latest closed session's history is enough; a stale one is shown
+    /// and then replaced. Until New York closes, the day before is current —
+    /// Asia's whole daytime — and weekends and holidays count back.
+    func testOnlyAStaleCacheIsRefreshedFromTheNetwork() {
+        func ending(_ day: String) -> HoldingValueHistory {
+            HoldingValueHistory(rows: [.init(dateText: "2026-08-31", cost: 100, values: ["A": 100]),
+                                       .init(dateText: day, cost: 100, values: ["A": 101])],
+                                costs: ["A": 100], names: [:])
+        }
+        func at(_ day: String, utcHour: Double) -> Date { DayDateCodec.date(from: day)!.addingTimeInterval(utcHour * 3_600) }
+        // Wednesday 10:00 in Beijing is Tuesday evening in New York.
+        let beijingMorning = at("2026-10-07", utcHour: 2)
+        XCTAssertTrue(HoldingHistoryState.reachesLatestSession(ending("2026-10-06"), now: beijingMorning))
+        XCTAssertFalse(HoldingHistoryState.reachesLatestSession(ending("2026-10-05"), now: beijingMorning))
+        // After Wednesday's close (16:00 EDT = 20:00 UTC).
+        let afterClose = at("2026-10-07", utcHour: 21)
+        XCTAssertTrue(HoldingHistoryState.reachesLatestSession(ending("2026-10-07"), now: afterClose))
+        XCTAssertFalse(HoldingHistoryState.reachesLatestSession(ending("2026-10-06"), now: afterClose))
+        let sunday = at("2026-10-04", utcHour: 12)
+        XCTAssertTrue(HoldingHistoryState.reachesLatestSession(ending("2026-10-02"), now: sunday))
+        XCTAssertFalse(HoldingHistoryState.reachesLatestSession(ending("2026-10-01"), now: sunday))
+        // Labor Day: Friday is still the latest session.
+        XCTAssertEqual(HoldingHistoryState.latestClosedSession(now: at("2026-09-07", utcHour: 22)), "2026-09-04")
+        // Past the known calendar, weekdays and the 16:00 close still hold.
+        XCTAssertEqual(HoldingHistoryState.latestClosedSession(now: at("2027-01-06", utcHour: 12)), "2027-01-05")
+        XCTAssertEqual(HoldingHistoryState.latestClosedSession(now: at("2027-01-06", utcHour: 22)), "2027-01-06")
+        XCTAssertEqual(HoldingHistoryState.latestClosedSession(now: at("2027-01-10", utcHour: 12)), "2027-01-08")
+    }
+
+    @MainActor
+    func testACurrentCacheNeedsNoNetworkRequest() async {
+        let state = HoldingHistoryState()
+        let today = DayDateCodec.string(from: Date())
+        let current = HoldingValueHistory(rows: [.init(dateText: "2000-01-03", cost: 100, values: ["A": 100]),
+                                                 .init(dateText: today, cost: 100, values: ["A": 120])],
+                                          costs: ["A": 100], names: [:])
+        var requests: [Bool] = []
+        await state.load { cachedOnly in
+            requests.append(cachedOnly)
+            return current
+        }
+        XCTAssertEqual(requests, [true])
+        XCTAssertEqual(state.history?.rows.last?.values["A"], 120)
+    }
+
     @MainActor
     func testEmptyAndFailedRefreshKeepSavedHistory() async {
         let state = HoldingHistoryState()

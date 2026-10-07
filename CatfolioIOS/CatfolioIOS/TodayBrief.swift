@@ -30,6 +30,23 @@ struct TodayBriefContext: Hashable, Sendable {
             ? $0.ticker < $1.ticker : abs($0.amount) > abs($1.amount) }.prefix(3))
     }
 
+    /// What makes two briefs the same brief: the session, the language and
+    /// the holdings. Not the amounts — a quote refresh must neither start a
+    /// new AI request nor throw away the paragraphs the reader opened.
+    var briefKey: String {
+        [sessionDate ?? "-", language, stocks.map(\.ticker).sorted().joined(separator: ",")]
+            .joined(separator: "|")
+    }
+
+    /// The portfolio's amount as it is now. A brief is kept across quote
+    /// refreshes rather than rewritten, so the figure written into it would
+    /// otherwise drift from the card beneath. Words other than an amount are
+    /// left as written.
+    func liveLabel(_ label: String, target: String) -> String {
+        guard target == "portfolio", label.contains(where: \.isNumber), total.isFinite else { return label }
+        return DisplayFormat.money(total, signed: true, fractionDigits: 2)
+    }
+
     var targets: Set<String> {
         Set(["portfolio", "benchmark"] + stocks.map { "stock:\($0.ticker)" }
             + sectors.map { "sector:\($0.id)" })
@@ -88,13 +105,18 @@ struct TodayBriefContext: Hashable, Sendable {
             + "Also search the latest company developments through the current date, including non-trading days. Clearly label developments published after the quoted session as new updates, never as causes of that earlier return. If none are relevant, say none. Investigate the observed trading-session move and check earnings, guidance, corporate actions and sector catalysts. Distinguish pre-close announcements from after-hours news. State a cause only when reliable reporting explicitly supports attribution; otherwise say no clear catalyst was verified."
     }
 
+    func companyResearchPrompt(for stock: Stock) -> String {
+        SecurityDailyMoveSkill.instructions + "\n" + (newsQuestion(for: "stock:\(stock.ticker)") ?? "")
+            + "\nReturn JSON: {\"text\":\"one or two concise sentences\",\"sources\":[{\"title\":\"source title\",\"url\":\"https://...\"}]}. No disclaimers."
+    }
+
     func prompt(target: String?, previous: String) -> String {
         """
         Write Catfolio's conversational daily portfolio brief from the supplied computed facts.
-        \(target == nil ? "Start with one short sentence: the net move, its main stock contributor and, if useful, the leading sector. Then, if verified news explains a leading stock’s session move, integrate one short sourced explanation. Maximum 150 Chinese characters or 75 English words." : "The reader tapped \(target!). Output ONLY one or two NEW sentences about the tapped topic, continuing naturally from the existing text. Do not output, rewrite or repeat any existing words, amounts, or facts. Keep relevant inline links in the addition. If already discussed, add a different verified detail. Never invent facts.")
+        \(target == nil ? "Write a substantive watchlist-style market readout in 3–4 short paragraphs, up to 500 Chinese characters or 250 English words. Start with the overall portfolio move and the strongest verified theme; never invent a unifying narrative. Then discuss the researched key stocks, grouped by a relevant sector or shared verified catalyst where possible. For each, connect the supplied session return with the specific dated company development, what changed and why it matters. Include one or two material numbers from the evidence when useful. Distinguish direct sourced attribution from concurrent news and portfolio contribution. Include downside contributors and significant contrary evidence when available. If evidence is absent, keep that part short and factual instead of filling space." : "The reader tapped \(target!). Output ONLY one or two NEW sentences about the tapped topic, continuing naturally from the existing text. Do not output, rewrite or repeat any existing words, amounts, or facts. Keep relevant inline links in the addition. If already discussed, add a different verified detail. Never invent facts.")
         Inline interactive references MUST use [[target|visible words]], e.g. [[portfolio|+$42]], [[stock:NVDA|NVIDIA]], [[sector:technology|Technology]], [[benchmark|SPY]].
-        Allowed targets: \(targets.sorted().joined(separator: ", ")). Include at least one relevant reference.
-        Use concise natural prose, no headings, bullets, Markdown, recommendations or predictions. Never output 今日简报, disclaimers, 非投资建议, or equivalent caveats; the page supplies one footer.
+        Allowed targets: \(targets.sorted().joined(separator: ", ")). Include at least one relevant reference. Put each researched company name in a stock reference. Include its supplied daily return once next to its name; do not repeat that return later.
+        Use concise natural prose with paragraph breaks, no separate headings, bullets, Markdown, recommendations or predictions. Never output 今日简报, disclaimers, 非投资建议, or equivalent caveats; the page supplies one footer.
         Keep supplied amounts, signs and currency unchanged. Do not call a contribution a stock's return.
         Never claim all holdings moved if some lack quotes. Do not confuse trading-session data with today's calendar date.
         Available cached daily facts are sufficient for this brief. Do not report an insufficient-history state;
@@ -179,8 +201,8 @@ final class TodayBriefStore {
     }
     typealias Generate = @Sendable (Request, @escaping @Sendable (String) async -> Void) async throws -> Output
     static let shared = TodayBriefStore()
-    private var entries: [TodayBriefContext: Entry] = [:]
-    @ObservationIgnored private var tasks: [TodayBriefContext: Task<Void, Never>] = [:]
+    private var entries: [String: Entry] = [:]
+    @ObservationIgnored private var tasks: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private let generate: Generate
 
     init(generate: @escaping Generate = { try await TodayBriefStore.fetch($0, emit: $1) }) {
@@ -188,13 +210,13 @@ final class TodayBriefStore {
     }
 
     func entry(for context: TodayBriefContext) -> Entry {
-        if let saved = entries[context] { return saved }
+        if let saved = entries[context.briefKey] { return saved }
         // Bound the in-memory cache; ongoing requests keep their entry.
         if entries.count >= 12, let old = entries.keys.first(where: { tasks[$0] == nil }) {
             entries.removeValue(forKey: old)
         }
         let entry = Entry()
-        entries[context] = entry
+        entries[context.briefKey] = entry
         return entry
     }
 
@@ -204,12 +226,12 @@ final class TodayBriefStore {
     }
 
     func expand(_ context: TodayBriefContext, target: String, after paragraphID: UUID? = nil) {
-        guard context.targets.contains(target), tasks[context] == nil else { return }
+        guard context.targets.contains(target), tasks[context.briefKey] == nil else { return }
         run(context, target: target, after: paragraphID)
     }
 
     private func run(_ context: TodayBriefContext, target: String?, after paragraphID: UUID? = nil) {
-        guard tasks[context] == nil else { return }
+        guard tasks[context.briefKey] == nil else { return }
         let entry = entry(for: context)
         let previous = entry.paragraphs.map(\.text).joined(separator: "\n")
         let saved = entry.paragraphs
@@ -221,8 +243,9 @@ final class TodayBriefStore {
             entry.paragraphs.append(paragraph)
         }
         entry.failure = nil
-        tasks[context] = Task {
-            defer { tasks[context] = nil }
+        let key = context.briefKey
+        tasks[key] = Task {
+            defer { tasks[key] = nil }
             var received = ""
             do {
                 let result = try await generate(Request(context: context, target: target, previous: previous)) { text in
@@ -271,7 +294,7 @@ final class TodayBriefStore {
                     let members = Set(request.context.sectors.first { "sector:\($0.id)" == target }?.tickers ?? [])
                     selected = Array(request.context.stocks.filter { members.contains($0.ticker) }.prefix(2))
                 } else {
-                    selected = Array(request.context.leaders.prefix(2))
+                    selected = Array(request.context.leaders.prefix(3))
                 }
                 let dateFormatter = DateFormatter()
                 dateFormatter.dateFormat = "yyyy-MM-dd"
@@ -284,7 +307,7 @@ final class TodayBriefStore {
                     try Task.checkCancellation()
                     let note = try await ContentLanguage.$requested.withValue(request.context.language) {
                         try await SecurityDailyMoveStore.researchNote(ticker: stock.ticker, name: stock.name,
-                            prompt: publicPrompt + "\nFocus on \(stock.name) (\(stock.ticker)), session return \(stock.changePercent)%.",
+                            prompt: request.context.companyResearchPrompt(for: stock),
                             sessionDate: session, focus: SecurityDailyMoveSkill.focus(changePercent: stock.changePercent, baseline: nil),
                             emptyNote: SecurityDailyMoveNote(text: "No verified relevant news or clear public catalyst found.", sources: []))
                     }

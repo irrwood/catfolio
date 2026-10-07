@@ -561,9 +561,14 @@ actor CompanyFinancialsClient {
 
     private func loadFromNasdaq(ticker: String) async throws -> CompanyFinancialsData {
         let symbol = Self.nasdaqSymbol(ticker)
-        guard !symbol.isEmpty else { throw CompanyFinancialsError.unsupportedTicker }
-        let annualURL = URL(string: "https://api.nasdaq.com/api/company/\(symbol)/financials?frequency=1")!
-        let quarterlyURL = URL(string: "https://api.nasdaq.com/api/company/\(symbol)/financials?frequency=2")!
+        // A ticker with a space or other stray character from an import
+        // makes no URL; that is an unsupported ticker, not a crash.
+        guard !symbol.isEmpty,
+              let encoded = symbol.addingPercentEncoding(
+                  withAllowedCharacters: CharacterSet.urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))),
+              let annualURL = URL(string: "https://api.nasdaq.com/api/company/\(encoded)/financials?frequency=1"),
+              let quarterlyURL = URL(string: "https://api.nasdaq.com/api/company/\(encoded)/financials?frequency=2")
+        else { throw CompanyFinancialsError.unsupportedTicker }
         async let annualBytes = request(
             url: annualURL,
             isSEC: false,

@@ -397,7 +397,13 @@ final class DetailMarketSyncTests: XCTestCase {
             quoteObservedAt: observedAt)
         let document = LocalPortfolioDocument(source: "CSV", updatedAt: now,
                                               positions: [position], snapshots: [])
-        let model = AppModel(defaults: defaults, personalDocumentLoader: { document })
+        // A cache of its own: the shared one keeps the home last shown, so
+        // one test's published quote would open the next test at 130.
+        let cacheDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DetailMarketSync-\(UUID().uuidString)", isDirectory: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: cacheDirectory) }
+        let model = AppModel(defaults: defaults, personalDocumentLoader: { document },
+                             presentationCache: PortfolioPresentationCache(directory: cacheDirectory))
         await model.refreshPortfolio(refreshMarketData: false)
         XCTAssertEqual(model.holdings.first?.quotePrice, 120)
         return model

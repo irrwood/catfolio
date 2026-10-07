@@ -48,7 +48,9 @@ final class SecurityDetailLiveZoom {
     private var logoPictures: [ObjectIdentifier: UIImageView] = [:]
 
     /// Presents the page zooming out of its row's logo. False when the row is
-    /// not on screen; the caller then presents the page its own way.
+    /// not on screen; the caller then presents the page its own way. A tap
+    /// blocked by an existing normal presentation is consumed (true), so it
+    /// cannot trigger a second presentation through that fallback.
     func open(id: AnyHashable, namespace: Namespace.ID,
               page content: (_ close: @escaping () -> Void) -> AnyView,
               didEnd: @escaping () -> Void) -> Bool {
@@ -73,6 +75,17 @@ final class SecurityDetailLiveZoom {
             Self.note("BLOCKED: the row has no window")
             #endif
             return false
+        }
+        let stack = Self.navigationController(of: source.row)
+        if let presented = stack?.presentedViewController {
+            // Only an action sheet is explicitly transient. A normal sheet,
+            // full-screen page or unrecognised presenter keeps ownership.
+            guard let menu = presented as? UIAlertController,
+                  menu.preferredStyle == .actionSheet,
+                  menu.presentedViewController == nil else {
+                // Consume the tap so the caller cannot start its modal fallback.
+                return true
+            }
         }
         #if DEBUG
         SecurityDetailTouchProbe.install(on: window)
@@ -107,7 +120,6 @@ final class SecurityDetailLiveZoom {
             }
         }
 
-        let stack = Self.navigationController(of: source.row)
         guard let presenter = stack ?? Self.topController(from: window.rootViewController) else {
             #if DEBUG
             Self.note("BLOCKED: no presenter and no stack")
@@ -164,7 +176,16 @@ final class SecurityDetailLiveZoom {
         // is all there is.
         if picture != nil { Self.hiddenLogo.key = key }
         if let stack {
-            stack.pushViewController(controller, animated: true)
+            if stack.presentedViewController != nil {
+                // The action sheet above was explicitly checked before changing
+                // the logo or page state. Dismiss only that controller.
+                stack.presentedViewController?.dismiss(animated: true) { [weak self, weak stack, controller] in
+                    guard let self, let stack, self.page === controller else { return }
+                    stack.pushViewController(controller, animated: true)
+                }
+            } else {
+                stack.pushViewController(controller, animated: true)
+            }
         } else {
             presenter.present(controller, animated: true)
         }
@@ -289,8 +310,7 @@ final class SecurityDetailLiveZoom {
         while let next = responder?.next {
             if let controller = next as? UIViewController {
                 // Also while a page is still popping: that is the interruption.
-                guard let stack = controller.navigationController,
-                      stack.presentedViewController == nil else { return nil }
+                guard let stack = controller.navigationController else { return nil }
                 return stack
             }
             responder = next
@@ -324,7 +344,9 @@ final class SecurityDetailLiveZoom {
         override func viewWillAppear(_ animated: Bool) {
             super.viewWillAppear(animated)
             // The home stack hides its bar; a pushed page must too.
-            navigationController?.setNavigationBarHidden(true, animated: false)
+            if let stack = navigationController, !stack.isNavigationBarHidden {
+                stack.setNavigationBarHidden(true, animated: false)
+            }
             transitionTabBar(hidden: true, animated: animated)
         }
 
@@ -348,7 +370,7 @@ final class SecurityDetailLiveZoom {
         /// Enroll its visibility change in the page's transition so scrubbing
         /// and cancelling a return also scrub and restore the tab bar.
         private func transitionTabBar(hidden: Bool, animated: Bool) {
-            guard let tabs = owningTabBarController else { return }
+            guard let tabs = owningTabBarController, tabs.isTabBarHidden != hidden else { return }
             guard animated, let coordinator = transitionCoordinator else {
                 tabs.setTabBarHidden(hidden, animated: false)
                 return
@@ -359,7 +381,10 @@ final class SecurityDetailLiveZoom {
                 // finger scrubs. Changing SwiftUI's tab container here can
                 // rebuild the destination on the first interactive frame.
                 coordinator.animate(alongsideTransition: nil) { context in
-                    tabs.setTabBarHidden(context.isCancelled ? wasHidden : hidden, animated: false)
+                    // Nothing changed during the gesture. Cancelling must not
+                    // relayout SwiftUI's tab container as the page becomes live.
+                    guard !context.isCancelled, tabs.isTabBarHidden != hidden else { return }
+                    tabs.setTabBarHidden(hidden, animated: false)
                 }
                 return
             }
@@ -373,7 +398,9 @@ final class SecurityDetailLiveZoom {
 
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
-            navigationController?.setNavigationBarHidden(true, animated: false)
+            if let stack = navigationController, !stack.isNavigationBarHidden {
+                stack.setNavigationBarHidden(true, animated: false)
+            }
             popping = false // A pull that was let go of.
             #if DEBUG
             if appearedAt == nil {

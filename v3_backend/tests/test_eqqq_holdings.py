@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DATASET = ROOT / "v3_backend" / "app" / "data" / "eqqq_holdings.json"
-PROJECT = ROOT / "CatfolioIOS" / "CatfolioIOS.xcodeproj" / "project.pbxproj"
+IOS_COPY = ROOT / "CatfolioIOS" / "CatfolioIOS" / "Resources" / "ETF" / "eqqq_holdings.json"
 
 
 def test_bundled_eqqq_holdings_are_complete_and_weighted():
@@ -22,7 +22,5 @@ def test_bundled_eqqq_holdings_are_complete_and_weighted():
     }
 
 
-def test_eqqq_holdings_are_bundled_in_the_ios_target():
-    project = PROJECT.read_text(encoding="utf-8")
-    assert "eqqq_holdings.json in Resources" in project
-    assert "../v3_backend/app/data/eqqq_holdings.json" in project
+def test_the_ios_app_bundles_the_same_holdings():
+    assert IOS_COPY.read_bytes() == DATASET.read_bytes()

@@ -49,7 +49,6 @@ struct PortfolioDetailsCard: View {
     @State private var etfConstituentDailyChanges: [String: Double] = [:]
     @State private var loadedETFConstituentChangesKey = ""
     @State private var isLoadingETFConstituentChanges = false
-    @State private var headerUsesGlass = false
     @AppStorage("portfolio.holdings.sortField") private var holdingSortFieldRawValue = HoldingSortField.marketValue.rawValue
     @AppStorage("portfolio.holdings.sortAscending") private var holdingSortAscending = false
     @State private var holdingPerformancePeriod: HoldingPerformancePeriod = .holdingPeriod
@@ -213,8 +212,18 @@ struct PortfolioDetailsCard: View {
                 // type — the title no longer carries the app's name.
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 2) {
-                        Text(tableTitle)
-                            .font(Typography.text(size: 22, weight: .semibold))
+                        ZStack(alignment: .leading) {
+                            // Keep the native menu's source bounds stable while
+                            // its selection changes, including longer translations.
+                            Text(L10n.text("持仓列表")).hidden()
+                                .accessibilityHidden(true)
+                            Text(L10n.text("ETF 穿透")).hidden()
+                                .accessibilityHidden(true)
+                            Text(tableTitle)
+                        }
+                        .font(Typography.text(size: 22, weight: .semibold))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: true)
                         Image("PortfolioHeaderDisclosure")
                             .renderingMode(.template)
                             .resizable()
@@ -222,10 +231,16 @@ struct PortfolioDetailsCard: View {
                             .frame(width: 20, height: 20)
                     }
                     .foregroundStyle(CatfolioTheme.primaryText)
-                    headerSubtitle
+                    ZStack(alignment: .leading) {
+                        Text("0").appText(.caption, weight: .medium)
+                            .hidden().accessibilityHidden(true)
+                        headerSubtitle
+                    }
                 }
+                .fixedSize(horizontal: true, vertical: true)
             }
             .buttonStyle(.plain)
+            .menuOrder(.fixed)
 
             Spacer()
             if isLoadingVolumeSort {
@@ -242,17 +257,6 @@ struct PortfolioDetailsCard: View {
                         menu: AnyView(filterMenu(floating: true))) : nil
                 }
         }
-        .onGeometryChange(for: Bool.self) { geometry in
-            guard #available(iOS 26.0, *) else { return false }
-            // Only publish the threshold crossing, not every global position.
-            let threshold = UIScreen.main.bounds.midY + (headerUsesGlass ? 28 : 0)
-            return geometry.frame(in: .global).midY <= threshold
-        } action: { _, usesGlass in
-            guard usesGlass != headerUsesGlass else { return }
-            // Not animated: glass animated in from nothing drew for a frame
-            // as a grey square before settling into its capsule.
-            headerUsesGlass = usesGlass
-        }
     }
 
     @ViewBuilder
@@ -263,13 +267,12 @@ struct PortfolioDetailsCard: View {
                 ascending: $holdingSortAscending,
                 performancePeriod: $holdingPerformancePeriod,
                 iconOnly: true,
-                usesGlass: floating || headerUsesGlass,
                 showsFilterTitle: floating
             )
         } else {
             HeatmapPerformancePeriodMenu(period: $heatmapPerformancePeriod,
                 groupsBySector: $heatmapGroupsBySector, looksThroughETF: $heatmapLooksThroughETF,
-                usesGlass: floating || headerUsesGlass, showsFilterTitle: floating)
+                showsFilterTitle: floating)
         }
     }
 
@@ -500,7 +503,6 @@ struct HeatmapPerformancePeriodMenu: View {
     @Binding var period: HoldingPerformancePeriod
     @Binding var groupsBySector: Bool
     @Binding var looksThroughETF: Bool
-    var usesGlass = false
     var showsFilterTitle = false
     var isToolbarItem = false
 
@@ -531,7 +533,7 @@ struct HeatmapPerformancePeriodMenu: View {
                     .renderingMode(.template).resizable().scaledToFit()
                     .frame(width: 24, height: 24)
             } else {
-                PortfolioFilterLabel(showsTitle: showsFilterTitle, usesGlass: usesGlass)
+                PortfolioFilterLabel(showsTitle: showsFilterTitle)
             }
         }
         .buttonStyle(.plain)
@@ -551,7 +553,6 @@ struct HoldingSortMenu: View {
     @Binding var ascending: Bool
     @Binding var performancePeriod: HoldingPerformancePeriod
     var iconOnly = false
-    var usesGlass = false
     var showsFilterTitle = false
 
     var body: some View {
@@ -607,7 +608,7 @@ struct HoldingSortMenu: View {
         } label: {
             Group {
                 if iconOnly {
-                    PortfolioFilterLabel(showsTitle: showsFilterTitle, usesGlass: usesGlass)
+                    PortfolioFilterLabel(showsTitle: showsFilterTitle)
                 } else {
                     HStack(spacing: 3) {
                         Text(field.compactTitle)
@@ -623,7 +624,6 @@ struct HoldingSortMenu: View {
 
 struct PortfolioFilterLabel: View {
     let showsTitle: Bool
-    let usesGlass: Bool
 
     var body: some View {
         HStack(spacing: 6) {
@@ -635,7 +635,7 @@ struct PortfolioFilterLabel: View {
         .padding(.horizontal, 17)
         .frame(minHeight: 44)
         .fixedSize()
-        .modifier(PortfolioHeaderMaterialControl(usesGlass: usesGlass))
+        .modifier(PortfolioHeaderMaterialControl())
     }
 }
 
@@ -675,7 +675,6 @@ struct PortfolioFloatingFilterOverlay: ViewModifier {
 
 struct PortfolioHeaderMaterialControl: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
-    let usesGlass: Bool
 
     private var fill: Color {
         colorScheme == .light
@@ -683,20 +682,10 @@ struct PortfolioHeaderMaterialControl: ViewModifier {
             : Color.white.opacity(0.12)
     }
 
-    /// One structure in both states, switched without animation. Swapping a
-    /// filled view for a glass one rebuilt the control, and glass animated in
-    /// drew for a frame as a grey square before becoming a capsule.
-    @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content
-                .background(fill.opacity(usesGlass ? 0 : 1), in: Capsule())
-                .glassEffect(usesGlass ? .regular.interactive() : .identity, in: Capsule())
-                .animation(nil, value: usesGlass)
-        } else {
-            content.background(fill, in: Capsule())
-        }
+        content.background(fill, in: Capsule())
     }
+
 }
 
 struct HoldingPerformanceValues {

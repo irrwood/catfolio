@@ -1,4 +1,3 @@
-from appmodel_source import read_appmodel
 """Disclosure delivery tests: preserve Core versions, nulls, and dates."""
 import importlib.util
 import json
@@ -40,16 +39,6 @@ def test_packaged_data_contains_no_local_paths_or_fake_musk_portfolio():
     assert musk['snapshot'] is None
     assert musk['activities'] == []
     assert len(bundle['coreSHA256']) == 64
-
-
-def test_public_mode_uses_existing_pages_and_account_adapter():
-    root = (ROOT / 'CatfolioIOS/CatfolioIOS/RootTabView.swift').read_text()
-    model = read_appmodel(ROOT / 'CatfolioIOS/CatfolioIOS')
-    assert 'PublicInvestorView(' not in root
-    assert 'PortfolioView()' in root and 'ReturnsView()' in root
-    assert 'publicInvestorStore.load(' in model
-    assert 'catfolio.publicSelectedAccounts' in model
-    assert 'guard !loaded.isPublicDisclosure else { return }' not in model
 
 
 def test_ark_account_has_continuous_history_and_mapped_equity():

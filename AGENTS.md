@@ -59,3 +59,14 @@ These rules apply to every UI change in `v3_backend/app/routes/` and `v3_backend
   - `xcodebuild test -project CatfolioIOS/CatfolioIOS.xcodeproj -scheme CatfolioIOS -testPlan Logic -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`
   - `-testPlan Views` for the view tests; `-testPlan All` (the scheme's default) for both.
 - `-only-testing:` alone does not help: it still builds every test target in the plan first.
+- Test behaviour in Swift, never by reading source. Do not add Python (or any) tests that open a `.swift` file and assert a string is or is not in it: they pass on a comment, fail on a rename, and check that code was written rather than that it works. Static style rules belong in `scripts/check_ios_design.py`; everything else is an XCTest that calls the real code.
+- Run what the change touches:
+  1. Every change: build, and `python3 scripts/check_ios_design.py` for UI code.
+  2. Logic changed: the related classes in the `Logic` plan (`-only-testing:CatfolioIOSTests/<Class>`).
+  3. Views, layout or interaction changed: the related classes in the `Views` plan.
+  4. Before a commit or a TestFlight build: both plans in full.
+- Keep logs out of the conversation: write the run to a file and read only the summary, opening the full log only when something failed.
+  ```sh
+  xcodebuild test … > /tmp/test.log 2>&1; status=$?
+  grep -E "error:|failed \(|Executed [0-9]+ tests" /tmp/test.log | sort -u | tail -30
+  ```

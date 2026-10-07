@@ -39,6 +39,16 @@ final class TodayBriefTests: XCTestCase {
             stocks: [], sectors: [], language: "en").newsQuestion(for: "portfolio"))
     }
 
+    func testNewsReadoutUsesSingleCompanyResearchAndSubstantiveInitialStructure() {
+        let value = context()
+        let research = value.companyResearchPrompt(for: value.stocks[0])
+        XCTAssertTrue(research.contains("NVDA"))
+        XCTAssertFalse(research.contains("AAPL"))
+        XCTAssertFalse(research.contains("contribution" + " 60"))
+        XCTAssertTrue(value.prompt(target: nil, previous: "").contains("3–4 short paragraphs"))
+        XCTAssertTrue(value.prompt(target: nil, previous: "").contains("never invent a unifying narrative"))
+    }
+
     func testExpansionPromptRequestsOnlyNewSentences() {
         let prompt = context().prompt(target: "stock:NVDA", previous: context().seed)
         XCTAssertTrue(prompt.contains("Output ONLY one or two NEW sentences"))
@@ -62,6 +72,38 @@ final class TodayBriefTests: XCTestCase {
         XCTAssertNotEqual(original, TodayBriefContext(sessionDate: "2026-10-05", total: original.total,
             benchmarkChange: original.benchmarkChange, stocks: original.stocks,
             sectors: original.sectors, language: original.language))
+    }
+
+    @MainActor
+    func testQuoteRefreshKeepsTheSameBriefAndItsExpansions() async throws {
+        let generator = TodayBriefTestGenerator()
+        let store = TodayBriefStore(generate: { request, emit in
+            try await generator.generate(request, emit: emit)
+        })
+        let value = context()
+        let entry = store.entry(for: value)
+        store.start(value)
+        try await finished(entry)
+        // The same session and holdings at fresher prices: no new request.
+        let refreshed = TodayBriefContext(sessionDate: value.sessionDate, total: 55,
+            benchmarkChange: 0.1, stocks: value.stocks.map {
+                .init(ticker: $0.ticker, name: $0.name, logoSymbol: $0.logoSymbol,
+                      changePercent: $0.changePercent + 0.5, amount: $0.amount + 6)
+            }, sectors: value.sectors, language: value.language)
+        XCTAssertTrue(store.entry(for: refreshed) === entry)
+        store.start(refreshed)
+        let count = await generator.count
+        XCTAssertEqual(count, 1)
+        // A new session or language is a new brief.
+        XCTAssertFalse(store.entry(for: context(language: "en")) === entry)
+    }
+
+    func testPortfolioAmountIsShownAsItIsNow() {
+        let value = context()
+        XCTAssertEqual(value.liveLabel("+$30.00", target: "portfolio"),
+                       DisplayFormat.money(42, signed: true, fractionDigits: 2))
+        XCTAssertEqual(value.liveLabel("组合", target: "portfolio"), "组合")
+        XCTAssertEqual(value.liveLabel("英伟达", target: "stock:NVDA"), "英伟达")
     }
 
     func testSourceLinksAcceptOnlyPublicWebURLs() {

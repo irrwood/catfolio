@@ -133,7 +133,7 @@ final class HoldingLossTests: XCTestCase {
     func testLossRanksFollowHoldingsThroughHideAndRestore() {
         let original = HoldingLossStack(history: history(), range: .oneYear)
         XCTAssertEqual(original.holdingRanks, ["A": 1, "E": 2, "C": 3, "B": 4, "G": 5, "F": 6])
-        XCTAssertEqual(original.bands.reversed().compactMap { original.rank(for: $0) }, [1, 2, 3, 4, 5])
+        XCTAssertEqual(original.bands.reversed().compactMap { original.rank(for: $0) }, [1, 2, 3, 4, 5, 6])
         XCTAssertNil(original.rank(for: original.bands[0]), "Other losses is not a ranked holding")
 
         let hidden = HoldingLossStack(history: history(), range: .oneYear, hiding: ["A", "E", "B"])
@@ -189,15 +189,16 @@ final class HoldingLossTests: XCTestCase {
     }
 
     func testPromotedLossKeepsItsRankInsteadOfItsReusedColour() {
-        let costs = Dictionary(uniqueKeysWithValues: (1...7).map { ("G\($0)", 100.0) })
+        // One more loser than there are named bands, so hiding G2 promotes G8.
+        let costs = Dictionary(uniqueKeysWithValues: (1...8).map { ("G\($0)", 100.0) })
         let history = HoldingValueHistory(rows: [
-            .init(dateText: "2026-01-05", cost: 700, values: costs, costs: costs),
-            .init(dateText: "2026-01-06", cost: 700, values: costs.mapValues { $0 - 10 }, costs: costs),
+            .init(dateText: "2026-01-05", cost: 800, values: costs, costs: costs),
+            .init(dateText: "2026-01-06", cost: 800, values: costs.mapValues { $0 - 10 }, costs: costs),
         ], costs: costs, names: [:])
         let stack = HoldingLossStack(history: history, range: .oneYear, hiding: ["G2"])
-        XCTAssertEqual(stack.bands.first { $0.title == "G7" }?.kind, .holding(colour: 1))
+        XCTAssertEqual(stack.bands.first { $0.title == "G8" }?.kind, .holding(colour: 1))
         XCTAssertEqual(stack.holdingRanks["G2"], 2)
-        XCTAssertEqual(stack.bands.reversed().compactMap { stack.rank(for: $0) }, [1, 3, 4, 5, 6, 7])
+        XCTAssertEqual(stack.bands.reversed().compactMap { stack.rank(for: $0) }, [1, 3, 4, 5, 6, 7, 8])
     }
 
     @MainActor
@@ -425,7 +426,10 @@ final class HoldingContributionTests: XCTestCase {
     @MainActor
     func testHistoryCacheHitDoesNotRequestNetwork() async throws {
         let state = HoldingHistoryState()
-        let value = history()
+        // Only a cache that reaches the latest session is answer enough.
+        let saved = history()
+        let value = HoldingValueHistory(rows: saved.rows + [.init(dateText: DayDateCodec.string(from: Date()),
+            cost: 600, values: saved.rows.last!.values, costs: Self.costs)], costs: saved.costs, names: saved.names)
         var requests: [Bool] = []
         await state.load { cachedOnly in
             requests.append(cachedOnly)

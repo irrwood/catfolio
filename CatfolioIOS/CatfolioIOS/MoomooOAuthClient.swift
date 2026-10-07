@@ -779,8 +779,10 @@ struct MoomooAuthorizationPage: Identifiable {
     let url: URL
 }
 
-private final class MoomooLoopbackListener: @unchecked Sendable {
+final class MoomooLoopbackListener: @unchecked Sendable {
     private let listener: NWListener
+    /// The port actually bound; tests listen on 0 and read the one chosen.
+    var port: UInt16? { listener.port?.rawValue }
     private let queue = DispatchQueue(label: "com.catfolio.ios.moomoo-oauth")
     private let lock = NSLock()
     private var readyContinuation: CheckedContinuation<Void, Error>?

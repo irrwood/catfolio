@@ -195,7 +195,10 @@ actor InsiderTradesClient {
     }
 
     private func fetch(_ symbol: String, limit: Int) async throws -> (trades: [InsiderTrade], totalRecords: Int) {
-        var components = URLComponents(string: "https://api.nasdaq.com/api/company/\(symbol)/insider-trades")!
+        // The checked symbol may still hold `^`, which a path must encode.
+        guard let encoded = symbol.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(.init(charactersIn: ".-"))),
+              var components = URLComponents(string: "https://api.nasdaq.com/api/company/\(encoded)/insider-trades")
+        else { throw ScreenFailure.message(L10n.text("证券代码无效。")) }
         components.queryItems = [
             URLQueryItem(name: "limit", value: String(limit)),
             URLQueryItem(name: "type", value: "ALL"),

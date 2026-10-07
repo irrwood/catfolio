@@ -17,11 +17,21 @@ struct TodayBriefView: View {
                               generating: item.isGenerating && item.target == nil || !item.isGenerating && entry.isGenerating,
                               entry: entry, activeTarget: entry.paragraphs.first(where: \.isGenerating)?.target,
                               paragraphID: item.id)
-                    if !item.sources.isEmpty, !item.isGenerating {
-                        sourceLinks(item.sources)
-                    }
                 }
             }
+            // Set when the AI or the news search fails; without it a failed
+            // brief looked exactly like a short successful one.
+            if let failure = entry.failure, !entry.isGenerating {
+                Text(failure)
+                    .appText(.footnote)
+                    .foregroundStyle(SettingsTemplate.secondaryText)
+                    .accessibilityIdentifier("today.brief.failure")
+            }
+            let sources = entry.paragraphs.filter { !$0.isGenerating }.flatMap(\.sources)
+            let uniqueSources = sources.reduce(into: [TodayBriefSource]()) { result, source in
+                if !result.contains(where: { $0.url == source.url }) { result.append(source) }
+            }
+            if !uniqueSources.isEmpty { sourceLinks(uniqueSources) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 8)
@@ -30,15 +40,19 @@ struct TodayBriefView: View {
     }
 
     private func paragraph(_ text: String, generating: Bool, entry: TodayBriefStore.Entry, activeTarget: String? = nil, paragraphID: UUID? = nil) -> some View {
-        TodayBriefSentence(text: text, context: context, fontSize: fontSize, generating: generating,
-                           disabled: entry.isGenerating, activeTarget: activeTarget) { target in
-            store.expand(context, target: target, after: paragraphID)
+        VStack(alignment: .leading, spacing: 14) {
+            ForEach(Array(text.components(separatedBy: "\n").filter { !$0.isEmpty }.enumerated()), id: \.offset) { _, sentence in
+                TodayBriefSentence(text: sentence, context: context, fontSize: fontSize, generating: generating,
+                                   disabled: entry.isGenerating, activeTarget: activeTarget) { target in
+                    store.expand(context, target: target, after: paragraphID)
+                }
+            }
         }
     }
 
     private func sourceLinks(_ sources: [TodayBriefSource]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(sources.prefix(2).enumerated()), id: \.element.url) { _, source in
+            ForEach(Array(sources.enumerated()), id: \.element.url) { _, source in
                 Link(destination: source.url) {
                     Label(source.title, systemImage: "newspaper")
                         .font(.system(.caption, design: .rounded))
@@ -78,7 +92,8 @@ struct TodayBriefSentence: View {
                         } label: {
                             HStack(spacing: 4) {
                                 inlineIcon(target)
-                                word(piece.text, index: index, time: time, target: piece.target)
+                                word(context.liveLabel(piece.text, target: target),
+                                     index: index, time: time, target: piece.target)
                                     .foregroundStyle(CatfolioTheme.primaryText)
                             }
                         }

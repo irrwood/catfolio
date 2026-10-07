@@ -522,9 +522,8 @@ final class HoldingResearchCardLayoutTests: XCTestCase {
         for dark in [false, true] {
             let size = try await capture(HoldingResearchSection(holding: visibilityHolding("QQQ"), price: 100,
                 restoresCache: false, initialEarnings: snapshot), width: 402, dark: dark, name: "fund-real-content-\(dark)")
-            // Earnings is folded until tapped: its row, the gap above it and
-            // the caveat paragraph below.
-            XCTAssertGreaterThan(size.height, HoldingDetailCardStyle.minimumRowHeight + 40)
+            // Earnings is folded until tapped: its row and the gap above it.
+            XCTAssertGreaterThanOrEqual(size.height, HoldingDetailCardStyle.minimumRowHeight + HoldingDetailCardStyle.spacing)
             XCTAssertLessThan(size.height, 520, "Only the actual earnings card should occupy space")
         }
     }
