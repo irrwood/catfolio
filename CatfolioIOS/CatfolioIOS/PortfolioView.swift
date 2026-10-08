@@ -249,9 +249,24 @@ struct PortfolioView: View {
         Task { await model.refreshPortfolio() }
     }
 
+    /// The spinner goes back at once; the refresh runs behind the page and
+    /// the line above the total says it is running, then what it found.
+    /// Without a network it says so straight away.
     @MainActor private func refreshFromUser() async {
-        guard let result = await model.refreshPortfolioReportingResult(), !Task.isCancelled else { return }
-        ToastCenter.shared.show(result.noticeText, kind: result.toastKind)
+        let status = HomeStatusLine.shared
+        guard !NetworkReachability.shared.isOffline else {
+            status.show(L10n.text("网络不可用"))
+            return
+        }
+        guard !status.isRefreshing else { return }
+        status.beginRefresh()
+        Task { @MainActor in
+            let result = await model.refreshPortfolioReportingResult()
+            status.endRefresh()
+            if let result {
+                status.show(result.statusText, kind: result.toastKind, announcement: result.noticeText)
+            }
+        }
     }
 }
 
@@ -285,6 +300,18 @@ extension PortfolioRefreshResult {
         case .failed(let retainsData): retainsData
             ? L10n.text("刷新失败，继续显示已有数据")
             : L10n.text("刷新失败，请稍后重试")
+        }
+    }
+
+    /// A few words for the line above the total.
+    var statusText: String {
+        switch self {
+        case .quotesUpdated: L10n.text("已更新")
+        case .portfolioLoaded: L10n.text("已载入")
+        case .portfolioLoadedWithoutNewQuotes, .unchangedQuotes: L10n.text("暂无新报价")
+        case .unchangedContent: L10n.text("已是最新")
+        case .noHeldQuotes: L10n.text("没有可刷新的报价")
+        case .failed: L10n.text("刷新失败")
         }
     }
 

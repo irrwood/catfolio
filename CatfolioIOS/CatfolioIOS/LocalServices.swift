@@ -231,12 +231,12 @@ struct HoldingValueHistory: Sendable {
 
 
 enum LocalRequestSessions {
-    static let ephemeral = URLSession(configuration: .ephemeral)
+    static let ephemeral = URLSession(configuration: URLSessionConfiguration.ephemeral.simulatingOffline())
     static let waiting: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.waitsForConnectivity = true
         configuration.timeoutIntervalForResource = 60
-        return URLSession(configuration: configuration)
+        return URLSession(configuration: configuration.simulatingOffline())
     }()
 }
 

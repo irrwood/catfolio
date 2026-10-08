@@ -55,6 +55,9 @@ struct PerformanceHeatmapHero<Heatmap: View>: View {
     @State private var resolvedLogoURLs: Set<URL> = []
     @State private var isVisible = false
     @State private var renderedTextureKey: TextureKey?
+    /// The plane fades in when its first texture is ready instead of
+    /// appearing at once.
+    @State private var planeOpacity: Double = 0
 
     var body: some View {
         let hint = IsometricBands.smoothstep(0, HeatmapHeroState.threshold, state.pull)
@@ -74,6 +77,7 @@ struct PerformanceHeatmapHero<Heatmap: View>: View {
             drift: drift,
             drifts: drifts,
             glows: colorScheme == .dark,
+            planeOpacity: reduceMotion ? 1 : planeOpacity,
             heatmap: heatmap(false),
             onHeatmapSize: { heatmapSize = $0 }
         )
@@ -110,8 +114,13 @@ struct PerformanceHeatmapHero<Heatmap: View>: View {
                 displayScale: displayScale
             )
             guard !Task.isCancelled else { return }
+            let isFirst = textures == nil && rendered != nil
             textures = rendered
             if rendered != nil { renderedTextureKey = textureKey }
+            if isFirst, !reduceMotion {
+                drift.beginIntro(at: .now)
+                withAnimation(.easeOut(duration: 0.8)) { planeOpacity = 1 }
+            }
         }
     }
 
@@ -135,11 +144,32 @@ struct PerformanceHeatmapHero<Heatmap: View>: View {
 struct HeatmapHeroDrift {
     /// Points per second along the plane's depth axis.
     static let speed: Double = 10
+    /// The plane's first appearance runs in: from the cruise it speeds up to
+    /// `introBoost` times faster and eases back, over `introDuration`.
+    static let introDuration: Double = 2.2
+    static let introBoost: Double = 7
     private var accumulated: Double = 0
     private var resumedAt: Date?
+    private var introStartedAt: Date?
 
     func travel(at date: Date) -> CGFloat {
-        CGFloat(accumulated + (resumedAt.map { date.timeIntervalSince($0) } ?? 0) * Self.speed)
+        CGFloat(accumulated + (resumedAt.map { date.timeIntervalSince($0) } ?? 0) * Self.speed
+                + introTravel(at: date))
+    }
+
+    mutating func beginIntro(at date: Date) {
+        guard introStartedAt == nil else { return }
+        introStartedAt = date
+    }
+
+    /// The extra distance of the run-in: its speed follows sin² of the time,
+    /// so it leaves the cruise and returns to it without a jolt.
+    func introTravel(at date: Date) -> Double {
+        guard let introStartedAt else { return 0 }
+        let duration = Self.introDuration
+        let t = min(max(0, date.timeIntervalSince(introStartedAt)), duration)
+        let integral = t / 2 - duration / (4 * .pi) * sin(2 * .pi * t / duration)
+        return Self.introBoost * Self.speed * integral
     }
 
     mutating func resume(at date: Date) {
@@ -297,6 +327,7 @@ private struct HeatmapHeroMorph<Heatmap: View>: View, Animatable {
     let drift: HeatmapHeroDrift
     let drifts: Bool
     let glows: Bool
+    let planeOpacity: Double
     let heatmap: Heatmap
     let onHeatmapSize: (CGSize) -> Void
 
@@ -326,6 +357,7 @@ private struct HeatmapHeroMorph<Heatmap: View>: View, Animatable {
         .overlay(alignment: .topLeading) {
             if !isUpright, let textures, heatmapSize.width > 0 {
                 canvas(e: e, textures: textures, height: height)
+                    .opacity(planeOpacity)
             }
         }
         .overlay {

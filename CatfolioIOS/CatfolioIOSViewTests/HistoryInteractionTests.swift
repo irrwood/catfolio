@@ -157,17 +157,18 @@ final class HistoryInteractionTests: XCTestCase {
         XCTAssertTrue(HistoryDividendBreakdown.build([]).rows.isEmpty)
     }
 
-    func testDividendStackHitTestingUsesVisibleWidths() {
+    /// The ring draws the largest share first, clockwise from the top.
+    func testDividendRingHitTestingUsesVisibleArcs() {
         let chart = HistoryDividendBreakdown(rows: [
             .init(ticker: "A", name: "Alpha", amountUSD: 70),
             .init(ticker: "B", name: "Beta", amountUSD: 30),
             .init(ticker: "ZERO", name: "Zero", amountUSD: 0),
             .init(ticker: "REV", name: "Reversal", amountUSD: -10)
         ], positiveTotalUSD: 100)
-        XCTAssertEqual(chart.row(at: 0)?.ticker, "B")
-        XCTAssertEqual(chart.row(at: 0.299)?.ticker, "B")
-        XCTAssertEqual(chart.row(at: 0.3)?.ticker, "A")
-        XCTAssertEqual(chart.row(at: 1)?.ticker, "A")
+        XCTAssertEqual(chart.row(at: 0)?.ticker, "A")
+        XCTAssertEqual(chart.row(at: 0.699)?.ticker, "A")
+        XCTAssertEqual(chart.row(at: 0.7)?.ticker, "B")
+        XCTAssertEqual(chart.row(at: 1)?.ticker, "B")
         XCTAssertNil(chart.row(at: -.infinity))
         XCTAssertNil(chart.row(at: 1.01))
         var unavailable = chart
@@ -200,8 +201,9 @@ final class HistoryInteractionTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(250))
             let size = host.sizeThatFits(in: CGSize(width: 370, height: 1000))
             XCTAssertEqual(size.width, 370, accuracy: 1)
-            XCTAssertGreaterThanOrEqual(size.height, 150)
-            XCTAssertLessThan(size.height, 180)
+            // Total, then the share ring under its selection.
+            XCTAssertGreaterThanOrEqual(size.height, 260)
+            XCTAssertLessThan(size.height, 340)
             host.view.bounds = CGRect(origin: .zero, size: size)
             host.view.layoutIfNeeded()
             attach(host.view, name: "Dividend-Figma-\(dark ? "dark" : "light")")

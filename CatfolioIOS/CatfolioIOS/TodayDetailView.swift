@@ -7,8 +7,10 @@ import SwiftUI
 struct TodayDetailView: View {
     @Environment(\.locale) private var appLocale
     @Environment(\.dynamicTypeSize) private var typeSize
+    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var selectedSector: SectorBreakdown?
     @State private var showsSectorMembers = false
+    @State private var selectedHolding: Holding?
     struct Contribution: Identifiable {
         let holding: Holding
         let changePercent: Double
@@ -247,6 +249,12 @@ struct TodayDetailView: View {
                 SectorMembersView(breakdown: selectedSector)
             }
         }
+        .sheet(item: $selectedHolding) { holding in
+            // The sheet inherits the model from the page, as the heatmap's does.
+            HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
+                .securityDetailSheet()
+        }
+        .securityDetailOpenFeedback(trigger: selectedHolding?.ticker, enabled: hapticsEnabled)
         .softTopScrollEdge()
         .navigationTitle(L10n.text("今日"))
         .navigationBarTitleDisplayMode(.inline)
@@ -328,64 +336,54 @@ struct TodayDetailView: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// The standard cell, like the rankings below: a row per sector, its
+    /// mark and name on the left and what it moved on the right, the largest
+    /// move first whichever way it went, unclassified last.
     private var sectorSection: some View {
-        let rows = sectorRows
-        let columns = typeSize >= .xxxLarge ? 1 : 2
-        return VStack(alignment: .leading, spacing: 12) {
-            Text(L10n.text("按行业"))
-                .font(.headline)
-            // Eleven sectors at most plus unclassified. Eager rows keep the
-            // scroll content height stable as cards enter and leave the screen.
-            VStack(spacing: 12) {
-                ForEach(Array(stride(from: 0, to: rows.count, by: columns)), id: \.self) { index in
-                    TodaySectorRowLayout(columns: columns, spacing: 12) {
-                        sectorCard(rows[index])
-                        if columns == 2 {
-                            if index + 1 < rows.count {
-                                sectorCard(rows[index + 1])
-                            }
-                        }
-                    }
+        VStack(alignment: .leading, spacing: SettingsTemplate.sectionSpacing) {
+            SettingsSectionHeader(L10n.text("按行业"))
+            SettingsCard {
+                ForEach(sectorRows) { row in
+                    sectorRow(row)
                 }
             }
         }
     }
 
-    private func sectorCard(_ row: SectorBreakdown) -> some View {
+    private func sectorRow(_ row: SectorBreakdown) -> some View {
         Button {
             selectedSector = row
             showsSectorMembers = true
         } label: {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 6) {
-                    Image(systemName: row.symbolName)
-                        .accessibilityHidden(true)
-                    Spacer(minLength: 0)
-                    Text(L10n.text("\(row.components.count) 项"))
-                        .font(.caption)
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.semibold))
-                        .accessibilityHidden(true)
-                }
-                .foregroundStyle(.secondary)
-                VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: row.symbolName)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 36)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
                     Text(row.displayName)
                         .font(.body.weight(.medium))
                         .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxHeight: .infinity, alignment: .topLeading)
-                    Text(DisplayFormat.money(row.amount, signed: true, fractionDigits: 2))
-                        .appNumber(.body, weight: .semibold)
-                        .foregroundStyle(row.amount >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.65)
+                    Text(L10n.text("\(row.components.count) 项"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .frame(maxHeight: .infinity, alignment: .topLeading)
+                Spacer(minLength: 8)
+                Text(DisplayFormat.money(row.amount, signed: true, fractionDigits: 2))
+                    .appNumber(.body, weight: .semibold)
+                    .foregroundStyle(row.amount >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .modifier(ContentCard())
-            .contentShape(RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius))
+            .padding(.horizontal, SettingsTemplate.rowHorizontalPadding)
+            .padding(.vertical, SettingsTemplate.rowVerticalPadding)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SettingsRowButtonStyle())
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("today-sector.\(row.id)")
     }
@@ -408,14 +406,21 @@ struct TodayDetailView: View {
         let tint = value >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger
         let money = DisplayFormat.money(contribution.amount, signed: true, fractionDigits: 2)
         let percentage = DisplayFormat.percent(contribution.changePercent, signed: true)
-        return HStack(alignment: .center, spacing: 12) {
-            // The same mark the home list shows, so a holding reads as itself
-            // here without the reader matching names.
-            AssetLogo(ticker: contribution.holding.ticker, logoSymbol: contribution.holding.logoSymbol, size: 36)
-            contributionDetail(contribution, value: value, tint: tint, money: money, percentage: percentage)
+        return Button {
+            selectedHolding = contribution.holding
+        } label: {
+            HStack(alignment: .center, spacing: 12) {
+                // The same mark the home list shows, so a holding reads as itself
+                // here without the reader matching names.
+                AssetLogo(ticker: contribution.holding.ticker, logoSymbol: contribution.holding.logoSymbol, size: 36)
+                contributionDetail(contribution, value: value, tint: tint, money: money, percentage: percentage)
+            }
+            .padding(.horizontal, SettingsTemplate.rowHorizontalPadding)
+            .padding(.vertical, SettingsTemplate.rowVerticalPadding)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, SettingsTemplate.rowHorizontalPadding)
-        .padding(.vertical, SettingsTemplate.rowVerticalPadding)
+        .buttonStyle(SettingsRowButtonStyle())
+        .accessibilityIdentifier("today.holding.\(contribution.holding.ticker)")
     }
 
     private func contributionDetail(_ contribution: Contribution, value: Double, tint: Color,
@@ -450,31 +455,6 @@ struct TodayDetailView: View {
     }
 }
 
-/// Measure each card at its final column width, then give both cards the taller
-/// height. Localized names can wrap without staggering card edges or amounts.
-struct TodaySectorRowLayout: Layout {
-    var columns: Int
-    var spacing: CGFloat
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? 0
-        let columnWidth = max(0, (width - spacing * CGFloat(columns - 1)) / CGFloat(columns))
-        let height = subviews.map {
-            $0.sizeThatFits(ProposedViewSize(width: columnWidth, height: nil)).height
-        }.max() ?? 0
-        return CGSize(width: width, height: height)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let columnWidth = max(0, (bounds.width - spacing * CGFloat(columns - 1)) / CGFloat(columns))
-        for (index, subview) in subviews.enumerated() {
-            subview.place(at: CGPoint(x: bounds.minX + CGFloat(index) * (columnWidth + spacing), y: bounds.minY),
-                          anchor: .topLeading,
-                          proposal: ProposedViewSize(width: columnWidth, height: bounds.height))
-        }
-    }
-}
-
 /// Which holdings put a sector where it is.
 ///
 /// A fund appears with the share of it that belongs here, so a row reading
@@ -482,6 +462,8 @@ struct TodaySectorRowLayout: Layout {
 /// fund's whole move.
 private struct SectorMembersView: View {
     @Environment(\.locale) private var appLocale
+    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
+    @State private var selectedHolding: Holding?
     let breakdown: TodayDetailView.SectorBreakdown
 
     var body: some View {
@@ -507,32 +489,37 @@ private struct SectorMembersView: View {
 
             Section {
                 ForEach(breakdown.components) { component in
-                    HStack(alignment: .center, spacing: 12) {
-                    AssetLogo(ticker: component.holding.ticker, logoSymbol: component.holding.logoSymbol, size: 32)
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(component.holding.shortName)
-                                .font(.body)
-                                .lineLimit(1)
-                            Spacer(minLength: 8)
-                            Text(DisplayFormat.money(component.amount, signed: true, fractionDigits: 2))
-                                .appNumber(.subheading, weight: .medium)
-                                .foregroundStyle(component.amount >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
-                        }
-                        HStack(spacing: 6) {
-                            Text(component.holding.ticker)
-                                .appNumber(.caption)
-                                .foregroundStyle(.tertiary)
-                            if component.fraction < 0.999 {
-                                Text(L10n.text("成分穿透 \(percentText(component.fraction)) 计入本行业"))
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
+                    Button { selectedHolding = component.holding } label: {
+                        HStack(alignment: .center, spacing: 12) {
+                            AssetLogo(ticker: component.holding.ticker, logoSymbol: component.holding.logoSymbol, size: 32)
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text(component.holding.shortName)
+                                        .font(.body)
+                                        .lineLimit(1)
+                                    Spacer(minLength: 8)
+                                    Text(DisplayFormat.money(component.amount, signed: true, fractionDigits: 2))
+                                        .appNumber(.subheading, weight: .medium)
+                                        .foregroundStyle(component.amount >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
+                                }
+                                HStack(spacing: 6) {
+                                    Text(component.holding.ticker)
+                                        .appNumber(.caption)
+                                        .foregroundStyle(.tertiary)
+                                    if component.fraction < 0.999 {
+                                        Text(L10n.text("成分穿透 \(percentText(component.fraction)) 计入本行业"))
+                                            .font(.caption)
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                }
                             }
                         }
+                        .contentShape(Rectangle())
                     }
-                    }
+                    .buttonStyle(.plain)
                     .padding(.vertical, 2)
                     .settingsListRow()
+                    .accessibilityIdentifier("today-sector-member.\(component.holding.ticker)")
                 }
             } header: {
                 Text(L10n.text("\(breakdown.components.count) 项持仓"))
@@ -544,6 +531,12 @@ private struct SectorMembersView: View {
         }
         .scrollContentBackground(.hidden)
         .background(SettingsTemplate.pageBackground)
+        .sheet(item: $selectedHolding) { holding in
+            // The sheet inherits the model from the page, as the heatmap's does.
+            HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
+                .securityDetailSheet()
+        }
+        .securityDetailOpenFeedback(trigger: selectedHolding?.ticker, enabled: hapticsEnabled)
         .softTopScrollEdge()
         .navigationTitle(breakdown.displayName)
         .navigationBarTitleDisplayMode(.inline)

@@ -108,4 +108,16 @@ final class PortfolioHoldingListTests: XCTestCase {
                 week52Ranges: ranges).map(\.id), ["CCC", "BBB", "EXPO", "AAA", "MISSING", "FLAT"])
         }
     }
+
+    /// A column's own sort is offered only while that column is shown.
+    func testModeSortsAppearOnlyInTheirMode() {
+        let plain = HoldingSortField.available(shows52Week: false, showsVolume: false)
+        XCTAssertFalse(plain.contains(.week52Position))
+        XCTAssertFalse(plain.contains(.volumeArea))
+        XCTAssertTrue(plain.contains(.marketValue))
+        XCTAssertEqual(HoldingSortField.available(shows52Week: true, showsVolume: false).filter {
+            [.week52Position, .volumeArea].contains($0) }, [.week52Position])
+        XCTAssertEqual(HoldingSortField.available(shows52Week: false, showsVolume: true).filter {
+            [.week52Position, .volumeArea].contains($0) }, [.volumeArea])
+    }
 }

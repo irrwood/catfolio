@@ -312,35 +312,45 @@ final class HomeScrollInteractionTests: XCTestCase {
         for position: CGFloat in [280, 100, 0, -80, -240] {
             scroll.contentOffset.y = position - scroll.adjustedContentInset.top
             XCTAssertGreaterThanOrEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, 0)
-            XCTAssertNil(scroll.refreshControl)
+            XCTAssertEqual(controller.pullIndicator.alpha, 0)
             XCTAssertFalse(controller.gate.permitsRefresh)
         }
-        controller.requestRefresh()
+        controller.startRefresh()
         XCTAssertFalse(controller.gate.isRefreshing)
         controller.scrollViewDidEndDragging(scroll, willDecelerate: false)
         controller.touchBegan()
         XCTAssertTrue(controller.gate.permitsRefresh, "A new, settled gesture may refresh")
-        XCTAssertTrue(scroll.refreshControl === controller.refreshControl)
+        XCTAssertTrue(controller.eligiblePull)
     }
 
-    /// On a phone the control, put back before UIKit laid it out, kept a
-    /// zero width and drew its spinner centred on the left edge.
+    /// The spinner sits in the middle of the gap the pull opens, clearer as
+    /// the pull nears the refresh distance, and goes back up with the page.
     @MainActor
-    func testRefreshControlKeepsTheScrollViewWidthWhenPutBack() {
+    func testPullIndicatorSitsInTheGapAndGoesBackUpWithThePage() {
         let controller = PortfolioHomeScrollController()
         let scroll = nativeScroll(controller)
         defer { controller.detach() }
-        controller.refreshControl.frame.size.width = 0
-        controller.scrollViewDidEndDragging(scroll, willDecelerate: false)
+        let indicator = controller.pullIndicator
+        XCTAssertTrue(indicator.superview === scroll)
+        XCTAssertEqual(indicator.alpha, 0)
         controller.touchBegan()
-        XCTAssertTrue(scroll.refreshControl === controller.refreshControl)
-        XCTAssertEqual(controller.refreshControl.frame.width, scroll.bounds.width)
-        XCTAssertEqual(controller.refreshControl.frame.minX, 0)
-
-        controller.refreshControl.frame.size.width = 0
         controller.scrollViewWillBeginDragging(scroll)
-        scroll.contentOffset.y = -60 - scroll.adjustedContentInset.top
-        XCTAssertEqual(controller.refreshControl.frame.width, scroll.bounds.width, "Re-held while pulling")
+        let half = PortfolioHomeScrollController.refreshPull / 2
+        scroll.contentOffset.y = -half - scroll.adjustedContentInset.top
+        XCTAssertEqual(indicator.alpha, 0.5, accuracy: 0.01)
+        XCTAssertEqual(indicator.center.y, -half / 2, accuracy: 0.5)
+        XCTAssertEqual(indicator.center.x, scroll.bounds.width / 2, accuracy: 0.5)
+        XCTAssertTrue(indicator.isAnimating)
+        scroll.contentOffset.y = -200 - scroll.adjustedContentInset.top
+        XCTAssertEqual(indicator.alpha, 1)
+
+        controller.scrollViewDidEndDragging(scroll, willDecelerate: true)
+        scroll.contentOffset.y = -100 - scroll.adjustedContentInset.top
+        XCTAssertEqual(indicator.alpha, 1, "It rides back up with the rebound")
+        scroll.contentOffset.y = -scroll.adjustedContentInset.top
+        XCTAssertEqual(indicator.alpha, 0)
+        XCTAssertFalse(indicator.isAnimating)
+        XCTAssertFalse(controller.eligiblePull)
     }
 
     @MainActor
@@ -392,7 +402,7 @@ final class HomeScrollInteractionTests: XCTestCase {
         scroll.contentOffset.y = -200 - scroll.adjustedContentInset.top
         XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, 0, accuracy: 0.01)
         XCTAssertFalse(controller.gate.permitsRefresh)
-        XCTAssertNil(scroll.refreshControl)
+        XCTAssertEqual(controller.pullIndicator.alpha, 0)
         controller.scrollViewDidEndDragging(scroll, willDecelerate: false)
         controller.touchBegan()
         XCTAssertTrue(controller.gate.permitsRefresh)
@@ -425,31 +435,22 @@ final class HomeScrollInteractionTests: XCTestCase {
             controller.advanceSnap(at: 100 + PortfolioHomeSnapMotion.maximumDuration)
             XCTAssertEqual(renderedOffset, end, accuracy: 0.01)
             XCTAssertFalse(controller.isSettling)
-            XCTAssertNil(scroll.refreshControl)
+            XCTAssertEqual(controller.pullIndicator.alpha, 0)
         }
     }
 
+    /// Let go past the refresh distance: one refresh starts, and the page
+    /// rebounds natively the whole way up — while the refresh runs and after
+    /// it ends — with the hero following the pull, no spring, no clamp.
     @MainActor
-    func testEligibleNativeRefreshShowsSpinnerAndRunsOnceUntilCompletion() async throws {
+    func testEligiblePullRefreshesOnceAndReboundsNatively() async {
         let controller = PortfolioHomeScrollController()
         controller.reduceMotion = true
-        var renderedPull: CGFloat = 0
+        var renderedPull: CGFloat = -1
         controller.onOffset = { _, pull in renderedPull = pull }
         let scroll = nativeScroll(controller)
-        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
-        let previous = scene.windows.first(where: \.isKeyWindow)
-        let window = UIWindow(windowScene: scene)
-        let host = UIViewController()
-        host.view = scroll
-        window.rootViewController = host
-        window.makeKeyAndVisible()
-        host.view.layoutIfNeeded()
-        scroll.contentOffset.y = -scroll.adjustedContentInset.top
-        defer {
-            controller.detach()
-            window.isHidden = true
-            previous?.makeKeyAndVisible()
-        }
+        defer { controller.detach() }
+        func offset() -> CGFloat { scroll.contentOffset.y + scroll.adjustedContentInset.top }
         var requests = 0
         var finish: CheckedContinuation<Void, Never>?
         controller.refresh = {
@@ -458,53 +459,61 @@ final class HomeScrollInteractionTests: XCTestCase {
         }
         controller.touchBegan()
         controller.scrollViewWillBeginDragging(scroll)
-        scroll.contentOffset.y = -90 - scroll.adjustedContentInset.top
-        XCTAssertLessThan(scroll.contentOffset.y + scroll.adjustedContentInset.top, 0)
-        XCTAssertTrue(scroll.refreshControl === controller.refreshControl)
-        controller.refreshControl.beginRefreshing()
-        controller.refreshControl.sendActions(for: .valueChanged)
-        controller.refreshControl.sendActions(for: .valueChanged)
+        scroll.contentOffset.y = -120 - scroll.adjustedContentInset.top
+        XCTAssertEqual(renderedPull, 120, accuracy: 0.5)
+        var target = scroll.contentOffset
+        controller.scrollViewWillEndDragging(scroll, withVelocity: .zero, targetContentOffset: &target)
+        XCTAssertFalse(controller.isSettling, "UIKit rebounds the pull, not the panel spring")
+        controller.startRefresh()
+        controller.scrollViewDidEndDragging(scroll, willDecelerate: true)
         for _ in 0..<20 where finish == nil { await Task.yield() }
-        XCTAssertEqual(requests, 1)
-        XCTAssertTrue(controller.refreshControl.isRefreshing)
+        XCTAssertEqual(requests, 1, "One pull, one refresh")
         XCTAssertTrue(controller.gate.isRefreshing)
-        controller.scrollViewDidEndDragging(scroll, willDecelerate: false)
+
+        scroll.contentOffset.y = -60 - scroll.adjustedContentInset.top
+        XCTAssertEqual(offset(), -60, accuracy: 0.5)
+        XCTAssertEqual(renderedPull, 60, accuracy: 0.5)
         finish?.resume()
         for _ in 0..<20 where controller.gate.isRefreshing { await Task.yield() }
-        XCTAssertFalse(controller.refreshControl.isRefreshing)
         XCTAssertFalse(controller.gate.isRefreshing)
-        XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, 0, accuracy: 0.5,
-                       "Finishing refresh must return a released pull to its resting height")
-        XCTAssertEqual(renderedPull, 0, accuracy: 0.5,
-                       "The header must not retain its last stretched layout")
+        scroll.contentOffset.y = -30 - scroll.adjustedContentInset.top
+        XCTAssertEqual(offset(), -30, accuracy: 0.5, "A finished refresh does not clamp the rebound")
+        XCTAssertEqual(renderedPull, 30, accuracy: 0.5)
+        scroll.contentOffset.y = -scroll.adjustedContentInset.top
+        XCTAssertEqual(renderedPull, 0)
+
+        // A short pull does not refresh.
+        controller.touchBegan()
+        controller.scrollViewWillBeginDragging(scroll)
+        scroll.contentOffset.y = -40 - scroll.adjustedContentInset.top
+        target = scroll.contentOffset
+        controller.scrollViewWillEndDragging(scroll, withVelocity: .zero, targetContentOffset: &target)
+        controller.scrollViewDidEndDragging(scroll, willDecelerate: false)
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(requests, 1)
     }
 
     @MainActor
-    func testRefreshCompletionPreservesHeldPullAndScrolledPosition() async {
-        for held in [true, false] {
-            let controller = PortfolioHomeScrollController()
-            controller.reduceMotion = true
-            let scroll = nativeScroll(controller)
-            var finish: CheckedContinuation<Void, Never>?
-            controller.refresh = { await withCheckedContinuation { finish = $0 } }
-            controller.touchBegan()
-            controller.scrollViewWillBeginDragging(scroll)
-            scroll.contentOffset.y = -90 - scroll.adjustedContentInset.top
-            controller.refreshControl.beginRefreshing()
-            controller.requestRefresh()
-            for _ in 0..<20 where finish == nil { await Task.yield() }
-            if !held {
-                controller.scrollViewDidEndDragging(scroll, willDecelerate: false)
-                scroll.contentOffset.y = 120 - scroll.adjustedContentInset.top
-            }
-            let position = scroll.contentOffset.y + scroll.adjustedContentInset.top
-            finish?.resume()
-            for _ in 0..<20 where controller.gate.isRefreshing { await Task.yield() }
-            XCTAssertFalse(controller.gate.isRefreshing)
-            XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, position, accuracy: 0.5,
-                           held ? "Completion must not move a held gesture" : "Completion must not jump a scrolled list")
-            controller.detach()
-        }
+    func testRefreshCompletionNeverMovesThePage() async {
+        let controller = PortfolioHomeScrollController()
+        controller.reduceMotion = true
+        let scroll = nativeScroll(controller)
+        defer { controller.detach() }
+        var finish: CheckedContinuation<Void, Never>?
+        controller.refresh = { await withCheckedContinuation { finish = $0 } }
+        controller.touchBegan()
+        controller.scrollViewWillBeginDragging(scroll)
+        scroll.contentOffset.y = -120 - scroll.adjustedContentInset.top
+        var target = scroll.contentOffset
+        controller.scrollViewWillEndDragging(scroll, withVelocity: .zero, targetContentOffset: &target)
+        controller.scrollViewDidEndDragging(scroll, willDecelerate: false)
+        for _ in 0..<20 where finish == nil { await Task.yield() }
+        scroll.contentOffset.y = 120 - scroll.adjustedContentInset.top
+        finish?.resume()
+        for _ in 0..<20 where controller.gate.isRefreshing { await Task.yield() }
+        XCTAssertFalse(controller.gate.isRefreshing)
+        XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, 120, accuracy: 0.5,
+                       "Completion must not jump a scrolled list")
     }
 
     @MainActor

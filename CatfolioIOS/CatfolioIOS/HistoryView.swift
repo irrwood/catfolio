@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 import UniformTypeIdentifiers
 
 struct PortfolioActivityLedger: Equatable {
@@ -1195,10 +1196,11 @@ struct HistoryActivityPage {
     var dividendBreakdown = HistoryDividendBreakdown()
 }
 
-/// Figma 322:2262: one summary card, with an interactive stacked contribution bar.
+/// Figma 322:2262: one summary card, with each holding's share as a ring.
 struct HistoryDividendCard: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedTicker: String?
+    @State private var selectedShare: Double?
     let breakdown: HistoryDividendBreakdown
     let totalUSD: Double
     /// This calendar year's expected dividends; nil until known.
@@ -1262,34 +1264,7 @@ struct HistoryDividendCard: View {
                     .accessibilityLabel(L10n.text("股息来源占比"))
                     .accessibilityIdentifier("dividend-contribution-selection")
                 }
-                GeometryReader { geometry in
-                    HStack(spacing: 0) {
-                        ForEach(Array(breakdown.rows.enumerated().reversed()), id: \.element.id) { index, row in
-                            Rectangle()
-                                .fill(CatfolioPalette.dividendSeries[index % CatfolioPalette.dividendSeries.count])
-                                .frame(width: geometry.size.width * CGFloat(breakdown.share(for: row) ?? 0))
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(CatfolioTheme.subtleFill)
-                    .overlay {
-                        if breakdown.isComplete, breakdown.positiveTotalUSD > 0 {
-                            ContributionStripePattern(color: .white)
-                                .scaleEffect(x: -1, y: 1)
-                                .blendMode(.overlay)
-                                .opacity(0.3)
-                        }
-                    }
-                    .compositingGroup()
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .contentShape(Rectangle())
-                    .onTapGesture { location in
-                        if let row = breakdown.row(at: Double(location.x / max(1, geometry.size.width))) {
-                            selectedTicker = row.id
-                        }
-                    }
-                }
-                .frame(height: 40)
+                ring
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(L10n.text("股息来源占比"))
                 .accessibilityValue(selectedRow.map(selectionDescription) ?? "—")
@@ -1302,12 +1277,54 @@ struct HistoryDividendCard: View {
                     @unknown default: break
                     }
                 }
-                .accessibilityIdentifier("dividend-contribution-bar")
+                .accessibilityIdentifier("dividend-contribution-ring")
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
         }
         .settingsCardSurface()
+    }
+
+    /// Each holding an arc in its own colour, largest first and clockwise
+    /// from the top; a tap on an arc selects it and the centre reads its
+    /// share. Unknown amounts or rate leave an empty ring, no shares.
+    private var ring: some View {
+        let visible = breakdown.rows.filter { (breakdown.share(for: $0) ?? 0) > 0 }
+        return Chart(visible) { row in
+            SectorMark(angle: .value(L10n.text("比例"), breakdown.share(for: row) ?? 0),
+                       innerRadius: .ratio(0.66), angularInset: 1.5)
+                .cornerRadius(3)
+                .foregroundStyle(segmentColor(row))
+                .opacity(row.id == selectedRow?.id ? 1 : 0.45)
+        }
+        .chartLegend(.hidden)
+        .chartAngleSelection(value: $selectedShare)
+        .onChange(of: selectedShare) { _, share in
+            if let share, let row = breakdown.row(at: share) { selectedTicker = row.id }
+        }
+        .background {
+            if visible.isEmpty {
+                Circle()
+                    .strokeBorder(CatfolioTheme.subtleFill, lineWidth: 26)
+                    .aspectRatio(1, contentMode: .fit)
+            }
+        }
+        .overlay {
+            VStack(spacing: 2) {
+                Text(selectedRow.map(percentage) ?? "—")
+                    .appNumber(.title, weight: .semibold)
+                    .foregroundStyle(selectedRow.map(segmentColor) ?? .secondary)
+                if let row = selectedRow, !visible.isEmpty {
+                    Text(row.ticker)
+                        .appText(.caption, weight: .medium)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: 90)
+            .allowsHitTesting(false)
+        }
+        .frame(height: 168)
     }
 
     private func segmentColor(_ row: HistoryDividendBreakdown.Row) -> Color {
@@ -1347,11 +1364,12 @@ struct HistoryDividendBreakdown {
         return min(1, max(0, amount / positiveTotalUSD))
     }
 
-    /// Hit testing follows the exact displayed (reversed) order; zero and
-    /// unavailable values occupy no width and cannot steal a neighbouring tap.
+    /// The ring's arc at a cumulative share, in drawing order — largest first,
+    /// clockwise from the top. Zero and unavailable values take no arc and
+    /// cannot steal a neighbouring tap.
     func row(at fraction: Double) -> Row? {
         guard fraction.isFinite, (0...1).contains(fraction) else { return nil }
-        let visible = rows.reversed().filter { (share(for: $0) ?? 0) > 0 }
+        let visible = rows.filter { (share(for: $0) ?? 0) > 0 }
         var edge = 0.0
         for row in visible {
             edge += share(for: row) ?? 0

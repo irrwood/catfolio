@@ -6,8 +6,9 @@ import Observation
 final class HoldingDetailCachedContent {
     var profile: VolumeProfile?
     var priceHistory: SecurityPriceHistory?
-    var accountContext: HoldingDetailAccountContext?
-    var selectedAccountKeys: Set<String> = []
+    let accountSelection = HoldingDetailAccountSelection()
+    var accountContext: HoldingDetailAccountContext? { accountSelection.context }
+    var selectedAccountKeys: Set<String> { accountSelection.accountKeys }
     var realisedProfit: RealisedProfitSummary?
     var realisedProfitRequest: HoldingDetailRealisedProfitRequest?
     var optionsSnapshots: [Int: OISnapshot] = [:]
@@ -60,12 +61,10 @@ struct HoldingDetailContentView: View {
     }
     @State private var priceHistoryError: String?
     private var accountContext: HoldingDetailAccountContext? {
-        get { cachedContent.accountContext }
-        nonmutating set { cachedContent.accountContext = newValue }
+        cachedContent.accountContext
     }
     private var selectedAccountKeys: Set<String> {
-        get { cachedContent.selectedAccountKeys }
-        nonmutating set { cachedContent.selectedAccountKeys = newValue }
+        cachedContent.selectedAccountKeys
     }
     private var realisedProfit: RealisedProfitSummary? {
         get { cachedContent.realisedProfit }
@@ -78,7 +77,7 @@ struct HoldingDetailContentView: View {
     @State private var isLoadingMarketData = false
 
     private var displayedHolding: Holding {
-        accountContext?.holding(for: selectedAccountKeys) ?? holding
+        cachedContent.accountSelection.holding ?? holding
     }
 
     private var hasSelectedDetailAccounts: Bool {
@@ -350,11 +349,11 @@ struct HoldingDetailContentView: View {
             } catch LocalPortfolioError.noPortfolio {
                 // Held in no account: the market's history stands alone,
                 // with no accounts to pick and no trades to mark.
-                accountContext = nil
+                cachedContent.accountSelection.clear()
                 if priceHistory == nil, let cached = try? await model.marketPriceHistory(
                     for: holding.ticker, currency: holding.quoteCurrency ?? "USD", cachedOnly: true),
                    !Task.isCancelled {
-                    selectedAccountKeys = Set(cached.trades.flatMap(\.accountKeys))
+                    cachedContent.accountSelection.clear(accountKeys: Set(cached.trades.flatMap(\.accountKeys)))
                     priceHistory = cached
                     if !forceRefresh { isLoadingMarketData = false }
                 }
@@ -365,10 +364,9 @@ struct HoldingDetailContentView: View {
                     forceRefresh: forceRefresh
                 )
                 guard !Task.isCancelled else { return }
-                accountContext = nil
                 // No position to pick accounts from: mark every account's
                 // past trades, so a closed position keeps its points.
-                selectedAccountKeys = Set(loaded.trades.flatMap(\.accountKeys))
+                cachedContent.accountSelection.clear(accountKeys: Set(loaded.trades.flatMap(\.accountKeys)))
                 priceHistory = loaded
                 priceHistoryError = nil
                 return
@@ -376,14 +374,8 @@ struct HoldingDetailContentView: View {
             guard !Task.isCancelled else { return }
             // Refresh data without resetting the user's account selection,
             // chart range, scroll position or the independent section caches.
-            if let previous = accountContext {
-                selectedAccountKeys = selectedAccountKeys == previous.allAccountKeys
-                    ? context.allAccountKeys
-                    : selectedAccountKeys.intersection(context.allAccountKeys)
-            } else {
-                selectedAccountKeys = context.allAccountKeys
-            }
-            accountContext = context
+            await cachedContent.accountSelection.update(context: context)
+            guard !Task.isCancelled else { return }
             if priceHistory == nil {
                 let cached = try? await model.securityPriceHistory(
                     for: holding.ticker, accountKeys: context.allAccountKeys, cachedOnly: true)
@@ -425,19 +417,11 @@ struct HoldingDetailContentView: View {
     }
 
     private func selectAllDetailAccounts() {
-        guard let accountContext else { return }
-        selectedAccountKeys = accountContext.allAccountKeys
+        Task { await cachedContent.accountSelection.selectAll() }
     }
 
     private func toggleDetailAccount(_ accountKey: String) {
-        guard let accountContext else { return }
-        guard accountContext.allAccountKeys.contains(accountKey) else { return }
-
-        if selectedAccountKeys.contains(accountKey) {
-            selectedAccountKeys.remove(accountKey)
-        } else {
-            selectedAccountKeys.insert(accountKey)
-        }
+        Task { await cachedContent.accountSelection.toggle(accountKey) }
     }
 }
 
@@ -1185,12 +1169,11 @@ extension HoldingDetailContentView {
             do {
                 let context = try await model.holdingDetailAccountContext(for: holding.ticker)
                 if content.accountContext == nil {
-                    content.accountContext = context
-                    content.selectedAccountKeys = context.allAccountKeys
+                    await content.accountSelection.update(context: context)
                 }
                 accountKeys = content.selectedAccountKeys
                 hasAccounts = !accountKeys.isEmpty
-                shown = context.holding(for: accountKeys) ?? holding
+                shown = content.accountSelection.holding ?? holding
                 history = try? await model.securityPriceHistory(
                     for: holding.ticker, accountKeys: context.allAccountKeys, cachedOnly: true)
             } catch LocalPortfolioError.noPortfolio {
@@ -1198,7 +1181,7 @@ extension HoldingDetailContentView {
                     for: holding.ticker, currency: holding.quoteCurrency ?? "USD", cachedOnly: true)
                 accountKeys = Set(history?.trades.flatMap(\.accountKeys) ?? [])
                 if content.accountContext == nil, content.selectedAccountKeys.isEmpty {
-                    content.selectedAccountKeys = accountKeys
+                    content.accountSelection.clear(accountKeys: accountKeys)
                 }
             } catch {
                 return

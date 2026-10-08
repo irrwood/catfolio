@@ -199,7 +199,17 @@ struct CostMarketCard: View {
     }
 
     private func show(note: String) {
-        ToastCenter.shared.show(note, kind: .info)
+        HomeStatusLine.shared.show(note)
+    }
+
+    /// The status speaks over the title, but never over a day the reader is
+    /// inspecting on the chart.
+    private var headerStatus: HomeHeaderLine? {
+        guard selectedDate == nil, measuredRange == nil else { return nil }
+        let status = HomeStatusLine.shared
+        if let message = status.message { return .status(message.text, isError: message.kind == .error) }
+        if status.isRefreshing || isRefreshingBehindCache { return .refreshing }
+        return nil
     }
 
     private struct ProfitFigures: Equatable {
@@ -234,24 +244,17 @@ struct CostMarketCard: View {
 
     var body: some View {
         let data = rangeData
+        // Read here, not inside the timeline: what a timeline's content reads
+        // does not redraw the card when it changes.
+        let status = headerStatus
         ZStack(alignment: .topLeading) {
             TimelineView(.periodic(from: .now, by: 60)) { context in
                 let isClosed = !model.holdings.isEmpty && !DataDayLabel.isLive(model.holdings, at: context.date)
-                HStack(spacing: 4) {
-                    // Public portfolios keep their owner's name.
-                    Text(portfolioOwnerName ?? headerLabel(at: context.date))
-                        .appCaps(.caption, weight: .semibold)
-                    if response.isCurrentHoldingsOnly {
-                        Text(L10n.text("持仓市值"))
-                            .appCaps(.caption, weight: .semibold)
-                            .foregroundStyle(.secondary)
-                    }
-                    if portfolioOwnerName == nil, isClosed {
-                        Image(systemName: "moon.fill")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .accessibilityLabel(L10n.text("休市"))
-                    }
+                // Public portfolios keep their owner's name.
+                let title = HomeHeaderLine.title(portfolioOwnerName ?? headerLabel(at: context.date),
+                    holdingsValueOnly: response.isCurrentHoldingsOnly, closed: portfolioOwnerName == nil && isClosed)
+                SweepReplace(value: status ?? title, sweeps: HomeHeaderLine.sweeps) { line in
+                    line.view
                 }
                 .accessibilityElement(children: .combine)
             }
@@ -431,7 +434,7 @@ struct CostMarketCard: View {
                 .accessibilityElement()
                 .accessibilityLabel(L10n.text("正在准备历史数据"))
 
-        } else if !data.rows.isEmpty {
+        } else if data.rows.count > 1 {
             FastCostMarketPlot(
                 data: data,
                 showsNetDeposit: showsNetDeposit,
@@ -459,7 +462,9 @@ struct CostMarketCard: View {
             .accessibilityLabel(response.accountNAV != nil ? L10n.text("账户资产与净入金对比图，长按查看单日，双指测量区间") : L10n.text("成本与市值对比图，长按后单指拖动查看单日，保持第一指并加入第二指测量区间"))
         } else {
             // The header still shows the available account figures. No
-            // historical curve is implied when no real observations exist.
+            // historical curve is implied when no real observations exist,
+            // and a single day is not a curve: drawn, it was the market and
+            // cost end dots side by side at the left edge.
             Color.clear
         }
     }
@@ -519,6 +524,92 @@ struct CostMarketCard: View {
 /// Canvas keeps a range switch to one draw pass instead of rebuilding hundreds
 /// of Swift Charts marks. Filtering and domains are cached once; every range
 /// keeps the original daily vertices so viewport zooms preserve the same curve.
+/// The line above the home total: its title, or what the page is saying.
+enum HomeHeaderLine: Equatable {
+    case title(String, holdingsValueOnly: Bool, closed: Bool)
+    case refreshing
+    case status(String, isError: Bool)
+
+    /// A title that follows the chart's selection changes at once; only a
+    /// status coming or going sweeps.
+    static func sweeps(_ old: HomeHeaderLine, _ new: HomeHeaderLine) -> Bool {
+        if case .title = old, case .title = new { return false }
+        return true
+    }
+
+    @ViewBuilder var view: some View {
+        switch self {
+        case let .title(text, holdingsValueOnly, closed):
+            HStack(spacing: 5) {
+                if closed { HomeMoonGlyph() }
+                Text(text)
+                    .appCaps(.caption, weight: .semibold)
+                if holdingsValueOnly {
+                    Text(L10n.text("持仓市值"))
+                        .appCaps(.caption, weight: .semibold)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        case .refreshing:
+            HStack(spacing: 6) {
+                // UIKit's own spinner: a repeating SwiftUI animation here
+                // would leak into the page's other layout changes.
+                ProgressView()
+                    .controlSize(.mini)
+                    .tint(CatfolioTheme.primaryText)
+                Text(L10n.text("正在刷新…"))
+                    .appCaps(.caption, weight: .semibold)
+            }
+        case let .status(text, isError):
+            Text(text)
+                .appCaps(.caption, weight: .semibold)
+                .foregroundStyle(isError ? CatfolioTheme.danger : CatfolioTheme.primaryText)
+        }
+    }
+}
+
+/// The closed-market moon. It comes in full and wanes to the crescent.
+struct HomeMoonGlyph: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var phase: CGFloat = 0
+
+    var body: some View {
+        HomeMoonShape(phase: reduceMotion ? 1 : phase)
+            .fill(.secondary)
+            .frame(width: 10, height: 10)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 0.9).delay(0.15)) { phase = 1 }
+            }
+            .accessibilityLabel(L10n.text("休市"))
+    }
+}
+
+/// A disc with a second disc cut from its upper right: clear of the moon at
+/// phase 0, a full moon, and biting in to the crescent at phase 1.
+struct HomeMoonShape: Shape {
+    var phase: CGFloat
+    var animatableData: CGFloat {
+        get { phase }
+        set { phase = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let radius = min(rect.width, rect.height) / 2
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let moon = Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius,
+                                          width: radius * 2, height: radius * 2))
+        // Offsets in radii, from well clear of the disc to the crescent's bite.
+        let start = CGPoint(x: 2.3, y: -1.7), end = CGPoint(x: 0.55, y: -0.42)
+        let cutCenter = CGPoint(x: center.x + (start.x + (end.x - start.x) * phase) * radius,
+                                y: center.y + (start.y + (end.y - start.y) * phase) * radius)
+        let cutRadius = radius * 0.88
+        let cut = Path(ellipseIn: CGRect(x: cutCenter.x - cutRadius, y: cutCenter.y - cutRadius,
+                                         width: cutRadius * 2, height: cutRadius * 2))
+        return moon.subtracting(cut)
+    }
+}
+
 struct FastCostMarketPlot: View {
     @Environment(\.locale) private var appLocale
     let data: CostMarketRangeData
@@ -557,7 +648,9 @@ struct FastCostMarketPlot: View {
             leadingLineOverflow: 0,
             trailingEndpointInset: 21,
             gridOpacity: 0,
-            transitionKey: "\(transitionKey)-\(colorScheme == .light ? "light" : "dark")-\(showsNetDeposit)",
+            // Not the cost line's toggle: showing or hiding it swaps the line
+            // in place instead of replaying the curve's bounce.
+            transitionKey: "\(transitionKey)-\(colorScheme == .light ? "light" : "dark")",
             rangeTransitionKey: transitionKey,
             appearanceID: "portfolio-assets",
             dataTransition: .viewportZoom,

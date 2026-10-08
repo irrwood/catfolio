@@ -208,22 +208,16 @@ struct PortfolioDetailsCard: View {
                     if $0 { shows52Week = false }
                 }))
             } label: {
-                // The list's name, then its count with the day in small
-                // type — the title no longer carries the app's name.
+                // The list's name with the menu's arrow right after it; what
+                // the menu chose goes on the line below, with the count and
+                // the day. A title that never changes keeps the menu's
+                // source bounds still.
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 2) {
-                        ZStack(alignment: .leading) {
-                            // Keep the native menu's source bounds stable while
-                            // its selection changes, including longer translations.
-                            Text(L10n.text("持仓列表")).hidden()
-                                .accessibilityHidden(true)
-                            Text(L10n.text("ETF 穿透")).hidden()
-                                .accessibilityHidden(true)
-                            Text(tableTitle)
-                        }
-                        .font(Typography.text(size: 22, weight: .semibold))
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: true)
+                        Text(tableTitle)
+                            .font(Typography.text(size: 22, weight: .semibold))
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: true)
                         Image("PortfolioHeaderDisclosure")
                             .renderingMode(.template)
                             .resizable()
@@ -264,6 +258,7 @@ struct PortfolioDetailsCard: View {
         if !showsHeatmap {
             HoldingSortMenu(
                 field: Binding(get: { holdingSortField }, set: { holdingSortFieldRawValue = $0.rawValue }),
+                fields: sortFields,
                 ascending: $holdingSortAscending,
                 performancePeriod: $holdingPerformancePeriod,
                 iconOnly: true,
@@ -281,8 +276,16 @@ struct PortfolioDetailsCard: View {
     }
 
     private var tableTitle: String {
-        showsHeatmap ? L10n.text("持仓热力图")
-            : L10n.text(showsMergedHoldings ? "ETF 穿透" : "持仓列表")
+        showsHeatmap ? L10n.text("持仓热力图") : L10n.text("持仓列表")
+    }
+
+    /// The list and column the menu chose, for the line under the title.
+    private var modeLabels: [String] {
+        guard !showsHeatmap else { return [] }
+        var labels = [L10n.text(showsMergedHoldings ? "ETF 穿透" : "持仓明细")]
+        if showsVolume { labels.append(L10n.text("成交量")) }
+        else if shows52Week { labels.append(L10n.text("52 周")) }
+        return labels
     }
 
     /// Rows in the list on screen; nil until an ETF breakdown has loaded.
@@ -300,7 +303,7 @@ struct PortfolioDetailsCard: View {
         case .today: model.latestSessionDate.map { DataDayLabel.text(for: $0, locale: appLocale) }
         case .holdingPeriod: L10n.text("持有期")
         }
-        let parts = [tableCount.map(String.init), period].compactMap { $0 }
+        let parts = [tableCount.map(String.init)].compactMap { $0 } + modeLabels + [period].compactMap { $0 }
         return Text(parts.joined(separator: " · "))
             .appText(.caption, weight: .medium)
             .foregroundStyle(.secondary)
@@ -377,8 +380,15 @@ struct PortfolioDetailsCard: View {
         }
     }
 
+    /// A sort that belongs to a hidden column falls back to market value
+    /// while that column is off, and comes back with it.
     private var holdingSortField: HoldingSortField {
-        HoldingSortField(rawValue: holdingSortFieldRawValue) ?? .marketValue
+        let saved = HoldingSortField(rawValue: holdingSortFieldRawValue) ?? .marketValue
+        return sortFields.contains(saved) ? saved : .marketValue
+    }
+
+    private var sortFields: [HoldingSortField] {
+        HoldingSortField.available(shows52Week: shows52Week && !showsVolume, showsVolume: showsVolume)
     }
 
     private var etfHoldingsKey: String {
@@ -453,6 +463,17 @@ enum HoldingSortField: String, CaseIterable, Identifiable {
     case name
 
     var id: String { rawValue }
+
+    /// The 52-week and volume sorts only where their column is shown.
+    static func available(shows52Week: Bool, showsVolume: Bool) -> [HoldingSortField] {
+        allCases.filter {
+            switch $0 {
+            case .week52Position: shows52Week
+            case .volumeArea: showsVolume
+            default: true
+            }
+        }
+    }
 
     var title: String {
         switch self {
@@ -550,6 +571,7 @@ struct HoldingSortMenu: View {
     @Environment(\.locale) private var appLocale
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @Binding var field: HoldingSortField
+    var fields = HoldingSortField.allCases
     @Binding var ascending: Bool
     @Binding var performancePeriod: HoldingPerformancePeriod
     var iconOnly = false
@@ -582,7 +604,7 @@ struct HoldingSortMenu: View {
             Divider()
 
             Section(L10n.text("排序方式")) {
-                ForEach(HoldingSortField.allCases) { option in
+                ForEach(fields) { option in
                     Button {
                         field = option
                     } label: {

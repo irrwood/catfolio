@@ -188,12 +188,6 @@ struct SettingsLabView: View {
                     StockScreenerView().environment(model)
                 }
                 .accessibilityIdentifier("lab.screener")
-                // Paused while the strategy studio is redesigned. Keep its
-                // implementation and saved workspaces for a future release.
-                SettingsButtonRow(icon: .symbol("slider.horizontal.3"), title: L10n.text("策略编曲家")) {}
-                .disabled(true)
-                .accessibilityHint(L10n.text("功能暂未开放"))
-                .accessibilityIdentifier("lab.policy-composer")
                 SettingsValueRow(icon: .symbol("number.square"), title: L10n.text("税务计算"), value: nil)
                     .disabled(true)
                     .accessibilityHint(L10n.text("功能暂未开放"))

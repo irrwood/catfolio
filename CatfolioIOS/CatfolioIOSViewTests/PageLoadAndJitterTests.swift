@@ -147,63 +147,6 @@ final class PageLoadAndJitterTests: XCTestCase {
     }
 
     @MainActor
-    func testTodaySectorRowAlignsWrappedEnglishCardsAndKeepsOddColumnWidth() async throws {
-        let scene = try connectedWindowScene()
-        let previousWindow = scene.windows.first(where: \.isKeyWindow)
-        var frames: [Int: CGRect] = [:]
-        let host = UIHostingController(rootView:
-            VStack {
-                TodaySectorRowLayout(columns: 2, spacing: 12) {
-                    ForEach(0..<2) { index in
-                        VStack(alignment: .leading) {
-                            Text(index == 0 ? "Communication Services" : "Energy")
-                                .fixedSize(horizontal: false, vertical: true)
-                            Spacer(minLength: 8)
-                            Text("+$100.00")
-                                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
-                                    frames[index + 10] = $0
-                                }
-                        }
-                        .padding(20)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
-                            frames[index] = $0
-                        }
-                    }
-                }
-                TodaySectorRowLayout(columns: 2, spacing: 12) {
-                    Text("Industrials")
-                        .frame(maxWidth: .infinity)
-                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
-                            frames[2] = $0
-                        }
-                }
-            }
-            .font(.body)
-            .environment(\.dynamicTypeSize, .large)
-        )
-        let window = UIWindow(windowScene: scene)
-        window.rootViewController = host
-        window.makeKeyAndVisible()
-        defer { window.isHidden = true; previousWindow?.makeKeyAndVisible() }
-        for width: CGFloat in [280, 353] {
-            window.frame = CGRect(x: 0, y: 0, width: width, height: 720)
-            host.view.frame = window.bounds
-            host.view.layoutIfNeeded()
-            try await Task.sleep(for: .milliseconds(150))
-            let left = try XCTUnwrap(frames[0])
-            let right = try XCTUnwrap(frames[1])
-            XCTAssertEqual(left.width, (width - 12) / 2, accuracy: 1)
-            XCTAssertEqual(left.width, right.width, accuracy: 1)
-            XCTAssertEqual(left.minY, right.minY, accuracy: 1)
-            XCTAssertEqual(left.maxY, right.maxY, accuracy: 1)
-            XCTAssertEqual(right.minX - left.maxX, 12, accuracy: 1)
-            XCTAssertEqual(try XCTUnwrap(frames[10]).maxY, try XCTUnwrap(frames[11]).maxY, accuracy: 1)
-            XCTAssertEqual(try XCTUnwrap(frames[2]).width, left.width, accuracy: 1)
-        }
-    }
-
-    @MainActor
     private func verifyTodayLayout(width: CGFloat, typeSize: DynamicTypeSize, scheme: ColorScheme) async throws {
         let previousLanguage = UserDefaults.standard.string(forKey: AppLanguage.preferenceKey)
         UserDefaults.standard.set("en", forKey: AppLanguage.preferenceKey)

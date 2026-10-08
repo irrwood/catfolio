@@ -177,8 +177,11 @@ extension AppModel {
         let context = try await holdingDetailAccountContext(for: ticker)
         // Positions from the picked accounts; trades also from any account
         // that has since sold out, so their buys and sells stay marked.
-        let scoped = context.document.scoped(to: context.tradeAccountKeys(for: accountKeys))
-        let scopedHolding = context.holding(for: accountKeys)
+        let (scoped, scopedHolding) = await Task.detached(priority: .userInitiated) {
+            (context.document.scoped(to: context.tradeAccountKeys(for: accountKeys)),
+             context.holding(for: accountKeys))
+        }.value
+        try Task.checkCancellation()
         let history = try await LocalMarketDataClient().securityPriceHistory(
             ticker: ticker,
             currency: scopedHolding?.quoteCurrency ?? "USD",

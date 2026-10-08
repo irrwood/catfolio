@@ -7,6 +7,11 @@ struct CatfolioIOSApp: App {
     @AppStorage(AppLanguage.preferenceKey) private var languageRawValue = AppLanguage.system.rawValue
     @AppStorage(AppAppearance.preferenceKey) private var appearanceRawValue = AppAppearance.system.rawValue
 
+    init() {
+        SimulatedOffline.install()
+        _ = NetworkReachability.shared
+    }
+
     private var preferredColorScheme: ColorScheme? {
         (AppAppearance(rawValue: appearanceRawValue) ?? .system).preferredColorScheme
     }

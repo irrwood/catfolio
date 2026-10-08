@@ -12,7 +12,7 @@ struct LocalMarketDataClient {
             memoryCapacity: 24 * 1_024 * 1_024,
             diskCapacity: 120 * 1_024 * 1_024
         )
-        return URLSession(configuration: configuration)
+        return URLSession(configuration: configuration.simulatingOffline())
     }()
 
     private struct YahooChartResponse: Decodable {

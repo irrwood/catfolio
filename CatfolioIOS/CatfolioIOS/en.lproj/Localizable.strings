@@ -3837,3 +3837,11 @@
 "当前没有持仓低于成本。" = "No holdings are currently below cost.";
 
 "持仓市值" = "Holdings value";
+
+"正在刷新…" = "Refreshing…";
+"已更新" = "Updated";
+"已载入" = "Loaded";
+"暂无新报价" = "No new quotes";
+"已是最新" = "Up to date";
+"没有可刷新的报价" = "No quotes to refresh";
+"刷新失败" = "Refresh failed";

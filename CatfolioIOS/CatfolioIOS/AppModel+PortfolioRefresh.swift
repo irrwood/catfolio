@@ -207,6 +207,15 @@ extension AppModel {
         from loaded: LocalPortfolioDocument, generation: Int, forceRefresh: Bool = true
     ) async {
         guard !isFakeDataMode else { return }
+        // Only a single point on screen, and the last full curve on disk:
+        // show that while the rebuild runs, which offline may never finish.
+        if (portfolioChart?.positionHistory.rows.count ?? 0) <= 1,
+           let saved = await savedHomeChart(), saved.positionHistory.rows.count > 1 {
+            guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+            portfolioChart = saved
+            isPortfolioChartLoading = false
+            portfolioChartRevision &+= 1
+        }
         // A new/invalid result cache should still try existing price history
         // locally before entering the slow provider refresh/fallback pipeline.
         if !hasUsableHomeChart || portfolioChart?.isCurrentHoldingsOnly == true,
@@ -246,11 +255,14 @@ extension AppModel {
             // A failed/offline rebuild can return an unavailable response.
             // Keep the last valid cached curve and its timestamp in that case.
             guard enriched.currentPoint.marketValue.isFinite || !hasUsableHomeChart else { return }
-            // An interim response can have a valid current number but no
-            // rebuilt history. Keep the complete cache on disk as well as on
-            // screen, until a complete replacement arrives for this scope.
-            if hasUsableHomeChart, enriched.positionHistory.rows.count <= 1,
-               (portfolioChart?.positionHistory.rows.count ?? 0) > 1 { return }
+            // A rebuild that comes back shorter than the curve on screen lost
+            // prices on the way — offline, a provider failing — and fell back
+            // to a few points, which drew as two dots and stayed until the
+            // network returned. Keep the complete curve, on disk as well as on
+            // screen, until a full one arrives. A changed ledger replaces the
+            // chart before this point, so this only holds back a refresh.
+            if hasUsableHomeChart,
+               enriched.positionHistory.rows.count < (portfolioChart?.positionHistory.rows.count ?? 0) { return }
             portfolioChart = enriched
             if enriched.currentPoint.marketValue.isFinite { portfolioCachedAt = nil }
             portfolioChartRevision &+= 1

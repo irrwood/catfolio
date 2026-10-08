@@ -646,7 +646,7 @@ struct ResearchView: View {
                         DCACalculatorView()
                     }
                     .accessibilityIdentifier("research.dca")
-                    // AI 持仓筛选, 策略编曲家 and 税务计算 are in 设置 › Lab 实验室.
+                    // AI 持仓筛选 and 税务计算 are in 设置 › Lab 实验室.
                 }
             }
         }

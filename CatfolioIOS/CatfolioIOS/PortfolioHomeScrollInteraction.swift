@@ -94,13 +94,16 @@ enum PortfolioHomeSnapMotion {
 }
 
 /// Adapts just the home ScrollView. UIKit retains the pan, list inertia and
-/// refresh spinner; the two panel landings run one explicit spring clock.
+/// the pull's rebound; the two panel landings run one explicit spring clock.
 /// Unimplemented delegate methods are forwarded to SwiftUI's own delegate.
 @MainActor
 final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
     weak var scrollView: UIScrollView?
     private weak var forwardedDelegate: UIScrollViewDelegate?
-    let refreshControl = UIRefreshControl()
+    /// The spinner in the gap a pull opens above the page. Not a
+    /// UIRefreshControl: that holds the page open while it refreshes, and
+    /// ended early it broke the rebound and did not fire on the next pull.
+    let pullIndicator = UIActivityIndicatorView(style: .medium)
     private(set) var gate = PortfolioHomeRefreshGate()
     private(set) var isSettling = false
     private(set) var gestureStart: CGFloat = 0
@@ -118,6 +121,12 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
     private var animation: (spring: PortfolioHomeSnapMotion.Spring, time: CFTimeInterval)?
     private var displayLink: CADisplayLink?
     private var refreshTask: Task<Void, Never>?
+    /// How far past the top a released pull has to be to refresh.
+    static let refreshPull: CGFloat = 90
+    /// The overscroll on screen belongs to a pull that began settled at the
+    /// top: until the page is back up it rebounds natively and the hero
+    /// follows it, even once the refresh it started has run.
+    private(set) var eligiblePull = false
     private var generation = 0
     private var isChangingAttachment = false
     /// When the latest touch came down on a list that was still moving.
@@ -134,9 +143,11 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
 
     override init() {
         super.init()
-        refreshControl.tintColor = .label
-        refreshControl.accessibilityIdentifier = "home-refresh"
-        refreshControl.addTarget(self, action: #selector(requestRefresh), for: .valueChanged)
+        pullIndicator.color = .label
+        pullIndicator.hidesWhenStopped = false
+        pullIndicator.isUserInteractionEnabled = false
+        pullIndicator.alpha = 0
+        pullIndicator.accessibilityIdentifier = "home-refresh"
     }
 
     override func responds(to selector: Selector!) -> Bool {
@@ -167,8 +178,8 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
             observer.onTouchEnded = { [weak self] in self?.touchEnded() }
             scroll.addGestureRecognizer(observer)
             touchObserver = observer
-            scroll.refreshControl = refreshControl
-            alignRefreshControl()
+            scroll.addSubview(pullIndicator)
+            layoutPullIndicator()
         }
         if scroll.delegate !== self {
             forwardedDelegate = scroll.delegate
@@ -194,17 +205,18 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
         let delegate = forwardedDelegate
         let observer = touchObserver
         // Clear our binding before UIKit can synchronously lay out after
-        // removing the refresh control and call BoundaryView.connect again.
+        // removing the indicator and call BoundaryView.connect again.
         scrollView = nil
         forwardedDelegate = nil
         touchObserver = nil
         if let scroll {
             if scroll.delegate === self { scroll.delegate = delegate }
-            if scroll.refreshControl === refreshControl { scroll.refreshControl = nil }
+            if pullIndicator.superview === scroll { pullIndicator.removeFromSuperview() }
             if let observer { scroll.removeGestureRecognizer(observer) }
         }
         hasTouch = false
         isMoving = false
+        eligiblePull = false
         motionCaughtAt = nil
     }
 
@@ -227,6 +239,7 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
         motionCaughtAt = isSettling || isMoving || scroll.isDecelerating ? clock() : nil
         gate.beginTouch(offset: offset, isSettling: isSettling,
                         isMoving: isMoving || scroll.isDecelerating)
+        eligiblePull = gate.permitsRefresh
         // Native deceleration stops under a finger; our display-link spring
         // must do the same. Otherwise each further tap catches the still-moving
         // sheet and is rejected until the spring eventually finishes.
@@ -237,12 +250,7 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
                 y: stopped - scroll.adjustedContentInset.top), animated: false)
             isMoving = false
         }
-        // Removing the control for a locked gesture prevents even a partial
-        // refresh indicator/inset, not just the eventual network callback.
-        if !gate.isRefreshing {
-            scroll.refreshControl = gate.permitsRefresh ? refreshControl : nil
-        }
-        alignRefreshControl()
+        layoutPullIndicator()
     }
 
     func touchEnded() {
@@ -265,19 +273,18 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
         isSettling = false
     }
 
-    /// The control is taken off and put back as touches lock and unlock
-    /// refresh. Put back before UIKit has laid it out, it can keep a zero
-    /// width, and its spinner is then centred on the left edge — half of it
-    /// showing beside the account name. Hold it to the scroll view's width.
-    func alignRefreshControl() {
-        guard let scroll = scrollView, scroll.refreshControl === refreshControl else { return }
-        let width = scroll.bounds.width
-        var frame = refreshControl.frame
-        guard width > 0, abs(frame.width - width) > 0.5 || abs(frame.minX) > 0.5 else { return }
-        frame.origin.x = 0
-        frame.size.width = width
-        refreshControl.frame = frame
-        refreshControl.layoutIfNeeded()
+    /// Centred in the gap the pull opens, clearer as the pull nears the
+    /// refresh distance, and back up with the page. A locked pull shows none.
+    func layoutPullIndicator() {
+        guard let scroll = scrollView else { return }
+        let pull = max(0, -offset)
+        let shown = eligiblePull && pull > 0
+        pullIndicator.alpha = shown ? min(1, pull / Self.refreshPull) : 0
+        pullIndicator.center = CGPoint(x: scroll.bounds.width / 2, y: -pull / 2)
+        if shown, scroll.subviews.last !== pullIndicator { scroll.bringSubviewToFront(pullIndicator) }
+        if shown != pullIndicator.isAnimating {
+            shown ? pullIndicator.startAnimating() : pullIndicator.stopAnimating()
+        }
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
@@ -296,7 +303,7 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
         if !isSettling && !gate.isRefreshing && isMoving {
             // A touch can catch the curve a few pixels below zero. Preserve
             // that captured position (no jump), but allow no further pull.
-            let floor: CGFloat = gate.permitsRefresh ? -.greatestFiniteMagnitude : min(0, gestureStart)
+            let floor: CGFloat = eligiblePull ? -.greatestFiniteMagnitude : min(0, gestureStart)
             let ceiling = gestureStart < detent - 8 && maximum >= detent
                 ? detent : CGFloat.greatestFiniteMagnitude
             let constrained = min(ceiling, max(floor, raw))
@@ -307,22 +314,23 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
             }
         }
         forwardedDelegate?.scrollViewDidScroll?(scrollView)
-        if raw < 0 { alignRefreshControl() }
+        if !hasTouch, offset >= 0 { eligiblePull = false }
+        layoutPullIndicator()
         publishOffset()
     }
 
     func scrollViewDidChangeAdjustedContentInset(_ scrollView: UIScrollView) {
         forwardedDelegate?.scrollViewDidChangeAdjustedContentInset?(scrollView)
-        // Refresh completion can change the inset without a didScroll event.
-        // Keep the header's cached geometry in sync with that native change.
+        // An inset change can arrive without a didScroll event. Keep the
+        // header's cached geometry in sync with that native change.
         publishOffset()
     }
 
     private func publishOffset() {
         // Signed animation offsets also pin the hero during the lower-stop
         // overshoot. Only eligible native pulls are exposed as pull distance.
-        onOffset(isSettling || (!gate.permitsRefresh && !gate.isRefreshing) ? offset : max(0, offset),
-                 gate.permitsRefresh || gate.isRefreshing ? max(0, -offset) : 0)
+        let pulling = eligiblePull || gate.permitsRefresh || gate.isRefreshing
+        onOffset(isSettling || !pulling ? offset : max(0, offset), pulling ? max(0, -offset) : 0)
     }
 
     func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint,
@@ -331,18 +339,21 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
                                                        targetContentOffset: targetContentOffset)
         guard !gate.isRefreshing else { return }
         let released = offset
+        // A pull let go this far down refreshes, once; the page then
+        // rebounds natively whatever the refresh is doing.
+        if eligiblePull, released < -Self.refreshPull { startRefresh() }
         // UIScrollView reports points per millisecond; the spring wants seconds.
         releaseVelocity = min(PortfolioHomeSnapMotion.maximumVelocity,
                               max(-PortfolioHomeSnapMotion.maximumVelocity, velocity.y * 1000))
         pendingTarget = PortfolioHomeSnapMotion.target(start: gestureStart, released: released,
                                                        velocity: velocity.y, detent: detent, maximum: maximum)
-        if released < 0 && !gate.permitsRefresh { pendingTarget = 0 }
+        if released < 0 && !eligiblePull { pendingTarget = 0 }
         if pendingTarget != nil {
             // Cancel native deceleration *before* starting the one snap clock.
             targetContentOffset.pointee = scrollView.contentOffset
             gate.lockRefresh()
             isSettling = true
-        } else if !gate.permitsRefresh && !gate.isRefreshing {
+        } else if !eligiblePull {
             let floor: CGFloat = released >= detent ? detent : 0
             targetContentOffset.pointee.y = max(floor - scrollView.adjustedContentInset.top,
                                                  targetContentOffset.pointee.y)
@@ -377,7 +388,7 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
         pendingTarget = nil
         displayLink?.invalidate()
         scroll.setContentOffset(scroll.contentOffset, animated: false)
-        if !gate.isRefreshing { scroll.refreshControl = nil }
+        eligiblePull = false
         if abs(offset - target) <= 0.5 {
             scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x,
                                            y: target - scroll.adjustedContentInset.top), animated: false)
@@ -419,29 +430,15 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
         }
     }
 
-    @objc func requestRefresh() {
-        guard gate.beginRefresh() else {
-            if !gate.isRefreshing { refreshControl.endRefreshing() }
-            return
-        }
+    /// Once per pull. The refresh runs behind the page — the line above
+    /// the total says what it is doing — so nothing holds the page open.
+    func startRefresh() {
+        guard gate.beginRefresh() else { return }
         refreshTask = Task { [weak self] in
             guard let self else { return }
-            let refreshingScroll = self.scrollView
             await self.refresh()
-            self.refreshControl.endRefreshing()
             self.gate.finishRefresh()
             self.refreshTask = nil
-            guard let scroll = self.scrollView, scroll === refreshingScroll else { return }
-            // endRefreshing hides the spinner, but a refresh that rebuilt the
-            // content can leave a released scroll parked below its top. Return
-            // only that idle overscroll; never move an active touch or a list
-            // the reader has already scrolled away from the header.
-            if !self.hasTouch && !scroll.isTracking && !scroll.isDragging
-                && !scroll.isDecelerating && self.offset < 0 {
-                self.isMoving = false
-                scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x,
-                    y: -scroll.adjustedContentInset.top), animated: !self.reduceMotion)
-            }
             self.publishOffset()
         }
     }

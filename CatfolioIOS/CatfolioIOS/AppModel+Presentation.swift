@@ -322,13 +322,27 @@ extension AppModel {
 
     func saveHomePresentation(generation: Int? = nil) async {
         guard !Task.isCancelled, generation == nil || generation == portfolioRequestGeneration,
-              presentedSource == portfolioSource, let overview, let chart = portfolioChart else { return }
+              presentedSource == portfolioSource, let overview, var chart = portfolioChart else { return }
+        let context = homeCacheContext(accountKeys: selectedAccountKeys)
+        // A curve that came back as a single point — offline, prices missing —
+        // must not replace the last full one on disk, or every later launch
+        // opens on it until a rebuild succeeds online.
+        if chart.positionHistory.rows.count <= 1,
+           let saved = await presentationCache.load(document: fullDocument, context: context)?.chart,
+           saved.positionHistory.rows.count > 1 {
+            chart = saved
+        }
         let snapshot = PortfolioPresentationSnapshot(overview: overview, chart: chart, holdings: holdings,
             dailyChanges: holdingDailyChanges, benchmark: benchmarkDailyChange,
             updatedAt: localUpdatedAt, savedAt: Date())
         // Failure to write a disposable result cache must not fail a refresh.
-        try? await presentationCache.save(snapshot, document: fullDocument,
-            context: homeCacheContext(accountKeys: selectedAccountKeys))
+        try? await presentationCache.save(snapshot, document: fullDocument, context: context)
+    }
+
+    /// The curve last saved for the selected accounts and this ledger.
+    func savedHomeChart() async -> PortfolioChartResponse? {
+        await presentationCache.load(document: fullDocument,
+            context: homeCacheContext(accountKeys: selectedAccountKeys))?.chart
     }
 
     func loadActiveDocument() async throws -> LocalPortfolioDocument {
