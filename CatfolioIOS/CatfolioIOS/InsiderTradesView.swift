@@ -262,7 +262,7 @@ struct InsiderTradesSummaryCard: View {
             if count == 0 {
                 Text("—").appNumber(.callout).foregroundStyle(.secondary)
             } else {
-                Text(DisplayFormat.compactMoney(value, currency: "USD")).appNumber(.callout)
+                FinancialText(DisplayFormat.compactMoney(value, currency: "USD")).appNumber(.callout)
                 Text(L10n.text("\(count) 笔")).appNumber(.caption).foregroundStyle(.secondary)
             }
         }
@@ -275,7 +275,7 @@ struct InsiderTradesSummaryCard: View {
         if count == 0 {
             Text("—").appNumber(.callout).foregroundStyle(.secondary)
         } else {
-            Text((value >= 0 ? "+" : "") + DisplayFormat.compactMoney(value, currency: "USD"))
+            FinancialText((value >= 0 ? "+" : "") + DisplayFormat.compactMoney(value, currency: "USD"))
                 .appNumber(.callout, weight: .semibold)
                 .foregroundStyle(value > 0 ? CatfolioPalette.green500 : value < 0 ? CatfolioPalette.rose500 : .secondary)
                 .lineLimit(1)
@@ -304,7 +304,7 @@ private struct InsiderTradeRow: View {
                 Text(kindTitle)
                     .appText(.caption, weight: .semibold)
                     .foregroundStyle(kindColor)
-                Text(amount)
+                FinancialText(amount)
                     .appNumber(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)

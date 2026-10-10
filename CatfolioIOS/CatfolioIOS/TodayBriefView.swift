@@ -74,13 +74,26 @@ struct TodayBriefSentence: View {
     var onExpand: (String) -> Void = { _ in }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    var body: some View {
-        let fragments = TodayBriefFragment.parse(text, allowedTargets: context.targets)
-        let pieces = fragments.flatMap { fragment in
-            fragment.target != nil ? [fragment] : Self.words(fragment.text).map {
-                TodayBriefFragment(text: $0, target: nil)
+    struct Piece: Equatable {
+        let text: String
+        let target: String?
+        // Only the first word owns the logo and the full VoiceOver action.
+        let referenceLabel: String?
+    }
+
+    static func pieces(from fragments: [TodayBriefFragment], context: TodayBriefContext) -> [Piece] {
+        fragments.flatMap { fragment in
+            let label = fragment.target.map { context.liveLabel(fragment.text, target: $0) } ?? fragment.text
+            return words(label).enumerated().map { index, word in
+                Piece(text: word, target: fragment.target,
+                      referenceLabel: fragment.target != nil && index == 0 ? label : nil)
             }
         }
+    }
+
+    var body: some View {
+        let fragments = TodayBriefFragment.parse(text, allowedTargets: context.targets)
+        let pieces = Self.pieces(from: fragments, context: context)
         TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !generating || reduceMotion)) { timeline in
             let time = generating && !reduceMotion ? timeline.date.timeIntervalSinceReferenceDate : 0
             TodayBriefFlowLayout(lineSpacing: 7) {
@@ -91,20 +104,26 @@ struct TodayBriefSentence: View {
                             onExpand(target)
                         } label: {
                             HStack(spacing: 4) {
-                                inlineIcon(target)
-                                word(context.liveLabel(piece.text, target: target),
-                                     index: index, time: time, target: piece.target)
+                                if piece.referenceLabel != nil {
+                                    inlineIcon(target)
+                                        .researchLayoutFrame("today.brief.icon.\(index)")
+                                }
+                                word(piece.text, index: index, time: time, target: piece.target)
                                     .foregroundStyle(CatfolioTheme.primaryText)
                             }
                         }
                         .buttonStyle(.plain)
                         .allowsHitTesting(!disabled)
+                        .accessibilityLabel(piece.referenceLabel ?? piece.text)
+                        .accessibilityHidden(piece.referenceLabel == nil)
                         .accessibilityHint(L10n.text("继续展开简报"))
                         .accessibilityIdentifier("today.brief.\(target)")
+                        .researchLayoutFrame("today.brief.piece.\(index)")
                     } else {
                         word(piece.text, index: index, time: time, target: piece.target)
                             .foregroundStyle(CatfolioTheme.primaryText.opacity(0.55))
                             .accessibilityHidden(true)
+                            .researchLayoutFrame("today.brief.piece.\(index)")
                     }
                 }
             }
@@ -112,7 +131,7 @@ struct TodayBriefSentence: View {
         // Reading one character at a time is unusable with VoiceOver. The
         // paragraph is read once; interactive phrases remain separate actions.
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(fragments.map(\.text).joined())
+        .accessibilityLabel(pieces.map(\.text).joined())
     }
 
     private func word(_ text: String, index: Int, time: Double, target: String?) -> some View {
@@ -159,7 +178,8 @@ struct TodayBriefSentence: View {
     }
 
     /// Keep Latin words and numbers intact; Chinese wraps at character
-    /// boundaries. Punctuation stays with its preceding word.
+    /// boundaries. Opening punctuation stays with the next word; closing
+    /// punctuation stays with the preceding word, including fund suffixes.
     static func words(_ text: String) -> [String] {
         var result: [String] = []
         var word = ""
@@ -170,13 +190,21 @@ struct TodayBriefSentence: View {
             } else if character.isWhitespace {
                 word.append(character)
                 flush()
+            } else if "（([“‘".contains(character) {
+                flush()
+                word.append(character)
             } else if "，。；：、！？,.!?;:）)]”’".contains(character) {
                 if !word.isEmpty { word.append(character); flush() }
                 else if !result.isEmpty { result[result.count - 1].append(character) }
                 else { result.append(String(character)) }
             } else {
-                flush()
-                result.append(String(character))
+                if !word.isEmpty, word.allSatisfy({ "（([“‘".contains($0) }) {
+                    word.append(character)
+                    flush()
+                } else {
+                    flush()
+                    result.append(String(character))
+                }
             }
         }
         flush()
@@ -184,8 +212,8 @@ struct TodayBriefSentence: View {
     }
 }
 
-/// Measure long interactive phrases at the available width before wrapping.
-/// This also keeps large accessibility type inside a narrow phone's margins.
+/// References and prose share word boundaries, so a long company name can
+/// continue on the next line alongside the rest of the sentence.
 private struct TodayBriefFlowLayout: Layout {
     let lineSpacing: CGFloat
 

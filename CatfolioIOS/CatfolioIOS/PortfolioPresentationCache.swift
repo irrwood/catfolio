@@ -10,6 +10,8 @@ struct PortfolioPresentationSnapshot: Codable {
     let benchmark: Double?
     let updatedAt: Date?
     let savedAt: Date
+    /// The closes the day's figures are read from; absent in older caches.
+    var recentCloses: [String: [String: Double]]? = nil
 
     var hasUsableChart: Bool {
         chart.currentPoint.marketValue.isFinite && chart.currentPoint.cost.isFinite

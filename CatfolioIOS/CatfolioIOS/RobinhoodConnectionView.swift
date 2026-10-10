@@ -45,12 +45,6 @@ struct RobinhoodConnectionView: View {
             SettingsPage(bottomInset: 32) {
                 SettingsSection(L10n.text("连接")) {
                     SettingsValueRow(title: "Robinhood", value: connected ? L10n.text("已连接") : L10n.text("尚未连接"), valueIsNumeric: false)
-                    SettingsButtonRow(icon: .symbol("person.badge.key"), title: L10n.text("生成桌面登录链接"), showsChevron: false) {
-                        run {
-                            authorizationURL = try await RobinhoodMCPClient.shared.beginAuthorization()
-                            callback = ""
-                        }
-                    }
                     if let authorizationURL {
                         ShareLink(item: authorizationURL) {
                             Label(L10n.text("将登录链接发送到电脑"), systemImage: "square.and.arrow.up")
@@ -62,20 +56,6 @@ struct RobinhoodConnectionView: View {
                             .textInputAutocapitalization(.never).autocorrectionDisabled()
                             .keyboardType(.URL).privacySensitive()
                     }
-                    SettingsButtonRow(icon: .symbol("checkmark.shield"), title: L10n.text("完成 Robinhood 连接"), showsChevron: false) {
-                        run {
-                            try await RobinhoodMCPClient.shared.finishAuthorization(callback: callback)
-                            callback = ""
-                            authorizationURL = nil
-                            connected = true
-                            accounts = []
-                            preview = nil
-                            selectedID = ""
-                            available = Set(try await RobinhoodMCPClient.shared.availableTools())
-                            try await loadAccounts()
-                        }
-                    }
-                    .disabled(callback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
                 SettingsFootnote(L10n.text("在电脑打开登录链接并授权。跳转至 localhost 后页面可能无法打开，请复制地址栏的完整链接并粘贴到这里。请在 30 分钟内完成。"))
                 SettingsFootnote(L10n.text("实验性连接：尚未完成真实账号联调，部分数据可能暂不可用。"))
@@ -83,9 +63,6 @@ struct RobinhoodConnectionView: View {
 
                 if connected {
                     SettingsSection(L10n.text("账户与组合")) {
-                        SettingsButtonRow(icon: .symbol("arrow.down.circle"), title: L10n.text("读取 Robinhood 账户"), showsChevron: false) {
-                            run { try await loadAccounts() }
-                        }
                         if !allowedAccounts.isEmpty {
                             SettingsRowContainer {
                                 Picker(L10n.text("选择 Robinhood 账户"), selection: $selectedID) {
@@ -96,17 +73,6 @@ struct RobinhoodConnectionView: View {
                             }
                             if context.isCreating {
                                 SettingsRowContainer { AccountNicknameField(nickname: $nickname, edited: $nicknameEdited) }
-                            }
-                            SettingsButtonRow(icon: .symbol("tray.and.arrow.down"), title: L10n.text("预览 Robinhood 股票持仓"), showsChevron: false) {
-                                run {
-                                    preview = nil
-                                    guard let account = allowedAccounts.first(where: { $0.id == selectedID }) else {
-                                        throw RobinhoodAccountError.wrongAccount
-                                    }
-                                    let snapshot = try await RobinhoodMCPClient.shared.snapshot(account: account)
-                                    try snapshot.validate(context: context, existing: model.accounts)
-                                    preview = snapshot
-                                }
                             }
                         }
                         readButton(L10n.text("读取组合快照"), tool: "get_portfolio", arguments: accountArguments)
@@ -126,10 +92,6 @@ struct RobinhoodConnectionView: View {
                             }
                             if preview.positions.isEmpty {
                                 SettingsFootnote(L10n.text("此账户没有股票持仓；确认同步将清空该账户已导入的股票持仓。"))
-                            }
-                            SettingsButtonRow(icon: .symbol("checkmark.circle"),
-                                title: context.isCreating ? L10n.text("创建 Robinhood 账户") : L10n.text("同步 Robinhood 持仓"), showsChevron: false) {
-                                confirmsSync = true
                             }
                         }
                         .privacySensitive()
@@ -177,6 +139,7 @@ struct RobinhoodConnectionView: View {
                 Link(L10n.text("Robinhood 官方连接说明"), destination: URL(string: "https://robinhood.com/us/en/support/articles/agentic-trading-overview/")!)
                     .padding(.horizontal, 20)
             }
+            .accountFlowActions { flowActions }
             .disabled(working)
             .onDisappear { operationTask?.cancel() }
             .onChange(of: selectedID) { _, value in
@@ -210,6 +173,53 @@ struct RobinhoodConnectionView: View {
                     do { available = Set(try await RobinhoodMCPClient.shared.availableTools()) }
                     catch { message = error.localizedDescription }
                 }
+            }
+        }
+        .accountFlowBrand(.robinhood, enabled: context.isCreating)
+    }
+
+    @ViewBuilder
+    private var flowActions: some View {
+        if !connected && authorizationURL == nil {
+            GlassPrimaryButton(title: L10n.text("生成桌面登录链接"), isDisabled: false, isBusy: working) {
+                run {
+                    authorizationURL = try await RobinhoodMCPClient.shared.beginAuthorization()
+                    callback = ""
+                }
+            }
+        } else if !connected {
+            GlassPrimaryButton(title: L10n.text("完成 Robinhood 连接"), isDisabled: callback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, isBusy: working) {
+                run {
+                    try await RobinhoodMCPClient.shared.finishAuthorization(callback: callback)
+                    callback = ""
+                    authorizationURL = nil
+                    connected = true
+                    accounts = []
+                    preview = nil
+                    selectedID = ""
+                    available = Set(try await RobinhoodMCPClient.shared.availableTools())
+                    try await loadAccounts()
+                }
+            }
+        } else if allowedAccounts.isEmpty {
+            GlassPrimaryButton(title: L10n.text("读取 Robinhood 账户"), isDisabled: false, isBusy: working) {
+                run { try await loadAccounts() }
+            }
+        } else if preview == nil {
+            GlassPrimaryButton(title: L10n.text("预览 Robinhood 股票持仓"), isDisabled: selectedID.isEmpty, isBusy: working) {
+                run {
+                    preview = nil
+                    guard let account = allowedAccounts.first(where: { $0.id == selectedID }) else {
+                        throw RobinhoodAccountError.wrongAccount
+                    }
+                    let snapshot = try await RobinhoodMCPClient.shared.snapshot(account: account)
+                    try snapshot.validate(context: context, existing: model.accounts)
+                    preview = snapshot
+                }
+            }
+        } else {
+            GlassPrimaryButton(title: context.isCreating ? L10n.text("创建 Robinhood 账户") : L10n.text("同步 Robinhood 持仓"), isDisabled: context.isCreating && nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, isBusy: working) {
+                confirmsSync = true
             }
         }
     }

@@ -97,7 +97,7 @@ final class VolumeProfileLayoutRegressionTests: XCTestCase {
                                  volume: Double(12 - abs(index - 10)) * 1_000)
             })
         let holding = HoldingDetailLayoutAuditTests.holding(price: 100)
-        for (language, width, large) in [("en", 320.0, false), ("en", 320.0, true), ("zh-Hans", 393.0, true)] {
+        for (language, width, large) in [("en", 401.0, false), ("en", 320.0, false), ("en", 320.0, true), ("zh-Hans", 393.0, true)] {
             UserDefaults.standard.set(language, forKey: AppLanguage.preferenceKey)
             let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
             let previousWindow = scene.windows.first(where: \.isKeyWindow)

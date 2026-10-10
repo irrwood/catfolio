@@ -64,6 +64,12 @@ final class AppModel {
     }
     var holdings: [Holding] = []
     var holdingDailyChanges: [String: Double] = [:]
+    /// Each holding's recent daily closes, keyed by upper-cased ticker: the
+    /// day's figures read their change from these. See `AppModel+Currency`.
+    var holdingRecentCloses: [String: [String: Double]] = [:]
+    /// Daily closes against the dollar of the display currency and of the
+    /// currencies the holdings are priced in. See `AppModel+Currency`.
+    var currencyHistories: [String: CurrencyHistory] = [:]
     var benchmarkDailyChange: Double?
     var isHoldingDailyChangesLoading = false
     var comparison: ComparisonResponse?

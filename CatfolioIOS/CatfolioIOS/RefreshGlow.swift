@@ -15,56 +15,61 @@ struct RefreshGlow: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let isActive: Bool
 
-    /// One pass, then a rest before the next: a heartbeat, not a barber's pole.
-    private static let sweep: Double = 1.1
-    private static let rest: Double = 0.5
-
-    private var period: Double { Self.sweep + Self.rest }
-
-    private var light: Color {
-        Color.white.opacity(0.6)
-    }
-
     func body(content: Content) -> some View {
         content
             .overlay {
                 if isActive {
                     sheen
                         .allowsHitTesting(false)
+                        .accessibilityHidden(true)
                         .mask(content)
+                        // A small contrast shift also reads on white digits.
+                        .blendMode(.difference)
                         .transition(.opacity)
                 }
             }
-            .animation(.easeOut(duration: 0.25), value: isActive)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: isActive)
     }
 
     @ViewBuilder
     private var sheen: some View {
         if reduceMotion {
             // No travelling light: a still tint that says the same thing.
-            light.opacity(0.5)
+            Color.white.opacity(0.04)
         } else {
-            GeometryReader { geometry in
-                // The sheen moves over small text for 1.1 seconds at a time.
-                // Thirty samples are visually smooth without waking SwiftUI
-                // at the display's full rate throughout a network refresh.
-                TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
-                    let width = max(geometry.size.width, 1)
-                    let band = max(60, width * 0.4)
-                    let elapsed = timeline.date.timeIntervalSinceReferenceDate
-                    let progress = elapsed.truncatingRemainder(dividingBy: period) / Self.sweep
-                    LinearGradient(
-                        colors: [light.opacity(0), light, light.opacity(0)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: band)
-                    .offset(x: -band + min(progress, 1) * (width + band))
-                    // Off screen for the resting part of the period, so the
-                    // light passes by rather than looping without a break.
-                    .opacity(progress <= 1 ? 1 : 0)
-                }
+            TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
+                AmountRefreshSheen(elapsed: timeline.date.timeIntervalSinceReferenceDate)
             }
+        }
+    }
+}
+
+/// A soft band travels diagonally through the glyph mask, with a quiet pause
+/// between passes. Pixel coordinates keep the angle at 45° even on a wide amount.
+struct AmountRefreshSheen: View {
+    let elapsed: TimeInterval
+
+    var body: some View {
+        Canvas { context, size in
+            let progress = elapsed.truncatingRemainder(dividingBy: 3) / 2
+            guard progress < 1 else { return }
+            let span = size.width + size.height
+            let halfBand = max(30, span * 0.2)
+            let center = -halfBand + CGFloat(progress) * (span + 2 * halfBand)
+            let start = (center - halfBand) / 2
+            let end = (center + halfBand) / 2
+            let light = Color.white.opacity(0.16)
+            let gradient = Gradient(stops: [
+                .init(color: .clear, location: 0),
+                .init(color: light.opacity(0.12), location: 0.2),
+                .init(color: light.opacity(0.55), location: 0.35),
+                .init(color: light, location: 0.5),
+                .init(color: light.opacity(0.55), location: 0.65),
+                .init(color: light.opacity(0.12), location: 0.8),
+                .init(color: .clear, location: 1)
+            ])
+            context.fill(Path(CGRect(origin: .zero, size: size)), with: .linearGradient(
+                gradient, startPoint: CGPoint(x: start, y: start), endPoint: CGPoint(x: end, y: end)))
         }
     }
 }

@@ -12,7 +12,7 @@ enum CorporateCalendarMode: String, CaseIterable, Identifiable {
     }
 }
 
-private extension CorporateEvent {
+extension CorporateEvent {
     var kindTitle: String {
         switch kind {
         case .earnings: L10n.text(isEstimate ? "财报（预计）" : "财报")
@@ -37,7 +37,7 @@ private extension CorporateEvent {
     }
 }
 
-private struct CorporateCalendarHoldings {
+struct CorporateCalendarHoldings {
     let byTicker: [String: Holding]
 
     init(_ holdings: [Holding]) {
@@ -49,7 +49,7 @@ private struct CorporateCalendarHoldings {
     func holding(_ event: CorporateEvent) -> Holding? { byTicker[event.ticker.uppercased()] }
 }
 
-private enum CorporateCalendarDay {
+enum CorporateCalendarDay {
     static func key(_ date: Date, calendar: Calendar) -> String {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
@@ -63,87 +63,82 @@ private enum CorporateCalendarDay {
     }
 }
 
-// MARK: - Card
-
-/// The next few dates on the portfolio's calendar, with the whole calendar
-/// a tap away.
-struct CorporateEventsCard: View {
-    let holdings: [Holding]
-    private let store = CorporateEventsStore.shared
-    private static let limit = 3
-
-    private var scope: CorporateCalendarHoldings { CorporateCalendarHoldings(holdings) }
-
-    private var upcoming: [CorporateEvent] {
-        let today = CorporateCalendarDay.key(Date(), calendar: .current)
-        return store.events(for: Set(scope.tickers)).filter { $0.date >= today }.prefix(Self.limit).map { $0 }
-    }
-
-    var body: some View {
-        let scope = scope
-        // Titled like the security page's entry cards; the title opens the
-        // calendar, and the next dates sit under it.
-        VStack(alignment: .leading, spacing: 0) {
-            NavigationLink { CorporateCalendarView(holdings: holdings) } label: {
-                HoldingDetailCardHeader(title: L10n.text("公司日历"), subtitle: L10n.text("财报、除息与派息日期"),
-                    symbol: "chevron.right", isLoading: store.isLoading && upcoming.isEmpty)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("corporate-calendar.open")
-
-            if !upcoming.isEmpty {
-                VStack(spacing: 12) {
-                    ForEach(upcoming) { event in
-                        CorporateEventCardRow(event: event, holding: scope.holding(event))
-                    }
-                }
-                .padding(.horizontal, HoldingDetailCardStyle.contentInset)
-                .padding(.bottom, HoldingDetailCardStyle.contentInset)
-            } else if !store.isLoading {
-                Text(L10n.text("近期没有财报或除息"))
-                    .appText(.callout)
-                    .foregroundStyle(SettingsTemplate.secondaryText)
-                    .padding(.horizontal, HoldingDetailCardStyle.contentInset)
-                    .padding(.bottom, HoldingDetailCardStyle.contentInset)
-            }
-        }
-        .holdingDetailCard()
-        .accessibilityIdentifier("corporate-calendar.card")
-        .task(id: scope.tickers.joined(separator: ",")) { await store.load(tickers: scope.tickers) }
-    }
+struct CorporateCalendarSummaryItem {
+    let text: String
+    let symbol: String?
+    let accessibilityText: String
 }
 
-private struct CorporateEventCardRow: View {
-    let event: CorporateEvent
-    let holding: Holding?
-    var body: some View {
-        let date = CorporateCalendarDay.date(event.date, calendar: .current) ?? Date()
-        HStack(spacing: 12) {
-            CorporateEventDateTile(date: date, day: Int(event.date.suffix(2)) ?? 0)
+struct CorporateCalendarHeader: View {
+    let month: Date
+    let items: [CorporateCalendarSummaryItem]
+    let previous: () -> Void
+    let next: () -> Void
 
-            HStack(spacing: 12) {
-                AssetLogo(ticker: event.ticker, logoSymbol: holding?.logoSymbol, size: 40, cornerRadius: 20)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(holding?.shortName ?? event.ticker)
-                        .appText(.body, weight: .medium)
-                        .foregroundStyle(CatfolioTheme.primaryText)
-                        .lineLimit(1)
-                    Text(event.kindTitle)
-                        .appText(.footnote)
-                        .foregroundStyle(SettingsTemplate.secondaryText)
-                }
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                titleAndSummary.fixedSize(horizontal: true, vertical: false)
                 Spacer(minLength: 0)
-                if let income = event.incomeUSD(shares: holding?.shares ?? 0) {
-                    Text(DisplayFormat.money(income))
-                        .appNumber(.footnote, weight: .medium)
-                        .foregroundStyle(CatfolioTheme.primaryText)
+                navigation
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                titleAndSummary
+                HStack { Spacer(); navigation }
+            }
+        }
+    }
+
+    private var titleAndSummary: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(month, format: .dateTime.year().month(.wide))
+                .appText(.title, weight: .bold)
+                .foregroundStyle(CatfolioTheme.primaryText)
+                .contentTransition(.numericText())
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
+                    ForEach(items.indices, id: \.self) { index in
+                        if index > 0 { Text("·").accessibilityHidden(true) }
+                        summaryItem(items[index])
+                    }
+                }
+                .fixedSize(horizontal: true, vertical: false)
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(items.indices, id: \.self) { summaryItem(items[$0]) }
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .appText(.caption)
+            .foregroundStyle(SettingsTemplate.secondaryText)
+            .contentTransition(.numericText())
         }
-        .accessibilityElement(children: .combine)
+    }
+
+    private func summaryItem(_ item: CorporateCalendarSummaryItem) -> some View {
+        HStack(spacing: 3) {
+            if let symbol = item.symbol { Image(systemName: symbol) }
+            Text(item.text).monospacedDigit()
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(item.accessibilityText)
+    }
+
+    private var navigation: some View {
+        HStack(spacing: 8) {
+            monthButton("chevron.left", label: L10n.text("上个月"), action: previous)
+            monthButton("chevron.right", label: L10n.text("下个月"), action: next)
+        }
+    }
+
+    private func monthButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(CatfolioTheme.primaryText)
+                .frame(width: 44, height: 44)
+                .background(SettingsTemplate.card, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }
 
@@ -230,28 +225,17 @@ struct CorporateCalendarView: View {
     }
 
     private func header(_ events: [CorporateEvent]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .center) {
-                Text(month, format: .dateTime.year().month(.wide))
-                    .appText(.title, weight: .bold)
-                    .foregroundStyle(CatfolioTheme.primaryText)
-                    .contentTransition(.numericText())
-                Spacer()
-                monthButton("chevron.left", label: L10n.text("上个月")) { shiftMonth(-1) }
-                monthButton("chevron.right", label: L10n.text("下个月")) { shiftMonth(1) }
-            }
-            Text(summary(events))
-                .appText(.footnote)
-                .foregroundStyle(SettingsTemplate.secondaryText)
-                .contentTransition(.numericText())
-        }
+        CorporateCalendarHeader(month: month, items: summary(events),
+                                previous: { shiftMonth(-1) }, next: { shiftMonth(1) })
     }
 
-    private func summary(_ events: [CorporateEvent]) -> String {
+    private func summary(_ events: [CorporateEvent]) -> [CorporateCalendarSummaryItem] {
         switch mode {
         case .earnings:
             let count = Set(events.map(\.ticker)).count
-            return count == 0 ? L10n.text("本月没有持仓公司发布财报") : L10n.text("\(count) 家公司发布财报")
+            return [.init(text: String(count), symbol: "doc.text",
+                          accessibilityText: count == 0 ? L10n.text("本月没有持仓公司发布财报")
+                            : L10n.text("\(count) 家公司发布财报"))]
         case .dividends:
             let exDates = events.filter { $0.kind == .exDividend }.count
             let payments = events.filter { $0.kind == .dividendPayment }
@@ -259,24 +243,23 @@ struct CorporateCalendarView: View {
             // ex-dates stand in for it.
             let counted = payments.isEmpty ? events.filter { $0.kind == .exDividend } : payments
             let income = counted.compactMap { $0.incomeUSD(shares: scope.holding($0)?.shares ?? 0) }.reduce(0, +)
-            var parts: [String] = []
-            if income > 0 { parts.append(L10n.text("约 \(DisplayFormat.money(income))")) }
-            if exDates > 0 { parts.append(L10n.text("\(String(exDates)) 次除息")) }
-            if !payments.isEmpty { parts.append(L10n.text("\(String(payments.count)) 次派息")) }
-            return parts.isEmpty ? L10n.text("本月没有除息或派息") : parts.joined(separator: " · ")
+            var parts: [CorporateCalendarSummaryItem] = []
+            if income > 0 {
+                parts.append(.init(text: "≈ " + DisplayFormat.money(income), symbol: nil,
+                                   accessibilityText: L10n.text("约 \(DisplayFormat.money(income))")))
+            }
+            if exDates > 0 {
+                parts.append(.init(text: String(exDates), symbol: "calendar.badge.minus",
+                                   accessibilityText: L10n.text("\(String(exDates)) 次除息")))
+            }
+            if !payments.isEmpty {
+                parts.append(.init(text: String(payments.count), symbol: "banknote",
+                                   accessibilityText: L10n.text("\(String(payments.count)) 次派息")))
+            }
+            return parts.isEmpty
+                ? [.init(text: "0", symbol: "calendar", accessibilityText: L10n.text("本月没有除息或派息"))]
+                : parts
         }
-    }
-
-    private func monthButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(CatfolioTheme.primaryText)
-                .frame(width: 44, height: 44)
-                .background(SettingsTemplate.card, in: Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
     }
 
     private var weekdayRow: some View {
@@ -367,7 +350,7 @@ struct CorporateCalendarView: View {
             }
             Spacer(minLength: 8)
             if let income = event.incomeUSD(shares: holding?.shares ?? 0) {
-                Text(DisplayFormat.money(income, fractionDigits: 2))
+                FinancialText(DisplayFormat.money(income, fractionDigits: 2))
                     .appNumber(.callout, weight: .medium)
                     .foregroundStyle(CatfolioTheme.primaryText)
             }
@@ -383,35 +366,5 @@ struct CorporateCalendarView: View {
             month = next
             selectedDay = monthDays.contains(todayKey) ? todayKey : nil
         }
-    }
-}
-
-/// The date as a calendar icon: a small tile with the month in red over the
-/// day, the way a calendar app marks a day.
-private struct CorporateEventDateTile: View {
-    @Environment(\.locale) private var appLocale
-    let date: Date
-    let day: Int
-
-    private static let monthRed = Color(red: 0.78, green: 0.24, blue: 0.24)
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
-        VStack(spacing: 0) {
-            Text(date.formatted(.dateTime.month(.abbreviated).locale(appLocale)).uppercased(with: appLocale))
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(Self.monthRed)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(String(day))
-                .appNumber(.title, weight: .medium)
-                .foregroundStyle(CatfolioTheme.primaryText)
-                .lineLimit(1)
-        }
-        .frame(width: 52, height: 56)
-        .background(SettingsTemplate.card, in: shape)
-        .overlay { shape.strokeBorder(SettingsTemplate.cardBorder, lineWidth: SettingsTemplate.cardBorderWidth) }
-        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
-        .accessibilityHidden(true)
     }
 }

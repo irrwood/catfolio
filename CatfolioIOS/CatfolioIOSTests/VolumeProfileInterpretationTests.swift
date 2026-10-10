@@ -6,6 +6,18 @@ import XCTest
 final class VolumeProfileInterpretationTests: XCTestCase {
     private typealias Rules = VolumeProfileInterpretation
 
+    func testHeaderPriceChangeUsesCostAsItsReference() {
+        XCTAssertEqual(Rules.priceChangeFromCost(current: 116.4, cost: 100) ?? .nan, 16.4, accuracy: 0.0001)
+        XCTAssertEqual(Rules.priceChangeFromCost(current: 80, cost: 100) ?? .nan, -20, accuracy: 0.0001)
+        XCTAssertEqual(Rules.priceChangeFromCost(current: 100, cost: 100), 0)
+        let invalidPrices: [Double?] = [nil, 0, -100, .nan, .infinity]
+        for invalid in invalidPrices {
+            XCTAssertNil(Rules.priceChangeFromCost(current: invalid, cost: 100))
+            XCTAssertNil(Rules.priceChangeFromCost(current: 100, cost: invalid))
+        }
+        XCTAssertNil(Rules.priceChangeFromCost(current: .greatestFiniteMagnitude, cost: .leastNonzeroMagnitude))
+    }
+
     private func result(_ quote: Double, _ low: Double = 90, _ high: Double = 110,
                         _ poc: Double? = 100, cost: Double? = nil) -> Rules.Result {
         Rules.result(sessions: 160, quote: quote, valueAreaLow: low, valueAreaHigh: high,

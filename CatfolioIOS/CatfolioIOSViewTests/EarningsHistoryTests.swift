@@ -73,8 +73,10 @@ final class EarningsHistoryTests: XCTestCase {
         }
         let snapshot = EarningsSnapshot(observations: points, source: "TEST FIXTURE", fetchedAt: Date(timeIntervalSince1970: 1788900000), note: nil)
         for revenue in [false, true] {
-            let content = EarningsHistoryView(symbol: "TEST", initialSnapshot: snapshot, initialRevenue: revenue,
-                                              initiallyExpanded: true)
+            let content = HoldingDetailChildPageContent {
+                EarningsHistoryContent(symbol: "TEST", snapshot: snapshot, revenue: .constant(revenue),
+                                       loading: false, errorMessage: nil)
+            }
                 .padding(16).frame(width: 390).background(Color(uiColor: .systemBackground))
             let controller = UIHostingController(rootView: content)
             let size = controller.sizeThatFits(in: CGSize(width: 390, height: 900))

@@ -21,6 +21,8 @@ struct TodayContributionCard: View {
         : .gains
 
     let holdings: [Holding]
+    /// Each holding's change since the previous session, in percent, in the
+    /// reader's currency (`AppModel.holdingDayReturns`).
     let dailyChanges: [String: Double]
     let benchmarkChange: Double?
     /// The market session the changes are from, yyyy-MM-dd; it names the
@@ -109,9 +111,22 @@ struct TodayContributionCard: View {
         return totalAmount / previousValue * 100
     }
 
-    private var isAwaitingContributions: Bool {
-        isLoading && contributions.isEmpty
+    enum ContentState: Equatable {
+        case loading, unavailable, emptyDirection, bars
+
+        static func resolve(isLoading: Bool, hasContributions: Bool, hasVisibleContributions: Bool) -> Self {
+            if hasVisibleContributions { return .bars }
+            if isLoading { return .loading }
+            return hasContributions ? .emptyDirection : .unavailable
+        }
     }
+
+    private var contentState: ContentState {
+        .resolve(isLoading: isLoading, hasContributions: !contributions.isEmpty,
+                 hasVisibleContributions: !visibleContributions.isEmpty)
+    }
+
+    private var isAwaitingContributions: Bool { contentState == .loading }
 
     private var visibleContributions: [Contribution] {
         let filtered = contributions.filter { contribution in
@@ -162,8 +177,10 @@ struct TodayContributionCard: View {
                             CatfolioDisplayAmountText(
                                 text: DisplayFormat.money(totalAmount, signed: true, fractionDigits: 2),
                                 size: 26,
-                                symbolSize: 16.8,
-                                color: .primary
+                                symbolSize: 26,
+                                color: .primary,
+                                isDirectional: true,
+                                signFollowsValue: true
                             )
                             .contentTransition(.numericText(value: totalAmount))
                             .refreshGlow(isActive: isRefreshingBehindCache)
@@ -180,7 +197,7 @@ struct TodayContributionCard: View {
                                     .foregroundStyle(.secondary)
                             }
                         } else {
-                            Text(DisplayFormat.percent(totalPercent))
+                            FinancialText(DisplayFormat.percent(totalPercent), signFollowsValue: true)
                                 .foregroundStyle(CatfolioTheme.primaryText)
                             Text("·")
                                 .foregroundStyle(.tertiary)
@@ -206,14 +223,15 @@ struct TodayContributionCard: View {
             .frame(height: 106, alignment: .top)
 
             Group {
-                if isAwaitingContributions {
+                switch contentState {
+                case .loading:
                     TodayContributionLoadingBars(isAnimating: true)
                         .frame(height: 167, alignment: .top)
-                } else if contributions.isEmpty {
+                case .unavailable:
                     emptyNote(L10n.text("行情暂不可用"), retries: true)
-                } else if visibleContributions.isEmpty {
+                case .emptyDirection:
                     emptyNote(direction == .gains ? L10n.text("今天没有上涨") : L10n.text("今天没有下跌"))
-                } else {
+                case .bars:
                     contributionBars
                         .frame(height: 167)
                 }
@@ -260,8 +278,9 @@ struct TodayContributionCard: View {
     @ViewBuilder
     private var benchmarkSummary: some View {
         if let benchmarkChange, benchmarkChange.isFinite {
-            let difference = totalPercent - benchmarkChange
-            Text("\(difference >= 0 ? "+" : "-")SPY \(DisplayFormat.percent(abs(difference), signed: false))")
+            // SPY's own move, as the Today page writes it. The gap to the
+            // portfolio read as SPY falling ("-SPY 0.8%").
+            FinancialText("SPY " + DisplayFormat.percent(benchmarkChange, signed: true), signFollowsValue: true)
         } else {
             Text(L10n.text("SPY 暂无数据"))
         }
@@ -528,14 +547,14 @@ struct TodayContributionBar: View {
     }
 
     private func barAmountLabel(_ text: String) -> some View {
-        Text(text)
+        FinancialText(text)
             .appNumber(.caption, weight: .semibold)
             .foregroundStyle(.white)
             .lineLimit(1)
     }
 
     private var amountBubble: some View {
-        Text(amountText)
+        FinancialText(amountText)
             .appNumber(.micro, weight: .bold)
             .foregroundStyle(colorScheme == .dark ? Color.white : accent)
             .lineLimit(1)

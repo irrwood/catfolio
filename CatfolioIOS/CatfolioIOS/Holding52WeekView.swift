@@ -6,6 +6,11 @@ struct Holding52WeekRow: View {
     @Environment(AppModel.self) private var model
     let item: PortfolioHoldingListItem
     let performancePeriod: HoldingPerformancePeriod
+    var showsWeight = true
+    var showsTicker = true
+    var showsShares = true
+    var showsPerformanceAmount = true
+    var showsPerformancePercent = true
     var suppliedRange: Holding52WeekRange? = nil
     var loadsRange = true
     @State private var loaded: (key: String, range: Holding52WeekRange)?
@@ -16,7 +21,8 @@ struct Holding52WeekRow: View {
     private var key: String { "\(item.ticker)|\(currency ?? "")" }
 
     var body: some View {
-        HoldingRow(item: item, performancePeriod: performancePeriod,
+        HoldingRow(item: item, performancePeriod: performancePeriod, showsWeight: showsWeight, showsTicker: showsTicker, showsShares: showsShares,
+            showsPerformanceAmount: showsPerformanceAmount, showsPerformancePercent: showsPerformancePercent,
             week52: Holding52WeekPrices(holding: item.detailHolding,
                 range: suppliedRange ?? (loaded?.key == key ? loaded?.range : nil)))
             .task(id: "\(key)|\(loadsRange)|\(model.localUpdatedAt?.timeIntervalSince1970 ?? 0)") {
@@ -34,6 +40,11 @@ struct HoldingVolumeRow: View {
     @Environment(AppModel.self) private var model
     let item: PortfolioHoldingListItem
     let performancePeriod: HoldingPerformancePeriod
+    var showsWeight = true
+    var showsTicker = true
+    var showsShares = true
+    var showsPerformanceAmount = true
+    var showsPerformancePercent = true
     var suppliedRange: HoldingVolumeRange? = nil
     var loadsRange = true
     @State private var loaded: (key: String, range: HoldingVolumeRange)?
@@ -44,7 +55,8 @@ struct HoldingVolumeRow: View {
     private var key: String { "\(item.ticker)|\(currency ?? "")" }
 
     var body: some View {
-        HoldingRow(item: item, performancePeriod: performancePeriod,
+        HoldingRow(item: item, performancePeriod: performancePeriod, showsWeight: showsWeight, showsTicker: showsTicker, showsShares: showsShares,
+            showsPerformanceAmount: showsPerformanceAmount, showsPerformancePercent: showsPerformancePercent,
             volume: HoldingVolumePrices(holding: item.detailHolding,
                 range: suppliedRange ?? (loaded?.key == key ? loaded?.range : nil)))
             .task(id: "\(key)|\(loadsRange)|\(model.localUpdatedAt?.timeIntervalSince1970 ?? 0)") {

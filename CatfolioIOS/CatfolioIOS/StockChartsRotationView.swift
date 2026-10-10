@@ -138,7 +138,7 @@ struct StockChartsRotationView: View {
             HStack {
                 Text("\(start.date) — \(current.date)")
                 Spacer()
-                Text(percent(current.benchmark / start.benchmark - 1))
+                FinancialText(percent(current.benchmark / start.benchmark - 1))
             }.font(.system(size: 11, design: .rounded)).monospacedDigit().foregroundStyle(.secondary)
         }
     }
@@ -175,7 +175,7 @@ struct StockChartsRotationView: View {
                     Spacer(minLength: 0)
                     VStack(alignment: .trailing, spacing: 4) {
                         Text(value.price.formatted(.number.precision(.fractionLength(2))))
-                        Text(percent(change)).foregroundStyle(change >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
+                        FinancialText(percent(change)).foregroundStyle(change >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
                     }.font(.system(size: 12, design: .rounded)).monospacedDigit()
                 }
             }
@@ -191,7 +191,7 @@ struct StockChartsRotationView: View {
     private func metric(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(.system(size: 10, design: .rounded)).foregroundStyle(.secondary)
-            Text(value).font(.system(size: 15, weight: .semibold, design: .rounded)).monospacedDigit()
+            FinancialText(value).font(.system(size: 15, weight: .semibold, design: .rounded)).monospacedDigit()
         }
     }
     private func percent(_ value: Double) -> String { String(format: "%+.2f%%", value * 100) }

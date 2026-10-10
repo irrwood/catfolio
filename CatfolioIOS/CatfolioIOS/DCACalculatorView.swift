@@ -242,7 +242,7 @@ struct DCACalculatorView: View {
     NavigationStack {
       Form {
         Section(L10n.text("基础投入金额")) {
-          Text(money(amountDraft.baseAmount)).font(.largeTitle.bold()).monospacedDigit()
+          FinancialText(money(amountDraft.baseAmount)).font(.largeTitle.bold()).monospacedDigit()
           Slider(
             value: $amountDraft.baseAmount, in: 50...max(2000, amountDraft.baseAmount), step: 50
           )
@@ -360,13 +360,13 @@ struct DCACalculatorView: View {
             HStack {
               Text(L10n.text("自定义策略"))
               Spacer()
-              Text(strategy)
+              FinancialText(strategy)
             }
           }
           HStack {
             Text(L10n.text("固定定投"))
             Spacer()
-            Text(fixed)
+            FinancialText(fixed)
           }
         }.appNumber(.callout)
       } else {
@@ -374,10 +374,10 @@ struct DCACalculatorView: View {
           Text(title).appText(.caption).foregroundStyle(.secondary).frame(
             width: 72, alignment: .leading)
           if showsCustomStrategy {
-            Text(strategy).appNumber(.callout, weight: .semibold).lineLimit(1).minimumScaleFactor(0.7)
+            FinancialText(strategy).appNumber(.callout, weight: .semibold).lineLimit(1).minimumScaleFactor(0.7)
               .frame(maxWidth: .infinity, alignment: .trailing)
           }
-          Text(fixed).appNumber(.callout, weight: .semibold).lineLimit(1).minimumScaleFactor(0.7)
+          FinancialText(fixed).appNumber(.callout, weight: .semibold).lineLimit(1).minimumScaleFactor(0.7)
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
       }
@@ -405,7 +405,7 @@ struct DCACalculatorView: View {
           Text(selectedDate != nil ? point.day : chartHeadline)
             .font(.caption).foregroundStyle(.secondary)
           Spacer()
-          Text(
+          FinancialText(
             money(
               focusedSeries == "fixedCapital" ? point.baselineContributed : focusedSeries == "capital"
                 ? (showsCustomStrategy ? point.contributed : point.baselineContributed)

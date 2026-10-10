@@ -49,12 +49,12 @@ final class HomeScrollInteractionTests: XCTestCase {
         func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap(descendants) }
         let scroll = try XCTUnwrap(descendants(host.view).compactMap { $0 as? UIScrollView }
             .max(by: { $0.contentSize.height < $1.contentSize.height }))
-        XCTAssertFalse(scroll.delaysContentTouches, "Home rows must receive touch-down without the native scroll delay")
+        XCTAssertTrue(scroll.delaysContentTouches, "Home rows wait out the native touch-down delay, as a system list does")
         for (name, offset): (String, CGFloat) in [("initial", 0), ("floating", 1300), ("further", 1450), ("returned", 343)] {
             scroll.setContentOffset(CGPoint(x: 0, y: offset - scroll.adjustedContentInset.top), animated: false)
             try await Task.sleep(for: .milliseconds(400))
             XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, offset, accuracy: 1)
-            XCTAssertFalse(scroll.delaysContentTouches)
+            XCTAssertTrue(scroll.delaysContentTouches)
             let attachment = XCTAttachment(image: UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
                 window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
             })

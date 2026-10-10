@@ -135,7 +135,7 @@ struct SectorRotationView: View {
         .appSheet(isPresented: Binding(get: { precise != nil }, set: { if !$0 { precise = nil } })) {
             NavigationStack {
                 Form {
-                    if let precise { Text("\(precise.symbol) · \(precise.displayQuadrant)\nx: \(precise.x.formatted(.number.precision(.fractionLength(4))))  y: \(precise.y.formatted(.number.precision(.fractionLength(4))))\n\(percent(precise.relativeTrend)) / \(percent(precise.relativeMomentum))") }
+                    if let precise { FinancialText("\(precise.symbol) · \(precise.displayQuadrant)\nx: \(precise.x.formatted(.number.precision(.fractionLength(4))))  y: \(precise.y.formatted(.number.precision(.fractionLength(4))))\n\(percent(precise.relativeTrend)) / \(percent(precise.relativeMomentum))") }
                 }
                 .navigationTitle(L10n.text("精确值"))
                 .navigationBarTitleDisplayMode(.inline)
@@ -188,7 +188,7 @@ struct SectorRotationView: View {
         }
     }
     private func metric(_ label: String, _ value: String) -> some View {
-        HStack { Text(label).foregroundStyle(.secondary); Spacer(); Text(value).monospacedDigit() }.font(.subheadline)
+        HStack { Text(label).foregroundStyle(.secondary); Spacer(); FinancialText(value).monospacedDigit() }.font(.subheadline)
     }
     private func percent(_ value: Double) -> String { String(format: "%+0.1f%%", value * 100) }
     private func restore() async {

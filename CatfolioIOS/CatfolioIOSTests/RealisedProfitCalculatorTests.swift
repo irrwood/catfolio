@@ -4,6 +4,14 @@ import XCTest
 /// Closed-position profit is the one number a user can check against their
 /// broker statement, so each source of it is pinned separately here.
 final class RealisedProfitCalculatorTests: XCTestCase {
+    func testChangingYearBasisPreservesSelectedYearAndAllYearsScope() {
+        XCTAssertEqual(TaxYearBasis.uk.equivalentLabel("2026"), "2026/27")
+        XCTAssertEqual(TaxYearBasis.calendar.equivalentLabel("2026/27"), "2026")
+        XCTAssertEqual(TaxYearBasis.uk.equivalentLabel("2026/27"), "2026/27")
+        XCTAssertNil(TaxYearBasis.calendar.equivalentLabel(nil))
+        XCTAssertNil(TaxYearBasis.uk.equivalentLabel(nil))
+    }
+
 
     private func trade(
         _ action: String,

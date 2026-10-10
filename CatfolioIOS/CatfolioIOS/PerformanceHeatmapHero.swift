@@ -17,6 +17,10 @@ struct HeatmapHeroState {
     var onToggle: () -> Void
     var collapsedHeight: CGFloat = 202
 
+    /// Align the expanded tiles with the inline toolbar, keeping the status
+    /// bar clear while the filter button remains over the heatmap.
+    var expandedTopLift: CGFloat { min(44, max(0, topInset)) }
+
     /// How far to pull before letting go stands the heatmap up, or lays it
     /// back down.
     static let threshold: CGFloat = 110
@@ -342,12 +346,13 @@ private struct HeatmapHeroMorph<Heatmap: View>: View, Animatable {
     var body: some View {
         let e = CGFloat(min(1, max(0, progress)))
         let isUpright = e > 0.999
-        let expandedHeight = heatmapSize.height
+        let expandedHeight = max(0, heatmapSize.height - state.expandedTopLift)
         let height = collapsedHeight + (expandedHeight - collapsedHeight) * e
 
         heatmap
         .fixedSize(horizontal: false, vertical: true)
         .onGeometryChange(for: CGSize.self) { $0.size } action: { onHeatmapSize($0) }
+        .offset(y: -state.expandedTopLift * e)
         .opacity(isUpright ? 1 : 0)
         .allowsHitTesting(isUpright)
         .accessibilityHidden(!isUpright)
@@ -382,7 +387,7 @@ private struct HeatmapHeroMorph<Heatmap: View>: View, Animatable {
             e: e,
             canvas: size,
             isometricAnchor: CGPoint(x: size.width / 2, y: top + collapsedHeight * 0.45),
-            uprightOrigin: CGPoint(x: inset, y: top)
+            uprightOrigin: CGPoint(x: inset, y: top - state.expandedTopLift)
         )
         // Figma 496:23660: two vertical layers, with a clear interval
         // between the status-bar fade and the lower fade behind the title.

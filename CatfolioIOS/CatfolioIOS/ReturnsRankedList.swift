@@ -157,7 +157,7 @@ struct ReturnsChartBadge: View {
     @Environment(\.self) private var environment
 
     var body: some View {
-        Text(text)
+        FinancialText(text)
             .font(.system(size: fontSize, weight: .semibold, design: .rounded))
             .monospacedDigit()
             .lineLimit(1)

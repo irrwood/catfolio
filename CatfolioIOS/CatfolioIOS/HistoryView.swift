@@ -2,177 +2,11 @@ import SwiftUI
 import Charts
 import UniformTypeIdentifiers
 
-struct PortfolioActivityLedger: Equatable {
-    let accounts: [PortfolioAccount]
-    let transactions: [LocalTransactionRecord]
-    let securityNames: [String: String]
-}
-
-enum HistoryCategory: String, CaseIterable, Identifiable {
-    case all = "All"
-    case orders = "Orders"
-    case dividends = "Dividends"
-    case interest = "Interest"
-    /// Not an activity. The ledger records what was traded; a fund's charge
-    /// is a property of holding it, and it is the one cost in this app that
-    /// accrues without ever appearing as a transaction.
-    case fees = "Fees"
-
-    var id: String { rawValue }
-
-    var systemImage: String {
-        switch self {
-        case .all: "tray.full"
-        case .orders: "arrow.up.arrow.down"
-        case .dividends: "banknote.fill"
-        case .interest: "percent"
-        case .fees: "creditcard"
-        }
-    }
-
-    func includes(_ kind: PortfolioActivityKind) -> Bool {
-        switch self {
-        case .all: true
-        case .orders: kind == .buy || kind == .sell
-        case .dividends: kind == .dividend
-        case .fees: false
-        case .interest: kind == .interest
-        }
-    }
-}
-
-enum PortfolioActivityKind: Equatable {
-    case buy
-    case sell
-    case dividend
-    case deposit
-    case withdrawal
-    case transfer
-    case interest
-    case other
-
-    init(action: String) {
-        let normalized = action
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased()
-            .replacingOccurrences(of: "-", with: "_")
-            .replacingOccurrences(of: " ", with: "_")
-
-        if normalized.contains("DIVIDEND") {
-            self = .dividend
-        } else if normalized.contains("INTEREST") {
-            self = .interest
-        } else if ["BUY", "BUY_BACK"].contains(normalized) {
-            self = .buy
-        } else if ["SELL", "SELL_SHORT"].contains(normalized) {
-            self = .sell
-        } else if ["DEPOSIT", "CASH_DEPOSIT", "FUNDING", "TRANSFER_IN"].contains(normalized) {
-            self = .deposit
-        } else if ["WITHDRAW", "WITHDRAWAL", "CASH_WITHDRAWAL", "TRANSFER_OUT"].contains(normalized) {
-            self = .withdrawal
-        } else if normalized.contains("TRANSFER") || normalized.contains("CURRENCY_EXCHANGE") {
-            self = .transfer
-        } else {
-            self = .other
-        }
-    }
-
-    var title: String {
-        switch self {
-        case .buy: L10n.text("Buy")
-        case .sell: L10n.text("Sell")
-        case .dividend: L10n.text("Dividend")
-        case .deposit: L10n.text("Deposit")
-        case .withdrawal: L10n.text("Withdrawal")
-        case .transfer: L10n.text("Transfer")
-        case .interest: L10n.text("Interest")
-        case .other: L10n.text("Account activity")
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .buy: "arrow.down.left"
-        case .sell: "arrow.up.right"
-        case .dividend: "banknote.fill"
-        case .deposit: "arrow.down.to.line.compact"
-        case .withdrawal: "arrow.up.from.line.compact"
-        case .transfer: "arrow.left.arrow.right"
-        case .interest: "percent"
-        case .other: "clock.arrow.circlepath"
-        }
-    }
-
-    var isCashTransfer: Bool {
-        self == .deposit || self == .withdrawal || self == .transfer
-    }
-}
-
-struct PortfolioActivity: Identifiable {
-    let transaction: LocalTransactionRecord
-    let securityName: String
-    let kind: PortfolioActivityKind
-
-    init(transaction: LocalTransactionRecord, securityName: String) {
-        self.transaction = transaction
-        self.securityName = securityName
-        kind = PortfolioActivityKind(action: transaction.action)
-    }
-
-    var id: String { transaction.id }
-
-    var nativeAmount: Double {
-        let amount = transaction.quantity * transaction.price
-        return switch kind {
-        case .buy, .withdrawal:
-            -abs(amount)
-        case .sell, .deposit:
-            abs(amount)
-        default:
-            amount
-        }
-    }
-
-    var amountUSD: Double {
-        nativeAmount * (LocalPortfolioEngine.usdRate(for: transaction.currency) ?? .nan)
-    }
-
-    var title: String {
-        switch kind {
-        case .interest:
-            L10n.text("Interest on cash")
-        case .deposit:
-            L10n.text("Cash deposit")
-        case .withdrawal:
-            L10n.text("Cash withdrawal")
-        case .transfer:
-            transaction.ticker == "CASH" ? L10n.text("Cash transfer") : transaction.ticker
-        case .other:
-            transaction.ticker == "CASH" ? L10n.text("Account activity") : transaction.ticker
-        default:
-            securityName.isEmpty ? transaction.ticker : securityName
-        }
-    }
-
-    var displayTitle: String {
-        guard usesAssetLogo else { return title }
-        if transaction.source == PublicInvestorAccountAdapter.source {
-            return PublicDisclosureFormat.securityName(ticker: transaction.ticker, name: title)
-        }
-        return CompanyNameCatalog.displayName(ticker: transaction.ticker, fallback: title)
-    }
-
-    var usesAssetLogo: Bool {
-        [.buy, .sell, .dividend].contains(kind)
-            && !transaction.ticker.isEmpty
-            && transaction.ticker.uppercased() != "CASH"
-    }
-}
-
 private struct HistorySummaryMetric: Identifiable {
     let title: String
     let value: String
     let color: Color
+    var icon: SettingsIconSource? = nil
 
     var id: String { title }
 }
@@ -195,6 +29,7 @@ struct HistoryView: View {
     @AppStorage("history.taxYearBasis") private var taxYearBasisRaw = TaxYearBasis.calendar.rawValue
     /// Dividends listed under each security rather than by date.
     @AppStorage("history.dividendsByStock") private var dividendsByStock = false
+    @AppStorage("history.ordersByStock") private var ordersByStock = false
     @State private var selectedTaxYear: String?
 
     private var taxYearBasis: TaxYearBasis {
@@ -256,7 +91,7 @@ struct HistoryView: View {
                 HistoryPagingView(selection: $category, categories: visibleCategories, contentID: HistoryPageContentID(
                     ledger: preparedLedger.contentID, basis: taxYearBasisRaw,
                     year: selectedTaxYear, forecast: dividendForecastUSD, gains: buyGains.count,
-                    dividendsByStock: dividendsByStock
+                    dividendsByStock: dividendsByStock, ordersByStock: ordersByStock
                 )) { pageCategory in
                     AnyView(historyList(for: pageCategory))
                 }
@@ -270,7 +105,6 @@ struct HistoryView: View {
         .navigationTitle(ticker.map { "\($0) · \(L10n.text("History"))" } ?? L10n.text("History"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
-        .hidesTabBarWhenPushed()
         // The pager supplies one continuous material behind the native title
         // and category row. The navigation bar must not paint a second layer.
         .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
@@ -375,18 +209,38 @@ struct HistoryView: View {
             if pageCategory == .fees {
                 feeSections
             } else {
-                if pageCategory == .dividends, !page.dividendBreakdown.rows.isEmpty {
-                    dividendContributionSection(page)
-                } else {
+                if pageCategory == .all {
+                    incomeSummarySection
+                } else if pageCategory == .orders {
                     Section {
-                        let metrics = summaryMetrics(for: pageCategory)
-                        ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
-                            summaryRow(metric).settingsListRow(isFirst: index == 0, isLast: index == metrics.count - 1)
-                        }
+                        HistoryRealisedSummaryCard(calculation: realisedCalculation,
+                            ordersBreakdown: page.ordersBreakdown)
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                     } footer: {
+                        if !page.ordersBreakdown.isComplete {
+                            Text(L10n.text("部分卖出缺少成本或汇率，暂不显示占比。"))
+                        } else if page.ordersBreakdown.hasLosses {
+                            Text(L10n.text("占比按各股票已实现盈亏的绝对值计算，金额保留正负。"))
+                        }
                         if let explanation = realisedExplanation(for: pageCategory) {
                             Text(explanation)
                         }
+                    }
+                } else if pageCategory == .dividends {
+                    dividendContributionSection(page)
+                } else {
+                    Section {
+                        SettingsCard {
+                            ForEach(summaryMetrics(for: pageCategory)) { metric in
+                                HistorySummaryRow(title: metric.title, icon: metric.icon,
+                                    value: metric.value, valueColor: metric.color)
+                            }
+                        }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                     }
                 }
 
@@ -398,19 +252,48 @@ struct HistoryView: View {
                             .listRowSeparator(.hidden)
                     }
                 } else {
-                    if pageCategory == .dividends {
+                    if pageCategory == .dividends || pageCategory == .orders {
                         Section {
-                            Picker(L10n.text("分组"), selection: $dividendsByStock) {
+                            Picker(L10n.text("分组"), selection: pageCategory == .orders ? $ordersByStock : $dividendsByStock) {
                                 Text(L10n.text("按日期")).tag(false)
                                 Text(L10n.text("按股票")).tag(true)
                             }
                             .pickerStyle(.segmented)
+                            .accessibilityIdentifier(pageCategory == .orders ? "history-orders-grouping" : "history-dividends-grouping")
                             .listRowInsets(EdgeInsets())
                             .listRowBackground(Color.clear)
                         }
                     }
-                    ForEach(pageCategory == .dividends && dividendsByStock
-                            ? Self.groupsByStock(page.activities) : page.groups) { group in
+                    if pageCategory == .orders && ordersByStock {
+                        orderSecuritySection(page.ordersBreakdown)
+                    } else if pageCategory == .dividends && dividendsByStock {
+                        let securities = HistoryDividendSecurityGroup.build(page.activities, locale: appLocale)
+                        Section {
+                            ForEach(Array(securities.enumerated()), id: \.element.id) { index, group in
+                                NavigationLink {
+                                    HistoryDividendSecurityPage(group: group) { activity in
+                                        AnyView(activityRow(activity))
+                                    }
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        AssetLogo(ticker: group.id, logoSymbol: group.id, size: 42)
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(group.security.name).appText(.body, weight: .semibold)
+                                            Text(group.id).appText(.caption).foregroundStyle(.secondary)
+                                        }
+                                        Spacer(minLength: 8)
+                                        FinancialText(group.security.amountUSD.map {
+                                            DisplayFormat.money($0, fractionDigits: 2)
+                                        } ?? DisplayFormat.money(.nan))
+                                            .appNumber(.subheading, weight: .semibold)
+                                    }
+                                }
+                                .accessibilityIdentifier("history-dividend-stock-\(group.id)")
+                                .settingsListRow(isFirst: index == 0, isLast: index == securities.count - 1)
+                            }
+                        }
+                    } else {
+                    ForEach(page.groups) { group in
                         Section {
                             ForEach(Array(group.activities.enumerated()), id: \.element.id) { index, activity in
                                 activityRow(activity, compactLabels: pageCategory == .all)
@@ -422,16 +305,18 @@ struct HistoryView: View {
                         }
                         .headerProminence(.increased)
                     }
+                    }
                 }
             }
         }
         .listStyle(.insetGrouped)
+        .hardTopScrollEdge()
         .listSectionSpacing(SettingsTemplate.sectionSpacing)
         .contentMargins(.horizontal, SettingsTemplate.pageInset, for: .scrollContent)
         // The list draws its own grouped grey, which is #F2F2F7 and reads as a
         // seam against the template's #F7F7F7 under the chip row.
         .scrollContentBackground(.hidden)
-        .contentMargins(.top, 0, for: .scrollContent)
+        .contentMargins(.top, SettingsTemplate.pageInset, for: .scrollContent)
         // Space to scroll the last row clear of the floating scope control,
         // without reserving an opaque toolbar-sized viewport at the bottom.
         .contentMargins(.bottom, 76, for: .scrollContent)
@@ -439,6 +324,50 @@ struct HistoryView: View {
         .refreshable {
             await synchronizeTrading212History()
             await loadLedger(showLoading: false)
+        }
+    }
+
+    private var incomeSummarySection: some View {
+        let summary = preparedLedger.incomeSummary(basis: taxYearBasis, year: selectedTaxYear)
+        return Section {
+            HistoryIncomeSummaryCard(summary: summary)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+        } footer: {
+            let qualifier = !summary.isComplete
+                ? (summary.amountUSD == nil ? L10n.text("部分数据缺失") : L10n.text("仅含已知金额"))
+                : summary.realised.estimatedCount > 0 ? L10n.text("含本地估算") : nil
+            Text(L10n.text("已实现盈亏 + 股息") + (qualifier.map { " · " + $0 } ?? ""))
+        }
+    }
+
+    private func orderSecuritySection(_ breakdown: HistoryOrdersBreakdown) -> some View {
+        Section {
+            ForEach(Array(breakdown.rows.enumerated()), id: \.element.id) { index, group in
+                NavigationLink {
+                    HistoryOrdersSecurityPage(group: group) { activity in
+                        AnyView(activityRow(activity))
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        AssetLogo(ticker: group.id, logoSymbol: group.id, size: 42)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(group.name).appText(.body, weight: .semibold)
+                            Text(group.id + " · " + L10n.text("\(group.orderCount) 笔订单"))
+                                .appText(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 8)
+                        FinancialText(group.amountUSD.map {
+                            DisplayFormat.money($0, signed: true, fractionDigits: 2)
+                        } ?? "—")
+                            .appNumber(.subheading, weight: .semibold)
+                            .foregroundStyle(group.amountUSD.map(amountColor) ?? .secondary)
+                    }
+                }
+                .accessibilityIdentifier("history-orders-stock-\(group.id)")
+                .settingsListRow(isFirst: index == 0, isLast: index == breakdown.rows.count - 1)
+            }
         }
     }
 
@@ -467,11 +396,13 @@ struct HistoryView: View {
             let fundValue = charges.reduce(0) { $0 + $1.holding.marketValue }
             Section {
                 SettingsCard {
-                    SettingsValueRow(title: L10n.text("年费用合计"), value: DisplayFormat.money(total, fractionDigits: 2))
-                    SettingsValueRow(title: L10n.text("基金市值"), value: DisplayFormat.money(fundValue))
-                    SettingsValueRow(title: L10n.text("加权费率"), value: fundValue > 0
+                    HistorySummaryRow(title: L10n.text("年费用合计"), icon: .symbol("creditcard.circle.fill"),
+                        value: DisplayFormat.money(total, fractionDigits: 2))
+                    HistorySummaryRow(title: L10n.text("基金市值"), value: DisplayFormat.money(fundValue),
+                        valueColor: SettingsTemplate.secondaryText)
+                    HistorySummaryRow(title: L10n.text("加权费率"), value: fundValue > 0
                         ? (total / fundValue * 100).formatted(.number.precision(.fractionLength(2...3))) + "%"
-                        : "—")
+                        : "—", valueColor: SettingsTemplate.secondaryText)
                 }
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
@@ -514,7 +445,7 @@ struct HistoryView: View {
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 4) {
-                Text(DisplayFormat.money(charge.annual, fractionDigits: 2))
+                FinancialText(DisplayFormat.money(charge.annual, fractionDigits: 2))
                     .appNumber(.subheading, weight: .semibold)
                     .lineLimit(1)
                 Text(L10n.text("每年"))
@@ -529,30 +460,26 @@ struct HistoryView: View {
         switch category {
         // Fees have their own section rather than a metric strip: they are a
         // rate applied to a holding, not a count of things that happened.
-        case .fees: []
-        case .all:
-            [
-                HistorySummaryMetric(title: L10n.text("Activity"), value: "\(preparedLedger.page(category: .all, basis: taxYearBasis, year: selectedTaxYear).activities.count)", color: .primary),
-                HistorySummaryMetric(title: L10n.text("Accounts"), value: "\(selectedAccounts.count)", color: .secondary),
-            ]
-        case .orders:
-            realisedSummaryMetrics
+        case .fees, .all, .orders: []
         case .dividends:
             [
                 HistorySummaryMetric(
                     title: L10n.text("Total dividends"),
                     value: DisplayFormat.money(totalUSD(for: .dividend)),
-                    color: CatfolioTheme.positive
+                    color: CatfolioTheme.positive,
+                    icon: .asset("HistoryDividend")
                 )
             ] + (dividendForecastUSD.map {
-                [HistorySummaryMetric(title: L10n.text("今年预计"), value: DisplayFormat.money($0), color: .secondary)]
+                [HistorySummaryMetric(title: L10n.text("今年预计"), value: DisplayFormat.money($0),
+                    color: SettingsTemplate.secondaryText, icon: .asset("HistoryBrokerCalculator"))]
             } ?? [])
         case .interest:
             [
                 HistorySummaryMetric(
                     title: L10n.text("Total interest"),
                     value: DisplayFormat.money(totalUSD(for: .interest)),
-                    color: CatfolioTheme.positive
+                    color: CatfolioTheme.positive,
+                    icon: .symbol("building.columns.circle.fill")
                 )
             ]
         }
@@ -567,7 +494,11 @@ struct HistoryView: View {
     /// their own currency, rather than being replaced by the converted total.
     private var taxYearPicker: some View {
         Menu {
-            Picker(L10n.text("口径"), selection: $taxYearBasisRaw) {
+            Picker(L10n.text("口径"), selection: Binding(get: { taxYearBasisRaw }, set: { raw in
+                guard let basis = TaxYearBasis(rawValue: raw) else { return }
+                selectedTaxYear = basis.equivalentLabel(selectedTaxYear)
+                taxYearBasisRaw = raw
+            })) {
                 ForEach(TaxYearBasis.allCases) { Text($0.title).tag($0.rawValue) }
             }
             Divider()
@@ -576,11 +507,11 @@ struct HistoryView: View {
             } label: {
                 Label(L10n.text("全部年份"), systemImage: selectedTaxYear == nil ? "checkmark" : "infinity")
             }
-            ForEach(realisedByTaxYear, id: \.label) { entry in
+            ForEach(preparedLedger.yearLabels[taxYearBasis] ?? [], id: \.self) { year in
                 Button {
-                    selectedTaxYear = entry.label
+                    selectedTaxYear = year
                 } label: {
-                    Label(entry.label, systemImage: selectedTaxYear == entry.label ? "checkmark" : "calendar")
+                    Label(year, systemImage: selectedTaxYear == year ? "checkmark" : "calendar")
                 }
             }
         } label: {
@@ -622,65 +553,6 @@ struct HistoryView: View {
             parts.append(L10n.text("\(names) 缺汇率，只出现在原币行"))
         }
         return parts.isEmpty ? nil : L10n.sentences(parts)
-    }
-
-    private var realisedSummaryMetrics: [HistorySummaryMetric] {
-        let calculation = realisedCalculation
-        guard calculation.saleCount > 0 else {
-            let title = selectedTaxYear.map { L10n.text("\($0) · 没有卖出记录") } ?? L10n.text("已实现盈亏 · 暂无卖出")
-            return [HistorySummaryMetric(title: title, value: "—", color: .secondary)]
-        }
-        let total = calculation.saleCount
-        let valued = calculation.brokerCount + calculation.estimatedCount
-        var metrics: [HistorySummaryMetric] = []
-
-        let scope = selectedTaxYear.map { "\($0) · " } ?? ""
-        if valued > 0 {
-            // The estimate and missing-basis counts get their own rows below,
-            // so repeating them here only pushed the amount onto a second line.
-            // An unconvertible currency has no row of its own, so it stays.
-            let suffix = calculation.unconvertibleCurrencies.isEmpty
-                ? ""
-                : L10n.text("（\(calculation.unconvertibleCurrencies.sorted().joined(separator: "/")) 未计入）")
-            metrics.append(HistorySummaryMetric(
-                title: L10n.text("\(scope)已实现盈亏\(selectedTaxYear == nil ? L10n.text(" · 合计") : "")\(suffix)"),
-                value: DisplayFormat.money(calculation.combinedUSD, signed: true),
-                color: calculation.combinedUSD >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger))
-        }
-
-        if !calculation.brokerTotals.isEmpty {
-            let values = calculation.brokerTotals.keys.sorted().map { currency in
-                DisplayFormat.money(
-                    NSDecimalNumber(decimal: calculation.brokerTotals[currency]!).doubleValue,
-                    currency: currency, signed: true, fractionDigits: 2)
-            }.joined(separator: " · ")
-            metrics.append(HistorySummaryMetric(
-                title: L10n.text("券商 Result · \(calculation.brokerCount)/\(total) 笔 · 原币"),
-                value: values, color: .secondary))
-        }
-
-        if calculation.estimatedCount > 0 {
-            metrics.append(HistorySummaryMetric(
-                title: L10n.text("本地估算 · \(calculation.estimatedCount)/\(total) 笔 · 按当前汇率"),
-                value: DisplayFormat.money(calculation.estimatedUSD, signed: true),
-                color: .secondary))
-        }
-
-        if calculation.unavailableCount > 0 {
-            metrics.append(HistorySummaryMetric(
-                title: L10n.text("缺买入成本 · \(calculation.unavailableCount)/\(total) 笔"),
-                value: "—", color: .secondary))
-        }
-
-        return metrics
-    }
-
-    private func summaryRow(_ metric: HistorySummaryMetric) -> some View {
-        LabeledContent(metric.title) {
-            Text(metric.value)
-                .appNumber(.body, weight: .semibold)
-                .foregroundStyle(metric.color)
-        }
     }
 
     private var accountFilter: some View {
@@ -780,14 +652,14 @@ struct HistoryView: View {
             Spacer(minLength: 8)
 
             VStack(alignment: .trailing, spacing: 4) {
-                Text(presentation.amount)
+                FinancialText(presentation.amount)
                     .appNumber(.subheading, weight: .semibold)
                     .foregroundStyle(isOrder ? CatfolioTheme.primaryText : amountColor(activity.nativeAmount))
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
 
                 if let gain {
-                    Text(gain.text)
+                    FinancialText(gain.text, isDirectional: activity.kind == .buy)
                         .appNumber(.caption, weight: .medium)
                         .foregroundStyle(amountColor(gain.value))
                         .lineLimit(1)
@@ -887,7 +759,7 @@ struct HistoryView: View {
             .background(kind == .buy ? CatfolioTheme.positive : CatfolioTheme.accent, in: Circle())
             .overlay {
                 Circle()
-                    .stroke(Color(uiColor: .systemBackground), lineWidth: 1.5)
+                    .stroke(SettingsTemplate.card, lineWidth: 1.5)
             }
             .accessibilityHidden(true)
     }
@@ -1152,453 +1024,6 @@ struct HistoryView: View {
 
     private var exportFilename: String {
         "Catfolio-History-\(DayDateCodec.string(from: Date()))"
-    }
-}
-
-struct ActivityDateGroup: Identifiable {
-    let id: String
-    let title: String
-    let activities: [PortfolioActivity]
-}
-
-struct HistoryHeaderPosition: Equatable {
-    let pullDown: CGFloat
-    let materialOpacity: Double
-
-    private init(pullDown: CGFloat, materialOpacity: Double) {
-        self.pullDown = pullDown
-        self.materialOpacity = materialOpacity
-    }
-
-    static func interpolated(from: Self, to: Self, fraction: CGFloat) -> Self {
-        let t = min(1, max(0, fraction))
-        return Self(pullDown: from.pullDown + (to.pullDown - from.pullDown) * t,
-                    materialOpacity: from.materialOpacity + (to.materialOpacity - from.materialOpacity) * Double(t))
-    }
-
-    init(scrollOffset: CGFloat) {
-        pullDown = max(0, -scrollOffset)
-        let progress = min(1, max(0, scrollOffset / 16))
-        materialOpacity = Double(progress * progress * (3 - 2 * progress))
-    }
-}
-
-private struct HistoryPreparationKey: Hashable {
-    let revision: Int
-    let accountIDs: Set<String>
-    let locale: String
-}
-
-struct HistoryActivityPage {
-    var activities: [PortfolioActivity] = []
-    var groups: [ActivityDateGroup] = []
-    var totalUSD: Double = 0
-    var dividendBreakdown = HistoryDividendBreakdown()
-}
-
-/// Figma 322:2262: one summary card, with each holding's share as a ring.
-struct HistoryDividendCard: View {
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var selectedTicker: String?
-    @State private var selectedShare: Double?
-    let breakdown: HistoryDividendBreakdown
-    let totalUSD: Double
-    /// This calendar year's expected dividends; nil until known.
-    var forecastUSD: Double? = nil
-
-    private var selectedRow: HistoryDividendBreakdown.Row? {
-        breakdown.rows.first { $0.id == selectedTicker } ?? breakdown.rows.first
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text(L10n.text("股息总计")).appText(.subheading, weight: .medium)
-                Spacer(minLength: 12)
-                Text(breakdown.isComplete ? DisplayFormat.money(totalUSD) : "—")
-                    .appNumber(.subheading)
-                    .foregroundStyle(totalUSD < 0
-                                     ? CatfolioTheme.loss(for: colorScheme)
-                                     : CatfolioTheme.gain(for: colorScheme))
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            if let forecastUSD, forecastUSD.isFinite {
-                Divider()
-                HStack {
-                    Text(L10n.text("今年预计")).appText(.subheading, weight: .medium)
-                    Spacer(minLength: 12)
-                    Text(DisplayFormat.money(forecastUSD))
-                        .appNumber(.subheading)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-                .accessibilityElement(children: .combine)
-            }
-            Divider()
-            VStack(spacing: 13) {
-                HStack(spacing: 12) {
-                    Text(L10n.text("比例")).appText(.subheading, weight: .medium)
-                    Spacer(minLength: 0)
-                    Menu {
-                        ForEach(breakdown.rows) { row in
-                            Button {
-                                selectedTicker = row.id
-                            } label: {
-                                Label(selectionDescription(row), systemImage: row.id == selectedRow?.id ? "checkmark" : "circle")
-                            }
-                        }
-                    } label: {
-                        if let row = selectedRow {
-                            HStack(spacing: 4) {
-                                Text(CompanyNameCatalog.displayName(ticker: row.ticker, fallback: row.name))
-                                    .appText(.subheading).lineLimit(1)
-                                Text(percentage(row)).appNumber(.subheading, weight: .regular)
-                                    .opacity(0.5).fixedSize()
-                            }
-                            // The same colour as the selected holding's segment.
-                            .foregroundStyle(segmentColor(row))
-                        }
-                    }
-                    .accessibilityLabel(L10n.text("股息来源占比"))
-                    .accessibilityIdentifier("dividend-contribution-selection")
-                }
-                ring
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(L10n.text("股息来源占比"))
-                .accessibilityValue(selectedRow.map(selectionDescription) ?? "—")
-                .accessibilityAdjustableAction { direction in
-                    guard let row = selectedRow,
-                          let index = breakdown.rows.firstIndex(where: { $0.id == row.id }) else { return }
-                    switch direction {
-                    case .increment: selectedTicker = breakdown.rows[min(index + 1, breakdown.rows.count - 1)].id
-                    case .decrement: selectedTicker = breakdown.rows[max(index - 1, 0)].id
-                    @unknown default: break
-                    }
-                }
-                .accessibilityIdentifier("dividend-contribution-ring")
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-        }
-        .settingsCardSurface()
-    }
-
-    /// Each holding an arc in its own colour, largest first and clockwise
-    /// from the top; a tap on an arc selects it and the centre reads its
-    /// share. Unknown amounts or rate leave an empty ring, no shares.
-    private var ring: some View {
-        let visible = breakdown.rows.filter { (breakdown.share(for: $0) ?? 0) > 0 }
-        return Chart(visible) { row in
-            SectorMark(angle: .value(L10n.text("比例"), breakdown.share(for: row) ?? 0),
-                       innerRadius: .ratio(0.66), angularInset: 1.5)
-                .cornerRadius(3)
-                .foregroundStyle(segmentColor(row))
-                .opacity(row.id == selectedRow?.id ? 1 : 0.45)
-        }
-        .chartLegend(.hidden)
-        .chartAngleSelection(value: $selectedShare)
-        .onChange(of: selectedShare) { _, share in
-            if let share, let row = breakdown.row(at: share) { selectedTicker = row.id }
-        }
-        .background {
-            if visible.isEmpty {
-                Circle()
-                    .strokeBorder(CatfolioTheme.subtleFill, lineWidth: 26)
-                    .aspectRatio(1, contentMode: .fit)
-            }
-        }
-        .overlay {
-            VStack(spacing: 2) {
-                Text(selectedRow.map(percentage) ?? "—")
-                    .appNumber(.title, weight: .semibold)
-                    .foregroundStyle(selectedRow.map(segmentColor) ?? .secondary)
-                if let row = selectedRow, !visible.isEmpty {
-                    Text(row.ticker)
-                        .appText(.caption, weight: .medium)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-            .frame(maxWidth: 90)
-            .allowsHitTesting(false)
-        }
-        .frame(height: 168)
-    }
-
-    private func segmentColor(_ row: HistoryDividendBreakdown.Row) -> Color {
-        guard let index = breakdown.rows.firstIndex(where: { $0.id == row.id }) else {
-            return CatfolioPalette.dividendSelection
-        }
-        return CatfolioPalette.dividendSeries[index % CatfolioPalette.dividendSeries.count]
-    }
-
-    private func percentage(_ row: HistoryDividendBreakdown.Row) -> String {
-        breakdown.share(for: row).map { DisplayFormat.percent($0 * 100, signed: false) } ?? "—"
-    }
-
-    private func selectionDescription(_ row: HistoryDividendBreakdown.Row) -> String {
-        "\(CompanyNameCatalog.displayName(ticker: row.ticker, fallback: row.name)) · \(row.ticker) · \(percentage(row)) · \(row.amountUSD.map { DisplayFormat.money($0) } ?? "—")"
-    }
-}
-
-/// Uses the same account/year scope and USD conversion as the ledger total.
-/// Built with the page indexes, never while scrolling or swiping categories.
-struct HistoryDividendBreakdown {
-    struct Row: Identifiable {
-        let ticker: String
-        let name: String
-        let amountUSD: Double?
-        var id: String { ticker }
-    }
-
-    var rows: [Row] = []
-    var positiveTotalUSD: Double = 0
-    var isComplete = true
-    var hasNegativeTotals: Bool { rows.contains { ($0.amountUSD ?? 0) < 0 } }
-
-    func share(for row: Row) -> Double? {
-        guard isComplete, positiveTotalUSD.isFinite, positiveTotalUSD > 0,
-              let amount = row.amountUSD, amount >= 0 else { return nil }
-        return min(1, max(0, amount / positiveTotalUSD))
-    }
-
-    /// The ring's arc at a cumulative share, in drawing order — largest first,
-    /// clockwise from the top. Zero and unavailable values take no arc and
-    /// cannot steal a neighbouring tap.
-    func row(at fraction: Double) -> Row? {
-        guard fraction.isFinite, (0...1).contains(fraction) else { return nil }
-        let visible = rows.filter { (share(for: $0) ?? 0) > 0 }
-        var edge = 0.0
-        for row in visible {
-            edge += share(for: row) ?? 0
-            if fraction < edge { return row }
-        }
-        return visible.last
-    }
-
-    static func build(_ activities: [PortfolioActivity]) -> Self {
-        let grouped = Dictionary(grouping: activities.filter { $0.kind == .dividend }) {
-            let ticker = $0.transaction.ticker.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-            return ticker.isEmpty ? "CASH" : ticker
-        }
-        let rows = grouped.map { ticker, entries in
-            let amounts = entries.map(\.amountUSD)
-            let sum = amounts.reduce(0, +)
-            let amount = amounts.allSatisfy(\.isFinite) && sum.isFinite ? sum : nil
-            let name = ticker == "CASH" ? L10n.text("未识别标的") : (entries.first?.displayTitle ?? ticker)
-            return Row(ticker: ticker, name: name, amountUSD: amount)
-        }.sorted {
-            if $0.amountUSD != $1.amountUSD {
-                return ($0.amountUSD ?? -.infinity) > ($1.amountUSD ?? -.infinity)
-            }
-            return $0.ticker < $1.ticker
-        }
-        let total = rows.reduce(0) { $0 + max(0, $1.amountUSD ?? 0) }
-        return Self(rows: rows, positiveTotalUSD: total,
-                    isComplete: rows.allSatisfy { $0.amountUSD != nil } && total.isFinite)
-    }
-}
-
-/// Immutable UI indexes, rebuilt off the main actor only when the ledger or
-/// account scope changes. A category tap or a scroll never runs FIFO, parses
-/// the catalogues, sorts transactions, or regroups a whole history.
-/// Prepared once alongside the ledger, rather than formatting on row reuse.
-struct HistoryRowPresentation {
-    let title: String
-    let amount: String
-    let quantity: String
-
-    init(_ activity: PortfolioActivity) {
-        let isOrder = activity.kind == .buy || activity.kind == .sell
-        title = activity.displayTitle
-        amount = DisplayFormat.money(isOrder ? abs(activity.nativeAmount) : activity.nativeAmount,
-                                     currency: activity.transaction.currency, signed: !isOrder)
-        quantity = isOrder ? L10n.text("\(DisplayFormat.shares(activity.transaction.quantity)) shares") : ""
-    }
-}
-
-/// What an order has made or lost, ready to print under its amount.
-struct HistoryRowGain: Equatable, Sendable {
-    let text: String
-    /// Only the sign is read: it picks the colour.
-    let value: Double
-
-    init(text: String, value: Double) {
-        self.text = text
-        self.value = value
-    }
-
-    /// The broker's own figure stays in its own currency.
-    init?(_ outcome: RealisedSale.Outcome) {
-        switch outcome {
-        case let .broker(value, currency, _):
-            let amount = NSDecimalNumber(decimal: value).doubleValue
-            self.init(text: DisplayFormat.money(amount, currency: currency, signed: true, fractionDigits: 2), value: amount)
-        case let .estimated(usd):
-            guard usd.isFinite else { return nil }
-            self.init(text: DisplayFormat.money(usd, signed: true, fractionDigits: 2), value: usd)
-        case .unavailable:
-            return nil
-        }
-    }
-
-    /// Each purchase at today's quote, on today's share basis, in USD.
-    /// Skipped when the security is no longer held or either side lacks a rate.
-    static func purchaseGains(_ activities: [PortfolioActivity], holdings: [Holding]) -> [String: Double] {
-        let quotes = Dictionary(holdings.map { ($0.ticker.uppercased(), $0) }, uniquingKeysWith: { first, _ in first })
-        let splits = try? StockSplitCatalog.bundled.get()
-        var gains: [String: Double] = [:]
-        for activity in activities where activity.kind == .buy {
-            let transaction = activity.transaction
-            guard let holding = quotes[transaction.ticker.uppercased()], holding.quotePrice > 0,
-                  let quoteRate = LocalPortfolioEngine.usdRate(for: holding.quoteCurrency ?? transaction.currency),
-                  let costRate = LocalPortfolioEngine.usdRate(for: transaction.currency) else { continue }
-            let split = splits?.adjustment(ticker: transaction.ticker, from: transaction.date) ?? 1
-            guard split > 0 else { continue }
-            let quantity = abs(transaction.quantity) * split
-            let cost = transaction.price / split
-            let gain = (holding.quotePrice * quoteRate - cost * costRate) * quantity
-            if gain.isFinite { gains[activity.id] = gain }
-        }
-        return gains
-    }
-}
-
-private struct HistoryPageContentID: Hashable {
-    let ledger: UUID
-    let basis: String
-    let year: String?
-    let forecast: Double?
-    let gains: Int
-    let dividendsByStock: Bool
-}
-
-struct HistoryPreparedLedger {
-    let contentID = UUID()
-    private struct Period: Hashable {
-        var basis: TaxYearBasis = .calendar
-        var year: String?
-    }
-
-    private var pages: [Period: [HistoryCategory: HistoryActivityPage]] = [:]
-    var realisedTotal = RealisedProfitSummary()
-    var realisedByTaxYear: [TaxYearBasis: [(label: String, summary: RealisedProfitSummary)]] = [:]
-    var matchedDisposals: [String: UKShareMatching.Disposal] = [:]
-    var rowPresentations: [String: HistoryRowPresentation] = [:]
-    var saleGains: [String: HistoryRowGain] = [:]
-
-    func page(category: HistoryCategory, basis: TaxYearBasis, year: String?) -> HistoryActivityPage {
-        let period = year.map { Period(basis: basis, year: $0) } ?? Period()
-        return pages[period]?[category] ?? HistoryActivityPage()
-    }
-
-    static func build(
-        ledger: PortfolioActivityLedger, accountIDs: Set<String>, locale: Locale, ticker: String? = nil
-    ) throws -> Self {
-        try Task.checkCancellation()
-        let symbol = ticker?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        let activities = ledger.transactions.compactMap { transaction -> PortfolioActivity? in
-            guard accountIDs.contains(transaction.accountKey),
-                  symbol == nil || transaction.ticker.uppercased() == symbol else { return nil }
-            let activity = PortfolioActivity(
-                transaction: transaction,
-                securityName: ledger.securityNames[transaction.ticker.uppercased()] ?? transaction.ticker
-            )
-            return activity.kind.isCashTransfer ? nil : activity
-        }
-        // Keep the calculator's existing whole-history inputs and algorithms.
-        // The year filters apply to its results, never to acquisition lots.
-        let transactions = activities.map(\.transaction)
-        var result = Self()
-        for activity in activities {
-            try Task.checkCancellation()
-            result.rowPresentations[activity.id] = HistoryRowPresentation(activity)
-        }
-        let sales = RealisedProfitCalculator.sales(transactions: transactions)
-        result.realisedTotal = RealisedProfitCalculator.summarize(sales: sales)
-        for sale in sales {
-            guard let id = sale.transactionID, let gain = HistoryRowGain(sale.outcome) else { continue }
-            result.saleGains[id] = gain
-        }
-        for basis in TaxYearBasis.allCases {
-            try Task.checkCancellation()
-            result.realisedByTaxYear[basis] = RealisedProfitCalculator
-                .summarize(transactions: transactions, basis: basis)
-                .filter { $0.summary.saleCount > 0 }
-        }
-        let splits = try? StockSplitCatalog.bundled.get()
-        let tickers = Set(transactions.filter { $0.action.uppercased() == "SELL" }.map { $0.ticker.uppercased() })
-        for ticker in tickers {
-            try Task.checkCancellation()
-            for disposal in UKShareMatching.disposals(ticker: ticker, transactions: transactions, splits: splits)
-            where !disposal.isFullyFromPool {
-                result.matchedDisposals[disposal.sourceID] = disposal
-            }
-        }
-
-        let titles = Dictionary(uniqueKeysWithValues: Set(activities.map { $0.transaction.date }).map {
-            ($0, dateGroupTitle($0, locale: locale))
-        })
-        result.pages[Period()] = makePages(activities, titles: titles)
-        for basis in TaxYearBasis.allCases {
-            let groups = Dictionary(grouping: activities) { basis.label(for: $0.transaction.date) }
-            for (year, entries) in groups {
-                try Task.checkCancellation()
-                guard let year else { continue }
-                result.pages[Period(basis: basis, year: year)] = makePages(entries, titles: titles)
-            }
-        }
-        return result
-    }
-
-    private static func makePages(
-        _ activities: [PortfolioActivity], titles: [String: String]
-    ) -> [HistoryCategory: HistoryActivityPage] {
-        let sorted = activities.sorted {
-            if $0.transaction.date == $1.transaction.date { return $0.id > $1.id }
-            return $0.transaction.date > $1.transaction.date
-        }
-        return Dictionary(uniqueKeysWithValues: HistoryCategory.allCases.map { category in
-            let filtered = sorted.filter { category.includes($0.kind) }
-            let grouped = Dictionary(grouping: filtered) { $0.transaction.date }
-            let groups = grouped.keys.sorted(by: >).map {
-                ActivityDateGroup(id: $0, title: titles[$0] ?? $0, activities: grouped[$0] ?? [])
-            }
-            return (category, HistoryActivityPage(
-                activities: filtered, groups: groups,
-                // Sum in the original ledger order, as the previous display did.
-                totalUSD: activities.filter { category.includes($0.kind) }.reduce(0) { $0 + $1.amountUSD },
-                dividendBreakdown: category == .dividends ? HistoryDividendBreakdown.build(filtered) : .init()
-            ))
-        })
-    }
-
-    private static func dateGroupTitle(_ text: String, locale: Locale) -> String {
-        let values = text.split(separator: "-").compactMap { Int($0) }
-        guard values.count == 3,
-              let date = Calendar.current.date(from: DateComponents(year: values[0], month: values[1], day: values[2]))
-        else { return text }
-        if Calendar.current.isDateInToday(date) { return L10n.text("Today") }
-        if Calendar.current.isDateInYesterday(date) { return L10n.text("Yesterday") }
-        return date.formatted(.dateTime.month(.wide).day().year().locale(locale))
-    }
-}
-
-struct HistoryFeeCharge {
-    let holding: Holding
-    let rate: Double
-    let annual: Double
-    let isVerified: Bool
-
-    static func build(holdings: [Holding]) -> [Self] {
-        guard let catalog = try? FundFeeCatalog.bundled.get() else { return [] }
-        return holdings.compactMap { holding in
-            guard let fee = catalog.fee(brokerSymbol: holding.ticker) else { return nil }
-            return Self(holding: holding, rate: fee.rate,
-                        annual: holding.marketValue * fee.rate, isVerified: fee.isVerified)
-        }.sorted { $0.annual > $1.annual }
     }
 }
 

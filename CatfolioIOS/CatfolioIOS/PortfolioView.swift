@@ -5,6 +5,10 @@ typealias PortfolioHomeTypography = LegacyType
 
 
 struct PortfolioView: View {
+    #if DEBUG
+    /// `--demo-today-push` runs once, not again each time the page returns.
+    @MainActor static var didRunTodayPushDemo = false
+    #endif
     @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
@@ -80,10 +84,10 @@ struct PortfolioView: View {
                                     VStack(spacing: 0) {
                                         TodayContributionCard(
                                             holdings: model.holdings,
-                                            dailyChanges: model.holdingDailyChanges,
+                                            dailyChanges: model.holdingDayReturns,
                                             benchmarkChange: model.benchmarkDailyChange,
                                             sessionDate: model.latestSessionDate,
-                                            isLoading: model.isHoldingDailyChangesLoading,
+                                            isLoading: model.isHoldingDailyChangesLoading || model.isPortfolioLoading || model.isPortfolioChartLoading,
                                             isRefreshingBehindCache: model.isHomeRefreshingBehindCache,
                                             onOpenDetail: { showsTodayDetail = true },
                                             onTitleBottomPositionChange: { titleBottomY in
@@ -125,10 +129,6 @@ struct PortfolioView: View {
                         // settle fully in view instead of ending beneath it.
                         .padding(.bottom, 96)
                         .coordinateSpace(name: "portfolio-home-content")
-                        // Rows answer a touch at once instead of after the
-                        // scroll view's touch-down delay; a drag still
-                        // cancels the press and scrolls.
-                        .background(SettingsImmediateTouchFeedback())
                         .background {
                             PortfolioHomeScrollBridge(
                                 controller: homeScrollController,
@@ -185,6 +185,30 @@ struct PortfolioView: View {
                             try? await Task.sleep(for: .milliseconds(250))
                             scrollProxy.scrollTo("today-contribution", anchor: .top)
                         }
+                        #if DEBUG
+                        // Pushes the Today page and pops it again, slowed, for
+                        // recording how the tab bar leaves and comes back.
+                        if arguments.contains("--demo-today-push"), !Self.didRunTodayPushDemo {
+                            Self.didRunTodayPushDemo = true
+                            let window = UIApplication.shared.connectedScenes
+                                .compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
+                            for _ in 0..<2 {
+                                try? await Task.sleep(for: .seconds(3))
+                                window?.layer.speed = 0.15
+                                showsTodayDetail = true
+                                try? await Task.sleep(for: .seconds(5))
+                                showsTodayDetail = false
+                                try? await Task.sleep(for: .seconds(5))
+                                window?.layer.speed = 1
+                            }
+                        }
+                        #endif
+                    }
+                    // The rates the home figures are read at: again when the
+                    // reader's currency, the chart's first day or the
+                    // holdings' currencies change.
+                    .task(id: model.wantedCurrencyHistories) {
+                        await model.loadCurrencyHistories()
                     }
                 }
                 .modifier(PortfolioFloatingFilterOverlay())
@@ -196,9 +220,10 @@ struct PortfolioView: View {
                 .navigationDestination(isPresented: $showsTodayDetail) {
                     TodayDetailView(
                         holdings: model.holdings,
-                        dailyChanges: model.holdingDailyChanges,
+                        dailyChanges: model.holdingDayReturns,
                         benchmarkChange: model.benchmarkDailyChange,
-                        sessionDate: model.latestSessionDate
+                        sessionDate: model.latestSessionDate,
+                        isLoading: model.isHoldingDailyChangesLoading || model.isPortfolioLoading || model.isPortfolioChartLoading
                     )
                 }
             }

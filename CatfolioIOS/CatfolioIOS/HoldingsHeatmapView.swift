@@ -36,7 +36,7 @@ struct HoldingsHeatmapView: View {
                 // The words are left off the texture the hero bakes: it lies
                 // the whole plane down at an angle, where a sentence reads as
                 // a smudge. Standing upright, the heatmap keeps them.
-                HoldingsHeatmapPlaceholder(showsCaption: isInteractive)
+                HoldingsHeatmapPlaceholder(showsCaption: isInteractive, isLoading: isLoading)
                     .frame(height: 320)
             } else {
                 Group {
@@ -581,17 +581,17 @@ private struct HoldingsHeatmapRemainderDetail: View {
             List {
                 Section {
                     HStack {
-                        Text(DisplayFormat.money(model.marketValue)).appNumber(.body)
+                        FinancialText(DisplayFormat.money(model.marketValue)).appNumber(.body)
                         Spacer()
-                        Text(DisplayFormat.percent(model.portfolioFraction * 100, signed: false))
+                        FinancialText(DisplayFormat.percent(model.portfolioFraction * 100, signed: false))
                             .appNumber(.body).foregroundStyle(.secondary)
                     }
-                    LabeledContent(L10n.text(summary.isComplete ? "P&L" : "已知盈亏"), value:
+                    LabeledContent(L10n.text(summary.isComplete ? "P&L" : "已知盈亏"), financialValue:
                         summary.knownCount > 0
                             ? (summary.isEstimated ? "≈" : "") + DisplayFormat.money(summary.amount, signed: true)
                             : L10n.text("暂无数据"))
                         .currencyFont(.body)
-                    LabeledContent(L10n.text("收益率"), value:
+                    LabeledContent(L10n.text("收益率"), financialValue:
                         summary.percent.map { (summary.isEstimated ? "≈" : "") + DisplayFormat.percent($0) }
                             ?? L10n.text("暂无数据"))
                     if !summary.isComplete {
@@ -661,7 +661,7 @@ private struct HoldingsHeatmapRemainderDetail: View {
                 HStack(spacing: 6) {
                     Text(identity.ticker).appText(.caption)
                     Text("·").appText(.caption)
-                    Text(DisplayFormat.percent(item.portfolioFraction * 100, signed: false))
+                    FinancialText(DisplayFormat.percent(item.portfolioFraction * 100, signed: false))
                         .appNumber(.caption)
                 }
                 .foregroundStyle(.secondary)
@@ -669,7 +669,7 @@ private struct HoldingsHeatmapRemainderDetail: View {
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 4) {
                 if let change = item.changePercent ?? loadedChanges[item.id.uppercased()] {
-                    Text((item.isEstimated ? "≈" : "") + DisplayFormat.percent(change))
+                    FinancialText((item.isEstimated ? "≈" : "") + DisplayFormat.percent(change))
                         .appNumber(.body)
                         .foregroundStyle(change == 0 ? Color.secondary : (change > 0 ? CatfolioTheme.gain(for: colorScheme) : CatfolioTheme.loss(for: colorScheme)))
                 } else if loadingQuotes && !completedQuoteIDs.contains(item.id) {
@@ -677,7 +677,7 @@ private struct HoldingsHeatmapRemainderDetail: View {
                 } else {
                     Text(L10n.text("暂无数据")).appText(.caption).foregroundStyle(.secondary)
                 }
-                Text(DisplayFormat.money(item.marketValue)).appNumber(.caption).foregroundStyle(.secondary)
+                FinancialText(DisplayFormat.money(item.marketValue)).appNumber(.caption).foregroundStyle(.secondary)
             }
             .fixedSize(horizontal: true, vertical: false)
         }
@@ -718,6 +718,7 @@ private struct HoldingsHeatmapRemainderDetail: View {
 /// will sit, and it is the shape the page will actually take.
 private struct HoldingsHeatmapPlaceholder: View {
     var showsCaption = true
+    var isLoading = false
 
     /// Weights, not sizes: one large position, a few mid ones and a tail, the
     /// distribution a real portfolio has. Fixed, so the tiles do not reshuffle
@@ -749,6 +750,9 @@ private struct HoldingsHeatmapPlaceholder: View {
         }
         .overlay {
             if showsCaption {
+                if isLoading {
+                    ProgressView()
+                } else {
                 VStack(spacing: 5) {
                     Text(L10n.text("暂无持仓"))
                         .appText(.subheading, weight: .semibold)
@@ -758,9 +762,10 @@ private struct HoldingsHeatmapPlaceholder: View {
                         .multilineTextAlignment(.center)
                 }
                 .padding(.horizontal, 24)
+                }
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.sentences([L10n.text("暂无持仓"), L10n.text("同步持仓后会在这里显示资产分布。")]))
+        .accessibilityLabel(isLoading ? L10n.text("加载中…") : L10n.sentences([L10n.text("暂无持仓"), L10n.text("同步持仓后会在这里显示资产分布。")]))
     }
 }

@@ -31,7 +31,7 @@ struct DrawdownStatistics: View {
     private func statistic(_ title: String, _ value: String, _ detail: String, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).appText(.caption, weight: .medium).foregroundStyle(.secondary)
-            Text(value).appNumber(.callout, weight: .semibold).foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.7)
+            FinancialText(value).appNumber(.callout, weight: .semibold).foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.7)
             Text(detail).appText(.caption).foregroundStyle(.tertiary).lineLimit(1)
         }
         .padding(12)

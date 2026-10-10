@@ -3,6 +3,10 @@ import XCTest
 @testable import CatfolioIOS
 
 final class HoldingHeaderLayoutTests: XCTestCase {
+    @MainActor
+    private final class FrameCapture {
+        var frames: [String: CGRect] = [:]
+    }
     private var previousLanguage: Any?
 
     override func setUp() {
@@ -37,6 +41,55 @@ final class HoldingHeaderLayoutTests: XCTestCase {
 
     private var mixedTrades: [SecurityTrade] {
         SecurityTrade.grouped([trade("BUY"), trade("SELL"), trade("SELL", currency: "GBP")])
+    }
+
+    @MainActor
+    func testFundMetadataWrapsWithoutOverlappingSafeAreaCloseOrQuote() async throws {
+        for language in ["en", "zh-Hans"] {
+            for width: CGFloat in [320, 402] {
+                for size in [DynamicTypeSize.large, .xxxLarge, .accessibility3] {
+                    let fund = Holding(ticker: "VUAG.L", logoSymbol: nil,
+                        displayName: "Vanguard S&P 500 (Acc)", sector: nil, source: nil,
+                        shares: 108.2563, averageCost: 105, costCurrency: "GBP", quotePrice: 114.02,
+                        quoteCurrency: "GBP", todayChangePercent: 0.2, marketValue: 12_343, weight: 1,
+                        unrealized: 1_000, unrealizedPercent: 8.8, fxPnl: nil, fxPnlPercent: nil,
+                        fxPnlStatus: nil, fxPnlSource: nil)
+                    let captured = FrameCapture()
+                    _ = try await measure(HoldingDetailHeader(holding: fund, marketTodayChange: 0.2,
+                        selectedPrice: nil, selectedReturn: nil), width: width, language: language, size: size,
+                        screenshot: "fund-header-\(language)-\(Int(width))-\(size)", capture: captured)
+                    let frames = captured.frames
+                    let logo = try XCTUnwrap(frames["holding-header.logo"])
+                    let name = try XCTUnwrap(frames["holding-header.name"])
+                    let metadata = try XCTUnwrap(frames["holding-header.metadata"])
+                    let close = try XCTUnwrap(frames["holding-header.close"])
+                    let quote = try XCTUnwrap(frames["holding-header.quote"])
+                    XCTAssertEqual(logo.minY, HoldingDetailHeader.topInset, accuracy: 0.5,
+                                   "The logo must retain the zoom transition's destination")
+                    XCTAssertGreaterThanOrEqual(name.minY, logo.minY - 0.5,
+                                                "The title must not spill upward into the status bar")
+                    XCTAssertGreaterThanOrEqual(quote.minY, max(logo.maxY, metadata.maxY) + 11.5,
+                                                "Every metadata row must fit before the quote")
+                    let items = frames.filter { $0.key.hasPrefix("holding-header.item.") }
+                        .map(\.value).filter { $0.width > 0 && $0.height > 0 }
+                    for item in items {
+                        XCTAssertGreaterThanOrEqual(item.minX, metadata.minX - 0.5)
+                        XCTAssertLessThanOrEqual(item.maxX, metadata.maxX + 0.5)
+                        XCTAssertGreaterThanOrEqual(item.minY, name.maxY + 1.5)
+                        XCTAssertFalse(item.intersects(close), "Metadata must not sit beneath Close")
+                    }
+                    for i in items.indices {
+                        for j in items.indices where j > i {
+                            XCTAssertFalse(items[i].intersects(items[j]), "Metadata items must not overlap")
+                        }
+                    }
+                    if width == 402, size == .large {
+                        XCTAssertLessThanOrEqual(metadata.height, 42,
+                            "Share count, ticker and badges should pack into at most two compact lines")
+                    }
+                }
+            }
+        }
     }
 
     @MainActor
@@ -124,18 +177,28 @@ final class HoldingHeaderLayoutTests: XCTestCase {
 
     @MainActor
     private func measure<V: View>(_ view: V, width: CGFloat, language: String, size: DynamicTypeSize,
-                                  screenshot: String? = nil) async throws -> CGSize {
+                                  screenshot: String? = nil, capture: FrameCapture? = nil) async throws -> CGSize {
         UserDefaults.standard.set(language, forKey: AppLanguage.preferenceKey)
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let previous = scene.windows.first(where: \.isKeyWindow)
         let host = UIHostingController(rootView: view
             .frame(width: width)
+            .overlayPreferenceValue(ResearchCardLayoutFrames.self) { anchors in
+                GeometryReader { geometry in
+                    let resolved = anchors.mapValues { geometry[$0] }
+                    Color.clear
+                        .onAppear { capture?.frames = resolved }
+                        .onChange(of: resolved) { _, frames in capture?.frames = frames }
+                }
+                .allowsHitTesting(false)
+            }
             .environment(\.locale, Locale(identifier: language))
             .environment(\.dynamicTypeSize, size)
             .environment(\.colorScheme, .light)
-            .background(Color(uiColor: .systemBackground)))
+            .background(Color.white))
         host.safeAreaRegions = []
         let window = UIWindow(windowScene: scene)
+        window.overrideUserInterfaceStyle = .light
         window.rootViewController = host
         window.makeKeyAndVisible()
         defer { window.isHidden = true; previous?.makeKeyAndVisible() }
@@ -144,6 +207,7 @@ final class HoldingHeaderLayoutTests: XCTestCase {
         let measured = host.sizeThatFits(in: CGSize(width: width, height: 3000))
         host.view.bounds = CGRect(origin: .zero, size: measured)
         host.view.layoutIfNeeded()
+        try await Task.sleep(for: .milliseconds(30))
         if let screenshot {
             let attachment = XCTAttachment(image: UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
                 host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)

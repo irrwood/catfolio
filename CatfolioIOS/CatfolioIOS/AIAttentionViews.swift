@@ -219,7 +219,6 @@ struct PortfolioAttentionDetail: View {
         .softTopScrollEdge()
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
-        .hidesTabBarWhenPushed()
         .overlay(alignment: .trailing) {
             // Keep the additional left-swipe gesture at the right edge so the
             // article keeps its normal scrolling gestures.
@@ -256,7 +255,7 @@ struct PortfolioAttentionDetail: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(row.stanceText) · \(row.confidenceText)")
                 if !row.signals.isEmpty {
-                    Text(row.signals.map { L10n.message($0.label) }.joined(separator: " · "))
+                    FinancialText(row.signals.map { L10n.message($0.label) }.joined(separator: " · "))
                 }
             }
             .appText(.footnote)
@@ -705,7 +704,7 @@ struct PortfolioAttentionCardContent: View {
             ScrollView(.horizontal) {
                 HStack(spacing: 6) {
                     ForEach(row.signals) { signal in
-                        Text(L10n.message(signal.label))
+                        FinancialText(L10n.message(signal.label))
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 7)

@@ -163,7 +163,6 @@ struct SettingsTestView: View {
         }
         .navigationTitle(L10n.text("测试"))
         .navigationBarTitleDisplayMode(.inline)
-        .hidesTabBarWhenPushed()
         .fullScreenCover(isPresented: $showsPaywall) { PaywallView() }
         .fullScreenCover(isPresented: $showsFirstLaunchGuide) {
             // Reuse the launch flow without resetting its seen flag or any credentials.
@@ -195,6 +194,5 @@ struct SettingsLabView: View {
         }
         .navigationTitle(L10n.text("Lab 实验室"))
         .navigationBarTitleDisplayMode(.inline)
-        .hidesTabBarWhenPushed()
     }
 }

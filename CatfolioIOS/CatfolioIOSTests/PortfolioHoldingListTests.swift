@@ -2,10 +2,10 @@ import XCTest
 @testable import CatfolioIOS
 
 final class PortfolioHoldingListTests: XCTestCase {
-    private func holding(_ ticker: String, name: String = "Test", value: Double = 100) -> Holding {
+    private func holding(_ ticker: String, name: String = "Test", value: Double = 100, weight: Double = 0.1) -> Holding {
         Holding(ticker: ticker, logoSymbol: nil, displayName: name, sector: nil, source: nil,
             shares: 1, averageCost: 80, costCurrency: "USD", quotePrice: value, quoteCurrency: "USD",
-            todayChangePercent: 10, marketValue: value, weight: 0.1, unrealized: 20, unrealizedPercent: 25,
+            todayChangePercent: 10, marketValue: value, weight: weight, unrealized: 20, unrealizedPercent: 25,
             fxPnl: nil, fxPnlPercent: nil, fxPnlStatus: nil, fxPnlSource: nil)
     }
 
@@ -13,6 +13,41 @@ final class PortfolioHoldingListTests: XCTestCase {
         .init(ticker: ticker, logoSymbol: nil, name: name, directUSD: 100, fromETFUSD: 50,
             totalUSD: value, etfWeightPercent: 5, sector: nil, allocatedCostUSD: 120,
             fundMarketValues: ["VUAG.L": 50])
+    }
+
+    func testDirectWeightsFollowSelectedAccountsInsteadOfProfitOrShareCount() throws {
+        let positions = [("AAA", 50.0, "A"), ("BBB", 150.0, "A"), ("CCC", 800.0, "B")].map {
+            LocalPositionRecord(ticker: $0.0, name: $0.0, shares: 1, averageCost: 10,
+                currency: "USD", quotePrice: $0.1, quoteCurrency: "USD", source: "CSV",
+                openedDate: nil, accountID: $0.2)
+        }
+        let document = LocalPortfolioDocument(source: "CSV", updatedAt: Date(), positions: positions, snapshots: [])
+        for (scope, expected) in [(Set(["CSV|A", "CSV|B"]), 0.05), (Set(["CSV|A"]), 0.25)] {
+            let holdings = try LocalPortfolioEngine.presentation(for: document.scoped(to: scope)).2
+            for period in HoldingPerformancePeriod.allCases {
+                let items = PortfolioHoldingListItem.make(holdings: holdings, period: period, dailyChanges: ["AAA": -3])
+                XCTAssertEqual(try XCTUnwrap(items.first { $0.ticker == "AAA" }?.portfolioWeight), expected, accuracy: 1e-9)
+                XCTAssertEqual(items.compactMap(\.portfolioWeight).reduce(0, +), 1, accuracy: 1e-9)
+            }
+        }
+    }
+
+    func testExposureWeightIncludesBothDirectAndFundHoldings() throws {
+        let item = PortfolioHoldingListItem.exposure(exposure("AAA"), direct: holding("AAA", weight: 0.1),
+            portfolioTotal: 1000, performance: nil)
+        XCTAssertEqual(try XCTUnwrap(item.portfolioWeight), 0.15, accuracy: 1e-9)
+    }
+
+    func testUnavailableWeightsAreNotPresentedAsZeroOrNonfinitePercentages() {
+        for value in [Double.nan, .infinity, -.infinity] {
+            XCTAssertNil(PortfolioHoldingListItem.holding(holding("AAA", weight: value), performance: nil).portfolioWeight)
+            XCTAssertNil(PortfolioHoldingListItem.exposure(exposure("AAA", value: value), direct: nil,
+                portfolioTotal: 1000, performance: nil).portfolioWeight)
+        }
+        for total in [0, -1, Double.nan, .infinity] {
+            XCTAssertNil(PortfolioHoldingListItem.exposure(exposure("AAA"), direct: nil,
+                portfolioTotal: total, performance: nil).portfolioWeight)
+        }
     }
 
     func testDisplayModeChangesAmountsButKeepsTheRealDetailPosition() throws {

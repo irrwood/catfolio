@@ -233,7 +233,7 @@ final class PublicInvestorSelectionTests: XCTestCase {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let previousWindow = scene.windows.first(where: \.isKeyWindow)
         let controller = UIHostingController(rootView: NavigationStack {
-            SettingsPage { PublicInvestorSettingsSection() }
+            SettingsView()
         }.environment(model).defaultAppStorage(defaults))
         let window = UIWindow(windowScene: scene)
         window.rootViewController = controller

@@ -100,13 +100,27 @@ struct CostMarketCard: View {
         return (start, end)
     }
 
+    private var depositIsSettled: Bool {
+        prepared != nil || DisplayCurrency.current == .usd || model.displayCurrencyHistory(for: response) != nil
+    }
+
+    /// Changes when the reader's currency, or the rates its history is read
+    /// at, do.
+    private var displayRatesKey: String {
+        let currency = DisplayCurrency.current.rawValue
+        let history = model.currencyHistories[currency]
+        return "\(currency)-\(history?.from ?? "")-\(history?.closes.count ?? 0)-\(history?.closes.keys.max() ?? "")"
+    }
+
     private var displayedMarketValue: Double {
         if response.accountNAV != nil { return selectedPoint?.marketValue ?? response.currentPoint.marketValue }
         return selectedPoint?.marketValue ?? overview.summary.marketValue
     }
 
     private var displayedCost: Double {
-        if response.accountNAV != nil { return selectedPoint?.cost ?? response.currentPoint.cost }
+        // Before the ranges are prepared, the deposits still read in the
+        // reader's currency: a pound paid in counts at its own day's rate.
+        if response.accountNAV != nil { return selectedPoint?.cost ?? model.displayedPortfolioChart(response).currentPoint.cost }
         return selectedPoint?.cost ?? overview.summary.totalCost
     }
 
@@ -284,14 +298,15 @@ struct CostMarketCard: View {
                 Group {
                     Button(action: toggleProfitBasis) {
                         HStack(spacing: 4) {
-                            Text(DisplayFormat.money(profit.amount, signed: true))
+                            FinancialText(DisplayFormat.money(profit.amount, signed: true),
+                                          isDirectional: response.accountNAV == nil && addedRealisedProfit == nil)
                                 .contentTransition(.numericText(value: profit.amount))
                                 .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: profit.amount)
 
                             Text("·")
                                 .foregroundStyle(.tertiary)
 
-                            Text((response.accountNAV != nil ? "TWR " : "") + (profit.percentage.isFinite ? DisplayFormat.percent(profit.percentage, signed: false) : "—"))
+                            FinancialText((response.accountNAV != nil ? "TWR " : "") + (profit.percentage.isFinite ? DisplayFormat.percent(profit.percentage, signed: false) : "—"))
                                 .contentTransition(.numericText(value: profit.percentage))
                                 .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: profit.percentage)
                         }
@@ -316,13 +331,21 @@ struct CostMarketCard: View {
                     HStack(spacing: 4) {
                         Text(L10n.text(response.accountNAV != nil ? "NET DEPOSIT" : "成本"))
                             .appCaps(.footnote)
-                        Text(DisplayFormat.money(displayedCost))
+                        FinancialText(DisplayFormat.money(displayedCost))
                             .numericTransition(displayedCost)
+                            // Settling swaps the figure as it fades in, not
+                            // rolls or fades the dollar sum's digits into it.
+                            .id(depositIsSettled)
+                            .transition(.identity)
                     }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .opacity(showsNetDeposit ? 1 : 0.45)
+                // In pounds, deposits wait for the rates of the days they
+                // arrived rather than show the dollar sum for a moment.
+                .opacity(depositIsSettled ? 1 : 0)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: depositIsSettled)
                 .accessibilityLabel(L10n.text("净入金线"))
                 .accessibilityValue(showsNetDeposit ? L10n.text("显示") : L10n.text("隐藏"))
                 .accessibilityHint(L10n.text("轻点切换显示或隐藏"))
@@ -362,10 +385,17 @@ struct CostMarketCard: View {
                   initial: true) { _, figures in
             if figures.isValid { lastValidProfit = figures }
         }
-        .task(id: "\(model.portfolioChartRevision)-\(isAwaitingEnrichedHistory)") {
+        .task(id: "\(model.portfolioChartRevision)-\(isAwaitingEnrichedHistory)-\(displayRatesKey)") {
             // Prepare locally available data even while history is refreshing.
             // Keep a complete mounted curve over interim snapshot-only responses.
-            let response = response
+            // Each day reads at its own rate in the reader's currency. Take
+            // the saved rates first rather than draw the dollar figures and
+            // then redraw; fresher ones follow from the page.
+            if DisplayCurrency.current != .usd, model.displayCurrencyHistory(for: response) == nil {
+                await model.loadCurrencyHistories(cachedOnly: true)
+                guard !Task.isCancelled else { return }
+            }
+            let response = model.displayedPortfolioChart(response)
             let initialRange = range
             let initialRanges: [ChartTimeRange] = initialRange == .maximum
                 ? [.maximum]
@@ -477,7 +507,7 @@ struct CostMarketCard: View {
         ]
         return VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(values.enumerated()), id: \.offset) { index, value in
-                Text(compactAxisValue(value))
+                FinancialText(compactAxisValue(value))
                     .appNumber(.footnote)
                 if index < values.count - 1 { Spacer() }
             }
@@ -521,386 +551,6 @@ struct CostMarketCard: View {
     }
 }
 
-/// Canvas keeps a range switch to one draw pass instead of rebuilding hundreds
-/// of Swift Charts marks. Filtering and domains are cached once; every range
-/// keeps the original daily vertices so viewport zooms preserve the same curve.
-/// The line above the home total: its title, or what the page is saying.
-enum HomeHeaderLine: Equatable {
-    case title(String, holdingsValueOnly: Bool, closed: Bool)
-    case refreshing
-    case status(String, isError: Bool)
-
-    /// A title that follows the chart's selection changes at once; only a
-    /// status coming or going sweeps.
-    static func sweeps(_ old: HomeHeaderLine, _ new: HomeHeaderLine) -> Bool {
-        if case .title = old, case .title = new { return false }
-        return true
-    }
-
-    @ViewBuilder var view: some View {
-        switch self {
-        case let .title(text, holdingsValueOnly, closed):
-            HStack(spacing: 5) {
-                if closed { HomeMoonGlyph() }
-                Text(text)
-                    .appCaps(.caption, weight: .semibold)
-                if holdingsValueOnly {
-                    Text(L10n.text("持仓市值"))
-                        .appCaps(.caption, weight: .semibold)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        case .refreshing:
-            HStack(spacing: 6) {
-                // UIKit's own spinner: a repeating SwiftUI animation here
-                // would leak into the page's other layout changes.
-                ProgressView()
-                    .controlSize(.mini)
-                    .tint(CatfolioTheme.primaryText)
-                Text(L10n.text("正在刷新…"))
-                    .appCaps(.caption, weight: .semibold)
-            }
-        case let .status(text, isError):
-            Text(text)
-                .appCaps(.caption, weight: .semibold)
-                .foregroundStyle(isError ? CatfolioTheme.danger : CatfolioTheme.primaryText)
-        }
-    }
-}
-
-/// The closed-market moon. It comes in full and wanes to the crescent.
-struct HomeMoonGlyph: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var phase: CGFloat = 0
-
-    var body: some View {
-        HomeMoonShape(phase: reduceMotion ? 1 : phase)
-            .fill(.secondary)
-            .frame(width: 10, height: 10)
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 0.9).delay(0.15)) { phase = 1 }
-            }
-            .accessibilityLabel(L10n.text("休市"))
-    }
-}
-
-/// A disc with a second disc cut from its upper right: clear of the moon at
-/// phase 0, a full moon, and biting in to the crescent at phase 1.
-struct HomeMoonShape: Shape {
-    var phase: CGFloat
-    var animatableData: CGFloat {
-        get { phase }
-        set { phase = newValue }
-    }
-
-    func path(in rect: CGRect) -> Path {
-        let radius = min(rect.width, rect.height) / 2
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let moon = Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius,
-                                          width: radius * 2, height: radius * 2))
-        // Offsets in radii, from well clear of the disc to the crescent's bite.
-        let start = CGPoint(x: 2.3, y: -1.7), end = CGPoint(x: 0.55, y: -0.42)
-        let cutCenter = CGPoint(x: center.x + (start.x + (end.x - start.x) * phase) * radius,
-                                y: center.y + (start.y + (end.y - start.y) * phase) * radius)
-        let cutRadius = radius * 0.88
-        let cut = Path(ellipseIn: CGRect(x: cutCenter.x - cutRadius, y: cutCenter.y - cutRadius,
-                                         width: cutRadius * 2, height: cutRadius * 2))
-        return moon.subtracting(cut)
-    }
-}
-
-struct FastCostMarketPlot: View {
-    @Environment(\.locale) private var appLocale
-    let data: CostMarketRangeData
-    let showsNetDeposit: Bool
-    let transitionKey: String
-    let showsLatestPoint: Bool
-    let selectedPoint: CostMarketPlotPoint?
-    let measuredRange: ChartDateRange?
-    let selectionIndicatorLabel: String?
-    let compactDates: Bool
-    let onSelect: (Date) -> Void
-    let onMeasure: (ChartDateRange) -> Void
-    let onInteractionEnded: (Int) -> Void
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var seriesCache = CostMarketPlotSeriesCache()
-    private let bottomHeight: CGFloat = 0
-
-    var body: some View {
-        // A selection changes this view every time the finger crosses a day.
-        // Rebuilding both point arrays and sorting them in Series.init on
-        // every move makes a long portfolio history compete with scrolling.
-        let prepared = seriesCache.prepared(for: data, scheme: colorScheme,
-                                            showsLatestPoint: showsLatestPoint)
-        StandardLineChart(
-            // Canvas paints later series above earlier ones. Keep the blue
-            // net-deposit line underneath the adaptive white/green market
-            // line so their crossings preserve the portfolio-value signal.
-            series: showsNetDeposit ? [prepared.cost, prepared.market] : [prepared.market],
-            interactionDates: prepared.interactionDates,
-            domain: data.domain,
-            yTicks: prepared.yTicks,
-            axisWidth: 0,
-            topInset: 0,
-            bottomHeight: bottomHeight,
-            interactionBottomInset: PortfolioHeroChartLayout.chartInteractionBottomInset,
-            leadingLineOverflow: 0,
-            trailingEndpointInset: 21,
-            gridOpacity: 0,
-            // Not the cost line's toggle: showing or hiding it swaps the line
-            // in place instead of replaying the curve's bounce.
-            transitionKey: "\(transitionKey)-\(colorScheme == .light ? "light" : "dark")",
-            rangeTransitionKey: transitionKey,
-            appearanceID: "portfolio-assets",
-            dataTransition: .viewportZoom,
-            seriesChangeBounce: 12,
-            // No morph out of the loading lines at launch: the blue line
-            // slid from the placeholder's slope to its real level.
-            animatesInitialAppearance: false,
-            selectedDate: selectedPoint?.date,
-            measuredRange: measuredRange,
-            selectionIndicatorLabel: selectionIndicatorLabel,
-            selectionSeriesIDs: showsNetDeposit ? ["market", "cost"] : ["market"],
-            rangeSeriesIDs: showsNetDeposit ? ["market", "cost"] : ["market"],
-            rangePrimarySeriesID: "market",
-            dimsFutureDuringSelection: true,
-            yAxisLabel: { _ in "" },
-            xAxisLabel: shortDate,
-            onSelect: onSelect,
-            onMeasure: onMeasure,
-            onInteractionEnded: onInteractionEnded
-        )
-    }
-
-    private func shortDate(_ date: Date) -> String {
-        compactDates
-            ? date.formatted(.dateTime.month(.abbreviated).day())
-            : date.formatted(.dateTime.month(.abbreviated))
-    }
-}
-
-/// Keeps the immutable chart geometry across selection-only body updates.
-/// Every prepared range has a new identity, including a refreshed account or
-/// currency response, so stale points cannot leak into a new portfolio.
-@MainActor
-final class CostMarketPlotSeriesCache {
-    struct Prepared {
-        let market: StandardLineChartSeries
-        let cost: StandardLineChartSeries
-        let interactionDates: [Date]
-        let yTicks: [Double]
-    }
-
-    private struct Key: Equatable {
-        let dataID: UUID
-        let scheme: ColorScheme
-        let showsLatestPoint: Bool
-    }
-
-    private var cachedKey: Key?
-    private var cachedValue: Prepared?
-    private(set) var rebuildCount = 0
-
-    func prepared(for data: CostMarketRangeData, scheme: ColorScheme,
-                  showsLatestPoint: Bool) -> Prepared {
-        let key = Key(dataID: data.id, scheme: scheme, showsLatestPoint: showsLatestPoint)
-        if key == cachedKey, let cachedValue { return cachedValue }
-
-        let market = StandardLineChartSeries(
-            id: "market",
-            points: data.plottedRows.map {
-                StandardLineChartPoint(id: $0.id, date: $0.date, value: $0.marketValue)
-            },
-            color: scheme == .light ? .white : CatfolioTheme.gain(for: .dark),
-            lineWidth: 2,
-            latestPointRadius: showsLatestPoint ? 5 : 0,
-            latestPointColor: scheme == .light ? .black : nil,
-            latestPointUsesGlass: false
-        )
-        let cost = StandardLineChartSeries(
-            id: "cost",
-            points: data.plottedRows.map {
-                StandardLineChartPoint(id: "cost|\($0.id)", date: $0.date, value: $0.cost)
-            },
-            color: Color(red: 0.204, green: 0.459, blue: 1),
-            lineWidth: 2,
-            latestPointRadius: showsLatestPoint ? 5 : 0,
-            latestPointUsesGlass: false
-        )
-        let ticks = (0..<5).map { index in
-            let fraction = Double(index) / 4
-            return data.domain.upperBound
-                - (data.domain.upperBound - data.domain.lowerBound) * fraction
-        }
-        let value = Prepared(market: market, cost: cost,
-                             interactionDates: data.rows.map(\.date), yTicks: ticks)
-        cachedKey = key
-        cachedValue = value
-        rebuildCount &+= 1
-        return value
-    }
-}
-
-final class CostMarketPreparedSource: @unchecked Sendable {
-    let points: [CostMarketPlotPoint]
-    let lastDate: Date?
-    let previousTradingDate: Date?
-    let accountRowsByDate: [String: ChartPoint]
-    let accountNAV: [String: Double]?
-
-    init(response: PortfolioChartResponse) {
-        accountNAV = response.accountNAV
-        accountRowsByDate = response.accountNAV == nil ? [:] : Dictionary(
-            response.positionHistory.rows.map { ($0.dateText, $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        // The latest observation may replace a same-day historical point or
-        // extend it. Never let a nonempty history hide the current endpoint.
-        var source = response.positionHistory.rows
-        if response.currentPoint.marketValue.isFinite, response.currentPoint.cost.isFinite {
-            source.removeAll { $0.dateText == response.currentPoint.dateText }
-            source.append(response.currentPoint)
-        }
-        points = source.compactMap { row -> CostMarketPlotPoint? in
-            guard row.marketValue.isFinite, row.cost.isFinite,
-                  let date = DayDateCodec.date(from: row.dateText) else { return nil }
-            return CostMarketPlotPoint(
-                dateText: row.dateText,
-                date: date,
-                marketValue: row.marketValue,
-                cost: row.cost
-            )
-        }.sorted { $0.date < $1.date }
-        lastDate = points.last?.date
-        if let sessions = response.marketDates?.sorted(), sessions.count >= 2 {
-            let baseline = sessions[sessions.count - 2]
-            previousTradingDate = points.last(where: { $0.dateText <= baseline })?.date
-                ?? points.first?.date
-        } else {
-            previousTradingDate = points.dropLast().last?.date
-        }
-    }
-}
-
-final class CostMarketPreparedData: @unchecked Sendable {
-    private let ranges: [ChartTimeRange: CostMarketRangeData]
-    private let accountRowsByDate: [String: ChartPoint]
-    private let accountNAV: [String: Double]?
-
-    init(
-        source: CostMarketPreparedSource,
-        requestedRanges: [ChartTimeRange] = ChartTimeRange.allCases
-    ) {
-        let points = source.points
-        accountRowsByDate = source.accountRowsByDate
-        accountNAV = source.accountNAV
-
-        guard let last = source.lastDate else {
-            ranges = [:]
-            return
-        }
-
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        ranges = Dictionary(uniqueKeysWithValues: requestedRanges.map { range in
-            // Portfolio history is daily rather than intraday. Use the latest
-            // two trading snapshots so 1D still shows the day-over-day move
-            // instead of collapsing to an unhelpful single point.
-            var filtered = points.filter {
-                range.includes(
-                    $0.date,
-                    through: last,
-                    previousTradingDate: source.previousTradingDate,
-                    calendar: calendar
-                )
-            }
-            // YTD starts at the prior year-end closing valuation.
-            if range == .yearToDate, let first = filtered.first,
-               let prior = points.last(where: { $0.date < first.date }) {
-                filtered.insert(prior, at: 0)
-            }
-            return (range, Self.prepare(filtered))
-        })
-    }
-
-    func data(for range: ChartTimeRange) -> CostMarketRangeData {
-        ranges[range] ?? ranges[.maximum] ?? .empty
-    }
-
-    static func shouldReplace(_ cached: CostMarketPreparedData?, with fresh: CostMarketPreparedData) -> Bool {
-        !(fresh.data(for: .maximum).rows.count <= 1 && (cached?.data(for: .maximum).rows.count ?? 0) > 1)
-    }
-
-    func accountPerformance(from startDate: String, to endDate: String) -> (amount: Double, percentage: Double) {
-        guard let accountNAV, let start = accountRowsByDate[startDate],
-              let end = accountRowsByDate[endDate], startDate <= endDate,
-              let base = accountNAV[startDate], base > 0,
-              let last = accountNAV[endDate] else { return (.nan, .nan) }
-        return ((end.marketValue - start.marketValue) - (end.cost - start.cost), (last / base - 1) * 100)
-    }
-
-    private static func prepare(_ points: [CostMarketPlotPoint]) -> CostMarketRangeData {
-        guard !points.isEmpty else { return .empty }
-        // Range-dependent decimation changes the curve at shared dates. Keep
-        // every daily vertex so the transition's union and the resting path
-        // have identical geometry inside the final viewport.
-
-        var minimum = Double.greatestFiniteMagnitude
-        var maximum = -Double.greatestFiniteMagnitude
-        for point in points {
-            minimum = min(minimum, point.marketValue, point.cost)
-            maximum = max(maximum, point.marketValue, point.cost)
-        }
-        let span = max(maximum - minimum, max(abs(minimum), abs(maximum)) * 0.02, 1)
-        let padding = span * 0.12
-        return CostMarketRangeData(
-            rows: points,
-            plottedRows: points,
-            domain: (minimum < 0 ? minimum - padding : max(0, minimum - padding))...(maximum + padding)
-        )
-    }
-}
-
-struct CostMarketRangeData {
-    /// A freshly prepared range gets a fresh identity, while copies of that
-    /// range keep it so chart-only state changes reuse its geometry.
-    let id = UUID()
-    let rows: [CostMarketPlotPoint]
-    let plottedRows: [CostMarketPlotPoint]
-    let domain: ClosedRange<Double>
-
-    static let empty = CostMarketRangeData(rows: [], plottedRows: [], domain: 0...1)
-
-    func nearest(to date: Date) -> CostMarketPlotPoint? {
-        guard !rows.isEmpty else { return nil }
-        var lower = 0
-        var upper = rows.count
-        while lower < upper {
-            let middle = (lower + upper) / 2
-            if rows[middle].date < date {
-                lower = middle + 1
-            } else {
-                upper = middle
-            }
-        }
-        guard lower > 0 else { return rows[0] }
-        guard lower < rows.count else { return rows[rows.count - 1] }
-        let before = rows[lower - 1]
-        let after = rows[lower]
-        return abs(before.date.timeIntervalSince(date)) <= abs(after.date.timeIntervalSince(date)) ? before : after
-    }
-}
-
-struct CostMarketPlotPoint: Identifiable {
-    let dateText: String
-    let date: Date
-    let marketValue: Double
-    let cost: Double
-
-    var id: String { dateText }
-}
-
 struct PortfolioChartLoadingPlaceholder: View {
     @Environment(\.colorScheme) private var colorScheme
     var isAnimating = true
@@ -933,64 +583,3 @@ struct PortfolioChartLoadingPlaceholder: View {
         .frame(height: PortfolioHeroChartLayout.sectionHeight, alignment: .topLeading)
     }
 }
-
-/// Change in the chart's cost-adjusted value, not a ledger-backed TWR/IRR.
-/// Inputs share the chart's reporting currency; do not convert either endpoint twice.
-func costMarketChange(
-    from start: CostMarketPlotPoint, to end: CostMarketPlotPoint
-) -> (amount: Double, percentage: Double) {
-    let amount = (end.marketValue - start.marketValue) - (end.cost - start.cost)
-    return (amount, start.marketValue == 0 ? 0 : amount / start.marketValue * 100)
-}
-
-/// Names the day a set of figures belongs to, the way a person would:
-/// 今天, 昨天, the weekday within the past week, the date before that.
-enum DataDayLabel {
-    /// `now` is read on the reader's own calendar: just past midnight is
-    /// already the next day for them, whatever the date is in UTC.
-    static func text(for dayKey: String, locale: Locale, now: Date = Date(),
-                     timeZone: TimeZone = .current) -> String {
-        var local = Calendar(identifier: .gregorian)
-        local.timeZone = timeZone
-        let parts = local.dateComponents([.year, .month, .day], from: now)
-        let today = String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
-        guard let date = DayDateCodec.date(from: dayKey),
-              let current = DayDateCodec.date(from: today) else { return dayKey }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        var style = Date.FormatStyle(date: .omitted, time: .omitted).locale(locale)
-        style.timeZone = calendar.timeZone
-        switch calendar.dateComponents([.day], from: date, to: current).day ?? 0 {
-        case ...0: return L10n.text("今天")
-        case 1: return L10n.text("昨天")
-        case 2...6: return date.formatted(style.weekday(.abbreviated))
-        default: return date.formatted(style.month(.abbreviated).day())
-        }
-    }
-
-    /// No selection, or the newest available session, keeps the home title.
-    /// Market opening hours do not determine whether data is the latest.
-    static func homeTitle(displayedDay: String?, latestDay: String?, locale: Locale,
-                          now: Date = Date(), timeZone: TimeZone = .current) -> String {
-        guard let displayedDay, let latestDay, displayedDay < latestDay else { return "CATFOLIO" }
-        return text(for: displayedDay, locale: locale, now: now, timeZone: timeZone)
-    }
-
-    /// The latest trading day among these dates. A snapshot taken on a
-    /// Saturday is dated Saturday, but its prices are Friday's.
-    static func latestSession(in dates: [String]) -> String? {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        return dates.filter { key in
-            guard let date = DayDateCodec.date(from: key) else { return false }
-            return !calendar.isDateInWeekend(date)
-        }.max()
-    }
-
-    /// True while any held listing's market is in session, so its prices are
-    /// moving now.
-    static func isLive(_ holdings: [Holding], at date: Date = Date()) -> Bool {
-        holdings.contains { MarketHours.isOpen(ticker: $0.ticker, at: date) }
-    }
-}
-

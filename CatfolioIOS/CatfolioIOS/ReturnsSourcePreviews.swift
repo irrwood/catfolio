@@ -217,7 +217,7 @@ struct ReturnsSourceCards: View {
 /// icon and chevron on top, the title over the amount at the foot, and a
 /// blur that deepens toward the foot so the text reads over the curves. Gains are blue and rise
 /// from the bottom edge; losses are purple and hang from the top edge. Each
-/// has a blurred glow set in the design's own place, over liquid glass.
+/// has a blurred glow set in the design's own place, on an opaque surface.
 private struct ReturnsSourceCard: View {
     @Environment(\.colorScheme) private var colorScheme
     let chart: ReturnsChartDestination
@@ -247,7 +247,7 @@ private struct ReturnsSourceCard: View {
             // height to baseline); SwiftUI's line boxes add about 8pt of
             // their own between the two, and 4pt under the figure.
             VStack(alignment: .leading, spacing: 4) {
-                Text(chart.title)
+                Text(L10n.text(isLosses ? "Loss" : "Gain"))
                     .font(Typography.text(size: 14, weight: .bold))
                     .tracking(0.56)
                     .textCase(.uppercase)
@@ -265,6 +265,7 @@ private struct ReturnsSourceCard: View {
         .frame(height: Self.height)
         .background {
             ZStack(alignment: .topLeading) {
+                Color(uiColor: .systemBackground)
                 palette.fill
                 artwork
             }
@@ -284,7 +285,6 @@ private struct ReturnsSourceCard: View {
             .accessibilityHidden(true)
         }
         .clipShape(shape)
-        .modifier(ReturnsSourceGlass(shape: shape))
         .contentShape(shape)
         .accessibilityElement(children: .combine)
         .accessibilityValue(accessibilityValue)
@@ -339,7 +339,8 @@ private struct ReturnsSourceCard: View {
         if let preview {
             // Signed, as in the dark frame: a loss reads as money lost.
             let amount = isLosses ? -abs(preview.headline) : preview.headline
-            Text(DisplayFormat.money(amount, signed: amount != 0, fractionDigits: 0))
+            FinancialText(DisplayFormat.money(amount, signed: amount != 0, fractionDigits: 0),
+                          isDirectional: true, signFollowsValue: true)
                 .font(Typography.number(size: 20, weight: .semibold))
                 .foregroundStyle(palette.amount)
                 .lineLimit(1)
@@ -376,8 +377,7 @@ private struct ReturnsSourcePalette {
         let abovePlot: Bool
     }
 
-    /// The card's own fill under the glows: clear in the dark (the glass and
-    /// the glows carry it), the design's gradient at 86% in the light.
+    /// The design's colour wash, composited over the card's opaque base.
     let fill: LinearGradient
     /// The title over the amount: the chart's colour in the dark, white on
     /// the light scheme's coloured cards.
@@ -448,20 +448,6 @@ private struct ReturnsSourcePalette {
             glows = [Glow(color: Self.rgb(0x9651FF), frame: CGRect(x: -100, y: -91, width: 222, height: 165), abovePlot: false)]
             curve = Self.rgb(0x7D25FF); curveFade = Self.rgb(0xAC74FF)
             stroke = .clear; layerOpacity = 0.4
-        }
-    }
-}
-
-/// Apply native liquid glass to the complete card, never to its chart layers.
-private struct ReturnsSourceGlass: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
-    let shape: RoundedRectangle
-
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content.glassEffect(colorScheme == .dark ? .clear.interactive() : .regular.interactive(), in: shape)
-        } else {
-            content.background(.ultraThinMaterial, in: shape)
         }
     }
 }

@@ -54,7 +54,9 @@ struct SnapTradeView: View {
                     SettingsCard {
                         Link(destination: URL(string: "https://dashboard.snaptrade.com")!) {
                             SettingsRowContainer {
-                                SettingsRowLabel(icon: .symbol("arrow.up.right.square"), title: L10n.text("打开 SnapTrade Dashboard"))
+                                SettingsRowLabel(icon: .symbol("arrow.up.right.square"),
+                                    title: L10n.text("打开 SnapTrade Dashboard"),
+                                    titleColor: context.isCreating ? AddAccountProvider.snaptrade.flowTheme.controlTint : nil)
                             }
                         }.buttonStyle(SettingsRowButtonStyle())
                         SettingsButtonRow(icon: .symbol("link"), title: L10n.text("连接或重新授权券商"), showsChevron: false) {
@@ -172,7 +174,8 @@ struct SnapTradeView: View {
                     }
                 }
             }
-        }.tint(CatfolioTheme.accent)
+        }
+        .accountFlowBrand(.snaptrade, enabled: context.isCreating)
     }
 
     private func credentials() throws -> SnapTradeCredentials { try .init(clientID: clientID, consumerKey: consumerKey) }

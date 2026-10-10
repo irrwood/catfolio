@@ -5,6 +5,23 @@ import XCTest
 
 @MainActor
 final class SecurityDetailLiveZoomTests: XCTestCase {
+    func testHiddenNavigationBarKeepsNativeBackswipeAvailable() async throws {
+        guard #available(iOS 26.0, *) else { throw XCTSkip("Content backswipe requires iOS 26") }
+        try await withSource(inNavigationStack: true) { presenter, key, transition in
+            let stack = try XCTUnwrap(presenter as? UINavigationController)
+            let root = try XCTUnwrap(stack.topViewController)
+            XCTAssertTrue(transition.open(id: key.id, namespace: key.namespace,
+                                          page: Self.page, didEnd: {}))
+            try await self.waitUntil { stack.topViewController !== root && stack.transitionCoordinator == nil }
+            let page = try XCTUnwrap(stack.topViewController)
+            XCTAssertTrue(stack.isNavigationBarHidden)
+            XCTAssertFalse(page.navigationItem.hidesBackButton)
+            XCTAssertTrue(try XCTUnwrap(stack.interactiveContentPopGestureRecognizer).isEnabled)
+            transition.close()
+            try await self.waitUntil { stack.topViewController === root && stack.transitionCoordinator == nil }
+        }
+    }
+
     func testProductionSecurityPageOpenLatency() async throws {
         try await checkProductionPageOpenLatency(restoresAccountContext: false)
     }

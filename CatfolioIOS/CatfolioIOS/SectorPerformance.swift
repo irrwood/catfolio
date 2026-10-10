@@ -79,7 +79,6 @@ struct SectorPerformancePanel: View {
                 ForEach(SectorPerformanceDefinition.all) { definition in
                     NavigationLink {
                         SectorPerformanceDetailView(definition: definition, store: store, rotation: rotation)
-                            .hidesTabBarWhenPushed()
                     } label: {
                         SectorPerformanceCard(definition: definition, market: store.markets[definition.symbol])
                     }
@@ -164,7 +163,7 @@ struct SectorGlassCard: View {
                     .font(.body.weight(.medium))
                     .lineLimit(typeSize.isAccessibilitySize ? 8 : 2,
                                reservesSpace: !typeSize.isAccessibilitySize)
-                Text(value)
+                FinancialText(value)
                     .font(.body.weight(.bold))
                     .monospacedDigit()
                     .foregroundStyle(valueColor)
@@ -213,7 +212,7 @@ private struct SectorPerformanceDetailView: View {
                         Text(latest.value, format: .number.precision(.fractionLength(2))).monospacedDigit()
                     }
                     if let change = market.changePercent {
-                        LabeledContent(L10n.text("板块表现"), value: String(format: "%+.1f%%", change))
+                        LabeledContent(L10n.text("板块表现"), financialValue: String(format: "%+.1f%%", change))
                     }
                     Text(L10n.text("数据日期 \(latest.id)")).foregroundStyle(.secondary)
                 } else { Text(L10n.text("暂无数据")).foregroundStyle(.secondary) }
@@ -238,8 +237,8 @@ private struct SectorPerformanceDetailView: View {
             }
             if let rotation, let sector = rotation.sectors.first(where: { $0.symbol == definition.symbol }) {
                 Section(L10n.text("行业轮动")) {
-                    LabeledContent(L10n.text("中期相对强弱"), value: String(format: "%+.1f%%", sector.relativeTrend*100))
-                    LabeledContent(L10n.text("近 1 月相对动量"), value: String(format: "%+.1f%%", sector.relativeMomentum*100))
+                    LabeledContent(L10n.text("中期相对强弱"), financialValue: String(format: "%+.1f%%", sector.relativeTrend*100))
+                    LabeledContent(L10n.text("近 1 月相对动量"), financialValue: String(format: "%+.1f%%", sector.relativeMomentum*100))
                     Text(sector.displayQuadrant)
                     Text(sector.explanation).foregroundStyle(.secondary)
                     Text(L10n.text("数据截至 \(rotation.asOf)（纽约）")).font(.caption).foregroundStyle(.secondary)

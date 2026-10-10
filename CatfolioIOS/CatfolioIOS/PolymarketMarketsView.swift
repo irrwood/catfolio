@@ -444,7 +444,7 @@ struct PolymarketEventCard: View {
                     .appText(.footnote, weight: .medium)
                     .foregroundStyle(CatfolioTheme.primaryText)
                     .lineLimit(1)
-                Text(L10n.text("\(DisplayFormat.compactMoney(market.totalVolume, currency: "USD")) volume"))
+                FinancialText(L10n.text("\(DisplayFormat.compactMoney(market.totalVolume, currency: "USD")) volume"))
                     .appText(.caption)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)

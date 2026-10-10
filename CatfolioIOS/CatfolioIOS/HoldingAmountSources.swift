@@ -99,7 +99,7 @@ struct HoldingAmountSourcesList: View {
 
     private func amountRow(_ title: String, _ value: Double?) -> some View {
         LabeledContent(L10n.label(title)) {
-            Text(value.map { DisplayFormat.money($0, fractionDigits: 2) } ?? "—")
+            FinancialText(value.map { DisplayFormat.money($0, fractionDigits: 2) } ?? "—")
                 .appNumber(.body)
         }
     }

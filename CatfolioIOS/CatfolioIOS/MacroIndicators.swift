@@ -303,7 +303,7 @@ struct MacroIndicatorCard: View {
                     .minimumScaleFactor(0.75)
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     if let value = indicator?.latest?.value {
-                        Text(indicator?.format == .exchangeRate
+                        FinancialText(indicator?.format == .exchangeRate
                              ? value.formatted(.number.precision(.fractionLength(4)))
                              : value.formatted(.number.precision(.fractionLength(2))) + "%")
                             .font(.system(size: valueSize, weight: .semibold, design: .rounded))
@@ -311,7 +311,7 @@ struct MacroIndicatorCard: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
                         if let change = changeText {
-                            Text(change)
+                            FinancialText(change)
                                 .font(.system(size: changeSize, weight: .semibold, design: .rounded))
                                 .monospacedDigit()
                                 .foregroundStyle(.secondary)

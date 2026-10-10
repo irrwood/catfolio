@@ -1470,6 +1470,7 @@ enum JEVLabels {
 // MARK: - The page
 
 struct JEVTodayAttentionView: View {
+    var titleDisplayMode: NavigationBarItem.TitleDisplayMode = .large
     @Environment(AppModel.self) private var model
     @State private var runner = JEVRunner()
     @State private var expanded: Set<String> = []
@@ -1486,20 +1487,9 @@ struct JEVTodayAttentionView: View {
             summaryCard
 
             if let report = runner.report {
-                ForEach(report.calls) { call in
-                    JEVCallCard(
-                        call: call,
-                        isExpanded: expanded.contains(call.id),
-                        isExplaining: runner.explaining.contains(call.id),
-                        explanationError: runner.explanationErrors[call.id],
-                        toggle: {
-                            withAnimation(.snappy) {
-                                if expanded.contains(call.id) { expanded.remove(call.id) } else { expanded.insert(call.id) }
-                            }
-                        },
-                        explain: { Task { await runner.explain(call.id) } }
-                    )
-                }
+                JEVReportCards(report: report, expanded: $expanded,
+                    explaining: runner.explaining, explanationErrors: runner.explanationErrors,
+                    explain: { id in Task { await runner.explain(id) } })
             }
 
             SettingsFootnote([
@@ -1508,7 +1498,7 @@ struct JEVTodayAttentionView: View {
             ])
         }
         .navigationTitle(L10n.text("JEV 今日关注"))
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(titleDisplayMode)
         .toolbarVisibility(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -1626,6 +1616,35 @@ struct JEVTodayAttentionView: View {
     }
 }
 
+/// Keep long reports out of one eager display list. Card updates also avoid
+/// interpolating every text glyph while the report is being scrolled.
+struct JEVReportCards: View {
+    let report: JEVReport
+    @Binding var expanded: Set<String>
+    var explaining: Set<String> = []
+    var explanationErrors: [String: String] = [:]
+    let explain: (String) -> Void
+
+    var body: some View {
+        LazyVStack(spacing: SettingsTemplate.sectionSpacing) {
+            ForEach(report.calls) { call in
+                JEVCallCard(call: call, isExpanded: expanded.contains(call.id),
+                    isExplaining: explaining.contains(call.id),
+                    explanationError: explanationErrors[call.id],
+                    toggle: {
+                        if expanded.contains(call.id) { expanded.remove(call.id) }
+                        else { expanded.insert(call.id) }
+                    },
+                    explain: { explain(call.id) })
+            }
+        }
+        .transaction { transaction in
+            transaction.animation = nil
+            transaction.disablesAnimations = true
+        }
+    }
+}
+
 private struct JEVCallCard: View {
     @Environment(\.colorScheme) private var colorScheme
     let call: JEVCall
@@ -1734,7 +1753,7 @@ private struct JEVCallCard: View {
             HStack {
                 Text(L10n.text("RSI · 仓位 · 浮盈")).appText(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Text([facts.rsi14.map { String(format: "%.0f", $0) } ?? "—",
+                FinancialText([facts.rsi14.map { String(format: "%.0f", $0) } ?? "—",
                       DisplayFormat.percent(facts.weightPercent, signed: false),
                       DisplayFormat.percent(facts.unrealizedGainPercent)].joined(separator: " · "))
                     .appNumber(.caption, weight: .medium)
@@ -1767,7 +1786,7 @@ private struct JEVCallCard: View {
         HStack {
             Text(title).appText(.caption).foregroundStyle(.secondary)
             Spacer()
-            Text(value).appNumber(.caption, weight: .medium).lineLimit(1)
+            FinancialText(value).appNumber(.caption, weight: .medium).lineLimit(1)
         }
     }
 
@@ -1775,7 +1794,7 @@ private struct JEVCallCard: View {
         HStack {
             Text(title).appText(.caption).foregroundStyle(.secondary)
             Spacer()
-            Text(values.map { $0.map { DisplayFormat.percent($0) } ?? "—" }.joined(separator: " · "))
+            FinancialText(values.map { $0.map { DisplayFormat.percent($0) } ?? "—" }.joined(separator: " · "))
                 .appNumber(.caption, weight: .medium)
         }
     }
@@ -1833,90 +1852,5 @@ private struct JEVScoreRow: View {
         .opacity(isReliable ? 1 : 0.45)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(dimension.title) \(dimension.label(for: score.score)) \(JEVLabels.confidence(score.confidence))")
-    }
-}
-
-/// The entry on the 收益 page: the last report's tally, or how to start.
-struct JEVTodayAttentionEntry: View {
-    @Environment(AppModel.self) private var model
-    /// Off when a tabbed header above it already names the section.
-    var showsHeader = true
-
-    var body: some View {
-        if showsHeader {
-            SettingsSection(L10n.text("JEV 今日关注")) { row }
-        } else {
-            SettingsCard { row }
-        }
-    }
-
-    private var row: some View {
-        let report = JEVReportCache.load(scope: JEVReportCache.scope(model: model))
-        return Group {
-            SettingsNavigationRow(
-                icon: .symbol("bolt.fill"),
-                title: report.map { report in
-                    let counts = report.counts
-                    return L10n.text("\(counts.bullish) 看多 · \(counts.neutral) 中性 · \(counts.bearish) 看空")
-                } ?? L10n.text("让 JEV 描述每只持仓的状态"),
-                subtitle: report.map { L10n.text("判断于 \($0.generatedAt.formatted(date: .abbreviated, time: .shortened))") }
-                    ?? (JEVProvider.current.isConfigured ? L10n.text("基于行情指标的结构化判断")
-                                                          : L10n.text("需要在 服务商 中填写 OpenRouter 或 Cloudflare 凭证"))
-            ) {
-                JEVTodayAttentionView()
-            }
-            .accessibilityIdentifier("performance.jev-attention")
-        }
-    }
-}
-
-/// Today's attention and JEV's, as two tabs of one section: the analysis's
-/// cards, or JEV's structured call on each holding.
-struct TodayAttentionTabs: View {
-    enum Tab: String { case analysis, jev }
-    @AppStorage("performance.attention.tab") private var tabRawValue = Tab.analysis.rawValue
-    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
-
-    private var tab: Tab { Tab(rawValue: tabRawValue) ?? .analysis }
-
-    var body: some View {
-        Group {
-            HStack(alignment: .firstTextBaseline, spacing: 16) {
-                tabButton(.analysis, title: L10n.text("今天值得关注"))
-                tabButton(.jev, title: "JEV")
-                Spacer(minLength: 12)
-                NavigationLink {
-                    if tab == .jev { JEVTodayAttentionView() } else { TodayAttentionView() }
-                } label: {
-                    HStack(spacing: 3) {
-                        Text(L10n.text("更多"))
-                        Image(systemName: "chevron.right").font(.caption.weight(.semibold))
-                    }
-                    .appText(.footnote, weight: .medium)
-                    .foregroundStyle(SettingsTemplate.sectionHeader)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("performance.today-attention")
-            }
-            .padding(.top, SettingsTemplate.sectionHeaderTopSpacing)
-
-            switch tab {
-            case .analysis: TodayAttentionPreview(showsHeader: false)
-            case .jev: JEVTodayAttentionEntry(showsHeader: false)
-            }
-        }
-        .sensoryFeedback(.selection, trigger: tabRawValue) { _, _ in hapticsEnabled }
-    }
-
-    private func tabButton(_ value: Tab, title: String) -> some View {
-        let isSelected = tab == value
-        return Button { tabRawValue = value.rawValue } label: {
-            Text(title)
-                .appText(.body, weight: isSelected ? .semibold : .medium)
-                .foregroundStyle(isSelected ? CatfolioTheme.primaryText : SettingsTemplate.sectionHeader)
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

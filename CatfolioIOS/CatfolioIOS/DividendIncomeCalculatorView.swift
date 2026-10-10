@@ -88,7 +88,7 @@ struct DividendIncomeCalculatorView: View {
             Text(title)
                 .appText(.footnote, weight: .medium)
                 .foregroundStyle(SettingsTemplate.secondaryText)
-            Text(DisplayFormat.money(perShare * shares, currency: income.currency, fractionDigits: 2))
+            FinancialText(DisplayFormat.money(perShare * shares, currency: income.currency, fractionDigits: 2))
                 .appNumber(.title)
                 .foregroundStyle(CatfolioTheme.primaryText)
                 .contentTransition(.numericText(value: perShare * shares))

@@ -1,15 +1,7 @@
 import Foundation
 
-/// Every Financial Modeling Prep request in the app draws on one account
-/// quota. This limiter already existed, but it was private to
-/// LocalReturnsAnalytics and so paced exactly one of the five call sites that
-/// spend that quota. Opening a stock page fires the analyst-consensus card,
-/// the financials card and the historical-bar fetches at once; three of them
-/// were unthrottled, and whichever rendered last collected the 429.
-///
-/// Promoted here so all of them share it, and given a back-off so that a
-/// rejection seen by one caller holds the others back too — otherwise a single
-/// 429 cascades as each client retries into an already-exhausted budget.
+/// Pace the app's shared FMP quota. During a server cooldown, fail promptly
+/// so callers can continue to another provider or their saved market data.
 actor FMPRequestLimiter {
     static let shared = FMPRequestLimiter()
 
@@ -23,12 +15,18 @@ actor FMPRequestLimiter {
     private var blockedUntil = Date.distantPast
 
     func waitForTurn() async throws {
-        // Recheck after every suspension. A 429 received while this request
-        // sleeps must postpone it too, and released waiters must stay spaced.
+        // Recheck after pacing too: another caller may have exhausted the
+        // quota while this one slept. Never wait out that server cooldown;
+        // doing so blocks the caller's fallback path behind FMP.
         while true {
             try Task.checkCancellation()
             let now = Date()
-            let ready = max(nextAllowedAt, blockedUntil)
+            if blockedUntil > now {
+                throw FMPFailure.rateLimited(
+                    retryAfterSeconds: Int(blockedUntil.timeIntervalSince(now).rounded(.up))
+                )
+            }
+            let ready = nextAllowedAt
             if ready <= now {
                 nextAllowedAt = now.addingTimeInterval(spacing)
                 return
@@ -37,15 +35,15 @@ actor FMPRequestLimiter {
         }
     }
 
-    /// Honour `Retry-After` when the server sends one; otherwise wait long
-    /// enough that a per-minute budget has a chance to recover.
+    /// Honour `Retry-After` by skipping FMP until the quota can recover.
+    /// Other providers and cached results remain available during this time.
     func backOff(retryAfter: String?) {
         let seconds = ProviderRequestCooldown.delay(retryAfter: retryAfter)
         let resume = Date().addingTimeInterval(seconds)
         blockedUntil = max(blockedUntil, resume)
     }
 
-    /// How long the next caller would wait, so a message can say so.
+    /// How long until a new FMP request can be attempted.
     var secondsUntilFreeSlot: TimeInterval {
         max(0, max(nextAllowedAt, blockedUntil).timeIntervalSinceNow)
     }

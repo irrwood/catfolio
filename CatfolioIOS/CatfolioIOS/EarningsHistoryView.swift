@@ -1,36 +1,38 @@
 import SwiftUI
 
-/// Folded until tapped. Appearing reads only the local cache, to know whether
+/// A child-page entry. Appearing reads only the local cache, to know whether
 /// there is anything to offer; opening the card is what spends a request.
 struct EarningsHistoryView: View {
     let symbol: String
     private let onAvailability: (HoldingResearchAvailability) -> Void
 
     init(symbol: String, initialSnapshot: EarningsSnapshot? = nil, initialRevenue: Bool = false,
-         initiallyExpanded: Bool = false,
+         initiallyPresented: Bool = false,
          onAvailability: @escaping (HoldingResearchAvailability) -> Void = { _ in }) {
         self.symbol = symbol
         self.onAvailability = onAvailability
         _snapshot = State(initialValue: initialSnapshot)
         _revenue = State(initialValue: initialRevenue)
-        _isExpanded = State(initialValue: initiallyExpanded)
+        _isPresented = State(initialValue: initiallyPresented)
     }
     @State private var revenue = false
     @State private var snapshot: EarningsSnapshot?
     @State private var loadState = ResearchCardLoadState()
     @State private var errorMessage: String?
-    @State private var isExpanded: Bool
+    @State private var isPresented: Bool
+    @State private var pendingAvailability: HoldingResearchAvailability?
     @State private var hasLoaded = false
     private var loading: Bool { loadState.isLoading }
 
     var body: some View {
         Group {
-            if snapshot?.hasUsableObservations != false {
-                HoldingDetailDisclosureCard(
+            if isPresented || pendingAvailability != nil || snapshot?.hasUsableObservations != false {
+                HoldingDetailChildPageCard(
                     title: L10n.text("盈利历史"),
                     subtitle: L10n.text("每股收益与收入 · 实际对比预期"),
-                    isExpanded: $isExpanded,
-                    isLoading: loading
+                    isPresented: $isPresented,
+                    isLoading: loading,
+                    onDismiss: publishAvailability
                 ) {
                     EarningsHistoryContent(symbol: symbol, snapshot: snapshot, revenue: $revenue,
                         loading: loading, errorMessage: errorMessage,
@@ -47,14 +49,25 @@ struct EarningsHistoryView: View {
                 snapshot = cached
             }
             guard loadState.canPublish(revision) else { return }
-            if let snapshot { onAvailability(snapshot.hasUsableObservations ? .available : .empty) }
+            if let snapshot { reportAvailability(snapshot.hasUsableObservations ? .available : .empty) }
         }
         // Once per visit: the client answers from its day-old cache when it
         // can, and the refresh button below is there for anything newer.
-        .task(id: "\(symbol)|\(isExpanded)") {
-            guard isExpanded, !hasLoaded else { return }
+        .task(id: "\(symbol)|\(isPresented)") {
+            guard isPresented, !hasLoaded else { return }
             await load(force: false)
         }
+    }
+
+    private func reportAvailability(_ state: HoldingResearchAvailability) {
+        if isPresented { pendingAvailability = state }
+        else { onAvailability(state) }
+    }
+
+    private func publishAvailability() {
+        guard let pendingAvailability else { return }
+        self.pendingAvailability = nil
+        onAvailability(pendingAvailability)
     }
 
     @MainActor private func load(force: Bool) async {
@@ -65,11 +78,11 @@ struct EarningsHistoryView: View {
         } onSuccess: { value in
             snapshot = value
             hasLoaded = true
-            onAvailability(value.hasUsableObservations ? .available : .empty)
+            reportAvailability(value.hasUsableObservations ? .available : .empty)
         } onFailure: { failure, _ in
             errorMessage = failure.localizedDescription
             // Keep the chart and cached values when a refresh fails.
-            onAvailability(snapshot?.hasUsableObservations == true ? .available : .failed)
+            reportAvailability(snapshot?.hasUsableObservations == true ? .available : .failed)
         }
     }
 }

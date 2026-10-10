@@ -101,7 +101,7 @@ private struct DrawdownCard: View {
 
                 Spacer(minLength: 8)
 
-                Text(L10n.text("最大回撤 \(DisplayFormat.ratioPercent(series.maxDrawdown))"))
+                FinancialText(L10n.text("最大回撤 \(DisplayFormat.ratioPercent(series.maxDrawdown))"))
                     .appNumber(.label, weight: .semibold)
                     .foregroundStyle(CatfolioStyle.blue)
                     .lineLimit(1)
@@ -114,7 +114,7 @@ private struct DrawdownCard: View {
                         Text(point.date.formatted(.dateTime.year().month(.abbreviated).day()))
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Text(DisplayFormat.ratioPercent(point.drawdown))
+                        FinancialText(DisplayFormat.ratioPercent(point.drawdown))
                             .foregroundStyle(point.drawdown < 0 ? CatfolioStyle.blue : .secondary)
                     }
                     .appNumber(.caption)

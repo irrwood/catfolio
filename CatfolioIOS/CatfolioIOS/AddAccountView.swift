@@ -7,24 +7,12 @@ import SwiftUI
 /// edge swipe return to it, and finishing closes the whole sheet.
 struct AddAccountView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var provider: Provider?
-
-    private enum Provider: Hashable { case trading212, ibkr, moomoo, robinhood, snaptrade, csv }
+    @State private var provider: AddAccountProvider?
 
     var body: some View {
         NavigationStack {
-            SettingsPage(bottomInset: 32) {
-                SettingsSectionHeader(L10n.text("选择券商或导入方式"))
-                SettingsCard {
-                    row("Trading 212", .brandAsset("BrokerTrading212"), .trading212)
-                    row("Interactive Brokers", .brandAsset("BrokerIBKR"), .ibkr)
-                    row("Moomoo", .brandAsset("BrokerMoomoo"), .moomoo)
-                    row("Robinhood", .brandAsset("BrokerRobinhood"), .robinhood)
-                    row(L10n.text("链接 2000+交易所"), .brandAsset("BrokerSnapTrade"), .snaptrade)
-                }
-                SettingsCard {
-                    row(L10n.text("CSV 导入"), .symbol("doc.badge.plus"), .csv)
-                }
+            SettingsPage(bottomInset: 32, topInset: SettingsTemplate.pageInset) {
+                AddAccountOptions { provider = $0 }
                 SettingsFootnote(L10n.text("Trading 212 和 IBKR 提供逐步连接教程。已有凭证可以直接填写。"))
             }
             .navigationTitle(L10n.text("添加账户"))
@@ -42,10 +30,10 @@ struct AddAccountView: View {
         }
         // A pushed provider's 完成 closes the sheet, not just its own page.
         .environment(\.accountFlowClose, { dismiss() })
-        .tint(CatfolioTheme.accent)
+        .tint(provider?.flowTheme.controlTint ?? CatfolioTheme.accent)
     }
 
-    @ViewBuilder private func destination(_ provider: Provider) -> some View {
+    @ViewBuilder private func destination(_ provider: AddAccountProvider) -> some View {
         switch provider {
         case .trading212: Trading212View(context: .create)
         case .ibkr: IBKRFlexView(context: .create)
@@ -56,9 +44,6 @@ struct AddAccountView: View {
         }
     }
 
-    private func row(_ title: String, _ icon: SettingsIconSource, _ selection: Provider) -> some View {
-        SettingsButtonRow(icon: icon, title: title) { provider = selection }
-    }
 }
 
 private struct AccountFlowCloseKey: EnvironmentKey {

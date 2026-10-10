@@ -32,6 +32,11 @@ struct PortfolioDetailsCard: View {
     @AppStorage("portfolio.holdings.mergeETF") private var mergesETF = false
     @AppStorage("portfolio.holdings.shows52Week") private var shows52Week = false
     @AppStorage("portfolio.holdings.showsVolume") private var showsVolume = false
+    @AppStorage("portfolio.holdings.showsWeight") private var showsWeight = true
+    @AppStorage("portfolio.holdings.showsTicker") private var showsTicker = true
+    @AppStorage("portfolio.holdings.showsShares") private var showsShares = true
+    @AppStorage("portfolio.holdings.showsPerformanceAmount") private var showsPerformanceAmount = true
+    @AppStorage("portfolio.holdings.showsPerformancePercent") private var showsPerformancePercent = true
     @State private var selectedMergedRow: ETFLookThroughRow?
     private var showsMergedHoldings: Bool {
         mergesETF || LaunchArguments.contains("--show-merged-etf") || LaunchArguments.contains("--show-etf")
@@ -91,7 +96,7 @@ struct PortfolioDetailsCard: View {
             }
         }
         .toolbar {
-            if showsHeatmap {
+            if showsHeatmap, hero?.isExpanded ?? true {
                 ToolbarItem(placement: .topBarTrailing) {
                     HeatmapPerformancePeriodMenu(period: $heatmapPerformancePeriod,
                         groupsBySector: $heatmapGroupsBySector, looksThroughETF: $heatmapLooksThroughETF,
@@ -144,7 +149,7 @@ struct PortfolioDetailsCard: View {
         HoldingsHeatmapView(
             holdings: holdings,
             dailyChanges: model.holdingDailyChanges,
-            isLoading: !isSnapshot && ((heatmapLooksThroughETF && isLoadingETF)
+            isLoading: !isSnapshot && (model.isPortfolioLoading || (heatmapLooksThroughETF && isLoadingETF)
                 || (heatmapPerformancePeriod == .today
                     && (model.isHoldingDailyChangesLoading || isLoadingETFConstituentChanges))),
             performancePeriod: heatmapPerformancePeriod,
@@ -198,6 +203,16 @@ struct PortfolioDetailsCard: View {
                     Label(L10n.text("ETF 穿透"), systemImage: showsMergedHoldings ? "checkmark" : "square.3.layers.3d")
                 }
                 Divider()
+                Toggle(L10n.text("显示股数"), isOn: $showsShares)
+                    .accessibilityIdentifier("portfolio-list-show-shares")
+                Toggle(L10n.text("显示股票代码"), isOn: $showsTicker)
+                    .accessibilityIdentifier("portfolio-list-show-ticker")
+                Toggle(L10n.text("显示占比"), isOn: $showsWeight)
+                    .accessibilityIdentifier("portfolio-list-show-weight")
+                Toggle(L10n.text("显示涨跌幅"), isOn: $showsPerformancePercent)
+                    .accessibilityIdentifier("portfolio-list-show-performance-percent")
+                Toggle(L10n.text("显示涨跌金额"), isOn: $showsPerformanceAmount)
+                    .accessibilityIdentifier("portfolio-list-show-performance-amount")
                 // One of the two at a time: they share the row's right side.
                 Toggle(L10n.text("52 周"), isOn: Binding(get: { shows52Week && !showsVolume }, set: {
                     shows52Week = $0
@@ -244,30 +259,28 @@ struct PortfolioDetailsCard: View {
                 ProgressView().controlSize(.small)
                     .accessibilityLabel(L10n.text("正在读取 52 周范围…"))
             }
-            filterMenu(floating: false)
+            filterMenu
                 .accessibilityIdentifier("portfolio-inline-filter")
                 .anchorPreference(key: PortfolioFloatingFilterPreference.self, value: .bounds) { anchor in
                     floatsFilter ? PortfolioFloatingFilterSource(bounds: anchor,
-                        menu: AnyView(filterMenu(floating: true))) : nil
+                        menu: AnyView(filterMenu)) : nil
                 }
         }
     }
 
     @ViewBuilder
-    private func filterMenu(floating: Bool) -> some View {
+    private var filterMenu: some View {
         if !showsHeatmap {
             HoldingSortMenu(
                 field: Binding(get: { holdingSortField }, set: { holdingSortFieldRawValue = $0.rawValue }),
                 fields: sortFields,
                 ascending: $holdingSortAscending,
                 performancePeriod: $holdingPerformancePeriod,
-                iconOnly: true,
-                showsFilterTitle: floating
+                iconOnly: true
             )
         } else {
             HeatmapPerformancePeriodMenu(period: $heatmapPerformancePeriod,
-                groupsBySector: $heatmapGroupsBySector, looksThroughETF: $heatmapLooksThroughETF,
-                showsFilterTitle: floating)
+                groupsBySector: $heatmapGroupsBySector, looksThroughETF: $heatmapLooksThroughETF)
         }
     }
 
@@ -364,14 +377,19 @@ struct PortfolioDetailsCard: View {
                 } label: {
                     if showsVolume {
                         HoldingVolumeRow(item: item, performancePeriod: holdingPerformancePeriod,
+                            showsWeight: showsWeight, showsTicker: showsTicker, showsShares: showsShares,
+                            showsPerformanceAmount: showsPerformanceAmount, showsPerformancePercent: showsPerformancePercent,
                             suppliedRange: holdingSortField == .volumeArea ? volumeSortRanges[item.ticker.uppercased()] : nil,
                             loadsRange: holdingSortField != .volumeArea)
                     } else if shows52Week {
                         Holding52WeekRow(item: item, performancePeriod: holdingPerformancePeriod,
+                            showsWeight: showsWeight, showsTicker: showsTicker, showsShares: showsShares,
+                            showsPerformanceAmount: showsPerformanceAmount, showsPerformancePercent: showsPerformancePercent,
                             suppliedRange: holdingSortField == .week52Position ? week52SortRanges[item.ticker.uppercased()] : nil,
                             loadsRange: holdingSortField != .week52Position)
                     } else {
-                        HoldingRow(item: item, performancePeriod: holdingPerformancePeriod)
+                        HoldingRow(item: item, performancePeriod: holdingPerformancePeriod, showsWeight: showsWeight, showsTicker: showsTicker, showsShares: showsShares,
+                            showsPerformanceAmount: showsPerformanceAmount, showsPerformancePercent: showsPerformancePercent)
                     }
                 }
                 .buttonStyle(HoldingPressButtonStyle())
@@ -451,760 +469,5 @@ struct PortfolioDetailsCard: View {
             isLoadingETFConstituentChanges = false
         }
         loadedETFConstituentChangesKey = signature
-    }
-}
-
-enum HoldingSortField: String, CaseIterable, Identifiable {
-    case marketValue
-    case unrealized
-    case unrealizedPercent
-    case week52Position
-    case volumeArea
-    case name
-
-    var id: String { rawValue }
-
-    /// The 52-week and volume sorts only where their column is shown.
-    static func available(shows52Week: Bool, showsVolume: Bool) -> [HoldingSortField] {
-        allCases.filter {
-            switch $0 {
-            case .week52Position: shows52Week
-            case .volumeArea: showsVolume
-            default: true
-            }
-        }
-    }
-
-    var title: String {
-        switch self {
-        case .marketValue: L10n.text("市值")
-        case .unrealized: L10n.text("盈利")
-        case .unrealizedPercent: L10n.text("收益率")
-        case .week52Position: L10n.text("52 周位置")
-        case .volumeArea: L10n.text("成交密集区位置")
-        case .name: L10n.text("名称")
-        }
-    }
-
-    var compactTitle: String {
-        switch self {
-        case .marketValue: L10n.text("Mkt Cap")
-        case .unrealized: L10n.text("P&L")
-        case .unrealizedPercent: L10n.text("Return")
-        case .week52Position: L10n.text("52 周位置")
-        case .volumeArea: L10n.text("成交密集区位置")
-        case .name: L10n.text("Name")
-        }
-    }
-}
-
-enum HoldingPerformancePeriod: String, CaseIterable, Identifiable {
-    case today
-    case holdingPeriod
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .today: L10n.text("今日")
-        case .holdingPeriod: L10n.text("持有期")
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .today: "sun.max"
-        case .holdingPeriod: "calendar.badge.clock"
-        }
-    }
-}
-
-struct HeatmapPerformancePeriodMenu: View {
-    @Environment(\.locale) private var appLocale
-    @Binding var period: HoldingPerformancePeriod
-    @Binding var groupsBySector: Bool
-    @Binding var looksThroughETF: Bool
-    var showsFilterTitle = false
-    var isToolbarItem = false
-
-    var body: some View {
-        Menu {
-            Section(L10n.text("收益时间")) {
-                ForEach(HoldingPerformancePeriod.allCases) { option in
-                    Button {
-                        period = option
-                    } label: {
-                        Label(
-                            option.title,
-                            systemImage: period == option ? "checkmark" : option.systemImage
-                        )
-                    }
-                }
-            }
-
-            Divider()
-
-            Section(L10n.text("布局")) {
-                Toggle(L10n.text("按板块分组"), isOn: $groupsBySector)
-                Toggle(L10n.text("穿透 ETF"), isOn: $looksThroughETF)
-            }
-        } label: {
-            if isToolbarItem {
-                Image("PortfolioHeaderSort")
-                    .renderingMode(.template).resizable().scaledToFit()
-                    .frame(width: 24, height: 24)
-            } else {
-                PortfolioFilterLabel(showsTitle: showsFilterTitle)
-            }
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
-        .menuOrder(.fixed)
-        .accessibilityLabel(
-            L10n.text("热力图筛选：\(period.title)，\(groupsBySector ? "按板块分组" : "不分组")，")
-                + (looksThroughETF ? L10n.text("已穿透 ETF") : L10n.text("未穿透 ETF"))
-        )
-    }
-}
-
-struct HoldingSortMenu: View {
-    @Environment(\.locale) private var appLocale
-    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
-    @Binding var field: HoldingSortField
-    var fields = HoldingSortField.allCases
-    @Binding var ascending: Bool
-    @Binding var performancePeriod: HoldingPerformancePeriod
-    var iconOnly = false
-    var showsFilterTitle = false
-
-    var body: some View {
-        menu
-        .buttonStyle(.plain)
-        .appText(.footnote, weight: .medium)
-        .foregroundStyle(.secondary)
-        .sensoryFeedback(.selection, trigger: performancePeriod) { _, _ in hapticsEnabled }
-        .accessibilityLabel(L10n.text("筛选：\(performancePeriod.title)；排序：\(field.title)，\(ascending ? "升序" : "降序")"))
-    }
-
-    private var menu: some View {
-        Menu {
-            Section(L10n.text("收益时间")) {
-                ForEach(HoldingPerformancePeriod.allCases) { period in
-                    Button {
-                        performancePeriod = period
-                    } label: {
-                        Label(
-                            period.title,
-                            systemImage: performancePeriod == period ? "checkmark" : period.systemImage
-                        )
-                    }
-                }
-            }
-
-            Divider()
-
-            Section(L10n.text("排序方式")) {
-                ForEach(fields) { option in
-                    Button {
-                        field = option
-                    } label: {
-                        if field == option {
-                            Label(option.title, systemImage: "checkmark")
-                        } else {
-                            Text(option.title)
-                        }
-                    }
-                }
-            }
-
-            Divider()
-
-            Button {
-                ascending.toggle()
-            } label: {
-                Label(
-                    ascending ? L10n.text("改为降序") : L10n.text("改为升序"),
-                    systemImage: ascending ? "arrow.down" : "arrow.up"
-                )
-            }
-        } label: {
-            Group {
-                if iconOnly {
-                    PortfolioFilterLabel(showsTitle: showsFilterTitle)
-                } else {
-                    HStack(spacing: 3) {
-                        Text(field.compactTitle)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 9, weight: .bold))
-                    }
-                }
-            }
-        }
-        .menuOrder(.fixed)
-    }
-}
-
-struct PortfolioFilterLabel: View {
-    let showsTitle: Bool
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Image("PortfolioHeaderSort")
-                .renderingMode(.template).resizable().scaledToFit()
-                .frame(width: 24, height: 24)
-            if showsTitle { Text(L10n.text("筛选")).appText(.footnote, weight: .medium) }
-        }
-        .padding(.horizontal, 17)
-        .frame(minHeight: 44)
-        .fixedSize()
-        .modifier(PortfolioHeaderMaterialControl())
-    }
-}
-
-struct PortfolioFloatingFilterSource {
-    let bounds: Anchor<CGRect>
-    // The bindings still belong to the details card, including its transient
-    // performance period and ETF sort. Both presentations operate on that state.
-    let menu: AnyView
-}
-
-struct PortfolioFloatingFilterPreference: PreferenceKey {
-    static var defaultValue: PortfolioFloatingFilterSource? { nil }
-    static func reduce(value: inout PortfolioFloatingFilterSource?, nextValue: () -> PortfolioFloatingFilterSource?) {
-        value = nextValue() ?? value
-    }
-}
-
-struct PortfolioFloatingFilterOverlay: ViewModifier {
-    func body(content: Content) -> some View {
-        content.overlayPreferenceValue(PortfolioFloatingFilterPreference.self) { source in
-            GeometryReader { geometry in
-                if let source, Self.shouldFloat(sourceFrame: geometry[source.bounds]) {
-                    source.menu
-                        .accessibilityIdentifier("portfolio-floating-filter")
-                        .padding(.top, 10)
-                        .padding(.trailing, CatfolioStyle.pageHorizontalInset)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                }
-            }
-        }
-    }
-
-    static func shouldFloat(sourceFrame: CGRect) -> Bool {
-        sourceFrame.height > 0 && sourceFrame.maxY.isFinite && sourceFrame.maxY <= 0
-    }
-}
-
-struct PortfolioHeaderMaterialControl: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var fill: Color {
-        colorScheme == .light
-            ? Color(red: 244 / 255, green: 244 / 255, blue: 244 / 255)
-            : Color.white.opacity(0.12)
-    }
-
-    func body(content: Content) -> some View {
-        content.background(fill, in: Capsule())
-    }
-
-}
-
-struct HoldingPerformanceValues {
-    let amount: Double
-    let percent: Double
-}
-
-extension Holding {
-    func performanceValues(
-        for period: HoldingPerformancePeriod,
-        dailyChangePercent: Double?
-    ) -> HoldingPerformanceValues? {
-        switch period {
-        case .holdingPeriod:
-            guard unrealized.isFinite, unrealizedPercent.isFinite else { return nil }
-            return HoldingPerformanceValues(amount: unrealized, percent: unrealizedPercent)
-        case .today:
-            guard let dailyChangePercent,
-                  let amount = PortfolioMath.dayContribution(
-                      marketValue: marketValue, changePercent: dailyChangePercent) else { return nil }
-            return HoldingPerformanceValues(amount: amount, percent: dailyChangePercent)
-        }
-    }
-}
-
-struct HoldingRow: View {
-    @Environment(\.locale) private var appLocale
-    @Environment(\.securityDetailZoomOrigin) private var zoomOrigin
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    let item: PortfolioHoldingListItem
-    let performancePeriod: HoldingPerformancePeriod
-    let week52: Holding52WeekPrices?
-    let volume: HoldingVolumePrices?
-
-    init(item: PortfolioHoldingListItem, performancePeriod: HoldingPerformancePeriod,
-         week52: Holding52WeekPrices? = nil, volume: HoldingVolumePrices? = nil) {
-        self.item = item
-        self.performancePeriod = performancePeriod
-        self.week52 = week52
-        self.volume = volume
-    }
-
-    init(holding: Holding, performancePeriod: HoldingPerformancePeriod, dailyChangePercent: Double?) {
-        self.init(item: .holding(holding, performance: holding.performanceValues(
-            for: performancePeriod, dailyChangePercent: dailyChangePercent)), performancePeriod: performancePeriod)
-    }
-
-    @ViewBuilder
-    var body: some View {
-        if let volume {
-            content
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(item.name + "，" + item.ticker)
-                .accessibilityValue(volumeDescription(volume))
-                .accessibilityHint(L10n.text(item.ticker == "ETF 其他" ? "金额来源" : "打开个股"))
-        } else if let week52 {
-            content
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(item.name + "，" + item.ticker)
-                .accessibilityValue(week52Description(week52))
-                .accessibilityHint(L10n.text(item.ticker == "ETF 其他" ? "金额来源" : "打开个股"))
-        } else if case let .holding(holding, _) = item {
-            content
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(L10n.text("\(holding.shortName)，\(DisplayFormat.listShares(holding.shares, compact: false, locale: appLocale)) 股 \(holding.ticker)，市值 \(DisplayFormat.money(holding.marketValue))，\(performancePeriod.title)盈亏 \(profitDescription)"))
-        } else {
-            content
-                .accessibilityElement(children: .combine)
-                .accessibilityHint(L10n.text(item.ticker == "ETF 其他" ? "金额来源" : "打开个股"))
-        }
-    }
-
-    private var content: some View {
-        Group {
-            if dynamicTypeSize.isAccessibilitySize {
-                accessibleContent
-            } else {
-                HStack(alignment: .center, spacing: 10) {
-                    logo
-                    HStack(spacing: 8) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(alignment: .center, spacing: 8) {
-                                SecurityDisplayName(name: item.name, scale: .body, weight: .semibold,
-                                                    showsClassMarkers: false)
-                                    .layoutPriority(1)
-                                Spacer(minLength: 4)
-                                // Keep the existing 1pt optical alignment of the number.
-                                if let volume {
-                                    price(volume.current, currency: volume.currency, isCost: false).offset(y: -1)
-                                } else if let week52 {
-                                    price(week52.current, currency: week52.currency, isCost: false).offset(y: -1)
-                                } else {
-                                    amount.offset(y: -1)
-                                }
-                            }
-                            HStack(alignment: .center, spacing: 5) {
-                                subtitle
-                                Spacer(minLength: 2)
-                                if let volume {
-                                    price(volume.cost, currency: volume.currency, isCost: true)
-                                } else if let week52 {
-                                    price(week52.cost, currency: week52.currency, isCost: true)
-                                } else {
-                                    HoldingPerformanceLabel(performance: item.performance)
-                                }
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        if let volume { HoldingVolumeProfileBar(prices: volume) }
-                        else if let week52 { Holding52WeekBar(positions: week52.positions) }
-                    }
-                }
-            }
-        }
-        .frame(minHeight: 64)
-        .contentShape(Rectangle())
-    }
-
-    @ViewBuilder
-    private var accessibleContent: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                logo
-                if case let .holding(holding, _) = item {
-                    HoldingIdentity(holding: holding, compact: false)
-                } else {
-                    SecurityDisplayName(name: item.name, scale: .body, weight: .semibold, singleLine: false)
-                }
-            }
-            if let volume {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(L10n.text("现价") + " " + priceText(volume.current, currency: volume.currency))
-                            .appNumber(.callout, weight: .semibold)
-                        Text(L10n.text("成本价") + " " + priceText(volume.cost, currency: volume.currency))
-                            .appNumber(.footnote, weight: .medium).foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
-                    HoldingVolumeProfileBar(prices: volume)
-                }
-            } else if let week52 {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(L10n.text("现价") + " " + priceText(week52.current, currency: week52.currency))
-                            .appNumber(.callout, weight: .semibold)
-                        Text(L10n.text("成本价") + " " + priceText(week52.cost, currency: week52.currency))
-                            .appNumber(.footnote, weight: .medium).foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
-                    Holding52WeekBar(positions: week52.positions)
-                }
-            } else if case let .holding(holding, _) = item {
-                HoldingMetrics(holding: holding, performance: item.performance, period: performancePeriod,
-                               alignment: .leading, compact: false)
-            } else {
-                amount
-                subtitle
-                HoldingPerformanceLabel(performance: item.performance)
-            }
-        }
-    }
-
-    private var logo: some View {
-        AssetLogo(ticker: item.ticker, logoSymbol: item.logoSymbol, size: 44, cornerRadius: 12)
-            .securityDetailLogoSource(item.ticker, in: zoomOrigin)
-    }
-
-    @ViewBuilder
-    private var amount: some View {
-        let text = Text(item.displayedMarketValue)
-            .appNumber(.callout, weight: .semibold)
-            .foregroundStyle(CatfolioTheme.primaryText)
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
-        if case .holding = item { text.numericTransition(item.marketValue) }
-        else { text }
-    }
-
-    private var subtitle: some View {
-        Group {
-            switch item {
-            case let .holding(holding, _):
-                HStack(spacing: 2) {
-                    Text(DisplayFormat.listShares(holding.shares, locale: appLocale))
-                        .appNumber(.footnote, weight: .medium, monospaced: false)
-                    Text(holding.ticker).appText(.footnote, weight: .medium)
-                    SecurityClassBadges(markers: holding.classMarkers)
-                }
-            case let .exposure(row, _, total, _):
-                let ticker = row.ticker == "ETF 其他" ? L10n.text("ETF 其他") : row.ticker
-                let weight = total.isFinite && total > 0 && row.totalUSD.isFinite
-                    ? DisplayFormat.percent(row.totalUSD / total * 100, signed: false) : "—"
-                Text("\(ticker) · \(weight)")
-                    .appText(.footnote, weight: .medium)
-                    .accessibilityLabel(L10n.text("\(ticker)，") + L10n.text("\(weight) · 组合占比"))
-            }
-        }
-        .foregroundStyle(Color(red: 142 / 255, green: 142 / 255, blue: 147 / 255))
-        .lineLimit(1)
-        .truncationMode(.tail)
-    }
-
-    private var profitDescription: String {
-        guard let performance = item.performance else { return L10n.text("暂无数据") }
-        return "\(DisplayFormat.money(performance.amount, signed: true, fractionDigits: 2)) · \(DisplayFormat.percent(performance.percent))"
-    }
-
-    private func price(_ value: Double?, currency: String?, isCost: Bool) -> some View {
-        Text(priceText(value, currency: currency))
-            .appNumber(isCost ? .footnote : .callout, weight: isCost ? .medium : .semibold)
-            .foregroundStyle(isCost ? Color(red: 142 / 255, green: 142 / 255, blue: 147 / 255) : CatfolioTheme.primaryText)
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
-    }
-
-    private func priceText(_ value: Double?, currency: String?) -> String {
-        guard let value, let currency else { return "—" }
-        return DisplayFormat.money(value, currency: currency)
-    }
-
-    private func volumeDescription(_ prices: HoldingVolumePrices) -> String {
-        var parts = [L10n.text("现价") + " " + priceText(prices.current, currency: prices.currency),
-                     L10n.text("成本价") + " " + priceText(prices.cost, currency: prices.currency)]
-        if let range = prices.range {
-            parts.append(L10n.text("成交密集区") + " " + priceText(range.valueAreaLow, currency: range.currency)
-                + " – " + priceText(range.valueAreaHigh, currency: range.currency))
-            parts.append(L10n.text("成交最密集") + " " + priceText(range.pointOfControl, currency: range.currency))
-        } else {
-            parts.append(L10n.text("成交量分布暂无数据"))
-        }
-        return parts.joined(separator: "，")
-    }
-
-    private func week52Description(_ prices: Holding52WeekPrices) -> String {
-        var parts = [L10n.text("现价") + " " + priceText(prices.current, currency: prices.currency),
-                     L10n.text("成本价") + " " + priceText(prices.cost, currency: prices.currency)]
-        if let range = prices.range {
-            parts.append(L10n.text("52 周范围") + " " + priceText(range.low, currency: range.currency)
-                + " – " + priceText(range.high, currency: range.currency))
-            if let start = range.startPrice {
-                parts.append(L10n.text("期初价") + " " + priceText(start, currency: range.currency))
-            }
-        } else {
-            parts.append(L10n.text("52 周范围暂无数据"))
-        }
-        return parts.joined(separator: "，")
-    }
-}
-
-/// A row's profit: the amount, then its percentage on a tinted tag — green
-/// for a gain, red for a loss. The holdings list's, shared by the
-/// look-through list so the two read the same.
-struct HoldingPerformanceLabel: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let performance: HoldingPerformanceValues?
-
-    var body: some View {
-        if let performance {
-            HStack(spacing: 4) {
-                Text(DisplayFormat.money(performance.amount, signed: true, fractionDigits: 2))
-                    .appNumber(.footnote, weight: .medium)
-                    .foregroundStyle(rowAccent)
-                    .numericTransition(performance.amount)
-                Text(DisplayFormat.percent(performance.percent, signed: false))
-                    .appNumber(.caption, weight: .semibold, monospaced: false)
-                    .foregroundStyle(rowAccent)
-                    .numericTransition(performance.percent)
-                    .padding(.horizontal, 5)
-                    .frame(minHeight: 17)
-                    .background(badgeColor, in: RoundedRectangle(cornerRadius: 4))
-            }
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
-            .layoutPriority(2)
-        } else {
-            Text(L10n.text("暂无数据"))
-                .font(PortfolioHomeTypography.medium(12, relativeTo: .caption))
-                .foregroundStyle(rowAccent)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .layoutPriority(2)
-        }
-    }
-
-    private var rowAccent: Color {
-        if (performance?.amount ?? 0) >= 0 {
-            return colorScheme == .light
-                ? Color(red: 1 / 255, green: 184 / 255, blue: 1 / 255)
-                : CatfolioTheme.gain(for: colorScheme)
-        }
-        return CatfolioTheme.loss(for: colorScheme)
-    }
-
-    private var badgeColor: Color {
-        if (performance?.amount ?? 0) >= 0 {
-            return colorScheme == .light
-                ? Color(red: 220 / 255, green: 247 / 255, blue: 220 / 255)
-                : rowAccent.opacity(0.18)
-        }
-        return CatfolioTheme.loss(for: colorScheme).opacity(0.18)
-    }
-}
-
-struct SecurityDisplayName: View {
-    let name: String
-    let scale: TypeScale
-    let weight: Font.Weight
-    var singleLine = true
-    var showsClassMarkers = true
-
-    private var parts: SecurityNameParts { SecurityNameParts(name) }
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 1) {
-            Text(parts.primary)
-                .appText(scale, weight: weight)
-                .foregroundStyle(CatfolioTheme.primaryText)
-                .lineLimit(singleLine ? 1 : nil)
-                .truncationMode(.tail)
-
-            if showsClassMarkers {
-                SecurityClassBadges(markers: parts.classMarkers)
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(name)
-    }
-}
-
-struct SecurityClassBadges: View {
-    let markers: [String]
-
-    var body: some View {
-        ForEach(markers.indices, id: \.self) { index in
-            SecurityClassBadge(marker: markers[index])
-        }
-    }
-}
-
-struct SecurityClassBadge: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let marker: String
-    @ScaledMetric(relativeTo: .caption) private var badgeHeight: CGFloat = 18
-
-    private let gray = Color(red: 142 / 255, green: 142 / 255, blue: 147 / 255)
-
-    var body: some View {
-        Text(marker)
-            .appText(.caption, weight: .medium)
-            .foregroundStyle(gray)
-            .padding(.horizontal, 3)
-            .frame(height: badgeHeight)
-            .background(gray.opacity(colorScheme == .dark ? 0.24 : 0.1),
-                        in: RoundedRectangle(cornerRadius: 3))
-            .fixedSize(horizontal: true, vertical: false)
-            .accessibilityHidden(true)
-    }
-}
-
-struct HoldingIdentity: View {
-    @Environment(\.locale) private var appLocale
-    let holding: Holding
-    let compact: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            SecurityDisplayName(name: holding.shortName, scale: .body, weight: .medium,
-                                singleLine: compact, showsClassMarkers: false)
-
-            HStack(spacing: 2) {
-                Text(DisplayFormat.listShares(holding.shares, locale: appLocale))
-                    .appNumber(.caption, monospaced: false)
-                Text(holding.ticker)
-                    .appText(.caption, weight: .medium)
-                SecurityClassBadges(markers: holding.classMarkers)
-            }
-                .foregroundStyle(.secondary)
-                .lineLimit(compact ? 1 : nil)
-        }
-    }
-}
-
-struct HoldingMetrics: View {
-    @Environment(\.locale) private var appLocale
-    let holding: Holding
-    let performance: HoldingPerformanceValues?
-    let period: HoldingPerformancePeriod
-    let alignment: HorizontalAlignment
-    let compact: Bool
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        VStack(alignment: alignment, spacing: 5) {
-            Text(holding.displayedMarketValue)
-                .appNumber(.body)
-                .foregroundStyle(CatfolioTheme.primaryText)
-                .lineLimit(compact ? 1 : nil)
-            // The separator is punctuation, not data. Carrying the gain or
-            // loss colour it reads as part of the figure, and a row of red
-            // dots between red numbers is noise the eye has to filter.
-            Group {
-                if let performance {
-                    Text(DisplayFormat.money(performance.amount, signed: true, fractionDigits: 2))
-                        .foregroundStyle(performanceColor)
-                    + Text(" · ").foregroundStyle(.secondary)
-                    + Text(DisplayFormat.percent(performance.percent))
-                        .foregroundStyle(performanceColor)
-                } else {
-                    Text(performanceText).foregroundStyle(.secondary)
-                }
-            }
-            .appNumber(.caption, weight: .medium)
-            .lineLimit(compact ? 1 : nil)
-        }
-    }
-
-    private var performanceColor: Color {
-        (performance?.amount ?? 0) >= 0
-            ? (colorScheme == .light
-                ? CatfolioTheme.gain(for: .light)
-                : CatfolioTheme.gain(for: .dark))
-            : CatfolioPalette.rose500
-    }
-
-    private var performanceText: String {
-        guard let performance else { return L10n.text("\(period.title)暂无数据") }
-        return "\(DisplayFormat.money(performance.amount, signed: true, fractionDigits: 2)) "
-            + "· \(DisplayFormat.percent(performance.percent))"
-    }
-}
-
-/// Whether a listing's exchange is in its regular session now, from the
-/// ticker's market suffix. Weekends count as closed; exchange holidays are
-/// not known here and read as open.
-enum MarketHours {
-    private struct Session {
-        let timeZone: String
-        let open: Int   // minutes after midnight, local
-        let close: Int
-    }
-
-    private static func session(for ticker: String) -> Session {
-        let symbol = ticker.uppercased()
-        func local(_ zone: String, _ open: (Int, Int), _ close: (Int, Int)) -> Session {
-            Session(timeZone: zone, open: open.0 * 60 + open.1, close: close.0 * 60 + close.1)
-        }
-        if symbol.hasSuffix(".L") { return local("Europe/London", (8, 0), (16, 30)) }
-        if symbol.hasSuffix(".DE") || symbol.hasSuffix(".F") { return local("Europe/Berlin", (9, 0), (17, 30)) }
-        if symbol.hasSuffix(".PA") || symbol.hasSuffix(".AS") || symbol.hasSuffix(".BR") || symbol.hasSuffix(".LS") {
-            return local("Europe/Paris", (9, 0), (17, 30))
-        }
-        if symbol.hasSuffix(".MI") { return local("Europe/Rome", (9, 0), (17, 30)) }
-        if symbol.hasSuffix(".MC") { return local("Europe/Madrid", (9, 0), (17, 30)) }
-        if symbol.hasSuffix(".SW") { return local("Europe/Zurich", (9, 0), (17, 30)) }
-        if symbol.hasSuffix(".CO") { return local("Europe/Copenhagen", (9, 0), (17, 0)) }
-        if symbol.hasSuffix(".ST") { return local("Europe/Stockholm", (9, 0), (17, 30)) }
-        if symbol.hasSuffix(".HK") { return local("Asia/Hong_Kong", (9, 30), (16, 0)) }
-        if symbol.hasSuffix(".T") { return local("Asia/Tokyo", (9, 0), (15, 30)) }
-        if symbol.hasSuffix(".TO") { return local("America/Toronto", (9, 30), (16, 0)) }
-        return local("America/New_York", (9, 30), (16, 0))
-    }
-
-    static func isOpen(ticker: String, at date: Date = Date()) -> Bool {
-        let session = session(for: ticker)
-        guard let zone = TimeZone(identifier: session.timeZone) else { return true }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = zone
-        let parts = calendar.dateComponents([.weekday, .hour, .minute], from: date)
-        guard let weekday = parts.weekday, (2...6).contains(weekday) else { return false }
-        let minute = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
-        return minute >= session.open && minute < session.close
-    }
-}
-
-/// Outside the listing's trading session: a moon, in the class badge's shape,
-/// purple on a pale purple ground. Checks again every minute.
-struct MarketClosedBadge: View {
-    let ticker: String
-    @Environment(\.colorScheme) private var colorScheme
-    @ScaledMetric(relativeTo: .caption) private var badgeHeight: CGFloat = 18
-    private let purple = Color(red: 0.545, green: 0.361, blue: 0.965)
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 60)) { context in
-            if !MarketHours.isOpen(ticker: ticker, at: context.date) {
-                HStack(spacing: 2) {
-                    Image(systemName: "moon.fill").font(.system(size: 9, weight: .semibold))
-                    Text(L10n.text("休市")).appText(.caption, weight: .medium)
-                }
-                .foregroundStyle(purple)
-                .padding(.horizontal, 4)
-                .frame(height: badgeHeight)
-                .background(purple.opacity(colorScheme == .dark ? 0.24 : 0.12), in: RoundedRectangle(cornerRadius: 3))
-                .fixedSize()
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(L10n.text("非交易时段"))
-            }
-        }
     }
 }

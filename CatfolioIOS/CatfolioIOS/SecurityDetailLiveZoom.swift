@@ -129,13 +129,11 @@ final class SecurityDetailLiveZoom {
             return false
         }
 
-        // The page has its own close; the stack's bar and back button stay
-        // hidden, which the hosted view has to say too or SwiftUI shows them.
+        // Hide the bar, but leave its back action available to UIKit's
+        // full-content interactive pop gesture.
         let controller = PageController(rootView: AnyView(
             content { [weak self] in self?.close() }
-                .toolbar(.hidden, for: .navigationBar)
-                .navigationBarBackButtonHidden(true)))
-        controller.navigationItem.hidesBackButton = true
+                .toolbar(.hidden, for: .navigationBar)))
         controller.view.backgroundColor = SecurityDetailPresentation.uiGround
         controller.modalPresentationStyle = .fullScreen
         controller.hidesBottomBarWhenPushed = true
@@ -151,6 +149,11 @@ final class SecurityDetailLiveZoom {
 
         let options = UIViewController.Transition.ZoomOptions()
         options.dimmingColor = SecurityDetailPresentation.backdropColor
+        options.interactiveDismissShouldBegin = { [weak controller] context in
+            guard let view = controller?.viewIfLoaded else { return context.willBegin }
+            return SecurityDetailDismissal.shouldBegin(in: view, velocity: context.velocity,
+                                                       systemAllows: context.willBegin)
+        }
         if origin !== source.row {
             // The logo lines up on a square the page's width at its very top,
             // as an album's artwork does: grown that large it overlies the

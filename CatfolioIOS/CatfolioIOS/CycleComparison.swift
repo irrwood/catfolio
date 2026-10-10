@@ -605,7 +605,7 @@ struct CycleComparisonView: View {
                 Spacer(minLength: 8)
                 if let value {
                     HStack(spacing: 0) {
-                        Text("\(value >= 0 ? "+" : "")\(value.formatted(.number.precision(.fractionLength(1))))")
+                        FinancialText("\(value >= 0 ? "+" : "")\(value.formatted(.number.precision(.fractionLength(1))))", isDirectional: true)
                         Text("%").foregroundStyle(.primary.opacity(0.3))
                     }
                     .font(.system(size: 15, weight: .semibold, design: .rounded))

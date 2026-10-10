@@ -17,12 +17,16 @@ final class AccountGuideLayoutTests: XCTestCase {
                     try await capture(SettingsPage {
                         Trading212GuideProgress(step: step)
                         Trading212GuideLesson(step: step, next: {}, skip: {})
-                    }, name: "trading212-\(step)-\(language)-\(dark)", dark: dark, directory: directory)
+                    }.accountFlowActions {
+                        Trading212GuideLesson(step: step, next: {}, skip: {}).actions
+                    }.accountFlowBrand(.trading212), name: "trading212-\(step)-\(language)-\(dark)", dark: dark, directory: directory)
                 }
                 for step in 0..<3 {
                     try await capture(SettingsPage {
                         IBKRAccountGuide(step: step, next: {}, skip: {})
-                    }, name: "ibkr-\(step)-\(language)-\(dark)", dark: dark, directory: directory)
+                    }.accountFlowActions {
+                        IBKRAccountGuide(step: step, next: {}, skip: {}).actions
+                    }.accountFlowBrand(.ibkr), name: "ibkr-\(step)-\(language)-\(dark)", dark: dark, directory: directory)
                 }
             }
         }
@@ -39,8 +43,9 @@ final class AccountGuideLayoutTests: XCTestCase {
                     SettingsFieldRow("Flex Token", text: .constant(""), isSecure: true, isMonospaced: true)
                     SettingsFieldRow("Query ID", text: .constant(""), isMonospaced: true)
                 }
+            }.accountFlowActions {
                 GlassPrimaryButton(title: L10n.text("保存并创建账户"), isDisabled: true, action: {})
-            }, name: "ibkr-connection-\(dark)", dark: dark, directory: directory)
+            }.accountFlowBrand(.ibkr), name: "ibkr-connection-\(dark)", dark: dark, directory: directory)
         }
     }
 

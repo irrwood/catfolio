@@ -5,6 +5,7 @@ struct ReturnsComparisonEntryArtwork: View {
     @Environment(\.colorScheme) private var colorScheme
     let title: String
     let isCycle: Bool
+    var returnPercent: Double? = nil
     private var isDay: Bool { colorScheme == .light }
     private var dayInk: Color { isCycle ? Color(red: 0.53, green: 0.10, blue: 0.25) : Color(red: 0.39, green: 0.27, blue: 0.04) }
     private var dayAccent: Color { isCycle ? Color(red: 0.76, green: 0.23, blue: 0.39) : Color(red: 0.58, green: 0.40, blue: 0.06) }
@@ -22,16 +23,24 @@ struct ReturnsComparisonEntryArtwork: View {
             .frame(height: 24)
             Spacer(minLength: 12)
             VStack(alignment: .leading, spacing: 4) {
-                Text(isCycle ? "CYCLE" : "RETURN")
+                Text(title)
                     .font(Typography.text(size: 14, weight: .bold))
                     .tracking(0.56)
+                    .textCase(.uppercase)
                     .foregroundStyle(isDay ? dayAccent : .white.opacity(0.4))
                     .blendMode(isDay ? .normal : .plusLighter)
-                Text(title)
-                    .font(Typography.text(size: 20, weight: .semibold))
-                    .foregroundStyle(isDay ? dayInk : (isCycle ? Color.white : Color.black))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    FinancialText(returnPercent.map { DisplayFormat.percent($0, signed: true) } ?? "—", signFollowsValue: true)
+                        .font(Typography.number(size: 20, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    Text("ANN.")
+                        .appText(.nano, weight: .medium)
+                        .fixedSize()
+                }
+                .foregroundStyle(isDay ? dayInk : (isCycle ? Color.white : Color.black))
             }
         }
         .padding([.horizontal, .top], 16)
@@ -46,8 +55,11 @@ struct ReturnsComparisonEntryArtwork: View {
             }
         }
         .clipShape(shape)
-        .modifier(EntryGlass())
         .contentShape(shape)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(L10n.text(isCycle ? "当年年化收益率" : "全部投资期间年化收益率") + ": " +
+            (returnPercent.map { DisplayFormat.percent($0, signed: true) } ?? "—"))
     }
 
     private var illustration: some View {
@@ -126,14 +138,24 @@ struct ReturnsComparisonEntryArtwork: View {
         }
     }
 
-    private struct EntryGlass: ViewModifier {
-        @Environment(\.colorScheme) private var colorScheme
-        func body(content: Content) -> some View {
-            if #available(iOS 26.0, *) {
-                content.glassEffect(colorScheme == .light ? .regular.interactive() : .clear.interactive(), in: RoundedRectangle(cornerRadius: 24))
-            } else {
-                content.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
-            }
-        }
+}
+
+/// Annualized money-weighted investment returns for the two entry scopes.
+enum ReturnsEntrySummary {
+    static func allTimePercent(_ comparison: ComparisonResponse?) -> Double? {
+        comparison?.mwrLedger?.annualizedReturn().map { $0 * 100 }
+    }
+
+    static func yearToDatePercent(_ comparison: ComparisonResponse?, now: Date = Date()) -> Double? {
+        guard let ledger = comparison?.mwrLedger,
+              let latestKey = ledger.dates.last,
+              let latest = DayDateCodec.date(from: latestKey) else { return nil }
+        let calendar = ChartTimeRange.financeCalendar
+        guard calendar.isDate(latest, equalTo: now, toGranularity: .year),
+              let yearStart = calendar.date(from: calendar.dateComponents([.year], from: now)),
+              let start = ledger.dates.firstIndex(where: {
+                  DayDateCodec.date(from: $0).map { $0 >= yearStart } ?? false
+              }), let result = ledger.annualizedReturn(startIndex: start) else { return nil }
+        return result * 100
     }
 }

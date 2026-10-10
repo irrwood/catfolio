@@ -302,6 +302,7 @@ extension AppModel {
         let snapshot = holdings
         guard !snapshot.isEmpty else {
             holdingDailyChanges = [:]
+            holdingRecentCloses = [:]
             benchmarkDailyChange = nil
             holdingDailyChangesSignature = ""
             isHoldingDailyChangesLoading = false
@@ -337,18 +338,23 @@ extension AppModel {
         }
         let client = LocalMarketDataClient()
         let fetchSnapshot = holdingsNeedingFetch
-        async let fetchedChanges = client.dailyChanges(for: fetchSnapshot, positions: document.positions, forceRefresh: forceRefresh)
+        async let fetchedCloses = client.recentCloses(for: fetchSnapshot, positions: document.positions, forceRefresh: forceRefresh)
         // Holdings can combine a fresh quote with saved daily closes. SPY has
         // no portfolio quote overlay, so fetch its current daily point even
         // when the wider history refresh is allowed to use its cache.
         async let fetchedBenchmark = client.dailyChange(ticker: "SPY", forceRefresh: true)
-        let (fetched, benchmark) = await (fetchedChanges, fetchedBenchmark)
+        // The day's figures fold in what the exchange rate did; read the
+        // rates again with the prices.
+        async let rates: Void = loadCurrencyHistories(forceRefresh: forceRefresh)
+        let (closes, benchmark, _) = await (fetchedCloses, fetchedBenchmark, rates)
+        let fetched = closes.compactMapValues { LocalMarketDataClient.latestDailyChange(in: $0) }
         guard !Task.isCancelled,
               generation == dailyChangesRequestGeneration,
               portfolioGeneration == portfolioRequestGeneration,
               signature == Self.dailyChangesSignature(for: holdings) else { return }
 
         changes.merge(fetched) { _, latest in latest }
+        holdingRecentCloses.merge(closes) { _, latest in latest }
         holdingDailyChanges = changes
         applyDetailDailyChanges()
         if let benchmark, benchmark.isFinite {

@@ -367,7 +367,15 @@ final class HistoryPagingController: UIViewController, UIScrollViewDelegate {
     }
 
     private func connectList(at index: Int) {
-        guard lists[index] == nil, let list = verticalScrollView(in: hosts[index].view) else { return }
+        guard let list = verticalScrollView(in: hosts[index].view) else { return }
+        if lists[index] === list {
+            if #available(iOS 26.0, *) { list.topEdgeEffect.style = .hard }
+            return
+        }
+        // A scope change can replace the hosting view's List. Never keep
+        // styling or observing the previous list after that replacement.
+        observations[index] = nil
+        lists[index]?.scrollsToTop = false
         lists[index] = list
         // These lists are SwiftUI's, but they live in hosting controllers
         // under a UIKit pager, so the style is set on the scroll view itself
@@ -450,6 +458,8 @@ final class HistoryPagingScrollView: UIScrollView {
 /// slides with the page.
 final class HistoryCategoryBar: UIView {
     let scrollView = UIScrollView()
+    private let backdrop = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
+    private let separator = UIView()
     let pill: UIVisualEffectView = {
         if #available(iOS 26.0, *) {
             let glass = UIGlassEffect()
@@ -459,15 +469,14 @@ final class HistoryCategoryBar: UIView {
         return UIVisualEffectView(effect: nil)
     }()
     /// Space between two tabs' capsules, and inside one around its title.
-    private static let tabSpacing: CGFloat = 4
-    private static let tabPadding: CGFloat = 18
+    private static let tabSpacing: CGFloat = 0
+    private static let tabPadding = SettingsTemplate.segmentHorizontalPadding
     private(set) var buttons: [UIButton] = []
     var onSelect: ((Int) -> Void)?
     private var progress: CGFloat = 0
     static var preferredHeight: CGFloat {
-        SettingsTemplate.segmentBarHeight(
-            forLineHeight: UIFont.preferredFont(forTextStyle: .body).lineHeight
-        )
+        SettingsTemplate.segmentBarVerticalPadding * 2
+            + UIFontMetrics(forTextStyle: .body).scaledValue(for: SettingsTemplate.segmentHeight)
     }
 
     let categories: [HistoryCategory]
@@ -475,10 +484,20 @@ final class HistoryCategoryBar: UIView {
     init(categories: [HistoryCategory] = HistoryCategory.allCases) {
         self.categories = categories
         super.init(frame: .zero)
+        // Keep the blur at full strength; translucency belongs to its tint,
+        // so both the resting strip and scrolling content use the same surface.
+        backgroundColor = .clear
+        backdrop.contentView.backgroundColor = SettingsTemplate.uiSegmentBarTint
+        backdrop.isUserInteractionEnabled = false
+        backdrop.accessibilityIdentifier = "history-category-backdrop"
+        addSubview(backdrop)
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.scrollsToTop = false
         scrollView.contentInsetAdjustmentBehavior = .never
         addSubview(scrollView)
+        separator.backgroundColor = SettingsTemplate.uiSeparator
+        separator.isUserInteractionEnabled = false
+        addSubview(separator)
         if #available(iOS 26.0, *) {
             pill.cornerConfiguration = .capsule()
         } else {
@@ -502,11 +521,8 @@ final class HistoryCategoryBar: UIView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func updateTitles() {
-        let base = UIFont.preferredFont(forTextStyle: .body)
-        let descriptor = base.fontDescriptor.withDesign(.rounded) ?? base.fontDescriptor
-        let font = UIFont(descriptor: descriptor.addingAttributes([
-            .traits: [UIFontDescriptor.TraitKey.weight: UIFont.Weight.medium]
-        ]), size: 0)
+        let font = UIFontMetrics(forTextStyle: .body).scaledFont(for:
+            CurrencySymbolAlternates.font(size: TypeScale.body.size, weight: .medium, rounded: true))
         for (index, button) in buttons.enumerated() {
             button.setTitle(L10n.label(categories[index].rawValue), for: .normal)
             button.titleLabel?.font = font
@@ -519,7 +535,10 @@ final class HistoryCategoryBar: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        backdrop.frame = bounds
         scrollView.frame = bounds
+        separator.frame = CGRect(x: 0, y: bounds.height - SettingsTemplate.separatorHeight,
+                                 width: bounds.width, height: SettingsTemplate.separatorHeight)
         let inset = SettingsTemplate.pageInset
         let barPadding = SettingsTemplate.segmentBarVerticalPadding
         // Each tab hugs its title, as Revolut's do; equal slots left short

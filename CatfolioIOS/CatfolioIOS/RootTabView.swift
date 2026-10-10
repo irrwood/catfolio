@@ -83,28 +83,34 @@ struct RootTabView: View {
     private var rootTabs: some View {
         TabView(selection: $selection) {
             Tab(value: .portfolio) {
-                NavigationStack { PortfolioView() }
+                NavigationStack { PortfolioView().ownsTabBar() }
+                    .id(presentationPreferencesID)
             } label: {
                 tabIcon(for: .portfolio, selected: "TabPortfolioSelected",
                         unselected: "TabPortfolioUnselected", label: L10n.text("持仓"))
             }
 
             Tab(value: .returns) {
-                NavigationStack { ReturnsView() }
+                NavigationStack { ReturnsView().ownsTabBar() }
+                    .id(presentationPreferencesID)
             } label: {
                 tabIcon(for: .returns, selected: "TabPerformanceSelected",
                         unselected: "TabPerformanceUnselected", label: L10n.text("收益"))
             }
 
             Tab(value: .research) {
-                NavigationStack { ResearchView() }
+                NavigationStack { ResearchView().ownsTabBar() }
+                    .id(presentationPreferencesID)
             } label: {
                 tabIcon(for: .research, selected: "TabResearchSelected",
                         unselected: "TabResearchUnselected", label: L10n.text("研究"))
             }
 
             Tab(value: .settings) {
-                NavigationStack { SettingsView() }
+                // Keep the settings navigation stack while its preferences change.
+                NavigationStack {
+                    SettingsView(presentationPreferencesID: presentationPreferencesID).ownsTabBar()
+                }
             } label: {
                 tabIcon(for: .settings, selected: "TabSettingsSelected",
                         unselected: "TabSettingsUnselected", label: L10n.text("账户"))
@@ -114,16 +120,16 @@ struct RootTabView: View {
             // of the bar, where the assistant's button used to float.
             Tab(value: .assistant, role: .search) {
                 NavigationStack {
-                    AIAssistantPage()
+                    AIAssistantPage().ownsTabBar()
                         .toolbarVisibility(.hidden, for: .navigationBar)
                 }
+                .id(presentationPreferencesID)
             } label: {
                 tabIcon(for: .assistant, selected: "TabAI", unselected: "TabAI", label: L10n.text("AI 助手"))
             }
         }
-        .id(presentationPreferencesID)
         .tint(.primary)
-        .modifier(KeepsTabBarExpanded())
+        .modifier(KeepsTabBarFullWidth())
     }
 
     /// An icon and no title: the label's text stays for VoiceOver only.
@@ -139,9 +145,10 @@ struct RootTabView: View {
     }
 }
 
-/// The tab bar stays full width while the pages scroll: collapsed to a
-/// single ball it hid the other tabs behind a tap.
-private struct KeepsTabBarExpanded: ViewModifier {
+/// The system's own minimising folds the bar sideways into a single ball;
+/// here it stays full width and slides down out of the way instead. See
+/// `RootTabBar.setTucked`.
+private struct KeepsTabBarFullWidth: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
             content.tabBarMinimizeBehavior(.never)
@@ -149,10 +156,6 @@ private struct KeepsTabBarExpanded: ViewModifier {
             content
         }
     }
-}
-
-extension EnvironmentValues {
-    @Entry var rootTabBarCompact: Binding<Bool> = .constant(false)
 }
 
 // One detector per root scroll view. Accumulate small scroll deltas so slow
@@ -179,9 +182,8 @@ struct RootTabBarScrollDirection {
 }
 
 private struct RootTabBarScrollTracking: ViewModifier {
-    @Environment(\.rootTabBarCompact) private var compact
     // Gesture bookkeeping has no visual output. Keep it outside SwiftUI's
-    // observation graph; only an actual compact/expanded change redraws UI.
+    // observation graph; the bar itself is moved in UIKit.
     @State private var tracking = Tracking()
     var onOffsetChange: (CGFloat) -> Void
     var onPhaseChange: (ScrollPhase, ScrollPhase, ScrollPhaseChangeContext) -> Void
@@ -201,9 +203,8 @@ private struct RootTabBarScrollTracking: ViewModifier {
             } action: { oldOffset, newOffset in
                 onOffsetChange(newOffset)
                 guard tracking.isInteracting,
-                      let value = tracking.direction.update(from: oldOffset, to: newOffset),
-                      compact.wrappedValue != value else { return }
-                compact.wrappedValue = value
+                      let tucked = tracking.direction.update(from: oldOffset, to: newOffset) else { return }
+                RootTabBar.setTucked(tucked)
             }
             .onScrollPhaseChange { oldPhase, phase, context in
                 // Inertia and rubber-band recovery must not undo the state
@@ -224,19 +225,207 @@ extension View {
     }
 }
 
-/// UIKit's `hidesBottomBarWhenPushed` for a SwiftUI page, done by hand: the
-/// tab bar leaves with the page beneath as this one pushes in, and comes back
-/// with it on the way out, following an interactive swipe and restored if the
-/// swipe is let go.
+/// The tab bar is part of a tab's root page, not a layer over every page.
 ///
-/// SwiftUI's own `toolbarVisibility(.hidden, for: .tabBar)` is not used. It
-/// flips the bar the moment the page appears or goes, with no animation —
-/// the bar blinked out on a push and blinked back on the way home. UIKit's
-/// flag alone does nothing either: SwiftUI's tab container ignores it. So the
-/// flag only marks the page, and the bar is moved in the push's own
-/// transition: hidden at its start, so each page lays out once for where it
-/// will end, with a picture of the bar riding on the page it belongs to.
-private struct TabBarHidingAnchor: UIViewControllerRepresentable {
+/// A page pushed over the root covers the bar as it covers the rest of the
+/// root: at the push the bar is pictured onto the root page and the real one
+/// put away, so the picture slides off with the root; on the way back it
+/// returns with the root and the real bar takes its place as the pop lands.
+/// An interactive swipe that is called off puts everything back. Pushed pages
+/// need nothing of their own — every page above the root is without the bar.
+///
+/// Scrolling a root page down slides the bar straight down out of the way,
+/// and scrolling back up (or reaching the top) brings it back — never the
+/// system's sideways fold into a single ball.
+///
+/// UIKit's `hidesBottomBarWhenPushed` would do the push part, but it has to
+/// be set before the push, and SwiftUI's navigation stack makes its pages
+/// itself; SwiftUI's own `toolbarVisibility(.hidden, for: .tabBar)` only pops
+/// the bar in and out.
+@MainActor
+enum RootTabBar {
+    private static weak var tabs: UITabBarController?
+    /// The bar as pictured onto a root page at the last push over it, until
+    /// that root page is back.
+    private static var picture: (image: UIView, root: Weak)?
+    private static weak var visibleRoot: UIViewController?
+    private(set) static var isTucked = false
+
+    final class Weak {
+        weak var controller: UIViewController?
+        init(_ controller: UIViewController) { self.controller = controller }
+    }
+
+    // MARK: Scrolling
+
+    /// Slides the bar down out of the screen, or back up.
+    static func setTucked(_ tucked: Bool, animated: Bool = true) {
+        guard tucked != isTucked else { return }
+        isTucked = tucked
+        guard let tabs else { return }
+        let bar = tabs.tabBar
+        let change = { bar.transform = tucked ? tuckedTransform(for: bar, in: tabs) : .identity }
+        if animated, !UIAccessibility.isReduceMotionEnabled, !tabs.isTabBarHidden, bar.window != nil {
+            UIView.animate(withDuration: 0.32, delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0,
+                           options: [.beginFromCurrentState, .allowUserInteraction], animations: change)
+        } else {
+            change()
+        }
+    }
+
+    private static func tuckedTransform(for bar: UITabBar, in tabs: UITabBarController) -> CGAffineTransform {
+        // From where the bar sits to just past the bottom of the screen.
+        let top = bar.convert(CGPoint(x: 0, y: bar.bounds.minY), to: tabs.view).y
+        return CGAffineTransform(translationX: 0, y: max(0, tabs.view.bounds.maxY - top) + 8)
+    }
+
+    // MARK: Pushes and pops over a root page
+
+    /// A page is about to be pushed over `root`.
+    fileprivate static func rootWillBeCovered(_ root: UIViewController) {
+        guard let stack = root.navigationController, let tabs = stack.tabBarController,
+              !tabs.isTabBarHidden else { return }
+        self.tabs = tabs
+        let bar = tabs.tabBar
+        // Putting the bar away changes every page's bottom safe area, and the
+        // root re-laid out while still sliding away: its content near the bar
+        // tore. It is frozen as a picture of itself first, so that happens
+        // unseen underneath.
+        let frozen = freeze(root.view)
+        // A tucked bar is already out of sight: nothing to carry.
+        let image = isTucked ? nil : stand(in: bar, tabs: tabs)
+        if let image {
+            let barTop = bar.convert(CGPoint.zero, to: root.view).y
+            image.frame = CGRect(x: 0, y: barTop - scrollEdgeOverhang,
+                                 width: root.view.bounds.width, height: image.bounds.height)
+            image.isUserInteractionEnabled = false
+            image.accessibilityElementsHidden = true
+            root.view.addSubview(image)
+            picture = (image, Weak(root))
+        }
+        tabs.setTabBarHidden(true, animated: false)
+        // The arriving page laid out for where it ends before the first frame.
+        tabs.view.layoutIfNeeded()
+        guard let coordinator = root.transitionCoordinator ?? stack.transitionCoordinator else {
+            frozen?.removeFromSuperview()
+            return
+        }
+        let finish: (Bool) -> Void = { cancelled in
+            if cancelled {
+                // The push was called off: the root keeps its bar, laid out
+                // for it again before its picture comes off.
+                tabs.setTabBarHidden(false, animated: false)
+                tabs.view.layoutIfNeeded()
+                dropPicture()
+            }
+            frozen?.removeFromSuperview()
+        }
+        // A transition already under way does not take the completion, and
+        // the frozen picture would stay over the page for good.
+        if !coordinator.animate(alongsideTransition: nil, completion: { finish($0.isCancelled) }) {
+            finish(false)
+        }
+    }
+
+    /// `root` is coming back into view: its picture of the bar comes with
+    /// it, and the real bar takes over as it lands.
+    fileprivate static func rootWillAppear(_ root: UIViewController) {
+        guard let tabs = root.tabBarController else { return }
+        self.tabs = tabs
+        guard tabs.isTabBarHidden,
+              let coordinator = root.transitionCoordinator ?? root.navigationController?.transitionCoordinator
+        else { return }
+        if let saved = picture, saved.root.controller === root, saved.image.superview !== root.view {
+            root.view.addSubview(saved.image)
+        }
+        // The bar is back from the first frame, out of sight behind its
+        // picture, so the root slides in laid out as it will land rather
+        // than re-laying out as it arrives. The page leaving is frozen first:
+        // the bar coming back changes its safe area too.
+        let frozen = freeze(coordinator.viewController(forKey: .from)?.view)
+        let bar = tabs.tabBar
+        bar.alpha = 0
+        tabs.setTabBarHidden(false, animated: false)
+        tabs.view.layoutIfNeeded()
+        let finish: (Bool) -> Void = { cancelled in
+            bar.alpha = 1
+            if cancelled {
+                // Still covered: away again, laid out before the page leaving
+                // comes back to life.
+                tabs.setTabBarHidden(true, animated: false)
+                tabs.view.layoutIfNeeded()
+            } else {
+                reveal(on: root)
+            }
+            frozen?.removeFromSuperview()
+        }
+        if !coordinator.animate(alongsideTransition: nil, completion: { finish($0.isCancelled) }) {
+            finish(false)
+        }
+    }
+
+    /// Covers `view` with a picture of itself, for while its layout changes
+    /// under a transition.
+    private static func freeze(_ view: UIView?) -> UIView? {
+        guard let view, let frozen = view.snapshotView(afterScreenUpdates: false) else { return nil }
+        frozen.frame = view.bounds
+        frozen.isUserInteractionEnabled = false
+        frozen.accessibilityElementsHidden = true
+        view.addSubview(frozen)
+        return frozen
+    }
+
+    /// Whatever the way back was, the root page on screen has its bar.
+    fileprivate static func rootDidAppear(_ root: UIViewController) {
+        guard let tabs = root.tabBarController else { return }
+        self.tabs = tabs
+        if visibleRoot !== root {
+            // Another tab: its page starts at its own scroll position, with
+            // the bar up.
+            visibleRoot = root
+            setTucked(false, animated: false)
+        }
+        // A page on top of this one (shown without a push animation) still
+        // covers it.
+        if root.navigationController?.topViewController === root { reveal(on: root) }
+    }
+
+    private static func reveal(on root: UIViewController) {
+        guard let tabs = root.tabBarController else { return }
+        dropPicture()
+        if tabs.isTabBarHidden { tabs.setTabBarHidden(false, animated: false) }
+        tabs.tabBar.transform = isTucked ? tuckedTransform(for: tabs.tabBar, in: tabs) : .identity
+    }
+
+    /// What rides on the root page in the bar's place: the bottom of the
+    /// screen as it is, glass included. iOS 26 draws the glass at
+    /// composition, so the screen is pictured rather than the bar's own
+    /// layers, which picture as a bare selection pill.
+    ///
+    /// The picture reaches above the bar: the soft blur a scroll view lays
+    /// under a bar rises well past the bar's top, and goes when the bar is
+    /// put away. Pictured with the bar, it stays on the root the whole way
+    /// instead of popping back in as the root lands.
+    private static func stand(in bar: UITabBar, tabs: UITabBarController) -> UIView? {
+        let barFrame = bar.convert(bar.bounds, to: tabs.view)
+        let area = CGRect(x: 0, y: barFrame.minY - scrollEdgeOverhang,
+                          width: tabs.view.bounds.width, height: tabs.view.bounds.maxY - barFrame.minY + scrollEdgeOverhang)
+        return tabs.view.resizableSnapshotView(from: area, afterScreenUpdates: false, withCapInsets: .zero)
+    }
+
+    /// How far the scroll edge blur rises above the tab bar (65 pt on
+    /// iOS 26), with a little to spare.
+    private static let scrollEdgeOverhang: CGFloat = 72
+
+    private static func dropPicture() {
+        picture?.image.removeFromSuperview()
+        picture = nil
+    }
+}
+
+/// Sits on a tab's root page and tells `RootTabBar` when a page is pushed
+/// over the root and when the root is back.
+private struct RootTabBarAnchor: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> Anchor { Anchor() }
     func updateUIViewController(_ controller: Anchor, context: Context) {}
 
@@ -247,109 +436,42 @@ private struct TabBarHidingAnchor: UIViewControllerRepresentable {
             self.view = view
         }
 
-        override func willMove(toParent parent: UIViewController?) {
-            super.willMove(toParent: parent)
-            page(from: parent)?.hidesBottomBarWhenPushed = true
-        }
-
-        override func viewWillAppear(_ animated: Bool) {
-            super.viewWillAppear(animated)
-            page(from: parent)?.hidesBottomBarWhenPushed = true
-            TabBarPushTransition.update(from: self, animated: animated)
-        }
-
-        override func viewWillDisappear(_ animated: Bool) {
-            super.viewWillDisappear(animated)
-            TabBarPushTransition.update(from: self, animated: animated)
-        }
-
-        /// The controller the navigation stack pushed is the one whose
-        /// parent is the navigation controller; that is the one to mark.
-        private func page(from start: UIViewController?) -> UIViewController? {
-            var current = start
+        /// The page the navigation stack holds: the one whose parent is the
+        /// navigation controller.
+        private var root: UIViewController? {
+            var current = parent
             while let controller = current {
                 if controller.parent is UINavigationController { return controller }
                 current = controller.parent
             }
             return nil
         }
-    }
-}
 
-/// Shows or hides the tab bar for what a navigation stack will hold once its
-/// push or pop is over: hidden while any page in it asks to be.
-@MainActor
-enum TabBarPushTransition {
-    static func update(from anchor: UIViewController, animated: Bool) {
-        guard let navigation = anchor.navigationController,
-              let tabs = navigation.tabBarController else { return }
-        // The stack as it will be: a pop has already taken the leaving page
-        // out of it, a push has already put the arriving one in.
-        let hidden = navigation.viewControllers.dropFirst().contains { $0.hidesBottomBarWhenPushed }
-        guard tabs.isTabBarHidden != hidden else { return }
-        guard animated, let coordinator = navigation.transitionCoordinator ?? anchor.transitionCoordinator else {
-            tabs.setTabBarHidden(hidden, animated: animated)
-            return
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            if let root { RootTabBar.rootWillAppear(root) }
         }
-        let bar = tabs.tabBar
-        // The page the bar belongs to: the one going away on a push, the one
-        // coming back on a pop. The bar's picture rides on it.
-        let carrier = coordinator.viewController(forKey: hidden ? .from : .to)?.view
-        let leaving = coordinator.viewController(forKey: .from)?.view
-        let barFrame = tabs.view.convert(bar.bounds, from: bar)
-        // Showing or hiding the bar changes every page's bottom safe area, and
-        // the page leaving the screen re-laid out while it was still sliding
-        // away: its content near the bar tore. It is frozen as a picture of
-        // itself first, so that re-layout happens unseen underneath.
-        let frozen = leaving?.snapshotView(afterScreenUpdates: false)
-        if let frozen, let leaving {
-            frozen.frame = leaving.bounds
-            frozen.isUserInteractionEnabled = false
-            leaving.addSubview(frozen)
-        }
-        let picture: UIView?
-        if hidden {
-            picture = bar.snapshotView(afterScreenUpdates: false)
-            tabs.setTabBarHidden(true, animated: false)
-        } else {
-            tabs.setTabBarHidden(false, animated: false)
-            picture = carrier == nil ? nil : bar.snapshotView(afterScreenUpdates: true)
-            // The real bar waits out of sight until its picture is home.
-            bar.alpha = 0
-        }
-        if let picture, let carrier {
-            picture.frame = barFrame
-            picture.isUserInteractionEnabled = false
-            carrier.addSubview(picture)
-        }
-        // The arriving page laid out for where it ends before the first frame,
-        // not part-way into the slide.
-        tabs.view.layoutIfNeeded()
 
-        let finish: (Bool) -> Void = { cancelled in
-            if cancelled {
-                // Back as it was, laid out again before the picture comes off.
-                tabs.setTabBarHidden(!hidden, animated: false)
-                tabs.view.layoutIfNeeded()
-            }
-            picture?.removeFromSuperview()
-            frozen?.removeFromSuperview()
-            bar.alpha = 1
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            if let root { RootTabBar.rootDidAppear(root) }
         }
-        let enrolled = coordinator.animate(alongsideTransition: { _ in
-            if picture == nil || carrier == nil { bar.alpha = hidden ? 0 : 1 }
-        }, completion: { context in
-            finish(context.isCancelled)
-        })
-        // Not taken into the transition: its completion will not run.
-        if !enrolled { finish(false) }
+
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            // Only a push covers the root. Switching tabs or presenting a
+            // sheet leaves it on top of its own stack.
+            guard let root, let stack = root.navigationController,
+                  stack.topViewController !== root, stack.viewControllers.contains(root) else { return }
+            RootTabBar.rootWillBeCovered(root)
+        }
     }
 }
 
 extension View {
-    /// Hides the tab bar while this page is on screen, leaving and returning
-    /// with the page beneath as the system's push does.
-    func hidesTabBarWhenPushed() -> some View {
-        background(TabBarHidingAnchor().frame(width: 0, height: 0).accessibilityHidden(true))
+    /// A tab's root page, which the tab bar belongs to. Every page pushed
+    /// over it is shown without the bar. See `RootTabBar`.
+    func ownsTabBar() -> some View {
+        background(RootTabBarAnchor().frame(width: 0, height: 0).accessibilityHidden(true))
     }
 }

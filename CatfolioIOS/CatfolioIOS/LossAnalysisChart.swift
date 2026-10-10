@@ -166,7 +166,8 @@ struct LossAnalysisChart: View {
                 text: row.totalLoss > 0 ? DisplayFormat.money(-row.totalLoss, signed: true, fractionDigits: 0)
                                        : DisplayFormat.money(0, fractionDigits: 0),
                 size: 34, symbolSize: 22,
-                color: ReturnsSourceChartStyle.primary(for: colorScheme)
+                color: ReturnsSourceChartStyle.primary(for: colorScheme),
+                isDirectional: true
             )
                 .contentTransition(.numericText(value: row.totalLoss))
                 .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: row.totalLoss)
@@ -178,7 +179,7 @@ struct LossAnalysisChart: View {
                 Text(L10n.text("组合盈亏"))
                     .appText(.footnote, weight: .medium)
                     .foregroundStyle(ReturnsSourceChartStyle.secondary(for: colorScheme))
-                Text(DisplayFormat.money(row.netGain, signed: true, fractionDigits: 0))
+                FinancialText(DisplayFormat.money(row.netGain, signed: true, fractionDigits: 0), isDirectional: true)
                     .appNumber(.footnote)
                     .foregroundStyle(ReturnsSourceChartStyle.primary(for: colorScheme))
             }
@@ -284,11 +285,11 @@ struct LossAnalysisChart: View {
         VStack(alignment: .leading, spacing: 0) {
             Spacer()
             AnimatedChartValue(value: bottom / 2) {
-                Text(DisplayFormat.compact($0, precision: .whole)).appNumber(.footnote)
+                FinancialText(DisplayFormat.compact($0, precision: .whole)).appNumber(.footnote)
             }
             Spacer()
             AnimatedChartValue(value: bottom) {
-                Text(DisplayFormat.compact($0, precision: .whole)).appNumber(.footnote)
+                FinancialText(DisplayFormat.compact($0, precision: .whole)).appNumber(.footnote)
             }
         }
         .animation(reduceMotion ? nil : StandardLineChartTransition.zoom, value: bottom)
@@ -321,7 +322,7 @@ struct LossAnalysisChart: View {
                             VStack(alignment: .trailing, spacing: 2) {
                                 lossText(row.bands[band])
                                 if let deepest = stack.deepest[item.title], item.kind != .others {
-                                    Text(L10n.text("最深 \(DisplayFormat.money(-deepest, signed: true, fractionDigits: 0))"))
+                                    FinancialText(L10n.text("最深 \(DisplayFormat.money(-deepest, signed: true, fractionDigits: 0))"), isDirectional: true)
                                         .appNumber(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -392,7 +393,7 @@ struct LossAnalysisChart: View {
     }
 
     private func lossText(_ loss: Double) -> some View {
-        Text(loss > 0.5 ? DisplayFormat.money(-loss, signed: true, fractionDigits: 0) : L10n.text("未亏损"))
+        FinancialText(loss > 0.5 ? DisplayFormat.money(-loss, signed: true, fractionDigits: 0) : L10n.text("未亏损"), isDirectional: true)
             .appNumber(.callout)
             .foregroundStyle(loss > 0.5 ? CatfolioTheme.loss(for: colorScheme) : .secondary)
     }

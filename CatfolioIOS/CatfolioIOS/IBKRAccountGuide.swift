@@ -18,7 +18,7 @@ struct IBKRAccountGuide: View {
             Text("Interactive Brokers").appText(.subheading, weight: .semibold)
             Text(L10n.text("第 \(step + 1) 步，共 4 步"))
                 .appText(.label).foregroundStyle(SettingsTemplate.secondaryText)
-            ProgressView(value: Double(step + 1), total: 4).tint(CatfolioTheme.accent)
+            ProgressView(value: Double(step + 1), total: 4)
             Text(title).font(.title2.weight(.bold)).accessibilityAddTraits(.isHeader)
         }
         SettingsCard {
@@ -42,14 +42,6 @@ struct IBKRAccountGuide: View {
             }
         }
         SettingsCard {
-            SettingsRowContainer {
-                GlassPrimaryButton(title: step == 2 ? L10n.text("已准备好，填写凭证") : L10n.text("下一步"),
-                                   systemImage: "arrow.right", action: next)
-            }
-            if step == 0 {
-                SettingsButtonRow(icon: .symbol("key"), title: L10n.text("已有 Token 和 Query ID，直接填写"),
-                                  showsChevron: false, action: skip)
-            }
             Link(destination: URL(string: step == 2
                 ? "https://www.ibkrguides.com/clientportal/performanceandstatements/flex-web-service.htm"
                 : "https://www.ibkrguides.com/clientportal/performanceandstatements/activityflex.htm")!) {
@@ -61,6 +53,17 @@ struct IBKRAccountGuide: View {
             .buttonStyle(SettingsRowButtonStyle())
         }
     }
+    var actions: some View {
+        VStack(spacing: 12) {
+            GlassPrimaryButton(title: step == 2 ? L10n.text("已准备好，填写凭证") : L10n.text("下一步"),
+                               systemImage: "arrow.right", action: next)
+            if step == 0 {
+                Button(L10n.text("已有 Token 和 Query ID，直接填写"), action: skip)
+                    .appText(.callout, weight: .medium)
+            }
+        }
+    }
+
 }
 
 /// Reopening help leaves the connection draft and its preview in the parent view.
@@ -74,6 +77,11 @@ struct IBKRGuideHelpView: View {
                 IBKRAccountGuide(step: step) {
                     if step < 2 { step += 1 } else { dismiss() }
                 } skip: { dismiss() }
+            }
+            .accountFlowActions {
+                IBKRAccountGuide(step: step) {
+                    if step < 2 { step += 1 } else { dismiss() }
+                } skip: { dismiss() }.actions
             }
             .navigationTitle(L10n.text("分步连接教程"))
             .navigationBarTitleDisplayMode(.inline)
@@ -90,7 +98,7 @@ struct IBKRGuideHelpView: View {
                 }
             }
         }
-        .tint(CatfolioTheme.accent)
+        .accountFlowBrand(.ibkr)
     }
 }
 

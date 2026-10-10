@@ -38,6 +38,18 @@ enum PortfolioHoldingListItem: Identifiable {
         if case let .holding(holding, _) = self { return holding.displayedMarketValue }
         return DisplayFormat.money(marketValue, fractionDigits: 2)
     }
+    /// Direct holdings already carry the selected accounts' combined weight.
+    /// Look-through rows use their complete exposure, including direct shares.
+    var portfolioWeight: Double? {
+        let weight: Double
+        switch self {
+        case let .holding(holding, _): weight = holding.weight
+        case let .exposure(row, _, total, _):
+            guard total.isFinite, total > 0 else { return nil }
+            weight = row.totalUSD / total
+        }
+        return weight.isFinite ? weight : nil
+    }
     var performance: HoldingPerformanceValues? {
         switch self {
         case let .holding(_, performance), let .exposure(_, _, _, performance): performance

@@ -57,6 +57,7 @@ struct Trading212View: View {
                 }
             }
             .disabled(isWorking)
+            .accountFlowActions { flowActions }
             .softTopScrollEdge()
             .navigationTitle(context.isCreating ? L10n.text("新建 Trading 212 账户") : "Trading 212")
             // Past the first step the guide's own 上一步 is the back button;
@@ -72,7 +73,6 @@ struct Trading212View: View {
                         } label: {
                             Label(L10n.text("上一步"), systemImage: "chevron.left")
                         }
-                        .tint(CatfolioTheme.primaryText)
                         .disabled(isWorking)
                         .accessibilityIdentifier("account-guide-back")
                     }
@@ -117,7 +117,38 @@ struct Trading212View: View {
                     : L10n.text("将更新当前 Trading 212 账户持仓；其他账户不受影响。"))
             }
         }
-        .tint(CatfolioTheme.accent)
+        .accountFlowBrand(.trading212, enabled: context.isCreating)
+    }
+
+    @ViewBuilder
+    private var flowActions: some View {
+        if context.isCreating && guideStep.isTutorial {
+            Trading212GuideLesson(step: guideStep) {
+                guideStep = guideStep.nextTutorialStep
+            } skip: { guideStep = .credentials }.actions
+        } else if context.isCreating && guideStep == .complete {
+            GlassPrimaryButton(title: L10n.text("完成")) { stopWaiting(); dismiss() }
+        } else if let snapshot {
+            GlassPrimaryButton(
+                title: isWorking
+                    ? (context.isCreating ? L10n.text("正在创建") : L10n.text("正在同步"))
+                    : (context.isCreating ? L10n.text("创建 Trading 212 账户") : L10n.text("同步 \(snapshot.positions.count) 项到 Catfolio")),
+                systemImage: "tray.and.arrow.down.fill",
+                isDisabled: !hasValidNickname,
+                isBusy: isWorking
+            ) {
+                showsSyncConfirmation = true
+            }
+        } else {
+            GlassPrimaryButton(
+                title: isWorking ? L10n.text("正在读取") : L10n.text("读取并预览持仓"),
+                systemImage: "arrow.down.circle",
+                isDisabled: !credentialsReady,
+                isBusy: isWorking
+            ) {
+                perform(.preview)
+            }
+        }
     }
 
     @ViewBuilder
@@ -162,29 +193,6 @@ struct Trading212View: View {
                 }
                 .disabled(isWorking)
 
-                SettingsRowContainer {
-                    GlassPrimaryButton(
-                        title: isWorking
-                            ? (context.isCreating ? L10n.text("正在创建") : L10n.text("正在同步"))
-                            : (context.isCreating ? L10n.text("创建 Trading 212 账户") : L10n.text("同步 \(snapshot.positions.count) 项到 Catfolio")),
-                        systemImage: "tray.and.arrow.down.fill",
-                        isDisabled: !hasValidNickname,
-                        isBusy: isWorking
-                    ) {
-                        showsSyncConfirmation = true
-                    }
-                }
-            } else {
-                SettingsRowContainer {
-                    GlassPrimaryButton(
-                        title: isWorking ? L10n.text("正在读取") : L10n.text("读取并预览持仓"),
-                        systemImage: "arrow.down.circle",
-                        isDisabled: !credentialsReady,
-                        isBusy: isWorking
-                    ) {
-                        perform(.preview)
-                    }
-                }
             }
 
             if status.isPresented {
@@ -237,10 +245,10 @@ struct Trading212View: View {
                             }
                             Spacer()
                             VStack(alignment: .trailing, spacing: SettingsTemplate.subtitleSpacing) {
-                                Text(DisplayFormat.shares(position.quantity))
+                                FinancialText(DisplayFormat.shares(position.quantity))
                                     .appNumber(.subheading)
                                 if let currentPrice = position.currentPrice {
-                                    Text(DisplayFormat.money(position.quantity * currentPrice, currency: position.currency))
+                                    FinancialText(DisplayFormat.money(position.quantity * currentPrice, currency: position.currency))
                                         .appNumber(.label, weight: .regular, monospaced: false)
                                         .foregroundStyle(SettingsTemplate.secondaryText)
                                 }
@@ -280,10 +288,6 @@ struct Trading212View: View {
                         .appText(.subheading, weight: .semibold)
                     Text(nickname).appText(.subheading)
                     statusView
-                    GlassPrimaryButton(title: L10n.text("完成")) {
-                        stopWaiting()
-                        dismiss()
-                    }
                 }
             }
         }

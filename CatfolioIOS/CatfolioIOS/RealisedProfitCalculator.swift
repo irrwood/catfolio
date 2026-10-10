@@ -73,6 +73,13 @@ enum TaxYearBasis: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// Keep the selected year when changing reporting calendars. A tax year
+    /// is identified by the year in which it starts.
+    func equivalentLabel(_ selected: String?) -> String? {
+        guard let selected, let year = Int(selected.prefix(4)), (1...9998).contains(year) else { return nil }
+        return self == .calendar ? String(year) : "\(year)/\(String(format: "%02d", (year + 1) % 100))"
+    }
+
     /// `nil` for an unparsable date rather than a guess.
     func label(for date: String) -> String? {
         let parts = date.split(separator: "-").compactMap { Int($0) }

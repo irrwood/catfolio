@@ -166,6 +166,7 @@ extension AppModel {
         accounts = []
         storedSelectedAccountKeys = []
         holdingDailyChanges = [:]
+        holdingRecentCloses = [:]
         holdingDailyChangesSignature = ""
         comparison = nil
         returnsAnalytics = nil

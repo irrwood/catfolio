@@ -363,7 +363,8 @@ struct HoldingContributionChart: View {
                 text: DisplayFormat.money(gain, signed: true, fractionDigits: 0),
                 size: 34,
                 symbolSize: 22,
-                color: heroPrimary
+                color: heroPrimary,
+                isDirectional: true
             )
             // As on the home page: the digits roll to the new figure as the
             // reader moves along the chart or changes the range.
@@ -373,7 +374,7 @@ struct HoldingContributionChart: View {
                 Text(includesSold ? L10n.text("市值 + 已实现") : L10n.text("市值"))
                     .appText(.footnote, weight: .medium)
                     .foregroundStyle(heroSecondary)
-                Text(DisplayFormat.money(row.total, fractionDigits: 0))
+                FinancialText(DisplayFormat.money(row.total, fractionDigits: 0))
                     .foregroundStyle(heroPrimary)
                     .contentTransition(.numericText(value: row.total))
                     .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: row.total)
@@ -381,7 +382,7 @@ struct HoldingContributionChart: View {
                 Text(L10n.text("本金"))
                     .appText(.footnote, weight: .medium)
                     .foregroundStyle(heroSecondary)
-                Text(DisplayFormat.money(row.principal, fractionDigits: 0))
+                FinancialText(DisplayFormat.money(row.principal, fractionDigits: 0))
                     .foregroundStyle(heroSecondary)
                     .contentTransition(.numericText(value: row.principal))
                     .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: row.principal)
@@ -462,7 +463,7 @@ struct HoldingContributionChart: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array([top, top / 2, 0].enumerated()), id: \.offset) { index, value in
                 AnimatedChartValue(value: value) {
-                    Text(DisplayFormat.compact($0, precision: .whole)).appNumber(.footnote)
+                    FinancialText(DisplayFormat.compact($0, precision: .whole)).appNumber(.footnote)
                 }
                 if index < 2 { Spacer() }
             }
@@ -603,9 +604,9 @@ struct HoldingContributionChart: View {
             }
         }()
         if kind == .principal {
-            Text(DisplayFormat.money(amount, fractionDigits: 0)).appNumber(.callout)
+            FinancialText(DisplayFormat.money(amount, fractionDigits: 0)).appNumber(.callout)
         } else {
-            Text(DisplayFormat.money(amount, signed: true, fractionDigits: 0))
+            FinancialText(DisplayFormat.money(amount, signed: true, fractionDigits: 0), isDirectional: true)
                 .appNumber(.callout)
                 .foregroundStyle(.white)
         }

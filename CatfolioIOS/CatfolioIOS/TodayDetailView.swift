@@ -20,19 +20,23 @@ struct TodayDetailView: View {
     }
 
     let holdings: [Holding]
+    /// Each holding's change since the previous session, in percent, in the
+    /// reader's currency (`AppModel.holdingDayReturns`).
     let dailyChanges: [String: Double]
     let benchmarkChange: Double?
     var sessionDate: String? = nil
+    let isLoading: Bool
     var briefStore: TodayBriefStore = .shared
     private let contributions: [Contribution]
     private let sectorTotals: (rows: [SectorBreakdown], lookThroughUsed: Bool, unclassifiedWeight: Double)
 
     init(holdings: [Holding], dailyChanges: [String: Double], benchmarkChange: Double?,
-         sessionDate: String? = nil, briefStore: TodayBriefStore = .shared) {
+         sessionDate: String? = nil, isLoading: Bool = false, briefStore: TodayBriefStore = .shared) {
         self.holdings = holdings
         self.dailyChanges = dailyChanges
         self.benchmarkChange = benchmarkChange
         self.sessionDate = sessionDate
+        self.isLoading = isLoading
         self.briefStore = briefStore
         let contributions = Self.makeContributions(holdings: holdings, dailyChanges: dailyChanges)
         self.contributions = contributions
@@ -228,11 +232,15 @@ struct TodayDetailView: View {
                 }
 
                 if contributions.isEmpty {
+                    if isLoading {
+                        ProgressView().frame(maxWidth: .infinity)
+                    } else {
                     ContentUnavailableView(
                         L10n.text("暂无今日行情"),
                         systemImage: "chart.bar.xaxis",
                         description: Text(L10n.text("持仓的当日涨跌还没有读取到。"))
                     )
+                    }
                 }
                 Text(appDisclaimer)
                     .font(.system(.caption, design: .rounded))
@@ -258,7 +266,6 @@ struct TodayDetailView: View {
         .softTopScrollEdge()
         .navigationTitle(L10n.text("今日"))
         .navigationBarTitleDisplayMode(.inline)
-        .hidesTabBarWhenPushed()
     }
 
     private var summary: some View {
@@ -270,13 +277,13 @@ struct TodayDetailView: View {
                 Text(L10n.text("今日盈亏"))
                     .appText(.callout, weight: .medium)
                     .foregroundStyle(SettingsTemplate.secondaryText)
-                Text(DisplayFormat.money(total, signed: true, fractionDigits: 2))
+                FinancialText(DisplayFormat.money(total, signed: true, fractionDigits: 2), isDirectional: true)
                     .appNumber(.display, weight: .bold)
                     .foregroundStyle(total >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
                 if let benchmarkChange, benchmarkChange.isFinite {
-                    Text("SPY " + DisplayFormat.percent(benchmarkChange, signed: true))
+                    FinancialText("SPY " + DisplayFormat.percent(benchmarkChange, signed: true))
                         .appNumber(.footnote, weight: .medium)
                         .foregroundStyle(SettingsTemplate.secondaryText)
                 }
@@ -324,7 +331,7 @@ struct TodayDetailView: View {
             Text(L10n.text("\(title) · \(count) 只"))
                 .appText(.callout, weight: .medium)
                 .foregroundStyle(SettingsTemplate.secondaryText)
-            Text(DisplayFormat.money(amount, signed: amount != 0, fractionDigits: 2))
+            FinancialText(DisplayFormat.money(amount, signed: amount != 0, fractionDigits: 2), isDirectional: true)
                 .appNumber(.title, weight: .semibold)
                 .foregroundStyle(count == 0 ? SettingsTemplate.secondaryText : color)
                 .lineLimit(1)
@@ -369,7 +376,7 @@ struct TodayDetailView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 8)
-                Text(DisplayFormat.money(row.amount, signed: true, fractionDigits: 2))
+                FinancialText(DisplayFormat.money(row.amount, signed: true, fractionDigits: 2), isDirectional: true)
                     .appNumber(.body, weight: .semibold)
                     .foregroundStyle(row.amount >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
                     .lineLimit(1)
@@ -431,7 +438,7 @@ struct TodayDetailView: View {
                     .font(.body.weight(.medium))
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
-                Text(percentage)
+                FinancialText(percentage)
                     .appNumber(.subheading, weight: .semibold)
                     .foregroundStyle(tint)
                     .fixedSize(horizontal: true, vertical: false)
@@ -445,7 +452,7 @@ struct TodayDetailView: View {
                         .frame(width: max(3, geo.size.width * ratio), height: 5)
                 }
                 .frame(height: 5)
-                Text(money)
+                FinancialText(money, isDirectional: true)
                     .appNumber(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: true, vertical: false)
@@ -478,7 +485,7 @@ private struct SectorMembersView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
-                    Text(DisplayFormat.money(breakdown.amount, signed: true, fractionDigits: 2))
+                    FinancialText(DisplayFormat.money(breakdown.amount, signed: true, fractionDigits: 2), isDirectional: true)
                         .currencyFont(.largeTitle, weight: .bold)
                         .monospacedDigit()
                         .foregroundStyle(breakdown.amount >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
@@ -498,7 +505,7 @@ private struct SectorMembersView: View {
                                         .font(.body)
                                         .lineLimit(1)
                                     Spacer(minLength: 8)
-                                    Text(DisplayFormat.money(component.amount, signed: true, fractionDigits: 2))
+                                    FinancialText(DisplayFormat.money(component.amount, signed: true, fractionDigits: 2), isDirectional: true)
                                         .appNumber(.subheading, weight: .medium)
                                         .foregroundStyle(component.amount >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
                                 }
@@ -540,7 +547,6 @@ private struct SectorMembersView: View {
         .softTopScrollEdge()
         .navigationTitle(breakdown.displayName)
         .navigationBarTitleDisplayMode(.inline)
-        .hidesTabBarWhenPushed()
     }
 
     private func percentText(_ fraction: Double) -> String {

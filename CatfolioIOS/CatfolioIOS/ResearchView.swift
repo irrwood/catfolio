@@ -3,377 +3,11 @@ import Charts
 import CryptoKit
 import Observation
 
-actor ResearchAnalysisCache {
-    static let shared = ResearchAnalysisCache()
-    private let directory: URL
-
-    init(directory: URL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("research-analysis-v1", isDirectory: true)) {
-        self.directory = directory
-    }
-
-    private func file(for scope: String) -> URL {
-        let key = SHA256.hash(data: Data(scope.utf8)).map { String(format: "%02x", $0) }.joined()
-        return directory.appendingPathComponent(key).appendingPathExtension("json")
-    }
-
-    func load(scope: String) -> PortfolioAttentionReport? {
-        guard let data = try? Data(contentsOf: file(for: scope)) else { return nil }
-        return try? JSONDecoder().decode(PortfolioAttentionReport.self, from: data)
-    }
-
-    /// The account scope a report is saved under: the language, demo or real
-    /// data, and the selected accounts. Shared by the attention page and its
-    /// preview on the Performance tab, so both read the same report.
-    @MainActor static func scope(locale: Locale, model: AppModel) -> String {
-        let keys = [locale.identifier, model.isFakeDataMode ? "demo" : "real"] + model.selectedAccountKeys.sorted()
-        return keys.map { "\($0.utf8.count):\($0)" }.joined()
-    }
-
-    func save(_ report: PortfolioAttentionReport, scope: String) throws {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try JSONEncoder().encode(report).write(to: file(for: scope), options: [.atomic, .completeFileProtectionUnlessOpen])
-    }
-}
-
-/// Research is read-only: market context and selected-account holdings never
-/// write into the portfolio ledger. Historical closes are not live quotes.
-struct ResearchMarketSnapshot: Identifiable {
-    struct Point: Identifiable {
-        let id: String
-        let value: Double
-    }
-    let id: String
-    let title: String
-    let points: [Point]
-    var latest: Point? { points.last }
-    var changeBasisPoints: Double? {
-        guard points.count >= 2 else { return nil }
-        return (points[points.count - 1].value - points[points.count - 2].value) * 100
-    }
-    var changePercent: Double? {
-        guard points.count >= 2, points[points.count - 2].value > 0 else { return nil }
-        return (points[points.count - 1].value / points[points.count - 2].value - 1) * 100
-    }
-
-    init(id: String, title: String, history: [String: Double]) {
-        self.id = id
-        self.title = title
-        points = history.filter { $0.value.isFinite && $0.value > 0 }
-            .sorted { $0.key < $1.key }.map { Point(id: $0.key, value: $0.value) }
-    }
-}
-
-/// Figma 264:13428: a coloured title, one quote row, and a 53pt sparkline.
-/// Series colours identify the metric; the badge and change express direction.
-struct ResearchMetricCard: View {
-    let symbol: String
-    let title: String
-    let snapshot: ResearchMarketSnapshot?
-    var isLoading = false
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @ScaledMetric(relativeTo: .subheadline) private var titleSize = 16.0
-    @ScaledMetric(relativeTo: .title3) private var valueSize = 20.0
-    @ScaledMetric(relativeTo: .subheadline) private var changeSize = 14.0
-
-    private var seriesColor: Color {
-        switch symbol {
-        case "^GSPC": CatfolioTheme.accent
-        case "^IXIC": CatfolioTheme.services
-        case "^VIX": CatfolioTheme.warning
-        // This card's purple is specified directly in the Figma reference.
-        default: Color(red: 139 / 255, green: 92 / 255, blue: 246 / 255)
-        }
-    }
-    private var displayTitle: String {
-        symbol == "^TNX" ? L10n.text("美国 10 年期国债") : title
-    }
-    private var showsSkeleton: Bool { isLoading && snapshot == nil }
-
-    var body: some View {
-        SettingsCard {
-            VStack(alignment: .leading, spacing: 7) {
-                Text(displayTitle)
-                    .font(.system(size: titleSize, weight: .semibold, design: .rounded))
-                    .foregroundStyle(seriesColor)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
-                    .minimumScaleFactor(0.8)
-                    .redacted(reason: showsSkeleton ? .placeholder : [])
-                    .chartLoadingShimmer(active: showsSkeleton, appearanceID: "research-metric|\(symbol)")
-
-                // Set like the macro cards below: the value, then its move
-                // in quiet grey on the same baseline.
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    quote
-                    change
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .chartLoadingShimmer(active: showsSkeleton, appearanceID: "research-metric|\(symbol)")
-
-                sparkline
-                    .frame(height: 53)
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("research-metric-\(symbol)")
-    }
-
-    @ViewBuilder private var quote: some View {
-        if let value = snapshot?.latest?.value {
-            Text(symbol == "^TNX"
-                 ? (value / 100).formatted(.percent.precision(.fractionLength(2)))
-                 : value.formatted(.number.precision(.fractionLength(2))))
-                .font(.system(size: valueSize, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(CatfolioTheme.primaryText)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        } else if showsSkeleton {
-            ChartSkeletonShape(width: 82, height: valueSize)
-        } else {
-            Text(L10n.text("暂无数据"))
-                .font(.system(size: changeSize, design: .rounded))
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    @ViewBuilder private var change: some View {
-        if showsSkeleton {
-            ChartSkeletonShape(width: 42, height: changeSize)
-        } else if let value = snapshot?.changePercent {
-            Text(DisplayFormat.percent(value, signed: true))
-                .font(.system(size: changeSize, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-                .fixedSize()
-        }
-    }
-
-    @ViewBuilder private var sparkline: some View {
-        if let snapshot, snapshot.points.count > 1 {
-            let domain = StandardLineChartEntrancePhase.domain(snapshot.points.map(\.value))
-            StandardLineChartEntrance(appearanceID: "research-metric|\(symbol)") { phase in
-                Chart(Array(snapshot.points.enumerated()), id: \.element.id) { item in
-                    LineMark(x: .value(L10n.text("日期"), item.offset),
-                             y: .value(L10n.text("收盘"), phase.value(item.element.value,
-                                fraction: Double(item.offset) / Double(snapshot.points.count - 1), domain: domain)))
-                        .foregroundStyle(seriesColor)
-                        .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-                        .interpolationMethod(.monotone)
-                }
-                .chartXAxis(.hidden)
-                .chartYAxis(.hidden)
-                .chartXScale(domain: 0...(snapshot.points.count - 1))
-                .chartYScale(domain: domain)
-                .padding(.horizontal, 3)
-                .padding(.vertical, 5)
-                .accessibilityLabel(L10n.text("\(title)最近收盘走势"))
-                .accessibilityValue("\(snapshot.points.first?.id ?? "") – \(snapshot.latest?.id ?? "")")
-            }
-        } else if showsSkeleton {
-            StandardLineChartSkeleton(axisWidth: 0, topInset: 5, bottomHeight: 5,
-                lineWidths: [3], appearanceID: "research-metric|\(symbol)")
-        } else {
-            Color.clear.accessibilityHidden(true)
-        }
-    }
-}
-
-/// One security from the offline directory, ready to open in the detail
-/// sheet whether or not anything is held.
-struct MarketSecurityResult: Identifiable, Equatable, Sendable {
-    let ticker: String
-    let name: String
-    let market: String
-    let exchange: String?
-    let currency: String?
-    let sector: String?
-    let isFund: Bool
-    var id: String { ticker }
-
-    /// Where it trades, short: the exchange in the US, the market elsewhere,
-    /// whose own exchange names run too long for a row.
-    var venue: String {
-        let place = market == "US" ? exchange ?? market : market
-        return isFund ? "ETF · \(place)" : place
-    }
-
-    static func search(
-        _ query: String,
-        in catalog: CompanyReferenceCatalog,
-        limit: Int = 40,
-        shouldCancel: () -> Bool = { false }
-    ) -> [Self] {
-        catalog.search(query, limit: limit, shouldCancel: shouldCancel).map { entry in
-            Self(
-                ticker: catalog.brokerSymbol(for: entry),
-                name: entry.name ?? entry.symbol,
-                market: entry.market,
-                exchange: entry.exchange,
-                currency: entry.currency ?? CompanyReferenceCatalog.listingCurrency(market: entry.market),
-                sector: entry.sector,
-                isFund: HoldingSecurityKind.classify(instrumentType: entry.instrumentType, names: [entry.name ?? ""]) == .fund
-            )
-        }
-    }
-
-    /// No shares and no cost, the same shape as an ETF look-through
-    /// constituent: the detail sheet leaves its position blocks out rather
-    /// than showing zeros.
-    var holding: Holding {
-        Holding(
-            ticker: ticker,
-            logoSymbol: ticker,
-            displayName: name,
-            sector: sector,
-            source: nil,
-            shares: 0,
-            averageCost: 0,
-            costCurrency: nil,
-            quotePrice: 0,
-            quoteCurrency: currency,
-            todayChangePercent: nil,
-            marketValue: 0,
-            weight: 0,
-            unrealized: 0,
-            unrealizedPercent: 0,
-            fxPnl: nil,
-            fxPnlPercent: nil,
-            fxPnlStatus: nil,
-            fxPnlSource: nil
-        )
-    }
-}
-
-struct TodayAttentionView: View {
-    var body: some View {
-        ResearchView(showsAttention: true)
-            .hidesTabBarWhenPushed()
-    }
-}
-
-/// Today's attention, on the Performance tab itself: the last analysis's
-/// three most pressing holdings — high attention first — under a heading
-/// whose "更多" opens the full attention page.
-struct TodayAttentionPreview: View {
-    @Environment(\.locale) private var appLocale
-    @Environment(AppModel.self) private var model
-    @State private var report: PortfolioAttentionReport?
-    @State private var hasLoaded = false
-    /// Off when a tabbed header above it already names the section.
-    var showsHeader = true
-
-    private static let limit = 3
-
-    /// High attention before medium, each in the report's own order.
-    private var rows: [PortfolioAttentionHolding] {
-        let rows = report?.attentionRows ?? []
-        return Array((rows.filter { $0.attention == .high } + rows.filter { $0.attention != .high })
-            .prefix(Self.limit))
-    }
-
-    var body: some View {
-        Group {
-            if showsHeader {
-            HStack(alignment: .firstTextBaseline) {
-                Text(L10n.text("今天值得关注"))
-                    .appText(.body, weight: .medium)
-                    .foregroundStyle(SettingsTemplate.sectionHeader)
-                Spacer(minLength: 12)
-                NavigationLink {
-                    TodayAttentionView()
-                } label: {
-                    HStack(spacing: 3) {
-                        Text(L10n.text("更多"))
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                    }
-                    .appText(.footnote, weight: .medium)
-                    .foregroundStyle(SettingsTemplate.sectionHeader)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("performance.today-attention")
-            }
-            .padding(.top, SettingsTemplate.sectionHeaderTopSpacing)
-            } else {
-                // Without its header the group can be empty until the report
-                // loads, and an empty group carries no task to load it.
-                Color.clear.frame(height: 0).accessibilityHidden(true)
-            }
-
-            if !rows.isEmpty {
-                // A row of cards, one screen wide less a glimpse of the next,
-                // snapping card by card. It runs to the screen's edges and
-                // keeps the page's margin as its content margin, so the first
-                // card lines up with everything else and the last can be
-                // scrolled fully into view.
-                ScrollView(.horizontal) {
-                    HStack(alignment: .top, spacing: 12) {
-                        ForEach(rows) { row in
-                            PortfolioAttentionCard(row: row)
-                                .containerRelativeFrame(.horizontal) { width, _ in
-                                    rows.count > 1 ? width - SettingsTemplate.pageInset * 2 - 28
-                                                   : width - SettingsTemplate.pageInset * 2
-                                }
-                                .frame(maxHeight: .infinity, alignment: .top)
-                        }
-                    }
-                    .fixedSize(horizontal: false, vertical: true)
-                    .scrollTargetLayout()
-                }
-                .contentMargins(.horizontal, SettingsTemplate.pageInset, for: .scrollContent)
-                // Always opens on the first — the most pressing — card.
-                .defaultScrollAnchor(.leading)
-                .scrollTargetBehavior(.viewAligned)
-                .scrollIndicators(.hidden)
-                // The glass's rim and shadow reach past each card.
-                .scrollClipDisabled()
-                .padding(.horizontal, -SettingsTemplate.pageInset)
-            } else if hasLoaded {
-                // Nothing analysed yet for these accounts: the way in is the
-                // same page "更多" opens.
-                SettingsCard {
-                    SettingsNavigationRow(icon: .symbol("sparkles"), title: L10n.text("还没有今天的分析"),
-                                          subtitle: L10n.text("在更多里分析持仓")) {
-                        TodayAttentionView()
-                    }
-                }
-            }
-        }
-        .environment(\.attentionEvidenceEditor, AttentionEvidenceEditor { updated in
-            guard var current = report,
-                  let index = current.attentionRows.firstIndex(where: { $0.id == updated.id }) else { return }
-            current.attentionRows[index] = updated
-            report = current
-            let scope = ResearchAnalysisCache.scope(locale: appLocale, model: model)
-            Task { try? await ResearchAnalysisCache.shared.save(current, scope: scope) }
-        })
-        // Again on every return, so an analysis run on the full page shows.
-        .task(id: ResearchAnalysisCache.scope(locale: appLocale, model: model)) {
-            let scope = ResearchAnalysisCache.scope(locale: appLocale, model: model)
-            var loaded = await ResearchAnalysisCache.shared.load(scope: scope)
-            #if DEBUG
-            // The demo only where nothing is saved, so a follow-up asked on
-            // the demo is still there on return.
-            if LaunchArguments.contains("--preview-research-analysis"), loaded == nil {
-                loaded = PortfolioAttentionCard.researchPreviewReport
-            }
-            #endif
-            guard !Task.isCancelled else { return }
-            report = loaded
-            hasLoaded = true
-        }
-    }
-}
-
-/// The system search field for both pages. Research puts it in the
-/// navigation bar itself on iOS 26 — up in the toolbar rather than in a
-/// drawer under the large title, which left a band of empty page above the
-/// field; earlier systems keep the drawer. The attention page filters with
-/// the default placement.
+/// The system search field for both pages. Research opens directly on it,
+/// in the navigation bar itself on iOS 26 — up in the toolbar rather than in
+/// a drawer under the large title, which left a band of empty page above the
+/// field; earlier systems keep the drawer. The attention page keeps its title
+/// and filters with the default placement.
 private struct ResearchSystemSearch: ViewModifier {
     let showsAttention: Bool
     @Binding var query: String
@@ -418,6 +52,7 @@ private struct ResearchMarketRefreshModifier: ViewModifier {
 
 struct ResearchView: View {
     var showsAttention = false
+    var titleDisplayMode: NavigationBarItem.TitleDisplayMode = .large
     @Environment(\.locale) private var appLocale
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -501,8 +136,8 @@ struct ResearchView: View {
             Task { try? await ResearchAnalysisCache.shared.save(current, scope: scope) }
         } : nil)
         .tracksRootTabBarScroll()
-        .navigationTitle(L10n.text(showsAttention ? "今天值得关注" : "研究"))
-        .navigationBarTitleDisplayMode(.large)
+        .navigationTitle(showsAttention ? L10n.text("今天值得关注") : "")
+        .navigationBarTitleDisplayMode(showsAttention ? titleDisplayMode : .inline)
         .toolbarVisibility(.visible, for: .navigationBar)
         // Research searches the market from the bar; the pushed attention
         // page filters its own results and keeps its rule controls.
@@ -556,7 +191,6 @@ struct ResearchView: View {
         }
         .navigationDestination(isPresented: $showsDCA) {
             DCACalculatorView()
-                .hidesTabBarWhenPushed()
         }
         .sheet(item: $selectedSecurity) { holding in
             HoldingDetailView(holding: holding, onClose: { selectedSecurity = nil })
@@ -724,9 +358,9 @@ struct ResearchView: View {
                 if let value = snapshot?.latest?.value {
                     Group {
                         if symbol == "^TNX" {
-                            Text(value / 100, format: .percent.precision(.fractionLength(2)))
+                            FinancialText((value / 100).formatted(.percent.precision(.fractionLength(2)).locale(appLocale)))
                         } else {
-                            Text(value, format: .number.precision(.fractionLength(2)))
+                            FinancialText(value.formatted(.number.precision(.fractionLength(2)).locale(appLocale)))
                         }
                     }
                     .font(.title2.weight(.semibold))
@@ -737,11 +371,11 @@ struct ResearchView: View {
 
                 if let snapshot {
                     if symbol == "^TNX", let change = snapshot.changeBasisPoints {
-                        Text("\(change >= 0 ? "+" : "")\(change.formatted(.number.precision(.fractionLength(1)))) bps")
+                        FinancialText("\(change >= 0 ? "+" : "")\(change.formatted(.number.precision(.fractionLength(1)))) bps")
                             .appNumber(.callout, weight: .medium)
                             .foregroundStyle(.secondary)
                     } else if let change = snapshot.changePercent {
-                        Text(DisplayFormat.percent(change, signed: true))
+                        FinancialText(DisplayFormat.percent(change, signed: true))
                             .appNumber(.callout, weight: .medium)
                             .foregroundStyle(tint)
                     }
@@ -956,105 +590,5 @@ struct ResearchView: View {
                 analysisError = L10n.text("分析或缓存更新失败，已保留现有结果：\(error.localizedDescription)")
             }
         }
-    }
-}
-
-/// The scan's thresholds, in 编辑规则. A holding is listed when it crosses
-/// any one of them and marked 高关注 when it crosses several.
-private struct AttentionSignalRulesSections: View {
-    private typealias Rules = AttentionSignalRules
-    @AppStorage(Rules.returnWindowKey) private var returnWindow = Rules.defaults.returnWindowDays
-    @AppStorage(Rules.returnThresholdKey) private var returnThreshold = Rules.defaults.returnThreshold
-    @AppStorage(Rules.volumeMultipleKey) private var volumeMultiple = Rules.defaults.volumeMultiple
-    @AppStorage(Rules.volumeBaselineKey) private var volumeBaseline = Rules.defaults.volumeBaselineDays
-    @AppStorage(Rules.nearExtremeKey) private var nearExtreme = Rules.defaults.nearExtremePercent
-    @AppStorage(Rules.todayMoveKey) private var todayMove = Rules.defaults.todayMoveThreshold
-    @AppStorage(Rules.movingAverageKey) private var movingAverage = Rules.defaults.movingAverageDays
-    @AppStorage(Rules.contributionShareKey) private var contributionShare = Rules.defaults.contributionShare
-    @AppStorage(Rules.highAttentionKey) private var highAttention = Rules.defaults.highAttentionSignals
-    @State private var confirmsReset = false
-
-    private var isDefault: Bool {
-        Rules.current == Rules.defaults
-    }
-
-    var body: some View {
-        Section {
-            Picker(L10n.text("涨跌幅周期"), selection: $returnWindow) {
-                ForEach(Rules.returnWindowChoices, id: \.self) { Text("\($0)D").tag($0) }
-            }
-            stepper(L10n.text("涨跌幅阈值"), value: $returnThreshold, in: 3...40, step: 1, text: "±\(Int(returnThreshold))%")
-            Picker(L10n.text("均线"), selection: $movingAverage) {
-                ForEach(Rules.movingAverageChoices, id: \.self) { Text("MA\($0)").tag($0) }
-            }
-            stepper(L10n.text("接近 52 周高低点"), value: $nearExtreme, in: 0.5...10, step: 0.5,
-                    text: L10n.text("\(Self.number(nearExtreme))% 以内"))
-        } header: {
-            Text(L10n.text("价格信号"))
-        } footer: {
-            Text(L10n.text("涨跌幅是现价相对 N 天前收盘的变化；均线信号在现价上穿或下穿均线的那天出现。"))
-        }
-
-        Section {
-            stepper(L10n.text("放量倍数"), value: $volumeMultiple, in: 1.5...5, step: 0.5, text: "\(Self.number(volumeMultiple))×")
-            Picker(L10n.text("放量基准"), selection: $volumeBaseline) {
-                ForEach(Rules.volumeBaselineChoices, id: \.self) { Text(L10n.text("\($0) 日均量")).tag($0) }
-            }
-            stepper(L10n.text("今日异动"), value: $todayMove, in: 1...15, step: 0.5, text: "±\(Self.number(todayMove))%")
-            stepper(L10n.text("占今日组合波动"), value: $contributionShare, in: 20...80, step: 5, text: "\(Int(contributionShare))%")
-        } header: {
-            Text(L10n.text("成交与异动"))
-        }
-
-        Section {
-            Stepper(value: $highAttention, in: 1...4) {
-                row(L10n.text("高关注至少"), L10n.text("\(highAttention) 个信号"))
-            }
-            Button(L10n.text("恢复默认参数"), role: .destructive) { confirmsReset = true }
-                .disabled(isDefault)
-                .confirmationDialog(L10n.text("恢复默认参数？"), isPresented: $confirmsReset, titleVisibility: .visible) {
-                    Button(L10n.text("恢复默认"), role: .destructive) { reset() }
-                    Button(L10n.text("取消"), role: .cancel) {}
-                } message: {
-                    Text(L10n.text("60D ±10%、MA200、52 周高低点 3% 以内、2× 30 日均量、今日 ±5%、占组合波动 40%、2 个信号为高关注。"))
-                }
-        } footer: {
-            Text(L10n.text("满足任一信号即列入今天值得关注，满足设定个数为高关注。阈值调低会列出更多持仓。下次刷新分析时生效。"))
-        }
-    }
-
-    private func stepper(_ title: String, value: Binding<Double>, in range: ClosedRange<Double>,
-                         step: Double, text: String) -> some View {
-        Stepper(value: value, in: range, step: step) { row(title, text) }
-    }
-
-    private func row(_ title: String, _ value: String) -> some View {
-        HStack {
-            Text(title)
-            Spacer(minLength: 8)
-            Text(value)
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    /// Writing the defaults back, not only removing the keys, so every
-    /// control on screen updates at once.
-    private func reset() {
-        let base = Rules.defaults
-        returnWindow = base.returnWindowDays
-        returnThreshold = base.returnThreshold
-        volumeMultiple = base.volumeMultiple
-        volumeBaseline = base.volumeBaselineDays
-        nearExtreme = base.nearExtremePercent
-        todayMove = base.todayMoveThreshold
-        movingAverage = base.movingAverageDays
-        contributionShare = base.contributionShare
-        highAttention = base.highAttentionSignals
-        Rules.reset()
-    }
-
-    private static func number(_ value: Double) -> String {
-        value == value.rounded() ? String(Int(value)) : String(format: "%.1f", value)
     }
 }

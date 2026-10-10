@@ -10,16 +10,22 @@ typealias HoldingDetailTypography = LegacyType
 @MainActor enum SecurityCardInsightDemo { static var fired = false }
 #endif
 
-/// Shared VP/OI section chrome; each plot keeps its own financial semantics.
+/// Volume section chrome; the plot keeps its own financial semantics.
 struct PriceDistributionSection<Plot: View, Footer: View>: View {
     @Environment(\.locale) private var appLocale
     let title: String
-    let subtitle: String
+    var costChangePercent: Double?
     var insightFacts: (() -> String?)? = nil
     @ViewBuilder let plot: () -> Plot
     @ViewBuilder let footer: () -> Footer
     var body: some View {
-        HoldingDetailSectionCard(title: title, subtitle: subtitle, insightFacts: insightFacts) {
+        HoldingDetailSectionCard(title: title, insightFacts: insightFacts) {
+            if let costChangePercent {
+                FinancialText(DisplayFormat.percent(costChangePercent))
+                    .accessibilityLabel(L10n.text("现价相对成本"))
+                    .accessibilityValue(DisplayFormat.percent(costChangePercent))
+            }
+        } content: {
             VStack(alignment: .leading, spacing: 16) {
                 plot()
                 footer().font(LegacyType.medium(15, relativeTo: .subheadline))
@@ -127,7 +133,8 @@ struct VolumePriceChart: View {
     }
 
     var body: some View {
-        PriceDistributionSection(title: L10n.text("Volume Profile"), subtitle: L10n.text("\(profile.sessions) 个交易日"),
+        PriceDistributionSection(title: L10n.text("Volume Profile"),
+                                 costChangePercent: VolumeProfileInterpretation.priceChangeFromCost(current: currentPrice, cost: holdingCost),
                                  insightFacts: { insightFacts }) {
             VolumeDistributionPlot(
                 profile: profile,
@@ -918,12 +925,12 @@ private struct VolumeDistributionPlot: View {
         price: Double,
         foreground: Color
     ) -> some View {
-        (
+        FinancialText(alignmentFont: Typography.number(.micro, weight: .bold)) {
             Text(title)
                 .font(Typography.text(.micro, weight: .semibold))
-            + Text(" \(money(price))")
+            + Text(financial: " \(money(price))")
                 .font(Typography.number(.micro, weight: .bold))
-        )
+        }
         .foregroundStyle(foreground)
         .lineLimit(1)
         .minimumScaleFactor(0.58)
@@ -933,7 +940,7 @@ private struct VolumeDistributionPlot: View {
     }
 
     private func edgePriceLabel(price: Double) -> some View {
-        Text(money(price))
+        FinancialText(money(price))
             .appNumber(.micro, weight: .semibold)
             .fontDesign(.rounded)
             .foregroundStyle(.white)
@@ -941,7 +948,7 @@ private struct VolumeDistributionPlot: View {
     }
 
     private func axisPricePill(price: Double, width: CGFloat) -> some View {
-        let label = Text(money(price, fractionDigits: 2))
+        let label = FinancialText(money(price, fractionDigits: 2))
             .appNumber(.micro, weight: .semibold)
             .fontDesign(.rounded)
             .foregroundStyle(.white)

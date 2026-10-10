@@ -260,7 +260,8 @@ struct AnalystConsensusView: View {
     @State private var data: AnalystConsensusData?
     @State private var error: String?
     @State private var loadState = ResearchCardLoadState()
-    @State private var isExpanded = false
+    @State private var isPresented = false
+    @State private var pendingAvailability: HoldingResearchAvailability?
     @State private var showsHistory = false
     private var loading: Bool { loadState.isLoading }
 
@@ -311,17 +312,17 @@ struct AnalystConsensusView: View {
         } == true
     }
 
-    /// Opens in place on the holding page; there is no analyst sheet. Same
-    /// title size, secondary line and glass as the Financial row beside it.
+    /// Opens the analyst page on demand, like the Financial entry beside it.
     private var consensusRow: some View {
-        HoldingDetailDisclosureCard(
+        HoldingDetailChildPageCard(
             title: L10n.text("分析师一致预期"),
             subtitle: subtitle,
-            isExpanded: $isExpanded,
+            isPresented: $isPresented,
             isLoading: loading,
-            isEnabled: AnalystConsensusClient.supports(currency: currency)
+            isEnabled: AnalystConsensusClient.supports(currency: currency),
+            onDismiss: publishAvailability
         ) {
-            expandedContent
+            pageContent
         }
         .accessibilityHint(data == nil ? L10n.text("读取并查看分析师评级与目标价") : L10n.text("查看分析师评级与目标价"))
         // Appearing costs nothing. Every holding detail firing a request as it
@@ -334,16 +335,16 @@ struct AnalystConsensusView: View {
             else { cached = await AnalystConsensusClient.shared.cached(symbol: symbol.uppercased()) }
             guard loadState.canPublish(revision) else { return }
             data = cached
-            if let data { onAvailability(data.hasContent ? .available : .empty) }
+            if let data { reportAvailability(data.hasContent ? .available : .empty) }
         }
         // Opening the card is the request.
-        .task(id: "\(symbol)|\(isExpanded)") {
-            guard isExpanded, data == nil else { return }
+        .task(id: "\(symbol)|\(isPresented)") {
+            guard isPresented, data == nil else { return }
             await load()
         }
     }
 
-    @ViewBuilder private var expandedContent: some View {
+    @ViewBuilder private var pageContent: some View {
         VStack(alignment: .leading, spacing: 16) {
             if let data {
                 AnalystConsensusContent(data: data.withCurrentQuote(price, currency: currency))
@@ -378,6 +379,18 @@ struct AnalystConsensusView: View {
         }
     }
 
+    private func reportAvailability(_ state: HoldingResearchAvailability) {
+        // A confirmed empty response must not remove a page while it is open.
+        if isPresented { pendingAvailability = state }
+        else { onAvailability(state) }
+    }
+
+    private func publishAvailability() {
+        guard let pendingAvailability else { return }
+        self.pendingAvailability = nil
+        onAvailability(pendingAvailability)
+    }
+
     @MainActor @discardableResult
     private func load(forceRefresh: Bool = false) async -> AnalystConsensusData? {
         guard !Task.isCancelled else { return data }
@@ -394,12 +407,12 @@ struct AnalystConsensusView: View {
             return await AnalystConsensusClient.shared.cached(symbol: symbol.uppercased())
         } onSuccess: { loaded in
             data = loaded
-            onAvailability(loaded.hasContent ? .available : .empty)
+            reportAvailability(loaded.hasContent ? .available : .empty)
         } onFailure: { failure, cached in
             error = failure.localizedDescription
             // A failed manual refresh never erases the last usable snapshot.
             if data == nil { data = cached }
-            onAvailability(data?.hasContent == true ? .available : .failed)
+            reportAvailability(data?.hasContent == true ? .available : .failed)
         }
         return data
     }
@@ -504,7 +517,7 @@ struct AnalystConsensusContent: View {
     }
     private func metric(_ title: String, value: Double?, marker: AnalystTargetBar.Marker) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(value.map { $0.formatted(.currency(code: "USD")) } ?? "—").appNumber(.callout, weight: .semibold)
+            FinancialText(value.map { $0.formatted(.currency(code: "USD")) } ?? "—").appNumber(.callout, weight: .semibold)
                 .lineLimit(1).minimumScaleFactor(0.8)
                 .researchLayoutFrame("analyst.value.\(title)")
             // The round legend is the mark this figure has on the line below.

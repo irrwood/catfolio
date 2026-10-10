@@ -99,53 +99,53 @@ struct HoldingDetailHeader: View {
                 Text(displayName)
                     .font(Typography.text(size: nameSize, weight: .semibold))
                     .fixedSize(horizontal: false, vertical: true)
+                    .researchLayoutFrame("holding-header.name")
                 identity
             }
         } else {
-            // The row is the logo's height whatever the name: the text centres
-            // on the logo and a second line of name spills evenly above and
-            // below it, so the price and chart sit in the same place on every
-            // security.
-            HStack(spacing: 12) {
+            // Keep the logo at the zoom destination. Longer names and wrapped
+            // metadata grow downward, reserving their space before the quote.
+            HStack(alignment: .top, spacing: 12) {
                 logo
                 VStack(alignment: .leading, spacing: 2) {
                     Text(displayName)
                         .font(Typography.text(size: nameSize, weight: .semibold))
                         .lineLimit(2)
                         .lineSpacing(-3)
+                        .researchLayoutFrame("holding-header.name")
                     identity
                 }
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxHeight: 56)
-                Spacer(minLength: 8)
+                .frame(maxWidth: .infinity, minHeight: Self.logoSize, alignment: .leading)
                 closeReservation
             }
-            .frame(height: 56)
         }
     }
 
     private var logo: some View {
         AssetLogo(ticker: holding.ticker, logoSymbol: holding.logoSymbol, size: Self.logoSize)
+            .researchLayoutFrame("holding-header.logo")
     }
 
     private var closeReservation: some View {
         Color.clear.frame(width: 48, height: 48).accessibilityHidden(true)
+            .researchLayoutFrame("holding-header.close")
     }
 
     private var identity: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 6) { identityText }.fixedSize()
-            VStack(alignment: .leading, spacing: 2) { identityText }
-                .fixedSize(horizontal: false, vertical: true)
+        HoldingIdentityFlowLayout {
+            identityText
         }
         .foregroundStyle(.secondary)
+        .researchLayoutFrame("holding-header.metadata")
     }
 
     @ViewBuilder
     private var identityText: some View {
         // No count for a security with no shares behind it.
         if holding.shares > 0 {
-            Text(DisplayFormat.shares(holding.shares)).appNumber(.label, monospaced: false)
+            FinancialText(DisplayFormat.shares(holding.shares)).appNumber(.label, monospaced: false)
+                .researchLayoutFrame("holding-header.item.shares")
         }
         // A tap on the ticker offers the security's page at each broker.
         Menu {
@@ -162,16 +162,22 @@ struct HoldingDetailHeader: View {
         .buttonStyle(.plain)
         .accessibilityHint(L10n.text("在券商中打开此证券"))
         .accessibilityIdentifier("holding-detail-ticker-links")
+        .researchLayoutFrame("holding-header.item.ticker")
         // The home list's badges, written out: "Acc", "Class A".
-        SecurityClassBadges(markers: holding.classLabels)
+        ForEach(holding.classLabels.indices, id: \.self) { index in
+            let marker = holding.classLabels[index]
+            SecurityClassBadge(marker: marker)
+                .researchLayoutFrame("holding-header.item.class.\(index)")
+        }
         // Outside the trading session: the price above is the last close.
         MarketClosedBadge(ticker: holding.ticker)
+            .researchLayoutFrame("holding-header.item.closed")
     }
 
     private var quote: some View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .center, spacing: 8) {
-                    Text(DisplayFormat.money(displayedPrice, currency: holding.quoteCurrency ?? "USD"))
+                    FinancialText(DisplayFormat.money(displayedPrice, currency: holding.quoteCurrency ?? "USD"))
                         .font(Typography.number(size: priceSize, weight: .semibold))
                         .numericTransition(displayedPrice)
                         .lineLimit(1)
@@ -181,7 +187,7 @@ struct HoldingDetailHeader: View {
                 // 0 until the day's move is known, then counts to it in place:
                 // the line never appears, disappears or changes size.
                 let change = todayChange ?? 0
-                Text(DisplayFormat.percent(change))
+                FinancialText(DisplayFormat.percent(change))
                     .appNumber(.heading)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -193,6 +199,58 @@ struct HoldingDetailHeader: View {
                     .animation(.snappy(duration: 0.3), value: change)
             }
             .contentShape(Rectangle())
+            .researchLayoutFrame("holding-header.quote")
+    }
+}
+
+/// Packs complete quantities, tickers and badges into as few lines as fit.
+/// A closed-market badge wraps independently instead of turning every item
+/// into a separate row. Empty badge views do not consume spacing.
+private struct HoldingIdentityFlowLayout: Layout {
+    private let spacing: CGFloat = 6
+    private let rowSpacing: CGFloat = 2
+
+    private func rows(_ subviews: Subviews, width: CGFloat) -> [[(index: Int, size: CGSize)]] {
+        var result: [[(index: Int, size: CGSize)]] = []
+        var row: [(index: Int, size: CGSize)] = []
+        var used: CGFloat = 0
+        for (index, view) in subviews.enumerated() {
+            let size = view.sizeThatFits(ProposedViewSize(width: width, height: nil))
+            guard size.width > 0, size.height > 0 else { continue }
+            if !row.isEmpty, used + spacing + size.width > width {
+                result.append(row)
+                row = []
+                used = 0
+            }
+            used += (row.isEmpty ? 0 : spacing) + size.width
+            row.append((index, size))
+        }
+        if !row.isEmpty { result.append(row) }
+        return result
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let ideal = subviews.map { $0.sizeThatFits(.unspecified).width }.filter { $0 > 0 }
+        let width = proposal.width.flatMap { $0.isFinite ? $0 : nil }
+            ?? ideal.reduce(0, +) + CGFloat(max(0, ideal.count - 1)) * spacing
+        let rows = rows(subviews, width: width)
+        let height = rows.reduce(CGFloat.zero) { $0 + ( $1.map { $0.size.height }.max() ?? 0) }
+            + CGFloat(max(0, rows.count - 1)) * rowSpacing
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in rows(subviews, width: bounds.width) {
+            let height = row.map { $0.size.height }.max() ?? 0
+            var x = bounds.minX
+            for item in row {
+                subviews[item.index].place(at: CGPoint(x: x, y: y + (height - item.size.height) / 2),
+                    anchor: .topLeading, proposal: ProposedViewSize(item.size))
+                x += item.size.width + spacing
+            }
+            y += height + rowSpacing
+        }
     }
 }
 
@@ -274,7 +332,7 @@ struct SecurityTradeReadout: View {
                     VStack(alignment: .trailing, spacing: 2) {
                         ForEach(row.details.indices, id: \.self) { index in
                             let detail = row.details[index]
-                            Text(detail.text)
+                            FinancialText(detail.text)
                                 .foregroundStyle(detail.isPositive.map {
                                     $0 ? CatfolioTheme.gainDefault : CatfolioTheme.lossDefault
                                 } ?? .secondary)
@@ -301,7 +359,7 @@ struct SecurityTradeReadout: View {
     private func amounts(_ row: Row) -> some View {
         VStack(alignment: .trailing, spacing: 2) {
             ForEach(row.amounts.indices, id: \.self) { index in
-                Text(row.amounts[index])
+                FinancialText(row.amounts[index])
             }
         }
         .font(Typography.number(size: amountSize, weight: .semibold))
@@ -492,7 +550,8 @@ struct HoldingPositionDetails: View {
                 title: fxTitle,
                 icon: .fxImpact,
                 value: fxValue,
-                color: fxColor
+                color: fxColor,
+                isDirectional: true
             ),
         ] + fxPercentRow + [
             .init(
@@ -505,7 +564,8 @@ struct HoldingPositionDetails: View {
                 title: L10n.text("Unrealised P&L"),
                 icon: .unrealisedProfitLoss,
                 value: DisplayFormat.money(holding.unrealized, signed: true),
-                color: profitColor
+                color: profitColor,
+                isDirectional: true
             ),
             .init(
                 title: L10n.text("Unrealised P&L %"),
@@ -521,9 +581,13 @@ struct HoldingPositionDetails: View {
         // edge to edge beneath it.
         VStack(alignment: .leading, spacing: 0) {
             Text(L10n.text("Data"))
-                .appText(.subheading, weight: .medium)
-                .padding([.horizontal, .top], HoldingDetailCardStyle.contentInset)
-                .padding(.bottom, 12)
+                .appText(.heading, weight: .medium, trimsLeading: true)
+                .foregroundStyle(CatfolioTheme.primaryText)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, HoldingDetailCardStyle.contentInset)
+                .padding(.top, 24)
+                .padding([.horizontal, .top], SettingsTemplate.cardBorderWidth)
+                .padding(.bottom, 20)
 
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
@@ -633,6 +697,7 @@ struct HoldingDataRow: View {
         let icon: HoldingDataIcon
         let value: String
         var color: Color = .primary
+        var isDirectional = false
     }
 
     @Environment(\.colorScheme) private var colorScheme
@@ -691,7 +756,7 @@ struct HoldingDataRow: View {
     }
 
     private var value: some View {
-        Text(model.value)
+        FinancialText(model.value, isDirectional: model.isDirectional)
             .appNumber(.footnote, weight: .semibold)
             .foregroundStyle(model.color)
     }

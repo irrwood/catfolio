@@ -153,7 +153,7 @@ struct ValuationStockMap: View {
                     }.frame(minHeight: 44)
                 }
                 Spacer()
-                Text("\(L10n.text("仓位")) \(percent(row.weight * 100))")
+                FinancialText("\(L10n.text("仓位")) \(percent(row.weight * 100))")
                     .font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.5))
             }
             HStack(alignment: .top, spacing: 8) {
@@ -176,7 +176,7 @@ struct ValuationStockMap: View {
     private func metric(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(title).font(.system(size: 10, weight: .medium)).foregroundStyle(.white.opacity(0.5))
-            Text(value).font(.system(size: 24, weight: .medium, design: .rounded)).monospacedDigit()
+            FinancialText(value).font(.system(size: 24, weight: .medium, design: .rounded)).monospacedDigit()
                 .minimumScaleFactor(0.7).lineLimit(1)
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -193,7 +193,7 @@ struct ValuationStockMap: View {
                 if let q = row.quality {
                     Text("SEC · \(L10n.text("年度")) \(q.periodStart) – \(q.periodEnd)")
                     Text("EPS: \(decimal(q.priorDilutedEPS)) → \(decimal(q.dilutedEPS)) USD")
-                    Text("\(L10n.text("有效税率")): \(percent(q.effectiveTaxRate.map { $0 * 100 }))")
+                    FinancialText("\(L10n.text("有效税率")): \(percent(q.effectiveTaxRate.map { $0 * 100 }))")
                     Text("NOPAT: \(decimal(q.nopat)) USD")
                     Text("\(L10n.text("投入资本（期初 / 期末）")): \(decimal(q.openingCapital)) / \(decimal(q.closingCapital)) USD")
                     Text("\(L10n.text("申报日期")): \(q.filed)")

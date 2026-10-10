@@ -137,7 +137,6 @@ struct AccountDetailView: View {
                 .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
             }
         }
-        .hidesTabBarWhenPushed()
         // A sheet rather than a text-field alert: the alert insets its title
         // to the field's text, not its edge, and the two never line up.
         .appSheet(isPresented: $showsRenamePrompt) {

@@ -291,7 +291,6 @@ struct LocalServicesSettingsView: View {
                 ServiceAPIOnboardingView()
             }
             .navigationDestination(item: $routedProvider) { provider in detail(provider) }
-            .hidesTabBarWhenPushed()
             .onAppear {
                 refreshStatuses()
                 applyLaunchRouteIfNeeded()
@@ -303,7 +302,6 @@ struct LocalServicesSettingsView: View {
         LocalServiceDetailView(provider: provider) { status in
             statuses[provider] = status
         }
-        .hidesTabBarWhenPushed()
     }
 
     private var selectedAIProvider: AIProviderPreference {
@@ -313,7 +311,6 @@ struct LocalServicesSettingsView: View {
     private var codexLink: some View {
         NavigationLink {
             CodexOAuthSettingsView()
-                .hidesTabBarWhenPushed()
         } label: {
             LocalServiceRowLabel(iconName: "bubble.left.and.text.bubble.right",
                 title: "ChatGPT Codex", subtitle: L10n.text("使用 ChatGPT 订阅进行组合问答"),

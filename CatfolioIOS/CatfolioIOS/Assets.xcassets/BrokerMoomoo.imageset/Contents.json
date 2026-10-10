@@ -1,12 +1,31 @@
 {
-  "images": [
+  "images" : [
     {
-      "filename": "BrokerMoomoo.png",
-      "idiom": "universal"
+      "filename" : "BrokerMoomoo-light.svg",
+      "idiom" : "universal",
+      "appearances" : [
+        {
+          "appearance" : "luminosity",
+          "value" : "light"
+        }
+      ]
+    },
+    {
+      "filename" : "BrokerMoomoo-dark.svg",
+      "idiom" : "universal",
+      "appearances" : [
+        {
+          "appearance" : "luminosity",
+          "value" : "dark"
+        }
+      ]
     }
   ],
-  "info": {
-    "author": "xcode",
-    "version": 1
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "preserves-vector-representation" : true
   }
 }

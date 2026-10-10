@@ -92,6 +92,7 @@ struct IBKRFlexView: View {
                     connectionContent
                 }
             }
+            .accountFlowActions { flowActions }
             .softTopScrollEdge()
             .navigationTitle(context.isCreating ? L10n.text("新建 IBKR 账户") : "IBKR Flex")
             // Past the first step the guide's own 上一步 is the back button.
@@ -105,7 +106,6 @@ struct IBKRFlexView: View {
                         } label: {
                             Label(L10n.text("上一步"), systemImage: "chevron.left")
                         }
-                        .tint(CatfolioTheme.primaryText)
                         .disabled(isWorking)
                     }
                 } else if context.isCreating && snapshot == nil {
@@ -153,11 +153,41 @@ struct IBKRFlexView: View {
                     : L10n.text("将更新当前 IBKR 账户持仓；其他账户不受影响。"))
             }
         }
-        .tint(CatfolioTheme.accent)
+        .accountFlowBrand(.ibkr, enabled: context.isCreating)
     }
 
-    /// A row that opens a web page. `Link` stays the control, so the row does
-    /// not reimplement how a URL is handed to the system.
+    @ViewBuilder
+    private var flowActions: some View {
+        if context.isCreating && guideStep < 3 {
+            IBKRAccountGuide(step: guideStep) { guideStep += 1 } skip: { guideStep = 3 }.actions
+        } else if let snapshot {
+            GlassPrimaryButton(
+                title: isWorking
+                    ? (context.isCreating ? L10n.text("正在创建") : L10n.text("正在同步"))
+                    : (context.isCreating ? L10n.text("创建 IBKR 账户") : L10n.text("同步 \(snapshot.positions.count) 项到 Catfolio")),
+                systemImage: "tray.and.arrow.down.fill",
+                isDisabled: !hasValidNickname,
+                isBusy: isWorking
+            ) {
+                showsSyncConfirmation = true
+            }
+        } else {
+            GlassPrimaryButton(
+                title: context.isCreating ? L10n.text("保存并创建账户") : L10n.text("保存凭证"),
+                systemImage: "tray.and.arrow.down.fill",
+                isDisabled: !hasCompleteCredentials || !hasValidNickname,
+                isBusy: isWorking
+            ) {
+                Task { await saveAndClose() }
+            }
+            Button(isWorking ? L10n.text("正在读取") : L10n.text("现在就读取持仓")) {
+                Task { await testFlex() }
+            }
+            .appText(.callout, weight: .medium)
+            .disabled(isWorking || !hasCompleteCredentials)
+        }
+    }
+
     private func settingsLink(_ title: String, url: String) -> some View {
         Link(destination: URL(string: url)!) {
             SettingsRowContainer {
@@ -172,7 +202,7 @@ struct IBKRFlexView: View {
         if context.isCreating {
             Text(L10n.text("第 \(4) 步，共 4 步"))
                 .appText(.label).foregroundStyle(SettingsTemplate.secondaryText)
-            ProgressView(value: 4, total: 4).tint(CatfolioTheme.accent)
+            ProgressView(value: 4, total: 4)
         }
         if context.isCreating, snapshot != nil {
             SettingsSectionHeader(L10n.text("账户昵称"))
@@ -220,42 +250,6 @@ struct IBKRFlexView: View {
                 }
                 .disabled(isWorking)
 
-                SettingsRowContainer {
-                    GlassPrimaryButton(
-                        title: isWorking
-                            ? (context.isCreating ? L10n.text("正在创建") : L10n.text("正在同步"))
-                            : (context.isCreating ? L10n.text("创建 IBKR 账户") : L10n.text("同步 \(snapshot.positions.count) 项到 Catfolio")),
-                        systemImage: "tray.and.arrow.down.fill",
-                        isDisabled: !hasValidNickname,
-                        isBusy: isWorking
-                    ) {
-                        showsSyncConfirmation = true
-                    }
-                }
-            } else {
-                // Saving no longer waits on a report IBKR may take
-                // minutes to build. The account is created now and
-                // shows as awaiting its first sync; the credentials
-                // can be revisited by opening it again.
-                SettingsRowContainer {
-                    GlassPrimaryButton(
-                        title: context.isCreating ? L10n.text("保存并创建账户") : L10n.text("保存凭证"),
-                        systemImage: "tray.and.arrow.down.fill",
-                        isDisabled: !hasCompleteCredentials || !hasValidNickname,
-                        isBusy: isWorking
-                    ) {
-                        Task { await saveAndClose() }
-                    }
-                }
-
-                SettingsButtonRow(
-                    icon: .symbol("arrow.down.circle"),
-                    title: isWorking ? L10n.text("正在读取") : L10n.text("现在就读取持仓"),
-                    showsChevron: false
-                ) {
-                    Task { await testFlex() }
-                }
-                .disabled(isWorking || !hasCompleteCredentials)
             }
 
             if status.isPresented {
@@ -266,7 +260,7 @@ struct IBKRFlexView: View {
                 icon: .symbol(didCopyBrief ? "checkmark.circle" : "doc.on.doc"),
                 title: didCopyBrief ? L10n.text("已复制，去 IBKR 粘贴给它的助手") : L10n.text("复制配置提示词"),
                 showsChevron: false,
-                tint: didCopyBrief ? CatfolioTheme.positive : CatfolioTheme.accent
+                tint: didCopyBrief ? CatfolioTheme.positive : nil
             ) {
                 UIPasteboard.general.string = IBKRFlexQueryBrief.prompt
                 withAnimation { didCopyBrief = true }
@@ -307,10 +301,10 @@ struct IBKRFlexView: View {
                             }
                             Spacer()
                             VStack(alignment: .trailing, spacing: SettingsTemplate.subtitleSpacing) {
-                                Text(DisplayFormat.shares(position.quantity))
+                                FinancialText(DisplayFormat.shares(position.quantity))
                                     .appNumber(.subheading)
                                 if let marketValue = position.marketValue {
-                                    Text(DisplayFormat.money(marketValue, currency: position.currency))
+                                    FinancialText(DisplayFormat.money(marketValue, currency: position.currency))
                                         .appNumber(.label, weight: .regular, monospaced: false)
                                         .foregroundStyle(SettingsTemplate.secondaryText)
                                 }

@@ -41,23 +41,27 @@ struct CSVImportView: View {
                     }
                 }
 
-                SettingsSectionHeader(L10n.text("交易记录"))
-                SettingsCard {
-                    SettingsButtonRow(
-                        icon: .symbol("folder"),
-                        title: selectedFile == nil ? L10n.text("选择 CSV 文件") : L10n.text("重新选择文件"),
-                        showsChevron: false
-                    ) {
-                        showsFileImporter = true
-                    }
-                    .disabled(isImporting)
+                if selectedFile != nil || isReadingFile {
+                    SettingsSectionHeader(L10n.text("交易记录"))
+                    SettingsCard {
+                        if selectedFile != nil {
+                            SettingsButtonRow(
+                                icon: .symbol("folder"),
+                                title: selectedFile == nil ? L10n.text("选择 CSV 文件") : L10n.text("重新选择文件"),
+                                showsChevron: false
+                            ) {
+                                showsFileImporter = true
+                            }
+                            .disabled(isImporting)
+                        }
 
-                    if isReadingFile { ProgressView().padding() }
-                    if let selectedFile {
-                        SettingsValueRow(title: L10n.text("文件"), value: selectedFile.filename, valueIsNumeric: false)
-                        SettingsValueRow(title: L10n.text("大小"), value: selectedFile.formattedSize)
-                        SettingsValueRow(title: L10n.text("数据行"), value: selectedFile.dataRowCount.map(String.init) ?? L10n.text("导入时统计"))
-                        SettingsValueRow(title: L10n.text("识别列"), value: selectedFile.headers.joined(separator: " · "), valueIsNumeric: false)
+                        if isReadingFile { ProgressView().padding() }
+                        if let selectedFile {
+                            SettingsValueRow(title: L10n.text("文件"), value: selectedFile.filename, valueIsNumeric: false)
+                            SettingsValueRow(title: L10n.text("大小"), value: selectedFile.formattedSize)
+                            SettingsValueRow(title: L10n.text("数据行"), value: selectedFile.dataRowCount.map(String.init) ?? L10n.text("导入时统计"))
+                            SettingsValueRow(title: L10n.text("识别列"), value: selectedFile.headers.joined(separator: " · "), valueIsNumeric: false)
+                        }
                     }
                 }
                 SettingsFootnote(L10n.text("本机处理，不上传；最大 50 MB。"))
@@ -71,26 +75,10 @@ struct CSVImportView: View {
                     SettingsValueRow(title: L10n.text("可选"), value: "Currency · Name", valueIsNumeric: false)
                 }
 
-                if let selectedFile {
+                if let selectedFile, selectedFile.dataRowCount == 0 {
                     SettingsCard {
                         SettingsRowContainer {
-                            GlassPrimaryButton(
-                                title: isImporting
-                                    ? L10n.text("正在导入")
-                                    : (context.isCreating ? L10n.text("创建 CSV 账户") : L10n.text("导入并更新账户")),
-                                systemImage: "arrow.down.doc",
-                                isDisabled: !selectedFile.hasDataRows || isReadingFile
-                                    || (context.isCreating && nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty),
-                                isBusy: isImporting
-                            ) {
-                                showsImportConfirmation = true
-                            }
-                        }
-
-                        if selectedFile.dataRowCount == 0 {
-                            SettingsRowContainer {
-                                StatusNotice(text: L10n.text("CSV 没有可导入的数据行。"))
-                            }
+                            StatusNotice(text: L10n.text("CSV 没有可导入的数据行。"))
                         }
                     }
                 }
@@ -105,6 +93,7 @@ struct CSVImportView: View {
                     }
                 }
             }
+            .accountFlowActions { flowActions }
             .softTopScrollEdge()
             .navigationTitle(context.isCreating ? L10n.text("新建 CSV 账户") : L10n.text("CSV 导入"))
             .navigationBarTitleDisplayMode(.inline)
@@ -151,7 +140,29 @@ struct CSVImportView: View {
                     : L10n.text("请确认 CSV 包含完整交易记录。导入将更新当前账户并重算成本；其他账户不受影响。"))
             }
         }
-        .tint(CatfolioTheme.accent)
+        .accountFlowBrand(.csv, enabled: context.isCreating)
+    }
+
+    @ViewBuilder
+    private var flowActions: some View {
+        if importResult != nil {
+            GlassPrimaryButton(title: L10n.text("完成")) { dismiss() }
+        } else if let selectedFile {
+            GlassPrimaryButton(
+                title: isImporting
+                    ? L10n.text("正在导入")
+                    : (context.isCreating ? L10n.text("创建 CSV 账户") : L10n.text("导入并更新账户")),
+                systemImage: "arrow.down.doc",
+                isDisabled: !selectedFile.hasDataRows || isReadingFile
+                    || (context.isCreating && nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty),
+                isBusy: isImporting
+            ) {
+                showsImportConfirmation = true
+            }
+        } else {
+            GlassPrimaryButton(title: L10n.text("选择 CSV 文件"), systemImage: "folder",
+                isBusy: isReadingFile) { showsFileImporter = true }
+        }
     }
 
     /// A column the file has to carry, and what goes in it. The name is set
@@ -276,9 +287,9 @@ struct CSVImportResultSection: View {
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: SettingsTemplate.subtitleSpacing) {
-                            Text(DisplayFormat.shares(holding.shares))
+                            FinancialText(DisplayFormat.shares(holding.shares))
                                 .appNumber(.subheading)
-                            Text(L10n.text("均价 \(DisplayFormat.money(holding.averageCost, currency: holding.currency))"))
+                            FinancialText(L10n.text("均价 \(DisplayFormat.money(holding.averageCost, currency: holding.currency))"))
                                 .appNumber(.label, weight: .regular, monospaced: false)
                                 .foregroundStyle(SettingsTemplate.secondaryText)
                         }

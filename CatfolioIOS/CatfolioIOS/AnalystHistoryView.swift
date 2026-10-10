@@ -138,12 +138,12 @@ struct AnalystHistoryView: View {
         VStack(alignment: .leading, spacing: 8) {
             if let p = selected {
                 Text(p.date).font(.caption).foregroundStyle(.secondary)
-                Text(L10n.text("股价 ") + money(p.price)).font(.title3.bold()).monospacedDigit()
+                FinancialText(L10n.text("股价 ") + money(p.price)).font(.title3.bold()).monospacedDigit()
                 if ratings {
                     Text(zip(labels, p.counts).map { $0.0 + " \($0.1)" }.joined(separator: " · ")).font(.caption).monospacedDigit()
                 } else {
-                    Text(L10n.text("共识 ") + money(p.mean)).font(.subheadline).monospacedDigit()
-                    Text(money(p.low) + " — " + money(p.high)).font(.caption).foregroundStyle(.secondary)
+                    FinancialText(L10n.text("共识 ") + money(p.mean)).font(.subheadline).monospacedDigit()
+                    FinancialText(money(p.low) + " — " + money(p.high)).font(.caption).foregroundStyle(.secondary)
                 }
             }
         }.frame(minHeight: 92, alignment: .topLeading)
@@ -268,7 +268,7 @@ struct AnalystHistoryView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Spacer(minLength: 4)
-                Text(valueText)
+                FinancialText(valueText)
                     .font(.caption.weight(.semibold))
                     .monospacedDigit()
                     .lineLimit(1)

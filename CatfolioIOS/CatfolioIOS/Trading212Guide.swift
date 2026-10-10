@@ -38,7 +38,6 @@ struct Trading212GuideProgress: View {
                     .foregroundStyle(SettingsTemplate.secondaryText)
             }
             ProgressView(value: Double(min(step.rawValue + 1, 5)), total: 5)
-                .tint(CatfolioTheme.accent)
                 .accessibilityLabel(L10n.text("添加账户进度"))
             Text(step.title)
                 .font(.title2.weight(.bold))
@@ -82,15 +81,6 @@ struct Trading212GuideLesson: View {
             }
         }
         SettingsCard {
-            SettingsRowContainer {
-                GlassPrimaryButton(title: step == .permissions ? L10n.text("已准备好，填写凭证") : L10n.text("下一步"),
-                                   systemImage: "arrow.right", action: next)
-                    .accessibilityIdentifier("account-guide-next")
-            }
-            if step == .prepare {
-                SettingsButtonRow(icon: .symbol("key"), title: L10n.text("已有 Key 和 Secret，直接填写"),
-                                  showsChevron: false, action: skip)
-            }
             Link(destination: Self.helpURL) {
                 SettingsRowContainer {
                     Label(L10n.text("查看官方图文教程"), systemImage: "arrow.up.right.square")
@@ -101,11 +91,24 @@ struct Trading212GuideLesson: View {
         }
     }
 
+    var actions: some View {
+        VStack(spacing: 12) {
+            GlassPrimaryButton(title: step == .permissions ? L10n.text("已准备好，填写凭证") : L10n.text("下一步"),
+                               systemImage: "arrow.right", action: next)
+            .accessibilityIdentifier("account-guide-next")
+            if step == .prepare {
+                Button(L10n.text("已有 Key 和 Secret，直接填写"), action: skip)
+                    .appText(.callout, weight: .medium)
+            }
+        }
+    }
+
     private func instruction(_ symbol: String, _ title: String, _ detail: String) -> some View {
         SettingsRowContainer {
             HStack(alignment: .top, spacing: SettingsTemplate.iconSpacing) {
                 Image(systemName: symbol)
                     .font(.title3)
+                    .foregroundStyle(.tint)
                     .frame(width: SettingsTemplate.iconSize)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 8) {

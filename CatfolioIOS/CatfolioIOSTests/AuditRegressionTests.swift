@@ -365,15 +365,23 @@ final class AuditRegressionTests: XCTestCase {
         }
     }
 
-    func testAlreadyQueuedFMPRequestHonorsLaterBackoff() async throws {
+    func testAlreadyQueuedFMPRequestSkipsProviderAfterLaterBackoff() async throws {
         let limiter = FMPRequestLimiter(spacing: 0.4)
         try await limiter.waitForTurn()
-        let waiting = Task { try await limiter.waitForTurn(); return Date() }
+        let waiting = Task { () -> Bool in
+            do {
+                try await limiter.waitForTurn()
+                return false
+            } catch FMPFailure.rateLimited {
+                return true
+            } catch {
+                return false
+            }
+        }
         try await Task.sleep(for: .milliseconds(40))
-        let blocked = Date()
         await limiter.backOff(retryAfter: "1")
-        let resumed = try await waiting.value
-        XCTAssertGreaterThanOrEqual(resumed.timeIntervalSince(blocked), 0.95)
+        let skipped = await waiting.value
+        XCTAssertTrue(skipped, "A queued request must release its caller to use another provider or cached data")
     }
 }
 

@@ -216,6 +216,7 @@ extension AppModel {
         let accounts: [PortfolioAccount]
         let accountKeys: Set<String>
         let dailyChanges: [String: Double]
+        var recentCloses: [String: [String: Double]] = [:]
         let benchmark: Double?
         let comparison: ComparisonResponse?
         let analytics: ReturnsAnalyticsResponse?
@@ -227,7 +228,7 @@ extension AppModel {
     private func captureSourcePresentation() -> SourcePresentation {
         SourcePresentation(document: document, fullDocument: fullDocument, overview: overview, chart: portfolioChart,
             holdings: holdings, accounts: accounts, accountKeys: selectedAccountKeys,
-            dailyChanges: holdingDailyChanges, benchmark: benchmarkDailyChange,
+            dailyChanges: holdingDailyChanges, recentCloses: holdingRecentCloses, benchmark: benchmarkDailyChange,
             comparison: comparison, analytics: returnsAnalytics, source: localSource, updatedAt: localUpdatedAt,
             cachedAt: portfolioCachedAt)
     }
@@ -250,6 +251,7 @@ extension AppModel {
         accounts = cached.accounts
         storedSelectedAccountKeys = cached.accountKeys
         holdingDailyChanges = cached.dailyChanges
+        holdingRecentCloses = cached.recentCloses
         benchmarkDailyChange = cached.benchmark
         comparison = cached.comparison
         returnsAnalytics = cached.analytics
@@ -276,6 +278,7 @@ extension AppModel {
         accounts = []
         storedSelectedAccountKeys = []
         holdingDailyChanges = [:]
+        holdingRecentCloses = [:]
         localUpdatedAt = nil
         portfolioCachedAt = nil
         localSource = "尚未导入"
@@ -310,7 +313,8 @@ extension AppModel {
         restoreSourcePresentation(SourcePresentation(
             document: scoped, fullDocument: loaded, overview: cached.overview, chart: cached.chart,
             holdings: cached.holdings, accounts: preparedScope.accounts, accountKeys: preparedScope.keys,
-            dailyChanges: cached.dailyChanges, benchmark: cached.benchmark, comparison: nil, analytics: nil,
+            dailyChanges: cached.dailyChanges, recentCloses: cached.recentCloses ?? [:],
+            benchmark: cached.benchmark, comparison: nil, analytics: nil,
             source: isPublicInvestorMode ? scoped.accounts.map(\.displayName).joined(separator: "、") : scoped.source,
             updatedAt: cached.updatedAt, cachedAt: cached.savedAt), preparedScope: preparedScope)
         isPortfolioChartLoading = !hasUsableHomeChart
@@ -334,7 +338,7 @@ extension AppModel {
         }
         let snapshot = PortfolioPresentationSnapshot(overview: overview, chart: chart, holdings: holdings,
             dailyChanges: holdingDailyChanges, benchmark: benchmarkDailyChange,
-            updatedAt: localUpdatedAt, savedAt: Date())
+            updatedAt: localUpdatedAt, savedAt: Date(), recentCloses: holdingRecentCloses)
         // Failure to write a disposable result cache must not fail a refresh.
         try? await presentationCache.save(snapshot, document: fullDocument, context: context)
     }

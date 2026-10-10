@@ -39,7 +39,6 @@ struct IsometricHeatmapLabView: View {
         }
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
-        .hidesTabBarWhenPushed()
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L10n.text("等距热力图"))
@@ -454,7 +453,7 @@ private struct IsometricHeatmapTile: View {
                 Text(tile.ticker)
                     .font(.system(size: tickerSize, weight: .bold, design: .rounded))
                 if let change = tile.change {
-                    Text(DisplayFormat.percent(change))
+                    FinancialText(DisplayFormat.percent(change))
                         .font(.system(size: tickerSize * 0.78, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .opacity(0.5)

@@ -1,13 +1,34 @@
 import SwiftUI
 import UIKit
 
+enum SettingsHistoryOverviewIcon: View {
+    case realisedProfit
+    case dividend
+    case symbol(String)
+
+    @ViewBuilder var body: some View {
+        switch self {
+        case .realisedProfit:
+            Image("HistoryRealisedRocket")
+                .frame(width: 24, height: 24)
+        case .dividend:
+            Image("HistoryDividend")
+                .frame(width: 24, height: 24)
+        case .symbol(let name):
+            Image(systemName: name)
+                .font(.system(size: 22, weight: .regular))
+                .frame(width: 26, height: 26)
+        }
+    }
+}
+
 /// One History figure, laid out as Figma 487:5391: the icon and chevron on
 /// top, the title over the amount at the foot. The colours stay the
 /// settings card's own.
 struct SettingsHistoryOverviewTile: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let title: String
-    let icon: String
+    let icon: SettingsHistoryOverviewIcon
     let caption: String
     let value: String
     let valueColor: Color
@@ -16,9 +37,7 @@ struct SettingsHistoryOverviewTile: View {
         let shape = RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius, style: .continuous)
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 22, weight: .regular))
-                    .frame(width: 26, height: 26)
+                icon
                     .accessibilityHidden(true)
                 Spacer(minLength: 0)
                 // One line: a wrapped caption would push this tile's figures
@@ -42,7 +61,7 @@ struct SettingsHistoryOverviewTile: View {
                     .textCase(.uppercase)
                     .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
                     .minimumScaleFactor(0.8)
-                Text(value)
+                FinancialText(value)
                     .font(Typography.number(size: 20, weight: .semibold))
                     .foregroundStyle(valueColor)
                     .lineLimit(1)
@@ -98,17 +117,17 @@ struct SettingsHistoryOverview: View {
         VStack(alignment: .leading, spacing: 12) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12),
                                      count: typeSize.isAccessibilitySize ? 1 : 2), spacing: 12) {
-                overviewCard(.orders, title: L10n.text("已实现盈亏"), icon: "chart.line.uptrend.xyaxis.circle.fill",
+                overviewCard(.orders, title: L10n.text("已实现盈亏"), icon: .realisedProfit,
                              caption: realisedCaption, amount: realisedAmount, signed: true)
-                overviewCard(.dividends, title: L10n.text("股息"), icon: "dollarsign.circle.fill",
+                overviewCard(.dividends, title: L10n.text("股息"), icon: .dividend,
                              caption: "", amount: total(for: .dividends))
-                overviewCard(.interest, title: L10n.text("利息"), icon: "building.columns.circle.fill",
+                overviewCard(.interest, title: L10n.text("利息"), icon: .symbol("building.columns.circle.fill"),
                              caption: "", amount: total(for: .interest))
-                overviewCard(.fees, title: L10n.text("年费用"), icon: "creditcard.circle.fill",
+                overviewCard(.fees, title: L10n.text("年费用"), icon: .symbol("creditcard.circle.fill"),
                              caption: "", amount: annualFees)
             }
             SettingsCard {
-                SettingsNavigationRow(icon: .asset("SettingsInvoice"), title: L10n.text("全部历史")) {
+                SettingsNavigationRow(icon: .asset("HistoryArchive"), title: L10n.text("全部历史")) {
                     HistoryView().environment(model)
                 }
                 .accessibilityIdentifier("settings.history-overview.all")
@@ -151,7 +170,7 @@ struct SettingsHistoryOverview: View {
         prepared?.page(category: category, basis: .calendar, year: nil).totalUSD
     }
 
-    private func overviewCard(_ category: HistoryCategory, title: String, icon: String,
+    private func overviewCard(_ category: HistoryCategory, title: String, icon: SettingsHistoryOverviewIcon,
                               caption: String, amount: Double?, signed: Bool = false) -> some View {
         let validAmount = amount.flatMap { $0.isFinite ? $0 : nil }
         let currency = DisplayCurrency(rawValue: displayCurrency) ?? .usd

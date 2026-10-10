@@ -470,6 +470,8 @@ struct SecurityPricePlot: View {
     @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
     @State private var seriesCache = SecurityPricePlotSeriesCache()
+    @ScaledMetric(relativeTo: .footnote) private var axisFontSize = TypeScale.footnote.size
+    @ScaledMetric(relativeTo: .footnote) private var minimumAxisFontSize = TypeScale.nano.size
 
     let data: SecurityPriceRangeData
     let currency: String
@@ -487,6 +489,9 @@ struct SecurityPricePlot: View {
 
     var body: some View {
         let prepared = seriesCache.prepared(for: data, scheme: colorScheme)
+        let axisValues = prepared.yTicks + [data.averageCost, data.offscaleCost?.value].compactMap { $0 }
+        let axis = seriesCache.axisLayout(for: .init(labels: axisValues.map(axisPriceLabel),
+            preferredFontSize: axisFontSize, minimumFontSize: minimumAxisFontSize))
         let costReference = data.averageCost.map {
             StandardLineChartReferenceLine(
                 id: "cost",
@@ -502,7 +507,7 @@ struct SecurityPricePlot: View {
             interactionDates: prepared.interactionDates,
             domain: data.domain,
             yTicks: prepared.yTicks,
-            axisWidth: 49,
+            axisWidth: axis.width,
             topInset: 15,
             bottomHeight: 0,
             // The first price is also the return baseline; keep it visible.
@@ -525,9 +530,9 @@ struct SecurityPricePlot: View {
             rangeSeriesIDs: ["price"],
             rangePrimarySeriesID: "price",
             dimsFutureDuringSelection: true,
-            yAxisFont: Typography.number(.footnote),
+            yAxisFont: Typography.number(size: axis.fontSize),
             yAxisColor: Color.primary.opacity(0.20),
-            referenceAxisFont: Typography.number(.footnote, weight: .semibold),
+            referenceAxisFont: Typography.number(size: axis.fontSize, weight: .semibold),
             yAxisLabel: axisPriceLabel,
             xAxisLabel: { _ in "" },
             onSelect: onSelect,
@@ -542,13 +547,15 @@ struct SecurityPricePlot: View {
                 VStack(spacing: 2) {
                     if cost.isAbove { OffscaleCostTriangle(pointsUp: true) }
                     Text(axisPriceLabel(cost.value))
-                        .font(Typography.number(.footnote, weight: .semibold))
+                        .font(Typography.number(size: axis.fontSize, weight: .semibold))
                         .lineLimit(1)
+                        .fixedSize()
+                        .researchLayoutFrame("security-price.axis.offscale")
                     if !cost.isAbove { OffscaleCostTriangle(pointsUp: false) }
                 }
                 .foregroundStyle(CatfolioPalette.tradeBuy)
                 .opacity(0.5)
-                .frame(width: 49)
+                .frame(width: axis.width)
                 .allowsHitTesting(false)
                     .accessibilityLabel(L10n.text("持仓成本 \(axisPriceLabel(cost.value))，不在当前价格范围内"))
             }
@@ -594,7 +601,17 @@ final class SecurityPricePlotSeriesCache {
 
     private var cachedKey: Key?
     private var cachedValue: Prepared?
+    private var cachedAxisKey: SecurityPriceAxisLayout.Key?
+    private var cachedAxisLayout: SecurityPriceAxisLayout?
     private(set) var rebuildCount = 0
+
+    func axisLayout(for key: SecurityPriceAxisLayout.Key) -> SecurityPriceAxisLayout {
+        if cachedAxisKey == key, let cachedAxisLayout { return cachedAxisLayout }
+        let layout = SecurityPriceAxisLayout(key)
+        cachedAxisKey = key
+        cachedAxisLayout = layout
+        return layout
+    }
 
     /// Round prices inside the scale — up to four, as few as one — at the
     /// smallest round step that fits: 1, 2, 5, 10, 20, 50… Whole numbers from

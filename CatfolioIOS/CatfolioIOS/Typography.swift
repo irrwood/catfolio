@@ -164,6 +164,20 @@ enum Typography {
         )).monospacedDigit()
     }
 
+    /// Measure the same alternate, tabular digits used by `number(size:)`.
+    static func numberWidth(_ text: String, size: CGFloat, weight: Font.Weight = .medium) -> CGFloat {
+        let base = NumericAlternates.font(size: size, weight: NumericAlternates.uiWeight(weight), rounded: true)
+        let features = base.fontDescriptor.object(forKey: .featureSettings) as? [[String: Any]] ?? []
+        let descriptor = base.fontDescriptor.addingAttributes([
+            .featureSettings: features + [[
+                UIFontDescriptor.FeatureKey.type.rawValue: kNumberSpacingType,
+                UIFontDescriptor.FeatureKey.selector.rawValue: kMonospacedNumbersSelector
+            ]]
+        ])
+        let font = UIFont(descriptor: descriptor, size: size)
+        return (text as NSString).size(withAttributes: [.font: font]).width
+    }
+
     /// Prose at a size the scale does not name.
     static func text(size: CGFloat, weight: Font.Weight = .regular) -> Font {
         Font(CurrencySymbolAlternates.font(size: size, weight: NumericAlternates.uiWeight(weight), rounded: true))
@@ -315,6 +329,7 @@ private struct ScaledFont: ViewModifier {
     let usesAlternateDigits: Bool
     let lineSpacing: CGFloat
     let tracking: CGFloat
+    let trimsLeading: Bool
     @ScaledMetric private var size: CGFloat
 
     init(
@@ -323,7 +338,8 @@ private struct ScaledFont: ViewModifier {
         design: Font.Design,
         monospacedDigit: Bool,
         usesAlternateDigits: Bool = false,
-        tracking: CGFloat
+        tracking: CGFloat,
+        trimsLeading: Bool = false
     ) {
         self.weight = weight ?? scale.weight
         self.design = design
@@ -331,27 +347,59 @@ private struct ScaledFont: ViewModifier {
         self.usesAlternateDigits = usesAlternateDigits
         self.lineSpacing = scale.lineSpacing
         self.tracking = tracking
+        self.trimsLeading = trimsLeading
         _size = ScaledMetric(wrappedValue: scale.size, relativeTo: scale.textStyle)
     }
 
+    @ViewBuilder
     func body(content: Content) -> some View {
-        var font: Font
-        if usesAlternateDigits {
-            font = Font(NumericAlternates.font(
-                size: size,
-                weight: NumericAlternates.uiWeight(weight),
-                rounded: design == .rounded
-            ))
-        } else {
-            font = Font(CurrencySymbolAlternates.font(
-                size: size, weight: NumericAlternates.uiWeight(weight), rounded: design == .rounded
-            ))
-        }
-        if monospacedDigit { font = font.monospacedDigit() }
-        return content
+        let uiFont = usesAlternateDigits
+            ? NumericAlternates.font(size: size, weight: NumericAlternates.uiWeight(weight), rounded: design == .rounded)
+            : CurrencySymbolAlternates.font(size: size, weight: NumericAlternates.uiWeight(weight), rounded: design == .rounded)
+        let font = monospacedDigit ? Font(uiFont).monospacedDigit() : Font(uiFont)
+        let text = content
             .font(font)
             .tracking(tracking)
             .lineSpacing(lineSpacing)
+        if trimsLeading {
+            CapHeightTextLayout(capHeight: uiFont.capHeight) { text }
+        } else {
+            text
+        }
+    }
+}
+
+/// Figma's cap-height / alphabetic-baseline text box. Only the layout box
+/// loses its extra leading; glyphs, accents and descenders are never clipped.
+/// Multiline text retains every baseline and Dynamic Type uses the actual
+/// scaled font metrics. Existing typography stays unchanged unless opted in.
+struct CapHeightTextLayout: Layout {
+    let capHeight: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let text = subviews.first else { return .zero }
+        let dimensions = text.dimensions(in: ProposedViewSize(width: proposal.width, height: nil))
+        return CGSize(width: dimensions.width,
+                      height: dimensions[.lastTextBaseline] - dimensions[.firstTextBaseline] + capHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let text = subviews.first else { return }
+        let textProposal = ProposedViewSize(width: bounds.width, height: nil)
+        let dimensions = text.dimensions(in: textProposal)
+        text.place(at: CGPoint(x: bounds.minX, y: bounds.minY + capHeight - dimensions[.firstTextBaseline]),
+                   anchor: .topLeading, proposal: textProposal)
+    }
+
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize,
+                           subviews: Subviews, cache: inout ()) -> CGFloat? {
+        guard let text = subviews.first else { return nil }
+        if guide == .firstTextBaseline { return capHeight }
+        if guide == .lastTextBaseline {
+            let dimensions = text.dimensions(in: ProposedViewSize(width: bounds.width, height: nil))
+            return dimensions[.lastTextBaseline] - dimensions[.firstTextBaseline] + capHeight
+        }
+        return nil
     }
 }
 
@@ -368,10 +416,10 @@ extension View {
     /// request to compress would be accepted and silently ignored — which is
     /// exactly how the two range pickers came to look different from each
     /// other while their code read the same.
-    func appText(_ scale: TypeScale, weight: Font.Weight? = nil) -> some View {
+    func appText(_ scale: TypeScale, weight: Font.Weight? = nil, trimsLeading: Bool = false) -> some View {
         modifier(ScaledFont(
             scale: scale, weight: weight, design: .rounded,
-            monospacedDigit: false, tracking: 0
+            monospacedDigit: false, tracking: 0, trimsLeading: trimsLeading
         ))
     }
 
@@ -391,11 +439,12 @@ extension View {
     func appNumber(
         _ scale: TypeScale,
         weight: Font.Weight? = nil,
-        monospaced: Bool = true
+        monospaced: Bool = true,
+        trimsLeading: Bool = false
     ) -> some View {
         modifier(ScaledFont(
             scale: scale, weight: weight ?? scale.numberWeight, design: .rounded,
-            monospacedDigit: monospaced, usesAlternateDigits: true, tracking: 0
+            monospacedDigit: monospaced, usesAlternateDigits: true, tracking: 0, trimsLeading: trimsLeading
         ))
     }
 

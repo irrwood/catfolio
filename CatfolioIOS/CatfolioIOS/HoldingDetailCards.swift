@@ -25,42 +25,62 @@ struct HoldingDetailActionCardLabel: View {
     }
 }
 
-/// A research card that opens in place rather than presenting a sheet. Closed
-/// it is an action card with a downward chevron; open, the same glass grows to
-/// hold the section beneath the same header, so nothing moves but the content.
-struct HoldingDetailDisclosureCard<Content: View>: View {
+/// A research entry keeps a fixed place in the holding page. Its content
+/// opens in the same independent child-page presentation as Financial.
+struct HoldingDetailChildPageCard<Content: View>: View {
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     let title: String
     let subtitle: String
-    @Binding var isExpanded: Bool
+    @Binding var isPresented: Bool
     var isLoading = false
     var isEnabled = true
+    var onDismiss: () -> Void = {}
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button {
-                withAnimation(.snappy(duration: 0.3)) { isExpanded.toggle() }
-            } label: {
-                HoldingDetailCardHeader(title: title, subtitle: subtitle, symbol: "chevron.down",
-                    isLoading: isLoading, symbolRotation: .degrees(isExpanded ? 180 : 0))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(!isEnabled)
-            .accessibilityValue(L10n.text(isExpanded ? "已展开" : "已收起"))
-
-            if isExpanded {
-                content()
-                    .padding(.horizontal, HoldingDetailCardStyle.contentInset)
-                    .padding(.bottom, HoldingDetailCardStyle.contentInset)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .transition(.opacity)
-            }
+        Button { isPresented = true } label: {
+            HoldingDetailActionCardLabel(title: title, subtitle: subtitle, isLoading: isLoading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .holdingDetailCard()
-        .sensoryFeedback(.selection, trigger: isExpanded) { _, _ in hapticsEnabled }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .appSheet(isPresented: $isPresented, onDismiss: onDismiss) {
+            HoldingDetailChildPage(title: title, content: content)
+        }
+        .sensoryFeedback(.selection, trigger: isPresented) { _, presented in hapticsEnabled && presented }
+    }
+}
+
+struct HoldingDetailChildPage<Content: View>: View {
+    @Environment(\.dismiss) private var dismiss
+    let title: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        NavigationStack {
+            SettingsPage(bottomInset: 24, topInset: SettingsTemplate.sectionSpacing) {
+                HoldingDetailChildPageContent(content: content)
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { AppModalDoneButton { dismiss() } }
+            }
+            .accessibilityIdentifier("holding-research-child-page")
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+}
+
+/// Shared content surface, also used when checking a child page's layout.
+struct HoldingDetailChildPageContent<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        content()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(HoldingDetailCardStyle.contentInset)
+            .holdingDetailCard()
     }
 }
 
@@ -136,8 +156,8 @@ struct HoldingDetailCardModifier: ViewModifier {
     }
 }
 
-/// A section of the page set in the same card as the research below it:
-/// the card's 20pt inset all round, the title in the research cards' type.
+/// Volume Profile and 52-Week Range share the cap-height heading from
+/// Figma 610:15521, with 24pt above it and 20pt before the plot.
 struct HoldingDetailSectionCard<Trailing: View, Content: View>: View {
     let title: String
     var subtitle: String?
@@ -151,8 +171,9 @@ struct HoldingDetailSectionCard<Trailing: View, Content: View>: View {
             HStack(alignment: .center, spacing: 14) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(title)
-                        .appText(.subheading, weight: .medium)
+                        .appText(.heading, weight: .medium, trimsLeading: true)
                         .foregroundStyle(CatfolioTheme.primaryText)
+                        .fixedSize(horizontal: false, vertical: true)
                     if let subtitle {
                         Text(subtitle)
                             .appText(.label, weight: .medium)
@@ -162,10 +183,15 @@ struct HoldingDetailSectionCard<Trailing: View, Content: View>: View {
                 .securityCardInsight(title: title, facts: insightFacts)
                 Spacer(minLength: 0)
                 trailing()
+                    .appNumber(.body, weight: .medium, trimsLeading: true)
+                    .foregroundStyle(.primary.opacity(0.30))
+                    .fixedSize()
             }
             content()
         }
-        .padding(HoldingDetailCardStyle.contentInset)
+        .padding([.horizontal, .bottom], HoldingDetailCardStyle.contentInset)
+        .padding(.top, 24)
+        .padding(SettingsTemplate.cardBorderWidth)
         .frame(maxWidth: .infinity, alignment: .leading)
         .holdingDetailCard()
     }

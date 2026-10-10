@@ -179,7 +179,8 @@ struct HoldingPredictionMarketsCard: View {
     @State private var markets: [PolymarketRelatedMarket] = []
     @State private var errorMessage: String?
     @State private var isLoading = true
-    @State private var isExpanded = false
+    @State private var isPresented = false
+    @State private var pendingAvailability: HoldingResearchAvailability?
 
     private var predictionSubtitle: String {
         let count = PolymarketRelatedEvent.grouped(markets).count
@@ -191,16 +192,14 @@ struct HoldingPredictionMarketsCard: View {
     }
 
     var body: some View {
-        // The same card as the others on the page — its title, the content
-        // 20pt under — with the refresh where the others put their chevron.
-        // Its own header, in a minimum-height row centred on the title, sat
-        // the title lower than every other card's.
-        // Collapsed like the other research cards; the refresh moves inside.
-        HoldingDetailDisclosureCard(
+        // A stable entry on the holding page; markets and refresh live in
+        // the child page, so opening it never moves the surrounding cards.
+        HoldingDetailChildPageCard(
             title: L10n.text("Predicting markets"),
             subtitle: predictionSubtitle,
-            isExpanded: $isExpanded,
-            isLoading: isLoading
+            isPresented: $isPresented,
+            isLoading: isLoading,
+            onDismiss: publishAvailability
         ) {
             VStack(alignment: .leading, spacing: 20) {
                 if isLoading && markets.isEmpty {
@@ -225,7 +224,7 @@ struct HoldingPredictionMarketsCard: View {
         .task(id: taskID) {
             if usesCachedContentOnlyInitially {
                 isLoading = false
-                onAvailability(markets.isEmpty ? .empty : .available)
+                reportAvailability(markets.isEmpty ? .empty : .available)
                 return
             }
             await load(forceRefresh: false)
@@ -283,6 +282,17 @@ struct HoldingPredictionMarketsCard: View {
         .frame(minHeight: 60, alignment: .top)
     }
 
+    private func reportAvailability(_ state: HoldingResearchAvailability) {
+        if isPresented { pendingAvailability = state }
+        else { onAvailability(state) }
+    }
+
+    private func publishAvailability() {
+        guard let pendingAvailability else { return }
+        self.pendingAvailability = nil
+        onAvailability(pendingAvailability)
+    }
+
     @MainActor
     private func load(forceRefresh: Bool) async {
         let language = AppLanguage.currentIdentifier
@@ -308,11 +318,11 @@ struct HoldingPredictionMarketsCard: View {
             let usable = loaded.filter(\.hasUsableContent)
             if !usable.isEmpty || markets.isEmpty { markets = usable }
             onMarketsChange(markets)
-            onAvailability(markets.isEmpty ? .empty : .available)
+            reportAvailability(markets.isEmpty ? .empty : .available)
         } catch {
             guard !Task.isCancelled, language == AppLanguage.currentIdentifier else { return }
             errorMessage = error.localizedDescription
-            onAvailability(markets.isEmpty ? .failed : .available)
+            reportAvailability(markets.isEmpty ? .failed : .available)
         }
         isLoading = false
     }

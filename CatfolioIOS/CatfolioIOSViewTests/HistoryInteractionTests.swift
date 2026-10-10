@@ -3,6 +3,145 @@ import XCTest
 @testable import CatfolioIOS
 
 final class HistoryInteractionTests: XCTestCase {
+    @MainActor
+    func testCategoryLabelsUseTheFigmaSizeAndInsets() throws {
+        UITraitCollection(preferredContentSizeCategory: .large).performAsCurrent {
+            let bar = HistoryCategoryBar()
+            bar.frame = CGRect(x: 0, y: 0, width: 402, height: HistoryCategoryBar.preferredHeight)
+            bar.layoutIfNeeded()
+            XCTAssertEqual(bar.bounds.height, 57, accuracy: 0.1)
+            for (index, button) in bar.buttons.enumerated() {
+                XCTAssertEqual(button.titleLabel?.font.pointSize ?? 0, 16, accuracy: 0.1)
+                XCTAssertEqual(button.frame.height, 37, accuracy: 0.1)
+                XCTAssertEqual(button.frame.minY, 10, accuracy: 0.1)
+                XCTAssertEqual(button.frame.width,
+                    ceil(button.titleLabel?.intrinsicContentSize.width ?? 0) + 40, accuracy: 0.1)
+                if index == 0 {
+                    XCTAssertEqual(button.frame.minX, 16, accuracy: 0.1)
+                } else {
+                    XCTAssertEqual(button.frame.minX, bar.buttons[index - 1].frame.maxX, accuracy: 0.1)
+                }
+            }
+        }
+    }
+
+    @MainActor
+    func testCategoryBackdropStaysTranslucentAndAdaptsToAppearance() async throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        let controller = UIViewController()
+        let bar = HistoryCategoryBar()
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previous?.makeKeyAndVisible() }
+        controller.view.addSubview(bar)
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            controller.overrideUserInterfaceStyle = style
+            // Appearance propagates from the controller on the next UIKit update.
+            try await Task.sleep(for: .milliseconds(150))
+            bar.frame = CGRect(x: 0, y: 200, width: controller.view.bounds.width,
+                               height: HistoryCategoryBar.preferredHeight)
+            bar.layoutIfNeeded()
+            let backdrop = try XCTUnwrap(descendants(bar, of: UIVisualEffectView.self)
+                .first { $0.accessibilityIdentifier == "history-category-backdrop" })
+            XCTAssertTrue(backdrop.effect is UIBlurEffect)
+            XCTAssertEqual(backdrop.frame, bar.bounds)
+            XCTAssertFalse(backdrop.isHidden)
+            XCTAssertFalse(backdrop.isUserInteractionEnabled)
+            XCTAssertEqual(backdrop.alpha, 1)
+            var white: CGFloat = 0, alpha: CGFloat = 0
+            let tint = try XCTUnwrap(backdrop.contentView.backgroundColor)
+                .resolvedColor(with: bar.traitCollection)
+            XCTAssertTrue(tint.getWhite(&white, alpha: &alpha))
+            XCTAssertEqual(white, style == .dark ? 0 : 1, accuracy: 0.01)
+            XCTAssertGreaterThan(alpha, 0)
+            XCTAssertLessThan(alpha, 1)
+
+            // A change behind the bar must remain visible through the blur.
+            // Sample its top padding, away from labels and the selected pill.
+            controller.view.backgroundColor = .systemRed
+            try await Task.sleep(for: .milliseconds(150))
+            let red = snapshot(controller.view)
+            controller.view.backgroundColor = .systemBlue
+            try await Task.sleep(for: .milliseconds(150))
+            let blue = snapshot(controller.view)
+            let patch = CGRect(x: 40, y: bar.frame.minY + 2, width: 100, height: 5)
+            XCTAssertGreaterThan(try patchDifference(red, patch, blue, patch), 5)
+            attach(controller.view, name: "History-category-translucent-\(style == .dark ? "dark" : "light")")
+
+            bar.frame.size.width = 320
+            bar.layoutIfNeeded()
+            XCTAssertEqual(backdrop.frame, bar.bounds)
+            let button = try XCTUnwrap(bar.buttons.first)
+            XCTAssertTrue(bar.hitTest(button.convert(CGPoint(x: button.bounds.midX, y: button.bounds.midY), to: bar),
+                                      with: nil) === button)
+        }
+    }
+
+    @MainActor
+    func testRebuiltCategoryListsKeepTheSameNativeHeaderBlur() async throws {
+        guard #available(iOS 26.0, *) else { throw XCTSkip("Native scroll edges require iOS 26") }
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        let controller = HistoryPagingController(selection: .all)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previous?.makeKeyAndVisible() }
+        for revision in 0..<2 {
+            controller.updatePages(controller.categories.map { category in
+                AnyView(List {
+                    ForEach(0..<80) { Text("\(category.rawValue) \($0)") }
+                }.id("\(category.rawValue)-\(revision)").hardTopScrollEdge())
+            })
+            for category in controller.categories {
+                controller.select(category, animated: false)
+                controller.view.layoutIfNeeded()
+                try await Task.sleep(for: .milliseconds(70))
+                let lists = descendants(controller.view, of: UIScrollView.self).filter {
+                    $0.contentSize.height > $0.bounds.height
+                }
+                XCTAssertFalse(lists.isEmpty)
+                for list in lists {
+                    XCTAssertEqual(list.topEdgeEffect.style, .hard)
+                    XCTAssertFalse(list.topEdgeEffect.isHidden)
+                }
+            }
+        }
+    }
+
+    func testDividendSecurityEntriesOpenScopedPaymentsGroupedByDate() throws {
+        let input = ledger([
+            entry("DIVIDEND", date: "2026-06-01", price: 10, ticker: "AAA"),
+            entry("DIVIDEND", date: "2026-06-01", price: 2, ticker: "aaa"),
+            entry("DIVIDEND", date: "2026-03-01", price: 5, ticker: "AAA"),
+            entry("DIVIDEND", date: "2026-06-01", price: 7, ticker: "BBB"),
+            entry("DIVIDEND", account: "other", price: 99, ticker: "AAA"),
+            entry("BUY", price: 100, ticker: "AAA")
+        ])
+        let prepared = try prepare(input, accounts: [input.transactions[0].accountKey])
+        let page = prepared.page(category: .dividends, basis: .calendar, year: "2026")
+        let groups = HistoryDividendSecurityGroup.build(page.activities, locale: Locale(identifier: "en_GB"))
+        XCTAssertEqual(groups.map(\.id), ["AAA", "BBB"])
+        let apple = try XCTUnwrap(groups.first)
+        XCTAssertEqual(apple.security.amountUSD, 17)
+        XCTAssertEqual(apple.dates.map(\.id), ["2026-06-01", "2026-03-01"])
+        XCTAssertEqual(apple.dates.map { $0.activities.count }, [2, 1])
+        XCTAssertTrue(apple.dates.flatMap(\.activities).allSatisfy { $0.kind == .dividend })
+        XCTAssertEqual(groups.compactMap { $0.security.amountUSD }.reduce(0, +), page.totalUSD)
+    }
+
+    func testYearOptionsIncludeYearsWithDividendsAndNoSales() throws {
+        let input = ledger([entry("DIVIDEND", date: "2026-04-06", price: 10),
+                            entry("DIVIDEND", date: "2025-03-01", price: 5)])
+        let prepared = try prepare(input)
+        XCTAssertEqual(prepared.yearLabels[.calendar], ["2026", "2025"])
+        XCTAssertEqual(prepared.yearLabels[.uk], ["2026/27", "2024/25"])
+        XCTAssertEqual(prepared.page(category: .dividends, basis: .uk,
+            year: TaxYearBasis.uk.equivalentLabel("2026")).totalUSD, 10)
+    }
+
     func testPublicInvestorHistoryCleansDisplayedNameWithoutChangingSource() {
         let source = "Morningstar, Inc. (MORN) [ST]"
         let transaction = LocalTransactionRecord(
@@ -165,16 +304,17 @@ final class HistoryInteractionTests: XCTestCase {
             .init(ticker: "ZERO", name: "Zero", amountUSD: 0),
             .init(ticker: "REV", name: "Reversal", amountUSD: -10)
         ], positiveTotalUSD: 100)
-        XCTAssertEqual(chart.row(at: 0)?.ticker, "A")
-        XCTAssertEqual(chart.row(at: 0.699)?.ticker, "A")
-        XCTAssertEqual(chart.row(at: 0.7)?.ticker, "B")
-        XCTAssertEqual(chart.row(at: 1)?.ticker, "B")
-        XCTAssertNil(chart.row(at: -.infinity))
-        XCTAssertNil(chart.row(at: 1.01))
+        let layout = HistoryDividendRingLayout(breakdown: chart)
+        XCTAssertEqual(layout.row(at: 0)?.ticker, "A")
+        XCTAssertEqual(layout.row(at: 0.699)?.ticker, "A")
+        XCTAssertEqual(layout.row(at: 0.7)?.ticker, "B")
+        XCTAssertEqual(layout.row(at: 1)?.ticker, "B")
+        XCTAssertNil(layout.row(at: -.infinity))
+        XCTAssertNil(layout.row(at: 1.01))
         var unavailable = chart
         unavailable.isComplete = false
-        XCTAssertNil(unavailable.row(at: 0.5))
-        XCTAssertNil(HistoryDividendBreakdown().row(at: 0))
+        XCTAssertNil(HistoryDividendRingLayout(breakdown: unavailable).row(at: 0.5))
+        XCTAssertNil(HistoryDividendRingLayout(breakdown: HistoryDividendBreakdown()).row(at: 0))
     }
 
     @MainActor
@@ -201,9 +341,9 @@ final class HistoryInteractionTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(250))
             let size = host.sizeThatFits(in: CGSize(width: 370, height: 1000))
             XCTAssertEqual(size.width, 370, accuracy: 1)
-            // Total, then the share ring under its selection.
-            XCTAssertGreaterThanOrEqual(size.height, 260)
-            XCTAssertLessThan(size.height, 340)
+            // 195-point ring, 20-point chart padding, then both amounts below.
+            XCTAssertGreaterThanOrEqual(size.height, 340)
+            XCTAssertLessThan(size.height, 350)
             host.view.bounds = CGRect(origin: .zero, size: size)
             host.view.layoutIfNeeded()
             attach(host.view, name: "Dividend-Figma-\(dark ? "dark" : "light")")
@@ -275,18 +415,33 @@ final class HistoryInteractionTests: XCTestCase {
 
     @MainActor
     func testDividendGroupingPickerRefreshesVisibleRows() async throws {
-        let key = "history.dividendsByStock"
+        try await checkGroupingPicker(category: .dividends, entries: [
+            entry("DIVIDEND", date: "2026-04-06", price: 3, ticker: "AAA"),
+            entry("DIVIDEND", date: "2026-03-06", price: 2, ticker: "AAA"),
+            entry("DIVIDEND", date: "2026-02-06", price: 1, ticker: "BBB")
+        ])
+    }
+
+    @MainActor
+    func testOrdersGroupingPickerRefreshesVisibleRows() async throws {
+        try await checkGroupingPicker(category: .orders, entries: [
+            entry("BUY", date: "2026-01-06", price: 100, ticker: "AAA"),
+            entry("SELL", date: "2026-04-06", price: 125, ticker: "AAA"),
+            entry("BUY", date: "2026-02-06", price: 100, ticker: "BBB"),
+            entry("SELL", date: "2026-03-06", price: 90, ticker: "BBB")
+        ])
+    }
+
+    @MainActor
+    private func checkGroupingPicker(category: HistoryCategory, entries: [LocalTransactionRecord]) async throws {
+        let key = category == .orders ? "history.ordersByStock" : "history.dividendsByStock"
         let previous = UserDefaults.standard.object(forKey: key)
         UserDefaults.standard.set(false, forKey: key)
         defer {
             if let previous { UserDefaults.standard.set(previous, forKey: key) }
             else { UserDefaults.standard.removeObject(forKey: key) }
         }
-        let input = ledger([
-            entry("DIVIDEND", date: "2026-04-06", price: 3, ticker: "AAA"),
-            entry("DIVIDEND", date: "2026-03-06", price: 2, ticker: "AAA"),
-            entry("DIVIDEND", date: "2026-02-06", price: 1, ticker: "BBB")
-        ])
+        let input = ledger(entries)
         let prepared = try prepare(input)
         let controller = UIHostingController(rootView: NavigationStack {
             HistoryView(previewLedger: input, prepared: prepared)
@@ -299,9 +454,14 @@ final class HistoryInteractionTests: XCTestCase {
         defer { window.isHidden = true; previousWindow?.makeKeyAndVisible() }
         try await Task.sleep(for: .milliseconds(700))
         let categories = try XCTUnwrap(descendants(controller.view, of: HistoryCategoryBar.self).first)
-        categories.buttons[2].sendActions(for: .touchUpInside)
+        categories.buttons[category == .orders ? 1 : 2].sendActions(for: .touchUpInside)
         try await Task.sleep(for: .milliseconds(700))
-        let picker = try XCTUnwrap(descendants(controller.view, of: UISegmentedControl.self).first)
+        func visiblePicker() -> UISegmentedControl? {
+            descendants(controller.view, of: UISegmentedControl.self).first {
+                $0.convert($0.bounds, to: controller.view).intersects(controller.view.bounds)
+            }
+        }
+        let picker = try XCTUnwrap(visiblePicker())
         XCTAssertEqual(picker.selectedSegmentIndex, 0)
         let pickerBottom = picker.convert(picker.bounds, to: controller.view).maxY + 10
         let rows = CGRect(x: 16, y: pickerBottom, width: controller.view.bounds.width - 32,
@@ -315,8 +475,8 @@ final class HistoryInteractionTests: XCTestCase {
         let byStock = snapshot(controller.view)
         XCTAssertGreaterThan(try patchDifference(byDate, rows, byStock, rows), 1,
                              "Switching grouping must redraw the rows below the picker")
-        attach(controller.view, name: "History-dividends-by-stock")
-        let restoredPicker = try XCTUnwrap(descendants(controller.view, of: UISegmentedControl.self).first)
+        attach(controller.view, name: "History-\(category.rawValue)-by-stock")
+        let restoredPicker = try XCTUnwrap(visiblePicker())
         restoredPicker.selectedSegmentIndex = 0
         restoredPicker.sendActions(for: .valueChanged)
         try await Task.sleep(for: .milliseconds(500))

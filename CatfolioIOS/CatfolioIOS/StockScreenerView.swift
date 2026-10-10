@@ -388,7 +388,6 @@ struct StockScreenerView: View {
                     ForEach(results) { stock in
                         NavigationLink {
                             ScreenStockDetail(stock: stock, rules: rules)
-                                .hidesTabBarWhenPushed()
                                 .navigationTransition(.zoom(sourceID: stock.id, in: zoom))
                         } label: {
                             VStack(alignment: .leading) {
@@ -552,7 +551,7 @@ private struct ScreenStockDetail: View {
             Section { Text(stock.name).font(.headline) }
             Section(L10n.text("匹配依据")) {
                 ForEach(rules.conditions) { condition in
-                    LabeledContent(condition.metric.title, value: stock.values[condition.metric]?.formatted(.number.precision(.fractionLength(2))) ?? L10n.text("暂无数据"))
+                    LabeledContent(condition.metric.title, financialValue: stock.values[condition.metric]?.formatted(.number.precision(.fractionLength(2))) ?? L10n.text("暂无数据"))
                 }
                 ForEach(stock.dates, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
             }

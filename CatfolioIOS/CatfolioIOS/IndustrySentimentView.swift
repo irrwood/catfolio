@@ -334,7 +334,7 @@ struct IndustrySentimentView: View {
     private func compactMetric(_ label: String, _ value: Double?, suffix: String = "") -> some View {
         VStack(spacing: 4) {
             Text(label).font(.caption).foregroundStyle(Color(white: 0.65))
-            Text(value.map { String(format: "%.2f", $0) + suffix } ?? "—")
+            FinancialText(value.map { String(format: "%.2f", $0) + suffix } ?? "—")
                 .font(.system(size: 15, weight: .medium)).monospacedDigit()
                 .foregroundStyle(Color(white: 0.85))
         }
@@ -508,7 +508,7 @@ struct IndustrySentimentView: View {
     private func metric(_ label: String, _ value: Double?, suffix: String = "") -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label).font(.caption).foregroundStyle(.secondary)
-            Text(value.map { String(format: "%.2f", $0) + suffix } ?? "—")
+            FinancialText(value.map { String(format: "%.2f", $0) + suffix } ?? "—")
                 .font(Typography.number(.heading, weight: .semibold)).monospacedDigit()
         }
     }
@@ -537,7 +537,7 @@ struct IndustrySentimentView: View {
                         Capsule().fill(.secondary).frame(width: 12, height: 2)
                         Text("MA20 " + ((focused ?? rows.last)?.ma20.map { String(format: "%.2f", $0) } ?? "—"))
                     }
-                    Text(L10n.text("\(data.priceSymbol) 成交量") + " " + ((focused ?? rows.last)?.volume.map { DisplayFormat.compact($0) } ?? "—"))
+                    FinancialText(L10n.text("\(data.priceSymbol) 成交量") + " " + ((focused ?? rows.last)?.volume.map { DisplayFormat.compact($0) } ?? "—"))
                 }
                 .appNumber(.caption)
                 .foregroundStyle(.secondary)

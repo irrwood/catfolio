@@ -3,6 +3,7 @@ import SwiftUI
 struct HoldingsHeatmapTile: View {
     @Environment(\.securityDetailZoomOrigin) private var zoomOrigin
     @Environment(\.locale) private var appLocale
+    @Environment(\.colorScheme) private var colorScheme
     struct Model: Identifiable {
         enum Content {
             case holding(Holding)
@@ -199,7 +200,7 @@ struct HoldingsHeatmapTile: View {
                 Button(action: action) {
                     tileBody
                 }
-                .buttonStyle(HoldingPressButtonStyle())
+                .buttonStyle(HeatmapTileButtonStyle())
                 .holdingZoomSource(model.detailHolding?.ticker ?? model.id, in: zoomOrigin)
             } else {
                 tileBody
@@ -287,20 +288,20 @@ struct HoldingsHeatmapTile: View {
     private func performanceLabels(change: Double?) -> some View {
         if showsChange {
             if let change {
-                Text(DisplayFormat.percent(change))
+                FinancialText(DisplayFormat.percent(change))
                     .appNumber(returnScale, weight: .bold)
                     .foregroundStyle(changeColor)
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
             } else {
-                Text(DisplayFormat.percent(0))
+                FinancialText(DisplayFormat.percent(0))
                     .appNumber(returnScale, weight: .bold)
                     .lineLimit(1)
                     .hidden()
             }
         }
         if showsWeight {
-            Text(DisplayFormat.percent(fraction * 100, signed: false))
+            FinancialText(DisplayFormat.percent(fraction * 100, signed: false))
                 .appNumber(detailScale)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -333,7 +334,9 @@ struct HoldingsHeatmapTile: View {
 
     private var changeColor: Color {
         guard let change = model.changePercent, abs(change) >= 0.005 else { return .secondary }
-        return change > 0 ? CatfolioPalette.green500 : CatfolioPalette.rose500
+        return change > 0
+            ? (colorScheme == .light ? CatfolioPalette.green700 : CatfolioPalette.green200)
+            : (colorScheme == .light ? CatfolioPalette.rose700 : CatfolioPalette.rose300)
     }
 
     private var backgroundColor: Color {
@@ -341,7 +344,7 @@ struct HoldingsHeatmapTile: View {
             return CatfolioTheme.neutralFill
         }
         let intensity = min(abs(change) / 3, 1)
-        let opacity = 0.12 + intensity * 0.22
+        let opacity = colorScheme == .light ? 0.08 + intensity * 0.14 : 0.12 + intensity * 0.22
         return (change > 0 ? CatfolioPalette.green500 : CatfolioPalette.rose500).opacity(opacity)
     }
 
@@ -356,5 +359,13 @@ struct HoldingsHeatmapTile: View {
         case let .remainder(count):
             return L10n.text("其他 \(count) 项合并持仓")
         }
+    }
+}
+
+/// The highlight stays inside the tile's own clipped shape and dimensions.
+struct HeatmapTileButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.65 : 1)
     }
 }

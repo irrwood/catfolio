@@ -64,7 +64,7 @@ struct MoomooOAuthView: View {
                         }
                         .disabled(isWorking)
 
-                        if let snapshot {
+                        if snapshot != nil {
                             SettingsButtonRow(
                                 icon: .symbol("arrow.clockwise"),
                                 title: L10n.text("重新读取持仓"),
@@ -74,38 +74,6 @@ struct MoomooOAuthView: View {
                             }
                             .disabled(isWorking)
 
-                            SettingsRowContainer {
-                                GlassPrimaryButton(
-                                    title: isWorking
-                                        ? (context.isCreating ? L10n.text("正在创建") : L10n.text("正在同步"))
-                                        : (context.isCreating ? L10n.text("创建 Moomoo 账户") : L10n.text("同步 \(snapshot.positions.count) 项到 Catfolio")),
-                                    systemImage: "tray.and.arrow.down.fill",
-                                    isDisabled: !hasValidNickname,
-                                    isBusy: isWorking
-                                ) {
-                                    showsSyncConfirmation = true
-                                }
-                            }
-                        } else {
-                            SettingsRowContainer {
-                                GlassPrimaryButton(
-                                    title: isWorking ? L10n.text("正在读取") : L10n.text("读取并预览持仓"),
-                                    systemImage: "arrow.down.circle",
-                                    isBusy: isWorking
-                                ) {
-                                    Task { await preview() }
-                                }
-                            }
-                        }
-                    } else {
-                        SettingsRowContainer {
-                            GlassPrimaryButton(
-                                title: isWorking ? L10n.text("正在连接") : L10n.text("登录 Moomoo"),
-                                systemImage: "person.badge.key",
-                                isBusy: isWorking
-                            ) {
-                                Task { await connect() }
-                            }
                         }
                     }
 
@@ -144,10 +112,10 @@ struct MoomooOAuthView: View {
                                     }
                                     Spacer()
                                     VStack(alignment: .trailing, spacing: SettingsTemplate.subtitleSpacing) {
-                                        Text(DisplayFormat.shares(position.quantityValue))
+                                        FinancialText(DisplayFormat.shares(position.quantityValue))
                                             .appNumber(.subheading)
                                         if let marketValue = position.marketValueValue {
-                                            Text(DisplayFormat.money(marketValue, currency: position.currency))
+                                            FinancialText(DisplayFormat.money(marketValue, currency: position.currency))
                                                 .appNumber(.label, weight: .regular, monospaced: false)
                                                 .foregroundStyle(SettingsTemplate.secondaryText)
                                         }
@@ -180,6 +148,7 @@ struct MoomooOAuthView: View {
                     }
                 }
             }
+            .accountFlowActions { flowActions }
             .softTopScrollEdge()
             .navigationTitle(context.isCreating ? L10n.text("新建 Moomoo 账户") : "Moomoo")
             .navigationBarTitleDisplayMode(.inline)
@@ -225,7 +194,39 @@ struct MoomooOAuthView: View {
                 .ignoresSafeArea()
             }
         }
-        .tint(CatfolioTheme.accent)
+        .accountFlowBrand(.moomoo, enabled: context.isCreating)
+    }
+
+    @ViewBuilder
+    private var flowActions: some View {
+        if isConnected, let snapshot {
+            GlassPrimaryButton(
+                title: isWorking
+                    ? (context.isCreating ? L10n.text("正在创建") : L10n.text("正在同步"))
+                    : (context.isCreating ? L10n.text("创建 Moomoo 账户") : L10n.text("同步 \(snapshot.positions.count) 项到 Catfolio")),
+                systemImage: "tray.and.arrow.down.fill",
+                isDisabled: !hasValidNickname,
+                isBusy: isWorking
+            ) {
+                showsSyncConfirmation = true
+            }
+        } else if isConnected {
+            GlassPrimaryButton(
+                title: isWorking ? L10n.text("正在读取") : L10n.text("读取并预览持仓"),
+                systemImage: "arrow.down.circle",
+                isBusy: isWorking
+            ) {
+                Task { await preview() }
+            }
+        } else {
+            GlassPrimaryButton(
+                title: isWorking ? L10n.text("正在连接") : L10n.text("登录 Moomoo"),
+                systemImage: "person.badge.key",
+                isBusy: isWorking
+            ) {
+                Task { await connect() }
+            }
+        }
     }
 
     @ViewBuilder

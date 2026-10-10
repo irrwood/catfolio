@@ -7,7 +7,6 @@ struct PublicInvestorSettingsSection: View {
 
     var body: some View {
         Group {
-            SettingsSectionHeader(L10n.text("账户模式"))
             SettingsCard {
                 // One switch, not two. Demo data and a public filer's portfolio
                 // are the same thing to a reader — a portfolio that is not

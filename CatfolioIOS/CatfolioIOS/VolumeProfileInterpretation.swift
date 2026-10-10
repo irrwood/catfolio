@@ -3,6 +3,15 @@ import UIKit
 import Observation
 
 enum VolumeProfileInterpretation {
+    /// The header compares prices already converted to the same currency.
+    /// Its reference is the cost, unlike the prose's distance from the quote.
+    static func priceChangeFromCost(current: Double?, cost: Double?) -> Double? {
+        guard let current, let cost, current.isFinite, cost.isFinite,
+              current > 0, cost > 0 else { return nil }
+        let percent = (current / cost - 1) * 100
+        return percent.isFinite ? percent : nil
+    }
+
     /// Product rule: "near the POC" means no farther than 10% of the
     /// selected historical value area's width. This is a presentation rule,
     /// not a market or accounting standard.

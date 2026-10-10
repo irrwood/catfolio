@@ -116,6 +116,8 @@ struct FiftyTwoWeekRange: View {
 
     var body: some View {
         HoldingDetailSectionCard(title: L10n.text("52-Week Range"), insightFacts: { insightFacts }) {
+            Text("\(Int((currentPosition * 100).rounded()))%")
+        } content: {
             VStack(spacing: 10) {
                 GeometryReader { geometry in
                     rangePlot(size: geometry.size)
@@ -330,7 +332,7 @@ struct FiftyTwoWeekRange: View {
 
     @ViewBuilder
     private func markerBubble(title: String, price: Double) -> some View {
-        let label = Text("\(title) \(DisplayFormat.money(price, currency: currency))")
+        let label = FinancialText("\(title) \(DisplayFormat.money(price, currency: currency))")
             .font(Typography.number(size: 12, weight: .semibold))
             .lineLimit(1)
             .padding(.horizontal, 12)
@@ -443,6 +445,7 @@ struct FiftyTwoWeekRange: View {
             L10n.text("52 周最低 \(DisplayFormat.money(low, currency: currency))"),
             L10n.text("最高 \(DisplayFormat.money(high, currency: currency))"),
             L10n.text("当前价格 \(DisplayFormat.money(current, currency: currency))"),
+            L10n.text("52 周位置") + " \(Int((currentPosition * 100).rounded()))%",
         ]
         if let periodStart {
             components.append(L10n.text("52 周前价格 \(DisplayFormat.money(periodStart, currency: currency))"))

@@ -19,8 +19,7 @@ final class ResearchCardLayoutTests: XCTestCase {
                         VStack(spacing: 24) {
                             InsiderTradesSummaryCard(snapshot: insiderFixture)
                                 .padding(.horizontal, 20)
-                            HoldingDetailDisclosureCard(title: L10n.text("分析师一致预期"),
-                                subtitle: L10n.text("评级、目标价与分析师覆盖 · 按需读取"), isExpanded: .constant(true)) {
+                            HoldingDetailChildPageContent {
                                 AnalystConsensusContent(data: self.analystFixture)
                                     .researchLayoutFrame("analyst.bounds")
                             }
@@ -65,8 +64,7 @@ final class ResearchCardLayoutTests: XCTestCase {
                 for type in [DynamicTypeSize.large, .accessibility2] {
                     let result = try await capture(width: width, language: language, type: type,
                         name: "research-earnings-\(language)-\(Int(width))-\(type)-\(revenue ? "revenue16" : "eps4")") {
-                        HoldingDetailDisclosureCard(title: L10n.text("盈利历史"),
-                            subtitle: L10n.text("每股收益与收入 · 实际对比预期"), isExpanded: .constant(true)) {
+                        HoldingDetailChildPageContent {
                             EarningsHistoryContent(symbol: "LAYOUT", snapshot: snapshot,
                                 revenue: .constant(revenue), loading: false, errorMessage: nil)
                         }
