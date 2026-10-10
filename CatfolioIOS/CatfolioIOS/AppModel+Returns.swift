@@ -149,6 +149,12 @@ extension AppModel {
         try await LocalMarketDataClient().holdingValueHistory(document: document, cachedOnly: cachedOnly)
     }
 
+    /// The same chart with every day's own holdings, sold ones included,
+    /// rebuilt from the ledger. See `ActualHoldingHistory`.
+    func actualHoldingValueHistory(cachedOnly: Bool = false) async throws -> HoldingValueHistory {
+        try await LocalMarketDataClient().actualHoldingValueHistory(document: document, cachedOnly: cachedOnly)
+    }
+
     /// Current share counts over five years, for the underwater analysis.
     func fixedShareHistory(cachedOnly: Bool = false) async throws -> HoldingValueHistory {
         try await LocalMarketDataClient().fixedShareHistory(document: document, cachedOnly: cachedOnly)

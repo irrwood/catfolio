@@ -3999,5 +3999,5 @@
 "高频试错者" = "Rapid trier";
 "黑天鹅贡献" = "Black swans";
 "包含已卖出" = "Include sold";
-"加上卖出部分的已实现盈亏，已清仓的股票也会出现" = "Adds realised P/L from sales; stocks you no longer hold appear too";
 "市值 + 已实现" = "Value + realised";
+"按每天真实的持股重算，已清仓的股票、卖出的盈亏和分红都会计入" = "Rebuilt with each day's real holdings; sold stocks, realised P/L and dividends all count";
