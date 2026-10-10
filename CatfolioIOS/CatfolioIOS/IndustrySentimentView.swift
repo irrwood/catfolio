@@ -191,7 +191,6 @@ struct IndustrySentimentView: View {
         .preferredColorScheme(mechanicalDial ? .dark : nil)
         .environment(\.colorScheme, mechanicalDial ? .dark : inheritedColorScheme)
         .toolbarColorScheme(mechanicalDial ? .dark : inheritedColorScheme, for: .navigationBar)
-        .toolbar(mechanicalDial ? .hidden : .automatic, for: .tabBar)
         .navigationTitle(mechanicalDial ? "" : L10n.text("行业情绪"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

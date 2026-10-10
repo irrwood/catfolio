@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct RootTabView: View {
     @Environment(AppModel.self) private var model
@@ -223,46 +224,124 @@ extension View {
     }
 }
 
-/// UIKit's `hidesBottomBarWhenPushed` for a SwiftUI page: the tab bar slides
-/// away with the page beneath as this one pushes in, and slides back with it
-/// on the way out, following an interactive swipe — the system's own push.
-/// SwiftUI also needs an explicit visibility preference: marking the hosting
-/// controller alone does not reliably hide the bar in a SwiftUI TabView.
+/// UIKit's `hidesBottomBarWhenPushed` for a SwiftUI page, done by hand: the
+/// tab bar leaves with the page beneath as this one pushes in, and comes back
+/// with it on the way out, following an interactive swipe and restored if the
+/// swipe is let go.
+///
+/// SwiftUI's own `toolbarVisibility(.hidden, for: .tabBar)` is not used. It
+/// flips the bar the moment the page appears or goes, with no animation —
+/// the bar blinked out on a push and blinked back on the way home. UIKit's
+/// flag alone does nothing either: SwiftUI's tab container ignores it. So the
+/// flag only marks the page, and the bar is moved in the push's own
+/// transition: hidden at its start, so each page lays out once for where it
+/// will end, with a picture of the bar riding on the page it belongs to.
 private struct TabBarHidingAnchor: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> Anchor { Anchor() }
     func updateUIViewController(_ controller: Anchor, context: Context) {}
 
     final class Anchor: UIViewController {
+        override func loadView() {
+            let view = UIView(frame: .zero)
+            view.isUserInteractionEnabled = false
+            self.view = view
+        }
+
         override func willMove(toParent parent: UIViewController?) {
             super.willMove(toParent: parent)
-            markPage(from: parent)
+            page(from: parent)?.hidesBottomBarWhenPushed = true
         }
 
         override func viewWillAppear(_ animated: Bool) {
             super.viewWillAppear(animated)
-            markPage(from: parent)
+            page(from: parent)?.hidesBottomBarWhenPushed = true
+            TabBarPushTransition.update(from: self, animated: animated)
+        }
+
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            TabBarPushTransition.update(from: self, animated: animated)
         }
 
         /// The controller the navigation stack pushed is the one whose
         /// parent is the navigation controller; that is the one to mark.
-        private func markPage(from start: UIViewController?) {
+        private func page(from start: UIViewController?) -> UIViewController? {
             var current = start
             while let controller = current {
-                if controller.parent is UINavigationController {
-                    controller.hidesBottomBarWhenPushed = true
-                    return
-                }
+                if controller.parent is UINavigationController { return controller }
                 current = controller.parent
+            }
+            return nil
+        }
+    }
+}
+
+/// Shows or hides the tab bar for what a navigation stack will hold once its
+/// push or pop is over: hidden while any page in it asks to be.
+@MainActor
+enum TabBarPushTransition {
+    static func update(from anchor: UIViewController, animated: Bool) {
+        guard let navigation = anchor.navigationController,
+              let tabs = navigation.tabBarController else { return }
+        // The stack as it will be: a pop has already taken the leaving page
+        // out of it, a push has already put the arriving one in.
+        let hidden = navigation.viewControllers.dropFirst().contains { $0.hidesBottomBarWhenPushed }
+        guard tabs.isTabBarHidden != hidden else { return }
+        guard animated, let coordinator = navigation.transitionCoordinator ?? anchor.transitionCoordinator else {
+            tabs.setTabBarHidden(hidden, animated: animated)
+            return
+        }
+        let bar = tabs.tabBar
+        // The page the bar belongs to: the one going away on a push, the one
+        // coming back on a pop. The bar's picture rides on it.
+        let carrier = coordinator.viewController(forKey: hidden ? .from : .to)?.view
+        let barFrame = tabs.view.convert(bar.bounds, from: bar)
+        if hidden {
+            let picture = bar.snapshotView(afterScreenUpdates: false)
+            tabs.setTabBarHidden(true, animated: false)
+            if let picture, let carrier {
+                picture.frame = barFrame
+                picture.isUserInteractionEnabled = false
+                carrier.addSubview(picture)
+            }
+            let enrolled = coordinator.animate(alongsideTransition: { _ in
+                if picture == nil || carrier == nil { bar.alpha = 0 }
+            }, completion: { context in
+                picture?.removeFromSuperview()
+                bar.alpha = 1
+                if context.isCancelled { tabs.setTabBarHidden(false, animated: false) }
+            })
+            // Not taken into the transition: its completion will not run.
+            if !enrolled { picture?.removeFromSuperview() }
+        } else {
+            tabs.setTabBarHidden(false, animated: false)
+            let picture = carrier == nil ? nil : bar.snapshotView(afterScreenUpdates: true)
+            if let picture, let carrier {
+                picture.frame = barFrame
+                picture.isUserInteractionEnabled = false
+                carrier.addSubview(picture)
+            }
+            // The real bar waits out of sight until its picture is home.
+            bar.alpha = 0
+            let enrolled = coordinator.animate(alongsideTransition: { _ in
+                if picture == nil { bar.alpha = 1 }
+            }, completion: { context in
+                picture?.removeFromSuperview()
+                bar.alpha = 1
+                if context.isCancelled { tabs.setTabBarHidden(true, animated: false) }
+            })
+            if !enrolled {
+                picture?.removeFromSuperview()
+                bar.alpha = 1
             }
         }
     }
 }
 
 extension View {
-    /// Hides the tab bar while this page is on screen, with the system's
-    /// push animation.
+    /// Hides the tab bar while this page is on screen, leaving and returning
+    /// with the page beneath as the system's push does.
     func hidesTabBarWhenPushed() -> some View {
-        toolbarVisibility(.hidden, for: .tabBar)
-            .background(TabBarHidingAnchor().frame(width: 0, height: 0).accessibilityHidden(true))
+        background(TabBarHidingAnchor().frame(width: 0, height: 0).accessibilityHidden(true))
     }
 }

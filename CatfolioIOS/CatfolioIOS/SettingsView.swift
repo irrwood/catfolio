@@ -367,7 +367,7 @@ struct SettingsView: View {
                 StockScreenerView().hidesTabBarWhenPushed()
             }
             .navigationDestination(isPresented: $showsHistoryPreview) { HistoryView().environment(model) }
-            .navigationDestination(isPresented: $showsSentimentPreview) { IndustrySentimentView().environment(model) }
+            .navigationDestination(isPresented: $showsSentimentPreview) { IndustrySentimentView().environment(model).hidesTabBarWhenPushed() }
             .navigationDestination(isPresented: $showsResearchPreview) { TodayAttentionView().environment(model) }
             .navigationDestination(isPresented: $showsOIPreview) {
                 ScrollView { OptionsOIView(symbol: "TEST", currency: "USD", price: 108, costUSD: 104).padding(24) }
