@@ -112,6 +112,11 @@ struct SettingsHistoryOverview: View {
                     HistoryView().environment(model)
                 }
                 .accessibilityIdentifier("settings.history-overview.all")
+                SettingsNavigationRow(icon: .symbol("sparkles"), title: L10n.text("洞察"),
+                                      subtitle: L10n.text("你交易里有趣的数据")) {
+                    TradingInsightsView().environment(model)
+                }
+                .accessibilityIdentifier("settings.history-overview.insights")
             }
             if failed {
                 Button(L10n.text("无法读取速览，轻点重试")) {
