@@ -295,46 +295,54 @@ enum TabBarPushTransition {
         // The page the bar belongs to: the one going away on a push, the one
         // coming back on a pop. The bar's picture rides on it.
         let carrier = coordinator.viewController(forKey: hidden ? .from : .to)?.view
+        let leaving = coordinator.viewController(forKey: .from)?.view
         let barFrame = tabs.view.convert(bar.bounds, from: bar)
+        // Showing or hiding the bar changes every page's bottom safe area, and
+        // the page leaving the screen re-laid out while it was still sliding
+        // away: its content near the bar tore. It is frozen as a picture of
+        // itself first, so that re-layout happens unseen underneath.
+        let frozen = leaving?.snapshotView(afterScreenUpdates: false)
+        if let frozen, let leaving {
+            frozen.frame = leaving.bounds
+            frozen.isUserInteractionEnabled = false
+            leaving.addSubview(frozen)
+        }
+        let picture: UIView?
         if hidden {
-            let picture = bar.snapshotView(afterScreenUpdates: false)
+            picture = bar.snapshotView(afterScreenUpdates: false)
             tabs.setTabBarHidden(true, animated: false)
-            if let picture, let carrier {
-                picture.frame = barFrame
-                picture.isUserInteractionEnabled = false
-                carrier.addSubview(picture)
-            }
-            let enrolled = coordinator.animate(alongsideTransition: { _ in
-                if picture == nil || carrier == nil { bar.alpha = 0 }
-            }, completion: { context in
-                picture?.removeFromSuperview()
-                bar.alpha = 1
-                if context.isCancelled { tabs.setTabBarHidden(false, animated: false) }
-            })
-            // Not taken into the transition: its completion will not run.
-            if !enrolled { picture?.removeFromSuperview() }
         } else {
             tabs.setTabBarHidden(false, animated: false)
-            let picture = carrier == nil ? nil : bar.snapshotView(afterScreenUpdates: true)
-            if let picture, let carrier {
-                picture.frame = barFrame
-                picture.isUserInteractionEnabled = false
-                carrier.addSubview(picture)
-            }
+            picture = carrier == nil ? nil : bar.snapshotView(afterScreenUpdates: true)
             // The real bar waits out of sight until its picture is home.
             bar.alpha = 0
-            let enrolled = coordinator.animate(alongsideTransition: { _ in
-                if picture == nil { bar.alpha = 1 }
-            }, completion: { context in
-                picture?.removeFromSuperview()
-                bar.alpha = 1
-                if context.isCancelled { tabs.setTabBarHidden(true, animated: false) }
-            })
-            if !enrolled {
-                picture?.removeFromSuperview()
-                bar.alpha = 1
-            }
         }
+        if let picture, let carrier {
+            picture.frame = barFrame
+            picture.isUserInteractionEnabled = false
+            carrier.addSubview(picture)
+        }
+        // The arriving page laid out for where it ends before the first frame,
+        // not part-way into the slide.
+        tabs.view.layoutIfNeeded()
+
+        let finish: (Bool) -> Void = { cancelled in
+            if cancelled {
+                // Back as it was, laid out again before the picture comes off.
+                tabs.setTabBarHidden(!hidden, animated: false)
+                tabs.view.layoutIfNeeded()
+            }
+            picture?.removeFromSuperview()
+            frozen?.removeFromSuperview()
+            bar.alpha = 1
+        }
+        let enrolled = coordinator.animate(alongsideTransition: { _ in
+            if picture == nil || carrier == nil { bar.alpha = hidden ? 0 : 1 }
+        }, completion: { context in
+            finish(context.isCancelled)
+        })
+        // Not taken into the transition: its completion will not run.
+        if !enrolled { finish(false) }
     }
 }
 
