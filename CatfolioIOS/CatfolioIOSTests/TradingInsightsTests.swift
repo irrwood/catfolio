@@ -107,4 +107,59 @@ final class TradingInsightsTests: XCTestCase {
         XCTAssertEqual(insights.longestWinStreak, 2)
         XCTAssertEqual(insights.longestLossStreak, 1)
     }
+
+    func testHitRateLeaderNeedsThreeSales() throws {
+        var rows = [row("2024-01-01", "BUY", "A", 4, 10, id: "a0"), row("2024-01-01", "BUY", "B", 2, 10, id: "b0")]
+        rows += [
+            row("2024-02-01", "SELL", "A", 1, 12, id: "a1"),
+            row("2024-02-02", "SELL", "A", 1, 13, id: "a2"),
+            row("2024-02-03", "SELL", "A", 1, 9, id: "a3"),
+            row("2024-02-04", "SELL", "B", 2, 20, id: "b1"),
+        ]
+        let leader = try XCTUnwrap(build(rows).mostAccurateSecurity)
+        XCTAssertEqual(leader.ticker, "A")
+        XCTAssertEqual(try XCTUnwrap(leader.winRate), 2.0 / 3, accuracy: 0.0001)
+    }
+
+    func testTheStopLossSimulationCapsEachLossAtTenPercent() throws {
+        let rows = [
+            row("2024-01-01", "BUY", "X", 10, 100, id: "1"),
+            row("2024-03-01", "SELL", "X", 10, 60, id: "2"),
+        ]
+        // Lost 400 on 1,000; stopped at −10% it would have lost 100.
+        XCTAssertEqual(try XCTUnwrap(build(rows).stopLossSavingUSD), 300, accuracy: 0.001)
+    }
+
+    func testABuyWithinAWeekOfALosingSaleIsARevengeBuy() {
+        let rows = [
+            row("2024-01-01", "BUY", "X", 1, 100, id: "1"),
+            row("2024-02-01", "SELL", "X", 1, 80, id: "2"),
+            row("2024-02-05", "BUY", "X", 1, 82, id: "3"),
+        ]
+        let insights = build(rows)
+        XCTAssertEqual(insights.revengeBuyCount, 1)
+        XCTAssertEqual(insights.revengeTicker, "X")
+    }
+
+    func testHoldingRangesGroupByDaysHeld() {
+        let insights = build(ledger)
+        XCTAssertEqual(insights.holdingRanges.map(\.key), ["quarter", "longer"])
+    }
+
+    func testSessionPartsReadTheExchangesOwnClock() {
+        // 14:40 UTC is 09:40 in New York in January: the opening half hour.
+        XCTAssertEqual(TradingInsights.sessionPart(executedAt: "2024-01-10T14:40:00Z", currency: "USD"), .open)
+        XCTAssertEqual(TradingInsights.sessionPart(executedAt: "2024-01-10T20:45:00Z", currency: "USD"), .close)
+        XCTAssertEqual(TradingInsights.sessionPart(executedAt: "2024-01-10T12:30:00Z", currency: "GBP"), .midday)
+        // A date-only import is stored at midnight: outside the session.
+        XCTAssertNil(TradingInsights.sessionPart(executedAt: "2024-01-10T00:00:00Z", currency: "USD"))
+    }
+
+    func testTimingComparesTradesWithTodaysPrice() throws {
+        let insights = build(ledger, quotes: ["WIN": .init(price: 120, currency: "USD")])
+        let win = try XCTUnwrap(insights.timing.first { $0.ticker == "WIN" })
+        XCTAssertEqual(try XCTUnwrap(win.averageAfterBuy), 20, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(win.averageAfterSale), -20, accuracy: 0.001)
+        XCTAssertEqual(insights.bestSeller?.ticker, "WIN")
+    }
 }
