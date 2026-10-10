@@ -159,6 +159,7 @@ struct AIView: View {
                 isSending: isSending || isRestoringHistory,
                 isFloating: isEmbedded,
                 focus: $isComposerFocused,
+                isFocused: isComposerFocused,
                 hasMessages: !messages.isEmpty,
                 onClear: { showsClearConfirmation = true },
                 onQuickSend: { preset in
@@ -988,11 +989,18 @@ private struct ChatBubble: View {
 
 private struct AIComposer: View {
     @Environment(\.locale) private var appLocale
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The same choice as Settings › 默认模型: picked here, it is the default.
+    @AppStorage(AIProviderPreference.storageKey) private var aiProviderRaw = AIProviderPreference.automatic.rawValue
+    @Namespace private var composerSpace
     @Binding var question: String
     @Binding var webSearchEnabled: Bool
     let isSending: Bool
     let isFloating: Bool
     let focus: FocusState<Bool>.Binding
+    /// Passed as a value: read through the binding, a change of focus did
+    /// not reliably redraw the composer.
+    let isFocused: Bool
     let hasMessages: Bool
     let onClear: () -> Void
     let onQuickSend: (String) -> Void
@@ -1041,20 +1049,131 @@ private struct AIComposer: View {
         }
     }
 
-    private var floatingComposer: some View {
-        floatingComposerContent
+    /// Small until it is wanted. At rest it is one pill — the quick actions,
+    /// the prompt, the send button. Focused, or holding a draft, it opens
+    /// into a card: the text on top with room to write, and under it a row of
+    /// the quick actions, the model, web search and send.
+    ///
+    /// The text field is the same view in both, so opening and closing never
+    /// takes the keyboard away; only what is around it comes and goes.
+    private var isExpanded: Bool {
+        isFocused || !question.isEmpty
     }
 
-    private var floatingComposerContent: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            quickActionsMenu
-                .fixedSize()
-            webSearchButton
-            floatingTextFieldSurface
-                .frame(maxWidth: .infinity)
-                .layoutPriority(1)
+    private var floatingComposer: some View {
+        let expanded = isExpanded
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .bottom, spacing: 0) {
+                if !expanded {
+                    quickActionsMenu
+                        .matchedGeometryEffect(id: "quick-actions", in: composerSpace)
+                }
+                floatingTextField(expanded: expanded)
+                if !expanded {
+                    composerActionButton
+                        .padding(8)
+                        .matchedGeometryEffect(id: "action", in: composerSpace)
+                }
+            }
+            if expanded {
+                HStack(spacing: 8) {
+                    quickActionsMenu
+                        .matchedGeometryEffect(id: "quick-actions", in: composerSpace)
+                    modelMenu
+                    Spacer(minLength: 4)
+                    webSearchButton
+                    composerActionButton
+                        .matchedGeometryEffect(id: "action", in: composerSpace)
+                }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 10)
+                .transition(.opacity)
+            }
         }
         .frame(maxWidth: .infinity)
+        // Glass that is only a surface, and behind the controls rather than
+        // around them. Interactive glass claims the touch for its press
+        // effect, and the text field inside it took about six seconds to
+        // become focused; and glass blends what it holds, which turned the
+        // black send circle a washed-out grey that read as disabled.
+        .background {
+            Color.clear
+                .floatingGlassSurface(in: RoundedRectangle(cornerRadius: expanded ? 28 : 24, style: .continuous),
+                                      isInteractive: false)
+        }
+        .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86), value: expanded)
+    }
+
+    private func floatingTextField(expanded: Bool) -> some View {
+        TextField(
+            L10n.text("Ask AI"),
+            text: $question,
+            prompt: Text(L10n.text("Ask AI")).foregroundStyle(Color.primary.opacity(0.62)),
+            axis: .vertical
+        )
+            // The app's own face, not the system body font the field
+            // otherwise takes.
+            .appText(.subheading)
+            .foregroundStyle(CatfolioTheme.primaryText)
+            // One line at rest; open, two lines' room to start and up to six.
+            .lineLimit(expanded ? 2...6 : 1...1)
+            .focused(focus)
+            .submitLabel(.send)
+            .onSubmit(onSend)
+            .padding(.leading, expanded ? 18 : 2)
+            .padding(.trailing, expanded ? 18 : 0)
+            .padding(.top, expanded ? 16 : 8)
+            .padding(.bottom, expanded ? 10 : 8)
+            .frame(minHeight: 48)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var selectedProvider: AIProviderPreference {
+        AIProviderPreference(rawValue: aiProviderRaw) ?? .automatic
+    }
+
+    /// The model, after its provider, where there is a choice inside it.
+    private var providerDetail: String? {
+        guard selectedProvider == .openRouter else { return nil }
+        let model = LocalServiceKeys.openRouterModelID.split(separator: "/").last.map(String.init)
+        return model?.isEmpty == false ? model : nil
+    }
+
+    private var modelMenu: some View {
+        Menu {
+            Picker(selection: $aiProviderRaw) {
+                ForEach(AIProviderPreference.allCases) { provider in
+                    Text(L10n.label(provider.title)).tag(provider.rawValue)
+                }
+            } label: {
+                Text(L10n.text("模型"))
+            }
+            .pickerStyle(.inline)
+        } label: {
+            HStack(spacing: 5) {
+                Text(L10n.label(selectedProvider.title))
+                    .foregroundStyle(CatfolioTheme.primaryText)
+                if let providerDetail {
+                    Text(providerDetail)
+                        .foregroundStyle(.secondary)
+                }
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .appText(.label, weight: .medium)
+            .lineLimit(1)
+            .padding(.horizontal, 14)
+            .frame(height: 40)
+            .background(Color.primary.opacity(0.06), in: Capsule())
+            .contentShape(Capsule())
+        }
+        .tint(.primary)
+        .buttonStyle(.plain)
+        .disabled(isSending)
+        .accessibilityLabel(L10n.text("模型"))
+        .accessibilityValue(L10n.label(selectedProvider.title))
+        .accessibilityIdentifier("ai.model")
     }
 
     private var quickActionsMenu: some View {
@@ -1096,9 +1215,17 @@ private struct AIComposer: View {
         } label: {
             Image(systemName: "plus")
                 .font(.title3.weight(.regular))
-                .frame(width: 48, height: 48)
+                .foregroundStyle(CatfolioTheme.primaryText)
+                .frame(width: isFloating && isExpanded ? 40 : 48, height: isFloating && isExpanded ? 40 : 48)
+                .background {
+                    // Inside the floating composer's glass: a quiet disc when
+                    // open, nothing at rest. The standard composer keeps its own.
+                    if isFloating {
+                        Circle().fill(Color.primary.opacity(isExpanded ? 0.06 : 0))
+                    }
+                }
                 .contentShape(Circle())
-                .floatingGlassSurface(in: Circle())
+                .modifier(StandaloneGlassCircle(isOn: !isFloating))
         }
         // The menu's symbols take the tint, which otherwise resolves to the
         // page's accent and prints them blue against a dark sheet.
@@ -1113,8 +1240,9 @@ private struct AIComposer: View {
             Image(systemName: "globe")
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(webSearchEnabled ? Color.accentColor : Color.secondary)
-                .frame(width: 44, height: 48)
-                .background(webSearchEnabled ? Color.accentColor.opacity(0.12) : Color.clear, in: Capsule())
+                .frame(width: isFloating ? 40 : 44, height: isFloating ? 40 : 48)
+                .background(webSearchEnabled ? Color.accentColor.opacity(0.12) : Color.clear,
+                            in: isFloating ? AnyShape(Circle()) : AnyShape(Capsule()))
         }
         .buttonStyle(.plain)
         .disabled(isSending)
@@ -1122,45 +1250,6 @@ private struct AIComposer: View {
         .accessibilityValue(webSearchEnabled ? L10n.text("已开启") : L10n.text("已关闭"))
         .accessibilityAddTraits(webSearchEnabled ? [.isSelected] : [])
         .accessibilityIdentifier("ai.web-search")
-    }
-
-    private var floatingTextField: some View {
-        HStack(spacing: 8) {
-            TextField(
-                L10n.text("Ask AI"),
-                text: $question,
-                prompt: Text(L10n.text("Ask AI")).foregroundStyle(Color.primary.opacity(0.62)),
-                axis: .vertical
-            )
-                // The app's own face, not the system body font the field
-                // otherwise takes.
-                .appText(.subheading)
-                .foregroundStyle(CatfolioTheme.primaryText)
-                .lineLimit(1...3)
-                .focused(focus)
-                .submitLabel(.send)
-                .onSubmit(onSend)
-        }
-        // Clear of the capsule's curve on the left; on the right, room for
-        // the send button, which sits 8pt in all round over the glass.
-        .padding(.leading, 18)
-        .padding(.trailing, 8 + 32 + 8)
-        .padding(.vertical, 8)
-        .frame(minHeight: 48)
-    }
-
-    /// Glass that is only a surface. Interactive glass claims the touch for
-    /// its press effect, and the text field inside it took about six seconds
-    /// to become focused — the delay was the glass, not the keyboard.
-    @ViewBuilder
-    private var floatingTextFieldSurface: some View {
-        floatingTextField
-            .floatingGlassSurface(in: Capsule(), isInteractive: false)
-            // Over the glass, not in it: glass blends what it holds, and the
-            // black circle came out a washed-out grey that read as disabled.
-            .overlay(alignment: .bottomTrailing) {
-                composerActionButton.padding(8)
-            }
     }
 
     private var canSend: Bool {
@@ -1200,13 +1289,28 @@ private struct AIComposer: View {
                         .contentTransition(.symbolEffect(.replace))
                 }
             }
-            .frame(width: 32, height: 32)
+            // Larger in the open card, where it ends the row of controls.
+            .frame(width: isFloating && isExpanded ? 40 : 32, height: isFloating && isExpanded ? 40 : 32)
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .disabled(action == .empty || action == .busy)
         .animation(.easeOut(duration: 0.15), value: isFilled)
         .accessibilityLabel(L10n.text(action == .stop ? "停止生成" : "发送"))
+    }
+}
+
+/// The quick-actions circle's own glass, for the standard composer, where it
+/// sits outside the field.
+private struct StandaloneGlassCircle: ViewModifier {
+    let isOn: Bool
+
+    func body(content: Content) -> some View {
+        if isOn {
+            content.floatingGlassSurface(in: Circle())
+        } else {
+            content
+        }
     }
 }
 
