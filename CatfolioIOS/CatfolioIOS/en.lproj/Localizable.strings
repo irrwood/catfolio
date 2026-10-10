@@ -3998,3 +3998,6 @@
 "风险调整赢家" = "Risk-adjusted winner";
 "高频试错者" = "Rapid trier";
 "黑天鹅贡献" = "Black swans";
+"包含已卖出" = "Include sold";
+"加上卖出部分的已实现盈亏，已清仓的股票也会出现" = "Adds realised P/L from sales; stocks you no longer hold appear too";
+"市值 + 已实现" = "Value + realised";

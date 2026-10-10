@@ -259,10 +259,26 @@ struct HoldingContributionChart: View {
     @State private var highlightedBand: String?
     @State private var preparedCache = HoldingContributionPreparedCache()
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
+    /// Whether what has been sold counts too: off, the chart is today's
+    /// holdings only, as it always was.
+    @AppStorage("returns.sources.includesSold") private var includesSold = false
+    /// The history with sales put back in, for the history it was built from.
+    @State private var soldHistory: (revision: Int, history: HoldingValueHistory)?
+    @State private var soldRevision = 0
+
+    /// The history drawn, and a revision that tells the two apart.
+    private var drawnHistory: (history: HoldingValueHistory, revision: Int)? {
+        guard let base = loading.history else { return nil }
+        if includesSold, let sold = soldHistory, sold.revision == loading.revision {
+            return (sold.history, loading.revision &* 1_000 &+ soldRevision % 1_000 &+ 1)
+        }
+        return (base, loading.revision &* 1_000)
+    }
 
     var body: some View {
-        let prepared = loading.history.map {
-            preparedCache.prepared(history: $0, historyRevision: loading.revision,
+        let drawn = drawnHistory
+        let prepared = drawn.map {
+            preparedCache.prepared(history: $0.history, historyRevision: $0.revision,
                                    holdings: model.holdings, hiding: hiddenTickers,
                                    locale: appLocale, language: ContentLanguage.current,
                                    range: range, showsPrincipal: showsPrincipal,
@@ -287,9 +303,11 @@ struct HoldingContributionChart: View {
                                            else { Color.clear }
                                        }, isIncome: true)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { incomeHeroHeight = $0 }
-                legend(stack: prepared.stack, row: shown)
+                includesSoldToggle
                     .padding(.horizontal, ReturnsSourceChartStyle.inset)
                     .padding(.top, 6)
+                legend(stack: prepared.stack, row: shown)
+                    .padding(.horizontal, ReturnsSourceChartStyle.inset)
             } else if let errorMessage = loading.errorMessage {
                 StandardLineChartPlaceholder(title: L10n.text("暂时无法绘制"), message: errorMessage, isLoading: false)
                     .frame(height: 300)
@@ -339,6 +357,23 @@ struct HoldingContributionChart: View {
                 return try await model.holdingValueHistory(cachedOnly: cachedOnly)
             }
         }
+        // Sales are read and put into the history only while the switch is on.
+        .task(id: "\(includesSold)|\(loading.revision)|\(model.portfolioChartRevision)") {
+            guard includesSold, let base = loading.history else { return }
+            let revision = loading.revision
+            guard let ledger = try? await model.activityLedger() else { return }
+            let accountIDs = Set(ledger.accounts.map(\.id))
+            let transactions = ledger.transactions.filter { accountIDs.contains($0.accountKey) }
+            let merged = await Task.detached(priority: .userInitiated) {
+                let sales = TradingInsights.build(transactions: transactions).trades.compactMap { trade in
+                    trade.profitUSD.map { HoldingValueHistory.RealisedSale(ticker: trade.ticker, date: trade.saleDate, usd: $0) }
+                }
+                return base.includingRealised(sales, names: ledger.securityNames)
+            }.value
+            guard !Task.isCancelled, revision == loading.revision else { return }
+            soldRevision &+= 1
+            soldHistory = (revision, merged)
+        }
         .onChange(of: range) { _, _ in selectedDate = nil }
         .sensoryFeedback(.selection, trigger: "\(hiddenTickers.sorted())|\(showsPrincipal)|\(showsOthers)") { _, _ in hapticsEnabled }
     }
@@ -362,7 +397,7 @@ struct HoldingContributionChart: View {
             .contentTransition(.numericText(value: gain))
             .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: gain)
             HStack(spacing: 4) {
-                Text(L10n.text("市值"))
+                Text(includesSold ? L10n.text("市值 + 已实现") : L10n.text("市值"))
                     .appText(.footnote, weight: .medium)
                     .foregroundStyle(heroSecondary)
                 Text(DisplayFormat.money(row.total, fractionDigits: 0))
@@ -383,6 +418,24 @@ struct HoldingContributionChart: View {
             .minimumScaleFactor(0.7)
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// Sold securities and the sold part of held ones, in or out.
+    private var includesSoldToggle: some View {
+        Toggle(isOn: $includesSold) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.text("包含已卖出"))
+                    .appText(.body, weight: .semibold)
+                    .foregroundStyle(.white)
+                Text(L10n.text("加上卖出部分的已实现盈亏，已清仓的股票也会出现"))
+                    .appText(.caption)
+                    .foregroundStyle(.white.opacity(0.72))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        // The darkest band's navy: a white track would hide the knob on the blue field.
+        .tint(Color(red: 0, green: 46 / 255, blue: 88 / 255))
+        .accessibilityIdentifier("returns.sources.includes-sold")
     }
 
     private var heroPrimary: Color {
