@@ -369,14 +369,24 @@ struct TodayAttentionPreview: View {
     }
 }
 
-/// The system search field for both pages. Research keeps it under the
-/// large title, where tapping it collapses the title and moves the glass
-/// field to the top; the attention page filters with the default placement.
+/// The system search field for both pages. Research puts it in the
+/// navigation bar itself on iOS 26 — up in the toolbar rather than in a
+/// drawer under the large title, which left a band of empty page above the
+/// field; earlier systems keep the drawer. The attention page filters with
+/// the default placement.
 private struct ResearchSystemSearch: ViewModifier {
     let showsAttention: Bool
     @Binding var query: String
     @Binding var isPresented: Bool
     var isFocused: FocusState<Bool>.Binding
+
+    private var marketPlacement: SearchFieldPlacement {
+        if #available(iOS 26.0, *) {
+            .toolbarPrincipal
+        } else {
+            .navigationBarDrawer(displayMode: .always)
+        }
+    }
 
     func body(content: Content) -> some View {
         if showsAttention {
@@ -384,7 +394,7 @@ private struct ResearchSystemSearch: ViewModifier {
         } else {
             content
                 .searchable(text: $query, isPresented: $isPresented,
-                            placement: .navigationBarDrawer(displayMode: .always),
+                            placement: marketPlacement,
                             prompt: L10n.text("搜索股票、ETF 或公司名"))
                 .searchFocused(isFocused)
                 .textInputAutocapitalization(.never)
