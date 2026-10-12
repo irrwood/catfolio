@@ -148,27 +148,30 @@ final class UnderwaterAnalysisTests: XCTestCase {
     }
 
     @MainActor
-    func testSupersededAccountRequestCannotOverwriteNewHistory() async {
-        let state = HoldingHistoryState()
+    func testPreviousAccountRequestCannotOverwriteSelectedAccountHistory() async {
+        let cache = ReturnsSourceCache()
+        let previous = cache.entry(scope: "personal|account-a", kind: .current)
         let old = history(["A": [100, 110, 90, 95, 96, 99]])
         let fresh = history(["B": [200, 220, 180, 190, 192, 198]])
         var resume: CheckedContinuation<HoldingValueHistory, Never>?
         let task = Task {
-            await state.load(forceRefresh: true) { cachedOnly in
+            await previous.load(revision: 1, forceRefresh: true) { cachedOnly in
                 if cachedOnly { return old }
                 return await withCheckedContinuation { resume = $0 }
             }
         }
         while resume == nil { await Task.yield() }
-        await state.load { cachedOnly in
-            XCTAssertNil(state.history, "A different account must not retain the previous chart")
+        let selected = cache.entry(scope: "personal|account-b", kind: .current)
+        await selected.load(revision: 1) { cachedOnly in
+            XCTAssertNil(selected.loading.history, "A different account must not retain the previous chart")
             if cachedOnly { throw LocalServiceError.noHistoricalPrices }
             return fresh
         }
         resume?.resume(returning: old)
         await task.value
-        XCTAssertEqual(state.history?.rows.last?.values["B"], 198)
-        XCTAssertNil(state.history?.rows.last?.values["A"])
+        XCTAssertEqual(selected.loading.history?.rows.last?.values["B"], 198)
+        XCTAssertNil(selected.loading.history?.rows.last?.values["A"])
+        XCTAssertEqual(previous.loading.history, old, "The previous account retains only its own result")
     }
 
     func testTheCurveMeasuresFromTheHighSoFar() {

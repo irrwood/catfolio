@@ -138,6 +138,17 @@ enum TypeScale: CaseIterable, Sendable {
 /// scale through `@ScaledMetric`, which SwiftUI re-evaluates on its own when
 /// the reader changes their text size.
 enum Typography {
+    /// SwiftUI's font design does not reach UIKit's native large titles.
+    @MainActor
+    static func configureNavigationTitles() {
+        let system = UIFont.preferredFont(forTextStyle: .largeTitle).fontDescriptor
+        let rounded = system.withDesign(.rounded) ?? system
+        let bold = rounded.withSymbolicTraits(.traitBold) ?? rounded
+        UINavigationBar.appearance().largeTitleTextAttributes = [
+            .font: CurrencySymbolAlternates.applying(to: UIFont(descriptor: bold, size: 0))
+        ]
+    }
+
     static func text(_ scale: TypeScale, weight: Font.Weight? = nil) -> Font {
         text(size: scaled(scale), weight: weight ?? scale.weight)
     }

@@ -7,16 +7,26 @@ enum FinancialSign: String, Hashable {
     case increase, decrease
 
     static let sizeInEm: CGFloat = 0.75
+    /// The block holding the sign's place is almost a full em wide, while
+    /// the triangle's ink is about a third of one: this much of the block's
+    /// advance is taken back, so the triangle sits as close to its figures as
+    /// a digit to the next.
+    static let trimInEm: CGFloat = 0.36
 
     var assetName: String {
         self == .increase ? "FinancialIncrease" : "FinancialDecrease"
     }
 
-    var text: Text {
-        // A block provides a font-sized advance and the exact attributed
-        // foreground ink. FinancialSignRenderer masks it with the original
-        // Figma asset; the block itself is never visible or read by VoiceOver.
-        Text(verbatim: "\u{2588}").customAttribute(FinancialSignAttribute(sign: self))
+    var text: Text { text(fontSize: nil) }
+
+    /// A block provides a font-sized advance and the exact attributed
+    /// foreground ink. FinancialSignRenderer masks it with the original Figma
+    /// asset; the block itself is never visible or read by VoiceOver. With
+    /// the font size known, the block's advance is trimmed to the triangle.
+    func text(fontSize: CGFloat?) -> Text {
+        let block = Text(verbatim: "\u{2588}").customAttribute(FinancialSignAttribute(sign: self))
+        guard let fontSize, fontSize > 0 else { return block }
+        return block.kerning(-Self.trimInEm * fontSize)
     }
 }
 
@@ -81,35 +91,36 @@ struct FinancialNumberAttribute: TextAttribute {}
 struct FinancialText: View {
     @Environment(\.font) private var font
     @Environment(\.fontResolutionContext) private var fontContext
-    private let content: Text
+    private let content: (CGFloat?) -> Text
     private let alignmentFont: Font?
 
     init(_ string: String, isDirectional: Bool = false, signFollowsValue: Bool = false) {
-        content = Text(financial: string, isDirectional: isDirectional, signFollowsValue: signFollowsValue)
+        content = { Text(financial: string, isDirectional: isDirectional, signFollowsValue: signFollowsValue, fontSize: $0) }
         alignmentFont = nil
     }
 
     init(alignmentFont: Font? = nil, @ViewBuilder content: () -> Text) {
-        self.content = content()
+        let built = content()
+        self.content = { _ in built }
         self.alignmentFont = alignmentFont
     }
 
-    private var fontMetrics: (capHeightToAscent: CGFloat, pointSizeToAscent: CGFloat) {
+    private var fontMetrics: (capHeightToAscent: CGFloat, pointSizeToAscent: CGFloat, pointSize: CGFloat?) {
         if #available(iOS 26.0, *) {
             let resolved = (alignmentFont ?? font ?? .body).resolve(in: fontContext).ctFont
             let ascent = CTFontGetAscent(resolved)
-            return (CTFontGetCapHeight(resolved) / ascent, CTFontGetSize(resolved) / ascent)
+            return (CTFontGetCapHeight(resolved) / ascent, CTFontGetSize(resolved) / ascent, CTFontGetSize(resolved))
         }
         // The app's SF Rounded figures share these proportions. Earlier OS
         // versions do not expose SwiftUI's resolved font; actual run ascent
         // still supplies the text size, including Dynamic Type and shrinking.
         let fallback = NumericAlternates.font(size: 17, weight: .regular, rounded: true)
-        return (fallback.capHeight / fallback.ascender, fallback.pointSize / fallback.ascender)
+        return (fallback.capHeight / fallback.ascender, fallback.pointSize / fallback.ascender, nil)
     }
 
     var body: some View {
         let metrics = fontMetrics
-        content.textRenderer(FinancialSignRenderer(capHeightToAscent: metrics.capHeightToAscent,
+        content(metrics.pointSize).textRenderer(FinancialSignRenderer(capHeightToAscent: metrics.capHeightToAscent,
                                                    pointSizeToAscent: metrics.pointSizeToAscent))
     }
 }
@@ -157,12 +168,13 @@ extension LabeledContent where Label == Text, Content == FinancialText {
 extension Text {
     /// Use inside FinancialText for rich text concatenation. The renderer
     /// aligns tagged assets after SwiftUI resolves the caller's typography.
-    init(financial string: String, isDirectional: Bool = false, signFollowsValue: Bool = false) {
+    init(financial string: String, isDirectional: Bool = false, signFollowsValue: Bool = false,
+         fontSize: CGFloat? = nil) {
         let parts = FinancialTextPresentation.parts(in: string, isDirectional: isDirectional, signFollowsValue: signFollowsValue)
         self = parts.reduce(Text(verbatim: "")) { result, part in
             switch part {
             case .text(let text): result + Text(verbatim: text)
-            case .sign(let sign): result + sign.text
+            case .sign(let sign): result + sign.text(fontSize: fontSize)
             }
         }.accessibilityLabel(Text(verbatim: string))
     }

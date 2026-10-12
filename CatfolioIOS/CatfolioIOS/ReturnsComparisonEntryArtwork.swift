@@ -1,46 +1,45 @@
 import SwiftUI
 
-/// The two comparison entry surfaces from Figma 496:23834.
+/// The two comparison entry surfaces from Figma 487:5331 and 641:25494.
 struct ReturnsComparisonEntryArtwork: View {
     @Environment(\.colorScheme) private var colorScheme
     let title: String
     let isCycle: Bool
     var returnPercent: Double? = nil
     private var isDay: Bool { colorScheme == .light }
-    private var dayInk: Color { isCycle ? Color(red: 0.53, green: 0.10, blue: 0.25) : Color(red: 0.39, green: 0.27, blue: 0.04) }
-    private var dayAccent: Color { isCycle ? Color(red: 0.76, green: 0.23, blue: 0.39) : Color(red: 0.58, green: 0.40, blue: 0.06) }
+    private var amountInk: Color { isCycle ? .white : (isDay ? ReturnsEntryStyle.returnDayInk : .black) }
+    private var titleInk: Color { isDay && !isCycle ? ReturnsEntryStyle.returnDayInk : .white }
     private var prefix: String { isCycle ? "EntryCycle" : "EntryReturn" }
     private let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Image(prefix + "Icon").renderingMode(.template).resizable().scaledToFit().frame(width: 20, height: 20)
+                Image(prefix + "Icon").renderingMode(.original)
                 Spacer()
-                Image("SettingsChevron").foregroundStyle(isDay ? dayInk.opacity(0.55) : .white.opacity(0.5))
+                Image(isCycle ? "EntryChevron" : "EntryReturnChevron").renderingMode(.original)
             }
-            .foregroundStyle(isDay ? dayInk : .white)
             .frame(height: 24)
             Spacer(minLength: 12)
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
+                Text(L10n.text(isCycle ? "Cycle" : "Return"))
                     .font(Typography.text(size: 14, weight: .bold))
                     .tracking(0.56)
                     .textCase(.uppercase)
-                    .foregroundStyle(isDay ? dayAccent : .white.opacity(0.4))
-                    .blendMode(isDay ? .normal : .plusLighter)
+                    .foregroundStyle(titleInk.opacity(0.4))
+                    .blendMode(isDay && !isCycle ? .darken : .plusLighter)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    FinancialText(returnPercent.map { DisplayFormat.percent($0, signed: true) } ?? "—", signFollowsValue: true)
+                    FinancialText(returnPercent.map { DisplayFormat.percent($0, signed: true) } ?? "—", isDirectional: isDay, signFollowsValue: true)
                         .font(Typography.number(size: 20, weight: .semibold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
-                    Text("ANN.")
-                        .appText(.nano, weight: .medium)
+                    Text("ARR")
+                        .font(Typography.number(size: 14, weight: .semibold))
                         .fixedSize()
                 }
-                .foregroundStyle(isDay ? dayInk : (isCycle ? Color.white : Color.black))
+                .foregroundStyle(amountInk)
             }
         }
         .padding([.horizontal, .top], 16)
@@ -64,17 +63,10 @@ struct ReturnsComparisonEntryArtwork: View {
 
     private var illustration: some View {
         ZStack(alignment: .topLeading) {
-            if isDay {
-                LinearGradient(colors: isCycle
-                    ? [Color(red: 1, green: 0.66, blue: 0.75), Color(red: 1, green: 0.88, blue: 0.91)]
-                    : [Color(red: 0.96, green: 0.79, blue: 0.32), Color(red: 1, green: 0.94, blue: 0.74)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing)
-            } else {
-                Color.black
-                (isCycle ? Color(red: 227 / 255, green: 0, blue: 69 / 255)
-                         : Color(red: 198 / 255, green: 155 / 255, blue: 0)).opacity(0.6)
-            }
-            if isCycle { stripes }
+            Color.black
+            (isCycle ? ReturnsEntryStyle.cycleFill : ReturnsEntryStyle.returnFill)
+                .opacity(isDay ? 1 : 0.6)
+            if isCycle || isDay { stripes }
             asset("Back", width: 188, height: 156.955, x: -8, y: 35)
             if !isCycle { glow }
             asset("Middle", width: 188.5, height: 141.028, x: -8, y: 50.952)
@@ -89,7 +81,7 @@ struct ReturnsComparisonEntryArtwork: View {
             ]), maxSampleOffset: CGSize(width: 18.1, height: 18.1))
         }
         .overlay(alignment: .topLeading) { if isCycle { glow } }
-        .overlay { if !isCycle { stripes } }
+        .overlay { if !isCycle && !isDay { stripes } }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -102,20 +94,11 @@ struct ReturnsComparisonEntryArtwork: View {
 
     private func asset(_ suffix: String, width: CGFloat, height: CGFloat, x: CGFloat, y: CGFloat) -> some View {
         Image(prefix + suffix)
-            .renderingMode(isDay ? .template : .original)
-            .resizable()
-            .foregroundStyle(dayLayerColor(suffix))
+            .renderingMode(.original)
             .frame(width: width, height: height).offset(x: x, y: y)
-    }
-
-    private func dayLayerColor(_ suffix: String) -> Color {
-        switch suffix {
-        case "Back":
-            isCycle ? Color(red: 1, green: 0.75, blue: 0.81) : Color(red: 1, green: 0.86, blue: 0.49)
-        case "Middle":
-            isCycle ? Color(red: 1, green: 0.89, blue: 0.92) : Color(red: 1, green: 0.95, blue: 0.79)
-        default: .white
-        }
+            // Exported blur padding must not enlarge the stack's gradients
+            // or stripe bands. Keep the SVG intact on the card's own canvas.
+            .frame(width: 173, height: 173, alignment: .topLeading)
     }
 
     @ViewBuilder private var stripes: some View {
@@ -127,14 +110,12 @@ struct ReturnsComparisonEntryArtwork: View {
                 }
             }
             .blendMode(.overlay)
-            .opacity(isDay ? 0.25 : 1)
         } else {
             VStack(spacing: 0) {
                 LinearGradient(colors: [.white, .clear], startPoint: .leading, endPoint: .trailing)
                 LinearGradient(colors: [.clear, .white], startPoint: .leading, endPoint: .trailing)
             }
             .blendMode(.overlay)
-            .opacity(isDay ? 0.25 : 1)
         }
     }
 

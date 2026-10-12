@@ -270,11 +270,7 @@ struct ContentCard: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(20)
-            .background(SettingsTemplate.card, in: RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius, style: .continuous)
-                    .strokeBorder(SettingsTemplate.cardBorder, lineWidth: SettingsTemplate.cardBorderWidth)
-            }
+            .settingsCardSurface()
     }
 }
 
@@ -466,5 +462,97 @@ struct ContributionStripePattern: View {
             context.stroke(stripes, with: .color(color), lineWidth: bandWidth)
         }
         .allowsHitTesting(false)
+    }
+}
+
+/// Figma 487:5331 and 641:25494: the comparison-card identities in day and night.
+enum ReturnsEntryStyle {
+    static let returnFill = Color(red: 198 / 255, green: 155 / 255, blue: 0)
+    static let cycleFill = Color(red: 227 / 255, green: 0, blue: 69 / 255)
+    static let returnDayInk = Color(red: 56 / 255, green: 46 / 255, blue: 7 / 255)
+}
+
+/// The paints of Figma 487:5331 / 641:25494, per chart and scheme.
+struct ReturnsSourcePalette {
+    struct Glow {
+        let asset: String
+        /// Offset from the card's top-left corner, and size, before the blur.
+        let frame: CGRect
+        let abovePlot: Bool
+    }
+
+    /// The design's colour wash, composited over the card's opaque base.
+    let fill: LinearGradient
+    /// The title over the amount: the chart's tint, blended over the illustrated background.
+    let title: Color
+    let amount: Color
+    let solidLayerColors: [Color]?
+    let glows: [Glow]
+    /// Each layer: this colour at the curve, fading to `curveFade` at its base.
+    let curve: Color
+    let curveFade: Color
+    let stroke: Color
+    /// The whole layer — fill and edge — is set at this opacity.
+    let layerOpacity: Double
+    let backLayerOpacity: Double
+    let frontLayerOpacity: Double
+    let backLayerColor: Color?
+    let strokeOpacity: Double
+    let strokeWidth: CGFloat
+
+    private static func rgb(_ hex: UInt32, _ alpha: Double = 1) -> Color {
+        Color(red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255,
+              blue: Double(hex & 0xFF) / 255).opacity(alpha)
+    }
+
+    init(isLosses: Bool, scheme: ColorScheme) {
+        amount = scheme == .light ? (isLosses ? .white : Self.rgb(0x005CA7)) : .white
+        // Front (bottom) to back (top): daylight blue layers lighten toward the back.
+        solidLayerColors = isLosses ? (scheme == .light ? [.white, .white, .white] : nil) : scheme == .light
+            ? [Self.rgb(0x70BCF9), Self.rgb(0xA7D7FF), .white]
+            : [Self.rgb(0x0489F7), Self.rgb(0x0062B4), Self.rgb(0x078AF7)]
+        backLayerOpacity = scheme == .dark ? (isLosses ? 0.3 : 0.4) : (isLosses ? 1 : 0.8)
+        frontLayerOpacity = isLosses && scheme == .light ? 0.5 : 1
+        backLayerColor = nil
+        strokeOpacity = scheme == .dark ? 0.3 : 0.7
+        strokeWidth = scheme == .dark ? 1 : 1.5
+        switch (isLosses, scheme == .dark) {
+        case (false, true):
+            fill = LinearGradient(stops: [
+                .init(color: Self.rgb(0x004F74), location: 0.04445),
+                .init(color: Color.black, location: 0.67584)
+            ], startPoint: UnitPoint(x: 0.217, y: -0.101), endPoint: UnitPoint(x: 0.783, y: 1.101))
+            title = .white
+            glows = [Glow(asset: "EntryGainGlow", frame: CGRect(x: -163.8, y: 28.2, width: 355.6, height: 279.6), abovePlot: false)]
+            curve = Self.rgb(0x0189F8); curveFade = Self.rgb(0x0189F8, 0)
+            stroke = .clear; layerOpacity = 1
+        case (false, false):
+            fill = LinearGradient(stops: [
+                .init(color: Self.rgb(0x008DFF), location: 0.04445),
+                .init(color: Self.rgb(0x008EFF), location: 0.67584)
+            ], startPoint: UnitPoint(x: 0.217, y: -0.101), endPoint: UnitPoint(x: 0.783, y: 1.101))
+            title = Self.rgb(0x2FA2FF)
+            glows = [Glow(asset: "EntryGainGlow", frame: CGRect(x: -163.8, y: 28.2, width: 355.6, height: 279.6), abovePlot: true)]
+            curve = .white; curveFade = .white
+            stroke = .clear; layerOpacity = 1
+        case (true, true):
+            fill = LinearGradient(stops: [
+                .init(color: Self.rgb(0x2B006B), location: 0.07168),
+                .init(color: Color.black, location: 0.605)
+            ], startPoint: UnitPoint(x: 0.692, y: 1.099), endPoint: UnitPoint(x: 0.308, y: -0.099))
+            title = Self.rgb(0xB355FF)
+            glows = [Glow(asset: "EntryLossGlow", frame: CGRect(x: -183.8, y: -138.8, width: 395.6, height: 296.6), abovePlot: false)]
+            curve = Self.rgb(0x7D25FF); curveFade = Self.rgb(0xAC74FF, 0)
+            stroke = .clear; layerOpacity = 1
+        case (true, false):
+            fill = LinearGradient(stops: [
+                .init(color: Self.rgb(0xA66CFF), location: 0.32659),
+                .init(color: Self.rgb(0x9047FF), location: 1)
+            ], startPoint: .top, endPoint: .bottom)
+            title = Self.rgb(0xB355FF)
+            glows = [Glow(asset: "EntryLossDayGlow", frame: CGRect(x: -165.8, y: -156.8, width: 353.6, height: 296.6), abovePlot: false)]
+            curve = Self.rgb(0x7D25FF); curveFade = Self.rgb(0xAC74FF)
+            stroke = .clear; layerOpacity = 0.4
+        }
     }
 }

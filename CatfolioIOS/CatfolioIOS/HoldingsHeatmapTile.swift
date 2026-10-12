@@ -223,6 +223,9 @@ struct HoldingsHeatmapTile: View {
                 .padding(tilePadding)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Keep financial shades stable while gaps reveal the page gradient;
+        // repeated hero textures must not accumulate translucent tile fills.
+        .background(Color(uiColor: .systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: tileRadius, style: tileCornerStyle))
         .contentShape(RoundedRectangle(cornerRadius: tileRadius, style: tileCornerStyle))
     }

@@ -194,7 +194,7 @@ struct MoomooOAuthView: View {
                 .ignoresSafeArea()
             }
         }
-        .accountFlowBrand(.moomoo, enabled: context.isCreating)
+        .accountFlowBrand(.moomoo)
     }
 
     @ViewBuilder

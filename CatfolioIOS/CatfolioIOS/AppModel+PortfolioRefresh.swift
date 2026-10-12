@@ -239,15 +239,13 @@ extension AppModel {
                 isPortfolioChartLoading = false
             }
         }
-        if var enriched = try? await LocalMarketDataClient().portfolioChart(
-            document: loaded, forceRefresh: forceRefresh
-        ) {
+        if var enriched = try? await portfolioChartLoader(loaded, false, forceRefresh) {
             guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
             // A detail quote may arrive while history is loading. Reuse the
             // fetched history and value it with the latest document before publishing.
             while loaded != document {
                 let latest = document
-                guard let refreshed = try? await LocalMarketDataClient().portfolioChart(document: latest, cachedOnly: true),
+                guard let refreshed = try? await portfolioChartLoader(latest, true, false),
                       generation == portfolioRequestGeneration, !Task.isCancelled else { return }
                 enriched = refreshed
                 if latest == document { break }
@@ -272,6 +270,8 @@ extension AppModel {
 
     func invalidateInFlightRequests() {
         detailChartTask?.cancel()
+        accountHistoryTask?.cancel()
+        accountHistoryTask = nil
         returnsPageRequestGeneration &+= 1
         returnsPageTask?.cancel()
         returnsPageTask = nil

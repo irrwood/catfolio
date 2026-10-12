@@ -49,7 +49,9 @@ struct CostMarketCard: View {
     }
 
     private var isChartLoading: Bool {
-        forcesChartLoadingState || (prepared == nil && (isPreparing || isAwaitingEnrichedHistory))
+        forcesChartLoadingState || (prepared == nil && isPreparing)
+            || ((isAwaitingEnrichedHistory || response.positionHistory.rows.count > 1)
+                && (prepared?.data(for: .maximum).rows.count ?? 0) <= 1)
     }
 
     init(

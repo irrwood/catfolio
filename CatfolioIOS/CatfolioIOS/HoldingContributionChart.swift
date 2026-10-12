@@ -1,35 +1,5 @@
 import SwiftUI
 
-/// Where the portfolio's value came from, over time. The principal is the
-/// band at the bottom; on top of it sit the gains, the biggest contributors
-/// each as their own band and the rest together. With every gain visible,
-/// the top is the day's value. How many holdings get a band is decided from the gains
-/// themselves (`HoldingContributionStack.namedCount`).
-///
-/// Each day is today's share counts at that day's close — for a personal
-/// portfolio the home chart's own method. Hidden gains leave the plot only.
-/// The design's dotted field: 3pt dots on a 10pt grid, barely there.
-private struct HeroDotField: View {
-    let color: Color
-
-    var body: some View {
-        Canvas { context, size in
-            let step: CGFloat = 10, dot: CGFloat = 3
-            var y: CGFloat = 0
-            while y < size.height {
-                var x: CGFloat = 0
-                while x < size.width {
-                    context.fill(Path(ellipseIn: CGRect(x: x, y: y, width: dot, height: dot)),
-                                 with: .color(color))
-                    x += step
-                }
-                y += step
-            }
-        }
-        .drawingGroup()
-    }
-}
-
 enum ReturnsSourceChartStyle {
     // Figma income-sources-screen 496:19294.
     static let incomeBackground = Color(red: 0.235, green: 0.635, blue: 0.988)
@@ -37,31 +7,25 @@ enum ReturnsSourceChartStyle {
     static let incomeBase = Color(red: 228 / 255, green: 242 / 255, blue: 1)
     static let incomeFooter = Color(red: 0, green: 128 / 255, blue: 1)
     static let inset: CGFloat = 24
-    static let chartHeight: CGFloat = 280
+    static let chartHeight: CGFloat = 312
     static let stripHeight: CGFloat = 62
     static let stripeColor = Color(red: 92 / 255, green: 187 / 255, blue: 253 / 255).opacity(0.1)
 
-    static func primary(for scheme: ColorScheme) -> Color {
-        scheme == .dark ? .white : Color(red: 0.10, green: 0.10, blue: 0.10)
+    // Preserve the loss screen's purple in both appearances.
+    static let lossBackground = CatfolioPalette.lossChartBackground
+    static let lossFooter = lossBackground
+    static let lossBase = CatfolioPalette.lossChartBase
+}
+
+enum ReturnsSourceChartTheme {
+    case income, losses
+
+    var background: Color {
+        self == .income ? ReturnsSourceChartStyle.incomeBackground : ReturnsSourceChartStyle.lossBackground
     }
 
-    static func secondary(for scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color.white.opacity(0.72) : Color.black.opacity(0.55)
-    }
-
-    /// The hero's field paint (Figma), behind the plot.
-    static func field(for scheme: ColorScheme) -> Color {
-        scheme == .dark
-            ? Color(red: 0.360386, green: 0.194594, blue: 0.834078)
-            : Color(red: 238 / 255, green: 248 / 255, blue: 254 / 255)
-    }
-
-    /// A band set back while another is highlighted. The bands are stacked
-    /// as overlapping cumulative areas, so a see-through band would show
-    /// the ones beneath it; each is instead mixed most of the way into the
-    /// field and stays opaque.
-    static func faded(_ color: Color, scheme: ColorScheme) -> Color {
-        color.mix(with: field(for: scheme), by: 0.75)
+    var footer: Color {
+        self == .income ? ReturnsSourceChartStyle.incomeFooter : ReturnsSourceChartStyle.lossFooter
     }
 }
 
@@ -127,45 +91,33 @@ struct ReturnsSourceLegendSwatch: View {
 /// Shared Figma surface for gains and losses; each page supplies its own
 /// data-driven plot and axes, including the losses' downward direction.
 struct ReturnsSourceChartHero<Header: View, Plot: View, Axis: View>: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Binding var range: ChartTimeRange
     let header: Header
     let plot: Plot
     let axis: Axis
-    var isIncome = false
+    var theme: ReturnsSourceChartTheme = .losses
+
+    private var plotHeight: CGFloat { ReturnsSourceChartStyle.chartHeight }
+    private let bottomRadius: CGFloat = 26
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
                 .padding(.horizontal, ReturnsSourceChartStyle.inset)
-                .padding(.bottom, 20)
-                // Downward loss areas have colour at the top of the plot;
-                // their expanded glow must stay behind the header's text.
+                .padding(.top, 12)
+                .padding(.bottom, 8)
                 .zIndex(1)
-            ZStack {
-                // 454pt of colour behind a 280pt plot, blurred at 35pt.
-                if !isIncome {
-                    plot
-                    .frame(height: ReturnsSourceChartStyle.chartHeight)
-                    .scaleEffect(y: 454 / 280, anchor: .bottom)
-                    .blur(radius: 35)
-                    .opacity(colorScheme == .dark ? 0.2 : 0.5)
-                    .blendMode(colorScheme == .dark ? .plusLighter : .lighten)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-                }
-                plot.frame(height: ReturnsSourceChartStyle.chartHeight)
-            }
-            .frame(height: ReturnsSourceChartStyle.chartHeight)
-            .overlay(alignment: .topLeading) { axis }
+            plot
+                .frame(height: plotHeight)
+                .overlay(alignment: .topLeading) { axis }
             rangeStrip(reflecting: plot)
         }
-        .background(alignment: .bottom) { heroField }
+        .background { theme.background.padding(.top, -320) }
         .compositingGroup()
         .mask(alignment: .bottom) {
             UnevenRoundedRectangle(
-                cornerRadii: .init(bottomLeading: CatfolioStyle.cardRadius,
-                                   bottomTrailing: CatfolioStyle.cardRadius),
+                cornerRadii: .init(bottomLeading: bottomRadius,
+                                   bottomTrailing: bottomRadius),
                 style: .continuous
             )
             .fill(Color.black)
@@ -173,48 +125,13 @@ struct ReturnsSourceChartHero<Header: View, Plot: View, Axis: View>: View {
         }
     }
 
-    /// Exact Figma field paints. The apparent dark gradient comes from
-    /// the chart glow, not a second gradient baked into the background.
-    private var heroField: some View {
-        ZStack(alignment: .bottom) {
-            (isIncome ? ReturnsSourceChartStyle.incomeBackground : ReturnsSourceChartStyle.field(for: colorScheme))
-                .padding(.top, -320)
-            if isIncome {
-                // The supplied rotated gradient runs vertically over 506pt,
-                // ending at the plot baseline; the range strip keeps its tint.
-                LinearGradient(colors: [ReturnsSourceChartStyle.incomeBackground,
-                                        ReturnsSourceChartStyle.incomeBackgroundEnd],
-                               startPoint: .top, endPoint: .bottom)
-                    .frame(height: 506)
-                    .padding(.bottom, ReturnsSourceChartStyle.stripHeight)
-            }
-            if !isIncome {
-                HeroDotField(color: .black)
-                .mask {
-                    LinearGradient(stops: [.init(color: .white, location: 0),
-                                           .init(color: .clear, location: 0.7684)],
-                                   startPoint: .top, endPoint: .bottom)
-                }
-                .opacity(colorScheme == .dark ? 0.34 : 0.1)
-                .blendMode(colorScheme == .dark ? .overlay : .normal)
-                // Anchor the 533pt field to the plot baseline, so extending
-                // the background behind navigation does not dilute the dots.
-                .frame(height: 533)
-                .padding(.bottom, ReturnsSourceChartStyle.stripHeight - 23)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-
     /// The range picker on a translucent strip. The design shows the chart
-    /// reflected in it — the yellow band's colour pooling under the strip on
+    /// reflected in it — the bands' colour pooling under the strip on
     /// the right — so the strip carries a mirrored, blurred copy of the chart
     /// under its tint rather than a flat fill.
     private func rangeStrip<Chart: View>(reflecting chart: Chart) -> some View {
         ChartTimeRangePicker(selection: $range, isOnTintedField: true)
-            .environment(\.colorScheme, isIncome ? .dark : colorScheme)
+            .environment(\.colorScheme, .dark)
             .frame(maxWidth: .infinity)
             .frame(height: ReturnsSourceChartStyle.stripHeight)
             .background(alignment: .top) {
@@ -222,7 +139,7 @@ struct ReturnsSourceChartHero<Header: View, Plot: View, Axis: View>: View {
                     // Mirrored, so the chart's bottom edge continues into the
                     // strip; blurred until only the colour is left.
                     chart
-                        .frame(height: ReturnsSourceChartStyle.chartHeight)
+                        .frame(height: plotHeight)
                         .scaleEffect(y: -1, anchor: .center)
                         .offset(y: -24)
                         .blur(radius: 20)
@@ -238,6 +155,14 @@ struct ReturnsSourceChartHero<Header: View, Plot: View, Axis: View>: View {
 
 }
 
+/// Where the portfolio's value came from, over time. The principal is the
+/// band at the bottom; on top of it sit the gains, the biggest contributors
+/// each as their own band and the rest together. With every gain visible,
+/// the top is the day's value. How many holdings get a band is decided from the gains
+/// themselves (`HoldingContributionStack.namedCount`).
+///
+/// Each day is today's share counts at that day's close — for a personal
+/// portfolio the home chart's own method. Hidden gains leave the plot only.
 struct HoldingContributionChart: View {
     var refreshRevision = 0
     var fetchHistory: (@MainActor (Bool) async throws -> HoldingValueHistory)? = nil
@@ -245,171 +170,139 @@ struct HoldingContributionChart: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.locale) private var appLocale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var loading = HoldingHistoryState()
+    @State private var localCache = ReturnsSourceCache()
+    @State private var previousGains: (scope: String, prepared: ReturnsSourcePreparation<HoldingContributionStack>)?
     @State private var handledRefreshRevision = 0
     @State private var retryRevision = 0
     @State private var range = ChartTimeRange.yearToDate
-    @State private var incomeHeroHeight: CGFloat = 0
     @State private var selectedDate: Date?
     /// Holdings the reader turned off; the next ones by gain take their place.
     @State private var hiddenTickers: Set<String> = []
+    @State private var listScrollRequest: ReturnsSourceScrollRequest?
     @State private var showsPrincipal = false
     @State private var showsOthers = true
     /// The band a right swipe on its row brought forward (its series id).
     @State private var highlightedBand: String?
-    @State private var preparedCache = HoldingContributionPreparedCache()
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
-    /// On, every day is drawn with that day's own holdings, sold ones and
-    /// realised results included (`ActualHoldingHistory`). Off, it is today's
-    /// holdings carried back, as it always was.
+    /// On, every day is drawn with that day's own holdings, ones sold since
+    /// included until their sale (`ActualHoldingHistory`). Off, it is today's
+    /// holdings carried back, as it always was. Set from the bar's corner.
     @AppStorage("returns.sources.includesSold") private var includesSold = false
 
-    var body: some View {
-        let prepared = loading.history.map {
-            preparedCache.prepared(history: $0, historyRevision: loading.revision,
-                                   holdings: model.holdings, hiding: hiddenTickers,
-                                   locale: appLocale, language: ContentLanguage.current,
-                                   range: range, showsPrincipal: showsPrincipal,
-                                   showsOthers: showsOthers, highlighted: highlightedBand,
-                                   scheme: colorScheme)
-        }
+    private var historyKind: ReturnsSourceCache.Kind { includesSold ? .includingSold : .current }
+    private var entry: ReturnsSourceCacheEntry {
+        fetchHistory == nil ? model.returnsSourceEntry(kind: historyKind) : localCache.entry(scope: model.comparisonCacheScope, kind: historyKind)
+    }
+    private var loading: HoldingHistoryState { entry.loading }
+    private var preparationConfiguration: String {
+        let names = model.holdings.map { "\($0.ticker)|\($0.shortName)" }.joined(separator: ";")
+        return "\(hiddenTickers.sorted())|\(names)|\(appLocale.identifier)|\(ContentLanguage.current)"
+    }
 
-        VStack(alignment: .leading, spacing: 18) {
-            if let prepared, !prepared.window.rows.isEmpty {
-                let shown = prepared.window.row(nearest: selectedDate) ?? prepared.window.rows.last!
-                // Figma 357:2257 / 362:14796: the figures, the chart and the
-                // range strip share one tinted field that runs to all three
-                // screen edges; the holdings list sits on the page's own
-                // surface below it.
-                let chart = Group {
-                    if prepared.window.rows.count > 1 { plot(prepared: prepared) }
-                    else { Color.clear }
-                }
-                ReturnsSourceChartHero(range: $range, header: header(shown), plot: chart,
-                                       axis: Group {
-                                           if prepared.window.rows.count > 1 { axisLabels(top: prepared.top) }
-                                           else { Color.clear }
-                                       }, isIncome: true)
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { incomeHeroHeight = $0 }
-                includesSoldToggle
-                    .padding(.horizontal, ReturnsSourceChartStyle.inset)
-                    .padding(.top, 6)
-                legend(stack: prepared.stack, row: shown)
-                    .padding(.horizontal, ReturnsSourceChartStyle.inset)
-            } else if let errorMessage = loading.errorMessage {
-                StandardLineChartPlaceholder(title: L10n.text("暂时无法绘制"), message: errorMessage, isLoading: false)
-                    .frame(height: 300)
-                    .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
-                Button(L10n.text("重试")) { retryRevision &+= 1 }
-                    .buttonStyle(.bordered)
-                    .frame(maxWidth: .infinity)
-            } else if loading.history != nil {
-                Color.clear
-                    .frame(height: 300)
-                    .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
-            } else {
-                StandardLineChartPlaceholder(title: L10n.text("正在准备历史数据"),
-                                             message: L10n.text("收益来源"), isLoading: true,
-                                             lineWidths: [1.5, 1.5, 1.5], appearanceID: "income-sources")
-                    .frame(height: 300)
-                    .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
+    private var gains: ReturnsSourcePreparation<HoldingContributionStack> {
+        entry.gains.entry(configuration: preparationConfiguration)
+    }
+    private var displayScope: String { "\(model.comparisonCacheScope)|\(historyKind.rawValue)" }
+    private var displayedGains: ReturnsSourcePreparation<HoldingContributionStack> {
+        if gains.value != nil { return gains }
+        if let previousGains, previousGains.scope == displayScope { return previousGains.prepared }
+        return gains
+    }
+    private var preparationKey: String {
+        "\(model.comparisonCacheScope)|\(historyKind.rawValue)|\(loading.revision)|\(preparationConfiguration)"
+    }
+
+    var body: some View {
+        let prepared = displayedGains.value.flatMap { stack -> HoldingContributionPreparedCache.Prepared? in
+            guard let history = loading.history else { return nil }
+            return entry.gainPlots.prepared(history: history, historyRevision: displayedGains.revision,
+                                     holdings: model.holdings, hiding: hiddenTickers,
+                                     locale: appLocale, language: ContentLanguage.current,
+                                     range: range, showsPrincipal: showsPrincipal,
+                                     showsOthers: showsOthers, highlighted: highlightedBand,
+                                     scheme: colorScheme, preparedStack: stack, preparationID: displayedGains.id)
+        }
+        let shown = prepared.flatMap { $0.window.row(nearest: selectedDate) ?? $0.window.rows.last }
+
+        ReturnsChartPanel(scrollRequest: listScrollRequest) {
+            ReturnsSourceChartHero(range: $range, header: Group {
+                if let shown { header(shown) }
+                else { ReturnsSourceHeaderPlaceholder(theme: .income) }
+            }, plot: Group {
+                if let prepared, prepared.window.rows.count > 1 { plot(prepared: prepared) }
+                else if prepared == nil && loading.errorMessage == nil {
+                    ReturnsSourcePlotPlaceholder(appearanceID: "income-sources")
+                } else { Color.clear }
+            }, axis: Group {
+                if let prepared, prepared.window.rows.count > 1 { axisLabels(top: prepared.top) }
+                else { Color.clear }
+            }, theme: .income)
+        } rows: {
+            if let prepared, let shown { legend(stack: prepared.stack, row: shown) }
+            else {
+                ReturnsSourceRowsPlaceholder(errorMessage: loading.errorMessage) { retryRevision &+= 1 }
             }
         }
-        // The tinted field runs behind the bar, so the bar brings no surface
-        // of its own on this page.
-        .background {
-            GeometryReader { geometry in
-                let start = max(0, incomeHeroHeight - ReturnsSourceChartStyle.stripHeight)
-                VStack(spacing: 0) {
-                    Color.clear.frame(height: start)
-                    LinearGradient(colors: [.black, ReturnsSourceChartStyle.incomeFooter],
-                                   startPoint: .top, endPoint: .bottom)
-                        .frame(height: 402)
-                    ReturnsSourceChartStyle.incomeFooter
-                        .frame(height: max(0, geometry.size.height - start - 402))
-                }
-            }
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(ReturnsSourceChartStyle.incomeBackground.ignoresSafeArea())
         .foregroundStyle(.white)
         .toolbarBackground(.hidden, for: .navigationBar)
-        .task(id: "\(model.portfolioChartRevision)|\(model.holdings.count)|\(refreshRevision)|\(retryRevision)|\(includesSold)") {
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                IncludesSoldMenu(isOn: $includesSold)
+                    .accessibilityIdentifier("returns.sources.includes-sold")
+            }
+        }
+        .task(id: "\(model.comparisonCacheScope)|\(historyKind.rawValue)|\(model.portfolioChartRevision)|\(model.holdings.count)|\(refreshRevision)|\(retryRevision)") {
             let forceRefresh = refreshRevision != handledRefreshRevision
             handledRefreshRevision = refreshRevision
-            await loading.load(forceRefresh: forceRefresh) { cachedOnly in
-                if let fetchHistory { return try await fetchHistory(cachedOnly) }
+            let fetch = fetchHistory ?? model.returnsSourceFetch(kind: historyKind)
+            await entry.load(revision: model.portfolioChartRevision, forceRefresh: forceRefresh) { cachedOnly in
                 #if DEBUG
-                if LaunchArguments.contains("--demo-loss-history") {
-                    return LossAnalysisChart.demoHistory()
-                }
+                if LaunchArguments.contains("--demo-loss-history") { return LossAnalysisChart.demoHistory() }
                 #endif
-                return includesSold
-                    ? try await model.actualHoldingValueHistory(cachedOnly: cachedOnly)
-                    : try await model.holdingValueHistory(cachedOnly: cachedOnly)
+                return try await fetch(cachedOnly)
             }
+        }
+        .task(id: preparationKey) {
+            let target = entry
+            guard let history = target.loading.history else { return }
+            var names = history.names
+            for holding in model.holdings { names[holding.ticker.uppercased()] = holding.shortName }
+            let input = HoldingValueHistory(rows: history.rows, costs: history.costs, names: names)
+            let hidden = hiddenTickers
+            await gains.prepare(key: preparationKey) {
+                HoldingContributionStack(history: input, hiding: hidden)
+            }
+        }
+        .onChange(of: "\(gains.id)|\(gains.revision)", initial: true) { _, _ in
+            if gains.value != nil { previousGains = (displayScope, gains) }
         }
         .onChange(of: range) { _, _ in selectedDate = nil }
         .sensoryFeedback(.selection, trigger: "\(hiddenTickers.sorted())|\(showsPrincipal)|\(showsOthers)") { _, _ in hapticsEnabled }
     }
 
-    /// The gain is the headline — what the holdings have made — with the
-    /// value and principal it is the difference of on the line beneath.
+    /// The gain is the headline — what the holdings have made — under the
+    /// day it is for.
     private func header(_ row: HoldingContributionStack.Row) -> some View {
         let gain = row.total - row.principal
-        return VStack(alignment: .leading, spacing: 4) {
-            Text(row.date.formatted(.dateTime.year().month(.abbreviated).day()))
-                .appText(.caption, weight: .medium)
+        return VStack(alignment: .leading, spacing: 0) {
+            Text(row.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
+                .textCase(.uppercase)
+                .appText(.footnote, weight: .medium)
+                .tracking(0.7)
                 .foregroundStyle(heroSecondary)
-            CatfolioDisplayAmountText(
-                text: DisplayFormat.money(gain, signed: true, fractionDigits: 0),
-                size: 34,
-                symbolSize: 22,
-                color: heroPrimary,
-                isDirectional: true
-            )
+            FinancialText(DisplayFormat.money(gain, signed: gain < 0, fractionDigits: 0))
+                .font(Typography.number(size: 34, weight: .semibold))
+                .foregroundStyle(heroPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
             // As on the home page: the digits roll to the new figure as the
             // reader moves along the chart or changes the range.
             .contentTransition(.numericText(value: gain))
             .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: gain)
-            HStack(spacing: 4) {
-                Text(includesSold ? L10n.text("市值 + 已实现") : L10n.text("市值"))
-                    .appText(.footnote, weight: .medium)
-                    .foregroundStyle(heroSecondary)
-                FinancialText(DisplayFormat.money(row.total, fractionDigits: 0))
-                    .foregroundStyle(heroPrimary)
-                    .contentTransition(.numericText(value: row.total))
-                    .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: row.total)
-                Text("·").foregroundStyle(heroSecondary)
-                Text(L10n.text("本金"))
-                    .appText(.footnote, weight: .medium)
-                    .foregroundStyle(heroSecondary)
-                FinancialText(DisplayFormat.money(row.principal, fractionDigits: 0))
-                    .foregroundStyle(heroSecondary)
-                    .contentTransition(.numericText(value: row.principal))
-                    .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: row.principal)
-            }
-            .appNumber(.footnote)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
         }
         .accessibilityElement(children: .combine)
-    }
-
-    /// Sold securities and the sold part of held ones, in or out.
-    private var includesSoldToggle: some View {
-        Toggle(isOn: $includesSold) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(L10n.text("包含已卖出"))
-                    .appText(.body, weight: .semibold)
-                    .foregroundStyle(.white)
-                Text(L10n.text("按每天真实的持股重算，已清仓的股票、卖出的盈亏和分红都会计入"))
-                    .appText(.caption)
-                    .foregroundStyle(.white.opacity(0.72))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        // The darkest band's navy: a white track would hide the knob on the blue field.
-        .tint(Color(red: 0, green: 46 / 255, blue: 88 / 255))
-        .accessibilityIdentifier("returns.sources.includes-sold")
     }
 
     private var heroPrimary: Color {
@@ -463,7 +356,7 @@ struct HoldingContributionChart: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array([top, top / 2, 0].enumerated()), id: \.offset) { index, value in
                 AnimatedChartValue(value: value) {
-                    FinancialText(DisplayFormat.compact($0, precision: .whole)).appNumber(.footnote)
+                    FinancialText(DisplayFormat.compact($0, precision: .whole)).appNumber(.caption)
                 }
                 if index < 2 { Spacer() }
             }
@@ -476,62 +369,57 @@ struct HoldingContributionChart: View {
         .allowsHitTesting(false)
     }
 
-    /// The comparison page's list: tap a row to turn its band on and off,
-    /// swipe right to highlight it, swipe left to hide it. A holding turned
-    /// off leaves the plot and the next one by gain takes its band; it
-    /// waits, dimmed, at the foot of the list to be turned back on.
+    /// Visibility never changes the financial ranking. The list scrolls a
+    /// newly hidden source beneath the chart while its row keeps its place.
     private func legend(stack: HoldingContributionStack, row: HoldingContributionStack.Row) -> some View {
-        VStack(spacing: 12) {
-            // Top of the stack first, as the eye reads the chart.
-            ForEach(Array(stack.bands.enumerated().reversed()), id: \.element.id) { band, item in
+        let items = stack.legendItems
+        return VStack(spacing: 12) {
+            ForEach(items) { entry in
+                let item = entry.band
                 let id = Self.seriesID(item)
-                let isOn = isShown(item.kind)
-                let color = Self.incomeDisplayColor(for: item.kind, scheme: colorScheme,
+                let isOn = entry.index != nil && isShown(item.kind)
+                let color = entry.index.map { band in
+                    Self.incomeDisplayColor(for: item.kind, scheme: colorScheme,
                                                     isHighlighted: highlightedBand == id,
                                                     isFaded: highlightedBand != nil && highlightedBand != id,
                                                     rankFromTop: stack.bands.count - 1 - band)
+                } ?? Color.secondary
                 ReturnsSwipeRow(
                     color: color, isHighlighted: highlightedBand == id, canRemove: isOn,
                     removeTitle: L10n.text("隐藏此项"), removeIcon: "eye.slash", removeSlidesOut: false,
-                    onHighlight: { highlight(item) }, onRemove: { toggle(item) }
+                    onHighlight: {
+                        if entry.index == nil { show(item.title, highlighting: true) }
+                        else { highlight(item) }
+                    }, onRemove: { toggle(item) }
                 ) {
-                    Button { toggle(item) } label: {
+                    Button {
+                        if entry.index == nil { show(item.title, highlighting: false) }
+                        else { toggle(item) }
+                    } label: {
                         ReturnsSourceListRow(rank: stack.rank(for: item), color: color,
                                              title: item.title, subtitle: item.subtitle, isOn: isOn,
-                                             logo: logoHolding(for: item), isStriped: false, isOnBlueField: true,
+                                             logo: logoHolding(for: item), isStriped: false, isOnTintedField: true,
                                              isHighlighted: highlightedBand == id) {
-                            legendAmount(item.kind, row: row, band: band)
+                            if let band = entry.index {
+                                legendAmount(item.kind, row: row, band: band)
+                            } else {
+                                Text(L10n.text("已隐藏")).appText(.caption).foregroundStyle(.secondary)
+                            }
                         }
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("income.source.\(id)")
                 }
+                .returnsSourceScrollRow(id: id)
+                .returnsDimmed(entry.index == nil && highlightedBand != nil, ground: .black)
                 .accessibilityAddTraits(isOn ? .isSelected : [])
-                .accessibilityHint(L10n.text("轻点切换显示或隐藏"))
+                .accessibilityHint(L10n.text(isOn ? "轻点切换显示或隐藏" : "轻点重新显示"))
                 .accessibilityAction(named: highlightedBand == id ? L10n.text("取消高亮") : L10n.text("高亮曲线")) {
-                    highlight(item)
+                    if entry.index == nil { show(item.title, highlighting: true) }
+                    else { highlight(item) }
                 }
-            }
-            ForEach(stack.hidden, id: \.ticker) { holding in
-                ReturnsSwipeRow(
-                    color: .secondary, isHighlighted: false, canRemove: false,
-                    onHighlight: { show(holding.ticker, highlighting: true) }, onRemove: {}
-                ) {
-                    Button { show(holding.ticker, highlighting: false) } label: {
-                        ReturnsSourceListRow(rank: stack.holdingRanks[holding.ticker], color: .secondary,
-                                             title: holding.ticker, subtitle: holding.name, isOn: false,
-                                             logo: logoHolding(ticker: holding.ticker), isOnBlueField: true) {
-                            Text(L10n.text("已隐藏")).appText(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-                .returnsDimmed(highlightedBand != nil, ground: .black)
-                .accessibilityHint(L10n.text("轻点重新显示"))
             }
         }
-        // Rapid hide/restore must not interpolate text and row positions from
-        // an interrupted reorder. The chart owns its separate data animation.
-        .animation(nil, value: hiddenTickers)
     }
 
     /// A band's company logo, from its holding's logo symbol where there is
@@ -548,7 +436,7 @@ struct HoldingContributionChart: View {
     }
 
     private func show(_ ticker: String, highlighting: Bool) {
-        withAnimation(.snappy) {
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
             _ = hiddenTickers.remove(ticker)
             if highlighting { highlightedBand = "band-\(ticker)" }
         }
@@ -581,7 +469,8 @@ struct HoldingContributionChart: View {
     }
 
     private func toggle(_ band: HoldingContributionStack.Band) {
-        withAnimation(.snappy) {
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
+            if isShown(band.kind) { listScrollRequest = ReturnsSourceScrollRequest(id: band.id) }
             if isShown(band.kind), highlightedBand == Self.seriesID(band) { highlightedBand = nil }
             switch band.kind {
             case .principal: showsPrincipal.toggle()
@@ -713,6 +602,7 @@ final class HoldingContributionPreparedCache {
 
     private struct StackKey: Equatable {
         let historyRevision: Int
+        let preparationID: UUID?
         let names: [HoldingName]
         let hiding: Set<String>
         let localeIdentifier: String
@@ -740,7 +630,7 @@ final class HoldingContributionPreparedCache {
                   holdings: [Holding], hiding: Set<String>, locale: Locale,
                   language: String, range: ChartTimeRange,
                   showsPrincipal: Bool, showsOthers: Bool, highlighted: String? = nil,
-                  scheme: ColorScheme) -> Prepared {
+                  scheme: ColorScheme, preparedStack: HoldingContributionStack? = nil, preparationID: UUID? = nil) -> Prepared {
         // Names can change without a history refresh, for example after an
         // account edit. Compare the source fields rather than resolving the
         // display catalog on every selection tick.
@@ -749,11 +639,11 @@ final class HoldingContributionPreparedCache {
                         hasPublicDisclosure: $0.publicDisclosure != nil,
                         underlyingTicker: $0.publicDisclosure?.underlyingTicker)
         }
-        let nextStackKey = StackKey(historyRevision: historyRevision, names: names,
+        let nextStackKey = StackKey(historyRevision: historyRevision, preparationID: preparationID, names: names,
                                     hiding: hiding, localeIdentifier: locale.identifier,
                                     language: language)
         if stackKey != nextStackKey || cachedStack == nil {
-            cachedStack = HoldingContributionStack(history: history, holdings: holdings, hiding: hiding)
+            cachedStack = preparedStack ?? HoldingContributionStack(history: history, holdings: holdings, hiding: hiding)
             stackKey = nextStackKey
             stackGeneration &+= 1
             stackRebuildCount &+= 1
@@ -848,9 +738,16 @@ final class HoldingContributionPreparedCache {
 /// others' gain, then the named holdings' gains from the smallest of them to
 /// the largest, so the largest is on top. Hidden gains are excluded; portfolio
 /// totals remain available separately for the header.
-struct HoldingContributionStack {
-    struct Band: Identifiable {
-        enum Kind: Equatable {
+struct HoldingContributionStack: Sendable {
+    struct LegendItem: Identifiable {
+        let band: Band
+        /// A hidden holding keeps its row but has no chart layer.
+        let index: Int?
+        var id: String { band.id }
+    }
+
+    struct Band: Identifiable, Sendable {
+        enum Kind: Equatable, Sendable {
             case principal
             case others
             /// 0 for the largest gain.
@@ -873,7 +770,7 @@ struct HoldingContributionStack {
         }
     }
 
-    struct Row {
+    struct Row: Sendable {
         let dateText: String
         let date: Date
         /// What the holdings open on the day cost.
@@ -922,6 +819,22 @@ struct HoldingContributionStack {
     /// Holdings the reader turned off, excluded from the gain bands and listed
     /// separately so they can be turned back on.
     let hidden: [(ticker: String, name: String)]
+
+    /// Hidden holdings keep their financial rank and identity in the list.
+    var legendItems: [LegendItem] {
+        let visible = bands.enumerated().map { LegendItem(band: $0.element, index: $0.offset) }
+        let inactive = hidden.map {
+            LegendItem(band: Band(kind: .holding(colour: 0), title: $0.ticker, subtitle: $0.name), index: nil)
+        }
+        func rank(_ item: LegendItem) -> Int {
+            switch item.band.kind {
+            case .holding: holdingRanks[item.band.title] ?? Int.max - 2
+            case .others: Int.max - 1
+            case .principal: Int.max
+            }
+        }
+        return (visible + inactive).sorted { rank($0) < rank($1) }
+    }
 
     /// How many of the gains, largest first, get their own band: every
     /// positive one, up to `maximumNamed`.

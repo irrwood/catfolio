@@ -51,9 +51,10 @@ def main():
     for name in ["SettingsView.swift", "HistoryView.swift", "TodayDetailView.swift"]:
         source = (ROOT / name).read_text()
         assert 'joined(separator: "。")' not in source, f"Hard-coded sentence punctuation: {name}"
-    settings = (ROOT / "SettingsView.swift").read_text()
+    settings = (ROOT / "AppSettingsView.swift").read_text()
     assert 'value: L10n.label(model.localSource)' in settings
-    assert 'value: L10n.label(account.accountType)' in settings
+    account = (ROOT / "SettingsAccountDetailView.swift").read_text()
+    assert 'value: L10n.label(account.accountType)' in account
     missing = []
     count = 0
     for path in ROOT.glob("*.swift"):
@@ -91,7 +92,9 @@ def main():
                 # These engines retain canonical diagnostic text in caches or
                 # use its prefixes for routing. Their display layer translates
                 # it, so the catalog must cover those strings as well.
-                if path.name in {"LocalReturnsAnalytics.swift", "LocalMarketDataClient.swift", "DailyTimeWeightedReturn.swift"} and re.search("[一-鿿]", key):
+                # LocalMarketDataClient is split across `LocalMarketDataClient+*.swift`.
+                if (path.name in {"LocalReturnsAnalytics.swift", "DailyTimeWeightedReturn.swift"}
+                        or path.name.startswith("LocalMarketDataClient")) and re.search("[一-鿿]", key):
                     decoded = json.loads('"' + key + '"')
                     if decoded not in catalogs["en"]:
                         missing.append(f"{path.name} cached diagnostic: {decoded}")
@@ -99,7 +102,7 @@ def main():
     # These values route screens, select financial series, or identify synthetic data.
     # Their display labels can be translated; changing their stored values breaks behavior.
     portfolio = (ROOT / "PortfolioView.swift").read_text()
-    returns = (ROOT / "ReturnsView.swift").read_text()
+    returns = (ROOT / "ReturnsChart.swift").read_text()
     assert 'tableMode = L10n.' not in portfolio
     assert 'case L10n.' not in portfolio
     details = (ROOT / "PortfolioDetailsCard.swift").read_text()

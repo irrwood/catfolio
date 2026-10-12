@@ -148,11 +148,16 @@ struct CorporateCalendarView: View {
     @Environment(\.locale) private var appLocale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
-    let holdings: [Holding]
-    private let store = CorporateEventsStore.shared
+    private let scope: CorporateCalendarHoldings
+    private let store: CorporateEventsStore
     @State private var mode: CorporateCalendarMode = .earnings
     @State private var month = Calendar.current.dateInterval(of: .month, for: Date())?.start ?? Date()
-    @State private var selectedDay: String?
+    @State private var selectedDay: String? = CorporateCalendarDay.key(Date(), calendar: .current)
+
+    init(holdings: [Holding], store: CorporateEventsStore? = nil) {
+        self.scope = CorporateCalendarHoldings(holdings)
+        self.store = store ?? .shared
+    }
 
     private var calendar: Calendar {
         var calendar = Calendar.current
@@ -160,10 +165,10 @@ struct CorporateCalendarView: View {
         calendar.firstWeekday = 2
         return calendar
     }
-    private var scope: CorporateCalendarHoldings { CorporateCalendarHoldings(holdings) }
     private var todayKey: String { CorporateCalendarDay.key(Date(), calendar: calendar) }
 
     private var monthDays: [String] {
+        let calendar = calendar
         guard let range = calendar.range(of: .day, in: .month, for: month) else { return [] }
         return range.compactMap { day in
             calendar.date(byAdding: .day, value: day - 1, to: month).map { CorporateCalendarDay.key($0, calendar: calendar) }
@@ -175,16 +180,18 @@ struct CorporateCalendarView: View {
         (calendar.component(.weekday, from: month) - calendar.firstWeekday + 7) % 7
     }
 
-    private var monthEvents: [CorporateEvent] {
-        let days = Set(monthDays)
-        return store.events(for: Set(scope.tickers)).filter { mode.includes($0.kind) && days.contains($0.date) }
+    private func monthEvents(_ days: [String]) -> [CorporateEvent] {
+        guard let first = days.first, let last = days.last else { return [] }
+        return store.events(for: Set(scope.tickers), during: first...last).filter { mode.includes($0.kind) }
     }
 
     var body: some View {
-        let events = monthEvents
+        let days = monthDays
+        let today = todayKey
+        let events = monthEvents(days)
         let byDay = Dictionary(grouping: events, by: \.date)
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            LazyVStack(alignment: .leading, spacing: 16) {
                 Picker(L10n.text("类型"), selection: $mode) {
                     ForEach(CorporateCalendarMode.allCases) { Text($0.title).tag($0) }
                 }
@@ -192,21 +199,14 @@ struct CorporateCalendarView: View {
 
                 header(events)
 
-                VStack(spacing: 6) {
-                    weekdayRow
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 7), spacing: 6) {
-                        ForEach(0..<leadingBlanks, id: \.self) { _ in Color.clear.frame(height: 64) }
-                        ForEach(monthDays, id: \.self) { day in
-                            dayCell(day, events: byDay[day] ?? [])
-                        }
-                    }
-                }
-                .id(month)
-                .transition(.opacity)
-                .gesture(DragGesture(minimumDistance: 30).onEnded { value in
-                    guard abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
-                    shiftMonth(value.translation.width < 0 ? 1 : -1)
-                })
+                CorporateCalendarGrid(days: days, calendar: calendar, leadingBlanks: leadingBlanks,
+                                      today: today, byDay: byDay, scope: scope, selectedDay: $selectedDay)
+                    .id(month)
+                    .transition(.opacity)
+                    .gesture(DragGesture(minimumDistance: 30).onEnded { value in
+                        guard abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
+                        shiftMonth(value.translation.width < 0 ? 1 : -1)
+                    })
 
                 // A day with nothing on it lists the whole month instead.
                 eventList(selectedDay.flatMap { byDay[$0] } ?? events)
@@ -262,61 +262,6 @@ struct CorporateCalendarView: View {
         }
     }
 
-    private var weekdayRow: some View {
-        let symbols = calendar.shortStandaloneWeekdaySymbols
-        let ordered = Array(symbols[(calendar.firstWeekday - 1)...] + symbols[..<(calendar.firstWeekday - 1)])
-        return HStack(spacing: 6) {
-            ForEach(Array(ordered.enumerated()), id: \.offset) { _, symbol in
-                Text(symbol)
-                    .appText(.caption, weight: .medium)
-                    .foregroundStyle(SettingsTemplate.secondaryText)
-                    .frame(maxWidth: .infinity)
-            }
-        }
-    }
-
-    private func dayCell(_ day: String, events: [CorporateEvent]) -> some View {
-        let isToday = day == todayKey
-        let isSelected = day == selectedDay
-        let tickers = events.map(\.ticker).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
-        return Button {
-            withAnimation(.snappy(duration: 0.2)) { selectedDay = isSelected ? nil : day }
-        } label: {
-            VStack(spacing: 4) {
-                Text(String(Int(day.suffix(2)) ?? 0))
-                    .appNumber(.caption, weight: isToday ? .bold : .medium)
-                    .foregroundStyle(isToday ? CatfolioTheme.primaryText : SettingsTemplate.secondaryText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Spacer(minLength: 0)
-                if let first = tickers.first {
-                    AssetLogo(ticker: first, logoSymbol: scope.byTicker[first.uppercased()]?.logoSymbol,
-                              size: 26, cornerRadius: 8)
-                }
-                Text(tickers.count > 1 ? "+\(tickers.count - 1)" : " ")
-                    .appNumber(.nano, weight: .medium)
-                    .foregroundStyle(SettingsTemplate.secondaryText)
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 6)
-            .frame(height: 76)
-            .frame(maxWidth: .infinity)
-            .background(isSelected ? Color.primary.opacity(0.1) : SettingsTemplate.card,
-                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                if isToday {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(CatfolioTheme.primaryText, lineWidth: 1.5)
-                }
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(CorporateCalendarDay.date(day, calendar: calendar) ?? Date(),
-                                 format: .dateTime.month().day()))
-        .accessibilityValue(tickers.joined(separator: ", "))
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-
     @ViewBuilder
     private func eventList(_ events: [CorporateEvent]) -> some View {
         if events.isEmpty {
@@ -324,40 +269,14 @@ struct CorporateCalendarView: View {
                 ProgressView().frame(maxWidth: .infinity).padding(.vertical, 12)
             }
         } else {
-            SettingsCard {
-                ForEach(events) { event in eventRow(event) }
-            }
-        }
-    }
-
-    private func eventRow(_ event: CorporateEvent) -> some View {
-        let holding = scope.holding(event)
-        let date = CorporateCalendarDay.date(event.date, calendar: calendar) ?? Date()
-        return HStack(spacing: 12) {
-            AssetLogo(ticker: event.ticker, logoSymbol: holding?.logoSymbol, size: 36, cornerRadius: 10)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(holding?.shortName ?? event.ticker)
-                    .appText(.body, weight: .medium)
-                    .foregroundStyle(CatfolioTheme.primaryText)
-                    .lineLimit(1)
-                HStack(spacing: 4) {
-                    Text(date, format: .dateTime.month(.abbreviated).day())
-                    Text("·")
-                    Text(event.kindTitle)
+            LazyVStack(spacing: 0) {
+                ForEach(events) { event in
+                    CorporateCalendarEventRow(event: event, holding: scope.holding(event), calendar: calendar)
+                    if event.id != events.last?.id { ContentPanelSeparator() }
                 }
-                .appText(.footnote)
-                .foregroundStyle(SettingsTemplate.secondaryText)
             }
-            Spacer(minLength: 8)
-            if let income = event.incomeUSD(shares: holding?.shares ?? 0) {
-                FinancialText(DisplayFormat.money(income, fractionDigits: 2))
-                    .appNumber(.callout, weight: .medium)
-                    .foregroundStyle(CatfolioTheme.primaryText)
-            }
+            .settingsCardSurface()
         }
-        .padding(.horizontal, SettingsTemplate.rowHorizontalPadding)
-        .padding(.vertical, 12)
-        .accessibilityElement(children: .combine)
     }
 
     private func shiftMonth(_ step: Int) {

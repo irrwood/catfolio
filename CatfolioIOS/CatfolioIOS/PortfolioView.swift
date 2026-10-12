@@ -36,12 +36,6 @@ struct PortfolioView: View {
         // RootTabView owns this tab's stack, just as it does for the other tabs.
         Group {
             ScrollViewReader { scrollProxy in
-                ZStack {
-                    PortfolioHomePageBackdrop(
-                        colorScheme: colorScheme,
-                        scrollState: homeScrollState
-                    )
-
                     ScrollView {
                         // The hero is visually pinned with an offset while the
                         // foreground sheet scrolls over it. A LazyVStack judges
@@ -141,7 +135,9 @@ struct PortfolioView: View {
                             )
                         }
                     }
-                    .background(Color.clear)
+                    .background {
+                        PortfolioHomePageBackdrop(colorScheme: colorScheme, scrollState: homeScrollState)
+                    }
                     // Keep the native indicator track beside the holdings only;
                     // changing indicator margins leaves content and detents intact.
                     .modifier(PortfolioHomeScrollIndicators(
@@ -210,7 +206,6 @@ struct PortfolioView: View {
                     .task(id: model.wantedCurrencyHistories) {
                         await model.loadCurrencyHistories()
                     }
-                }
                 .modifier(PortfolioFloatingFilterOverlay())
                 .fullScreenCover(item: $selectedHolding) { holding in
                     HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
@@ -227,12 +222,7 @@ struct PortfolioView: View {
                     )
                 }
             }
-            // Inside the stack, so it hides the bar for this screen only.
-            // Applied to the stack itself it becomes a stack-wide preference
-            // that every pushed screen inherits and none of them can override
-            // — which left the Today detail with a title and a back button
-            // over no background at all.
-            .toolbar(.hidden, for: .navigationBar)
+            .toolbarVisibility(.hidden, for: .navigationBar)
         }
         .accessibilityIdentifier("page.portfolio")
     }

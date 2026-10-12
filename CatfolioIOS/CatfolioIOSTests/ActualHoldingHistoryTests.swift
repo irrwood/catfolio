@@ -32,19 +32,22 @@ final class ActualHoldingHistoryTests: XCTestCase {
             trade("2024-01-02", "BUY", "A", 10, 10, id: "1"),
             trade("2024-02-01", "SELL", "A", 6, 12, id: "2"),
         ], closes: ["A": days])
-        // 10 shares on the first day, 4 after the sale, plus the 12 it realised.
-        XCTAssertEqual(history.rows.map { $0.values["A"] ?? 0 }, [100, 60, 72])
+        // 10 shares on the first day, 4 after the sale; what the sale brought
+        // in has left the band.
+        XCTAssertEqual(history.rows.map { $0.values["A"] ?? 0 }, [100, 48, 60])
         XCTAssertEqual(history.rows.map(\.cost), [100, 40, 40])
-        XCTAssertEqual(try XCTUnwrap(history.rows.last).gain("A"), 32, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(history.rows.last).gain("A"), 20, accuracy: 0.0001)
     }
 
-    func testASoldOutSecurityIsThereWhileHeldAndKeepsItsResult() throws {
-        let history = build([], [
-            trade("2024-01-02", "BUY", "B", 10, 10, id: "1"),
-            trade("2024-02-01", "SELL", "B", 10, 12, id: "2"),
-        ], closes: ["B": days])
-        XCTAssertEqual(history.rows.map { $0.gain("B") }, [0, 20, 20])
-        XCTAssertEqual(history.rows.map(\.cost), [100, 0, 0])
+    func testASoldOutSecurityIsThereWhileHeldAndGoneFromItsSale() {
+        let history = build([position("A", shares: 10, cost: 10)], [
+            trade("2024-01-02", "BUY", "A", 10, 10, id: "1"),
+            trade("2024-01-02", "BUY", "B", 10, 10, id: "2"),
+            trade("2024-02-01", "SELL", "B", 10, 12, id: "3"),
+        ], closes: ["A": days, "B": days])
+        XCTAssertEqual(history.rows.map { $0.values["B"] }, [100, nil, nil])
+        XCTAssertEqual(history.rows.map { $0.values["A"] ?? 0 }, [100, 120, 150])
+        XCTAssertEqual(history.rows.map(\.cost), [200, 100, 100])
     }
 
     func testAPositionTheLedgerCannotAccountForKeepsTodaysShares() {

@@ -60,6 +60,12 @@ enum CatfolioPalette {
     static let violet700 = color(0x5A2CA8)
     static let violet900 = color(0x31165C)
 
+    /// Loss analysis keeps one purple field and ranked tonal bands in both appearances.
+    static let lossChartBackground = Color(red: 0.360386, green: 0.194594, blue: 0.834078)
+    static let lossChartBase = color(0xEFE2FF)
+    static let lossChartLayers = [color(0x2A0D52), color(0x5724A3), color(0x8C49ED),
+                                 color(0xB280F6), color(0xCCA7FB), color(0xE0CAFD)]
+
     static let blue50 = color(0xE4F1FF)
     static let blue100 = color(0xCCEBFF)
     static let blue200 = color(0xA0CDFF)

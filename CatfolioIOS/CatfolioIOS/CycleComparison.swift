@@ -160,8 +160,9 @@ struct CycleComparison: Equatable, Sendable {
         let values = cycles.flatMap(\.points).map(\.value).filter(\.isFinite)
         let low = min(0, values.min() ?? 0), high = max(0, values.max() ?? 0)
         let span = max(high - low, 1)
-        let padding = span * 0.08
-        return ((low - padding)...(high + padding), roundStep(span / 5))
+        // A small top clearance keeps endpoints intact directly below the
+        // navigation bar; the bottom still leaves room for the month labels.
+        return ((low - span * 0.08)...(high + span * 0.02), roundStep(span / 5))
     }
 
     static func roundStep(_ raw: Double) -> Double {
@@ -312,11 +313,10 @@ struct CycleComparisonView: View {
 
     var body: some View {
         let lines = self.lines
-        ScrollView {
+        ReturnsChartPanel(surface: .page) {
             VStack(spacing: 0) {
                 chart(lines ?? [])
                     .frame(height: 510)
-                    .padding(.top, 16)
 
                 // The charts' own range strip, counted in years.
                 // A count the history cannot fill shows as the largest it can;
@@ -324,16 +324,11 @@ struct CycleComparisonView: View {
                 CycleYearsPicker(selection: Binding(get: { effectiveYears }, set: { years = $0 }),
                                  choices: Self.yearChoices, enabled: availableYearChoices)
                     .frame(height: 62)
-
-                if let lines, !lines.isEmpty {
-                    legend(lines)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                }
-
-                Color.clear.frame(height: 40)
             }
+        } rows: {
+            if let lines, !lines.isEmpty { legend(lines) }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color(uiColor: .systemBackground))
         .navigationTitle(L10n.text("周期对比"))
         .navigationBarTitleDisplayMode(.inline)

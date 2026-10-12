@@ -123,7 +123,7 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        SettingsPage(title: L10n.text("账户")) {
+        SettingsPage(title: L10n.text("账户"), pageBackground: .clear) {
             // Portfolio mode, account activity and scope stay here; app preferences have one entry.
             if !model.accounts.isEmpty {
                 SettingsHistoryOverview()
@@ -149,7 +149,9 @@ struct SettingsView: View {
 
             PublicInvestorSettingsSection()
         }
+        .homeTabBackground()
         .tracksRootTabBarScroll()
+            .toolbarVisibility(.visible, for: .navigationBar)
             .accessibilityIdentifier("settings-root")
             #if DEBUG
             .navigationDestination(isPresented: $showsRotationPreview) {
@@ -299,6 +301,7 @@ struct SettingsView: View {
             AccountDetailView(accountID: account.id, initialAccount: account)
                 .environment(model)
         }
+        .accountFlowBrand(account.brandProvider)
     }
 
     /// A row that opens a broker flow in a sheet.

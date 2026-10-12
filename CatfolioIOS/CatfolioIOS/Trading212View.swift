@@ -117,7 +117,7 @@ struct Trading212View: View {
                     : L10n.text("将更新当前 Trading 212 账户持仓；其他账户不受影响。"))
             }
         }
-        .accountFlowBrand(.trading212, enabled: context.isCreating)
+        .accountFlowBrand(.trading212)
     }
 
     @ViewBuilder

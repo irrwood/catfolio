@@ -190,7 +190,6 @@ struct SettingsNavigationRow<Destination: View>: View {
 
 /// A row that runs an action — opening a sheet, starting a flow.
 struct SettingsButtonRow: View {
-    @Environment(\.accountFlowTheme) private var accountTheme
     let icon: SettingsIconSource?
     let title: String
     var subtitle: String?
@@ -211,7 +210,7 @@ struct SettingsButtonRow: View {
     /// keeps the label's own colours, so the role is applied here rather than
     /// left to the button.
     private var titleColor: Color? {
-        role == .destructive ? CatfolioTheme.danger : tint ?? accountTheme?.controlTint
+        role == .destructive ? CatfolioTheme.danger : tint
     }
 
     init(
@@ -455,6 +454,7 @@ struct SettingsMenuRow<SelectionValue: Hashable, Options: View>: View {
 /// account.
 struct SettingsSelectionRow<Destination: View>: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accountFlowTheme) private var accountTheme
     /// Both halves report into one flag so the fill covers the whole row,
     /// whichever half is being held.
     @State private var isPressed = false
@@ -493,7 +493,8 @@ struct SettingsSelectionRow<Destination: View>: View {
         SettingsRowContainer {
             HStack(spacing: SettingsTemplate.iconSpacing) {
                 Button(action: toggle) {
-                    SettingsRowIcon(.asset(isSelected ? "SettingsSelectOn" : "SettingsSelectOff"))
+                    SettingsRowIcon(.asset(isSelected ? "SettingsSelectOn" : "SettingsSelectOff"),
+                                    tint: isSelected ? accountTheme?.controlTint : nil)
                         // The circle needs a target taller than 24pt without
                         // making the row taller: padded out for the hit shape,
                         // then pulled back in so the layout still measures the

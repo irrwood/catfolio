@@ -1,1 +1,25 @@
-{"images": [{"filename": "art.svg", "idiom": "universal"}], "info": {"author": "xcode", "version": 1}, "properties": {"preserves-vector-representation": true}}
+{
+  "images": [
+    {
+      "filename": "art.svg",
+      "idiom": "universal"
+    },
+    {
+      "filename": "dark.svg",
+      "idiom": "universal",
+      "appearances": [
+        {
+          "appearance": "luminosity",
+          "value": "dark"
+        }
+      ]
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  },
+  "properties": {
+    "preserves-vector-representation": true
+  }
+}

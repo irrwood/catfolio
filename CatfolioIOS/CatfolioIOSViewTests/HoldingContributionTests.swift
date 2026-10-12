@@ -209,9 +209,8 @@ final class HoldingLossTests: XCTestCase {
         defer { window.isHidden = true; previousWindow?.makeKeyAndVisible() }
         let value = history()
         for scheme in [ColorScheme.light, .dark] {
-            let host = UIHostingController(rootView: ScrollView {
-                LossAnalysisChart(fetchHistory: { _ in value })
-            }.environment(AppModel()).environment(\.colorScheme, scheme))
+            let host = UIHostingController(rootView: LossAnalysisChart(fetchHistory: { _ in value })
+                .environment(AppModel()).environment(\.colorScheme, scheme))
             host.overrideUserInterfaceStyle = scheme == .dark ? .dark : .light
             window.rootViewController = host
             window.makeKeyAndVisible()
@@ -221,8 +220,9 @@ final class HoldingLossTests: XCTestCase {
                 if let scroll = view as? UIScrollView { return scroll }
                 return view.subviews.lazy.compactMap { scrollView($0) }.first
             }
-            XCTAssertGreaterThan(try XCTUnwrap(scrollView(host.view)).contentSize.height, 600,
-                                 "Loaded hero and ranked legend must replace the loading placeholder")
+            let list = try XCTUnwrap(scrollView(host.view))
+            XCTAssertGreaterThan(list.contentSize.height, list.bounds.height,
+                                 "The ranked legend must have its own bounded scroll area below the hero")
             let image = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
                 host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
             }
@@ -412,7 +412,7 @@ final class HoldingContributionTests: XCTestCase {
                 let color = HoldingContributionChart.incomeDisplayColor(for: band.kind, scheme: .light,
                                                                         isHighlighted: selected, isFaded: false)
                 ReturnsSourceListRow(rank: 1, color: color, title: selected ? "Highlighted" : "Normal",
-                                     subtitle: "Matching band and legend", isOn: true, isOnBlueField: true,
+                                     subtitle: "Matching band and legend", isOn: true, isOnTintedField: true,
                                      isHighlighted: selected) { Text("+$300") }
                 Rectangle().fill(color).frame(height: 40)
             }
@@ -479,15 +479,14 @@ final class HoldingContributionTests: XCTestCase {
         var resume: CheckedContinuation<HoldingValueHistory, Never>?
         let requested = expectation(description: "History requested by the chart")
         let value = history()
-        let host = UIHostingController(rootView: ScrollView {
+        let host = UIHostingController(rootView:
             HoldingContributionChart(fetchHistory: { cachedOnly in
                 if cachedOnly { throw LocalServiceError.noHistoricalPrices }
                 return await withCheckedContinuation {
                     resume = $0
                     requested.fulfill()
                 }
-            })
-        }.environment(AppModel()))
+            }).environment(AppModel()))
         window.rootViewController = host
         window.makeKeyAndVisible()
         defer {
@@ -497,22 +496,25 @@ final class HoldingContributionTests: XCTestCase {
         }
         await fulfillment(of: [requested], timeout: 5)
         host.view.layoutIfNeeded()
-        func scrollView(_ view: UIView) -> UIScrollView? {
-            if let scroll = view as? UIScrollView { return scroll }
-            return view.subviews.lazy.compactMap { scrollView($0) }.first
+        func descendant<T: UIView>(_ view: UIView, of type: T.Type) -> T? {
+            if let match = view as? T { return match }
+            return view.subviews.lazy.compactMap { descendant($0, of: type) }.first
         }
-        let scroll = try XCTUnwrap(scrollView(host.view))
-        let loadingHeight = scroll.contentSize.height
-        XCTAssertGreaterThanOrEqual(loadingHeight, 300)
+        XCTAssertNotNil(descendant(host.view, of: ReturnsChartHandle.Control.self),
+                        "The panel and handle keep their identity while history loads")
         resume?.resume(returning: value)
         resume = nil
         for _ in 0..<30 {
             try await Task.sleep(for: .milliseconds(100))
             host.view.layoutIfNeeded()
-            if scroll.contentSize.height > loadingHeight + 150 { break }
+            if descendant(host.view, of: ReturnsChartHandle.Control.self) != nil { break }
         }
-        XCTAssertGreaterThan(scroll.contentSize.height, loadingHeight + 150,
-                             "Loaded chart, range selector and legend must replace the placeholder")
+        let handle = try XCTUnwrap(descendant(host.view, of: ReturnsChartHandle.Control.self))
+        let scroll = try XCTUnwrap(descendant(host.view, of: UIScrollView.self))
+        XCTAssertGreaterThan(handle.convert(handle.bounds, to: host.view).midY, 400,
+                             "Loaded chart and range selector must appear above the handle")
+        XCTAssertGreaterThan(scroll.contentSize.height, scroll.bounds.height,
+                             "The loaded legend must have an independent scrollable viewport")
         // Include the completed chart reveal, not its grey transition frame.
         try await Task.sleep(for: .seconds(1))
         let image = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
@@ -522,6 +524,25 @@ final class HoldingContributionTests: XCTestCase {
         attachment.name = "holding-contribution-loaded"
         attachment.lifetime = .keepAlways
         add(attachment)
+
+        handle.sendActions(for: .touchUpInside)
+        try await Task.sleep(for: .milliseconds(500))
+        host.view.layoutIfNeeded()
+        let collapsed = handle.convert(handle.bounds, to: host.view)
+        XCTAssertLessThan(collapsed.maxY, 120, "The real chart must leave through the top")
+        XCTAssertGreaterThan(collapsed.maxY, host.view.safeAreaInsets.top, "The handle must remain reachable")
+        let collapsedImage = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
+            host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+        }
+        try collapsedImage.pngData()?.write(to: URL(fileURLWithPath: "/tmp/catfolio-income-handle-collapsed.png"))
+        let collapsedAttachment = XCTAttachment(image: collapsedImage)
+        collapsedAttachment.name = "holding-contribution-collapsed"
+        collapsedAttachment.lifetime = .keepAlways
+        add(collapsedAttachment)
+        handle.sendActions(for: .touchUpInside)
+        try await Task.sleep(for: .milliseconds(500))
+        host.view.layoutIfNeeded()
+        XCTAssertGreaterThan(handle.convert(handle.bounds, to: host.view).midY, 400)
     }
 
     func testEveryGainerGetsABandUpToSeven() {

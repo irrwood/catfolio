@@ -5,23 +5,35 @@ import XCTest
 
 @MainActor
 final class SettingsTabBarVisibilityTests: XCTestCase {
+    func testShortReverseDragCanFinishRestoringBarDuringInertia() {
+        var state = RootTabBarScrollState()
+        XCTAssertNil(state.phaseChanged(to: .interacting, offset: 100))
+        XCTAssertEqual(state.scrolled(from: 100, to: 130), true)
+        XCTAssertNil(state.phaseChanged(to: .idle, offset: 130))
+        XCTAssertNil(state.phaseChanged(to: .tracking, offset: 130))
+        XCTAssertNil(state.phaseChanged(to: .interacting, offset: 130))
+        XCTAssertNil(state.scrolled(from: 130, to: 124))
+        XCTAssertNil(state.phaseChanged(to: .decelerating, offset: 124))
+        XCTAssertEqual(state.scrolled(from: 124, to: 116), false)
+        // A bottom-edge bounce or forward inertia cannot hide it again.
+        XCTAssertNil(state.scrolled(from: 116, to: 145))
+    }
+
+    func testTopRestoresBarEvenIfScrollEndsBeforeFinalGeometryCallback() {
+        for phase in [ScrollPhase.idle, .decelerating, .animating] {
+            var state = RootTabBarScrollState()
+            XCTAssertNil(state.phaseChanged(to: .interacting, offset: 100))
+            XCTAssertEqual(state.scrolled(from: 100, to: 130), true)
+            XCTAssertEqual(state.phaseChanged(to: phase, offset: 0), false)
+            XCTAssertEqual(state.scrolled(from: 8, to: 0), false)
+        }
+    }
+
     func testPushedPagesHaveNoTabBarAndTheRootBringsItBack() async throws {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let previous = scene.windows.first(where: \.isKeyWindow)
         let route = Route()
-        let host = UIHostingController(rootView: TabView {
-            Tab("Settings", systemImage: "gearshape") {
-                NavigationStack(path: Binding(get: { route.path }, set: { route.path = $0 })) {
-                    SettingsNavigationRow(title: "Services") { Text("Services") }
-                        .ownsTabBar()
-                        // Pushed pages do nothing of their own: the bar is the root's.
-                        .navigationDestination(for: Int.self) { depth in
-                            Text("Settings depth \(depth)")
-                        }
-                }
-            }
-            Tab("Portfolio", systemImage: "chart.bar") { Text("Portfolio") }
-        })
+        let host = UIHostingController(rootView: testTabs(route: route))
         let window = UIWindow(windowScene: scene)
         window.rootViewController = host
         window.makeKeyAndVisible()
@@ -37,20 +49,30 @@ final class SettingsTabBarVisibilityTests: XCTestCase {
         try await waitUntil { self.isVisible(tabs.tabBar, in: window) }
     }
 
-    func testRapidPushesAndPopsLeaveNoPictureBehind() async throws {
+    func testInitialDestinationHidesBarBeforeReturningToRoot() async throws {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let previous = scene.windows.first(where: \.isKeyWindow)
         let route = Route()
-        let host = UIHostingController(rootView: TabView {
-            Tab("Settings", systemImage: "gearshape") {
-                NavigationStack(path: Binding(get: { route.path }, set: { route.path = $0 })) {
-                    Text("Root")
-                        .ownsTabBar()
-                        .navigationDestination(for: Int.self) { depth in Text("Depth \(depth)") }
-                }
-            }
-            Tab("Portfolio", systemImage: "chart.bar") { Text("Portfolio") }
-        })
+        route.path = [1]
+        let host = UIHostingController(rootView: testTabs(route: route))
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previous?.makeKeyAndVisible() }
+        try await waitUntil { self.findNavigation(host)?.viewControllers.count == 2 }
+        let tabs = try XCTUnwrap(findTabs(host))
+        try await waitUntil { !self.isVisible(tabs.tabBar, in: window) }
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertFalse(isVisible(tabs.tabBar, in: window))
+        route.path = []
+        try await waitUntil { self.isVisible(tabs.tabBar, in: window) }
+    }
+
+    func testRapidPushesAndPopsLeaveTheBarWhereItBelongs() async throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let route = Route()
+        let host = UIHostingController(rootView: testTabs(route: route))
         let window = UIWindow(windowScene: scene)
         window.rootViewController = host
         window.makeKeyAndVisible()
@@ -73,7 +95,7 @@ final class SettingsTabBarVisibilityTests: XCTestCase {
         route.path = [1]
         try await waitUntil { !self.isVisible(tabs.tabBar, in: window) }
         try await Task.sleep(for: .seconds(1))
-        let pushed = try XCTUnwrap(findNavigation(tabs)).topViewController
+        let pushed = try XCTUnwrap(findNavigation(host)).topViewController
         let pushedView = try XCTUnwrap(pushed?.view)
         XCTAssertFalse(pushedView.subviews.contains { String(describing: type(of: $0)).contains("Replicant") })
     }
@@ -92,7 +114,7 @@ final class SettingsTabBarVisibilityTests: XCTestCase {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let previous = scene.windows.first(where: \.isKeyWindow)
         let host = UIHostingController(rootView: TabView {
-            Tab("Portfolio", systemImage: "chart.bar") { NavigationStack { Text("Root").ownsTabBar() } }
+            Tab("Portfolio", systemImage: "chart.bar") { RootPageNavigation { Text("Root").ownsTabBar() } }
             Tab("Settings", systemImage: "gearshape") { Text("Settings") }
         })
         let window = UIWindow(windowScene: scene)
@@ -116,6 +138,41 @@ final class SettingsTabBarVisibilityTests: XCTestCase {
 
         RootTabBar.setTucked(false, animated: false)
         XCTAssertEqual(tabs.tabBar.frame, resting)
+
+        for _ in 0..<4 {
+            RootTabBar.setTucked(true)
+            try await Task.sleep(for: .milliseconds(40))
+            RootTabBar.setTucked(false)
+            try await Task.sleep(for: .milliseconds(40))
+        }
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertEqual(tabs.tabBar.transform, .identity)
+        XCTAssertEqual(tabs.tabBar.frame.minY, resting.minY, accuracy: 0.5)
+        XCTAssertTrue(isVisible(tabs.tabBar, in: window))
+    }
+
+    private func testTabs(route: Route) -> some View {
+        TabView {
+            Tab("Settings", systemImage: "gearshape") {
+                RootPageNavigation { TestPage(route: route, depth: 0).ownsTabBar() }
+            }
+            Tab("Portfolio", systemImage: "chart.bar") {
+                RootPageNavigation { Text("Portfolio").ownsTabBar() }
+            }
+        }
+    }
+
+    private struct TestPage: View {
+        let route: Route
+        let depth: Int
+
+        var body: some View {
+            SettingsPage(title: depth == 0 ? "Account" : "Settings") { Text("Depth \(depth)") }
+                .navigationDestination(isPresented: Binding(
+                    get: { route.path.count > depth },
+                    set: { if !$0 { route.path = Array(route.path.prefix(depth)) } }
+                )) { TestPage(route: route, depth: depth + 1) }
+        }
     }
 
     @Observable final class Route { var path: [Int] = [] }

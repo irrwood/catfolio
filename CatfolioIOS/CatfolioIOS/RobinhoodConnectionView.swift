@@ -175,7 +175,7 @@ struct RobinhoodConnectionView: View {
                 }
             }
         }
-        .accountFlowBrand(.robinhood, enabled: context.isCreating)
+        .accountFlowBrand(.robinhood)
     }
 
     @ViewBuilder

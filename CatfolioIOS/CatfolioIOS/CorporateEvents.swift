@@ -140,58 +140,115 @@ final class CorporateEventsStore {
     private(set) var schedules: [String: CorporateEventSchedule] = [:]
     private(set) var isLoading = false
     private var restored = false
-    private var loadingKey: String?
+    private var restoreTask: Task<[String: CorporateEventSchedule]?, Never>?
+    private struct Refresh {
+        let id: UUID
+        let tickers: Set<String>
+        let task: Task<Void, Never>
+    }
+    private var refresh: Refresh?
+    private let cacheURL: URL
+    private let fetchCrumb: @Sendable () async -> String?
+    private let fetchSchedule: @Sendable (String, String?) async -> CorporateEventSchedule?
+
+    init(cacheURL: URL = CorporateEventsStore.fileURL,
+         fetchCrumb: @escaping @Sendable () async -> String? = { await YahooCalendarClient.crumb() },
+         fetchSchedule: @escaping @Sendable (String, String?) async -> CorporateEventSchedule? = {
+             await YahooCalendarClient.schedule(ticker: $0, crumb: $1)
+         }) {
+        self.cacheURL = cacheURL
+        self.fetchCrumb = fetchCrumb
+        self.fetchSchedule = fetchSchedule
+    }
 
     private static let maxAge: TimeInterval = 12 * 3_600
-    private static var fileURL: URL {
+    nonisolated private static var fileURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("corporate-events-v1.json")
     }
 
     /// Every event for these tickers.
-    func events(for tickers: Set<String>) -> [CorporateEvent] {
-        tickers.flatMap { schedules[$0]?.events ?? [] }.sorted { ($0.date, $0.ticker) < ($1.date, $1.ticker) }
+    func events(for tickers: Set<String>, during days: ClosedRange<String>? = nil) -> [CorporateEvent] {
+        tickers.flatMap { schedules[$0]?.events ?? [] }
+            .filter { days?.contains($0.date) ?? true }
+            .sorted { ($0.date, $0.ticker) < ($1.date, $1.ticker) }
     }
 
     func load(tickers: [String]) async {
-        restore()
+        await restore()
         let wanted = Array(Set(tickers.map { $0.uppercased() })).sorted()
+        // Opening the full calendar while its preview is refreshing must
+        // join that work, including after an early batch has become fresh.
+        while let active = refresh {
+            await active.task.value
+            finish(active.id)
+            if Set(wanted).isSubset(of: active.tickers) { return }
+        }
         let stale = wanted.filter { (schedules[$0].map { Date().timeIntervalSince($0.fetchedAt) > Self.maxAge }) ?? true }
-        let key = stale.joined(separator: ",")
-        guard !stale.isEmpty, loadingKey != key else { return }
-        loadingKey = key
+        guard !stale.isEmpty, !Task.isCancelled else { return }
+        let id = UUID()
+        let task = Task { await self.fetch(stale) }
+        refresh = Refresh(id: id, tickers: Set(wanted), task: task)
         isLoading = true
-        defer { isLoading = false; loadingKey = nil }
-        let crumb = await YahooCalendarClient.crumb()
+        await task.value
+        finish(id)
+    }
+
+    private func finish(_ id: UUID) {
+        guard refresh?.id == id else { return }
+        refresh = nil
+        isLoading = false
+    }
+
+    private func fetch(_ stale: [String]) async {
+        let crumb = await fetchCrumb()
+        let fetchSchedule = fetchSchedule
         // A few at a time: Yahoo limits bursts, and a large portfolio is
         // dozens of listings.
         for chunk in stride(from: 0, to: stale.count, by: 4).map({ Array(stale[$0..<min(stale.count, $0 + 4)]) }) {
             let results = await withTaskGroup(of: (String, CorporateEventSchedule?).self) { group in
                 for ticker in chunk {
-                    group.addTask { (ticker, await YahooCalendarClient.schedule(ticker: ticker, crumb: crumb)) }
+                    group.addTask { (ticker, await fetchSchedule(ticker, crumb)) }
                 }
                 var collected: [(String, CorporateEventSchedule?)] = []
                 for await result in group { collected.append(result) }
                 return collected
             }
             guard !Task.isCancelled else { return }
-            for (ticker, schedule) in results { if let schedule { schedules[ticker] = schedule } }
+            var updated = schedules
+            for (ticker, schedule) in results { if let schedule { updated[ticker] = schedule } }
+            schedules = updated
         }
-        save()
+        await save()
     }
 
-    private func restore() {
+    private func restore() async {
+        guard !restored else { return }
+        let task: Task<[String: CorporateEventSchedule]?, Never>
+        if let existing = restoreTask { task = existing }
+        else {
+            let url = cacheURL
+            task = Task.detached(priority: .userInitiated) {
+                guard let data = try? Data(contentsOf: url) else { return nil }
+                return try? JSONDecoder().decode([String: CorporateEventSchedule].self, from: data)
+            }
+            restoreTask = task
+        }
+        let stored = await task.value
         guard !restored else { return }
         restored = true
-        if let data = try? Data(contentsOf: Self.fileURL),
-           let stored = try? JSONDecoder().decode([String: CorporateEventSchedule].self, from: data) {
-            schedules = stored
-        }
+        restoreTask = nil
+        if let stored { schedules = stored }
     }
 
-    private func save() {
-        guard let data = try? JSONEncoder().encode(schedules) else { return }
-        try? data.write(to: Self.fileURL, options: .atomic)
+    private func save() async {
+        let snapshot = schedules
+        let url = cacheURL
+        await Task.detached(priority: .utility) {
+            guard let data = try? JSONEncoder().encode(snapshot) else { return }
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? data.write(to: url, options: .atomic)
+        }.value
     }
 }
 

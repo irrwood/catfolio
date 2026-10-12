@@ -9,6 +9,7 @@ final class HoldingHistoryState {
     private(set) var history: HoldingValueHistory?
     private(set) var errorMessage: String?
     private(set) var revision = 0
+    private(set) var didLoadHistory = false
     private var generation = 0
 
     /// Whether the history reaches the latest session New York has closed.
@@ -39,12 +40,13 @@ final class HoldingHistoryState {
     func load(forceRefresh: Bool = false, fetch: (Bool) async throws -> HoldingValueHistory) async {
         generation &+= 1
         let request = generation
-        history = nil
         errorMessage = nil
-        revision &+= 1
+        didLoadHistory = false
 
         func publish(_ value: HoldingValueHistory) {
             if value.rows.count <= 1, (history?.rows.count ?? 0) > 1 { return }
+            didLoadHistory = true
+            guard value != history else { return }
             history = value
             errorMessage = nil
             revision &+= 1

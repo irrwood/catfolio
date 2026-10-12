@@ -6,6 +6,7 @@ struct AIView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(AIProviderPreference.storageKey) private var aiProviderRaw = AIProviderPreference.automatic.rawValue
     let isEmbedded: Bool
+    let usesRootTabHeader: Bool
     let loadsHistoryOnAppear: Bool
     let showsComposer: Bool
     let onClose: (() -> Void)?
@@ -55,11 +56,13 @@ struct AIView: View {
 
     init(
         isEmbedded: Bool = false,
+        usesRootTabHeader: Bool = false,
         loadsHistoryOnAppear: Bool = true,
         showsComposer: Bool = true,
         onClose: (() -> Void)? = nil
     ) {
         self.isEmbedded = isEmbedded
+        self.usesRootTabHeader = usesRootTabHeader
         self.loadsHistoryOnAppear = loadsHistoryOnAppear
         self.showsComposer = showsComposer
         self.onClose = onClose
@@ -68,7 +71,34 @@ struct AIView: View {
 
     var body: some View {
         Group {
-            if isEmbedded {
+            if usesRootTabHeader {
+                embeddedConversation
+                    .settingsNavigationTitle(L10n.text(showsSidebar ? "对话" : "AI 助手"))
+                    .toolbarVisibility(.visible, for: .navigationBar)
+                    .softTopScrollEdge()
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button(L10n.text(showsSidebar ? "回到对话" : "对话列表"),
+                                   systemImage: showsSidebar ? "chevron.down" : "line.3.horizontal") {
+                                showsSidebar ? dismissSidebar() : showSidebar()
+                            }
+                            .accessibilityIdentifier("ai.conversations.toggle")
+                            // Recreate the native bar button when its role
+                            // changes; reusing it can detach its glyph after
+                            // returning to this tab on iOS 27.
+                            .id(showsSidebar)
+                        }
+                        if showsSidebar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button(L10n.text("新对话"), systemImage: "square.and.pencil") {
+                                    startNewConversation()
+                                    dismissSidebar()
+                                }
+                                .accessibilityIdentifier("ai.conversations.new")
+                            }
+                        }
+                    }
+            } else if isEmbedded {
                 embeddedConversation
                     .overlay(alignment: .top) {
                         AIConversationHeader(
@@ -249,8 +279,13 @@ struct AIView: View {
                 .padding(.horizontal, 16)
             }
             .scrollTargetLayout()
-            .padding(.top, isEmbedded ? 64 : 16)
+            .padding(.top, usesRootTabHeader ? 0 : (isEmbedded ? 64 : 16))
             .padding(.bottom, 16)
+            .background {
+                if usesRootTabHeader {
+                    NavigationBarScrollAnchor().accessibilityHidden(true)
+                }
+            }
         }
         .background(isEmbedded ? Color.clear : Color(uiColor: .systemGroupedBackground))
         // Let messages pass beneath the fixed status-area fade.
@@ -322,7 +357,11 @@ struct AIView: View {
                         .transition(.opacity)
                 }
                 conversation
-                    .overlay { AIConversationTopFade().opacity(showsSidebar ? 0 : 1) }
+                    .overlay {
+                        if !usesRootTabHeader {
+                            AIConversationTopFade().opacity(showsSidebar ? 0 : 1)
+                        }
+                    }
                     .background {
                         if showsSidebar { card.fill(SettingsTemplate.card) }
                     }
@@ -446,7 +485,7 @@ struct AIView: View {
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
                 .scrollIndicators(.hidden)
-                .contentMargins(.top, 72, for: .scrollContent)
+                .contentMargins(.top, usesRootTabHeader ? 0 : 72, for: .scrollContent)
                 .contentMargins(.bottom, Self.conversationPeekHeight + 24, for: .scrollContent)
             }
         }

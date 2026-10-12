@@ -6,12 +6,9 @@ struct AIAssistantPage: View {
 
     /// A root tab: nothing to close back to, so no close control.
     var body: some View {
-        AIView(isEmbedded: true, onClose: nil)
+        AIView(isEmbedded: true, usesRootTabHeader: true, onClose: nil)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background {
-                AIConversationGlowBackground()
-                    .ignoresSafeArea()
-            }
+            .homeTabBackground()
     }
 }
 
@@ -143,6 +140,12 @@ struct AIHeaderGlass: ViewModifier {
 struct AIConversationTopFade: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(HomeBackgroundStyle.preferenceKey) private var backgroundStyleRawValue = HomeBackgroundStyle.defaultStyle.rawValue
+
+    private var topColor: Color {
+        let style = HomeBackgroundStyle(rawValue: backgroundStyleRawValue) ?? .defaultStyle
+        return style == .classic && colorScheme == .dark ? .black : style.palette(for: colorScheme).baseTop
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -151,7 +154,7 @@ struct AIConversationTopFade: View {
                     AIStatusBackdropBlur()
                 }
                 LinearGradient(
-                    colors: [AIConversationGround.base(for: colorScheme), .clear],
+                    colors: [topColor, .clear],
                     startPoint: .top,
                     endPoint: .bottom
                 )

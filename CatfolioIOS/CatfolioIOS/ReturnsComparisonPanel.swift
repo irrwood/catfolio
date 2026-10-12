@@ -44,38 +44,36 @@ struct ReturnsComparisonPanel: View {
     /// The list the comparison on screen was computed for.
     @State private var computedBenchmarks = ComparisonBenchmarkCatalog.symbols
     @State private var zeroPosition: CGFloat = 230
+    @State private var disclosure = ReturnsChartDisclosure()
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                if let comparison = model.comparison {
-                    ReturnsChart(
-                        comparison: comparison,
-                        mode: $chartMode,
-                        timeRange: $timeRange,
-                        selectedDate: $selectedDate,
-                        highlightedSeries: $highlightedSeries,
-                        onAddBenchmark: { showsBenchmarkPicker = true }
-                    )
-                    // A removed symbol leaves at once; an added one arrives
-                    // with the recomputed comparison.
-                    .id("\(model.comparisonRevision)|\(storedBenchmarks ?? "")")
-                } else {
-                    ReturnsComparisonPlaceholder(
-                        timeRange: $timeRange,
-                        title: model.returnsError == nil
-                            ? L10n.text("正在加载收益数据") : L10n.text("暂无收益记录"),
-                        message: model.returnsError
-                            ?? L10n.text("正在整理组合与基准的历史记录"),
-                        isLoading: model.returnsError == nil
-                    )
-                }
+        Group {
+            if let comparison = model.comparison {
+                ReturnsChart(
+                    comparison: comparison,
+                    mode: $chartMode,
+                    timeRange: $timeRange,
+                    selectedDate: $selectedDate,
+                    highlightedSeries: $highlightedSeries,
+                    disclosure: disclosure,
+                    onAddBenchmark: { showsBenchmarkPicker = true }
+                )
+                // A removed symbol leaves at once; an added one arrives
+                // with the recomputed comparison.
+                .id("\(model.comparisonRevision)|\(storedBenchmarks ?? "")")
+            } else {
+                ReturnsComparisonPlaceholder(
+                    timeRange: $timeRange,
+                    title: model.returnsError == nil
+                        ? L10n.text("正在加载收益数据") : L10n.text("暂无收益记录"),
+                    message: model.returnsError
+                        ?? L10n.text("正在整理组合与基准的历史记录"),
+                    isLoading: model.returnsError == nil,
+                    disclosure: disclosure
+                )
             }
-            .padding(.bottom, 34)
         }
-        .scrollIndicators(.hidden)
-        // The header rides over the chart as the page scrolls, with the
-        // same soft blurred edge the other chart pages get from their bar.
+        // The bar stays above the chart; only the handle moves the chart.
         .comparisonTopBar { header }
         .background { ComparisonSwipeBackSupport().frame(width: 0, height: 0) }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

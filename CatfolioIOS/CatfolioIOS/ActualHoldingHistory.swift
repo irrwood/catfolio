@@ -1,7 +1,7 @@
 import Foundation
 
-/// The income-sources history as it really was: each day's own share counts,
-/// open cost and realised results, rebuilt from the ledger.
+/// The income-sources history as it really was: each day's own share counts
+/// and open cost, rebuilt from the ledger.
 ///
 /// The usual history (`LocalMarketDataClient.holdingValueHistory`) is today's
 /// holdings carried back: a part-sold security is drawn at today's smaller
@@ -11,13 +11,12 @@ import Foundation
 ///
 /// A position whose ledger does not account for its shares today — moved in
 /// from another broker, or imported without its purchases — cannot be
-/// rebuilt; it keeps the usual drawing, today's shares from its opening day,
-/// and only its broker-reported results and dividends are added.
+/// rebuilt; it keeps the usual drawing, today's shares from its opening day.
 ///
 /// Per security, a day's value is what its shares were worth at that day's
-/// close plus everything it had realised (sales and dividends) by then; its
-/// cost is what its open shares cost. A security no longer held is worth its
-/// realised result at no cost. The principal is the open cost that day.
+/// close and its cost is what those shares cost. What a sale brought in left
+/// the security: a part sale narrows its band, and a security sold outright
+/// has none from that day on. The principal is the open cost that day.
 enum ActualHoldingHistory {
     /// One security in one account.
     struct Plan {
@@ -31,7 +30,6 @@ enum ActualHoldingHistory {
         let position: LocalPositionRecord?
         /// Buys and sells, in lot-matching order.
         let trades: [LocalTransactionRecord]
-        let dividends: [LocalTransactionRecord]
         /// The ledger says shares are still held but no position holds them:
         /// they left the account after the last trade.
         let leftAfter: String?
@@ -44,14 +42,9 @@ enum ActualHoldingHistory {
             ("\($0.accountKey)|\($0.ticker.uppercased())", $0)
         }, uniquingKeysWith: { first, _ in first })
         var tradesByKey: [String: [LocalTransactionRecord]] = [:]
-        var dividendsByKey: [String: [LocalTransactionRecord]] = [:]
-        for transaction in transactions {
-            let key = "\(transaction.accountKey)|\(transaction.ticker.uppercased())"
-            if RealisedProfitCalculator.isBuy(transaction.action) || RealisedProfitCalculator.isSell(transaction.action) {
-                tradesByKey[key, default: []].append(transaction)
-            } else if PortfolioActivityKind(action: transaction.action) == .dividend {
-                dividendsByKey[key, default: []].append(transaction)
-            }
+        for transaction in transactions where RealisedProfitCalculator.isBuy(transaction.action)
+            || RealisedProfitCalculator.isSell(transaction.action) {
+            tradesByKey["\(transaction.accountKey)|\(transaction.ticker.uppercased())", default: []].append(transaction)
         }
         var plans: [Plan] = []
         for key in Set(positionsByKey.keys).union(tradesByKey.keys).sorted() {
@@ -81,7 +74,6 @@ enum ActualHoldingHistory {
                 key: key, ticker: ticker, currency: currency,
                 symbol: LocalMarketDataClient.yahooSymbol(ticker: ticker, currency: currency),
                 isRebuilt: isRebuilt, position: position, trades: trades,
-                dividends: (dividendsByKey[key] ?? []).sorted { $0.date < $1.date },
                 leftAfter: isRebuilt && position == nil && ledgerShares > 0.0001 ? trades.last?.date : nil,
                 startDate: start))
         }
@@ -96,16 +88,13 @@ enum ActualHoldingHistory {
     /// Where one plan stands on a day.
     private struct State {
         var next = 0
-        var nextDividend = 0
         var shares = 0.0
         var lots: [Lot] = []
-        var realisedUSD = 0.0
     }
 
     /// - Parameters:
     ///   - closes: split-adjusted, not dividend-adjusted, closes by symbol and
-    ///     day: the trades were made at those prices, and dividends are
-    ///     counted as received.
+    ///     day: the trades were made at those prices.
     ///   - scales: how a symbol's market price converts to its plan's currency.
     static func build(plans: [Plan], closes: [String: [String: Double]], scales: [String: Double],
                       names: [String: String] = [:],
@@ -148,8 +137,8 @@ enum ActualHoldingHistory {
                 let marketValue = lastClose[plan.symbol].map {
                     shares * $0 * (scales[plan.symbol] ?? 1) * marketRate
                 } ?? openCost
-                guard shares > 0.000_000_1 || state.realisedUSD != 0 else { continue }
-                values[plan.ticker, default: 0] += marketValue + state.realisedUSD
+                guard shares > 0.000_000_1 else { continue }
+                values[plan.ticker, default: 0] += marketValue
                 costs[plan.ticker, default: 0] += openCost
                 principal += openCost
             }
@@ -164,58 +153,31 @@ enum ActualHoldingHistory {
         return HoldingValueHistory(rows: rows, costs: rows.last?.costs ?? [:], names: allNames)
     }
 
-    /// Applies a plan's trades and dividends made on or before `date`.
+    /// Applies a plan's trades made on or before `date`.
     private static func advance(_ state: inout State, plan: Plan, to date: String,
                                 usdRate: (String) -> Double?, splitAdjustment: (String, String) -> Double?) {
-        while state.nextDividend < plan.dividends.count, plan.dividends[state.nextDividend].date <= date {
-            let dividend = plan.dividends[state.nextDividend]
-            if let rate = usdRate(dividend.currency) {
-                let usd = dividend.quantity * dividend.price * rate
-                if usd.isFinite { state.realisedUSD += usd }
-            }
-            state.nextDividend += 1
-        }
+        // Without its purchases a position keeps today's shares throughout.
+        guard plan.isRebuilt else { return }
         while state.next < plan.trades.count, plan.trades[state.next].date <= date {
             let trade = plan.trades[state.next]
             state.next += 1
             let split = splitAdjustment(trade.ticker, trade.date) ?? 1
             let quantity = abs(trade.quantity) * split
-            let price = split > 0 ? trade.price / split : trade.price
-            let rate = usdRate(trade.currency)
             if RealisedProfitCalculator.isBuy(trade.action) {
-                guard plan.isRebuilt else { continue }
+                let price = split > 0 ? trade.price / split : trade.price
                 state.shares += quantity
-                state.lots.append(Lot(quantity: quantity, costPerShareUSD: price * (rate ?? 0)))
-                continue
-            }
-            let broker = brokerUSD(trade, usdRate: usdRate)
-            guard plan.isRebuilt else {
-                // Without its purchases only the broker's own result is known.
-                if let broker { state.realisedUSD += broker }
+                state.lots.append(Lot(quantity: quantity, costPerShareUSD: price * (usdRate(trade.currency) ?? 0)))
                 continue
             }
             var remaining = quantity
-            var matchedCost = 0.0
             while remaining > 0.000_000_1, !state.lots.isEmpty {
                 let matched = min(remaining, state.lots[0].quantity)
-                matchedCost += matched * state.lots[0].costPerShareUSD
                 remaining -= matched
                 state.lots[0].quantity -= matched
                 if state.lots[0].quantity <= 0.000_000_1 { state.lots.removeFirst() }
             }
             state.shares = max(0, state.shares - quantity)
-            let rebuilt = rate.map { price * $0 * (quantity - remaining) - matchedCost }
-            if let profit = broker ?? rebuilt, profit.isFinite { state.realisedUSD += profit }
         }
-    }
-
-    private static func brokerUSD(_ transaction: LocalTransactionRecord, usdRate: (String) -> Double?) -> Double? {
-        guard let raw = transaction.realisedProfitLoss, raw.isFinite else { return nil }
-        let currency = transaction.realisedProfitLossCurrency?
-            .trimmingCharacters(in: .whitespacesAndNewlines).uppercased() ?? ""
-        guard currency.count == 3, currency.utf8.allSatisfy({ (65...90).contains($0) }),
-              let rate = usdRate(currency), rate.isFinite else { return nil }
-        return raw * rate
     }
 
     static let defaultSplit: (String, String) -> Double? = { ticker, date in
@@ -233,8 +195,8 @@ extension LocalMarketDataClient {
         guard let start = plans.map(\.startDate).min() else { throw LocalPortfolioError.noPortfolio }
         let end = DayDateCodec.string(from: Date())
         let symbols = plans.map(\.symbol).uniqued()
-        // Split-adjusted only: the ledger's prices are what was paid and
-        // received, and dividends are counted as cash, not folded into price.
+        // Split-adjusted only: the ledger's prices are what was paid, so the
+        // shares are valued on the same footing, with no dividends folded in.
         let closes = await historicalCloses(symbols: symbols, from: start, to: end,
                                             dividendAdjusted: false, cachedOnly: cachedOnly)
         var scales: [String: Double] = [:]

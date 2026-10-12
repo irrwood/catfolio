@@ -139,6 +139,54 @@ struct IndustrySentimentFile: Sendable {
     }
 }
 
+/// The sentiment file on the phone: every market in one file, so a refresh
+/// of one never costs the others. 行业情绪 and Research's own dial share it.
+enum IndustrySentimentCache {
+    static var url: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("industry-sentiment.json")
+    }
+
+    /// The saved file, merged with the copy the app ships with.
+    static func load() async -> IndustrySentimentFile? {
+        let cache = url
+        let bundled = Bundle.main.url(forResource: "industry_sentiment", withExtension: "json")
+        return await Task.detached(priority: .userInitiated) {
+            let candidates = [cache, bundled].compactMap { $0 }.compactMap { url -> IndustrySentimentFile? in
+                guard let data = try? Data(contentsOf: url) else { return nil }
+                return try? IndustrySentimentFile.decode(data)
+            }
+            return candidates.dropFirst().reduce(candidates.first) { $0?.merging($1) }
+        }.value
+    }
+
+    static func store(_ merged: IndustrySentimentFile) throws {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let payload: [String: Any] = [
+            "schema_version": 2,
+            "sectors": try merged.sectors.map { snapshot in
+                try JSONSerialization.jsonObject(with: JSONEncoder.sentimentEncoder.encode(snapshot))
+            },
+        ]
+        try JSONSerialization.data(withJSONObject: payload).write(to: url, options: .atomic)
+    }
+
+    /// Reads one market afresh and keeps it with the others, merged into what
+    /// is saved now — the other screen may have read a market meanwhile.
+    static func refresh(_ sector: IndustrySentimentEngine.Sector,
+                        merging shown: IndustrySentimentFile?) async throws -> IndustrySentimentFile {
+        let data = try await IndustrySentimentClient().snapshotData(sector: sector)
+        let incoming = try await Task.detached(priority: .utility) {
+            try IndustrySentimentFile.decode(data)
+        }.value
+        let saved = await load()
+        let base = [saved, shown].compactMap { $0 }.reduce(nil as IndustrySentimentFile?) { $0?.merging($1) ?? $1 }
+        let merged = base?.merging(incoming) ?? incoming
+        try store(merged)
+        return merged
+    }
+}
+
 struct IndustrySentimentView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -156,8 +204,6 @@ struct IndustrySentimentView: View {
     /// a read still running for the last choice never blocks the next one.
     @State private var refreshing: Set<String> = []
     private var isRefreshing: Bool { refreshing.contains(sectorKey) }
-    private let cacheURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("industry-sentiment.json")
 
     /// The market on screen: the one chosen, or the first the file carries.
     private var snapshot: IndustrySentimentSnapshot? {
@@ -188,9 +234,9 @@ struct IndustrySentimentView: View {
         }
             }
         }
-        .preferredColorScheme(mechanicalDial ? .dark : nil)
-        .environment(\.colorScheme, mechanicalDial ? .dark : inheritedColorScheme)
-        .toolbarColorScheme(mechanicalDial ? .dark : inheritedColorScheme, for: .navigationBar)
+        // The shared dial selects its preserved silver/white artwork by day
+        // and its original dark artwork at night.
+        .toolbarColorScheme(inheritedColorScheme, for: .navigationBar)
         .navigationTitle(mechanicalDial ? "" : L10n.text("行业情绪"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -223,7 +269,6 @@ struct IndustrySentimentView: View {
                 guard data.count <= 5_000_000 else { throw CocoaError(.fileReadTooLarge) }
                 let incoming = try IndustrySentimentFile.decode(data)
                 guard file.map({ incoming.asOf >= $0.asOf }) ?? true else { throw CocoaError(.fileReadCorruptFile) }
-                try FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try store(file.map { $0.merging(incoming) } ?? incoming)
                 selectedDate = nil
                 error = nil
@@ -266,7 +311,7 @@ struct IndustrySentimentView: View {
                 .padding(.bottom, 32)
             }
         }
-        .background(Color.black.ignoresSafeArea())
+        .background(Color(uiColor: .systemBackground).ignoresSafeArea())
     }
 
     private func mechanicalMetrics(_ data: IndustrySentimentSnapshot) -> some View {
@@ -279,11 +324,11 @@ struct IndustrySentimentView: View {
                     .font(.system(size: 40, weight: .light, design: .default).width(.compressed))
                     .fontDesign(.default)
                     .monospacedDigit()
-                    .foregroundStyle(scoreColor(data.score))
+                    .foregroundStyle(SentimentGauge.color(for: data.score))
                     .contentTransition(reduceMotion ? .identity : .numericText(value: Double(data.score ?? 0)))
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: data.score)
                 Text(L10n.text(SentimentGauge(score: data.score).label))
-                    .font(.system(size: 15)).foregroundStyle(Color(white: 0.77))
+                    .font(.system(size: 15)).foregroundStyle(.secondary)
             }
                 Text(data.regime).font(.system(size: 15)).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
@@ -308,7 +353,11 @@ struct IndustrySentimentView: View {
 
     @ViewBuilder
     private var mechanicalPanelSurface: some View {
-        if #available(iOS 26.0, *) {
+        if inheritedColorScheme == .light {
+            RoundedRectangle(cornerRadius: 38)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .overlay { RoundedRectangle(cornerRadius: 38).strokeBorder(.quaternary, lineWidth: 0.5) }
+        } else if #available(iOS 26.0, *) {
             RoundedRectangle(cornerRadius: 38)
                 .fill(.clear)
                 .glassEffect(.clear.tint(.black.opacity(0.3)), in: RoundedRectangle(cornerRadius: 38))
@@ -319,24 +368,12 @@ struct IndustrySentimentView: View {
         }
     }
 
-    /// Match the red → orange → green stops in the dial's Figma spectrum.
-    private func scoreColor(_ score: Int?) -> Color {
-        guard let score else { return Color(white: 0.65) }
-        let fraction = Double(min(100, max(0, score))) / 100
-        let red = Color(red: 1, green: 0, blue: 14 / 255)
-        let orange = Color(red: 1, green: 118 / 255, blue: 0)
-        let green = Color(red: 0, green: 228 / 255, blue: 101 / 255)
-        return fraction <= 0.5
-            ? red.mix(with: orange, by: fraction * 2)
-            : orange.mix(with: green, by: (fraction - 0.5) * 2)
-    }
-
     private func compactMetric(_ label: String, _ value: Double?, suffix: String = "") -> some View {
         VStack(spacing: 4) {
-            Text(label).font(.caption).foregroundStyle(Color(white: 0.65))
+            Text(label).font(.caption).foregroundStyle(.secondary)
             FinancialText(value.map { String(format: "%.2f", $0) + suffix } ?? "—")
                 .font(.system(size: 15, weight: .medium)).monospacedDigit()
-                .foregroundStyle(Color(white: 0.85))
+                .foregroundStyle(.primary)
         }
         .frame(maxWidth: .infinity)
     }
@@ -351,11 +388,11 @@ struct IndustrySentimentView: View {
                     Button { sectorKey = entry.key } label: {
                         Text(entry.title)
                             .appText(.footnote, weight: .medium)
-                            .foregroundStyle(mechanicalDial ? (selected ? Color.black : Color.white) : (selected ? Color.white : SettingsTemplate.secondaryText))
+                            .foregroundStyle(mechanicalDial ? (selected ? (inheritedColorScheme == .dark ? Color.black : Color.white) : Color.primary) : (selected ? Color.white : SettingsTemplate.secondaryText))
                             .padding(.horizontal, mechanicalDial ? 27 : 14)
                             .frame(height: mechanicalDial ? 46 : 34)
                             .background(
-                                mechanicalDial ? AnyShapeStyle(Color.white.opacity(selected ? 0.7 : 0.1)) : (selected ? AnyShapeStyle(CatfolioStyle.blue) : AnyShapeStyle(SettingsTemplate.card)),
+                                mechanicalDial ? AnyShapeStyle(Color.primary.opacity(selected ? 0.7 : 0.1)) : (selected ? AnyShapeStyle(CatfolioStyle.blue) : AnyShapeStyle(SettingsTemplate.card)),
                                 in: Capsule()
                             )
                     }
@@ -381,15 +418,9 @@ struct IndustrySentimentView: View {
         refreshing.insert(key)
         defer { refreshing.remove(key) }
         do {
-            let data = try await IndustrySentimentClient().snapshotData(sector: sector)
-            let incoming = try await Task.detached(priority: .utility) {
-                try IndustrySentimentFile.decode(data)
-            }.value
             // Kept even if the reader has moved on: it is that market's data,
             // and switching back should find it.
-            try? FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(),
-                                                     withIntermediateDirectories: true)
-            try store(file.map { $0.merging(incoming) } ?? incoming)
+            file = try await IndustrySentimentCache.refresh(sector, merging: file)
             if key == sectorKey { error = nil }
         } catch {
             guard !Task.isCancelled, key == sectorKey else { return }
@@ -402,26 +433,12 @@ struct IndustrySentimentView: View {
     /// The merged file is what is cached, so a refresh of one market never
     /// costs the reader the other nine.
     private func store(_ merged: IndustrySentimentFile) throws {
-        let payload: [String: Any] = [
-            "schema_version": 2,
-            "sectors": try merged.sectors.map { snapshot in
-                try JSONSerialization.jsonObject(with: JSONEncoder.sentimentEncoder.encode(snapshot))
-            },
-        ]
-        try JSONSerialization.data(withJSONObject: payload).write(to: cacheURL, options: .atomic)
+        try IndustrySentimentCache.store(merged)
         file = merged
     }
 
     private func load() async {
-        let cache = cacheURL
-        let bundled = Bundle.main.url(forResource: "industry_sentiment", withExtension: "json")
-        let loaded = await Task.detached(priority: .userInitiated) {
-            let candidates = [cache, bundled].compactMap { $0 }.compactMap { url -> IndustrySentimentFile? in
-                guard let data = try? Data(contentsOf: url) else { return nil }
-                return try? IndustrySentimentFile.decode(data)
-            }
-            return candidates.dropFirst().reduce(candidates.first) { $0?.merging($1) }
-        }.value
+        let loaded = await IndustrySentimentCache.load()
         guard !Task.isCancelled else { return }
         file = loaded
         if file == nil { error = L10n.text("暂无行情数据") }
@@ -592,6 +609,7 @@ private struct SentimentGauge: View {
     let score: Int?
     var mechanical = false
     var headerOnly = false
+    var animationsPaused = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var startedAt = Date()
@@ -615,13 +633,13 @@ private struct SentimentGauge: View {
             if mechanical {
                 MechanicalSentimentDial(
                     headerOnly: headerOnly, score: score, label: L10n.text(label),
-                    paused: reduceMotion || !isVisible || scenePhase != .active || score == nil,
+                    paused: animationsPaused || reduceMotion || !isVisible || scenePhase != .active || score == nil,
                     fraction: needleFraction(at:)
                 )
                 .accessibilityHidden(true)
             } else {
             TimelineView(.animation(minimumInterval: 1.0 / 60,
-                                    paused: reduceMotion || !isVisible || scenePhase != .active || score == nil)) { timeline in
+                                    paused: animationsPaused || reduceMotion || !isVisible || scenePhase != .active || score == nil)) { timeline in
                 GeometryReader { proxy in
                     let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height - 20)
                     let radius = min(proxy.size.width / 2 - 20, proxy.size.height - 40)
@@ -710,5 +728,89 @@ private struct SentimentGauge: View {
         let amplitude = min(0.007, min(targetFraction, 1 - targetFraction))
         let sway = amplitude * sin(restingTime * 1.7) * (1 - exp(-restingTime * 2))
         return min(1, max(0, arrival + sway))
+    }
+}
+
+extension SentimentGauge {
+    /// Match the red → orange → green stops in the dial's Figma spectrum.
+    static func color(for score: Int?) -> Color {
+        guard let score else { return Color(white: 0.65) }
+        let fraction = Double(min(100, max(0, score))) / 100
+        let red = Color(red: 1, green: 0, blue: 14 / 255)
+        let orange = Color(red: 1, green: 118 / 255, blue: 0)
+        let green = Color(red: 0, green: 228 / 255, blue: 101 / 255)
+        return fraction <= 0.5
+            ? red.mix(with: orange, by: fraction * 2)
+            : orange.mix(with: green, by: (fraction - 0.5) * 2)
+    }
+}
+
+/// The US market's dial at the top of Research: VIX against SPY, the
+/// large-caps market of 行业情绪, drawn as that page draws it. A tap opens the
+/// page on it.
+private enum MarketSentimentRefresh {
+    @MainActor static var hasRefreshed = false
+}
+
+struct MarketSentimentHero<Search: View>: View {
+    static var sectorKey: String { "large-caps" }
+    var animationsPaused = false
+    @ViewBuilder var search: () -> Search
+    /// The market 行业情绪 opens on.
+    @AppStorage("industry-sentiment.sector") private var openSector = "semiconductors"
+    @State private var snapshot: IndustrySentimentSnapshot?
+    /// One read from the network a launch is enough for a daily figure.
+
+    private var title: String {
+        snapshot?.title ?? IndustrySentimentEngine.sector(Self.sectorKey)?.title ?? L10n.text("美股大盘")
+    }
+
+    private var label: String { L10n.text(SentimentGauge(score: snapshot?.score).label) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            marketLink {
+                SentimentGauge(score: snapshot?.score, mechanical: true, headerOnly: true,
+                               animationsPaused: animationsPaused)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 8)
+            }
+            .overlay(alignment: .bottom) {
+                // Sit in the dial's faded lower edge, above the score row.
+                // This is outside the navigation link so typing cannot open it.
+                search()
+                    .padding(.bottom, 40)
+            }
+            // The raised search field is the hero's last visible row.
+            // Remove the old space below it from the scroll layout too.
+            .padding(.bottom, -40)
+            .clipped()
+        }
+        .frame(maxWidth: .infinity)
+        .task { await load() }
+    }
+
+    private func marketLink<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        NavigationLink {
+            IndustrySentimentView().toolbarVisibility(.visible, for: .navigationBar)
+        } label: { content() }
+            .buttonStyle(.plain)
+            .simultaneousGesture(TapGesture().onEnded { openSector = Self.sectorKey })
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(title)
+            .accessibilityValue(L10n.text("\(snapshot?.score.map(String.init) ?? "—") / 100，\(label)"))
+            .accessibilityAddTraits(.isButton)
+    }
+
+    private func load() async {
+        let file = await IndustrySentimentCache.load()
+        snapshot = file?.sectors.first { $0.sector == Self.sectorKey }
+        guard !MarketSentimentRefresh.hasRefreshed, let sector = IndustrySentimentEngine.sector(Self.sectorKey) else { return }
+        MarketSentimentRefresh.hasRefreshed = true
+        guard let merged = try? await IndustrySentimentCache.refresh(sector, merging: file) else {
+            MarketSentimentRefresh.hasRefreshed = false
+            return
+        }
+        snapshot = merged.sectors.first { $0.sector == Self.sectorKey } ?? snapshot
     }
 }

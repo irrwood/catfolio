@@ -14,7 +14,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 CHECKER = ROOT / "scripts" / "check_ios_design.py"
 DESIGN_DOC = ROOT / "CatfolioIOS" / "DESIGN.md"
-DESIGN_SYSTEM = ROOT / "CatfolioIOS" / "CatfolioIOS" / "DesignSystem.swift"
+DISPLAY_FORMAT = ROOT / "CatfolioIOS" / "CatfolioIOS" / "DisplayFormat.swift"
 
 
 class IOSDesignRuleTests(unittest.TestCase):
@@ -41,7 +41,7 @@ class IOSDesignRuleTests(unittest.TestCase):
 
     def test_the_documented_modes_are_the_modes_the_app_compiles(self):
         """A table that drifts from the code is read as authoritative and wrong."""
-        code = DESIGN_SYSTEM.read_text()
+        code = DISPLAY_FORMAT.read_text()
         for mode in ("case whole", "case tenth", "case statement"):
             self.assertIn(mode, code, f"DESIGN.md documents {mode!r} but the code has no such case")
         for gone in ("case latin", "case localised"):
@@ -49,7 +49,7 @@ class IOSDesignRuleTests(unittest.TestCase):
 
     def test_the_ladder_lives_in_one_place(self):
         """DisplayFormat is the only home for compact notation."""
-        code = DESIGN_SYSTEM.read_text()
+        code = DISPLAY_FORMAT.read_text()
         self.assertIn("static func compact(", code)
         self.assertIn("static func compactMoney(", code)
         self.assertIn("notation(.compactName)", code)
@@ -63,7 +63,7 @@ class IOSDesignRuleTests(unittest.TestCase):
         English phone is shown K and M, which is the bug the rule exists to
         prevent — and it would not show up on a Chinese device.
         """
-        code = DESIGN_SYSTEM.read_text()
+        code = DISPLAY_FORMAT.read_text()
         ladder = code.split("static func compact(", 1)[1].split("static func compactMoney(", 1)[0]
         self.assertIn("AppLanguage.currentIdentifier", ladder)
         # Every render, not just the compact ones: the fallback that re-adds a

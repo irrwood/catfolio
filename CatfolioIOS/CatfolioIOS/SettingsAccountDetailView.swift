@@ -24,6 +24,7 @@ struct AccountDetailView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let accountID: String
     let initialAccount: PortfolioAccount
 
@@ -34,22 +35,27 @@ struct AccountDetailView: View {
     @State private var notice: AccountNotice?
     @State private var isWorking = false
     @State private var dataMatchStatus = L10n.text("无异常")
+    @State private var headerHeight: CGFloat = 0
+    @State private var showsCompactTitle = false
 
     private var account: PortfolioAccount {
         model.accounts.first(where: { $0.id == accountID }) ?? initialAccount
     }
 
     var body: some View {
+        GeometryReader { geometry in
+            // Match the space occupied by the native back control on both sides.
+            page(titleWidth: max(0, geometry.size.width - 2 * (44 + 2 * SettingsTemplate.pageInset)))
+        }
+    }
+
+    private func page(titleWidth: CGFloat) -> some View {
         SettingsPage(
-            // The account names the screen and the holding count sits under
-            // it, so both fold into the small two-line title on scroll. The
-            // value stays in the page, where it is the largest thing on it.
-            title: account.localizedDisplayName,
-            subtitle: L10n.text("\(account.positionCount) 个持仓"),
-            bottomInset: 24
+            bottomInset: 24,
+            topInset: SettingsTemplate.pageInset
         ) {
-            CatfolioDisplayAmountText(text: DisplayFormat.money(account.marketValueUSD), size: 34, symbolSize: 22)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            AccountDetailHeader(account: account)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
 
             if model.isFakeDataMode {
                 SettingsFootnote(L10n.text("这里是独立演示账户，与真实持仓无关。"))
@@ -137,6 +143,25 @@ struct AccountDetailView: View {
                 .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
             }
         }
+        // Observe only the handoff to the compact title, not every scroll pixel.
+        // The measured header also accounts for wrapped names and Dynamic Type.
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            headerHeight > 0
+                && geometry.contentOffset.y + geometry.contentInsets.top >= headerHeight + SettingsTemplate.pageInset
+        } action: { _, collapsed in
+            showsCompactTitle = collapsed
+        }
+        .navigationTitle(account.localizedDisplayName)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                AccountDetailNavigationTitle(account: account)
+                    .frame(width: titleWidth)
+                    .opacity(showsCompactTitle ? 1 : 0)
+                    .accessibilityHidden(!showsCompactTitle)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: showsCompactTitle)
+            }
+        }
         // A sheet rather than a text-field alert: the alert insets its title
         // to the field's text, not its edge, and the two never line up.
         .appSheet(isPresented: $showsRenamePrompt) {
@@ -168,6 +193,7 @@ struct AccountDetailView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        .accountFlowBrand(account.brandProvider)
     }
 
     @ViewBuilder
@@ -289,6 +315,74 @@ struct AccountDetailView: View {
                 notice = AccountNotice(title: L10n.text("无法删除账户"), message: error.localizedDescription)
             }
         }
+    }
+}
+
+/// The expanded identity and balance scroll together above the account's cards.
+struct AccountDetailHeader: View {
+    let account: PortfolioAccount
+    @ScaledMetric(relativeTo: .largeTitle) private var amountSize: CGFloat = 34
+    @ScaledMetric(relativeTo: .largeTitle) private var currencySize: CGFloat = 22
+
+    var body: some View {
+        VStack(spacing: 12) {
+            if let provider = account.brandProvider {
+                AccountDetailProviderIcon(provider: provider, size: 72)
+            }
+            Text(account.localizedDisplayName)
+                .appText(.heading, weight: .semibold)
+                .foregroundStyle(CatfolioTheme.primaryText)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("account-detail-name")
+
+            VStack(spacing: 4) {
+                CatfolioDisplayAmountText(text: DisplayFormat.money(account.marketValueUSD),
+                                          size: amountSize, symbolSize: currencySize)
+                    .accessibilityIdentifier("account-detail-balance")
+                Text(L10n.text("\(account.positionCount) 个持仓"))
+                    .appText(.callout, weight: .medium)
+                    .foregroundStyle(SettingsTemplate.subtitleText)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+    }
+}
+
+/// A soft, near-round badge shared by the expanded and compact account identity.
+private struct AccountDetailProviderIcon: View {
+    let provider: AddAccountProvider
+    let size: CGFloat
+
+    var body: some View {
+        AddAccountProviderIcon(provider: provider)
+            .scaleEffect(size / SettingsTemplate.accountProviderIconSize)
+            .frame(width: size, height: size)
+            .clipShape(AccountIdentityShape())
+    }
+}
+
+/// A compact native navigation title, with the same broker artwork as account creation.
+struct AccountDetailNavigationTitle: View {
+    let account: PortfolioAccount
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if let provider = account.brandProvider {
+                AccountDetailProviderIcon(provider: provider, size: SettingsTemplate.iconSize)
+            }
+            Text(account.localizedDisplayName)
+                .appText(.subheading, weight: .semibold)
+                .foregroundStyle(CatfolioTheme.primaryText)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityLabel(account.localizedDisplayName)
+        .accessibilityIdentifier("account-detail-title")
     }
 }
 
@@ -426,7 +520,7 @@ struct ManualTransactionView: View {
                 }
             }
         }
-        .tint(CatfolioTheme.accent)
+        .accountFlowBrand(account.brandProvider)
     }
 
     private func save() {

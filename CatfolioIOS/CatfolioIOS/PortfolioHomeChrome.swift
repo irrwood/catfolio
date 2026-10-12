@@ -30,7 +30,9 @@ struct PortfolioHomePageBackdrop: View {
     /// shader's clock stops then rather than drawing frames nobody sees.
     @State private var isOnScreen = false
     let colorScheme: ColorScheme
-    let scrollState: PortfolioHomeScrollState
+    /// The portfolio fades the backdrop as its sheet rises. Other root tabs
+    /// share the same colours, fixed behind their native scroll content.
+    var scrollState: PortfolioHomeScrollState? = nil
 
     private var backgroundStyle: HomeBackgroundStyle {
         HomeBackgroundStyle(rawValue: backgroundStyleRawValue) ?? .defaultStyle
@@ -40,7 +42,8 @@ struct PortfolioHomePageBackdrop: View {
     /// The card sits directly under the hero, so the chart is found from the
     /// card's resting top. Before that is measured the band covers the whole
     /// screen, so nothing glows yet.
-    private var chartBand: ClosedRange<CGFloat> {
+    private var chartBand: ClosedRange<CGFloat>? {
+        guard let scrollState else { return nil }
         guard let cardTop = scrollState.restingSheetTop else { return 0...10_000 }
         let heroTop = cardTop - PortfolioHeroChartLayout.sectionHeight
         return (heroTop + PortfolioHeroChartLayout.plotTop - 8)...cardTop
@@ -60,28 +63,52 @@ struct PortfolioHomePageBackdrop: View {
                         pattern: pattern,
                         palette: backgroundStyle.palette(for: colorScheme),
                         // Fully faded once the sheet has covered the hero.
-                        isPaused: !isOnScreen || scrollState.backdropProgress >= 1,
+                        isPaused: !isOnScreen || (scrollState?.backdropProgress ?? 0) >= 1,
                         // Until the card has reported its resting top (a frame
                         // or two), no glow.
-                        glowTop: backgroundStyle == .flowingAroundChart
+                        glowTop: backgroundStyle == .flowingAroundChart || scrollState == nil
                             ? nil
-                            : scrollState.restingSheetTop ?? .infinity,
+                            : scrollState?.restingSheetTop ?? .infinity,
                         clearBandPoints: backgroundStyle == .flowingAroundChart ? chartBand : nil
                     )
                 } else if colorScheme == .dark {
-                    PortfolioNightGlow(cardTop: scrollState.restingSheetTop, scrollState: scrollState)
+                    PortfolioNightGlow(cardTop: scrollState?.restingSheetTop, scrollState: scrollState)
+                        .overlay {
+                            if scrollState == nil {
+                                // The portfolio's sheet darkens the lower blue
+                                // canvas. Tabs without that sheet need the same
+                                // dark ground beneath their reading content.
+                                LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                            }
+                        }
                 } else {
                     PortfolioHomeTopBackground(colorScheme: colorScheme)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .opacity(1 - scrollState.backdropProgress)
+            .opacity(1 - (scrollState?.backdropProgress ?? 0))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
         .onAppear { isOnScreen = true }
         .onDisappear { isOnScreen = false }
     }
+}
+
+private struct HomeTabBackground: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content.background {
+            PortfolioHomePageBackdrop(colorScheme: colorScheme)
+        }
+    }
+}
+
+extension View {
+    func homeTabBackground() -> some View { modifier(HomeTabBackground()) }
 }
 
 /// Figma 398:3114's night page. There is no gradient and no coloured light:
@@ -96,7 +123,7 @@ struct PortfolioHomePageBackdrop: View {
 struct PortfolioNightGlow: View {
     /// The sheet's top in the backdrop's space with the page at rest.
     let cardTop: CGFloat?
-    let scrollState: PortfolioHomeScrollState
+    let scrollState: PortfolioHomeScrollState?
 
     static let canvas = Color(red: 0x7D / 255, green: 0xA7 / 255, blue: 0xEC / 255)
     /// Figma's card top in its 402pt frame; every shape is placed from it.
@@ -163,13 +190,13 @@ private struct PortfolioNightShades: View {
     let scale: CGFloat
     let shift: CGFloat
     let width: CGFloat
-    let scrollState: PortfolioHomeScrollState
+    let scrollState: PortfolioHomeScrollState?
 
     private static let topRate: CGFloat = 0.8
     private static let rightRate: CGFloat = 1.4
 
     var body: some View {
-        let scroll = reduceMotion ? 0 : scrollState.heroOffset
+        let scroll = reduceMotion ? 0 : (scrollState?.heroOffset ?? 0)
         ZStack(alignment: .topLeading) {
             // Figma's top shape starts 275pt above the screen. Moved down to
             // this card it would let blue in at the status bar, so everything

@@ -31,33 +31,51 @@ using namespace metal;
     return sum / half(total);
 }
 
-// Dense separable sampling for the heatmap's text and logos. The old 9×9
-// kernel left gaps of up to 11pt at a 44pt radius, repeating fine details.
-// Pair adjacent physical pixels using bilinear filtering, rather than
-// spreading a fixed number of taps farther apart as the radius grows.
+// Dense separable sampling for the heatmap's text and logos: bilinear pairs
+// of adjacent physical pixels. Sampling once per point instead left 2–3
+// pixel gaps on a 3× screen, and the two passes stacked the aliasing of
+// tile edges and text into a diamond pattern.
 [[ stitchable ]] half4 performanceHeroBlur(
     float2 position, SwiftUI::Layer layer, float2 size,
     float topEnd, float lowerStart, float lowerEnd,
-    float strength, float displayScale, float2 direction
+    float strength, float displayScale, float rasterScale, float2 direction
 ) {
+    // The artwork fades out completely below this boundary. Blurring
+    // those pixels spends GPU time on a result that cannot be seen.
+    // The horizontal pass must retain the vertical pass's sampling margin.
+    float hiddenStart = lowerEnd + (direction.x > 0.5f ? 44.1f * rasterScale : 0.0f);
+    if ((strength >= 0.999f && position.y >= hiddenStart) || strength < 0.001f)
+        return layer.sample(position);
     float topProgress = clamp(1.0f - position.y / max(topEnd, 0.001f), 0.0f, 1.0f);
     float lowerProgress = clamp((position.y - lowerStart) / max(lowerEnd - lowerStart, 0.001f), 0.0f, 1.0f);
-    float radius = max(20.0f * topProgress, 44.1f * lowerProgress) * strength;
+    float radius = max(20.0f * topProgress, 44.1f * lowerProgress) * strength * rasterScale;
     if (radius < 0.25f) return layer.sample(position);
 
     float scale = max(displayScale, 1.0f);
     int support = int(ceil(radius * scale));
     float4 sum = float4(layer.sample(position));
     float total = 1.0f;
+    // The Gaussian weights follow a recurrence. Compute exponentials once
+    // per fragment instead of twice per sample pair; keep the same dense
+    // physical-pixel taps so text and tile edges do not alias.
+    float k = 2.0f / (radius * radius * scale * scale);
+    float wa = exp(-k);
+    float wb = exp(-4.0f * k);
+    float ratioA = exp(-8.0f * k);
+    float ratioB = exp(-12.0f * k);
+    float ratioStep = ratioA;
     for (int i = 1; i <= support; i += 2) {
         float a = float(i) / scale;
         float b = float(i + 1) / scale;
-        float wa = exp(-2.0f * a * a / (radius * radius));
-        float wb = i + 1 <= support ? exp(-2.0f * b * b / (radius * radius)) : 0.0f;
-        float weight = wa + wb;
-        float2 offset = direction * ((a * wa + b * wb) / weight);
+        float pairedWeight = i + 1 <= support ? wb : 0.0f;
+        float weight = wa + pairedWeight;
+        float2 offset = direction * ((a * wa + b * pairedWeight) / weight);
         sum += (float4(layer.sample(position + offset)) + float4(layer.sample(position - offset))) * weight;
         total += 2.0f * weight;
+        wa *= ratioA;
+        wb *= ratioB;
+        ratioA *= ratioStep;
+        ratioB *= ratioStep;
     }
     return half4(sum / total);
 }

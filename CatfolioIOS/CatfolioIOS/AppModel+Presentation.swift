@@ -60,10 +60,16 @@ extension AppModel {
         }.value
         let cachedChart: PortfolioChartResponse?
         if loadsCachedChart && !preservesChart && !isFakeDataMode && !isPublicInvestorMode && (!scoped.positions.isEmpty || !(scoped.transactions ?? []).isEmpty) {
-            cachedChart = try? await LocalMarketDataClient().portfolioChart(
-                document: scoped,
-                cachedOnly: true
-            )
+            // Switching accounts must also reuse the finished curve saved for
+            // that exact selection. Its underlying price cache may be absent.
+            if localSelectionOnly,
+               let saved = await presentationCache.load(document: loaded,
+                   context: homeCacheContext(accountKeys: accountKeys)),
+               saved.chart.positionHistory.rows.count > 1 {
+                cachedChart = saved.chart
+            } else {
+                cachedChart = try? await portfolioChartLoader(scoped, true, false)
+            }
         } else {
             cachedChart = nil
         }
@@ -412,10 +418,29 @@ extension AppModel {
         benchmarkDailyChange = benchmark
         portfolioFailure = nil
         do {
-            // Re-scope the complete in-memory ledger, reusing quote and history
-            // caches. Account visibility never triggers a broker or market refresh.
+            // Publish the selected holdings and any saved curve first. Missing
+            // history is filled separately, without refreshing broker positions.
             try await apply(fullDocument, invalidatesDailyChanges: false, localSelectionOnly: true)
-            await saveHomePresentation(generation: generation)
+            guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+            if (portfolioChart?.positionHistory.rows.count ?? 0) <= 1,
+               !document.positions.isEmpty || !(document.transactions ?? []).isEmpty,
+               !isFakeDataMode, !isPublicInvestorMode {
+                let selected = document
+                isPortfolioChartLoading = true
+                // The request belongs to the selected account, not the lifetime
+                // of the settings sheet or the newly mounted home chart.
+                accountHistoryTask = Task { [weak self] in
+                    guard let self else { return }
+                    // Finish saving the placeholder before a fast history fetch
+                    // can save its complete replacement for the same selection.
+                    await self.saveHomePresentation(generation: generation)
+                    guard generation == self.portfolioRequestGeneration, !Task.isCancelled else { return }
+                    await self.enrichPortfolioChart(from: selected, generation: generation, forceRefresh: false)
+                    if generation == self.portfolioRequestGeneration { self.accountHistoryTask = nil }
+                }
+            } else {
+                await saveHomePresentation(generation: generation)
+            }
         } catch {
             guard generation == portfolioRequestGeneration else { return }
             portfolioFailure = error

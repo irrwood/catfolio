@@ -194,8 +194,8 @@ struct PortfolioAttentionDailyBar: Sendable {
 }
 
 /// Each current holding's value by day; see `LocalMarketDataClient.holdingValueHistory`.
-struct HoldingValueHistory: Sendable {
-    struct Row: Sendable {
+struct HoldingValueHistory: Sendable, Equatable {
+    struct Row: Sendable, Equatable {
         let dateText: String
         let cost: Double
         /// USD by upper-cased ticker.

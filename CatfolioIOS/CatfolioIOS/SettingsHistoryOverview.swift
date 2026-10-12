@@ -114,7 +114,7 @@ struct SettingsHistoryOverview: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: SettingsTemplate.sectionSpacing) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12),
                                      count: typeSize.isAccessibilitySize ? 1 : 2), spacing: 12) {
                 overviewCard(.orders, title: L10n.text("已实现盈亏"), icon: .realisedProfit,

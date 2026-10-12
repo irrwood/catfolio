@@ -120,6 +120,7 @@ final class AppModel {
     }
 
     @ObservationIgnored let historyPreparationCache = HistoryPreparationCache()
+    @ObservationIgnored let returnsSourceCache = ReturnsSourceCache()
     @ObservationIgnored var document = LocalPortfolioDocument.empty
     @ObservationIgnored var fullDocument = LocalPortfolioDocument.empty
     @ObservationIgnored var portfolioRequestGeneration = 0
@@ -138,6 +139,7 @@ final class AppModel {
     static let holdingDetailCacheLimit = 8
     @ObservationIgnored var returnsPageTask: Task<Void, Never>?
     @ObservationIgnored var detailChartTask: Task<Void, Never>?
+    @ObservationIgnored var accountHistoryTask: Task<Void, Never>?
     @ObservationIgnored var portfolioSourceTask: Task<Void, Never>?
     @ObservationIgnored var portfolioSourceGeneration = 0
     @ObservationIgnored var presentedSource: PortfolioSource?
@@ -147,6 +149,7 @@ final class AppModel {
     @ObservationIgnored let personalDocumentLoader: @Sendable () async throws -> LocalPortfolioDocument
     @ObservationIgnored let personalDocumentResetter: @Sendable () async throws -> URL?
     @ObservationIgnored let presentationCache: PortfolioPresentationCache
+    @ObservationIgnored let portfolioChartLoader: @Sendable (LocalPortfolioDocument, Bool, Bool) async throws -> PortfolioChartResponse
     static let brokerKey = "catfolio.activeBroker"
     static let selectedAccountsKey = "catfolio.selectedAccounts"
     static let selectsAllAccountsKey = "catfolio.selectsAllAccounts"
@@ -163,13 +166,17 @@ final class AppModel {
         personalDocumentResetter: @escaping @Sendable () async throws -> URL? = {
             try LocalPortfolioStore.shared.resetPortfolio()
         },
-        presentationCache: PortfolioPresentationCache = .shared
+        presentationCache: PortfolioPresentationCache = .shared,
+        portfolioChartLoader: @escaping @Sendable (LocalPortfolioDocument, Bool, Bool) async throws -> PortfolioChartResponse = {
+            try await LocalMarketDataClient().portfolioChart(document: $0, cachedOnly: $1, forceRefresh: $2)
+        }
     ) {
         modeDefaults = defaults
         self.publicInvestorStore = publicInvestorStore
         self.personalDocumentLoader = personalDocumentLoader
         self.personalDocumentResetter = personalDocumentResetter
         self.presentationCache = presentationCache
+        self.portfolioChartLoader = portfolioChartLoader
         storedPublicInvestorSelection = defaults.string(forKey: PublicInvestorPreferences.selectionKey) ?? PublicInvestorPreferences.defaultSelection
         storedFakeDataMode = defaults.bool(forKey: Self.fakeDataModeKey)
         storedPublicInvestorMode = defaults.bool(forKey: PublicInvestorPreferences.enabledKey)

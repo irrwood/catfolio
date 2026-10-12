@@ -55,7 +55,7 @@ struct CorporateEventsCardContent: View {
             if !events.isEmpty {
                 ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
                     if index > 0 {
-                        CatfolioPalette.calendarSeparator.frame(height: 1)
+                        ContentPanelSeparator()
                             .padding(.leading, HoldingDetailCardStyle.contentInset + 44 + 16)
                     }
                     CorporateEventCardRow(event: event, holding: scope.holding(event))
@@ -70,8 +70,7 @@ struct CorporateEventsCardContent: View {
         }
         .padding(.bottom, 6)
         .padding(1)
-        .holdingDetailCard()
-        .clipShape(RoundedRectangle(cornerRadius: HoldingDetailCardStyle.cornerRadius, style: .continuous))
+        .settingsCardSurface()
         .accessibilityIdentifier("corporate-calendar.card")
     }
 }

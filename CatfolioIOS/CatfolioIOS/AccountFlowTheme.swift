@@ -36,6 +36,21 @@ extension AddAccountProvider {
     }
 }
 
+extension PortfolioAccount {
+    /// Match the connector, not the editable account nickname.
+    var brandProvider: AddAccountProvider? {
+        switch source {
+        case "Trading 212": .trading212
+        case "IBKR Flex": .ibkr
+        case "Moomoo": .moomoo
+        case "Robinhood": .robinhood
+        case "SnapTrade": .snaptrade
+        case "CSV": .csv
+        default: nil
+        }
+    }
+}
+
 private struct AccountFlowThemeKey: EnvironmentKey {
     static let defaultValue: AccountFlowTheme? = nil
 }
@@ -48,9 +63,9 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// Keep the brand inside this provider's creation flow and its children.
-    func accountFlowBrand(_ provider: AddAccountProvider, enabled: Bool = true) -> some View {
-        let theme = enabled ? provider.flowTheme : nil
+    /// Scope a connector's brand to its account and creation/management pages.
+    func accountFlowBrand(_ provider: AddAccountProvider?) -> some View {
+        let theme = provider?.flowTheme
         return environment(\.accountFlowTheme, theme)
             .tint(theme?.controlTint ?? CatfolioTheme.accent)
     }

@@ -1,0 +1,178 @@
+[
+  {
+    "asset": "EntryChevron",
+    "appearance": "light",
+    "export": "light-imgVectorStroke",
+    "file": "EntryChevron.imageset/art.svg",
+    "canvas": [
+      "4.99941",
+      "9.99944"
+    ],
+    "sha256": "d2068b86efc9996e3a24d44f08889beae5446f946ee1ff874c1325e7bb1c12cb"
+  },
+  {
+    "asset": "EntryLossChevron",
+    "appearance": "light",
+    "export": "light-imgVectorStroke1",
+    "file": "EntryLossChevron.imageset/art.svg",
+    "canvas": [
+      "4.99941",
+      "9.99944"
+    ],
+    "sha256": "915268b072eeaac899204868842239cceb0a2a656b91c32f20c46684fd6b01d3"
+  },
+  {
+    "asset": "EntryLossChevron",
+    "appearance": "dark",
+    "export": "dark-imgVectorStroke",
+    "file": "EntryLossChevron.imageset/dark.svg",
+    "canvas": [
+      "4.99941",
+      "9.99944"
+    ],
+    "sha256": "d2068b86efc9996e3a24d44f08889beae5446f946ee1ff874c1325e7bb1c12cb"
+  },
+  {
+    "asset": "EntryReturnChevron",
+    "appearance": "light",
+    "export": "light-imgVectorStroke2",
+    "file": "EntryReturnChevron.imageset/art.svg",
+    "canvas": [
+      "4.99941",
+      "9.99944"
+    ],
+    "sha256": "95f0967974b0ef2b0de9f49e3f444130c85b6126ec9d1bcd2713844314078e71"
+  },
+  {
+    "asset": "EntryReturnChevron",
+    "appearance": "dark",
+    "export": "dark-imgVectorStroke",
+    "file": "EntryReturnChevron.imageset/dark.svg",
+    "canvas": [
+      "4.99941",
+      "9.99944"
+    ],
+    "sha256": "d2068b86efc9996e3a24d44f08889beae5446f946ee1ff874c1325e7bb1c12cb"
+  },
+  {
+    "asset": "EntryGainIcon",
+    "appearance": "light",
+    "export": "light-imgUnion",
+    "file": "EntryGainIcon.imageset/art.svg",
+    "canvas": [
+      "18",
+      "15.9997"
+    ],
+    "sha256": "abb3aa419c7e194a3d8a238b95728be45d90617f2c44a1f6e1956903156e7c39"
+  },
+  {
+    "asset": "EntryLossDayIcon",
+    "appearance": "light",
+    "export": "light-imgFrame1707480532",
+    "file": "EntryLossDayIcon.imageset/art.svg",
+    "canvas": [
+      "17",
+      "24"
+    ],
+    "sha256": "a0e7636d685a9d041e01f222cc86daeb762dc3fa0c7f7e8295133ac8e49e059f"
+  },
+  {
+    "asset": "EntryLossNightIcon",
+    "appearance": "light",
+    "export": "dark-imgVector54",
+    "file": "EntryLossNightIcon.imageset/art.svg",
+    "canvas": [
+      "14.3294",
+      "12.1749"
+    ],
+    "sha256": "fda9d8d0384b98dfe28b8758290e13f0b432b948c37fa7e063b3797712d5f9d6"
+  },
+  {
+    "asset": "EntryGainGlow",
+    "appearance": "light",
+    "export": "light-imgEllipse2052",
+    "file": "EntryGainGlow.imageset/art.svg",
+    "canvas": [
+      "355.6",
+      "279.6"
+    ],
+    "sha256": "232cd43cc56bbe4f393e7b0688bed1e5d13a4b615e7c5e4aa93e55109346c864"
+  },
+  {
+    "asset": "EntryGainGlow",
+    "appearance": "dark",
+    "export": "dark-imgEllipse2052",
+    "file": "EntryGainGlow.imageset/dark.svg",
+    "canvas": [
+      "355.6",
+      "279.6"
+    ],
+    "sha256": "3bbd8b4749d175af154a1f794de76be3065228415aef9391fd0b4261700dde0a"
+  },
+  {
+    "asset": "EntryLossGlow",
+    "appearance": "light",
+    "export": "dark-imgEllipse2053",
+    "file": "EntryLossGlow.imageset/art.svg",
+    "canvas": [
+      "395.6",
+      "296.6"
+    ],
+    "sha256": "b64c68c42079736cb0b19fae411894f6b0407014051dafcbb47ecb9a99045026"
+  },
+  {
+    "asset": "EntryReturnIcon",
+    "appearance": "light",
+    "export": "light-imgUnion1",
+    "file": "EntryReturnIcon.imageset/art.svg",
+    "canvas": [
+      "20",
+      "20"
+    ],
+    "sha256": "184853427baa14bc66353cd1303116224f0b1c25ab61a341cd77f9b79ae1017c"
+  },
+  {
+    "asset": "EntryReturnIcon",
+    "appearance": "dark",
+    "export": "dark-imgUnion1",
+    "file": "EntryReturnIcon.imageset/dark.svg",
+    "canvas": [
+      "20",
+      "20"
+    ],
+    "sha256": "c1391af980d0fe24ef8e905ba3bb786358bc8b1473cf9bb995dc1482f6642452"
+  },
+  {
+    "asset": "EntryReturnGlow",
+    "appearance": "light",
+    "export": "light-imgEllipse2053",
+    "file": "EntryReturnGlow.imageset/art.svg",
+    "canvas": [
+      "355.6",
+      "279.6"
+    ],
+    "sha256": "6035b0627a23f427f6ff4df6f3e8cd19599c9f324133c3d27a608bf910afafd8"
+  },
+  {
+    "asset": "EntryReturnGlow",
+    "appearance": "dark",
+    "export": "dark-imgEllipse2054",
+    "file": "EntryReturnGlow.imageset/dark.svg",
+    "canvas": [
+      "355.6",
+      "279.6"
+    ],
+    "sha256": "34d66faa511b96a4b898e14ad41da183e380733e0cf9a69f90103468da64b0c0"
+  },
+  {
+    "asset": "EntryLossDayGlow",
+    "appearance": "light",
+    "export": "534:26459",
+    "file": "EntryLossDayGlow.imageset/art.svg",
+    "canvas": [
+      "353.6",
+      "296.6"
+    ],
+    "sha256": "7689c321309a658a25bffa477737777e274daad17a89ca65ad3fa7bda73a96eb"
+  }
+]

@@ -3,6 +3,7 @@ import SwiftUI
 /// Full circular dial without ticks or dynamic glass. Static materials are
 /// cached independently of the needle's spring and resting motion.
 struct MechanicalSentimentDial: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     var headerOnly = false
     let score: Int?
@@ -11,9 +12,14 @@ struct MechanicalSentimentDial: View {
     let fraction: (Date) -> Double
 
     var body: some View {
-        GeometryReader { geometry in
+        // Resolve appearance once for the cached face and the live pointer.
+        let daylight = colorScheme == .light
+        let headerPrefix = daylight ? "Day" : ""
+        return GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
-                if headerOnly && !reduceTransparency {
+                if headerOnly && daylight {
+                    artwork("DayHeaderFace", x: 0, y: 0, width: 454, height: 454)
+                } else if headerOnly && !reduceTransparency {
                     artwork("HeaderFace", x: 0, y: 0, width: 454, height: 454)
                 } else {
                 ZStack(alignment: .topLeading) {
@@ -30,7 +36,8 @@ struct MechanicalSentimentDial: View {
                 if score != nil {
                     TimelineView(.animation(minimumInterval: 1.0 / 60, paused: paused)) { timeline in
                         ZStack(alignment: .topLeading) {
-                            artwork(headerOnly ? "PanelNeedle" : "Needle", x: 0, y: 0, width: 50, height: 240)
+                            artwork(headerOnly ? headerPrefix + "PanelNeedle" : "Needle",
+                                    x: 0, y: 0, width: 50, height: 240)
                             if !headerOnly {
                                 artwork("Tip", x: 22, y: 4, width: 6, height: 28)
                             }
@@ -39,13 +46,13 @@ struct MechanicalSentimentDial: View {
                         .drawingGroup()
                         .rotationEffect(.degrees((fraction(timeline.date) - 0.5) * 180),
                                         anchor: UnitPoint(x: 0.5, y: 175.0 / 240))
-                        .position(x: 227, y: 172)
+                        .position(x: headerOnly && daylight ? 227.58 : 227, y: 172)
                     }
                 }
                 if headerOnly {
-                    artwork("GlossSoft", x: 98.48, y: 41.90, width: 260.28, height: 170.13)
+                    artwork(headerPrefix + "GlossSoft", x: 98.48, y: 41.90, width: 260.28, height: 170.13)
                         .blendMode(.softLight)
-                    artwork("GlossHard", x: 98.48, y: 41.90, width: 260.28, height: 170.13)
+                    artwork(headerPrefix + "GlossHard", x: 98.48, y: 41.90, width: 260.28, height: 170.13)
                         .blendMode(.hardLight)
                 }
                 if !headerOnly {

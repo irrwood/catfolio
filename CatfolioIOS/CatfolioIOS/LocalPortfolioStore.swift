@@ -118,6 +118,7 @@ enum InstrumentCurrencyRules {
         "XS2D": "USD", "XT2D": "USD", "XSPD": "USD",
         "EQQU": "USD", "VUAA": "USD", "VUSD": "USD", "VHVE": "USD", "VWCG": "USD",
         "XSPS": "GBX", "EQQQ": "GBX",
+        "SILG": "GBP",
     ]
 
     static func knownPriceCurrency(for ticker: String) -> String? {
@@ -589,10 +590,18 @@ actor LocalPortfolioStore {
                 quoteObservedAt: position.quoteObservedAt
             )
         }
+        // A fill is priced in what its security is quoted in: the broker's
+        // own quote currency where it is still held, and only a guess for
+        // one sold since. The guess counts any unlisted London line as
+        // pence, which made SILG.L's pound fills a hundredth of their cost.
+        let heldCurrencies = Dictionary(positions.filter { $0.source == "Trading 212" }.map {
+            ($0.ticker.uppercased(), $0.quoteCurrency.uppercased())
+        }, uniquingKeysWith: { first, _ in first })
         let transactions = source.transactions?.map { transaction -> LocalTransactionRecord in
             guard transaction.source == "Trading 212",
                   ["BUY", "SELL"].contains(transaction.action.uppercased()),
-                  let currency = InstrumentCurrencyRules.inferredPriceCurrency(for: transaction.ticker),
+                  let currency = heldCurrencies[transaction.ticker.uppercased()]
+                      ?? InstrumentCurrencyRules.inferredPriceCurrency(for: transaction.ticker),
                   transaction.currency != currency else { return transaction }
             return LocalTransactionRecord(
                 date: transaction.date,

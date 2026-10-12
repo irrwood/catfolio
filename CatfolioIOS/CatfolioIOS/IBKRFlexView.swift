@@ -153,7 +153,7 @@ struct IBKRFlexView: View {
                     : L10n.text("将更新当前 IBKR 账户持仓；其他账户不受影响。"))
             }
         }
-        .accountFlowBrand(.ibkr, enabled: context.isCreating)
+        .accountFlowBrand(.ibkr)
     }
 
     @ViewBuilder

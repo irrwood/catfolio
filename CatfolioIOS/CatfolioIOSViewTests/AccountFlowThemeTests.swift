@@ -4,7 +4,7 @@ import XCTest
 
 @MainActor
 final class AccountFlowThemeTests: XCTestCase {
-    func testEveryCreationPageRendersItsOwnBrandInBothAppearances() async throws {
+    func testCreationAndManagementPagesRenderTheirBrandInBothAppearances() async throws {
         let suite = "account-brand-pages-\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         let previousLanguage = UserDefaults.standard.object(forKey: AppLanguage.preferenceKey)
@@ -17,17 +17,63 @@ final class AccountFlowThemeTests: XCTestCase {
         for dark in [false, true] {
             let traits = UITraitCollection(userInterfaceStyle: dark ? .dark : .light)
             for provider in AddAccountProvider.allCases {
-                let image = try await render(page(provider).environment(model), dark: dark)
                 let theme = provider.flowTheme
                 let targets = [theme.accent, theme.controlTint].map {
                     UIColor($0).resolvedColor(with: traits)
                 }
-                XCTAssertGreaterThan(try matchingPixels(in: image, colors: targets), 80,
-                    "\(provider.rawValue) must render its brand on the actual creation screen")
-                let attachment = XCTAttachment(image: image)
-                attachment.name = "Account-brand-\(provider.rawValue)-\(dark ? "dark" : "light")"
+                for context in [AccountConnectorContext.create, .manage(account(provider))] {
+                    let image = try await render(page(provider, context: context).environment(model), dark: dark)
+                    XCTAssertGreaterThan(try matchingPixels(in: image, colors: targets), 80,
+                        "\(provider.rawValue) must retain its brand when managing an existing account")
+                    let attachment = XCTAttachment(image: image)
+                    attachment.name = "Account-brand-\(provider.rawValue)-\(context.isCreating ? "create" : "manage")-\(dark ? "dark" : "light")"
+                    attachment.lifetime = .keepAlways
+                    add(attachment)
+                }
+            }
+        }
+    }
+
+    func testExistingAccountDetailsAndSelectionUseTheConnectorBrand() async throws {
+        let suite = "account-brand-details-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = AppModel(defaults: defaults, personalDocumentLoader: { .empty })
+        for dark in [false, true] {
+            let traits = UITraitCollection(userInterfaceStyle: dark ? .dark : .light)
+            for provider in AddAccountProvider.allCases {
+                let account = account(provider)
+                XCTAssertEqual(account.brandProvider, provider)
+                let target = UIColor(provider.flowTheme.controlTint).resolvedColor(with: traits)
+                let detail = try await render(NavigationStack {
+                    AccountDetailView(accountID: account.id, initialAccount: account)
+                }.environment(model), dark: dark)
+                let logoColor = UIColor(provider.flowTheme.accent).resolvedColor(with: traits)
+                XCTAssertGreaterThan(try matchingPixels(in: detail, colors: [logoColor, target]), 80,
+                                     "The centered account logo retains its brand color")
+                let attachment = XCTAttachment(image: detail)
+                attachment.name = "Account-detail-\(provider.rawValue)-\(dark ? "dark" : "light")"
                 attachment.lifetime = .keepAlways
                 add(attachment)
+                if provider == .trading212 {
+                    try detail.pngData()?.write(to: URL(fileURLWithPath: "/tmp/account-brand-detail-\(dark ? "dark" : "light").png"))
+                    let manual = try await render(ManualTransactionView(account: account).environment(model), dark: dark)
+                    XCTAssertGreaterThan(try matchingPixels(in: manual, colors: [target]), 80,
+                                         "Manual entries retain the account brand in their controls")
+                }
+
+                for selected in [true, false] {
+                    let row = try await render(SettingsSelectionRow(
+                        isSelected: selected, title: account.localizedDisplayName,
+                        selectionAccessibilityLabel: "Include account", toggle: {}
+                    ).accountFlowBrand(account.brandProvider), dark: dark)
+                    let coloredPixels = try matchingPixels(in: row, colors: [target])
+                    if selected {
+                        XCTAssertGreaterThan(coloredPixels, 80, "Selected accounts use their connector's color")
+                    } else {
+                        XCTAssertEqual(coloredPixels, 0, "Unselected circles remain neutral")
+                    }
+                }
             }
         }
     }
@@ -51,22 +97,38 @@ final class AccountFlowThemeTests: XCTestCase {
         _ = try await render(VStack {
             ThemeProbe { captured["outside"] = $0 != nil }
             ThemeProbe { captured["creation"] = $0 != nil }.accountFlowBrand(.moomoo)
-            ThemeProbe { captured["management"] = $0 != nil }.accountFlowBrand(.moomoo, enabled: false)
+            ThemeProbe { captured["management"] = $0 != nil }.accountFlowBrand(.moomoo)
+            ThemeProbe { captured["unknown"] = $0 != nil }.accountFlowBrand(nil)
         }, dark: false)
         XCTAssertEqual(captured["outside"], false)
         XCTAssertEqual(captured["creation"], true)
-        XCTAssertEqual(captured["management"], false)
+        XCTAssertEqual(captured["management"], true)
+        XCTAssertEqual(captured["unknown"], false)
     }
 
-    @ViewBuilder private func page(_ provider: AddAccountProvider) -> some View {
+    @ViewBuilder private func page(_ provider: AddAccountProvider, context: AccountConnectorContext) -> some View {
         switch provider {
-        case .trading212: Trading212View(context: .create)
-        case .ibkr: IBKRFlexView(context: .create)
-        case .moomoo: MoomooOAuthView(context: .create)
-        case .robinhood: RobinhoodConnectionView(context: .create)
-        case .snaptrade: SnapTradeView(context: .create)
-        case .csv: CSVImportView(context: .create)
+        case .trading212: Trading212View(context: context)
+        case .ibkr: IBKRFlexView(context: context)
+        case .moomoo: MoomooOAuthView(context: context)
+        case .robinhood: RobinhoodConnectionView(context: context)
+        case .snaptrade: SnapTradeView(context: context)
+        case .csv: CSVImportView(context: context)
         }
+    }
+
+    private func account(_ provider: AddAccountProvider) -> PortfolioAccount {
+        let source: String = switch provider {
+        case .trading212: "Trading 212"
+        case .ibkr: "IBKR Flex"
+        case .moomoo: "Moomoo"
+        case .robinhood: "Robinhood"
+        case .snaptrade: "SnapTrade"
+        case .csv: "CSV"
+        }
+        return PortfolioAccount(id: "brand-test-\(provider.rawValue)", accountID: nil,
+            source: source, name: "\(source) · Orange", baseCurrency: "USD", positionCount: 3,
+            transactionCount: 8, manualTransactionCount: 0, hasCSVImport: false, marketValueUSD: 12500)
     }
 
     private func render<V: View>(_ content: V, dark: Bool) async throws -> UIImage {
@@ -97,11 +159,21 @@ final class AccountFlowThemeTests: XCTestCase {
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
         context.draw(cg, in: CGRect(x: 0, y: 0, width: cg.width, height: cg.height))
         let targets = colors.map(rgb)
-        return stride(from: 0, to: pixels.count, by: 4).filter { offset in
-            targets.contains { target in
-                (0..<3).allSatisfy { abs(Double(pixels[offset + $0]) / 255 - target[$0]) < 0.10 }
+        var matches = 0
+        for offset in stride(from: 0, to: pixels.count, by: 4) {
+            let red = Double(pixels[offset]) / 255
+            let green = Double(pixels[offset + 1]) / 255
+            let blue = Double(pixels[offset + 2]) / 255
+            if targets.contains(where: {
+                abs(red - $0[0]) < 0.10 && abs(green - $0[1]) < 0.10 && abs(blue - $0[2]) < 0.10
+            }) {
+                matches += 1
+                // Enough color to distinguish a control from antialiasing;
+                // do not scan the rest of a full-screen image after success.
+                if matches > 80 { return matches }
             }
-        }.count
+        }
+        return matches
     }
 
     private func rgb(_ color: UIColor) -> [Double] {

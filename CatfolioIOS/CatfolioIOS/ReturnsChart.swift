@@ -87,34 +87,37 @@ struct ReturnsComparisonPlaceholder: View {
     let title: String
     let message: String
     let isLoading: Bool
+    var disclosure: ReturnsChartDisclosure? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if isLoading {
-                StandardLineChartSkeleton(
-                    axisWidth: 33,
-                    topInset: 0,
-                    leadingLineOverflow: 0,
-                    trailingEndpointInset: 9,
-                    seriesCount: ReturnsSeriesStyle.displayOrder.count,
-                    lineWidths: [2],
-                    appearanceID: "returns-comparison"
-                )
-                .frame(height: ReturnsChartLayout.plotHeight)
-                .padding(.trailing, ReturnsChartLayout.contentHorizontalInset)
-            } else {
-                ReturnsPlotPlaceholder(
-                    title: title,
-                    message: message,
-                    isLoading: false,
-                    maximumLines: 3
-                )
-                .frame(height: ReturnsChartLayout.plotHeight)
-                .padding(.trailing, ReturnsChartLayout.contentHorizontalInset)
+        ReturnsChartPanel(disclosure: disclosure, surface: .page) {
+            VStack(alignment: .leading, spacing: 0) {
+                if isLoading {
+                    StandardLineChartSkeleton(
+                        axisWidth: 33,
+                        topInset: 0,
+                        leadingLineOverflow: 0,
+                        trailingEndpointInset: 9,
+                        seriesCount: ReturnsSeriesStyle.displayOrder.count,
+                        lineWidths: [2],
+                        appearanceID: "returns-comparison"
+                    )
+                    .frame(height: ReturnsChartLayout.plotHeight)
+                    .padding(.trailing, ReturnsChartLayout.contentHorizontalInset)
+                } else {
+                    ReturnsPlotPlaceholder(
+                        title: title,
+                        message: message,
+                        isLoading: false,
+                        maximumLines: 3
+                    )
+                    .frame(height: ReturnsChartLayout.plotHeight)
+                    .padding(.trailing, ReturnsChartLayout.contentHorizontalInset)
+                }
+
+                ReturnsTimeRangeControl(selection: $timeRange, isDisabled: true)
             }
-
-            ReturnsTimeRangeControl(selection: $timeRange, isDisabled: true)
-
+        } rows: {
             VStack(spacing: 12) {
                 ForEach(0..<4, id: \.self) { index in
                     HStack {
@@ -131,8 +134,6 @@ struct ReturnsComparisonPlaceholder: View {
                     .opacity(isLoading ? 0.5 : 1)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 23)
         }
         .accessibilityElement(children: .contain)
     }
@@ -177,6 +178,7 @@ struct ReturnsChart: View {
     @Binding var timeRange: ChartTimeRange
     @Binding var selectedDate: Date?
     let onAddBenchmark: () -> Void
+    let disclosure: ReturnsChartDisclosure?
     @State private var visibleSeries = Set(ReturnsSeriesStyle.displayOrder)
     @Binding var highlightedSeries: String?
     @State private var measuredRange: ChartDateRange?
@@ -190,6 +192,7 @@ struct ReturnsChart: View {
         timeRange: Binding<ChartTimeRange>,
         selectedDate: Binding<Date?>,
         highlightedSeries: Binding<String?>,
+        disclosure: ReturnsChartDisclosure? = nil,
         onAddBenchmark: @escaping () -> Void
     ) {
         self.comparison = comparison
@@ -197,6 +200,7 @@ struct ReturnsChart: View {
         _timeRange = timeRange
         _selectedDate = selectedDate
         _highlightedSeries = highlightedSeries
+        self.disclosure = disclosure
         self.onAddBenchmark = onAddBenchmark
     }
 
@@ -211,74 +215,75 @@ struct ReturnsChart: View {
         let hasDrawableLine = displayData.hasDrawableLine
         let measurement = rangeMeasurement()
 
-        VStack(alignment: .leading, spacing: 0) {
-            if isChartLoading {
-                StandardLineChartSkeleton(
-                    axisWidth: 33,
-                    topInset: 0,
-                    leadingLineOverflow: 0,
-                    trailingEndpointInset: 9,
-                    seriesCount: ReturnsSeriesStyle.displayOrder.count,
-                    lineWidths: [2],
-                    appearanceID: "returns-comparison"
-                )
-                .frame(height: ReturnsChartLayout.plotHeight)
-                .padding(.trailing, ReturnsChartLayout.contentHorizontalInset)
-            } else if !hasDrawableLine {
-                ReturnsPlotPlaceholder(
-                    title: visibleSeries.isEmpty ? L10n.text("已隐藏全部曲线") : L10n.text("暂无可绘制数据"),
-                    message: visibleSeries.isEmpty ? L10n.text("轻点下方条目重新显示") : emptyChartDescription,
-                    isLoading: false
-                )
-                .frame(height: ReturnsChartLayout.plotHeight)
-                .padding(.trailing, ReturnsChartLayout.contentHorizontalInset)
-            } else {
-                FastReturnsPlot(
-                    data: displayData,
-                    transitionKey: displayData.transitionKey,
-                    rangeTransitionKey: displayData.rangeTransitionKey,
-                    selectedDate: selectedDate == nil && measuredRange == nil ? nil : chartDate,
-                    measuredRange: measuredRange,
-                    mode: mode,
-                    highlightedSeries: highlightedSeries,
-                    onSelect: {
-                        guard measuredRange != nil || selectedDate != $0 else { return }
-                        measuredRange = nil
-                        selectedDate = $0
-                    },
-                    onMeasure: {
-                        guard measuredRange != $0 else { return }
-                        measuredRange = $0
-                        selectedDate = $0.end
-                    },
-                    onInteractionEnded: { _ in
-                        selectedDate = nil
-                        measuredRange = nil
-                    }
-                )
-                .frame(height: ReturnsChartLayout.plotHeight)
-                .padding(.trailing, ReturnsChartLayout.contentHorizontalInset)
-                .accessibilityLabel(L10n.text("组合与基准的 \(timeRange.rawValue) \(mode.displayTitle) 对比图，长按后单指拖动查看单日，保持第一指并加入第二指测量区间"))
-                .overlay(alignment: .topLeading) {
-                    if let measurement {
-                        ChartRangeSummary(
-                            dateText: measurement.dateText,
-                            primaryValue: measurement.primaryValue,
-                            secondaryValue: measurement.secondaryValue,
-                            color: measurement.color
-                        )
-                        .padding(10)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .padding(8)
-                        .allowsHitTesting(false)
+        ReturnsChartPanel(disclosure: disclosure, surface: .page) {
+            VStack(alignment: .leading, spacing: 0) {
+                if isChartLoading {
+                    StandardLineChartSkeleton(
+                        axisWidth: 33,
+                        topInset: 0,
+                        leadingLineOverflow: 0,
+                        trailingEndpointInset: 9,
+                        seriesCount: ReturnsSeriesStyle.displayOrder.count,
+                        lineWidths: [2],
+                        appearanceID: "returns-comparison"
+                    )
+                    .frame(height: ReturnsChartLayout.plotHeight)
+                    .padding(.trailing, ReturnsChartLayout.contentHorizontalInset)
+                } else if !hasDrawableLine {
+                    ReturnsPlotPlaceholder(
+                        title: visibleSeries.isEmpty ? L10n.text("已隐藏全部曲线") : L10n.text("暂无可绘制数据"),
+                        message: visibleSeries.isEmpty ? L10n.text("轻点下方条目重新显示") : emptyChartDescription,
+                        isLoading: false
+                    )
+                    .frame(height: ReturnsChartLayout.plotHeight)
+                    .padding(.trailing, ReturnsChartLayout.contentHorizontalInset)
+                } else {
+                    FastReturnsPlot(
+                        data: displayData,
+                        transitionKey: displayData.transitionKey,
+                        rangeTransitionKey: displayData.rangeTransitionKey,
+                        selectedDate: selectedDate == nil && measuredRange == nil ? nil : chartDate,
+                        measuredRange: measuredRange,
+                        mode: mode,
+                        highlightedSeries: highlightedSeries,
+                        onSelect: {
+                            guard measuredRange != nil || selectedDate != $0 else { return }
+                            measuredRange = nil
+                            selectedDate = $0
+                        },
+                        onMeasure: {
+                            guard measuredRange != $0 else { return }
+                            measuredRange = $0
+                            selectedDate = $0.end
+                        },
+                        onInteractionEnded: { _ in
+                            selectedDate = nil
+                            measuredRange = nil
+                        }
+                    )
+                    .frame(height: ReturnsChartLayout.plotHeight)
+                    .padding(.trailing, ReturnsChartLayout.contentHorizontalInset)
+                    .accessibilityLabel(L10n.text("组合与基准的 \(timeRange.rawValue) \(mode.displayTitle) 对比图，长按后单指拖动查看单日，保持第一指并加入第二指测量区间"))
+                    .overlay(alignment: .topLeading) {
+                        if let measurement {
+                            ChartRangeSummary(
+                                dateText: measurement.dateText,
+                                primaryValue: measurement.primaryValue,
+                                secondaryValue: measurement.secondaryValue,
+                                color: measurement.color
+                            )
+                            .padding(10)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .padding(8)
+                            .allowsHitTesting(false)
+                        }
                     }
                 }
+
+                ReturnsTimeRangeControl(selection: $timeRange)
             }
-
-            ReturnsTimeRangeControl(selection: $timeRange)
-
+        } rows: {
             seriesCards(valuesAtDate)
-
         }
         .onChange(of: mode) { _, _ in
             measuredRange = nil
@@ -336,8 +341,6 @@ struct ReturnsChart: View {
                 }
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 23)
     }
 
     private func nearestDate(in dates: [Date]) -> Date? {

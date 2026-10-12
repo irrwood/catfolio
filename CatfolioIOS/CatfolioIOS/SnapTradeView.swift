@@ -175,7 +175,7 @@ struct SnapTradeView: View {
                 }
             }
         }
-        .accountFlowBrand(.snaptrade, enabled: context.isCreating)
+        .accountFlowBrand(.snaptrade)
     }
 
     private func credentials() throws -> SnapTradeCredentials { try .init(clientID: clientID, consumerKey: consumerKey) }

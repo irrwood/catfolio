@@ -140,7 +140,7 @@ struct CSVImportView: View {
                     : L10n.text("请确认 CSV 包含完整交易记录。导入将更新当前账户并重算成本；其他账户不受影响。"))
             }
         }
-        .accountFlowBrand(.csv, enabled: context.isCreating)
+        .accountFlowBrand(.csv)
     }
 
     @ViewBuilder

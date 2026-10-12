@@ -141,9 +141,8 @@ enum SettingsTemplate {
 
     /// The card fill: white, and at night `#1D1E1E` — the standard cell's
     /// fill, a step above both the black page and a sheet's `#141515` ground.
-    /// Every card surface in the app uses this, so the two stay one colour.
-    /// Also the selected chip in the category bar, which is a card the size of
-    /// a word.
+    /// The opaque fallback for content panels and the fill for compact
+    /// controls. Grouped panels normally blend the page through a material.
     static let uiCard = UIColor { trait in
         trait.userInterfaceStyle == .dark
             ? UIColor(red: 0x1D / 255, green: 0x1E / 255, blue: 0x1E / 255, alpha: 1)
@@ -176,13 +175,17 @@ enum SettingsTemplate {
     static let cardBorderWidth: CGFloat = 1
 
     /// `#8E8E93` — `systemGray`, which resolves the same in both appearances.
-    /// A row's subtitle, an unselected chip and, since the drawing moved it
-    /// off `secondaryLabel`, a section header too.
+    /// A row's subtitle and an unselected chip.
     static let uiSecondaryText = UIColor.systemGray
     static let secondaryText = Color(uiColor: uiSecondaryText)
 
-    /// The name above a card takes the same grey as a row's subtitle.
-    static let sectionHeader = secondaryText
+    /// Section names use translucent ink, so their tone follows the actual
+    /// page beneath them rather than a fixed system grey.
+    static let uiSectionHeader = UIColor { trait in
+        (trait.userInterfaceStyle == .dark ? UIColor.white : UIColor.black)
+            .withAlphaComponent(trait.accessibilityContrast == .high ? 0.8 : 0.6)
+    }
+    static let sectionHeader = Color(uiColor: uiSectionHeader)
 
     /// A read-only trailing value: the row's own ink at 40%, not the subtitle
     /// grey. They are close in the light drawing and come apart in the dark,
@@ -370,6 +373,8 @@ struct SettingsPage<Content: View>: View {
     }
 
     var body: some View {
+        // Let NavigationStack own the scroll association through push/pop and
+        // title collapse. A child controller must not rebind it during layout.
         ScrollView {
             VStack(alignment: .leading, spacing: SettingsTemplate.sectionSpacing) {
                 // Under the large title, on the title's own left edge — the
@@ -386,9 +391,6 @@ struct SettingsPage<Content: View>: View {
             .padding(.horizontal, SettingsTemplate.pageInset)
             .padding(.top, topInset)
             .padding(.bottom, bottomInset)
-            // Associate only this page's scroll view with its native bar,
-            // before the first visible frame and again after a return.
-            .background(NavigationBarScrollAnchor().accessibilityHidden(true))
         }
         .scrollContentBackground(.hidden)
         .appPageBackground(pageBackground)
@@ -464,7 +466,7 @@ struct SettingsSection<Content: View>: View {
 }
 
 /// The name above a card. SF Rounded Medium at 16 — the same size as a row's
-/// title, one weight up and in the secondary grey, so a section reads as a
+/// title, one weight up and in translucent ink, so a section reads as a
 /// heading of the list rather than a smaller caption above it.
 struct SettingsSectionHeader: View {
     let title: String
@@ -485,11 +487,9 @@ struct SettingsSectionHeader: View {
     }
 }
 
-/// One white card. Rows inside it are flush against each other with no rule
-/// between them — the card is clipped once, so the first and last rows pick up
-/// the 24pt corners without each needing to know where it sits.
+/// One material behind the whole group, with a subtle rule between rows.
+/// Clip once so the first and last rows inherit the panel's outer corners.
 struct SettingsCard<Content: View>: View {
-    @Environment(\.colorScheme) private var colorScheme
     @ViewBuilder let content: Content
 
     init(@ViewBuilder content: () -> Content) {
@@ -538,17 +538,10 @@ extension View {
             .alignmentGuide(.listRowSeparatorTrailing) { dimensions in dimensions.width }
     }
 
-    /// The standard cell's card: its fill, its radius and its faint 1 pt
-    /// outline (Figma 571:5939 / 571:6350). For any surface drawn as a card
-    /// outside `SettingsCard`, so every card in the app is one card.
+    /// The shared content panel: background colour through system blur,
+    /// a neutral readability wash, and a hairline around the whole group.
     func settingsCardSurface(cornerRadius: CGFloat = SettingsTemplate.cardRadius) -> some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        return background(SettingsTemplate.card)
-            .clipShape(shape)
-            .overlay {
-                shape.strokeBorder(SettingsTemplate.cardBorder, lineWidth: SettingsTemplate.cardBorderWidth)
-                    .allowsHitTesting(false)
-            }
+        modifier(ContentPanelSurface(cornerRadius: cornerRadius))
     }
 }
 
@@ -560,8 +553,7 @@ private struct SettingsCardRows: _VariadicView_MultiViewRoot {
             ForEach(children) { child in
                 child
                 if child.id != last {
-                    SettingsTemplate.separator
-                        .frame(height: SettingsTemplate.separatorHeight)
+                    ContentPanelSeparator()
                 }
             }
         }

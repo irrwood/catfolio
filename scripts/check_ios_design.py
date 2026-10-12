@@ -7,7 +7,8 @@ down", because every screen picked its own. A reader comparing two rows cannot
 tell a deliberate shade from an accidental one, and no amount of documentation
 stops the next literal from being typed.
 
-So: colour literals live in DesignSystem.swift and nowhere else. Everything
+So: colour literals live in the theme (CatfolioTheme.swift, and the design
+system itself) and nowhere else. Everything
 else names a token. Files that predate the rule are listed with the count they
 had when it was written; the count may fall and never rise, which lets the
 debt drain without blocking work on the files that still carry it.
@@ -24,7 +25,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1] / "CatfolioIOS" / "CatfolioIOS"
 DESIGN_DOC = Path(__file__).resolve().parents[1] / "CatfolioIOS" / "DESIGN.md"
-HOME = "DesignSystem.swift"
+COLOUR_HOME = {"CatfolioTheme.swift", "DesignSystem.swift"}
 
 # Literal colour constructors. `Color("name")` is an asset and allowed;
 # `.primary` and `Color(uiColor:)` are semantic and encouraged.
@@ -51,7 +52,7 @@ LADDER = re.compile(
 UNIT_CONVERSION = re.compile(
     r"TimeInterval|timeIntervalSince1970|nanoseconds|[Mm]illiseconds|[Mm]icroseconds"
 )
-LADDER_HOME = {"DesignSystem.swift"}
+LADDER_HOME = {"DisplayFormat.swift"}
 
 # What each file still carried when the rule landed. Lower is fine; higher
 # fails. Delete an entry once it reaches zero.
@@ -59,10 +60,10 @@ LADDER_GRANDFATHERED: dict[str, int] = {}
 
 GRANDFATHERED = {
     "VolumeProfileView.swift": 27,
-    "ReturnsView.swift": 9,
+    "ReturnsChart.swift": 9,
     "PortfolioView.swift": 8,
     "ReturnsAnalyticsView.swift": 7,
-    "AIView.swift": 2,
+    "AIAssistantPage.swift": 2,
 }
 
 
@@ -147,7 +148,7 @@ def main() -> int:
             improved.append(f"{path.name}: {len(hits)} of {allowed} ladders left")
 
     for path in sorted(ROOT.glob("*.swift")):
-        if path.name == HOME:
+        if path.name in COLOUR_HOME:
             continue
         hits = [
             f"{path.name}:{n}"

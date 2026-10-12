@@ -197,7 +197,7 @@ struct ReturnsSourceCards: View {
     let store: ReturnsSourcePreviewStore
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
+        HStack(alignment: .top, spacing: SettingsTemplate.tileSpacing) {
             NavigationLink { ReturnsChartPage(chart: .contributors) } label: {
                 ReturnsSourceCard(chart: .contributors, preview: store.gains,
                                   isRefreshing: store.isRefreshing, isUnavailable: store.isUnavailable)
@@ -213,7 +213,7 @@ struct ReturnsSourceCards: View {
     }
 }
 
-/// Figma 487:5328 (dark) and 487:5331 (light): one tile per chart, the
+/// Figma 641:25494 (dark) and 487:5331 (light): one tile per chart, the
 /// icon and chevron on top, the title over the amount at the foot, and a
 /// blur that deepens toward the foot so the text reads over the curves. Gains are blue and rise
 /// from the bottom edge; losses are purple and hang from the top edge. Each
@@ -252,8 +252,8 @@ private struct ReturnsSourceCard: View {
                     .tracking(0.56)
                     .textCase(.uppercase)
                     .foregroundStyle(palette.title)
-                    .opacity(colorScheme == .dark ? (isLosses ? 0.8 : 0.4) : 1)
-                    .blendMode(colorScheme == .dark ? .plusLighter : .normal)
+                    .opacity(isLosses ? 0.8 : (colorScheme == .dark ? 0.4 : 1))
+                    .blendMode(isLosses || colorScheme == .dark ? .plusLighter : .normal)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 headline
@@ -302,8 +302,8 @@ private struct ReturnsSourceCard: View {
     private func glows(abovePlot: Bool) -> some View {
         ZStack(alignment: .topLeading) {
             ForEach(Array(palette.glows.filter { $0.abovePlot == abovePlot }.enumerated()), id: \.offset) { _, glow in
-                Ellipse()
-                    .fill(glow.color)
+                Image(glow.asset)
+                    .renderingMode(.original)
                     .frame(width: glow.frame.width, height: glow.frame.height)
                     .blur(radius: 33)
                     .offset(x: glow.frame.minX, y: glow.frame.minY)
@@ -317,21 +317,24 @@ private struct ReturnsSourceCard: View {
         HStack(spacing: 8) {
             icon
             Spacer(minLength: 4)
-            Image("SettingsChevron")
-                .foregroundStyle(Color.white.opacity(0.5))
+            Image(isLosses ? "EntryLossChevron" : "EntryChevron")
+                .renderingMode(.original)
         }
         .frame(height: 24)
     }
 
-    /// The Figma frame's own glyphs, in white: a mug for gains, a rounded
-    /// down-triangle for losses.
-    private var icon: some View {
-        Image(isLosses ? "ReturnsLossAnalysis" : "ReturnsGainSources")
-            .resizable()
-            .scaledToFit()
-            .foregroundStyle(.white)
-            .frame(width: isLosses ? 14.3 : 18, height: isLosses ? 12.2 : 16)
-            .frame(width: isLosses ? 17 : 18, height: 16)
+    @ViewBuilder private var icon: some View {
+        if isLosses {
+            if colorScheme == .light {
+                Image("EntryLossDayIcon").renderingMode(.original)
+            } else {
+                Image("EntryLossNightIcon").renderingMode(.original)
+                    .scaleEffect(y: -1)
+                    .frame(width: 17, height: 24)
+            }
+        } else {
+            Image("EntryGainIcon").renderingMode(.original)
+        }
     }
 
     @ViewBuilder
@@ -368,90 +371,6 @@ private struct ReturnsSourceCard: View {
     }
 }
 
-/// The paints of Figma 487:5328 / 487:5331, per chart and scheme.
-private struct ReturnsSourcePalette {
-    struct Glow {
-        let color: Color
-        /// Offset from the card's top-left corner, and size, before the blur.
-        let frame: CGRect
-        let abovePlot: Bool
-    }
-
-    /// The design's colour wash, composited over the card's opaque base.
-    let fill: LinearGradient
-    /// The title over the amount: the chart's colour in the dark, white on
-    /// the light scheme's coloured cards.
-    let title: Color
-    let amount: Color
-    let solidLayerColors: [Color]?
-    let glows: [Glow]
-    /// Each layer: this colour at the curve, fading to `curveFade` at its base.
-    let curve: Color
-    let curveFade: Color
-    let stroke: Color
-    /// The whole layer — fill and edge — is set at this opacity.
-    let layerOpacity: Double
-    let backLayerOpacity: Double
-    let frontLayerOpacity: Double
-    let backLayerColor: Color?
-    let strokeOpacity: Double
-    let strokeWidth: CGFloat
-
-    private static func rgb(_ hex: UInt32, _ alpha: Double = 1) -> Color {
-        Color(red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255,
-              blue: Double(hex & 0xFF) / 255).opacity(alpha)
-    }
-
-    init(isLosses: Bool, scheme: ColorScheme) {
-        amount = scheme == .light ? Self.rgb(isLosses ? 0x6836B1 : 0x005CA7) : .white
-        // Front (bottom) to back (top): the daylight waves become whiter downward.
-        solidLayerColors = isLosses ? nil : scheme == .light
-            ? [.white, Self.rgb(0xA7D7FF), Self.rgb(0x56AFF8)]
-            : [Self.rgb(0x0489F7), Self.rgb(0x0062B4), Self.rgb(0x078AF7)]
-        backLayerOpacity = scheme == .dark ? (isLosses ? 0.3 : 0.4) : 1
-        frontLayerOpacity = isLosses && scheme == .light ? 0.5 : 1
-        backLayerColor = isLosses && scheme == .light ? Self.rgb(0xAD76FF) : nil
-        strokeOpacity = scheme == .dark ? 0.3 : 0.7
-        strokeWidth = scheme == .dark ? 1 : 1.5
-        switch (isLosses, scheme == .dark) {
-        case (false, true):
-            fill = LinearGradient(stops: [
-                .init(color: Self.rgb(0x004F74, 0.8), location: 0.04445),
-                .init(color: Color.black.opacity(0.8), location: 0.67584)
-            ], startPoint: .topLeading, endPoint: .bottomTrailing)
-            title = .white
-            glows = [Glow(color: Self.rgb(0x004D8C), frame: CGRect(x: -99, y: 93, width: 224, height: 148), abovePlot: false)]
-            curve = Self.rgb(0x0189F8); curveFade = Self.rgb(0x0189F8, 0)
-            stroke = .clear; layerOpacity = 1
-        case (false, false):
-            fill = LinearGradient(stops: [
-                .init(color: Self.rgb(0x2498F6, 0.8), location: 0.04445),
-                .init(color: Self.rgb(0x71BDF9, 0.8), location: 0.67584)
-            ], startPoint: .topLeading, endPoint: .bottomTrailing)
-            title = Self.rgb(0x2FA2FF)
-            glows = [Glow(color: Self.rgb(0xFDFEFF), frame: CGRect(x: -98, y: 94, width: 224, height: 148), abovePlot: true)]
-            curve = .white; curveFade = .white
-            stroke = .clear; layerOpacity = 1
-        case (true, true):
-            fill = LinearGradient(stops: [
-                .init(color: Self.rgb(0x2B006B, 0.9), location: 0.07168),
-                .init(color: Color.black.opacity(0.9), location: 0.605)
-            ], startPoint: .bottomLeading, endPoint: .topTrailing)
-            title = Self.rgb(0xB355FF)
-            glows = [Glow(color: Self.rgb(0x42197F), frame: CGRect(x: -119, y: -74, width: 264, height: 165), abovePlot: false)]
-            curve = Self.rgb(0x7D25FF); curveFade = Self.rgb(0xAC74FF, 0)
-            stroke = .clear; layerOpacity = 1
-        case (true, false):
-            fill = LinearGradient(colors: [.white, .white],
-                                  startPoint: .top, endPoint: .bottom)
-            title = Self.rgb(0xB355FF)
-            glows = [Glow(color: Self.rgb(0x9651FF), frame: CGRect(x: -100, y: -91, width: 222, height: 165), abovePlot: false)]
-            curve = Self.rgb(0x7D25FF); curveFade = Self.rgb(0xAC74FF)
-            stroke = .clear; layerOpacity = 0.4
-        }
-    }
-}
-
 /// The three largest sources as layered areas, with no axes: the back layer
 /// is all three together, the front one the largest source alone. Each
 /// fades from its curve toward its base and carries a thin edge on the curve.
@@ -477,8 +396,8 @@ private struct ReturnsSourceMiniChart: View {
                         for glow in palette.glows where glow.abovePlot {
                             context.drawLayer { glowContext in
                                 glowContext.addFilter(.blur(radius: 33))
-                                glowContext.fill(Path(ellipseIn: glow.frame.offsetBy(dx: 0, dy: -ReturnsSourceCard.chartInset)),
-                                                 with: .color(glow.color))
+                                glowContext.draw(Image(glow.asset),
+                                                 in: glow.frame.offsetBy(dx: 0, dy: -ReturnsSourceCard.chartInset))
                             }
                         }
                     }

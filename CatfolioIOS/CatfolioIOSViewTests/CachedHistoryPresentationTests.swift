@@ -21,7 +21,7 @@ final class CachedHistoryPresentationTests: XCTestCase {
         let history = HoldingValueHistory(rows: [.init(dateText: "2026-10-02", cost: 80,
             values: ["AAPL": 110], costs: ["AAPL": 80])], costs: ["AAPL": 80], names: ["AAPL": "Apple"])
         for loss in [false, true] {
-            let host = UIHostingController(rootView: ScrollView {
+            let host = UIHostingController(rootView: Group {
                 if loss { LossAnalysisChart(fetchHistory: { _ in history }) }
                 else { HoldingContributionChart(fetchHistory: { _ in history }) }
             }.environment(AppModel()))

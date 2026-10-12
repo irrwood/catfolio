@@ -13,7 +13,7 @@ final class AddAccountLayoutTests: XCTestCase {
                 let options = try await render(AddAccountOptions { _ in }, width: 370, dark: dark)
                 XCTAssertEqual(options.size.width, 370, accuracy: 0.5)
                 // Five broker rows, four hairlines, a 12pt gap, and one import row.
-                XCTAssertEqual(options.size.height, 592, accuracy: 1)
+                XCTAssertEqual(options.size.height, 6 * 96 + 12 + 4 / options.scale, accuracy: 1)
                 if dark {
                     try assertLightGlyph(in: options, center: CGPoint(x: 48, y: 436.5))
                     try assertLightGlyph(in: options, center: CGPoint(x: 48, y: 544))

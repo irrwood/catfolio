@@ -271,14 +271,14 @@ struct ReturnsSourceListRow<Trailing: View>: View {
     var logo: (ticker: String, symbol: String)? = nil
     /// The others' row, whose band is striped.
     var isStriped = false
-    var isOnBlueField = false
+    var isOnTintedField = false
     var isHighlighted = false
     @ViewBuilder let trailing: Trailing
 
     var body: some View {
         HStack(spacing: 12) {
             ReturnsRankBadge(rank: rank, color: isOn ? color : Color(white: 0.55), isPortfolio: false,
-                             isStriped: isStriped && isOn, usesTintedGlass: isOnBlueField)
+                             isStriped: isStriped && isOn, usesTintedGlass: isOnTintedField)
                 .padding(.trailing, 4)
             if let logo {
                 AssetLogo(ticker: logo.ticker, logoSymbol: logo.symbol, size: 36, cornerRadius: 10)
@@ -289,7 +289,7 @@ struct ReturnsSourceListRow<Trailing: View>: View {
                     .lineLimit(1)
                 Text(subtitle)
                     .font(.system(size: 15, weight: .regular, design: .rounded))
-                    .foregroundStyle(isOnBlueField ? Color.white.opacity(0.5) : Color.secondary)
+                    .foregroundStyle(isOnTintedField ? Color.white.opacity(0.5) : Color.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
@@ -297,9 +297,9 @@ struct ReturnsSourceListRow<Trailing: View>: View {
         }
         .padding(.horizontal, 16)
         .frame(height: 65)
-        .foregroundStyle(isOnBlueField ? Color.white : Color.primary)
+        .foregroundStyle(isOnTintedField ? Color.white : Color.primary)
         .background {
-            if isOnBlueField {
+            if isOnTintedField {
                 RoundedRectangle(cornerRadius: 16).fill(.white.opacity(isHighlighted ? 0.2 : 0.1))
                     .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(isHighlighted ? color.opacity(0.85) : .white.opacity(0.05),
                                                                                lineWidth: isHighlighted ? 1.5 : 1) }

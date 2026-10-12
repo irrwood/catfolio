@@ -8,6 +8,7 @@ struct CatfolioIOSApp: App {
     @AppStorage(AppAppearance.preferenceKey) private var appearanceRawValue = AppAppearance.system.rawValue
 
     init() {
+        Typography.configureNavigationTitles()
         SimulatedOffline.install()
         _ = NetworkReachability.shared
     }
