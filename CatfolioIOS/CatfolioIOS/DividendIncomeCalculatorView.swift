@@ -18,7 +18,7 @@ struct DividendIncomeCalculatorCard: View {
                     HoldingDetailActionCardLabel(title: L10n.text("股息收入计算器"),
                         subtitle: L10n.text("按股数估算股息收入"))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PanelPressButtonStyle())
                 .padding(.top, HoldingDetailCardStyle.spacing)
                 .accessibilityIdentifier("holding.dividend-calculator")
                 .appSheet(isPresented: $showsCalculator) {

@@ -119,6 +119,40 @@ final class ResearchSearchPullTests: XCTestCase {
         XCTAssertTrue(view.isUserInteractionEnabled)
     }
 
+    func testCommittedPullHandsOffHeldGeometryWithoutReturningToToolbar() {
+        let view = UIView()
+        let motion = ResearchSearchMotion()
+        motion.field = view
+        motion.pull(180)
+        let released = view.transform
+        var dismissals = 0
+        motion.finishPull { dismissals += 1 }
+        XCTAssertEqual(dismissals, 1, "The closing flight starts as soon as the finger releases")
+        XCTAssertEqual(view.transform, released)
+        motion.finishPull { dismissals += 1 }
+        XCTAssertEqual(dismissals, 1)
+        motion.presentationEnded()
+        XCTAssertEqual(view.transform, released, "The positioning controller owns the return animation")
+        motion.reset()
+        XCTAssertEqual(view.transform, .identity)
+    }
+
+    func testCancelledSearchIgnoresLateKeyboardTextChanges() throws {
+        guard #available(iOS 26.0, *) else { throw XCTSkip("The movable field uses iOS 26") }
+        var query = "AAPL"
+        var presented = true
+        let coordinator = ResearchToolbarSearch.Coordinator(
+            query: Binding(get: { query }, set: { query = $0 }),
+            isPresented: Binding(get: { presented }, set: { presented = $0 }))
+        let search = UISearchBar()
+        search.text = query
+        coordinator.cancel(search)
+        coordinator.searchBar(search, textDidChange: "AAPL")
+        XCTAssertFalse(presented)
+        XCTAssertEqual(query, "")
+        XCTAssertEqual(search.text, "")
+    }
+
     func testNewPullInterruptsACancelledReturnWithoutBeingResetLater() async throws {
         let view = UIView()
         let motion = ResearchSearchMotion()

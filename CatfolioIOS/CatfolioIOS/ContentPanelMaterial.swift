@@ -108,23 +108,28 @@ extension EnvironmentValues {
     }
 }
 
-/// For a button that is one whole panel, such as an overview tile: the press
-/// thins the panel itself. On at once; off with a short fade, as a row does.
+/// Whole-card entries share a gentle press, including cards with artwork
+/// instead of a material surface. Native buttons still own tap cancellation.
 struct PanelPressButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
-        PressedPanel(configuration: configuration)
+        configuration.label.modifier(PanelPressFeedback(isPressed: configuration.isPressed,
+                                                         reduceMotion: reduceMotion))
     }
+}
 
-    private struct PressedPanel: View {
-        @Environment(\.isEnabled) private var isEnabled
-        @Environment(\.accessibilityReduceMotion) private var reduceMotion
-        let configuration: ButtonStyleConfiguration
+struct PanelPressFeedback: ViewModifier {
+    @Environment(\.isEnabled) private var isEnabled
+    let isPressed: Bool
+    let reduceMotion: Bool
 
-        var body: some View {
-            let pressed = configuration.isPressed && isEnabled
-            configuration.label
-                .environment(\.isPanelPressed, pressed)
-                .animation(pressed || reduceMotion ? nil : .easeOut(duration: 0.25), value: pressed)
-        }
+    func body(content: Content) -> some View {
+        let pressed = isPressed && isEnabled
+        content
+            .environment(\.isPanelPressed, pressed)
+            .scaleEffect(pressed && !reduceMotion ? 0.97 : 1)
+            .opacity(pressed && reduceMotion ? 0.8 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: pressed ? 0.12 : 0.2), value: pressed)
     }
 }

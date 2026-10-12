@@ -13,7 +13,6 @@ struct ResearchMarketSearch: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var motion = ResearchSearchMotion()
-    @State private var isClosing = false
     @State private var placement = ResearchSearchPlacement()
     @State private var resultsTopInset: CGFloat = 0
 
@@ -33,8 +32,7 @@ struct ResearchMarketSearch: ViewModifier {
                 }, query: query, onDismiss: dismissSearch, pullObserver: pullObserver,
                    onPull: motion.pull, onPullCancel: motion.cancelPull, onPullDismiss: dismissAfterPull,
                    contentTopInset: resultsTopInset)
-                    .opacity(isClosing ? 0 : 1)
-                    .allowsHitTesting(!isClosing)
+                    .transition(.opacity)
             }
         }
         return Group {
@@ -68,8 +66,7 @@ struct ResearchMarketSearch: ViewModifier {
         .onDisappear { motion.reset() }
         .onChange(of: isPresented) { _, presented in
             if !presented {
-                motion.reset()
-                isClosing = false
+                motion.presentationEnded()
                 query = ""
                 isFocused = false
             }
@@ -77,16 +74,14 @@ struct ResearchMarketSearch: ViewModifier {
     }
 
     private func dismissSearch() {
-        motion.reset()
-        isClosing = false
         isFocused = false
         isPresented = false
     }
 
     private func dismissAfterPull() {
-        guard !isClosing else { return }
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { isClosing = true }
-        motion.finishPull(completion: dismissSearch)
+        motion.finishPull {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { dismissSearch() }
+        }
     }
 }
 
@@ -127,7 +122,8 @@ struct ResearchToolbarSearch: UIViewControllerRepresentable {
         field.pullObserver.onDismiss = onPullDismiss
         field.searchBar.placeholder = L10n.text("搜索股票、ETF 或公司名")
         field.cancelButton.accessibilityLabel = L10n.text("取消")
-        if field.searchBar.text != query { field.searchBar.text = query }
+        let displayedQuery = isPresented ? query : ""
+        if field.searchBar.text != displayedQuery { field.searchBar.text = displayedQuery }
         controller.setPresented(isPresented)
     }
 
@@ -153,6 +149,9 @@ struct ResearchToolbarSearch: UIViewControllerRepresentable {
         }
 
         func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+            // Keyboard dismissal can deliver the last editing value after
+            // cancellation; it must not refill the resting search field.
+            guard isPresented.wrappedValue else { return }
             if query.wrappedValue != searchText { query.wrappedValue = searchText }
         }
 
@@ -181,8 +180,9 @@ struct ResearchToolbarSearch: UIViewControllerRepresentable {
         let cancelButton = UIButton(configuration: .glass())
         var onCancel: (() -> Void)?
         private(set) var isPresented = false
-        /// At rest the field is the page's own content panel, drawn by the
-        /// same SwiftUI material; presenting fades it and materialises glass.
+        private var isPinned = false
+        /// Inline search uses the page's panel material. Floating above the
+        /// page, whether pinned or editing, uses the system's liquid glass.
         private let panel = UIHostingController(rootView: SearchPanel())
         /// Brightens the resting panel under a finger.
         private let pressHighlight = UIView()
@@ -196,6 +196,7 @@ struct ResearchToolbarSearch: UIViewControllerRepresentable {
             addSubview(movingContent)
             panel.view.backgroundColor = .clear
             panel.safeAreaRegions = []
+            glass.accessibilityIdentifier = "research.search.glass"
             for surface in [panel.view!, glass, pressHighlight] {
                 surface.isUserInteractionEnabled = false
                 surface.clipsToBounds = true
@@ -213,6 +214,7 @@ struct ResearchToolbarSearch: UIViewControllerRepresentable {
             searchBar.autocapitalizationType = .none
             searchBar.autocorrectionType = .no
             searchBar.accessibilityIdentifier = "research.search.bar"
+            searchBar.setImage(UIImage(named: "SearchIcon"), for: .search, state: .normal)
             searchBar.setSearchFieldBackgroundImage(UIImage(), for: .normal)
             movingContent.addSubview(searchBar)
             cancelButton.setImage(UIImage(systemName: "xmark"), for: .normal)
@@ -272,6 +274,24 @@ struct ResearchToolbarSearch: UIViewControllerRepresentable {
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                                shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
 
+        func setPinned(_ pinned: Bool) {
+            guard isPinned != pinned else { return }
+            isPinned = pinned
+            UIView.animate(withDuration: UIAccessibility.isReduceMotionEnabled ? 0 : 0.2,
+                           delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
+                self.updateSurface()
+            }
+        }
+
+        private func updateSurface() {
+            let usesGlass = isPresented || isPinned
+            guard usesGlass != (glass.effect != nil) else { return }
+            // Keep the live effect when editing begins or ends while pinned.
+            // Animate the effect itself rather than fading its view's alpha.
+            glass.effect = usesGlass ? UIGlassEffect(style: .regular) : nil
+            panel.view.alpha = usesGlass ? 0 : 1
+        }
+
         func setPresented(_ presented: Bool, animated: Bool = false) {
             pullObserver.isEnabled = presented
             guard isPresented != presented else { return }
@@ -279,10 +299,7 @@ struct ResearchToolbarSearch: UIViewControllerRepresentable {
             if !presented { searchBar.resignFirstResponder() }
             cancelButton.isHidden = false
             let changes = {
-                // Effects animate between states; fading a visual effect
-                // view's alpha would not.
-                self.glass.effect = presented ? UIGlassEffect(style: .regular) : nil
-                self.panel.view.alpha = presented ? 0 : 1
+                self.updateSurface()
                 self.pressHighlight.alpha = 0
                 self.cancelButton.alpha = presented ? 1 : 0
                 self.cancelButton.transform = presented ? .identity : Self.cancelHiddenTransform

@@ -1,0 +1,41 @@
+Catfolio iOS audit verification — 2026-10-12
+
+Baseline build and tests
+Command: xcodebuild -project CatfolioIOS/CatfolioIOS.xcodeproj -scheme CatfolioIOS -testPlan All -destination 'platform=iOS Simulator,id=0567C6F4-1C81-4E7B-B9C2-F7CBB04B2649' -parallel-testing-enabled NO test
+Result: TEST SUCCEEDED
+Logic: 944 cases, 1 skipped, 0 failures (943 passed).
+Views: 556 cases, 2 skipped, 0 failures (554 passed).
+Total: 1,500 cases, 1,497 passed, 3 skipped, 0 failures.
+Skipped: opt-in NVDA live AI provider; opt-in Nasdaq live device read; unavailable physical-device portfolio diagnostic fixture.
+Log: /tmp/catfolio-audit-all.log
+Result bundle: /Users/qian/Library/Developer/Xcode/DerivedData/CatfolioIOS-dculixwlyhrufsfqwvmdzwtiinhb/Logs/Test/Test-CatfolioIOS-2026.10.12_4-16-36-+0100.xcresult
+
+Audit reproductions (separate from the baseline)
+Source: AppAuditReproductionTests.swift beside this file.
+Copied temporarily into CatfolioIOSViewTests, run with the Views plan and -only-testing:CatfolioIOSViewTests/AppAuditReproductionTests on simulator 519E1F9C-11D9-4BC9-B66C-A6048402D61E.
+All 5 proposed-safe-behavior tests failed, with 7 assertion failures, confirming:
+1. Stale Yahoo response bypassed Massive; returned 100 instead of newer 105.
+2. Header returned 100 while the chart endpoint remained 110 at regular-session open.
+3. Partial CSV deleted the existing AAPL position.
+4. 0700.HK at 12:30 HKT incorrectly classified as open.
+5. AAPL on Christmas and after the 2026-11-27 early close incorrectly classified as open.
+The temporary test-target copy was removed after the run. These deliberately failing reproductions are not part of the normal test plans.
+Log: /tmp/catfolio-audit-reproductions.log
+
+Static checks
+python3 scripts/check_ios_localizations.py
+PASS: 3,682 bilingual keys, 2,975 localized call sites; stable routing and series identifiers.
+python3 scripts/check_ios_design.py
+FAIL: 52 violation groups across 42 files (existing font, formatting and color rules).
+git diff --check
+PASS
+
+Performance evidence
+Existing simulator history scrolling test: vertical scroll p95 16.69 ms, 1 hitch / 319 sampled frames in each of two runs.
+This is simulator-only evidence, not a physical-device power, thermal, or full-app performance certification.
+
+Visual evidence
+Seven fresh screenshots saved under screenshots/. The app was launched directly into each surface, using process-scoped demo/appearance options. Screenshot 05 used --simulate-offline. No real brokerage sync, account deletion, or AI message was performed by the manual audit.
+
+Scope limitation
+The audit reviewed critical paths and the current automated suite, not every source line or every user flow. Third-party live services, actual account entitlements, real model quality, complete VoiceOver navigation, older OS versions and physical-device energy use remain unverified.

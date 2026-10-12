@@ -167,11 +167,11 @@ struct TreasuryYieldCurveView: View {
         var lines = [Line(id: "now", title: L10n.text("最新"), day: latest, color: .primary, isNow: true)]
         if let month = ago(.month, 1) {
             lines.append(Line(id: "month", title: L10n.text("1 个月前"), day: month,
-                              color: Color(red: 0.204, green: 0.459, blue: 1.000), isNow: false))
+                              color: CatfolioPalette.ChartSeries.blue, isNow: false))
         }
         if let year = ago(.year, 1) {
             lines.append(Line(id: "year", title: L10n.text("1 年前"), day: year,
-                              color: Color(red: 1.000, green: 0.584, blue: 0.000), isNow: false))
+                              color: CatfolioPalette.ChartSeries.orange, isNow: false))
         }
         return lines
     }
@@ -267,12 +267,12 @@ struct TreasuryYieldCurveView: View {
                     HStack(spacing: 12) {
                         Circle().fill(line.color).frame(width: 10, height: 10)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(line.title).font(.system(size: 16, weight: .semibold, design: .rounded))
+                            Text(line.title).font(Typography.rounded(size: 16, weight: .semibold))
                             Text(line.day.date).font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer(minLength: 8)
                         Text("\(maturity.label) " + (line.day.yields[maturity].map(percent) ?? "—"))
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .font(Typography.rounded(size: 15, weight: .semibold))
                             .monospacedDigit()
                     }
                     .foregroundStyle(CatfolioTheme.primaryText)

@@ -116,7 +116,7 @@ struct SettingsHistoryOverview: View {
                     HistoryView().environment(model)
                 }
                 .accessibilityIdentifier("settings.history-overview.all")
-                SettingsNavigationRow(icon: .symbol("sparkles"), title: L10n.text("洞察"),
+                SettingsNavigationRow(icon: .asset("AssistantSparkles"), title: L10n.text("洞察"),
                                       subtitle: L10n.text("你交易里有趣的数据")) {
                     TradingInsightsView().environment(model)
                 }

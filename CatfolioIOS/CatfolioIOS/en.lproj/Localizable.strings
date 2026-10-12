@@ -2437,7 +2437,6 @@
 "快速了解一家公司" = "Get to know a company";
 "最近市场发生了什么？" = "What is moving the market?";
 "从一个问题开始" = "Start with a question";
-"选择一个方向，一起看得更清楚。" = "Pick a topic to explore.";
 "先选择要分析的股票" = "Choose a stock to analyze first";
 "发送市场分析问题" = "Send a market analysis question";
 "你想分析哪只股票？" = "Which stock would you like to analyze?";
@@ -4073,6 +4072,12 @@
 /* Short performance entry title. */
 "Cycle" = "Cycle";
 
+/* Performance entry card titles. */
+"performance.card.gain.title" = "Gain";
+"performance.card.loss.title" = "Loss";
+"performance.card.return.title" = "Return";
+"performance.card.cycle.title" = "Cycle";
+
 "展开图表" = "Expand chart";
 "收起图表" = "Collapse chart";
 "上下拖动把手或轻点以展开、收起图表" = "Drag the handle vertically or tap to expand or collapse the chart";
@@ -4086,3 +4091,24 @@
 "盘前" = "Pre-market";
 
 "盘后" = "After-hours";
+"正在检查 CSV…" = "Checking the CSV…";
+"导入将创建新账户并重算成本。" = "Importing creates a new account and recalculates cost.";
+"导入将用这份 CSV 替换当前账户的持仓和交易，并重算成本；其他账户不受影响。" = "Importing replaces this account's holdings and trades with this CSV and recalculates cost. Other accounts are not affected.";
+"有 %@ 行无法读取，不会导入。" = "%@ rows could not be read and will not be imported.";
+"%@ 个现有持仓将被移除。" = "%@ existing holdings will be removed.";
+"导入前会自动备份当前组合。" = "Your current portfolio is backed up automatically before importing.";
+"导入前请检查" = "Check before importing";
+"导入预览" = "Import preview";
+"导入后持仓" = "Holdings after import";
+"无法读取，将跳过" = "Unreadable, will be skipped";
+"%@ 行" = "%@ rows";
+"持仓变化" = "Holding changes";
+"不变" = "Unchanged";
+"确认导入前不会改动账户；导入时会先自动备份当前组合。" = "Nothing in the account changes until you confirm; importing backs up your current portfolio first.";
+"新增" = "New";
+"将移除" = "Will be removed";
+"股数变化" = "Shares change";
+"已在导入前备份原组合" = "Original portfolio backed up before importing";
+"现金流" = "Cash flow";
+"MWR：缺少完整资金账本和账户估值，暂不可用。" = "MWR is unavailable without a complete cash ledger and account valuations.";
+"TWR：缺少完整资金账本和账户估值，暂不可用。" = "TWR is unavailable without a complete cash ledger and account valuations.";

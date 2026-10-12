@@ -165,6 +165,7 @@ enum LocalCSVImporter {
         var transactions: [Transaction] = []
         var warnings: [String] = []
         var ledgerIncomplete = false
+        var skippedRows = 0
         var rowOccurrences: [String: Int] = [:]
         for (offset, row) in records.dropFirst(headerIndex + 1).enumerated() {
             do {
@@ -234,6 +235,7 @@ enum LocalCSVImporter {
                 ))
             } catch {
                 ledgerIncomplete = true
+                skippedRows += 1
                 warnings.append(L10n.text("第 \(headerIndex + offset + 2) 行：\(error.localizedDescription)"))
             }
         }
@@ -323,7 +325,8 @@ enum LocalCSVImporter {
             transactionsCount: transactions.count,
             backupCreated: false,
             warnings: warnings,
-            holdings: imported
+            holdings: imported,
+            skippedRowCount: skippedRows
         ))
     }
 

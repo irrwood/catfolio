@@ -97,7 +97,7 @@ struct SectorPerformancePanel: View {
             }
             Text(L10n.text("行业 ETF 作为美国板块代理；数值为最近两个可用收盘价的变化，非盘中实时行情。来源：现有 Yahoo 行情服务及本机缓存。"))
         }
-        .font(.system(size: 11, design: .rounded))
+        .font(Typography.rounded(size: 11))
         .foregroundStyle(Color.primary.opacity(0.45))
     }
 }

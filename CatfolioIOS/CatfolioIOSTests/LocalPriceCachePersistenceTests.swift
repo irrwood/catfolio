@@ -53,7 +53,7 @@ final class LocalPriceCachePersistenceTests: XCTestCase {
         let newer = older + [MarketIntradayBar(timestamp: base.addingTimeInterval(120), close: 102)]
 
         await cache.save(symbol: "aaa", bars: older)
-        await cache.save(symbol: "AAA", bars: newer)
+        await cache.save(symbol: "AAA", bars: newer, includesExtendedHours: true)
         await cache.save(symbol: "BBB", bars: older)
 
         try await waitForCache(at: url) { json in
@@ -65,6 +65,25 @@ final class LocalPriceCachePersistenceTests: XCTestCase {
         let restored = LocalIntradayPriceCache(cacheURL: url)
         let hit = await restored.lookup(symbol: "aaa")
         XCTAssertEqual(hit?.bars.map(\.close), [100, 101, 102])
+        XCTAssertEqual(hit?.includesExtendedHours, true)
+        let regularHit = await restored.lookup(symbol: "BBB")
+        XCTAssertEqual(regularHit?.includesExtendedHours, false)
+    }
+
+    func testLegacyIntradayCacheDoesNotAssumeExtendedHoursCoverage() async throws {
+        struct LegacyEntry: Encodable {
+            let fetchedAt: Date
+            let bars: [MarketIntradayBar]
+        }
+        let url = temporaryCacheURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let bars = [MarketIntradayBar(timestamp: Date(timeIntervalSince1970: 1_700_000_000), close: 100)]
+        try JSONEncoder().encode(["AAPL": LegacyEntry(fetchedAt: .now, bars: bars)]).write(to: url)
+        let cache = LocalIntradayPriceCache(cacheURL: url)
+        let hit = await cache.lookup(symbol: "AAPL")
+        XCTAssertEqual(hit?.bars.map(\.close), [100])
+        XCTAssertEqual(hit?.isFresh, true)
+        XCTAssertEqual(hit?.includesExtendedHours, false)
     }
 
     func testSaveDuringInFlightWritePersistsNewerSnapshotLast() async throws {

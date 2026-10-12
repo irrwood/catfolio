@@ -69,6 +69,9 @@ struct CSVImportResult: Decodable {
     let backupCreated: Bool?
     let warnings: [String]
     let holdings: [CSVImportedHolding]?
+    /// Rows the local importer could not read and left out. Not part of the
+    /// server payload.
+    var skippedRowCount = 0
 
     enum CodingKeys: String, CodingKey {
         case ok, warnings, holdings

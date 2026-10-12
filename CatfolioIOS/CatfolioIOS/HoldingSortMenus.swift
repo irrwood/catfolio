@@ -96,8 +96,9 @@ struct HeatmapPerformancePeriodMenu: View {
             }
         } label: {
             if isToolbarItem {
-                Image("PortfolioHeaderSort")
-                    .renderingMode(.template).resizable().scaledToFit()
+                Image("AssistantMenu")
+                    .renderingMode(.template)
+                    .foregroundStyle(CatfolioTheme.primaryText)
                     .frame(width: 24, height: 24)
             } else {
                 PortfolioFilterLabel()
@@ -193,10 +194,11 @@ struct PortfolioFilterLabel: View {
     @Environment(\.portfolioFilterFloats) private var inBar
 
     var body: some View {
-        Image("PortfolioHeaderSort")
-            .renderingMode(.template).resizable().scaledToFit()
+        Image("AssistantMenu")
+            .renderingMode(.template)
+            .foregroundStyle(CatfolioTheme.primaryText)
             .frame(width: 24, height: 24)
-            // In the bar, the bar sizes the button; inline it is 44 pt.
+            // The floating glass wrapper supplies its own 44-point target.
             .frame(width: inBar ? nil : 44, height: inBar ? nil : 44)
             .modifier(PortfolioHeaderMaterialControl())
             .contentShape(Circle())

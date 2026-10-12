@@ -117,6 +117,9 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
     private var isMoving = false
     private var isCorrectingOffset = false
     private var pendingTarget: CGFloat?
+    /// A touch pauses the spring; releasing without a new drag resumes the
+    /// same landing instead of making the caught position a third stop.
+    private var interruptedSnapTarget: CGFloat?
     private var releaseVelocity: CGFloat = 0
     private var animation: (spring: PortfolioHomeSnapMotion.Spring, time: CFTimeInterval)?
     private var displayLink: CADisplayLink?
@@ -200,6 +203,7 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
         displayLink = nil
         animation = nil
         pendingTarget = nil
+        interruptedSnapTarget = nil
         isSettling = false
         let scroll = scrollView
         let delegate = forwardedDelegate
@@ -244,6 +248,7 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
         // must do the same. Otherwise each further tap catches the still-moving
         // sheet and is rejected until the spring eventually finishes.
         if isSettling {
+            interruptedSnapTarget = animation?.spring.end ?? pendingTarget
             cancelSnap()
             let stopped = min(maximum, max(0, offset))
             scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x,
@@ -261,6 +266,7 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self, !self.hasTouch, self.touchSequence == sequence else { return }
             self.motionCaughtAt = nil
+            self.settlePanelIfNeeded()
         }
     }
 
@@ -290,6 +296,7 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         if !hasTouch { touchBegan() }
         cancelSnap()
+        interruptedSnapTarget = nil
         // Snapshot permission is retained, even when interrupting an animation
         // exactly on the zero crossing. Only a new, settled touch can unlock it.
         gestureStart = offset
@@ -300,7 +307,7 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard !isCorrectingOffset else { return }
         let raw = offset
-        if !isSettling && !gate.isRefreshing && isMoving {
+        if !isSettling && isMoving {
             // A touch can catch the curve a few pixels below zero. Preserve
             // that captured position (no jump), but allow no further pull.
             let floor: CGFloat = eligiblePull ? -.greatestFiniteMagnitude : min(0, gestureStart)
@@ -329,7 +336,7 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
     private func publishOffset() {
         // Signed animation offsets also pin the hero during the lower-stop
         // overshoot. Only eligible native pulls are exposed as pull distance.
-        let pulling = eligiblePull || gate.permitsRefresh || gate.isRefreshing
+        let pulling = eligiblePull || gate.permitsRefresh
         onOffset(isSettling || !pulling ? offset : max(0, offset), pulling ? max(0, -offset) : 0)
     }
 
@@ -337,7 +344,6 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
                                   targetContentOffset: UnsafeMutablePointer<CGPoint>) {
         forwardedDelegate?.scrollViewWillEndDragging?(scrollView, withVelocity: velocity,
                                                        targetContentOffset: targetContentOffset)
-        guard !gate.isRefreshing else { return }
         let released = offset
         // A pull let go this far down refreshes, once; the page then
         // rebounds natively whatever the refresh is doing.
@@ -362,7 +368,7 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         forwardedDelegate?.scrollViewDidEndDragging?(scrollView, willDecelerate: decelerate)
-        hasTouch = false
+        touchEnded()
         if let target = pendingTarget {
             let token = generation
             let velocity = releaseVelocity
@@ -377,7 +383,22 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         forwardedDelegate?.scrollViewDidEndDecelerating?(scrollView)
-        if !isSettling { isMoving = false }
+        if !isSettling {
+            isMoving = false
+            // Native list inertia is allowed to reach the upper stop, but
+            // must not leave a sliver of chart exposed if UIKit ends early.
+            settlePanelIfNeeded(preferredTarget: detent)
+        }
+    }
+
+    private func settlePanelIfNeeded(preferredTarget: CGFloat? = nil) {
+        guard let scroll = scrollView, !hasTouch, !isSettling,
+              !scroll.isDragging, !scroll.isDecelerating, maximum >= detent else { return }
+        if let interruptedSnapTarget {
+            startSnap(to: interruptedSnapTarget)
+        } else if offset > 0.5, offset < detent - 0.5 {
+            startSnap(to: preferredTarget ?? (offset >= detent / 2 ? detent : 0))
+        }
     }
 
     /// `velocity` is the finger's release speed in points per second, so the
@@ -386,7 +407,9 @@ final class PortfolioHomeScrollController: NSObject, UIScrollViewDelegate {
         guard let scroll = scrollView else { return }
         gate.lockRefresh()
         pendingTarget = nil
+        interruptedSnapTarget = nil
         displayLink?.invalidate()
+        isSettling = true
         scroll.setContentOffset(scroll.contentOffset, animated: false)
         eligiblePull = false
         if abs(offset - target) <= 0.5 {

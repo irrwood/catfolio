@@ -14,7 +14,6 @@ struct RootTabView: View {
 
     @AppStorage(DisplayCurrency.preferenceKey) private var displayCurrencyRawValue = DisplayCurrency.usd.rawValue
     @AppStorage(CompanyNameDisplay.preferenceKey) private var companyNameDisplayRawValue = CompanyNameDisplay.original.rawValue
-    @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var selection: Destination
 
     init() {
@@ -42,9 +41,9 @@ struct RootTabView: View {
 
     var body: some View {
         rootTabs
-            // Observe selection above the tab pages, which stays mounted
-            // throughout navigation.
-            .sensoryFeedback(.selection, trigger: selection) { _, _ in hapticsEnabled }
+            // The tab bar's haptic is played from its own touches (see
+            // `RootTabBarHaptics`), at the finger rather than after the
+            // selection has gone through SwiftUI.
             // Have the assistant's conversations in memory before it is opened.
             .task { await LocalChatLibraryCache.warm() }
             // A new IBKR account whose first report was still being built
@@ -143,10 +142,14 @@ struct RootTabView: View {
 /// A native stack per tab keeps its title, toolbar and scroll association
 /// on the same page. The root's lifecycle anchor owns tab-bar visibility.
 struct RootPageNavigation<Content: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
     @ViewBuilder let content: Content
 
     var body: some View {
         NavigationStack { content }
+            // Stay behind the entire stack while either page moves during an
+            // interactive return, including a gesture that is cancelled.
+            .background { PortfolioHomePageBackdrop(colorScheme: colorScheme, isPaused: true) }
             .background(RootNavigationVisibilityAnchor().frame(width: 0, height: 0).accessibilityHidden(true))
     }
 }
@@ -155,7 +158,9 @@ struct RootPageNavigation<Content: View>: View {
 /// the stack's container too, including a tab reopened at a pushed page.
 private struct RootNavigationVisibilityAnchor: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> Controller { Controller() }
-    func updateUIViewController(_ controller: Controller, context: Context) {}
+    func updateUIViewController(_ controller: Controller, context: Context) {
+        controller.prepareBackdrop()
+    }
 
     final class Controller: UIViewController {
         override func loadView() {
@@ -166,7 +171,18 @@ private struct RootNavigationVisibilityAnchor: UIViewControllerRepresentable {
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
             guard let parent, let navigation = findNavigation(in: parent) else { return }
+            navigation.view.backgroundColor = .clear
             RootTabBar.navigationDidAppear(navigation)
+        }
+
+        override func viewIsAppearing(_ animated: Bool) {
+            super.viewIsAppearing(animated)
+            prepareBackdrop()
+        }
+
+        func prepareBackdrop() {
+            guard let parent, let navigation = findNavigation(in: parent) else { return }
+            navigation.view.backgroundColor = .clear
         }
 
         private func findNavigation(in controller: UIViewController) -> UINavigationController? {
@@ -283,7 +299,9 @@ extension View {
 /// separately through UIKit's native tab-bar visibility API.
 @MainActor
 enum RootTabBar {
-    private static weak var tabs: UITabBarController?
+    private static weak var tabs: UITabBarController? {
+        didSet { if let tabs { RootTabBarHaptics.install(on: tabs.tabBar) } }
+    }
     private(set) static var isTucked = false
 
     /// Slides the bar down out of the screen, or back up.
@@ -331,7 +349,10 @@ enum RootTabBar {
         guard let owner = page.tabBarController else { return }
         tabs = owner
         setTucked(false, animated: false)
-        owner.setTabBarHidden(false, animated: animated)
+        // Restore the bottom inset before the native pop lays out its title.
+        // A separate tab-bar expansion animates the incoming large title up
+        // by one title-row height, then snaps it back during the return.
+        owner.setTabBarHidden(false, animated: false)
     }
 
     fileprivate static func pageWillDisappear(_ page: UIViewController, animated: Bool) {
@@ -381,4 +402,78 @@ extension View {
     func ownsTabBar() -> some View {
         background(RootTabBarAnchor().frame(width: 0, height: 0).accessibilityHidden(true))
     }
+}
+
+/// A click under the finger: when it lands on a tab, and again each time it
+/// slides onto another one. Driven by the bar's touches, not the selection —
+/// that only changes when the finger lifts, and later still if the new tab is
+/// slow to draw, which is what made the old haptic lag behind the hand.
+final class RootTabBarHaptics: UIGestureRecognizer {
+    private static let name = "root-tab-bar.haptics"
+    private let feedback = UISelectionFeedbackGenerator()
+    private weak var currentItem: UIView?
+
+    static func install(on bar: UITabBar) {
+        guard !(bar.gestureRecognizers ?? []).contains(where: { $0.name == name }) else { return }
+        bar.addGestureRecognizer(RootTabBarHaptics())
+    }
+
+    init() {
+        super.init(target: nil, action: nil)
+        name = Self.name
+        // Watches only: every touch still reaches the bar unchanged.
+        cancelsTouchesInView = false
+        delaysTouchesBegan = false
+        delaysTouchesEnded = false
+    }
+
+    private var hapticsOn: Bool {
+        UserDefaults.standard.object(forKey: ChartInteractionStyle.hapticsPreferenceKey) as? Bool ?? true
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        guard let touch = touches.first, hapticsOn else { return }
+        feedback.prepare()
+        currentItem = item(at: touch)
+        if currentItem != nil {
+            feedback.selectionChanged()
+            feedback.prepare()
+        }
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+        guard let touch = touches.first, hapticsOn, let item = item(at: touch),
+              item !== currentItem else { return }
+        currentItem = item
+        feedback.selectionChanged()
+        feedback.prepare()
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) { finish() }
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) { finish() }
+
+    private func finish() {
+        currentItem = nil
+        state = .failed
+    }
+
+    override func reset() {
+        super.reset()
+        currentItem = nil
+    }
+
+    /// The tab button under the finger: the nearest control above the view
+    /// it is over. Between buttons there is none, and nothing is played.
+    private func item(at touch: UITouch) -> UIView? {
+        guard let bar = view else { return nil }
+        var candidate = bar.hitTest(touch.location(in: bar), with: nil)
+        while let current = candidate, current !== bar {
+            if current is UIControl { return current }
+            candidate = current.superview
+        }
+        return nil
+    }
+
+    override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+    override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
 }

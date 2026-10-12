@@ -44,29 +44,54 @@ enum MarketHours {
     }
 }
 
-/// Outside the listing's trading session: a moon, in the class badge's shape,
-/// purple on a pale purple ground. Checks again every minute.
+/// The existing metadata badge also identifies a current extended session.
+/// Its owner supplies the same timeline date used to choose the main quote.
 struct MarketClosedBadge: View {
     let ticker: String
+    var extendedHoursQuote: ExtendedHoursQuote? = nil
+    var date: Date = .now
     @Environment(\.colorScheme) private var colorScheme
     @ScaledMetric(relativeTo: .caption) private var badgeHeight: CGFloat = 18
+    @ScaledMetric(relativeTo: .caption) private var iconSize: CGFloat = 10
     private let purple = Color(red: 0.545, green: 0.361, blue: 0.965)
 
+    var session: USMarketSession {
+        if let extendedHoursQuote, extendedHoursQuote.isCurrentSession(at: date) {
+            return extendedHoursQuote.session
+        }
+        return MarketHours.isOpen(ticker: ticker, at: date) ? .regular : .closed
+    }
+
+    private var title: String {
+        switch session {
+        case .preMarket: L10n.text("盘前")
+        case .postMarket: L10n.text("盘后")
+        default: L10n.text("休市")
+        }
+    }
+
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 60)) { context in
-            if !MarketHours.isOpen(ticker: ticker, at: context.date) {
-                HStack(spacing: 2) {
+        if session != .regular {
+            HStack(spacing: 2) {
+                if session.isExtended {
+                    Image(systemName: session == .preMarket ? "sunrise.fill" : "sunset.fill")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: iconSize, height: iconSize)
+                        .researchLayoutFrame("extended-hours.icon")
+                } else {
                     Image(systemName: "moon.fill").font(.system(size: 9, weight: .semibold))
-                    Text(L10n.text("休市")).appText(.caption, weight: .medium)
                 }
-                .foregroundStyle(purple)
-                .padding(.horizontal, 4)
-                .frame(height: badgeHeight)
-                .background(purple.opacity(colorScheme == .dark ? 0.24 : 0.12), in: RoundedRectangle(cornerRadius: 3))
-                .fixedSize()
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(L10n.text("非交易时段"))
+                Text(title).appText(.caption, weight: .medium)
             }
+            .foregroundStyle(purple)
+            .padding(.horizontal, 4)
+            .frame(height: badgeHeight)
+            .background(purple.opacity(colorScheme == .dark ? 0.24 : 0.12), in: RoundedRectangle(cornerRadius: 3))
+            .fixedSize()
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(session.isExtended ? title : L10n.text("非交易时段"))
         }
     }
 }

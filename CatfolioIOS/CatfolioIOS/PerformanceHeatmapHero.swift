@@ -389,7 +389,7 @@ private struct HeatmapHeroMorph<Heatmap: View>: View, Animatable {
 /// Blur only needs one pixel per point. Rasterize that branch at that size,
 /// then composite the clear band at native resolution so logos stay sharp.
 /// Both branches use the same timeline sample and projection.
-private struct HeatmapHeroBlurredSurface<Surface: View>: View {
+struct HeatmapHeroBlurredSurface<Surface: View>: View {
     @Environment(\.displayScale) private var displayScale
     let size: CGSize
     let topEnd: CGFloat
@@ -417,30 +417,41 @@ private struct HeatmapHeroBlurredSurface<Surface: View>: View {
                     return content
                         .layerEffect(Shader(function: ShaderFunction(library: .default, name: "performanceHeroBlur"),
                                             arguments: arguments + [.float2(1, 0)]),
-                                     maxSampleOffset: CGSize(width: 44.1 * rasterScale, height: 0))
+                                     maxSampleOffset: CGSize(width: 45.1 * rasterScale, height: 0))
                         .layerEffect(Shader(function: ShaderFunction(library: .default, name: "performanceHeroBlur"),
                                             arguments: arguments + [.float2(0, 1)]),
-                                     maxSampleOffset: CGSize(width: 0, height: 44.1 * rasterScale))
+                                     maxSampleOffset: CGSize(width: 0, height: 45.1 * rasterScale))
                 }
                 .scaleEffect(1 / rasterScale, anchor: .topLeading)
                 .frame(width: size.width, height: size.height, alignment: .topLeading)
+                // Cross-fade premultiplied colors and alpha together. Normal
+                // source-over blending attenuates the lower copy a second
+                // time, leaving a stripe even with complementary masks.
+                .mask { clearBand(inverted: true) }
                 .overlay {
-                    surface.mask {
-                        // Transition over only the first two points of blur.
-                        // The genuinely clear interval remains native pixels.
-                        let topFeather = topEnd * min(1, 2 / (20 * strength))
-                        let bottomFeather = (lowerEnd - lowerStart) * min(1, 2 / (44.1 * strength))
-                        LinearGradient(stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: .clear, location: max(0, (topEnd - topFeather) / size.height)),
-                            .init(color: .black, location: min(1, topEnd / size.height)),
-                            .init(color: .black, location: min(1, lowerStart / size.height)),
-                            .init(color: .clear, location: min(1, (lowerStart + bottomFeather) / size.height)),
-                            .init(color: .clear, location: 1)
-                        ], startPoint: .top, endPoint: .bottom)
-                    }
+                    // The genuinely clear interval remains native pixels.
+                    surface.mask { clearBand(inverted: false) }
+                        .blendMode(.plusLighter)
                 }
+                .compositingGroup()
         }
+    }
+
+    /// Opaque over the clear interval, feathering out over only the first
+    /// two points of blur on either side; `inverted` is its complement.
+    private func clearBand(inverted: Bool) -> some View {
+        let topFeather = topEnd * min(1, 2 / (20 * strength))
+        let bottomFeather = (lowerEnd - lowerStart) * min(1, 2 / (44.1 * strength))
+        let inside: Color = inverted ? .clear : .black
+        let outside: Color = inverted ? .black : .clear
+        return LinearGradient(stops: [
+            .init(color: outside, location: 0),
+            .init(color: outside, location: max(0, (topEnd - topFeather) / size.height)),
+            .init(color: inside, location: min(1, topEnd / size.height)),
+            .init(color: inside, location: min(1, lowerStart / size.height)),
+            .init(color: outside, location: min(1, (lowerStart + bottomFeather) / size.height)),
+            .init(color: outside, location: 1)
+        ], startPoint: .top, endPoint: .bottom)
     }
 }
 

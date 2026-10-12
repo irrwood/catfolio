@@ -451,10 +451,10 @@ private struct IsometricHeatmapTile: View {
         VStack(alignment: .leading, spacing: 0) {
             if side >= 20 {
                 Text(tile.ticker)
-                    .font(.system(size: tickerSize, weight: .bold, design: .rounded))
+                    .font(Typography.rounded(size: tickerSize, weight: .bold))
                 if let change = tile.change {
                     FinancialText(DisplayFormat.percent(change))
-                        .font(.system(size: tickerSize * 0.78, weight: .semibold, design: .rounded))
+                        .font(Typography.rounded(size: tickerSize * 0.78, weight: .semibold))
                         .monospacedDigit()
                         .opacity(0.5)
                 }

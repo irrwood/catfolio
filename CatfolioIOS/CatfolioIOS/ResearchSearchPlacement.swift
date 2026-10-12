@@ -72,6 +72,9 @@ extension ResearchToolbarSearch {
         /// Where the page sat before search lifted it, so closing returns
         /// the field and the large title to the same place.
         private var offsetBeforeSearch: CGPoint?
+        private var frameBeforeSearch: CGRect?
+        private var isReturning = false
+        private var flightGeneration = 0
 
         init(placement: ResearchSearchPlacement) {
             self.placement = placement
@@ -121,12 +124,17 @@ extension ResearchToolbarSearch {
                 container.addSubview(field)
             }
             observeScroll(from: slot, navigation: navigation)
+            // The page's native large-title expansion has its own layout
+            // samples. During closing, the field flies directly to its saved
+            // slot instead of following those intermediate positions.
+            guard !isReturning else { return }
             let natural = slot.convert(slot.bounds, to: container)
             let bar = navigation.navigationBar.convert(navigation.navigationBar.bounds, to: container)
             // The first row remains below the large title. Only an upward
             // scroll can carry it into the compact navigation row; an open
             // search always holds it there.
             let y = field.isPresented ? bar.minY : max(natural.minY, bar.minY)
+            field.setPinned(natural.minY <= bar.minY)
             field.frame = CGRect(x: natural.minX, y: y,
                                  width: natural.width, height: 44)
             field.layoutIfNeeded()
@@ -150,17 +158,38 @@ extension ResearchToolbarSearch {
                 return
             }
             let animated = isVisible && !UIAccessibility.isReduceMotionEnabled
+            flightGeneration &+= 1
+            let request = flightGeneration
+            if presented {
+                if !isReturning { frameBeforeSearch = field.frame }
+                isReturning = false
+            } else {
+                isReturning = true
+            }
             field.setPresented(presented, animated: animated)
             if !presented { lowerPage(animated: animated) }
             let flight = {
-                if presented { self.liftPage() }
-                self.layoutSearch()
+                if presented {
+                    self.liftPage()
+                    self.layoutSearch()
+                } else {
+                    if let frame = self.frameBeforeSearch { self.field.frame = frame }
+                    self.field.movingContent.transform = .identity
+                    self.field.layoutIfNeeded()
+                }
                 self.navigationController?.view.layoutIfNeeded()
             }
-            guard animated else { flight(); return }
+            let finish = { (_: Bool) in
+                guard self.flightGeneration == request, !presented else { return }
+                self.isReturning = false
+                self.frameBeforeSearch = nil
+                self.layoutSearch()
+            }
+            guard animated else { flight(); finish(true); return }
             UIView.animate(withDuration: ResearchToolbarSearch.flightDuration, delay: 0,
                            usingSpringWithDamping: 0.86, initialSpringVelocity: 0,
-                           options: [.beginFromCurrentState, .allowUserInteraction], animations: flight)
+                           options: [.beginFromCurrentState, .allowUserInteraction],
+                           animations: flight, completion: finish)
         }
 
         private func liftPage() {
@@ -181,6 +210,8 @@ extension ResearchToolbarSearch {
         private func lowerPage(animated: Bool) {
             guard let start = offsetBeforeSearch else { return }
             offsetBeforeSearch = nil
+            // Native scrolling restores the large title's inset correctly.
+            // The field has a separate, single flight to its original slot.
             scroll?.setContentOffset(start, animated: animated)
         }
 

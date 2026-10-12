@@ -241,6 +241,7 @@ struct HoldingsHeatmapTile: View {
             VStack(spacing: 3) {
                 Text(L10n.text("其他"))
                     .appText(identifierScale, weight: .semibold)
+                    .foregroundStyle(CatfolioTheme.heatmapIdentifier)
                 performanceLabels(change: summary.percent)
             }
             .lineLimit(1)
@@ -254,6 +255,7 @@ struct HoldingsHeatmapTile: View {
             if showsTicker {
                 Text(ticker)
                     .appText(identifierScale, weight: .semibold)
+                    .foregroundStyle(CatfolioTheme.heatmapIdentifier)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
             } else if Self.canShowIdentifier(in: size) {
@@ -268,6 +270,7 @@ struct HoldingsHeatmapTile: View {
                 if showsTicker {
                     Text(ticker)
                         .appText(identifierScale, weight: .semibold)
+                        .foregroundStyle(CatfolioTheme.heatmapIdentifier)
                         .lineLimit(1)
                         .minimumScaleFactor(0.62)
                 }
@@ -290,7 +293,7 @@ struct HoldingsHeatmapTile: View {
             if let change {
                 FinancialText(DisplayFormat.percent(change))
                     .appNumber(returnScale, weight: .bold)
-                    .foregroundStyle(changeColor)
+                    .foregroundStyle(CatfolioTheme.heatmapPerformance(for: change, scheme: colorScheme))
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
             } else {
@@ -303,7 +306,7 @@ struct HoldingsHeatmapTile: View {
         if showsWeight {
             FinancialText(DisplayFormat.percent(fraction * 100, signed: false))
                 .appNumber(detailScale)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(CatfolioTheme.heatmapDetail)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
@@ -330,13 +333,6 @@ struct HoldingsHeatmapTile: View {
 
     private var changeText: String {
         model.changePercent.map { (model.isEstimated ? "≈" : "") + DisplayFormat.percent($0) } ?? L10n.text("暂无行情")
-    }
-
-    private var changeColor: Color {
-        guard let change = model.changePercent, abs(change) >= 0.005 else { return .secondary }
-        return change > 0
-            ? (colorScheme == .light ? CatfolioPalette.green700 : CatfolioPalette.green200)
-            : (colorScheme == .light ? CatfolioPalette.rose700 : CatfolioPalette.rose300)
     }
 
     private var backgroundColor: Color {

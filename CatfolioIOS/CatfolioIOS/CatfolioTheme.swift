@@ -16,6 +16,43 @@ enum CatfolioStyle {
 /// The expanded Catfolio palette. Screens opt into these tokens explicitly so
 /// a palette preview can be evaluated without silently recolouring the app.
 enum CatfolioPalette {
+    /// Existing chart swatches, shared without rounding their RGB components
+    /// to nearby hex colours or changing their categorical assignments.
+    enum ChartSeries {
+        static let green = Color(red: 0.204, green: 0.780, blue: 0.349)
+        static let orange = Color(red: 1.000, green: 0.584, blue: 0.000)
+        static let blue = Color(red: 0.204, green: 0.459, blue: 1.000)
+        static let rose = Color(red: 0.890, green: 0.000, blue: 0.271)
+        static let magenta = Color(red: 0.780, green: 0.000, blue: 0.910)
+        static let sky = Color(red: 0.627, green: 0.804, blue: 1.000)
+        static let peach = Color(red: 1.000, green: 0.824, blue: 0.741)
+        static let mint = Color(red: 0.000, green: 0.882, blue: 0.698)
+        static let pink = Color(red: 1.000, green: 0.431, blue: 0.702)
+        static let lavender = Color(red: 0.722, green: 0.600, blue: 1.000)
+        static let teal = Color(red: 0.000, green: 0.620, blue: 0.540)
+        static let neutral = Color(red: 0.400, green: 0.400, blue: 0.450)
+    }
+
+    /// Grounds and fringe shared by the existing animated backgrounds.
+    enum Ambient {
+        static let night = Color(red: 0.012, green: 0.020, blue: 0.130)
+        static let pinkFringe = Color(red: 1.000, green: 0.450, blue: 0.850)
+        static let nightBright = Color(red: 0.012, green: 0.020, blue: 0.075)
+        static let clearSkyDay = Color(red: 0.482, green: 0.820, blue: 1.000)
+        static let clearSkyNight = Color(red: 0.020, green: 0.070, blue: 0.160)
+        static let ringsNight = Color(red: 0.020, green: 0.050, blue: 0.100)
+    }
+
+    /// Exact fixed swatches used by existing surfaces and chart annotations.
+    static let researchViolet = Color(red: 139 / 255, green: 92 / 255, blue: 246 / 255)
+    static let fixedNeutralGray = Color(red: 142 / 255, green: 142 / 255, blue: 147 / 255)
+    static let homeSky = Color(red: 154 / 255, green: 220 / 255, blue: 1)
+    static let rangeNegative = Color(red: 1, green: 16 / 255, blue: 89 / 255)
+    static let contributionSky = Color(red: 124 / 255, green: 212 / 255, blue: 1)
+    static let stockMapBackground = Color(red: 0.045, green: 0.063, blue: 0.094)
+    static let emptyStateGraphite = Color(white: 0x1E / 255)
+    static let calendarMutedGreen = Color(red: 0.58, green: 0.66, blue: 0.27)
+
     /// Add-account action badges, Figma 630:23915.
     static let accountConnectTop = color(0x008F8C)
     static let accountConnectBottom = color(0x00DAD6)
@@ -234,6 +271,15 @@ enum CatfolioPalette {
 /// Semantic application colors. Views should depend on these roles instead of
 /// palette swatches so changing one token updates every related screen.
 enum CatfolioTheme {
+    /// White glass suggestions over the assistant's shared home backdrop.
+    static func assistantSuggestionFill(for scheme: ColorScheme) -> Color {
+        .white.opacity(scheme == .dark ? 0.06 : 0.38)
+    }
+
+    static func assistantSuggestionBorder(for scheme: ColorScheme) -> Color {
+        .white.opacity(scheme == .dark ? 0.06 : 0.50)
+    }
+
     // Figma 241:45228: white stationery on a black backdrop. At night the
     // same note is graphite with pale ink, and a light hairline keeps its
     // edge against the black.
@@ -270,6 +316,20 @@ enum CatfolioTheme {
             : UIColor(red: 30 / 255, green: 30 / 255, blue: 32 / 255, alpha: 1)
     }
     static let primaryText = Color(uiColor: primaryTextUIColor)
+    /// Neutral labels use adaptive ink; returns keep their financial colors.
+    /// Alpha preserves hierarchy over the heatmap's translucent tiles.
+    static let heatmapIdentifier = Color.primary.opacity(0.92)
+    static let heatmapDetail = Color.primary.opacity(0.68)
+
+    static func heatmapPerformance(for change: Double?, scheme: ColorScheme) -> Color {
+        guard let change, change.isFinite, abs(change) >= 0.005 else {
+            return Color.primary.opacity(0.86)
+        }
+        let ink = change > 0
+            ? (scheme == .light ? CatfolioPalette.green700 : CatfolioPalette.green200)
+            : (scheme == .light ? CatfolioPalette.rose700 : CatfolioPalette.rose300)
+        return ink.opacity(0.86)
+    }
     /// Black lettering on bright colored surfaces stays black in dark mode.
     static let blackTextOnColor = Color(uiColor: UIColor { trait in
         trait.userInterfaceStyle == .dark ? .black : primaryTextUIColor.resolvedColor(with: trait)
@@ -304,7 +364,7 @@ enum CatfolioTheme {
     static func gain(for scheme: ColorScheme) -> Color {
         scheme == .light
             ? Color(red: 0, green: 0.53, blue: 0.14)
-            : Color(red: 0.204, green: 0.780, blue: 0.349)
+            : CatfolioPalette.ChartSeries.green
     }
 
     static func loss(for scheme: ColorScheme) -> Color {
@@ -325,7 +385,7 @@ enum CatfolioTheme {
 
     /// For contexts with no `ColorScheme` to hand — a `Canvas` closure, a
     /// value computed off the view tree. Prefer the scheme-aware pair.
-    static let gainDefault = Color(red: 0.204, green: 0.780, blue: 0.349)
+    static let gainDefault = CatfolioPalette.ChartSeries.green
     static let lossDefault = CatfolioPalette.rose500
     /// Points at the settings template so a screen that has not been moved
     /// over yet still sits on the same ground as one that has.

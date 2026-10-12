@@ -543,19 +543,19 @@ struct HoldingContributionChart: View {
     static func fillEndColor(for kind: HoldingContributionStack.Band.Kind) -> Color? {
         switch kind {
         case .others: nil
-        case .principal: Color(red: 124 / 255, green: 212 / 255, blue: 1)
+        case .principal: CatfolioPalette.contributionSky
         case let .holding(index):
             switch index % 6 {
             case 0: Color(red: 0.344214, green: 0.970314, blue: 0.840135)
             case 2: Color(red: 0.979969, green: 0.933497, blue: 0.678497)
-            case 3: Color(red: 124 / 255, green: 212 / 255, blue: 1)
+            case 3: CatfolioPalette.contributionSky
             default: color(for: kind, scheme: .light).mix(with: .white, by: 0.38)
             }
         }
     }
 
     /// The home chart's net-deposit blue, for the principal line.
-    static let principalLine = Color(red: 0.204, green: 0.459, blue: 1)
+    static let principalLine = CatfolioPalette.ChartSeries.blue
 
     /// The principal is a deep tint of its line's blue; the gains take clear
     /// hues that are neither that blue nor the red and green of loss and gain;

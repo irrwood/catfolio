@@ -24,11 +24,11 @@ struct CatfolioEmptyState: View {
                 .frame(width: 64, height: 64)
                 .accessibilityHidden(true)
             Text(title)
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .font(Typography.rounded(size: 17, weight: .semibold))
                 .foregroundStyle(CatfolioTheme.primaryText)
                 .multilineTextAlignment(.center)
             Text(message)
-                .font(.system(size: 17, weight: .regular, design: .rounded))
+                .font(Typography.rounded(size: 17, weight: .regular))
                 .foregroundStyle(CatfolioTheme.primaryText.opacity(0.4))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -41,7 +41,7 @@ struct CatfolioEmptyState: View {
     /// `#F3F3F3` to `#C3C3C3` by day; the same fall in light at night.
     private var discColors: [Color] {
         colorScheme == .dark
-            ? [Color(white: 0x3A / 255), Color(white: 0x1E / 255)]
+            ? [Color(white: 0x3A / 255), CatfolioPalette.emptyStateGraphite]
             : [Color(white: 0xF3 / 255), Color(white: 0xC3 / 255)]
     }
 
@@ -50,7 +50,7 @@ struct CatfolioEmptyState: View {
     private var iconColors: LinearGradient {
         LinearGradient(colors: colorScheme == .dark
                 ? [Color(white: 0.95), Color(white: 0.6)]
-                : [Color(white: 0x1E / 255), Color(white: 0x6D / 255)],
+                : [CatfolioPalette.emptyStateGraphite, Color(white: 0x6D / 255)],
             startPoint: .top, endPoint: .bottom)
     }
 }

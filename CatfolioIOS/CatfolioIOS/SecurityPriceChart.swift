@@ -27,6 +27,9 @@ struct HoldingDetailPriceSection: View {
     @State private var explanation: SecurityPaperRequest?
     @State private var explanationAnchor = SecurityPaperSourceAnchor()
     @State private var tradeReadoutReservations: [SecurityTradeReadout.Measurement] = []
+    /// Kept across redraws: scrubbing the chart redraws the header each step.
+    @State private var extendedHoursQuotes = ExtendedHoursQuoteCache()
+    @State private var movements = SecurityPriceHistoryMemo<String, SecurityPriceMoveContext?>()
     /// Whether this section first drew the placeholder line — then the line
     /// grows out of it when the history comes, instead of replacing it.
     @State private var startedWithoutHistory: Bool?
@@ -37,25 +40,37 @@ struct HoldingDetailPriceSection: View {
     private var movement: SecurityPriceMoveContext? {
         guard let priceHistory else { return nil }
         let isFund = HoldingSecurityKind.classify(holding) == .fund
-        return SecurityPriceMoveContext.latestSession(history: priceHistory,
-            name: isFund ? holding.displayName : holding.shortName, isFund: isFund)
+        let name = isFund ? holding.displayName : holding.shortName
+        // Kept per history: it walks every daily close.
+        return movements.value(for: priceHistory, extra: "\(name)|\(isFund)") {
+            SecurityPriceMoveContext.latestSession(history: $0, name: name, isFund: isFund)
+        }
     }
 
     var body: some View {
+        // Read once per redraw: it walks the whole daily history, and the
+        // header below used it four times on every step of a chart scrub.
+        let movement = movement
         VStack(spacing: 0) {
-            HoldingDetailHeader(
-                holding: holding,
-                // One source for the day's move, the home list's: known at
-                // once, and the page's own fresher quote is written back into
-                // it, so the page and the list never show two numbers.
-                marketTodayChange: model?.holdingDailyChanges[holding.ticker.uppercased()],
-                selectedPrice: priceSelection?.price ?? priceHistory?.latestAvailablePrice,
-                selectedReturn: priceSelection?.returnPercent,
-                selectedTrades: priceSelection?.trades ?? [],
-                tradeReadoutReservations: tradeReadoutReservations,
-                isRefreshing: isRefreshing,
-                onRefresh: onRefresh
-            )
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                HoldingDetailHeader(
+                    holding: holding,
+                    // Regular-session prices still sync with the home list.
+                    // Extended hours use this same quote area in the detail.
+                    marketTodayChange: model?.holdingDailyChanges[holding.ticker.uppercased()],
+                    selectedPrice: priceSelection?.price,
+                    selectedReturn: priceSelection?.returnPercent,
+                    marketPrice: priceHistory?.latestAvailablePrice,
+                    extendedHoursQuote: priceHistory.flatMap {
+                        extendedHoursQuotes.quote(for: $0, at: context.date)
+                    },
+                    marketDate: context.date,
+                    selectedTrades: priceSelection?.trades ?? [],
+                    tradeReadoutReservations: tradeReadoutReservations,
+                    isRefreshing: isRefreshing,
+                    onRefresh: onRefresh
+                )
+            }
 
             if let priceHistory {
                 SecurityPriceChart(
@@ -310,7 +325,7 @@ struct SecurityPriceChart: View {
                 if isPreparing && prepared == nil {
                     SecurityPriceChartState.placeholderLine(
                         appearanceID: "security-price|\(history.ticker)|\(history.currency)")
-                } else if data.points.count > 1 {
+                } else if !data.points.isEmpty {
                     SecurityPricePlot(
                         data: data,
                         currency: history.currency,
@@ -334,6 +349,7 @@ struct SecurityPriceChart: View {
                         onInteractionEnded: { _ in clearInteraction() },
                         growsFromPlaceholder: followsPlaceholder || startedWithoutPreparedData
                     )
+                    .researchLayoutFrame("security-price.plot")
                 } else {
                     StandardLineChartPlaceholder(
                         title: L10n.text("暂无日内行情"),
@@ -797,7 +813,8 @@ struct SecurityPriceRangeData: @unchecked Sendable {
         let usesIntraday = range == .oneDay
         isIntraday = usesIntraday
         isMaximumRange = range == .maximum
-        let source = usesIntraday ? history.intradayPoints : history.chartDailyPoints
+        let source = usesIntraday ? history.chartIntradayPoints : history.chartDailyDisplayPoints
+        let marketSymbol = LocalMarketDataClient.yahooSymbol(ticker: history.ticker, currency: history.currency)
         let all = source.map {
             SecurityPricePlotPoint(dateText: $0.dateText, date: $0.date, price: $0.close, returnPercent: 0)
         }.sorted { $0.date < $1.date }
@@ -806,7 +823,7 @@ struct SecurityPriceRangeData: @unchecked Sendable {
             guard usesIntraday, let sessionStart = filtered.first?.date else {
                 return filtered.first?.price
             }
-            let sessionDay = DayDateCodec.string(from: sessionStart)
+            let sessionDay = LocalMarketDataClient.sessionKey(for: sessionStart, symbol: marketSymbol)
             return history.points
                 .filter { $0.dateText < sessionDay }
                 .max(by: { $0.dateText < $1.dateText })?
@@ -834,7 +851,9 @@ struct SecurityPriceRangeData: @unchecked Sendable {
 
         let visibleStart = normalizedPoints.first?.date ?? .distantFuture
         let visibleEnd = normalizedPoints.last?.date ?? .distantPast
-        let sessionDay = usesIntraday ? normalizedPoints.last.map { DayDateCodec.string(from: $0.date) } : nil
+        let sessionDay = usesIntraday ? normalizedPoints.last.map {
+            LocalMarketDataClient.sessionKey(for: $0.date, symbol: marketSymbol)
+        } : nil
         let visibleTrades: [TradePoint] = history.trades.compactMap { trade -> TradePoint? in
             guard let trade = trade.filtered(accounts: selectedAccountKeys) else { return nil }
             if usesIntraday {

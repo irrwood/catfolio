@@ -15,14 +15,16 @@ struct ReturnsComparisonEntryArtwork: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Image(prefix + "Icon").renderingMode(.original)
+                Image(prefix + "Icon")
+                    .renderingMode(.template)
+                    .foregroundStyle(titleInk)
                 Spacer()
                 Image(isCycle ? "EntryChevron" : "EntryReturnChevron").renderingMode(.original)
             }
             .frame(height: 24)
             Spacer(minLength: 12)
             VStack(alignment: .leading, spacing: 4) {
-                Text(L10n.text(isCycle ? "Cycle" : "Return"))
+                Text(L10n.text(isCycle ? "performance.card.cycle.title" : "performance.card.return.title"))
                     .font(Typography.text(size: 14, weight: .bold))
                     .tracking(0.56)
                     .textCase(.uppercase)

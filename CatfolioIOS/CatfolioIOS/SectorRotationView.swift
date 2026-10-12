@@ -56,7 +56,7 @@ struct SectorRotationView: View {
                             Text(L10n.text("全部板块"))
                         }
                     }
-                    .font(.system(size: 11, design: .rounded))
+                    .font(Typography.rounded(size: 11))
                     .foregroundStyle(Color.primary.opacity(0.45))
                     .padding(.top, 14)
                     if failed || (dates.last.flatMap { snapshots[$0] }?.isExpired ?? snapshot.isExpired) {

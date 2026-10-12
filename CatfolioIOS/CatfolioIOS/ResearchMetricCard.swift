@@ -15,7 +15,7 @@ struct ResearchMetricCard: View {
     @ScaledMetric(relativeTo: .title3) private var valueSize = 20.0
     @ScaledMetric(relativeTo: .subheadline) private var changeSize = 14.0
     /// The figure's font, which also sets the height of its line.
-    private var valueFont: Font { .system(size: valueSize, weight: .semibold, design: .rounded) }
+    private var valueFont: Font { Typography.rounded(size: valueSize, weight: .semibold) }
 
     private var seriesColor: Color {
         switch symbol {
@@ -23,7 +23,7 @@ struct ResearchMetricCard: View {
         case "^IXIC": CatfolioTheme.services
         case "^VIX": CatfolioTheme.warning
         // This card's purple is specified directly in the Figma reference.
-        default: Color(red: 139 / 255, green: 92 / 255, blue: 246 / 255)
+        default: CatfolioPalette.researchViolet
         }
     }
     private var displayTitle: String {
@@ -35,7 +35,7 @@ struct ResearchMetricCard: View {
         SettingsCard {
             VStack(alignment: .leading, spacing: 7) {
                 Text(displayTitle)
-                    .font(.system(size: titleSize, weight: .semibold, design: .rounded))
+                    .font(Typography.rounded(size: titleSize, weight: .semibold))
                     .foregroundStyle(seriesColor)
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                     .minimumScaleFactor(0.8)
@@ -84,7 +84,7 @@ struct ResearchMetricCard: View {
             ChartSkeletonShape(width: 82, height: valueSize)
         } else {
             Text(L10n.text("暂无数据"))
-                .font(.system(size: changeSize, design: .rounded))
+                .font(Typography.rounded(size: changeSize))
                 .foregroundStyle(.secondary)
         }
     }
@@ -94,7 +94,7 @@ struct ResearchMetricCard: View {
             ChartSkeletonShape(width: 42, height: changeSize)
         } else if let value = snapshot?.changePercent {
             FinancialText(DisplayFormat.percent(value, signed: true))
-                .font(.system(size: changeSize, weight: .semibold, design: .rounded))
+                .font(Typography.rounded(size: changeSize, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
                 .fixedSize()

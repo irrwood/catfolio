@@ -229,19 +229,21 @@ struct PortfolioView: View {
             // brings the system's own edge under them.
             .toolbarVisibility(floatingHeader == nil ? .hidden : .visible, for: .navigationBar)
             .navigationBarTitleDisplayMode(.inline)
-            // The gradient edge, not the hard one.
-            .softTopScrollEdge()
+            .modifier(PortfolioTopScrollEdge(hasFloatingHeader: floatingHeader != nil))
             .toolbar {
                 if let floatingHeader {
                     ToolbarItem(placement: .topBarLeading) {
                         floatingHeader.title
+                            .modifier(PortfolioFloatingHeaderReveal())
                     }
                     .withoutSharedBackground()
                     ToolbarItem(placement: .topBarTrailing) {
                         floatingHeader.menu
                             .environment(\.portfolioFilterFloats, true)
                             .accessibilityIdentifier("portfolio-floating-filter")
+                            .modifier(PortfolioFloatingHeaderReveal())
                     }
+                    .withoutSharedBackground()
                 }
             }
         }

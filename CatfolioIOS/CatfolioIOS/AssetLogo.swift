@@ -411,7 +411,7 @@ struct AssetLogo: View {
         return ZStack {
             dark ? fallbackColor : Self.lightTile
             Text(String(ticker.prefix(1)).uppercased())
-                .font(.system(size: max(10, size * 0.42), weight: .bold, design: .rounded))
+                .font(Typography.rounded(size: max(10, size * 0.42), weight: .bold))
                 .foregroundStyle(dark ? Color(red: 0xF3 / 255, green: 0xF6 / 255, blue: 0xF9 / 255) : fallbackColor)
         }
     }

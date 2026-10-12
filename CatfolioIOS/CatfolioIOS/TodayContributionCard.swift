@@ -363,8 +363,8 @@ struct TodayContributionCard: View {
         Button {
             switchDirection(to: direction == .gains ? .losses : .gains)
         } label: {
-            Image(systemName: direction == .gains ? "arrow.up" : "arrow.down")
-                .font(.system(size: 16, weight: .medium))
+            Image(direction == .gains ? "TodayChangeRise" : "TodayChangeFall")
+                .renderingMode(.template)
                 .foregroundStyle(isNight ? Color.white : Color(red: 17 / 255, green: 17 / 255, blue: 17 / 255))
                 .frame(width: 47, height: 47)
                 .contentShape(Circle())

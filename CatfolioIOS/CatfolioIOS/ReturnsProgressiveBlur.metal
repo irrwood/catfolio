@@ -43,7 +43,7 @@ using namespace metal;
     // The artwork fades out completely below this boundary. Blurring
     // those pixels spends GPU time on a result that cannot be seen.
     // The horizontal pass must retain the vertical pass's sampling margin.
-    float hiddenStart = lowerEnd + (direction.x > 0.5f ? 44.1f * rasterScale : 0.0f);
+    float hiddenStart = lowerEnd + (direction.x > 0.5f ? 45.1f * rasterScale : 0.0f);
     if ((strength >= 0.999f && position.y >= hiddenStart) || strength < 0.001f)
         return layer.sample(position);
     float topProgress = clamp(1.0f - position.y / max(topEnd, 0.001f), 0.0f, 1.0f);
@@ -52,7 +52,8 @@ using namespace metal;
     if (radius < 0.25f) return layer.sample(position);
 
     float scale = max(displayScale, 1.0f);
-    int support = int(ceil(radius * scale));
+    float extent = radius * scale;
+    int support = int(ceil(extent));
     float4 sum = float4(layer.sample(position));
     float total = 1.0f;
     // The Gaussian weights follow a recurrence. Compute exponentials once
@@ -67,9 +68,13 @@ using namespace metal;
     for (int i = 1; i <= support; i += 2) {
         float a = float(i) / scale;
         float b = float(i + 1) / scale;
-        float pairedWeight = i + 1 <= support ? wb : 0.0f;
-        float weight = wa + pairedWeight;
-        float2 offset = direction * ((a * wa + b * pairedWeight) / weight);
+        // Fade in the outermost physical pixel continuously. Adding its
+        // full Gaussian weight when ceil(radius) changes paints horizontal
+        // bands as the blur grows, especially around translucent tile edges.
+        float firstWeight = wa * smoothstep(0.0f, 1.0f, extent - float(i - 1));
+        float pairedWeight = wb * smoothstep(0.0f, 1.0f, extent - float(i));
+        float weight = firstWeight + pairedWeight;
+        float2 offset = direction * ((a * firstWeight + b * pairedWeight) / weight);
         sum += (float4(layer.sample(position + offset)) + float4(layer.sample(position - offset))) * weight;
         total += 2.0f * weight;
         wa *= ratioA;

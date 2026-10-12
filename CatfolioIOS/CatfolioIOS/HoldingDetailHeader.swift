@@ -12,6 +12,9 @@ struct HoldingDetailHeader: View {
     let marketTodayChange: Double?
     let selectedPrice: Double?
     let selectedReturn: Double?
+    var marketPrice: Double? = nil
+    var extendedHoursQuote: ExtendedHoursQuote? = nil
+    var marketDate: Date = .now
     var selectedTrades: [SecurityTrade] = []
     /// Actual historical readouts that can appear while scrubbing. Hidden
     /// representatives reserve their measured size before a trade is selected.
@@ -22,12 +25,14 @@ struct HoldingDetailHeader: View {
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var refreshTaps = 0
 
-    private var todayChange: Double? {
-        selectedReturn ?? marketTodayChange ?? holding.todayChangePercent
+    var displayedChange: Double? {
+        if selectedPrice != nil || selectedReturn != nil { return selectedReturn }
+        if let extendedHoursQuote { return extendedHoursQuote.changePercent }
+        return marketTodayChange ?? holding.todayChangePercent
     }
 
-    private var displayedPrice: Double {
-        selectedPrice ?? holding.quotePrice
+    var displayedPrice: Double {
+        selectedPrice ?? extendedHoursQuote?.price ?? marketPrice ?? holding.quotePrice
     }
 
     /// The share class leaves the title for a badge beside the ticker.
@@ -169,8 +174,7 @@ struct HoldingDetailHeader: View {
             SecurityClassBadge(marker: marker)
                 .researchLayoutFrame("holding-header.item.class.\(index)")
         }
-        // Outside the trading session: the price above is the last close.
-        MarketClosedBadge(ticker: holding.ticker)
+        MarketClosedBadge(ticker: holding.ticker, extendedHoursQuote: extendedHoursQuote, date: marketDate)
             .researchLayoutFrame("holding-header.item.closed")
     }
 
@@ -186,13 +190,13 @@ struct HoldingDetailHeader: View {
                 }
                 // 0 until the day's move is known, then counts to it in place:
                 // the line never appears, disappears or changes size.
-                let change = todayChange ?? 0
+                let change = displayedChange ?? 0
                 FinancialText(DisplayFormat.percent(change))
                     .appNumber(.heading)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                     .foregroundStyle(
-                        todayChange == nil ? Color.secondary
+                        displayedChange == nil ? Color.secondary
                             : change >= 0 ? CatfolioTheme.gainDefault : CatfolioTheme.lossDefault
                     )
                     .contentTransition(.numericText(value: change))

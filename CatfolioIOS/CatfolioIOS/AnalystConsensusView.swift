@@ -295,7 +295,7 @@ struct AnalystConsensusView: View {
                         title: L10n.text("分析师历史回顾"),
                         subtitle: L10n.text("目标价、推荐建议与股价 · 本地快照")
                     )
-                }.buttonStyle(.plain)
+                }.buttonStyle(PanelPressButtonStyle())
                 .accessibilityIdentifier("analyst-history-entry")
                 .appSheet(isPresented: $showsHistory) {
                     NavigationStack { AnalystHistoryView(symbol: symbol) }
@@ -589,7 +589,7 @@ struct AnalystTargetBar: View {
     let high: Double
     let current: Double?
 
-    static let rangeColor = Color(red: 52 / 255, green: 117 / 255, blue: 1)
+    static let rangeColor = CatfolioPalette.securityPriceLine
     private static let height: CGFloat = 8
 
     var body: some View {

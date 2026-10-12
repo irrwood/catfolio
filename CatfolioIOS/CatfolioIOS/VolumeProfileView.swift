@@ -641,7 +641,7 @@ private struct VolumeDistributionPlot: View {
     }
 
     private var volumeProfileBlue: Color {
-        Color(red: 52 / 255, green: 117 / 255, blue: 1)
+        CatfolioPalette.securityPriceLine
     }
 
     private var volumeProfileTailBlue: Color {

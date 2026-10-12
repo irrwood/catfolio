@@ -22,7 +22,16 @@ struct LocalMarketDataClient {
         }
 
         struct Result: Decodable {
-            struct Meta: Decodable { let currency: String? }
+            struct Meta: Decodable {
+                let currency: String?
+                let tradingPeriods: YahooTradingPeriods?
+                let currentTradingPeriod: YahooCurrentTradingPeriods?
+
+                func sessionWindow(at date: Date) -> MarketSessionWindow? {
+                    (tradingPeriods?.windows ?? []).first { $0.contains(date) }
+                        ?? currentTradingPeriod?.windows.first { $0.contains(date) }
+                }
+            }
             let meta: Meta?
             let timestamp: [Int]?
             let indicators: Indicators

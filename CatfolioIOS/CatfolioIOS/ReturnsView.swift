@@ -139,7 +139,7 @@ private struct ReturnsNavigationCard<Destination: View>: View {
         NavigationLink(destination: destination) {
             ReturnsComparisonEntryArtwork(title: title, isCycle: identifier == "cycle", returnPercent: returnPercent)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PanelPressButtonStyle())
         .accessibilityIdentifier("performance.chart.\(identifier)")
     }
 }

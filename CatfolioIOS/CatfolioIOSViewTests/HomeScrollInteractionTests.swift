@@ -38,9 +38,8 @@ final class HomeScrollInteractionTests: XCTestCase {
         await model.refreshPortfolio(refreshMarketData: false)
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let previous = scene.windows.first(where: \.isKeyWindow)
-        let host = UIHostingController(rootView: PortfolioView().environment(model)
-            .environment(\.locale, Locale(identifier: "zh-Hans"))
-            .preferredColorScheme(.light))
+        let host = UIHostingController(rootView: RootPageNavigation { PortfolioView() }.environment(model)
+            .environment(\.locale, Locale(identifier: "zh-Hans")))
         let window = UIWindow(windowScene: scene)
         window.rootViewController = host
         window.makeKeyAndVisible()
@@ -49,18 +48,48 @@ final class HomeScrollInteractionTests: XCTestCase {
         func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap(descendants) }
         let scroll = try XCTUnwrap(descendants(host.view).compactMap { $0 as? UIScrollView }
             .max(by: { $0.contentSize.height < $1.contentSize.height }))
-        XCTAssertTrue(scroll.delaysContentTouches, "Home rows wait out the native touch-down delay, as a system list does")
-        for (name, offset): (String, CGFloat) in [("initial", 0), ("floating", 1300), ("further", 1450), ("returned", 343)] {
-            scroll.setContentOffset(CGPoint(x: 0, y: offset - scroll.adjustedContentInset.top), animated: false)
-            try await Task.sleep(for: .milliseconds(400))
-            XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, offset, accuracy: 1)
-            XCTAssertTrue(scroll.delaysContentTouches)
-            let attachment = XCTAttachment(image: UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+        func navigation(in controller: UIViewController) -> UINavigationController? {
+            if let navigation = controller as? UINavigationController { return navigation }
+            return controller.children.lazy.compactMap { navigation(in: $0) }.first
+        }
+        let navigation = try XCTUnwrap(navigation(in: host))
+        func capture(_ name: String) throws {
+            let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
                 window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
-            })
-            attachment.name = "home-filter-\(name)"
+            }
+            let attachment = XCTAttachment(image: image)
+            attachment.name = name
             attachment.lifetime = .keepAlways
             add(attachment)
+            try image.pngData()?.write(to: URL(fileURLWithPath: "/tmp/\(name).png"))
+        }
+        XCTAssertTrue(scroll.delaysContentTouches, "Home rows wait out the native touch-down delay, as a system list does")
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            window.overrideUserInterfaceStyle = style
+            for (name, offset): (String, CGFloat) in [("initial", 0), ("floating", 1300), ("further", 1450), ("returned", 343)] {
+                scroll.setContentOffset(CGPoint(x: 0, y: offset - scroll.adjustedContentInset.top), animated: false)
+                if name == "floating" {
+                    for frame in 1...4 {
+                        try await Task.sleep(for: .milliseconds(80))
+                        XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, offset, accuracy: 1,
+                                       "The toolbar reveal must not move the holdings list")
+                        try capture("home-filter-reveal-\(frame)-\(style == .light ? "light" : "dark")")
+                    }
+                    try await Task.sleep(for: .milliseconds(80))
+                } else {
+                    try await Task.sleep(for: .milliseconds(400))
+                }
+                XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, offset, accuracy: 1)
+                XCTAssertTrue(scroll.delaysContentTouches)
+                let hasToolbar = name == "floating" || name == "further"
+                XCTAssertEqual(navigation.isNavigationBarHidden, !hasToolbar)
+                if #available(iOS 26.0, *) {
+                    XCTAssertEqual(scroll.topEdgeEffect.isHidden, !hasToolbar,
+                                   "The broad native blur belongs only to the floating holdings toolbar")
+                }
+                let captureName = "home-filter-\(name)-\(style == .light ? "light" : "dark")"
+                try capture(captureName)
+            }
         }
     }
 
@@ -377,6 +406,132 @@ final class HomeScrollInteractionTests: XCTestCase {
         controller.touchBegan()
         XCTAssertFalse(controller.touchCaughtMotion,
                        "The next tap on the now-stationary row must be accepted without a timer")
+    }
+
+    @MainActor
+    func testReleasingAnInterruptedSnapResumesItsOriginalLanding() async throws {
+        for end: CGFloat in [0, 343] {
+            let controller = PortfolioHomeScrollController()
+            let scroll = nativeScroll(controller)
+            defer { controller.detach() }
+            let now = CACurrentMediaTime()
+            controller.clock = { now }
+            scroll.contentOffset.y = (343 - end) - scroll.adjustedContentInset.top
+            controller.startSnap(to: end)
+            controller.advanceSnap(at: now + 0.08)
+            controller.touchBegan()
+            let caught = scroll.contentOffset.y
+            XCTAssertFalse(controller.isSettling)
+            XCTAssertTrue(controller.touchCaughtMotion)
+            controller.advanceSnap(at: now + 0.2)
+            XCTAssertEqual(scroll.contentOffset.y, caught, accuracy: 0.34,
+                           "Keep the panel under the finger until it is released")
+            controller.touchEnded()
+            try await Task.sleep(for: .milliseconds(30))
+            XCTAssertTrue(controller.isSettling, "A catch-and-release must not leave a third landing")
+            controller.advanceSnap(at: now + PortfolioHomeSnapMotion.maximumDuration)
+            XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, end, accuracy: 0.34)
+            XCTAssertFalse(controller.gate.permitsRefresh)
+        }
+    }
+
+    @MainActor
+    func testRefreshInFlightDoesNotDisablePanelLandings() async throws {
+        let controller = PortfolioHomeScrollController()
+        let scroll = nativeScroll(controller)
+        defer { controller.detach() }
+        var finish: CheckedContinuation<Void, Never>?
+        controller.refresh = { await withCheckedContinuation { finish = $0 } }
+        defer { finish?.resume() }
+        controller.touchBegan()
+        controller.scrollViewWillBeginDragging(scroll)
+        scroll.contentOffset.y = -120 - scroll.adjustedContentInset.top
+        var target = scroll.contentOffset
+        controller.scrollViewWillEndDragging(scroll, withVelocity: .zero, targetContentOffset: &target)
+        controller.scrollViewDidEndDragging(scroll, willDecelerate: true)
+        for _ in 0..<20 where finish == nil { await Task.yield() }
+        XCTAssertTrue(controller.gate.isRefreshing)
+        scroll.contentOffset.y = -scroll.adjustedContentInset.top
+        controller.scrollViewDidEndDecelerating(scroll)
+
+        // Data may still be loading when the user pulls back from the list.
+        // End at the partially exposed chart position from the reported case.
+        for decelerates in [false, true] {
+            scroll.contentOffset.y = 600 - scroll.adjustedContentInset.top
+            controller.touchBegan()
+            controller.scrollViewWillBeginDragging(scroll)
+            scroll.contentOffset.y = 290 - scroll.adjustedContentInset.top
+            target = scroll.contentOffset
+            controller.scrollViewWillEndDragging(scroll, withVelocity: CGPoint(x: 0, y: -0.5),
+                                                  targetContentOffset: &target)
+            controller.scrollViewDidEndDragging(scroll, willDecelerate: decelerates)
+            try await Task.sleep(for: .milliseconds(30))
+            XCTAssertTrue(controller.isSettling, "Network activity must not disable the panel spring")
+            controller.advanceSnap(at: CACurrentMediaTime() + PortfolioHomeSnapMotion.maximumDuration)
+            XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, 0, accuracy: 0.34)
+            XCTAssertTrue(controller.gate.isRefreshing)
+        }
+
+        controller.touchBegan()
+        controller.scrollViewWillBeginDragging(scroll)
+        scroll.contentOffset.y = -150 - scroll.adjustedContentInset.top
+        XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, 0, accuracy: 0.34,
+                       "An in-flight refresh cannot unlock another pull")
+        XCTAssertEqual(controller.pullIndicator.alpha, 0)
+        scroll.contentOffset.y = 500 - scroll.adjustedContentInset.top
+        XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, 343, accuracy: 0.34,
+                       "The first upward drag still stops at the upper detent")
+    }
+
+    @MainActor
+    func testNewDragCanReverseAnInterruptedLanding() async throws {
+        let controller = PortfolioHomeScrollController()
+        let scroll = nativeScroll(controller)
+        defer { controller.detach() }
+        let now = CACurrentMediaTime()
+        controller.clock = { now }
+        controller.startSnap(to: 343)
+        controller.advanceSnap(at: now + 0.16)
+        controller.touchBegan()
+        controller.scrollViewWillBeginDragging(scroll)
+        scroll.contentOffset.y = 180 - scroll.adjustedContentInset.top
+        var target = scroll.contentOffset
+        controller.scrollViewWillEndDragging(scroll, withVelocity: CGPoint(x: 0, y: -0.5),
+                                              targetContentOffset: &target)
+        controller.touchEnded()
+        controller.scrollViewDidEndDragging(scroll, willDecelerate: false)
+        try await Task.sleep(for: .milliseconds(30))
+        controller.advanceSnap(at: now + PortfolioHomeSnapMotion.maximumDuration)
+        XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, 0, accuracy: 0.34,
+                       "A deliberate new drag replaces the interrupted spring's destination")
+        XCTAssertFalse(controller.gate.permitsRefresh)
+    }
+
+    @MainActor
+    func testNativeDecelerationCannotFinishBetweenPanelLandings() {
+        let controller = PortfolioHomeScrollController()
+        let scroll = nativeScroll(controller)
+        defer { controller.detach() }
+        scroll.contentOffset.y = 600 - scroll.adjustedContentInset.top
+        controller.touchBegan()
+        controller.scrollViewWillBeginDragging(scroll)
+        scroll.contentOffset.y = 500 - scroll.adjustedContentInset.top
+        var target = CGPoint(x: 0, y: 290 - scroll.adjustedContentInset.top)
+        controller.scrollViewWillEndDragging(scroll, withVelocity: CGPoint(x: 0, y: -1),
+                                              targetContentOffset: &target)
+        controller.scrollViewDidEndDragging(scroll, willDecelerate: true)
+        XCTAssertEqual(target.y + scroll.adjustedContentInset.top, 343)
+        // UIKit can finish away from the proposed target after interruption
+        // or a layout update. Only the panel interval needs a final landing.
+        scroll.contentOffset.y = 290 - scroll.adjustedContentInset.top
+        controller.scrollViewDidEndDecelerating(scroll)
+        controller.advanceSnap(at: CACurrentMediaTime() + PortfolioHomeSnapMotion.maximumDuration)
+        XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, 343, accuracy: 0.34)
+        scroll.contentOffset.y = 700 - scroll.adjustedContentInset.top
+        controller.scrollViewDidEndDecelerating(scroll)
+        XCTAssertFalse(controller.isSettling)
+        XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, 700, accuracy: 0.34,
+                       "Holdings retain free scrolling beyond the upper detent")
     }
 
     @MainActor

@@ -59,7 +59,7 @@ struct FiftyTwoWeekRange: View {
         guard let periodStart else { return CatfolioStyle.blue }
         return current >= periodStart
             ? Color(red: 0, green: 1, blue: 35 / 255).opacity(0.90)
-            : Color(red: 1, green: 16 / 255, blue: 89 / 255)
+            : CatfolioPalette.rangeNegative
     }
 
     private var highlightedGradientColors: [Color] {
@@ -78,11 +78,11 @@ struct FiftyTwoWeekRange: View {
         return colorScheme == .dark
             ? [
                 Color(red: 153 / 255, green: 10 / 255, blue: 53 / 255),
-                Color(red: 1, green: 16 / 255, blue: 89 / 255),
+                CatfolioPalette.rangeNegative,
             ]
             : [
                 Color(red: 249 / 255, green: 150 / 255, blue: 250 / 255),
-                Color(red: 1, green: 16 / 255, blue: 89 / 255),
+                CatfolioPalette.rangeNegative,
             ]
     }
 

@@ -470,6 +470,7 @@ enum ReturnsEntryStyle {
     static let returnFill = Color(red: 198 / 255, green: 155 / 255, blue: 0)
     static let cycleFill = Color(red: 227 / 255, green: 0, blue: 69 / 255)
     static let returnDayInk = Color(red: 56 / 255, green: 46 / 255, blue: 7 / 255)
+    static let lossDayIconInk = Color(red: 123 / 255, green: 37 / 255, blue: 255 / 255)
 }
 
 /// The paints of Figma 487:5331 / 641:25494, per chart and scheme.

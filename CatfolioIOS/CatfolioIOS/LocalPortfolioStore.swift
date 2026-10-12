@@ -237,6 +237,27 @@ actor LocalPortfolioStore {
         return backup
     }
 
+    /// Copies the portfolio as it stands, beside it, before an import replaces
+    /// part of it. Nil when there is nothing saved yet to lose.
+    func backupPortfolio(reason: String) throws -> URL? {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
+        let stamp = ISO8601DateFormatter().string(from: Date())
+            .replacingOccurrences(of: ":", with: "-")
+        let backup = fileURL.deletingLastPathComponent()
+            .appendingPathComponent("portfolio-\(reason)-\(stamp)-\(UUID().uuidString.prefix(8)).json")
+        do {
+            try FileManager.default.copyItem(at: fileURL, to: backup)
+        } catch {
+            throw LocalPortfolioError.writeFailed
+        }
+        return backup
+    }
+
+    /// One account's saved positions, for comparing an import against them.
+    func positions(accountKey: String) throws -> [LocalPositionRecord] {
+        try load().positions.filter { $0.accountKey == accountKey }
+    }
+
     private func archivePortfolio(reason: String) throws -> URL {
         let backup = fileURL.deletingLastPathComponent()
             .appendingPathComponent("portfolio-\(reason)-\(UUID().uuidString).json")

@@ -1,6 +1,39 @@
 import SwiftUI
 import UIKit
 
+/// With no toolbar, only the status area needs a fade. The system's soft
+/// edge extends below that area and blurs the pinned portfolio heading.
+/// Once the holdings toolbar appears, let its native edge take over.
+struct PortfolioTopScrollEdge: ViewModifier {
+    let hasFloatingHeader: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+                .scrollEdgeEffectStyle(.soft, for: .top)
+                .scrollEdgeEffectHidden(!hasFloatingHeader, for: .top)
+                .overlay(alignment: .top) {
+                    if !hasFloatingHeader {
+                        GeometryReader { geometry in
+                            Rectangle()
+                                .fill(.ultraThinMaterial)
+                                .mask {
+                                    LinearGradient(colors: [.black, .clear],
+                                                   startPoint: .top, endPoint: .bottom)
+                                }
+                                .frame(height: geometry.safeAreaInsets.top)
+                                .offset(y: -geometry.safeAreaInsets.top)
+                        }
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                    }
+                }
+        } else {
+            content
+        }
+    }
+}
+
 struct PortfolioHomeTopBackground: View {
     @Environment(\.locale) private var appLocale
     let colorScheme: ColorScheme
@@ -10,7 +43,7 @@ struct PortfolioHomeTopBackground: View {
             stops: colorScheme == .light
                 ? [
                     // Figma 223:31122: #9ADCFF.
-                    .init(color: Color(red: 154 / 255, green: 220 / 255, blue: 1), location: 0),
+                    .init(color: CatfolioPalette.homeSky, location: 0),
                     .init(color: .white, location: 1),
                 ]
                 : [
@@ -33,6 +66,9 @@ struct PortfolioHomePageBackdrop: View {
     /// The portfolio fades the backdrop as its sheet rises. Other root tabs
     /// share the same colours, fixed behind their native scroll content.
     var scrollState: PortfolioHomeScrollState? = nil
+    /// The navigation underlay only appears between moving pages; keep its
+    /// shader still rather than running a second hidden animation.
+    var isPaused = false
 
     private var backgroundStyle: HomeBackgroundStyle {
         HomeBackgroundStyle(rawValue: backgroundStyleRawValue) ?? .defaultStyle
@@ -67,7 +103,7 @@ struct PortfolioHomePageBackdrop: View {
                         pattern: pattern,
                         palette: backgroundStyle.palette(for: colorScheme),
                         // Fully faded once the sheet has covered the hero.
-                        isPaused: !isOnScreen || (scrollState?.backdropProgress ?? 0) >= 1,
+                        isPaused: isPaused || !isOnScreen || (scrollState?.backdropProgress ?? 0) >= 1,
                         // Until the card has reported its resting top (a frame
                         // or two), no glow.
                         glowTop: backgroundStyle == .flowingAroundChart || scrollState == nil
@@ -617,8 +653,8 @@ struct PortfolioLoadingView: View {
                         .font(.system(size: 10))
                         .foregroundStyle(Color.primary.opacity(0.10))
                     Spacer()
-                    Image(systemName: "line.3.horizontal.decrease")
-                        .font(.system(size: 20))
+                    Image("AssistantMenu")
+                        .renderingMode(.template)
                         .foregroundStyle(Color.primary.opacity(0.10))
                         .frame(width: 58, height: 44)
                         .background(color, in: Capsule())

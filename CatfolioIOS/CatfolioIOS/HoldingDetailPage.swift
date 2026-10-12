@@ -231,7 +231,7 @@ struct HoldingDetailContentView: View {
                                 subtitle: L10n.text("买入、卖出与股息")
                             )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(PanelPressButtonStyle())
                         .accessibilityIdentifier("holding.transaction-history")
                         .padding(.horizontal, HoldingDetailCardStyle.pageInset)
                         .padding(.top, HoldingDetailCardStyle.spacing)

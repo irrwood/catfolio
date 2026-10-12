@@ -142,7 +142,7 @@ struct HoldingFinancialCard: View {
                 subtitle: L10n.text("Profit and Loss Statement, Balance Sheet and Cash Flow")
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PanelPressButtonStyle())
         .accessibilityHint("Open reported company financials")
         .appSheet(isPresented: $showsFinancials, onDismiss: { onAvailability(availability) }) {
             NavigationStack {

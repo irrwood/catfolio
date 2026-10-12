@@ -1,4 +1,5 @@
 import SwiftUI
+import Vision
 import XCTest
 @testable import CatfolioIOS
 
@@ -39,6 +40,49 @@ final class CSVImportPresentationTests: XCTestCase {
                     "Both skipped-row notices must be rendered after a successful partial import")
             }
         }
+    }
+
+    /// Before anything is written, the preview shows each skipped row and
+    /// each holding the import would remove, so a partly unreadable file
+    /// cannot quietly drop a position.
+    @MainActor
+    func testPreviewShowsSkippedRowsAndRemovalsBeforeImporting() async throws {
+        let csv = "Date,Action,Ticker,Quantity,Price,Currency\n2025-01-02,BUY,AAPL,10,150,USD\n2025-01-03,BUY,MSFT,abc,300,USD\n"
+        let (incoming, transactions, result) = try LocalCSVImporter.parse(Data(csv.utf8))
+        let previous = [incoming[0], LocalPositionRecord(ticker: "MSFT", name: "MSFT", shares: 4, averageCost: 300,
+            currency: "USD", quotePrice: 300, quoteCurrency: "USD", source: "CSV", openedDate: "2025-01-03",
+            accountID: nil, accountName: nil, accountCurrency: nil, brokerPnl: nil, brokerPnlCurrency: nil,
+            brokerFxPnl: nil, brokerFxPnlCurrency: nil, fxPnl: nil, fxPnlCurrency: nil, fxPnlStatus: nil,
+            fxPnlSource: nil)]
+        let comparison = CSVImportPreview.changes(previous: previous, incoming: incoming)
+        let preview = CSVImportPreview(positions: incoming, transactions: transactions, result: result,
+                                       accountKey: "CSV|default", changes: comparison.changes,
+                                       unchangedCount: comparison.unchanged)
+        let host = UIHostingController(rootView: VStack(alignment: .leading, spacing: 16) {
+            CSVImportPreviewSection(preview: preview)
+        }.padding(16))
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previousWindow = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        defer { window.isHidden = true; previousWindow?.makeKeyAndVisible() }
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 900)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        try await Task.sleep(for: .milliseconds(300))
+        let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        }
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.recognitionLanguages = ["en-US", "zh-Hans"]
+        try VNImageRequestHandler(cgImage: XCTUnwrap(image.cgImage)).perform([request])
+        let text = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+        XCTAssertEqual(preview.removedCount, 1)
+        XCTAssertTrue(text.contains { $0.contains("MSFT") }, "The holding the import removes is listed: \(text)")
+        // The skipped row's own line, with its row number.
+        XCTAssertTrue(text.contains { $0.contains("Row 3") || $0.contains("第 3 行") },
+                      "The unreadable row and its reason are shown: \(text)")
+        XCTAssertFalse(text.contains { $0.contains("accounts") }, "Holding counts read as holdings: \(text)")
     }
 
     @MainActor

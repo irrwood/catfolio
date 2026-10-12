@@ -4,7 +4,7 @@ import SwiftUI
 struct TodayAttentionEntry: View {
     var body: some View {
         SettingsCard {
-            SettingsNavigationRow(icon: .symbol("sparkles"), title: L10n.text("今天值得关注"),
+            SettingsNavigationRow(icon: .asset("AssistantSparkles"), title: L10n.text("今天值得关注"),
                                   subtitle: L10n.text("持仓分析 · JEV 行情解读")) {
                 TodayAttentionView()
             }

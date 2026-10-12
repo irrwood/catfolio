@@ -713,7 +713,8 @@ struct StandardLineChart: View {
                item.latestPointRadius == nil,
                let point = item.points.first {
                 drawPoint(
-                    at: CGPoint(x: plot.midX, y: y(for: point.value, in: plot, domain: valueDomain)),
+                    at: CGPoint(x: x(for: point.date, in: plot, dates: dates),
+                                y: y(for: point.value, in: plot, domain: valueDomain)),
                     color: item.color,
                     radius: item.latestPointRadius ?? max(3.5, item.selectionRadius),
                     context: &context
@@ -1110,7 +1111,7 @@ struct StandardLineChart: View {
         dates: [Date],
         domain: ClosedRange<Double>
     ) -> CGPoint {
-        guard let first = dates.first, let last = dates.last else {
+        guard let first = dates.first, let last = dates.last, last > first else {
             return CGPoint(x: 0.5, y: normalizedValue(point.value, domain: domain))
         }
         let span = max(last.timeIntervalSince(first), 1)
@@ -1728,9 +1729,12 @@ struct StandardLineChart: View {
 
     private func x(for date: Date, in plot: CGRect, dates: [Date]) -> CGFloat {
         guard let first = dates.first, let last = dates.last else { return plot.midX }
-        let span = max(last.timeIntervalSince(first), 1)
         let startX = plot.minX - leadingLineOverflow
         let endX = plot.maxX - trailingEndpointInset
+        // A lone print has no time span. Center its endpoint and crosshair
+        // instead of clipping half the ring at the plot's leading boundary.
+        guard last > first else { return (startX + endX) / 2 }
+        let span = max(last.timeIntervalSince(first), 1)
         return startX + (endX - startX) * CGFloat(date.timeIntervalSince(first) / span)
     }
 

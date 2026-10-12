@@ -6,6 +6,9 @@ enum AIQuestionPreset: String, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
     var requiresSecurity: Bool { self != .market }
 
+    /// Start with the market, then a company, before the more specific tools.
+    static let displayOrder: [Self] = [.market, .overview, .news, .earnings, .valuation, .trend, .options]
+
     var title: String {
         switch self {
         case .valuation: L10n.text("估值分析")
@@ -114,47 +117,19 @@ struct AIResearchQuestion: Sendable {
 
 struct AIQuestionPresets: View {
     @Environment(\.locale) private var appLocale
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let onSelect: (AIQuestionPreset) -> Void
-
-    private var columns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 10), count: dynamicTypeSize.isAccessibilitySize ? 1 : 2)
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(L10n.text("从一个问题开始"))
-                    .font(.title2.weight(.semibold))
-                Text(L10n.text("选择一个方向，一起看得更清楚。"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
+            Text(L10n.text("从一个问题开始"))
+                .appText(.heading, weight: .semibold)
 
-            LazyVGrid(columns: columns, spacing: 10) {
-                ForEach(AIQuestionPreset.allCases) { preset in
+            VStack(spacing: 10) {
+                ForEach(AIQuestionPreset.displayOrder) { preset in
                     Button { onSelect(preset) } label: {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Image(systemName: preset.symbol)
-                                .font(.title3.weight(.medium))
-                                .foregroundStyle(CatfolioStyle.blue)
-                            Text(preset.title)
-                                .font(.subheadline.weight(.semibold))
-                            Text(preset.summary)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 102, alignment: .topLeading)
-                        .padding(16)
-                        .background(.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 20))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 20)
-                                .strokeBorder(.primary.opacity(0.10), lineWidth: 1)
-                        }
-                        .contentShape(RoundedRectangle(cornerRadius: 20))
+                        AIQuestionPresetCard(preset: preset)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PanelPressButtonStyle())
                     .accessibilityHint(preset.requiresSecurity
                         ? L10n.text("先选择要分析的股票") : L10n.text("发送市场分析问题"))
                     .accessibilityIdentifier("ai-preset-\(preset.rawValue)")
@@ -162,6 +137,43 @@ struct AIQuestionPresets: View {
             }
         }
         .padding(.vertical, 12)
+    }
+}
+
+struct AIQuestionPresetCard: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let preset: AIQuestionPreset
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: preset.symbol)
+                .font(Typography.rounded(size: 22, weight: .regular))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(colorScheme == .dark ? Color.white : .black)
+                .frame(width: 30, height: 30)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(preset.title)
+                    .appText(.body, weight: .semibold)
+                    .foregroundStyle(CatfolioTheme.primaryText)
+                Text(preset.summary)
+                    .appText(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
+        .background(CatfolioTheme.assistantSuggestionFill(for: colorScheme),
+                    in: RoundedRectangle(cornerRadius: CatfolioStyle.cardRadius))
+        .overlay {
+            RoundedRectangle(cornerRadius: CatfolioStyle.cardRadius)
+                .strokeBorder(CatfolioTheme.assistantSuggestionBorder(for: colorScheme), lineWidth: 1)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: CatfolioStyle.cardRadius))
     }
 }
 

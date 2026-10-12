@@ -50,7 +50,7 @@ LADDER = re.compile(
 # quote epochs in milliseconds and microseconds, and those divisions are not
 # what this rule is about.
 UNIT_CONVERSION = re.compile(
-    r"TimeInterval|timeIntervalSince1970|nanoseconds|[Mm]illiseconds|[Mm]icroseconds"
+    r"TimeInterval|timeIntervalSince(?:1970|ReferenceDate)|nanoseconds|[Mm]illiseconds|[Mm]icroseconds"
 )
 LADDER_HOME = {"DisplayFormat.swift"}
 
@@ -59,8 +59,8 @@ LADDER_HOME = {"DisplayFormat.swift"}
 LADDER_GRANDFATHERED: dict[str, int] = {}
 
 GRANDFATHERED = {
-    "VolumeProfileView.swift": 27,
-    "ReturnsChart.swift": 9,
+    "VolumeProfileView.swift": 5,
+    "ReturnsChart.swift": 7,
     "PortfolioView.swift": 8,
     "ReturnsAnalyticsView.swift": 7,
     "AIAssistantPage.swift": 2,
@@ -125,7 +125,7 @@ def main() -> int:
             failures.append(
                 f"{path.name}: {len(hits)} font(s) built outside the type tokens\n    "
                 + "\n    ".join(hits)
-                + "\n    Use Typography.number(size:) or Typography.text(size:)."
+                + "\n    Use Typography.number/text, or Typography.rounded to preserve an existing treatment."
             )
 
     for path in sorted(ROOT.glob("*.swift")):

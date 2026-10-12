@@ -20,7 +20,7 @@ final class HistoryRealisedSummaryCardTests: XCTestCase {
             ("Realised P/L", .asset("HistoryRealisedRocket")),
             ("Total dividends", .asset("HistoryDividend")),
             ("Total interest", .symbol("building.columns.circle.fill")),
-            ("Annual fee total", .symbol("creditcard.circle.fill"))
+            ("Annual fee total", .asset("HistoryFee"))
         ]
         for dark in [false, true] {
             for (title, icon) in rows {

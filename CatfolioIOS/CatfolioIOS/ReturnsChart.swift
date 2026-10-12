@@ -44,22 +44,22 @@ enum ReturnsSeriesStyle {
     /// Figma 437:11904's line palette stays consistent across the plot,
     /// endpoint labels and ranking badges.
     static let colors: [String: Color] = [
-        portfolio: Color(red: 0.204, green: 0.780, blue: 0.349),
-        "SPY": Color(red: 1.000, green: 0.584, blue: 0.000),
-        "QQQ": Color(red: 0.204, green: 0.459, blue: 1.000),
-        "VTI": Color(red: 0.890, green: 0.000, blue: 0.271),
-        "VOO": Color(red: 0.780, green: 0.000, blue: 0.910),
-        "DIA": Color(red: 0.627, green: 0.804, blue: 1.000),
-        "IWM": Color(red: 1.000, green: 0.824, blue: 0.741),
-        "VEU": Color(red: 0.000, green: 0.882, blue: 0.698),
+        portfolio: CatfolioPalette.ChartSeries.green,
+        "SPY": CatfolioPalette.ChartSeries.orange,
+        "QQQ": CatfolioPalette.ChartSeries.blue,
+        "VTI": CatfolioPalette.ChartSeries.rose,
+        "VOO": CatfolioPalette.ChartSeries.magenta,
+        "DIA": CatfolioPalette.ChartSeries.sky,
+        "IWM": CatfolioPalette.ChartSeries.peach,
+        "VEU": CatfolioPalette.ChartSeries.mint,
         "GLD": Color(red: 0.784, green: 0.804, blue: 0.000),
     ]
 
     /// For symbols the reader added: light enough to carry the black label
     /// text, and apart from the fixed colours above.
     static let addedColors: [Color] = [
-        Color(red: 0.722, green: 0.600, blue: 1.000),
-        Color(red: 1.000, green: 0.431, blue: 0.702),
+        CatfolioPalette.ChartSeries.lavender,
+        CatfolioPalette.ChartSeries.pink,
         Color(red: 0.722, green: 0.949, blue: 0.200),
         Color(red: 1.000, green: 0.459, blue: 0.400),
         Color(red: 0.302, green: 0.851, blue: 1.000),
@@ -124,7 +124,7 @@ struct ReturnsComparisonPlaceholder: View {
                         Circle().fill(ReturnsSeriesStyle.color(for: ReturnsSeriesStyle.order[index]))
                             .frame(width: 24, height: 24)
                         Text(index == 0 ? "MY Portfolio" : ReturnsSeriesStyle.order[index])
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .font(Typography.rounded(size: 16, weight: .semibold))
                         Spacer()
                         Text("—")
                     }
@@ -363,16 +363,18 @@ struct ReturnsChart: View {
         return abs(before.timeIntervalSince(selectedDate)) <= abs(after.timeIntervalSince(selectedDate)) ? before : after
     }
 
+    /// The stored warnings are in Chinese, the language they were recorded
+    /// in; they are translated here, where they are shown.
     private var emptyChartDescription: String {
         if mode == .cashFlowMatched {
-            return comparison.warnings?.first(where: { $0.hasPrefix("现金流镜像：") })
+            return comparison.warnings?.first(where: { $0.hasPrefix("现金流镜像：") }).map { L10n.message($0) }
                 ?? L10n.text("现金流镜像：缺少完整资金账本和账户估值，暂不可用。")
         }
         if mode == .mwr {
-            return comparison.warnings?.first(where: { $0.hasPrefix("MWR：") })
+            return comparison.warnings?.first(where: { $0.hasPrefix("MWR：") }).map { L10n.message($0) }
                 ?? L10n.text("MWR 至少需要两个日期的组合价值与一笔有效现金流。")
         }
-        return comparison.warnings?.first(where: { $0.hasPrefix("TWR：") })
+        return comparison.warnings?.first(where: { $0.hasPrefix("TWR：") }).map { L10n.message($0) }
             ?? L10n.text("请先同步一次持仓，然后下拉刷新。")
     }
 
@@ -557,19 +559,19 @@ struct ReturnsRankingRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(isPortfolio ? "MY Portfolio" : item.series)
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .font(Typography.rounded(size: 16, weight: .semibold))
                         .lineLimit(1)
                         .layoutPriority(1)
                     // What the symbol is: "SPY 标普500".
                     if !isPortfolio, let name = benchmarkName {
                         Text(name)
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .font(Typography.rounded(size: 14, weight: .medium))
                             .foregroundStyle(.primary.opacity(0.5))
                             .lineLimit(1)
                     }
                 }
                 FinancialText(item.amountValue.map { DisplayFormat.money($0) } ?? "—")
-                    .font(.system(size: 15, weight: .regular, design: .rounded))
+                    .font(Typography.rounded(size: 15, weight: .regular))
                     .foregroundStyle(.primary.opacity(0.5))
                     .lineLimit(1)
             }
@@ -582,11 +584,11 @@ struct ReturnsRankingRow: View {
                     Text("%")
                         .foregroundStyle(.primary.opacity(0.3))
                 }
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(Typography.rounded(size: 15, weight: .semibold))
                 .monospacedDigit()
             } else {
                 Text("—")
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(Typography.rounded(size: 15, weight: .semibold))
             }
         }
         .padding(.horizontal, 16)

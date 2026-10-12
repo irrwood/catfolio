@@ -141,7 +141,7 @@ struct SettingsView: View {
             }
 
             SettingsCard {
-                SettingsNavigationRow(icon: .symbol("gearshape"), title: L10n.text("设置")) {
+                SettingsNavigationRow(icon: .asset("AccountSettings"), title: L10n.text("设置")) {
                     AppSettingsView()
                 }
                 .accessibilityIdentifier("account.settings")

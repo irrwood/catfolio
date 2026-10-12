@@ -495,7 +495,7 @@ struct DCACalculatorView: View {
       yAxisFont: Typography.number(.footnote),
       yAxisColor: Color.primary.opacity(0.20),
       yAxisLabel: { value in
-        value.formatted(.number.notation(.compactName).precision(.fractionLength(0)))
+        DisplayFormat.compactAxis(value)
       },
       xAxisLabel: { _ in "" },
       onSelect: { selectedDate = $0 },

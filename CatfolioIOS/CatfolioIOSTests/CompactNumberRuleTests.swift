@@ -10,6 +10,34 @@ import XCTest
 /// share `DisplayFormat.compact`, and the convention is the locale's own —
 /// 万/亿/万亿 in Chinese, K/M/B/T in English.
 final class CompactNumberRuleTests: XCTestCase {
+    func testExistingAxisLabelsKeepTheirPrecisionSuffixAndGrouping() {
+        let english = Locale(identifier: "en_US")
+        let chinese = Locale(identifier: "zh_Hans_CN")
+        for (value, en, zh) in [
+            (0.0, "0", "0"), (999.0, "999", "999"),
+            (1_500.0, "2K", "1500"), (12_345.0, "12K", "1万"),
+            (-12_345.0, "-12K", "-1万"),
+            (1_234_000_000.0, "1B", "12亿")
+        ] {
+            XCTAssertEqual(DisplayFormat.compactAxis(value, locale: english), en)
+            XCTAssertEqual(DisplayFormat.compactAxis(value, locale: chinese), zh)
+        }
+    }
+
+    func testAxisMigrationMatchesThePreviousFormatterAtRoundingBoundaries() {
+        for locale in [Locale(identifier: "en_US"), Locale(identifier: "zh_Hans_CN"),
+                       Locale(identifier: "de_DE"), .current] {
+            for value in [0, 0.49, 0.5, 999, 999.5, 1_000, 1_500, 9_999, 9_999.5,
+                          10_000, 999_999.5, 1_000_000, 1_234_000_000, -12_345.0] {
+                let previous = value.formatted(.number.notation(.compactName)
+                    .precision(.fractionLength(0)).locale(locale))
+                XCTAssertEqual(DisplayFormat.compactAxis(value, locale: locale), previous)
+            }
+        }
+        XCTAssertEqual(DisplayFormat.compactAxis(.nan), "—")
+        XCTAssertEqual(DisplayFormat.compactAxis(.infinity), "—")
+    }
+
     private var saved: String?
 
     override func setUp() {

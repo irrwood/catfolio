@@ -41,7 +41,7 @@ struct HoldingDetailChildPageCard<Content: View>: View {
         Button { isPresented = true } label: {
             HoldingDetailActionCardLabel(title: title, subtitle: subtitle, isLoading: isLoading)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PanelPressButtonStyle())
         .disabled(!isEnabled)
         .appSheet(isPresented: $isPresented, onDismiss: onDismiss) {
             HoldingDetailChildPage(title: title, content: content)

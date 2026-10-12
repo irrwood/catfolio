@@ -151,28 +151,34 @@ enum DisplayFormat {
     ) -> String {
         guard value.isFinite else { return "—" }
         let locale = Locale(identifier: AppLanguage.currentIdentifier)
-        let compact: String
-        switch precision {
-        case .whole:
-            compact = value.formatted(
-                .number.notation(.compactName).precision(.fractionLength(0...0)).locale(locale))
-        case .tenth:
-            compact = value.formatted(
-                .number.notation(.compactName).precision(.fractionLength(0...1)).locale(locale))
-        case .statement:
-            compact = value.formatted(
-                .number.notation(.compactName).precision(.significantDigits(3)).locale(locale))
-        }
+        let compact = abbreviated(value, precision: precision, locale: locale)
         // Below the first step there is nothing to abbreviate, and compact
-        // notation drops the thousands separator while it is at it — 1500
-        // rather than 1,500, which looks wrong beside a 1.23亿 on the same
-        // axis. Detected by the absence of a suffix rather than by comparing
-        // against a threshold, because where that threshold falls is the
-        // locale's business (10,000 in Chinese, 1,000 in English).
+        // notation drops grouping. Preserve the app's grouped plain numbers.
         if !compact.contains(where: { $0.isLetter || ($0.unicodeScalars.first?.value ?? 0) > 0x2E80 }) {
             return value.formatted(.number.precision(.fractionLength(0...0)).locale(locale))
         }
         return compact
+    }
+
+    /// The existing DCA axis uses the device locale and ungrouped compact
+    /// labels. Keep that presentation while sharing the abbreviation ladder.
+    static func compactAxis(_ value: Double, locale: Locale = .current) -> String {
+        guard value.isFinite else { return "—" }
+        return abbreviated(value, precision: .whole, locale: locale)
+    }
+
+    private static func abbreviated(_ value: Double, precision: CompactPrecision, locale: Locale) -> String {
+        switch precision {
+        case .whole:
+            return value.formatted(
+                .number.notation(.compactName).precision(.fractionLength(0...0)).locale(locale))
+        case .tenth:
+            return value.formatted(
+                .number.notation(.compactName).precision(.fractionLength(0...1)).locale(locale))
+        case .statement:
+            return value.formatted(
+                .number.notation(.compactName).precision(.significantDigits(3)).locale(locale))
+        }
     }
 
     /// An abbreviated amount carrying its currency symbol.

@@ -61,7 +61,7 @@ struct ReturnsSwipeRow<Content: View>: View {
             Image(systemName: icon)
                 .font(.system(size: 17, weight: .semibold))
             Text(title)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .font(Typography.rounded(size: 11, weight: .semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
@@ -158,7 +158,7 @@ struct ReturnsChartBadge: View {
 
     var body: some View {
         FinancialText(text)
-            .font(.system(size: fontSize, weight: .semibold, design: .rounded))
+            .font(Typography.rounded(size: fontSize, weight: .semibold))
             .monospacedDigit()
             .lineLimit(1)
             .minimumScaleFactor(0.4)
@@ -285,10 +285,10 @@ struct ReturnsSourceListRow<Trailing: View>: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .font(Typography.rounded(size: 16, weight: .semibold))
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(.system(size: 15, weight: .regular, design: .rounded))
+                    .font(Typography.rounded(size: 15, weight: .regular))
                     .foregroundStyle(isOnTintedField ? Color.white.opacity(0.5) : Color.secondary)
                     .lineLimit(1)
             }

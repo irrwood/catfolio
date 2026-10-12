@@ -69,7 +69,7 @@ struct HoldingsHeatmapView: View {
                 if usesETFLookThrough, performancePeriod == .holdingPeriod {
                     Text(L10n.text("≈ 按当前成分权重分摊 ETF 成本与市值，并合并直接持仓；不代表成分股自身的历史收益。"))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(CatfolioTheme.heatmapDetail)
                 }
             }
         }
@@ -472,7 +472,7 @@ private struct HoldingsHeatmapSectorView: View {
                     Spacer(minLength: 0)
                 }
                 .appText(.micro, weight: .semibold)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(CatfolioTheme.heatmapDetail)
                 .minimumScaleFactor(0.7)
                 .padding(.horizontal, 7)
                 .frame(height: headerHeight)
@@ -756,9 +756,10 @@ private struct HoldingsHeatmapPlaceholder: View {
                 VStack(spacing: 5) {
                     Text(L10n.text("暂无持仓"))
                         .appText(.subheading, weight: .semibold)
+                        .foregroundStyle(CatfolioTheme.heatmapIdentifier)
                     Text(L10n.text("同步持仓后会在这里显示资产分布。"))
                         .appText(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(CatfolioTheme.heatmapDetail)
                         .multilineTextAlignment(.center)
                 }
                 .padding(.horizontal, 24)

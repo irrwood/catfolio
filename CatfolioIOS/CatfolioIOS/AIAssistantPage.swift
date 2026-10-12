@@ -75,13 +75,14 @@ struct AIConversationHeader: View {
 
     var body: some View {
         HStack {
-            control(showsConversations ? "chevron.down" : "line.3.horizontal", action: onToggleConversations)
+            control(showsConversations ? Image(systemName: "chevron.down") : Image("AssistantMenu").renderingMode(.template),
+                    action: onToggleConversations)
                 .accessibilityLabel(L10n.text(showsConversations ? "回到对话" : "对话列表"))
             Spacer(minLength: 0)
-            if showsConversations {
-                control("square.and.pencil", action: onNewConversation)
-                    .accessibilityLabel(L10n.text("新对话"))
-            } else if let onClose {
+            control("square.and.pencil", action: onNewConversation)
+                .accessibilityLabel(L10n.text("新对话"))
+                .accessibilityIdentifier("ai.conversations.new")
+            if !showsConversations, let onClose {
                 control("xmark", action: onClose)
                     .keyboardShortcut(.cancelAction)
                     .accessibilityLabel(L10n.text("关闭 AI 投资助手"))
@@ -107,8 +108,12 @@ struct AIConversationHeader: View {
     }
 
     private func control(_ symbol: String, action: @escaping () -> Void) -> some View {
+        control(Image(systemName: symbol), action: action)
+    }
+
+    private func control(_ image: Image, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: symbol)
+            image
                 .font(.system(size: 18, weight: .regular))
                 .foregroundStyle(CatfolioTheme.primaryText)
                 .scaleEffect(isKeyboardVisible ? 1.1 : 1)
@@ -135,8 +140,27 @@ struct AIHeaderGlass: ViewModifier {
     }
 }
 
-/// The Figma fade occupies the status area (62 pt on its reference device).
-/// Anchor it to the physical top, independently of the keyboard's bottom inset.
+/// Keep scrolling messages behind the transparent toolbar. The lifted
+/// conversation alone clips at its top corners when the history is shown.
+struct AIConversationCardClip: Shape {
+    var radius: CGFloat
+    var topOverflow: CGFloat
+
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(radius, topOverflow) }
+        set { radius = newValue.first; topOverflow = newValue.second }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let expanded = CGRect(x: rect.minX, y: rect.minY - topOverflow,
+                              width: rect.width, height: rect.height + topOverflow)
+        return UnevenRoundedRectangle(topLeadingRadius: radius, topTrailingRadius: radius,
+                                      style: .continuous).path(in: expanded)
+    }
+}
+
+/// A backdrop blur through the status area and compact toolbar, dissolving
+/// into the scrolling content below. The native bar remains transparent.
 struct AIConversationTopFade: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorScheme) private var colorScheme
@@ -144,6 +168,7 @@ struct AIConversationTopFade: View {
 
     private var topColor: Color {
         let style = HomeBackgroundStyle(rawValue: backgroundStyleRawValue) ?? .defaultStyle
+        if style == .plain { return SettingsTemplate.pageBackground }
         return (style == .classic || style == .plain) && colorScheme == .dark ? .black : style.palette(for: colorScheme).baseTop
     }
 
@@ -154,12 +179,16 @@ struct AIConversationTopFade: View {
                     AIStatusBackdropBlur()
                 }
                 LinearGradient(
-                    colors: [topColor, .clear],
+                    stops: [
+                        .init(color: topColor.opacity(0.80), location: 0),
+                        .init(color: topColor.opacity(0.35), location: 0.55),
+                        .init(color: topColor.opacity(0), location: 1),
+                    ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
             }
-            .frame(height: max(62, geometry.safeAreaInsets.top))
+            .frame(height: max(62, geometry.safeAreaInsets.top) + 32)
             .offset(y: -geometry.safeAreaInsets.top)
         }
         .allowsHitTesting(false)
@@ -179,8 +208,10 @@ struct AIStatusBackdropBlur: UIViewRepresentable {
         init() {
             super.init(effect: UIBlurEffect(style: .systemUltraThinMaterial))
             isUserInteractionEnabled = false
-            gradient.colors = [UIColor.black.cgColor, UIColor.clear.cgColor]
-            gradient.locations = [0, 1]
+            gradient.colors = [UIColor.black.cgColor, UIColor.black.cgColor,
+                               UIColor.black.withAlphaComponent(0.65).cgColor,
+                               UIColor.black.withAlphaComponent(0.20).cgColor, UIColor.clear.cgColor]
+            gradient.locations = [0, 0.35, 0.60, 0.82, 1]
             gradient.startPoint = CGPoint(x: 0.5, y: 0)
             gradient.endPoint = CGPoint(x: 0.5, y: 1)
             fadeMask.layer.addSublayer(gradient)

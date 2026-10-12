@@ -24,11 +24,11 @@ final class ReturnsEntryAppearanceTests: XCTestCase {
 
     func testExportedArtworkKeepsItsCanvasAndVisiblePixels() throws {
         let assets: [(String, CGSize)] = [
-            ("EntryGainIcon", CGSize(width: 18, height: 16)),
-            ("EntryLossDayIcon", CGSize(width: 17, height: 24)),
-            ("EntryLossNightIcon", CGSize(width: 14.3294, height: 12.1749)),
-            ("EntryReturnIcon", CGSize(width: 20, height: 20)),
-            ("EntryCycleIcon", CGSize(width: 20, height: 20)),
+            ("EntryGainIcon", CGSize(width: 24, height: 24)),
+            ("EntryLossIcon", CGSize(width: 24, height: 24)),
+            ("EntryReturnIcon", CGSize(width: 24, height: 24)),
+            ("EntryCycleIcon", CGSize(width: 24, height: 24)),
+            ("CorporateCalendarIcon", CGSize(width: 24, height: 24)),
             ("EntryChevron", CGSize(width: 5, height: 10)),
             ("EntryLossChevron", CGSize(width: 5, height: 10)),
             ("EntryReturnChevron", CGSize(width: 5, height: 10)),
@@ -50,6 +50,10 @@ final class ReturnsEntryAppearanceTests: XCTestCase {
                     compatibleWith: UITraitCollection(userInterfaceStyle: style)), name)
                 XCTAssertEqual(image.size.width, size.width, accuracy: 0.5, name)
                 XCTAssertEqual(image.size.height, size.height, accuracy: 0.5, name)
+                if name.hasSuffix("Icon") {
+                    XCTAssertEqual(image.renderingMode, .alwaysTemplate,
+                                   "Entry icons inherit their card's light/dark foreground: \(name)")
+                }
                 var pixels = [UInt8](repeating: 0, count: 32 * 32 * 4)
                 let context = try XCTUnwrap(CGContext(data: &pixels, width: 32, height: 32,
                     bitsPerComponent: 8, bytesPerRow: 128, space: CGColorSpaceCreateDeviceRGB(),

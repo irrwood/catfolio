@@ -186,7 +186,7 @@ struct AnalystHistoryView: View {
         ]
     }
 
-    private static let consensusColor = Color(red: 1.000, green: 0.584, blue: 0.000)
+    private static let consensusColor = CatfolioPalette.ChartSeries.orange
 
     private func date(_ point: AnalystHistoryPoint) -> Date {
         DayDateCodec.date(from: point.date) ?? .distantPast

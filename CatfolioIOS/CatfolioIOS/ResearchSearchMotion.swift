@@ -39,22 +39,26 @@ final class ResearchSearchMotion {
         settle(delay: 0, completion: {})
     }
 
-    /// The backdrop starts fading at release. The field follows a moment
-    /// later, while the keyboard dismisses, then the search overlay unmounts.
+    /// Hand the held transform to the positioning controller immediately.
+    /// Its closing flight restores the page and the field together, without
+    /// first settling the field back into the active toolbar.
     func finishPull(completion: @escaping () -> Void) {
         guard !isFinishing else { return }
         isFinishing = true
+        generation &+= 1
         field?.endEditing(true)
-        field?.isUserInteractionEnabled = false
-        settle(delay: reduceMotion ? 0 : 0.14) {
-            self.isFinishing = false
-            completion()
-        }
+        completion()
+    }
+
+    /// Ending the SwiftUI presentation must not reset the held geometry
+    /// before UIKit can animate it into the field's original content slot.
+    func presentationEnded() {
+        isFinishing = false
+        generation &+= 1
     }
 
     func reset() {
-        isFinishing = false
-        generation &+= 1
+        presentationEnded()
         field?.layer.removeAllAnimations()
         field?.transform = .identity
         field?.isUserInteractionEnabled = true

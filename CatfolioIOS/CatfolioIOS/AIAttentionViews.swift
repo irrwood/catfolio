@@ -85,7 +85,7 @@ struct PortfolioAttentionCard: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PanelPressButtonStyle())
         .accessibilityHint(L10n.text("放大查看持仓分析详情"))
         .matchedTransitionSource(id: row.id, in: zoom)
     }
@@ -675,7 +675,7 @@ struct PortfolioAttentionCardContent: View {
                                         showsClassMarkers: false)
                     Text(row.ticker)
                         .appText(.footnote, weight: .medium)
-                        .foregroundStyle(Color(red: 142 / 255, green: 142 / 255, blue: 147 / 255))
+                        .foregroundStyle(CatfolioPalette.fixedNeutralGray)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 8)

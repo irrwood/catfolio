@@ -6,6 +6,9 @@ import XCTest
 @MainActor
 final class RootTabHeaderTests: XCTestCase {
     func testHomeOmitsHeaderAndOtherRootTitlesRestoreAfterTabChanges() async throws {
+        let savedLanguage = UserDefaults.standard.object(forKey: AppLanguage.preferenceKey)
+        UserDefaults.standard.set("zh-Hans", forKey: AppLanguage.preferenceKey)
+        defer { UserDefaults.standard.set(savedLanguage, forKey: AppLanguage.preferenceKey) }
         let suite = "RootTabHeaderTests.\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defaults.set(true, forKey: "catfolio.fakeDataMode")
@@ -51,14 +54,34 @@ final class RootTabHeaderTests: XCTestCase {
                     continue
                 }
                 if index == 4 {
-                    try capture(window, name: "ai-toolbar-before-\(style == .light ? "light" : "dark")")
-                    // Existing conversations open at their latest message.
-                    // A new conversation starts at the top, like the other roots.
+                    XCTAssertFalse(navigation.isNavigationBarHidden)
+                    XCTAssertEqual(navigation.topViewController?.navigationItem.title, "")
+                    XCTAssertEqual(navigation.topViewController?.navigationItem.largeTitleDisplayMode, .never)
+                    XCTAssertLessThan(navigation.navigationBar.bounds.height, 70,
+                                      "The assistant has a compact toolbar, without a large-title row")
+                    // Start directly from the conversation: the new-chat
+                    // action must be available before opening the library.
+                    try await tapToolbarItem(in: navigation, leading: false)
+                    try await Task.sleep(for: .milliseconds(450))
+                    try capture(window, name: "ai-new-conversation-\(style == .light ? "light" : "dark")")
+                    let scroll = try XCTUnwrap(navigation.topViewController?.contentScrollView(for: .top))
+                    let initialOffset = scroll.contentOffset
+                    let maximumOffset = max(initialOffset.y,
+                        scroll.contentSize.height - scroll.bounds.height + scroll.adjustedContentInset.bottom)
+                    scroll.setContentOffset(CGPoint(x: 0, y: min(initialOffset.y + 160, maximumOffset)), animated: false)
+                    try await Task.sleep(for: .milliseconds(350))
+                    try capture(window, name: "ai-top-fade-scrolled-\(style == .light ? "light" : "dark")")
+                    XCTAssertFalse(navigation.isNavigationBarHidden)
+                    _ = try await NativeToolbarTestSupport.button(in: navigation, leading: false,
+                                                                  identifier: "ai.conversations.new")
+                    scroll.setContentOffset(initialOffset, animated: false)
                     try await tapToolbarItem(in: navigation, leading: true)
                     try await Task.sleep(for: .milliseconds(450))
                     XCTAssertEqual(navigation.topViewController?.navigationItem.title, L10n.text("对话"))
                     try await tapToolbarItem(in: navigation, leading: false)
                     try await Task.sleep(for: .milliseconds(450))
+                    XCTAssertEqual(navigation.topViewController?.navigationItem.title, "")
+                    continue
                 }
                 XCTAssertFalse(navigation.isNavigationBarHidden, title)
                 XCTAssertEqual(navigation.topViewController?.navigationItem.title, title)

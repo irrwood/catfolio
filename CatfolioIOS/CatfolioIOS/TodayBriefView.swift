@@ -55,7 +55,7 @@ struct TodayBriefView: View {
             ForEach(Array(sources.enumerated()), id: \.element.url) { _, source in
                 Link(destination: source.url) {
                     Label(source.title, systemImage: "newspaper")
-                        .font(.system(.caption, design: .rounded))
+                        .font(Typography.rounded(.caption))
                         .foregroundStyle(SettingsTemplate.secondaryText)
                         .lineLimit(2)
                 }
@@ -136,7 +136,7 @@ struct TodayBriefSentence: View {
 
     private func word(_ text: String, index: Int, time: Double, target: String?) -> some View {
         Text(text)
-            .font(.system(size: fontSize, weight: .semibold, design: .rounded))
+            .font(Typography.rounded(size: fontSize, weight: .semibold))
             .textRenderer(TodayBriefWaveRenderer(time: time, phase: Double(index) * 0.55,
                                                 enabled: Self.animates(target: target, activeTarget: activeTarget,
                                                                        generating: generating, reduceMotion: reduceMotion)))

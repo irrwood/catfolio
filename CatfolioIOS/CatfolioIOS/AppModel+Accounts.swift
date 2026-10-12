@@ -228,6 +228,64 @@ extension AppModel {
         return result
     }
 
+    /// Reads a CSV for one account without writing anything: the trades it
+    /// rebuilds, the rows it had to leave out, and how the account's holdings
+    /// would change. `commitCSVImport` writes it once the reader has looked.
+    func prepareCSVImport(
+        _ data: Data,
+        accountID: String? = nil,
+        source: String = "CSV"
+    ) async throws -> CSVImportPreview {
+        let isins = await Task.detached(priority: .userInitiated) {
+            LocalCSVImporter.isinRequests(in: data)
+        }.value
+        let resolved = isins.isEmpty ? [:] : await SecurityIdentityResolver.shared.tickers(forISINs: isins)
+        let (positions, transactions, result) = try await Task.detached(priority: .userInitiated) {
+            try LocalCSVImporter.parse(data, resolvedISINs: resolved)
+        }.value
+        let accountKey = positions.first?.assignedAccount(id: accountID, name: "", source: source).accountKey
+            ?? "\(source)|\(accountID.flatMap { $0.isEmpty ? nil : $0 } ?? "default")"
+        let previous = try await LocalPortfolioStore.shared.positions(accountKey: accountKey)
+        let comparison = CSVImportPreview.changes(previous: previous, incoming: positions)
+        return CSVImportPreview(positions: positions, transactions: transactions, result: result,
+                                accountKey: accountKey, changes: comparison.changes,
+                                unchangedCount: comparison.unchanged)
+    }
+
+    /// Writes a previewed CSV into its account, after copying the portfolio
+    /// as it stands so nothing the import replaces is lost for good.
+    func commitCSVImport(
+        _ preview: CSVImportPreview,
+        accountID: String? = nil,
+        accountName: String? = nil,
+        source: String = "CSV",
+        replacingAccountsOnly: Bool = false
+    ) async throws -> CSVImportResult {
+        let positions = accountName.map { name in
+            preview.positions.map { $0.assignedAccount(id: accountID, name: name, source: source) }
+        } ?? preview.positions
+        let transactions = accountName.map { name in
+            preview.transactions.map { $0.assignedAccount(id: accountID, name: name, source: source) }
+        } ?? preview.transactions
+        let backup = try await LocalPortfolioStore.shared.backupPortfolio(reason: "before-csv")
+        invalidateInFlightRequests()
+        let generation = portfolioRequestGeneration
+        let saved = try await LocalPortfolioStore.shared.replace(
+            positions: positions,
+            source: source,
+            transactions: transactions,
+            replacingAccountsOnly: replacingAccountsOnly
+        )
+        try await apply(activeDocument(from: saved))
+        await enrichPortfolioChart(from: document, generation: generation)
+        let result = preview.result
+        return CSVImportResult(ok: result.ok, holdingsCount: result.holdingsCount,
+                               transactionsCount: result.transactionsCount, backupCreated: backup != nil,
+                               warnings: result.warnings, holdings: result.holdings,
+                               skippedRowCount: result.skippedRowCount)
+    }
+
+    /// Prepare and commit in one step, for callers with nobody to confirm.
     func importCSV(
         _ data: Data,
         filename _: String,
@@ -236,30 +294,9 @@ extension AppModel {
         source: String = "CSV",
         replacingAccountsOnly: Bool = false
     ) async throws -> CSVImportResult {
-        let isins = await Task.detached(priority: .userInitiated) {
-            LocalCSVImporter.isinRequests(in: data)
-        }.value
-        let resolved = isins.isEmpty ? [:] : await SecurityIdentityResolver.shared.tickers(forISINs: isins)
-        let (namedPositions, namedTransactions, result) = try await Task.detached(priority: .userInitiated) {
-            let (positions, transactions, result) = try LocalCSVImporter.parse(data, resolvedISINs: resolved)
-            guard let accountName else { return (positions, transactions, result) }
-            return (
-                positions.map { $0.assignedAccount(id: accountID, name: accountName, source: source) },
-                transactions.map { $0.assignedAccount(id: accountID, name: accountName, source: source) },
-                result
-            )
-        }.value
-        invalidateInFlightRequests()
-        let generation = portfolioRequestGeneration
-        let saved = try await LocalPortfolioStore.shared.replace(
-            positions: namedPositions,
-            source: source,
-            transactions: namedTransactions,
-            replacingAccountsOnly: replacingAccountsOnly
-        )
-        try await apply(activeDocument(from: saved))
-        await enrichPortfolioChart(from: document, generation: generation)
-        return result
+        let preview = try await prepareCSVImport(data, accountID: accountID, source: source)
+        return try await commitCSVImport(preview, accountID: accountID, accountName: accountName,
+                                         source: source, replacingAccountsOnly: replacingAccountsOnly)
     }
 
     func importTrading212(

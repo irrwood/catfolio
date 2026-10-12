@@ -200,6 +200,9 @@ actor LocalHistoricalPriceCache {
 struct MarketIntradayBar: Codable, Sendable {
     let timestamp: Date
     let close: Double
+    var sessionWindow: MarketSessionWindow? = nil
+
+    var marketSession: USMarketSession { sessionWindow?.session ?? USMarketSession.at(timestamp) }
 }
 
 /// Minute bars change continuously and have a very different refresh cadence
@@ -210,11 +213,15 @@ actor LocalIntradayPriceCache {
     struct Hit: Sendable {
         let bars: [MarketIntradayBar]
         let isFresh: Bool
+        let includesExtendedHours: Bool
     }
 
     private struct Entry: Codable, Sendable {
         let fetchedAt: Date
         let bars: [MarketIntradayBar]
+        // A request's coverage does not depend on provider-specific metadata.
+        // Optional for cache files saved before this field existed.
+        var includesExtendedHours: Bool? = nil
     }
 
     static let shared = LocalIntradayPriceCache()
@@ -241,17 +248,19 @@ actor LocalIntradayPriceCache {
 
     func lookup(symbol: String) -> Hit? {
         loadIfNeeded()
-        guard let entry = entries[symbol.uppercased()], entry.bars.count > 1 else { return nil }
+        guard let entry = entries[symbol.uppercased()], !entry.bars.isEmpty else { return nil }
         return Hit(
             bars: entry.bars,
-            isFresh: MarketCacheFreshness.isFresh(fetchedAt: entry.fetchedAt, lifetime: MarketCacheFreshness.intraday)
+            isFresh: MarketCacheFreshness.isFresh(fetchedAt: entry.fetchedAt, lifetime: MarketCacheFreshness.intraday),
+            includesExtendedHours: entry.includesExtendedHours ?? false
         )
     }
 
-    func save(symbol: String, bars: [MarketIntradayBar]) {
-        guard bars.count > 1 else { return }
+    func save(symbol: String, bars: [MarketIntradayBar], includesExtendedHours: Bool = false) {
+        guard !bars.isEmpty else { return }
         loadIfNeeded()
-        entries[symbol.uppercased()] = Entry(fetchedAt: Date(), bars: bars)
+        entries[symbol.uppercased()] = Entry(fetchedAt: Date(), bars: bars,
+                                            includesExtendedHours: includesExtendedHours)
         scheduleWrite()
     }
 
@@ -287,7 +296,7 @@ actor LocalIntradayPriceCache {
     private var cacheURL: URL {
         if let cacheURLOverride { return cacheURLOverride }
         let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        return root.appendingPathComponent("catfolio-intraday-history-units-v2.json")
+        return root.appendingPathComponent("catfolio-intraday-extended-units-v3.json")
     }
 }
 

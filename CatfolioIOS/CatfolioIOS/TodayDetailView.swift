@@ -243,7 +243,7 @@ struct TodayDetailView: View {
                     }
                 }
                 Text(appDisclaimer)
-                    .font(.system(.caption, design: .rounded))
+                    .font(Typography.rounded(.caption))
                     .foregroundStyle(SettingsTemplate.secondaryText)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

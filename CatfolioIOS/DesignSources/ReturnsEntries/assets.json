@@ -55,39 +55,6 @@
     "sha256": "d2068b86efc9996e3a24d44f08889beae5446f946ee1ff874c1325e7bb1c12cb"
   },
   {
-    "asset": "EntryGainIcon",
-    "appearance": "light",
-    "export": "light-imgUnion",
-    "file": "EntryGainIcon.imageset/art.svg",
-    "canvas": [
-      "18",
-      "15.9997"
-    ],
-    "sha256": "abb3aa419c7e194a3d8a238b95728be45d90617f2c44a1f6e1956903156e7c39"
-  },
-  {
-    "asset": "EntryLossDayIcon",
-    "appearance": "light",
-    "export": "light-imgFrame1707480532",
-    "file": "EntryLossDayIcon.imageset/art.svg",
-    "canvas": [
-      "17",
-      "24"
-    ],
-    "sha256": "a0e7636d685a9d041e01f222cc86daeb762dc3fa0c7f7e8295133ac8e49e059f"
-  },
-  {
-    "asset": "EntryLossNightIcon",
-    "appearance": "light",
-    "export": "dark-imgVector54",
-    "file": "EntryLossNightIcon.imageset/art.svg",
-    "canvas": [
-      "14.3294",
-      "12.1749"
-    ],
-    "sha256": "fda9d8d0384b98dfe28b8758290e13f0b432b948c37fa7e063b3797712d5f9d6"
-  },
-  {
     "asset": "EntryGainGlow",
     "appearance": "light",
     "export": "light-imgEllipse2052",
@@ -121,28 +88,6 @@
     "sha256": "b64c68c42079736cb0b19fae411894f6b0407014051dafcbb47ecb9a99045026"
   },
   {
-    "asset": "EntryReturnIcon",
-    "appearance": "light",
-    "export": "light-imgUnion1",
-    "file": "EntryReturnIcon.imageset/art.svg",
-    "canvas": [
-      "20",
-      "20"
-    ],
-    "sha256": "184853427baa14bc66353cd1303116224f0b1c25ab61a341cd77f9b79ae1017c"
-  },
-  {
-    "asset": "EntryReturnIcon",
-    "appearance": "dark",
-    "export": "dark-imgUnion1",
-    "file": "EntryReturnIcon.imageset/dark.svg",
-    "canvas": [
-      "20",
-      "20"
-    ],
-    "sha256": "c1391af980d0fe24ef8e905ba3bb786358bc8b1473cf9bb995dc1482f6642452"
-  },
-  {
     "asset": "EntryReturnGlow",
     "appearance": "light",
     "export": "light-imgEllipse2053",
@@ -174,5 +119,60 @@
       "296.6"
     ],
     "sha256": "7689c321309a658a25bffa477737777e274daad17a89ca65ad3fa7bda73a96eb"
+  },
+  {
+    "asset": "EntryGainIcon",
+    "appearance": "template",
+    "export": "figma-656:26735",
+    "file": "EntryGainIcon.imageset/art.svg",
+    "canvas": [
+      "24",
+      "24"
+    ],
+    "sha256": "2cf82e6defc09f0ddd9c8d0246d45b12fa0bb6a601a996345d50173f625f00bf"
+  },
+  {
+    "asset": "EntryLossIcon",
+    "appearance": "template",
+    "export": "figma-656:26736",
+    "file": "EntryLossIcon.imageset/icon.svg",
+    "canvas": [
+      "24",
+      "24"
+    ],
+    "sha256": "d1cd6676e0afd4284c30395b9fba8c0ac4e95d03ac7489c8bdf47ad7849b8fa8"
+  },
+  {
+    "asset": "EntryReturnIcon",
+    "appearance": "template",
+    "export": "figma-656:26737",
+    "file": "EntryReturnIcon.imageset/art.svg",
+    "canvas": [
+      "24",
+      "24"
+    ],
+    "sha256": "3a6e48c6c347164ec03987bf34b492f9f177567f3eaf7842d79433882d08d865"
+  },
+  {
+    "asset": "EntryCycleIcon",
+    "appearance": "template",
+    "export": "figma-656:26738",
+    "file": "EntryCycleIcon.imageset/icon.svg",
+    "canvas": [
+      "24",
+      "24"
+    ],
+    "sha256": "026accb89e21a8850dbc5caaa28bd0dc3004ef9edc206ccc176df86eeee471a6"
+  },
+  {
+    "asset": "CorporateCalendarIcon",
+    "appearance": "template",
+    "export": "figma-656:26787",
+    "file": "CorporateCalendarIcon.imageset/icon.svg",
+    "canvas": [
+      "24",
+      "24"
+    ],
+    "sha256": "415be0c018a51dfc758a0e148634e4e88830479d6c91a80da9e7e46ce1d814e7"
   }
 ]

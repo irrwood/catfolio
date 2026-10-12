@@ -291,7 +291,7 @@ struct MacroIndicatorCard: View {
     @ScaledMetric(relativeTo: .title3) private var valueSize = 20.0
     @ScaledMetric(relativeTo: .subheadline) private var changeSize = 14.0
     /// The figure's font, which also sets the height of its line.
-    private var valueFont: Font { .system(size: valueSize, weight: .semibold, design: .rounded) }
+    private var valueFont: Font { Typography.rounded(size: valueSize, weight: .semibold) }
 
     private var showsSkeleton: Bool { isLoading && indicator == nil }
 
@@ -299,7 +299,7 @@ struct MacroIndicatorCard: View {
         SettingsCard {
             VStack(alignment: .leading, spacing: 7) {
                 Text(title)
-                    .font(.system(size: titleSize, weight: .semibold, design: .rounded))
+                    .font(Typography.rounded(size: titleSize, weight: .semibold))
                     .foregroundStyle(color)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
@@ -322,7 +322,7 @@ struct MacroIndicatorCard: View {
                                     .minimumScaleFactor(0.7)
                                 if let change = changeText {
                                     FinancialText(change)
-                                        .font(.system(size: changeSize, weight: .semibold, design: .rounded))
+                                        .font(Typography.rounded(size: changeSize, weight: .semibold))
                                         .monospacedDigit()
                                         .foregroundStyle(.secondary)
                                         .fixedSize()
@@ -331,7 +331,7 @@ struct MacroIndicatorCard: View {
                                 ChartSkeletonShape(width: 82, height: valueSize)
                             } else {
                                 Text(L10n.text("暂无数据"))
-                                    .font(.system(size: changeSize, design: .rounded))
+                                    .font(Typography.rounded(size: changeSize))
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -393,22 +393,22 @@ struct MacroIndicatorSection: View {
     private let store = MacroIndicatorStore.shared
 
     private static let unitedStates: [(id: String, title: String, color: Color)] = [
-        ("fed-funds", L10n.text("联邦基金利率"), Color(red: 0.204, green: 0.459, blue: 1.000)),
-        ("cpi", L10n.text("CPI 同比"), Color(red: 0.890, green: 0.000, blue: 0.271)),
-        ("unemployment", L10n.text("失业率"), Color(red: 0.000, green: 0.620, blue: 0.540)),
-        ("high-yield", L10n.text("高收益债利差"), Color(red: 1.000, green: 0.584, blue: 0.000)),
-        ("treasury-2y", L10n.text("2 年期美债"), Color(red: 139 / 255, green: 92 / 255, blue: 246 / 255)),
-        ("treasury-spread", L10n.text("10 年 − 2 年利差"), Color(red: 0.400, green: 0.400, blue: 0.450)),
+        ("fed-funds", L10n.text("联邦基金利率"), CatfolioPalette.ChartSeries.blue),
+        ("cpi", L10n.text("CPI 同比"), CatfolioPalette.ChartSeries.rose),
+        ("unemployment", L10n.text("失业率"), CatfolioPalette.ChartSeries.teal),
+        ("high-yield", L10n.text("高收益债利差"), CatfolioPalette.ChartSeries.orange),
+        ("treasury-2y", L10n.text("2 年期美债"), CatfolioPalette.researchViolet),
+        ("treasury-spread", L10n.text("10 年 − 2 年利差"), CatfolioPalette.ChartSeries.neutral),
     ]
 
     private static let europe: [(id: String, title: String, color: Color)] = [
-        ("ecb-deposit", L10n.text("欧元区存款利率"), Color(red: 0.204, green: 0.459, blue: 1.000)),
-        ("ea-inflation", L10n.text("欧元区通胀"), Color(red: 0.890, green: 0.000, blue: 0.271)),
-        ("ea-gdp", L10n.text("欧元区 GDP 同比"), Color(red: 0.000, green: 0.620, blue: 0.540)),
-        ("eu-unemployment", L10n.text("欧盟失业率"), Color(red: 1.000, green: 0.584, blue: 0.000)),
-        ("uk-cpi", L10n.text("英国 CPI 同比"), Color(red: 0.780, green: 0.000, blue: 0.910)),
+        ("ecb-deposit", L10n.text("欧元区存款利率"), CatfolioPalette.ChartSeries.blue),
+        ("ea-inflation", L10n.text("欧元区通胀"), CatfolioPalette.ChartSeries.rose),
+        ("ea-gdp", L10n.text("欧元区 GDP 同比"), CatfolioPalette.ChartSeries.teal),
+        ("eu-unemployment", L10n.text("欧盟失业率"), CatfolioPalette.ChartSeries.orange),
+        ("uk-cpi", L10n.text("英国 CPI 同比"), CatfolioPalette.ChartSeries.magenta),
         ("uk-unemployment", L10n.text("英国失业率"), Color(red: 0.000, green: 0.540, blue: 0.760)),
-        ("eur-usd", L10n.text("欧元/美元"), Color(red: 0.400, green: 0.400, blue: 0.450)),
+        ("eur-usd", L10n.text("欧元/美元"), CatfolioPalette.ChartSeries.neutral),
         ("eur-gbp", L10n.text("欧元/英镑"), Color(red: 0.600, green: 0.470, blue: 0.250)),
     ]
 

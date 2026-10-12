@@ -74,7 +74,7 @@ struct HoldingVolumeRow: View {
 /// traded — and the dark and white dots are the price and the cost.
 struct HoldingVolumeProfileBar: View {
     let prices: HoldingVolumePrices
-    private let valueAreaColor = Color(red: 52 / 255, green: 117 / 255, blue: 1)
+    private let valueAreaColor = CatfolioPalette.securityPriceLine
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -112,7 +112,7 @@ struct HoldingVolumeProfileBar: View {
 /// Figma 494:19187: an 8 × 40 range with a 6pt current marker and 4pt cost marker.
 struct Holding52WeekBar: View {
     let positions: Holding52WeekPositions?
-    private let rangeColor = Color(red: 52 / 255, green: 117 / 255, blue: 1)
+    private let rangeColor = CatfolioPalette.securityPriceLine
 
     var body: some View {
         ZStack(alignment: .top) {

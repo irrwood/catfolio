@@ -3,16 +3,6 @@
     {
       "filename": "art.svg",
       "idiom": "universal"
-    },
-    {
-      "filename": "dark.svg",
-      "idiom": "universal",
-      "appearances": [
-        {
-          "appearance": "luminosity",
-          "value": "dark"
-        }
-      ]
     }
   ],
   "info": {
@@ -20,6 +10,7 @@
     "version": 1
   },
   "properties": {
-    "preserves-vector-representation": true
+    "preserves-vector-representation": true,
+    "template-rendering-intent": "template"
   }
 }

@@ -73,29 +73,41 @@ struct AIView: View {
         Group {
             if usesRootTabHeader {
                 embeddedConversation
-                    .settingsNavigationTitle(L10n.text(showsSidebar ? "对话" : "AI 助手"))
+                    .navigationTitle(showsSidebar ? L10n.text("对话") : "")
+                    .navigationBarTitleDisplayMode(.inline)
                     .toolbarVisibility(.visible, for: .navigationBar)
+                    .toolbarBackground(.hidden, for: .navigationBar)
                     .softTopScrollEdge()
+                    .overlay { AIConversationTopFade() }
                     .toolbar {
                         ToolbarItem(placement: .topBarLeading) {
-                            Button(L10n.text(showsSidebar ? "回到对话" : "对话列表"),
-                                   systemImage: showsSidebar ? "chevron.down" : "line.3.horizontal") {
+                            Button {
                                 showsSidebar ? dismissSidebar() : showSidebar()
+                            } label: {
+                                Label {
+                                    Text(L10n.text(showsSidebar ? "回到对话" : "对话列表"))
+                                } icon: {
+                                    if showsSidebar {
+                                        Image(systemName: "chevron.down")
+                                    } else {
+                                        Image("AssistantMenu").renderingMode(.template)
+                                    }
+                                }
                             }
+                            .labelStyle(.iconOnly)
                             .accessibilityIdentifier("ai.conversations.toggle")
                             // Recreate the native bar button when its role
                             // changes; reusing it can detach its glyph after
                             // returning to this tab on iOS 27.
                             .id(showsSidebar)
                         }
-                        if showsSidebar {
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button(L10n.text("新对话"), systemImage: "square.and.pencil") {
-                                    startNewConversation()
-                                    dismissSidebar()
-                                }
-                                .accessibilityIdentifier("ai.conversations.new")
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button(L10n.text("新对话"), systemImage: "square.and.pencil") {
+                                startNewConversation()
+                                dismissSidebar()
                             }
+                            .accessibilityIdentifier("ai.conversations.new")
+                            .disabled(isRestoringHistory)
                         }
                     }
             } else if isEmbedded {
@@ -279,7 +291,7 @@ struct AIView: View {
                 .padding(.horizontal, 16)
             }
             .scrollTargetLayout()
-            .padding(.top, usesRootTabHeader ? 0 : (isEmbedded ? 64 : 16))
+            .padding(.top, usesRootTabHeader ? 20 : (isEmbedded ? 64 : 16))
             .padding(.bottom, 16)
             .background {
                 if usesRootTabHeader {
@@ -365,7 +377,10 @@ struct AIView: View {
                     .background {
                         if showsSidebar { card.fill(SettingsTemplate.card) }
                     }
-                    .clipShape(card)
+                    .clipShape(AIConversationCardClip(
+                        radius: showsSidebar ? Self.conversationCardRadius : 0,
+                        topOverflow: showsSidebar ? 0 : geometry.safeAreaInsets.top + 80
+                    ))
                     // Outside the clip: the card casts upwards onto the list,
                     // so it reads as the conversation lifted off it.
                     .background {
@@ -892,12 +907,15 @@ struct AIView: View {
 
     /// Opens an empty conversation. The current one is kept.
     private func startNewConversation() {
+        dismissKeyboard()
         cancelPendingAnswer()
         foldActiveConversationIntoLibrary()
         resetConversationScrollPosition()
         let conversation = AIConversation()
         activeConversationID = conversation.id
         messages = []
+        question = ""
+        pendingQuestionPreset = nil
         attentionReports = [:]
         lastAttentionContext = nil
         errorMessage = nil

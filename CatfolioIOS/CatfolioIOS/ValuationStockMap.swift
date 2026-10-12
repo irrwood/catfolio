@@ -31,7 +31,7 @@ struct ValuationStockMap: View {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(L10n.text("估值地图"))
-                        .font(.system(size: 27, weight: .semibold, design: .rounded))
+                        .font(Typography.rounded(size: 27, weight: .semibold))
                     Text("P/E · EPS Growth · ROIC")
                         .font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
                 }
@@ -99,7 +99,7 @@ struct ValuationStockMap: View {
                 Rectangle().fill(.white.opacity(0.09)).frame(height: 0.5).padding(.horizontal, 20)
                 if let selected { selectedMetrics(selected).padding(20) }
             }
-            .background(Color(red: 0.045, green: 0.063, blue: 0.094))
+            .background(CatfolioPalette.stockMapBackground)
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             .environment(\.colorScheme, .dark)
 
@@ -148,7 +148,7 @@ struct ValuationStockMap: View {
                 } label: {
                     HStack(spacing: 9) {
                         Circle().fill(StockMapAppearance.color(row.ticker, tickers: plotted.map(\.ticker))).frame(width: 8, height: 8)
-                        Text(row.ticker).font(.system(size: 19, weight: .semibold, design: .rounded))
+                        Text(row.ticker).font(Typography.rounded(size: 19, weight: .semibold))
                         Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(.white.opacity(0.4))
                     }.frame(minHeight: 44)
                 }
@@ -176,7 +176,7 @@ struct ValuationStockMap: View {
     private func metric(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(title).font(.system(size: 10, weight: .medium)).foregroundStyle(.white.opacity(0.5))
-            FinancialText(value).font(.system(size: 24, weight: .medium, design: .rounded)).monospacedDigit()
+            FinancialText(value).font(Typography.rounded(size: 24, weight: .medium)).monospacedDigit()
                 .minimumScaleFactor(0.7).lineLimit(1)
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -419,10 +419,10 @@ private struct StockMapScene: View {
                     path.addLine(to: label.center)
                 }.stroke(color.opacity(0.55), lineWidth: 0.7)
                 Text(label.ticker)
-                    .font(.system(size: label.ticker == selectedTicker ? 11 : 10, weight: .semibold, design: .rounded))
+                    .font(Typography.rounded(size: label.ticker == selectedTicker ? 11 : 10, weight: .semibold))
                     .foregroundStyle(color)
                     .padding(.horizontal, 4).padding(.vertical, 2)
-                    .background(Color(red: 0.045, green: 0.063, blue: 0.094).opacity(0.85), in: RoundedRectangle(cornerRadius: 3))
+                    .background(CatfolioPalette.stockMapBackground.opacity(0.85), in: RoundedRectangle(cornerRadius: 3))
                     .position(label.center)
             }
         }

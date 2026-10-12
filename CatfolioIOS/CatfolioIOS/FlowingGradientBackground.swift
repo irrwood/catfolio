@@ -127,11 +127,11 @@ struct FlowingGradientPalette {
     /// A deep-blue ground with a calm blue glow, sampled from the calm
     /// reference frame.
     static let night = FlowingGradientPalette(
-        baseTop: Color(red: 0.012, green: 0.020, blue: 0.130),
-        baseBottom: Color(red: 0.012, green: 0.020, blue: 0.130),
+        baseTop: CatfolioPalette.Ambient.night,
+        baseBottom: CatfolioPalette.Ambient.night,
         halo: Color(red: 0.000, green: 0.420, blue: 0.710),
         core: Color(red: 0.000, green: 0.580, blue: 0.900),
-        fringe: Color(red: 1.000, green: 0.450, blue: 0.850),
+        fringe: CatfolioPalette.Ambient.pinkFringe,
         dispersion: 2,
         grain: 0.035,
         intensity: 0.6
@@ -140,7 +140,7 @@ struct FlowingGradientPalette {
     /// The home page's light gradient (Figma 223:31122, #9ADCFF to white)
     /// set moving: a vivid azure halo with a white core drifts over it.
     static let day = FlowingGradientPalette(
-        baseTop: Color(red: 154 / 255, green: 220 / 255, blue: 1),
+        baseTop: CatfolioPalette.homeSky,
         baseBottom: .white,
         halo: Color(red: 0.300, green: 0.600, blue: 1.000),
         core: .white,
@@ -156,11 +156,11 @@ struct FlowingGradientPalette {
     /// The earlier, brighter night: a vivid blue halo and a pale cyan core
     /// at full strength.
     static let nightBright = FlowingGradientPalette(
-        baseTop: Color(red: 0.012, green: 0.020, blue: 0.075),
-        baseBottom: Color(red: 0.012, green: 0.020, blue: 0.075),
+        baseTop: CatfolioPalette.Ambient.nightBright,
+        baseBottom: CatfolioPalette.Ambient.nightBright,
         halo: Color(red: 0.100, green: 0.520, blue: 1.000),
         core: Color(red: 0.600, green: 1.000, blue: 1.000),
-        fringe: Color(red: 1.000, green: 0.450, blue: 0.850),
+        fringe: CatfolioPalette.Ambient.pinkFringe,
         dispersion: 2,
         grain: 0.035
     )
@@ -236,8 +236,8 @@ struct FlowingGradientPalette {
     /// Day is sampled from the Figma render of 486:6627; night is the same
     /// arch in navy with a cyan rim.
     static let clearSkyDay = FlowingGradientPalette(
-        baseTop: Color(red: 0.482, green: 0.820, blue: 1.000),
-        baseBottom: Color(red: 0.482, green: 0.820, blue: 1.000),
+        baseTop: CatfolioPalette.Ambient.clearSkyDay,
+        baseBottom: CatfolioPalette.Ambient.clearSkyDay,
         halo: Color(red: 0.680, green: 0.890, blue: 1.000),
         core: Color(red: 0.945, green: 0.980, blue: 1.000),
         fringe: .white,
@@ -246,8 +246,8 @@ struct FlowingGradientPalette {
     )
 
     static let clearSkyNight = FlowingGradientPalette(
-        baseTop: Color(red: 0.020, green: 0.070, blue: 0.160),
-        baseBottom: Color(red: 0.020, green: 0.070, blue: 0.160),
+        baseTop: CatfolioPalette.Ambient.clearSkyNight,
+        baseBottom: CatfolioPalette.Ambient.clearSkyNight,
         halo: Color(red: 0.060, green: 0.200, blue: 0.360),
         core: Color(red: 0.500, green: 0.820, blue: 0.980),
         fringe: .white,
@@ -258,7 +258,7 @@ struct FlowingGradientPalette {
     /// For the bright rings: the ground is the home page's own gradient,
     /// the bands a deeper shade of its sky blue, the rims near white.
     static let brightRingsDay = FlowingGradientPalette(
-        baseTop: Color(red: 154 / 255, green: 220 / 255, blue: 1),
+        baseTop: CatfolioPalette.homeSky,
         baseBottom: .white,
         halo: Color(red: 0.420, green: 0.740, blue: 0.970),
         core: .white,
@@ -269,8 +269,8 @@ struct FlowingGradientPalette {
     )
 
     static let brightRingsNight = FlowingGradientPalette(
-        baseTop: Color(red: 0.020, green: 0.050, blue: 0.100),
-        baseBottom: Color(red: 0.020, green: 0.050, blue: 0.100),
+        baseTop: CatfolioPalette.Ambient.ringsNight,
+        baseBottom: CatfolioPalette.Ambient.ringsNight,
         halo: Color(red: 0.160, green: 0.420, blue: 0.680),
         core: Color(red: 0.880, green: 0.970, blue: 1.000),
         fringe: .white,

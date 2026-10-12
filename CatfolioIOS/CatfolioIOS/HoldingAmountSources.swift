@@ -9,7 +9,7 @@ struct HoldingAmountSourcesCard: View {
             HoldingDetailActionCardLabel(title: L10n.text("金额来源"),
                 subtitle: L10n.text("直接持仓与 ETF 持仓"))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PanelPressButtonStyle())
         .accessibilityIdentifier("holding-amount-sources-entry")
         .appSheet(isPresented: $showsSources) {
             HoldingAmountSourcesPage(ticker: ticker)

@@ -114,7 +114,7 @@ final class CostMarketPlotSeriesCache {
             points: data.plottedRows.map {
                 StandardLineChartPoint(id: "cost|\($0.id)", date: $0.date, value: $0.cost)
             },
-            color: Color(red: 0.204, green: 0.459, blue: 1),
+            color: CatfolioPalette.ChartSeries.blue,
             lineWidth: 2,
             latestPointRadius: showsLatestPoint ? 5 : 0,
             latestPointUsesGlass: false

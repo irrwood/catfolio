@@ -28,7 +28,8 @@ extension LocalMarketDataClient {
         let symbol = Self.yahooSymbol(ticker: ticker, currency: currency)
         async let dailyCloses = historicalCloses(symbol: symbol, from: start, to: end,
                                                 cachedOnly: cachedOnly, forceRefresh: forceRefresh)
-        async let latestIntradayBars = intradayBars(symbol: symbol, forceRefresh: forceRefresh, cachedOnly: cachedOnly)
+        async let latestIntradayBars = intradayBars(symbol: symbol, forceRefresh: forceRefresh,
+                                                    cachedOnly: cachedOnly, includingExtendedHours: true)
         let closes = try await dailyCloses
         let intradayBars = (try? await latestIntradayBars) ?? []
         guard !closes.isEmpty else { throw LocalServiceError.noHistoricalPrices }
@@ -45,13 +46,14 @@ extension LocalMarketDataClient {
             }
             .sorted { $0.dateText < $1.dateText }
         guard points.count > 1 else { throw LocalServiceError.noHistoricalPrices }
-        let intradayPoints = intradayBars.compactMap { bar -> SecurityPricePoint? in
+        let allIntradayPoints = intradayBars.compactMap { bar -> SecurityPricePoint? in
             let adjusted = bar.close * scale
             guard adjusted.isFinite, adjusted > 0 else { return nil }
             return SecurityPricePoint(
                 dateText: String(Int(bar.timestamp.timeIntervalSince1970)),
                 close: adjusted,
-                timestamp: bar.timestamp
+                timestamp: bar.timestamp,
+                sessionWindow: bar.sessionWindow
             )
         }
 
@@ -83,42 +85,78 @@ extension LocalMarketDataClient {
             $0.dateText == $1.dateText ? $0.action < $1.action : $0.dateText < $1.dateText
         }
 
+        let hasExtendedHours = Self.supportsMassiveStockSymbol(symbol)
+        let extendedPoints = allIntradayPoints.filter { hasExtendedHours && $0.marketSession.isExtended }
+        let regularPoints = allIntradayPoints.filter { !hasExtendedHours || $0.marketSession == .regular }
         return SecurityPriceHistory(
             ticker: ticker,
             currency: currency,
             points: points,
-            intradayPoints: intradayPoints,
-            trades: trades
+            intradayPoints: regularPoints,
+            trades: trades,
+            extendedHoursPoints: extendedPoints
         )
     }
 
     func intradayBars(symbol: String, forceRefresh: Bool = false, allowsStaleFallback: Bool = true,
-                              cachedOnly: Bool = false) async throws -> [MarketIntradayBar] {
-        let cached = await LocalIntradayPriceCache.shared.lookup(symbol: symbol)
-        if cachedOnly { return cached?.bars ?? [] }
-        if !forceRefresh, let cached, cached.isFresh { return cached.bars }
+                      cachedOnly: Bool = false, includingExtendedHours: Bool = false) async throws -> [MarketIntradayBar] {
+        try await Self.loadIntradayBars(symbol: symbol, forceRefresh: forceRefresh,
+            allowsStaleFallback: allowsStaleFallback, cachedOnly: cachedOnly,
+            includingExtendedHours: includingExtendedHours, cache: .shared,
+            yahoo: { try await yahooIntradayBars(symbol: symbol) },
+            massive: {
+                guard let key = KeychainStore.string(for: LocalServiceKeys.massive), !key.isEmpty else {
+                    throw LocalServiceError.noMarketData
+                }
+                return try await massiveIntradayBars(symbol: symbol, key: key)
+            })
+    }
+
+    /// Keep provider ordering, validation and cache fallback in one path, so
+    /// a failed or empty Yahoo response reaches Massive before stale data.
+    static func loadIntradayBars(
+        symbol: String, forceRefresh: Bool = false, allowsStaleFallback: Bool = true,
+        cachedOnly: Bool = false, includingExtendedHours: Bool = false,
+        cache: LocalIntradayPriceCache,
+        yahoo: @escaping () async throws -> [MarketIntradayBar],
+        massive: @escaping () async throws -> [MarketIntradayBar]
+    ) async throws -> [MarketIntradayBar] {
+        try Task.checkCancellation()
+        let cached = await cache.lookup(symbol: symbol)
+        func session(_ bars: [MarketIntradayBar]) throws -> [MarketIntradayBar] {
+            try Self.latestMarketSession(from: bars, symbol: symbol, includingExtendedHours: includingExtendedHours)
+        }
+        if cachedOnly { return (try? session(cached?.bars ?? [])) ?? [] }
+        if !forceRefresh, let cached, cached.isFresh,
+           !includingExtendedHours || !Self.supportsMassiveStockSymbol(symbol)
+               || cached.includesExtendedHours,
+           let bars = try? session(cached.bars) { return bars }
 
         var latestError: Error?
-        if Self.supportsMassiveStockSymbol(symbol),
-           let key = KeychainStore.string(for: LocalServiceKeys.massive), !key.isEmpty {
+        // Extended-hours detail requests prefer Yahoo's actual session
+        // windows so early closes are classified by the feed itself.
+        let providers = Self.supportsMassiveStockSymbol(symbol)
+            ? (includingExtendedHours ? [yahoo, massive] : [massive, yahoo])
+            : [yahoo]
+        for fetch in providers {
             do {
-                let bars = try await massiveIntradayBars(symbol: symbol, key: key)
-                await LocalIntradayPriceCache.shared.save(symbol: symbol, bars: bars)
-                return bars
+                let bars = try await fetch()
+                try Task.checkCancellation()
+                let selected = try session(bars)
+                await cache.save(symbol: symbol, bars: bars, includesExtendedHours: includingExtendedHours)
+                return selected
             } catch {
+                // Closing the page is not an outage: do not start another
+                // network request or replace its cache after cancellation.
+                if error is CancellationError || (error as? URLError)?.code == .cancelled {
+                    throw error
+                }
+                try Task.checkCancellation()
                 latestError = error
             }
         }
 
-        do {
-            let bars = try await yahooIntradayBars(symbol: symbol)
-            await LocalIntradayPriceCache.shared.save(symbol: symbol, bars: bars)
-            return bars
-        } catch {
-            latestError = error
-        }
-
-        if allowsStaleFallback, let cached { return cached.bars }
+        if allowsStaleFallback, let cached { return try session(cached.bars) }
         throw latestError ?? LocalServiceError.noMarketData
     }
 
@@ -170,11 +208,26 @@ extension LocalMarketDataClient {
                 close: aggregate.close
             )
         }
-        return try Self.latestMarketSession(from: bars, symbol: symbol)
+        return bars
     }
 
     private func yahooIntradayBars(symbol: String) async throws -> [MarketIntradayBar] {
-        let endDate = Date()
+        let request = Self.yahooIntradayRequest(symbol: symbol)
+        let (data, response) = try await MarketRequestCoalescer.shared.data(for: request, session: Self.yahooSession)
+        guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            throw LocalServiceError.remote("Yahoo 日内行情请求失败（\(http.statusCode)）")
+        }
+        do {
+            return try Self.decodeYahooIntradayBars(data, symbol: symbol)
+        } catch let error as DecodingError {
+            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
+            throw error
+        }
+    }
+
+    static func yahooIntradayRequest(symbol: String, now: Date = .now) -> URLRequest {
+        let endDate = now
         let startDate = Calendar(identifier: .gregorian).date(
             byAdding: .day,
             value: -7,
@@ -187,24 +240,17 @@ extension LocalMarketDataClient {
             URLQueryItem(name: "period2", value: String(Int(endDate.timeIntervalSince1970) + 60)),
             URLQueryItem(name: "interval", value: "5m"),
             URLQueryItem(name: "events", value: "history"),
-            URLQueryItem(name: "includePrePost", value: "false"),
+            URLQueryItem(name: "includePrePost", value: "true"),
         ]
         var request = URLRequest(url: components.url!)
         request.timeoutInterval = 9
         request.setValue("Mozilla/5.0 Catfolio-iOS", forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await MarketRequestCoalescer.shared.data(for: request, session: Self.yahooSession)
-        guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else {
-            throw LocalServiceError.remote("Yahoo 日内行情请求失败（\(http.statusCode)）")
-        }
-        let payload: YahooChartResponse
-        do {
-            payload = try JSONDecoder().decode(YahooChartResponse.self, from: data)
-        } catch {
-            DataSourceHealth.reportUnusable(DataSource.of(request.url), issue: .invalidFormat)
-            throw error
-        }
+        return request
+    }
+
+    static func decodeYahooIntradayBars(_ data: Data, symbol: String) throws -> [MarketIntradayBar] {
+        let payload = try JSONDecoder().decode(YahooChartResponse.self, from: data)
         if let error = payload.chart.error {
             throw LocalServiceError.remote(error.description ?? error.code ?? "Yahoo 日内行情读取失败")
         }
@@ -220,39 +266,39 @@ extension LocalMarketDataClient {
         bars.reserveCapacity(timestamps.count)
         for (index, timestamp) in timestamps.enumerated() where index < closes.count {
             guard let close = closes[index], close.isFinite, close > 0 else { continue }
+            let date = Date(timeIntervalSince1970: TimeInterval(timestamp))
             bars.append(MarketIntradayBar(
-                timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp)),
-                close: close * unitScale
+                timestamp: date,
+                close: close * unitScale,
+                sessionWindow: result.meta?.sessionWindow(at: date)
             ))
         }
-        return try Self.latestMarketSession(from: bars, symbol: symbol)
+        guard !bars.isEmpty else { throw LocalServiceError.noMarketData }
+        return bars
     }
 
-    private static func latestMarketSession(
+    static func latestMarketSession(
         from bars: [MarketIntradayBar],
-        symbol: String
+        symbol: String,
+        includingExtendedHours: Bool = false
     ) throws -> [MarketIntradayBar] {
-        let sorted = bars.sorted { $0.timestamp < $1.timestamp }
+        let usStock = supportsMassiveStockSymbol(symbol)
+        // Filter before choosing the day: at 04:00 today's first pre-market
+        // bar must not displace yesterday's regular quote for portfolio math.
+        let sorted = bars.filter { bar in
+            guard bar.close.isFinite, bar.close > 0 else { return false }
+            guard usStock else { return true }
+            let session = bar.marketSession
+            return session == .regular || (includingExtendedHours && session.isExtended)
+        }.sorted { $0.timestamp < $1.timestamp }
         let grouped = Dictionary(grouping: sorted) {
             sessionKey(for: $0.timestamp, symbol: symbol)
         }
         guard let latestKey = grouped.keys.max(),
-              let latest = grouped[latestKey], latest.count > 1 else {
+              let latest = grouped[latestKey], !latest.isEmpty else {
             throw LocalServiceError.noMarketData
         }
-        // Massive includes pre-market and after-hours aggregates, whereas the
-        // Yahoo fallback is requested with includePrePost=false. Normalize U.S.
-        // listings to the regular session so the same 1D range is shown no
-        // matter which provider answered.
-        guard supportsMassiveStockSymbol(symbol) else { return latest }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = marketTimeZone(for: symbol)
-        let regularSession = latest.filter { bar in
-            let values = calendar.dateComponents([.hour, .minute], from: bar.timestamp)
-            let minute = (values.hour ?? 0) * 60 + (values.minute ?? 0)
-            return minute >= 9 * 60 + 30 && minute <= 16 * 60
-        }
-        return regularSession.count > 1 ? regularSession : latest
+        return latest
     }
 
     static func marketDayStart(_ day: String, symbol: String) -> Date? {

@@ -37,6 +37,13 @@ struct CorporateEventsCardContent: View {
                     Text(L10n.text("公司日历"))
                         .appText(.heading, weight: .medium, trimsLeading: true)
                         .foregroundStyle(CatfolioTheme.primaryText)
+                        .padding(.leading, SettingsTemplate.iconSize + 12)
+                        .overlay(alignment: .leading) {
+                            Image("CorporateCalendarIcon")
+                                .renderingMode(.template)
+                                .foregroundStyle(CatfolioTheme.primaryText)
+                                .accessibilityHidden(true)
+                        }
                     Spacer(minLength: 8)
                     if isLoading && events.isEmpty {
                         ProgressView().controlSize(.mini)
@@ -58,7 +65,14 @@ struct CorporateEventsCardContent: View {
                         ContentPanelSeparator()
                             .padding(.leading, HoldingDetailCardStyle.contentInset + 44 + 16)
                     }
-                    CorporateEventCardRow(event: event, holding: scope.holding(event))
+                    NavigationLink {
+                        CorporateCalendarView(holdings: holdings)
+                    } label: {
+                        CorporateEventCardRow(event: event, holding: scope.holding(event))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(SettingsRowButtonStyle())
+                    .accessibilityIdentifier("corporate-calendar.event.open.\(event.id)")
                 }
             } else {
                 Text(L10n.text(isLoading ? "加载中…" : "近期没有财报或除息"))

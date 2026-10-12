@@ -24,8 +24,8 @@ extension CorporateEvent {
     var tint: Color {
         switch kind {
         case .earnings: Color(red: 0.52, green: 0.47, blue: 0.95).opacity(0.18)
-        case .exDividend: Color(red: 0.58, green: 0.66, blue: 0.27).opacity(0.22)
-        case .dividendPayment: Color(red: 0.58, green: 0.66, blue: 0.27).opacity(0.12)
+        case .exDividend: CatfolioPalette.calendarMutedGreen.opacity(0.22)
+        case .dividendPayment: CatfolioPalette.calendarMutedGreen.opacity(0.12)
         }
     }
 

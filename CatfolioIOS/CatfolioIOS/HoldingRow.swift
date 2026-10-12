@@ -227,7 +227,7 @@ struct HoldingRow: View {
                 .accessibilityLabel(withWeightDescription(ticker))
             }
         }
-        .foregroundStyle(Color(red: 142 / 255, green: 142 / 255, blue: 147 / 255))
+        .foregroundStyle(CatfolioPalette.fixedNeutralGray)
         .lineLimit(1)
         .truncationMode(.tail)
     }
@@ -248,7 +248,7 @@ struct HoldingRow: View {
     private func price(_ value: Double?, currency: String?, isCost: Bool) -> some View {
         FinancialText(priceText(value, currency: currency))
             .appNumber(isCost ? .footnote : .callout, weight: isCost ? .medium : .semibold)
-            .foregroundStyle(isCost ? Color(red: 142 / 255, green: 142 / 255, blue: 147 / 255) : CatfolioTheme.primaryText)
+            .foregroundStyle(isCost ? CatfolioPalette.fixedNeutralGray : CatfolioTheme.primaryText)
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
     }
@@ -391,7 +391,7 @@ struct SecurityClassBadge: View {
     let marker: String
     @ScaledMetric(relativeTo: .caption) private var badgeHeight: CGFloat = 18
 
-    private let gray = Color(red: 142 / 255, green: 142 / 255, blue: 147 / 255)
+    private let gray = CatfolioPalette.fixedNeutralGray
 
     var body: some View {
         Text(marker)

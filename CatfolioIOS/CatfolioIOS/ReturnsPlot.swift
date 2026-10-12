@@ -52,7 +52,7 @@ struct FastReturnsPlot: View {
                 : nil,
             rangeSeriesIDs: [ReturnsSeriesStyle.portfolio],
             rangePrimarySeriesID: ReturnsSeriesStyle.portfolio,
-            yAxisFont: .system(size: 14, weight: .regular, design: .rounded).italic(),
+            yAxisFont: Typography.rounded(size: 14, weight: .regular).italic(),
             yAxisColor: .primary.opacity(0.20),
             yAxisLabel: { _ in "" },
             xAxisLabel: shortDate,
@@ -74,7 +74,7 @@ struct FastReturnsPlot: View {
                 ForEach(prepared.yTicks.indices, id: \.self) { index in
                     let value = domain.contains(0) && index == zeroIndex ? 0 : prepared.yTicks[index]
                     FinancialText(axisLabel(value))
-                        .font(.system(size: 14, weight: .regular, design: .rounded))
+                        .font(Typography.rounded(size: 14, weight: .regular))
                         .tracking(2)
                         .foregroundStyle(Color.white.opacity(0.3))
                         .lineLimit(1)

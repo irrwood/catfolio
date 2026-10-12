@@ -11,7 +11,9 @@ Two of these rules are enforced by `scripts/check_ios_design.py`, which fails th
 
 This is the rule the rest of the section depends on, and it is enforced rather than encouraged. Before it existed the app carried nine different greens all meaning "this went up" and five reds meaning "this went down", because every screen picked its own. A reader comparing two rows cannot tell a deliberate shade from an accidental one.
 
-Colour literals live in one file. On iOS that is `DesignSystem.swift`; everywhere else, name a token.
+Colour literals live in `CatfolioTheme.swift` (and the shared `DesignSystem.swift` primitives); everywhere else, name a token.
+
+Appearance-preserving cleanup reuses exact colour components, including opacity and colour space. Do not round an existing decimal RGB swatch to a nearby hex value. `CatfolioPalette.ChartSeries` holds repeated categorical colours and `CatfolioPalette.Ambient` holds repeated animated-background colours; views retain their existing assignments, stops and blending.
 
 `scripts/check_ios_design.py` fails on a literal `Color(red:)`, `Color(white:)` or `Color(hue:)` written anywhere else. Files that predate the rule carry a budget equal to what they held the day it landed: the count may fall and never rise, so the debt drains without blocking work on the files that still carry it. Lower a budget when you clear one; delete the entry at zero.
 
@@ -26,7 +28,7 @@ There is no fifth option.
 
 ### Semantic Colour
 
-`CatfolioTheme` in `DesignSystem.swift` is the source of truth.
+`CatfolioTheme` in `CatfolioTheme.swift` is the source of truth.
 
 Neutral UI roles use dynamic system colours: `neutralIcon` uses `secondaryLabel`,
 `neutralFill` uses `secondarySystemFill`, `subtleFill` uses `quaternarySystemFill`,
@@ -94,6 +96,8 @@ Notes on the columns.
 
 Call sites ask for a role: `appText`, `appNumber`, `appCaps`. For a size the scale does not name, `Typography.number(size:)` and `Typography.text(size:)` still route through the tokens' faces and features.
 
+When a change explicitly preserves the current appearance, existing native SF Rounded fonts can move to `Typography.rounded(size:weight:)` or `Typography.rounded(_:weight:)`. These preserve the original glyphs, size, weight and SwiftUI scaling; they do not opt existing text into alternate digits, currency glyphs, heavier figure weights or extra leading. Keep existing monospacing and italic modifiers. New financial typography continues to use `appNumber` / `Typography.number`.
+
 ### Numerals
 
 
@@ -133,6 +137,8 @@ So there is one ladder: `DisplayFormat.compact` and `DisplayFormat.compactMoney`
 **The suffix follows the language.** 万, 亿 and 万亿 when the app is in Chinese; K, M, B and T when it is in English. A Chinese reader counts in 万 and 亿, and a figure written 1.2B for that reader has to be converted before it means anything. This is one convention, not two: the same call produces the right suffix in either language, which is why there is no style to choose.
 
 The locale is passed explicitly at the call. `formatted()` otherwise follows `Locale.current`, which tracks the device — and the language preference here lives in `AppLanguage` without going through `AppleLanguages`, so somebody reading the app in Chinese on an English phone would be shown K and M. Anything new that formats a figure has to pass it too.
+
+The existing DCA axis has an appearance-preserving compatibility entry point, `DisplayFormat.compactAxis`: whole compact units, device locale and the existing ungrouped labels below the abbreviation threshold. It shares the same internal abbreviation formatter. `compact` and `compactMoney` retain the app-language convention above.
 
 How much precision survives is the one thing a call site chooses:
 

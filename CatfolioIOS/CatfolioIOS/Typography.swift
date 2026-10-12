@@ -138,6 +138,18 @@ enum TypeScale: CaseIterable, Sendable {
 /// scale through `@ScaledMetric`, which SwiftUI re-evaluates on its own when
 /// the reader changes their text size.
 enum Typography {
+    /// Existing SF Rounded treatments, centralized without changing their
+    /// glyphs, digit spacing, weight or scaling. Use this for appearance-
+    /// preserving migrations; new financial text uses `number` / `appNumber`.
+    static func rounded(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        .system(size: size, weight: weight, design: .rounded)
+    }
+
+    /// Keep SwiftUI's native Dynamic Type ramp for existing semantic fonts.
+    static func rounded(_ style: Font.TextStyle, weight: Font.Weight? = nil) -> Font {
+        .system(style, design: .rounded, weight: weight)
+    }
+
     /// SwiftUI's font design does not reach UIKit's native large titles.
     @MainActor
     static func configureNavigationTitles() {

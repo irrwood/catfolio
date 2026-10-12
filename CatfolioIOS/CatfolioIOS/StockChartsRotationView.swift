@@ -25,12 +25,12 @@ struct StockChartsRotationView: View {
                     playback(response)
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text(L10n.text("六大市场指数")).font(.system(size: 17, weight: .semibold, design: .rounded))
+                            Text(L10n.text("六大市场指数")).font(Typography.rounded(size: 17, weight: .semibold))
                             Spacer()
                             if selected != nil { Button(L10n.text("取消选择")) { selected = nil }.font(.caption) }
                         }
                         Text(L10n.text("周线 · 30 周尾迹 · 基准 $SPX"))
-                            .font(.system(size: 12, design: .rounded)).foregroundStyle(.secondary)
+                            .font(Typography.rounded(size: 12)).foregroundStyle(.secondary)
                         ForEach(StockChartsRRGResponse.symbols, id: \.self) { symbol in
                             if let value = current.rrgdata[symbol], let first = start.rrgdata[symbol] {
                                 market(symbol, name: response.name(symbol), value: value, change: value.price / first.price - 1)
@@ -50,7 +50,7 @@ struct StockChartsRotationView: View {
                         Link("StockCharts · Relative Rotation Graphs®", destination: StockChartsRRGResponse.loadURL)
                         Text(L10n.text("仅供市场观察，不构成投资建议。"))
                     }
-                    .font(.system(size: 11, design: .rounded)).foregroundStyle(.secondary)
+                    .font(Typography.rounded(size: 11)).foregroundStyle(.secondary)
                 } else if store.isLoading {
                     StandardLineChartSkeleton(axisWidth: 0, topInset: 0, lineWidths: [1.3], appearanceID: "rotation-benchmark")
                         .frame(height: 70)
@@ -122,10 +122,10 @@ struct StockChartsRotationView: View {
     private func benchmark(current: StockChartsRRGResponse.Week, start: StockChartsRRGResponse.Week) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text("S&P 500 · $SPX").font(.system(size: 14, weight: .semibold, design: .rounded))
+                Text("S&P 500 · $SPX").font(Typography.rounded(size: 14, weight: .semibold))
                 Spacer()
                 Text(current.benchmark.formatted(.number.precision(.fractionLength(2))))
-                    .font(.system(size: 17, weight: .semibold, design: .rounded)).monospacedDigit()
+                    .font(Typography.rounded(size: 17, weight: .semibold)).monospacedDigit()
             }
             let domain = StandardLineChartEntrancePhase.domain(weeks.map(\.benchmark))
             StandardLineChartEntrance(appearanceID: "rotation-benchmark") { phase in
@@ -139,7 +139,7 @@ struct StockChartsRotationView: View {
                 Text("\(start.date) — \(current.date)")
                 Spacer()
                 FinancialText(percent(current.benchmark / start.benchmark - 1))
-            }.font(.system(size: 11, design: .rounded)).monospacedDigit().foregroundStyle(.secondary)
+            }.font(Typography.rounded(size: 11)).monospacedDigit().foregroundStyle(.secondary)
         }
     }
 
@@ -164,10 +164,10 @@ struct StockChartsRotationView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Circle().fill(Color(uiColor: StockChartsRRGChart.color(symbol))).frame(width: 8, height: 8)
-                    Text(symbol).font(.system(size: 16, weight: .semibold, design: .rounded))
-                    Text(name).font(.system(size: 13, design: .rounded)).lineLimit(1).minimumScaleFactor(0.8)
+                    Text(symbol).font(Typography.rounded(size: 16, weight: .semibold))
+                    Text(name).font(Typography.rounded(size: 13)).lineLimit(1).minimumScaleFactor(0.8)
                     Spacer(minLength: 0)
-                    Text(SectorRotationSnapshot.Sector.label(value.quadrant)).font(.system(size: 11, design: .rounded))
+                    Text(SectorRotationSnapshot.Sector.label(value.quadrant)).font(Typography.rounded(size: 11))
                 }
                 HStack(spacing: 16) {
                     metric("RS-Ratio", value.jdkratio.formatted(.number.precision(.fractionLength(2))))
@@ -176,7 +176,7 @@ struct StockChartsRotationView: View {
                     VStack(alignment: .trailing, spacing: 4) {
                         Text(value.price.formatted(.number.precision(.fractionLength(2))))
                         FinancialText(percent(change)).foregroundStyle(change >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
-                    }.font(.system(size: 12, design: .rounded)).monospacedDigit()
+                    }.font(Typography.rounded(size: 12)).monospacedDigit()
                 }
             }
             .padding(16).background(selected == symbol ? RotationPalette.cardSelected : RotationPalette.card, in: RoundedRectangle(cornerRadius: 20))
@@ -190,8 +190,8 @@ struct StockChartsRotationView: View {
     }
     private func metric(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.system(size: 10, design: .rounded)).foregroundStyle(.secondary)
-            FinancialText(value).font(.system(size: 15, weight: .semibold, design: .rounded)).monospacedDigit()
+            Text(title).font(Typography.rounded(size: 10)).foregroundStyle(.secondary)
+            FinancialText(value).font(Typography.rounded(size: 15, weight: .semibold)).monospacedDigit()
         }
     }
     private func percent(_ value: Double) -> String { String(format: "%+.2f%%", value * 100) }

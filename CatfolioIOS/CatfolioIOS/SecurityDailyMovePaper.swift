@@ -276,7 +276,7 @@ struct SecurityDailyMovePaper: View {
         .frame(height: halfHeight * 2, alignment: .top)
         .compositingGroup()
         .shadow(color: .black.opacity(0.13), radius: 16, x: 0, y: 12)
-        .font(.system(.body, design: .rounded))
+        .font(Typography.rounded(.body))
         .foregroundStyle(CatfolioTheme.paperInk)
         .accessibilityIdentifier("daily-move-paper")
     }
@@ -299,7 +299,7 @@ struct SecurityDailyMovePaper: View {
                     }
                 }
             }
-            .font(.system(.caption2, design: .rounded))
+            .font(Typography.rounded(.caption2))
             .foregroundStyle(.primary.opacity(0.45))
             .accessibilityIdentifier("daily-move-sources")
         }
@@ -311,7 +311,7 @@ struct SecurityDailyMovePaper: View {
                 onBrandColorResolved: { logoColor = $0 })
             Spacer(minLength: 0)
             Text(topic.name)
-                .font(.system(.largeTitle, design: .rounded, weight: .semibold))
+                .font(Typography.rounded(.largeTitle, weight: .semibold))
                 .lineLimit(2)
                 .minimumScaleFactor(0.6)
         }
@@ -349,9 +349,9 @@ struct SecurityDailyMovePaper: View {
                 .font(.caption).foregroundStyle(CatfolioTheme.paperInk.opacity(0.5))
             Spacer(minLength: 0)
             Text(insideTitle)
-                .opacity(min(1, max(0, (entranceProgress - 0.75) * 4))).font(.system(.title2, design: .rounded, weight: .medium))
+                .opacity(min(1, max(0, (entranceProgress - 0.75) * 4))).font(Typography.rounded(.title2, weight: .medium))
             if let insideFigure {
-                Text(insideFigure).font(.system(.largeTitle, design: .rounded))
+                Text(insideFigure).font(Typography.rounded(.largeTitle))
                     .foregroundStyle(CatfolioTheme.paperInk.opacity(0.25))
             }
         }

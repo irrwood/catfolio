@@ -133,7 +133,7 @@ struct ManagementDeliveryCard: View {
             HoldingDetailActionCardLabel(title: L10n.text("管理层兑现情况"),
                 subtitle: L10n.text("过去的承诺，后来的结果"), isLoading: store.busy)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PanelPressButtonStyle())
         .appSheet(isPresented: $expanded) {
             NavigationStack {
                 ScrollView {

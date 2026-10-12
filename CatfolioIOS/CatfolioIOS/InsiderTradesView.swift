@@ -15,7 +15,7 @@ struct HoldingInsiderTradesCard: View {
                 subtitle: L10n.text("只看主动买卖 · 已排除计划交易、代扣税与行权卖出")
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PanelPressButtonStyle())
         .accessibilityIdentifier("holding-insider-trades")
         .appSheet(isPresented: $showsTrades) {
             // A plain sheet sliding up, like the other research cards'.

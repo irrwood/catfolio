@@ -397,7 +397,7 @@ struct HistoryView: View {
             let fundValue = charges.reduce(0) { $0 + $1.holding.marketValue }
             Section {
                 SettingsCard {
-                    HistorySummaryRow(title: L10n.text("年费用合计"), icon: .symbol("creditcard.circle.fill"),
+                    HistorySummaryRow(title: L10n.text("年费用合计"), icon: .asset("HistoryFee"),
                         value: DisplayFormat.money(total, fractionDigits: 2))
                     HistorySummaryRow(title: L10n.text("基金市值"), value: DisplayFormat.money(fundValue),
                         valueColor: SettingsTemplate.secondaryText)

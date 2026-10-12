@@ -514,6 +514,37 @@ struct TradingInsights: Equatable, Sendable {
         return bucket
     }
 
+    // MARK: Prices for stocks no longer held
+
+    /// Every security bought or sold that has no price of its own — those
+    /// sold out entirely — with the currency of its last trade. They need a
+    /// price fetched for "what if" and after-sale timing to include them.
+    static func tickersNeedingQuotes(transactions: [LocalTransactionRecord],
+                                     quotes: [String: Quote]) -> [String: String] {
+        var result: [String: String] = [:]
+        var latestDate: [String: String] = [:]
+        for transaction in transactions where RealisedProfitCalculator.isBuy(transaction.action)
+            || RealisedProfitCalculator.isSell(transaction.action) {
+            let ticker = transaction.ticker.uppercased()
+            guard quotes[ticker] == nil, !ticker.isEmpty else { continue }
+            // Ledgers run newest first or oldest first; keep the latest trade's.
+            if result[ticker] == nil || transaction.date >= (latestDate[ticker] ?? "") {
+                result[ticker] = transaction.currency.uppercased()
+            }
+            latestDate[ticker] = max(latestDate[ticker] ?? "", transaction.date)
+        }
+        return result
+    }
+
+    /// The most recent close as a price in the currency the security was
+    /// traded in: a London line quoted in pence, traded in pounds, is scaled.
+    static func quote(fromCloses closes: [String: Double], ticker: String, currency: String) -> Quote? {
+        guard let latest = closes.filter({ $0.value.isFinite && $0.value > 0 }).max(by: { $0.key < $1.key })
+        else { return nil }
+        let price = latest.value * InstrumentCurrencyRules.marketPriceScale(symbol: ticker, targetCurrency: currency)
+        return price > 0 && price.isFinite ? Quote(price: price, currency: currency) : nil
+    }
+
     // MARK: Build
 
     private struct Lot {

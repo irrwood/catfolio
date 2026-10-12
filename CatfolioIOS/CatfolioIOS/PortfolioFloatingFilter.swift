@@ -23,6 +23,32 @@ struct PortfolioFloatingHeader {
     let menu: AnyView
 }
 
+/// The two toolbar items enter together after the inline header leaves.
+/// Animate their appearance without moving the navigation bar or scroll content.
+struct PortfolioFloatingHeaderReveal: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isRevealed = false
+
+    func body(content: Content) -> some View {
+        content
+            .blur(radius: isRevealed || reduceMotion ? 0 : 4)
+            .offset(y: isRevealed || reduceMotion ? 0 : 4)
+            .opacity(isRevealed ? 1 : 0)
+            .task {
+                await Task.yield()
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: reduceMotion ? 0.16 : 0.28)) {
+                    isRevealed = true
+                }
+            }
+            .onDisappear {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { isRevealed = false }
+            }
+    }
+}
+
 /// Reports whether the holdings header has scrolled above the top of the
 /// page. While it has, the page shows the system navigation bar carrying the
 /// header's title and sort button, with the system's own edge under it.
@@ -53,8 +79,8 @@ private struct PortfolioFilterFloatsKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    /// True for the copy of the sort button in the navigation bar, where the
-    /// bar supplies the glass around it.
+    /// True for the copy of the sort button in the navigation bar. Its glass
+    /// travels with the label so the whole control can reveal together.
     var portfolioFilterFloats: Bool {
         get { self[PortfolioFilterFloatsKey.self] }
         set { self[PortfolioFilterFloatsKey.self] = newValue }
@@ -66,8 +92,13 @@ struct PortfolioHeaderMaterialControl: ViewModifier {
 
     @ViewBuilder func body(content: Content) -> some View {
         if inBar {
-            // The navigation bar draws its own glass around the button.
-            content
+            if #available(iOS 26.0, *) {
+                content
+                    .frame(width: 44, height: 44)
+                    .glassEffect(.regular.interactive(), in: Circle())
+            } else {
+                content
+            }
         } else {
             content.background(.regularMaterial, in: Circle())
         }

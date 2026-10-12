@@ -594,7 +594,7 @@ struct CycleComparisonView: View {
             HStack(spacing: 16) {
                 ReturnsRankBadge(rank: rank, color: line.color, isPortfolio: line.id == Self.portfolioLineID)
                 Text(line.title)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .font(Typography.rounded(size: 16, weight: .semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Spacer(minLength: 8)
@@ -603,10 +603,10 @@ struct CycleComparisonView: View {
                         FinancialText("\(value >= 0 ? "+" : "")\(value.formatted(.number.precision(.fractionLength(1))))", isDirectional: true)
                         Text("%").foregroundStyle(.primary.opacity(0.3))
                     }
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(Typography.rounded(size: 15, weight: .semibold))
                     .monospacedDigit()
                 } else {
-                    Text("—").font(.system(size: 15, weight: .semibold, design: .rounded))
+                    Text("—").font(Typography.rounded(size: 15, weight: .semibold))
                 }
             }
             .foregroundStyle(CatfolioTheme.primaryText)
@@ -643,20 +643,20 @@ struct CycleComparisonView: View {
 
     // MARK: Values
 
-    private static let portfolioColor = Color(red: 0.204, green: 0.780, blue: 0.349)
+    private static let portfolioColor = CatfolioPalette.ChartSeries.green
     private static let averageColor = Color(red: 1.000, green: 0.769, blue: 0.169)
     /// Earlier years, most recent first.
     private static let palette: [Color] = [
-        Color(red: 1.000, green: 0.584, blue: 0.000),
-        Color(red: 0.204, green: 0.459, blue: 1.000),
-        Color(red: 0.627, green: 0.804, blue: 1.000),
-        Color(red: 0.890, green: 0.000, blue: 0.271),
-        Color(red: 0.780, green: 0.000, blue: 0.910),
+        CatfolioPalette.ChartSeries.orange,
+        CatfolioPalette.ChartSeries.blue,
+        CatfolioPalette.ChartSeries.sky,
+        CatfolioPalette.ChartSeries.rose,
+        CatfolioPalette.ChartSeries.magenta,
         Color(red: 0.776, green: 0.800, blue: 0.000),
-        Color(red: 1.000, green: 0.824, blue: 0.741),
-        Color(red: 0.000, green: 0.882, blue: 0.698),
-        Color(red: 1.000, green: 0.431, blue: 0.702),
-        Color(red: 0.722, green: 0.600, blue: 1.000),
+        CatfolioPalette.ChartSeries.peach,
+        CatfolioPalette.ChartSeries.mint,
+        CatfolioPalette.ChartSeries.pink,
+        CatfolioPalette.ChartSeries.lavender,
     ]
 
     /// Positions on the shared axis. Only their spacing matters.

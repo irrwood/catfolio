@@ -36,9 +36,19 @@ final class ResearchSearchLayoutTests: XCTestCase {
                                      "Toolbar layout must not reset the held field")
             }
             try self.capture(window, name: "research-search-held-at-detent")
+            let releasedFrame = self.presentationFrame(of: field, in: window)
             pull.endTouch()
-            // The field settles, then flies back down with the page.
-            try await Task.sleep(for: .milliseconds(1100))
+            // Sample the visible flight, not the model layer's final frame:
+            // a return through the toolbar can still finish at the right place.
+            for _ in 0..<45 {
+                try await Task.sleep(for: .milliseconds(16))
+                if #available(iOS 26.0, *) {
+                    let frame = self.presentationFrame(of: field, in: window)
+                    XCTAssertGreaterThanOrEqual(frame.minY, min(releasedFrame.minY, origin.minY) - 4,
+                                               "The field must return directly, without detouring through the toolbar")
+                    XCTAssertLessThanOrEqual(frame.minY, max(releasedFrame.minY, origin.minY) + 4)
+                }
+            }
             XCTAssertFalse(search.isActive)
             XCTAssertFalse(field.isFirstResponder)
             XCTAssertEqual(field.text, "")
@@ -52,6 +62,45 @@ final class ResearchSearchLayoutTests: XCTestCase {
             try await self.cancel(search, in: window)
             try await Task.sleep(for: .milliseconds(600))
             XCTAssertFalse(search.isActive)
+        }
+    }
+
+    func testPullReturnsDirectlyToPartiallyScrolledAndPinnedOrigins() async throws {
+        guard #available(iOS 26.0, *) else { throw XCTSkip("The movable field uses iOS 26") }
+        for offset: CGFloat in [20, 400] {
+            let pull = ResearchSearchPullToDismiss.Observer()
+            try await withResearch(pullObserver: pull) { window, host in
+                let navigation = try XCTUnwrap(self.controller(UINavigationController.self, in: host))
+                let scroll = try XCTUnwrap(navigation.topViewController?.contentScrollView(for: .top))
+                scroll.setContentOffset(CGPoint(x: 0, y: offset - scroll.adjustedContentInset.top), animated: false)
+                try await Task.sleep(for: .milliseconds(300))
+                let originalOffset = scroll.contentOffset.y
+                let search = try self.searchController(in: navigation)
+                let field = search.searchBar.searchTextField
+                let origin = field.convert(field.bounds, to: window)
+                try await self.activate(search, in: window)
+                try await Task.sleep(for: .milliseconds(550))
+                let point = CGPoint(x: window.bounds.midX, y: field.convert(field.bounds, to: window).maxY + 70)
+                let hit = try XCTUnwrap(window.hitTest(point, with: nil))
+                pull.beginTouch(at: point, in: hit)
+                pull.moveTouch(to: CGPoint(x: point.x, y: point.y + 180))
+                // Let the held transform reach the presentation layer before
+                // using its visible position as the flight's starting point.
+                try await Task.sleep(for: .milliseconds(80))
+                let released = self.presentationFrame(of: field, in: window)
+                pull.endTouch()
+                for _ in 0..<45 {
+                    try await Task.sleep(for: .milliseconds(16))
+                    let frame = self.presentationFrame(of: field, in: window)
+                    XCTAssertGreaterThanOrEqual(frame.minY, min(released.minY, origin.minY) - 4)
+                    XCTAssertLessThanOrEqual(frame.minY, max(released.minY, origin.minY) + 4)
+                }
+                XCTAssertFalse(search.isActive)
+                XCTAssertFalse(field.isFirstResponder)
+                XCTAssertEqual(field.convert(field.bounds, to: window).minY, origin.minY, accuracy: 1)
+                XCTAssertEqual(scroll.contentOffset.y, originalOffset, accuracy: 1)
+                try self.assertSearchGlass(in: window, visible: offset == 400)
+            }
         }
     }
 
@@ -103,6 +152,7 @@ final class ResearchSearchLayoutTests: XCTestCase {
             XCTAssertTrue(search.isActive)
             XCTAssertTrue(field.isFirstResponder)
             if #available(iOS 26.0, *) {
+                try self.assertSearchGlass(in: window, visible: true)
                 let bar = navigation.navigationBar.convert(navigation.navigationBar.bounds, to: window)
                 XCTAssertLessThan(field.convert(field.bounds, to: window).minY, origin.minY - 30,
                                   "Opening search must fly the field to the top")
@@ -171,6 +221,7 @@ final class ResearchSearchLayoutTests: XCTestCase {
             let titleFrame = try RootTabTitleTestSupport.frame(title: L10n.text("研究"), window: window)
             let origin = field.convert(field.bounds, to: window)
             XCTAssertEqual(item.title, L10n.text("研究"))
+            try self.assertSearchGlass(in: window, visible: false)
             XCTAssertGreaterThan(origin.minY, titleFrame.maxY,
                                  "Search must start below the large title, not in the toolbar")
             let scroll = try XCTUnwrap(navigation.topViewController?.contentScrollView(for: .top))
@@ -182,12 +233,14 @@ final class ResearchSearchLayoutTests: XCTestCase {
             XCTAssertLessThan(movingFrame.minY, origin.minY)
             XCTAssertGreaterThan(movingFrame.minY, window.safeAreaInsets.top + 20,
                                  "A small scroll must not immediately pin the search")
+            try self.assertSearchGlass(in: window, visible: false)
             var pinnedY: CGFloat?
             for offset: CGFloat in [200, 400, 700] {
                 scroll.setContentOffset(CGPoint(x: 0, y: offset - scroll.adjustedContentInset.top), animated: false)
                 try await Task.sleep(for: .milliseconds(220))
                 let frame = field.convert(field.bounds, to: window)
                 if #available(iOS 26.0, *) {
+                    try self.assertSearchGlass(in: window, visible: true)
                     let barFrame = navigation.navigationBar.convert(navigation.navigationBar.bounds, to: window)
                     XCTAssertGreaterThan(frame.height, 30)
                     XCTAssertGreaterThan(frame.width, window.bounds.width * 0.75)
@@ -212,6 +265,7 @@ final class ResearchSearchLayoutTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(750))
             XCTAssertEqual(field.convert(field.bounds, to: window).minY, try XCTUnwrap(pinnedY), accuracy: 1,
                            "Closing search while scrolled must keep its pinned position")
+            try self.assertSearchGlass(in: window, visible: true)
             // Scroll back to the top as a reader's scroll-to-top does, so the
             // large title expands again. An instant jump to the expanded
             // offset under a collapsed bar leaves the title collapsed or not
@@ -220,6 +274,7 @@ final class ResearchSearchLayoutTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(800))
             XCTAssertEqual(field.convert(field.bounds, to: window).minY, origin.minY, accuracy: 1)
             XCTAssertTrue(try self.searchController(in: navigation).searchBar === search.searchBar)
+            try self.assertSearchGlass(in: window, visible: false)
             try self.capture(window, name: "research-search-restored-below-title")
         }
     }
@@ -310,6 +365,17 @@ final class ResearchSearchLayoutTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(800))
             XCTAssertFalse(search.isActive)
             XCTAssertFalse(search.searchBar.searchTextField.isFirstResponder)
+            try self.assertSearchGlass(in: window, visible: false)
+            let scroll = try XCTUnwrap(navigation.topViewController?.contentScrollView(for: .top))
+            scroll.setContentOffset(CGPoint(x: 0, y: 400 - scroll.adjustedContentInset.top), animated: false)
+            try await Task.sleep(for: .milliseconds(300))
+            try self.assertSearchGlass(in: window, visible: true)
+            try self.capture(window, name: "research-system-search-dark-pinned")
+            try await self.activate(search, in: window)
+            try await Task.sleep(for: .milliseconds(450))
+            try await self.cancel(search, in: window)
+            try await Task.sleep(for: .milliseconds(750))
+            try self.assertSearchGlass(in: window, visible: true)
         }
     }
 
@@ -440,6 +506,21 @@ final class ResearchSearchLayoutTests: XCTestCase {
         button.sendActions(for: .touchUpInside)
     }
 
+    private func assertSearchGlass(in window: UIWindow, visible: Bool,
+                                   file: StaticString = #filePath, line: UInt = #line) throws {
+        guard #available(iOS 26.0, *) else { return }
+        let glass = try XCTUnwrap(find(UIVisualEffectView.self, in: window,
+                                       identifier: "research.search.glass"), file: file, line: line)
+        if visible {
+            XCTAssertTrue(glass.effect is UIGlassEffect, "Floating search must use liquid glass",
+                          file: file, line: line)
+            XCTAssertEqual(glass.alpha, 1, file: file, line: line)
+        } else {
+            XCTAssertNil(glass.effect, "Inline search returns to the page's panel material",
+                         file: file, line: line)
+        }
+    }
+
     private func capture(_ window: UIWindow, name: String) throws {
         let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
@@ -449,6 +530,11 @@ final class ResearchSearchLayoutTests: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
         try image.pngData()?.write(to: URL(fileURLWithPath: "/tmp/\(name).png"))
+    }
+
+    private func presentationFrame(of view: UIView, in window: UIWindow) -> CGRect {
+        let layer = view.layer.presentation() ?? view.layer
+        return layer.convert(layer.bounds, to: window.layer.presentation() ?? window.layer)
     }
 
     private func isVisible(_ view: UIView) -> Bool {

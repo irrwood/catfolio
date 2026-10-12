@@ -209,7 +209,7 @@ struct ReturnsSourceCards: View {
             }
             .accessibilityIdentifier("performance.chart.losses")
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PanelPressButtonStyle())
     }
 }
 
@@ -247,7 +247,7 @@ private struct ReturnsSourceCard: View {
             // height to baseline); SwiftUI's line boxes add about 8pt of
             // their own between the two, and 4pt under the figure.
             VStack(alignment: .leading, spacing: 4) {
-                Text(L10n.text(isLosses ? "Loss" : "Gain"))
+                Text(L10n.text(isLosses ? "performance.card.loss.title" : "performance.card.gain.title"))
                     .font(Typography.text(size: 14, weight: .bold))
                     .tracking(0.56)
                     .textCase(.uppercase)
@@ -323,18 +323,10 @@ private struct ReturnsSourceCard: View {
         .frame(height: 24)
     }
 
-    @ViewBuilder private var icon: some View {
-        if isLosses {
-            if colorScheme == .light {
-                Image("EntryLossDayIcon").renderingMode(.original)
-            } else {
-                Image("EntryLossNightIcon").renderingMode(.original)
-                    .scaleEffect(y: -1)
-                    .frame(width: 17, height: 24)
-            }
-        } else {
-            Image("EntryGainIcon").renderingMode(.original)
-        }
+    private var icon: some View {
+        Image(isLosses ? "EntryLossIcon" : "EntryGainIcon")
+            .renderingMode(.template)
+            .foregroundStyle(isLosses && colorScheme == .light ? ReturnsEntryStyle.lossDayIconInk : .white)
     }
 
     @ViewBuilder

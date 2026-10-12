@@ -525,7 +525,9 @@ struct TradingInsightsView: View {
     }
 
     private func name(_ ticker: String) -> String {
-        holdings.first { $0.ticker.uppercased() == ticker }?.shortName ?? names[ticker] ?? ticker
+        holdings.first { $0.ticker.uppercased() == ticker }?.shortName ?? names[ticker]
+            // A security sold out has no holding to name it; the catalogue does.
+            ?? CompanyNameCatalog.displayName(ticker: ticker, fallback: ticker)
     }
 
     private var currency: DisplayCurrency { DisplayCurrency(rawValue: displayCurrency) ?? .usd }
@@ -595,6 +597,31 @@ struct TradingInsightsView: View {
                                uniquingKeysWith: { first, _ in first })
             holdings = positions
             insights = built
+
+            // Securities sold out have no live price. Fetch their latest close
+            // so "what if" and after-sale timing include them too, then
+            // recount; what is on screen stays up meanwhile.
+            let missing = TradingInsights.tickersNeedingQuotes(transactions: transactions, quotes: quotes)
+            guard !missing.isEmpty else { return }
+            let end = Date()
+            let closes = await LocalMarketDataClient().historicalCloses(
+                symbols: Array(missing.keys),
+                from: DayDateCodec.string(from: end.addingTimeInterval(-14 * 86_400)),
+                to: DayDateCodec.string(from: end))
+            try Task.checkCancellation()
+            var completed = quotes
+            for (ticker, currency) in missing {
+                if let closes = closes[ticker],
+                   let quote = TradingInsights.quote(fromCloses: closes, ticker: ticker, currency: currency) {
+                    completed[ticker] = quote
+                }
+            }
+            guard completed.count > quotes.count else { return }
+            let recounted = await Task.detached(priority: .userInitiated) {
+                TradingInsights.build(transactions: transactions, quotes: completed)
+            }.value
+            try Task.checkCancellation()
+            insights = recounted
         } catch {
             guard !Task.isCancelled else { return }
             failed = true
