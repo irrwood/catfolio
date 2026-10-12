@@ -72,19 +72,9 @@ struct SettingsHistoryOverviewTile: View {
         .padding([.horizontal, .top], 16)
         .padding(.bottom, 12)
         .frame(maxWidth: .infinity, minHeight: 109, alignment: .leading)
-        .modifier(SettingsHistoryTileGlass())
+        // The same panel as every other card on the page, not glass.
+        .settingsCardSurface()
         .contentShape(shape)
-    }
-}
-
-struct SettingsHistoryTileGlass: ViewModifier {
-    func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius, style: .continuous)
-        if #available(iOS 26.0, *) {
-            content.glassEffect(.regular.interactive(), in: shape)
-        } else {
-            content.background(.regularMaterial, in: shape)
-        }
     }
 }
 
@@ -96,7 +86,6 @@ struct SettingsHistoryOverview: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @AppStorage(DisplayCurrency.preferenceKey) private var displayCurrency = DisplayCurrency.usd.rawValue
     @State private var prepared: HistoryPreparedLedger?
-    @State private var annualFees: Double?
     @State private var failed = false
     @State private var loadedKey: LoadKey?
 
@@ -121,10 +110,6 @@ struct SettingsHistoryOverview: View {
                              caption: realisedCaption, amount: realisedAmount, signed: true)
                 overviewCard(.dividends, title: L10n.text("股息"), icon: .dividend,
                              caption: "", amount: total(for: .dividends))
-                overviewCard(.interest, title: L10n.text("利息"), icon: .symbol("building.columns.circle.fill"),
-                             caption: "", amount: total(for: .interest))
-                overviewCard(.fees, title: L10n.text("年费用"), icon: .symbol("creditcard.circle.fill"),
-                             caption: "", amount: annualFees)
             }
             SettingsCard {
                 SettingsNavigationRow(icon: .asset("HistoryArchive"), title: L10n.text("全部历史")) {
@@ -178,7 +163,7 @@ struct SettingsHistoryOverview: View {
             DisplayFormat.money(currency.fromUSD($0), currency: currency.rawValue,
                                 signed: signed, fractionDigits: 2)
         } ?? "—"
-        let color: Color = category == .fees || validAmount == nil || validAmount == 0
+        let color: Color = validAmount == nil || validAmount == 0
             ? .primary : ((validAmount ?? 0) < 0 ? CatfolioTheme.danger : CatfolioTheme.positive)
         return NavigationLink {
             HistoryView(initialCategory: category).environment(model)
@@ -186,7 +171,7 @@ struct SettingsHistoryOverview: View {
             SettingsHistoryOverviewTile(title: title, icon: icon, caption: caption,
                                         value: value, valueColor: color)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PanelPressButtonStyle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue(caption.isEmpty ? value : "\(caption) · \(value)")
@@ -196,7 +181,7 @@ struct SettingsHistoryOverview: View {
 
     @MainActor
     /// A reload keeps the figures that are already up. Clearing them first
-    /// blanked all four cards and put a progress line under the grid, which
+    /// blanked every card and put a progress line under the grid, which
     /// changed the section's height and shifted everything below it — the
     /// jump a reader saw on coming back from a page that changes the key.
     private func load() async {
@@ -206,18 +191,11 @@ struct SettingsHistoryOverview: View {
             let ledger = try await model.activityLedger()
             let accountIDs = Set(ledger.accounts.map(\.id))
             let locale = locale
-            async let holdings = model.holdings(forAccounts: accountIDs)
             let result = try await model.historyPreparationCache.prepared(
                 ledger: ledger, accountIDs: accountIDs, locale: locale)
             try Task.checkCancellation()
             prepared = result
             loadedKey = requestKey
-            let positions = try? await holdings
-            try Task.checkCancellation()
-            if let positions {
-                let charges = HistoryFeeCharge.build(holdings: positions)
-                annualFees = charges.isEmpty ? nil : charges.reduce(0) { $0 + $1.annual }
-            }
         } catch {
             guard !Task.isCancelled else { return }
             failed = true

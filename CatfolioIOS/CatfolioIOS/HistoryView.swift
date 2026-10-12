@@ -105,9 +105,10 @@ struct HistoryView: View {
         .navigationTitle(ticker.map { "\($0) · \(L10n.text("History"))" } ?? L10n.text("History"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
-        // The pager supplies one continuous material behind the native title
-        // and category row. The navigation bar must not paint a second layer.
-        .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
+        // The bar and the category row are one solid surface: white by day,
+        // black at night (`systemBackground`, as the category bar uses).
+        .toolbarBackground(Color(uiColor: .systemBackground), for: .navigationBar)
+        .toolbarBackgroundVisibility(.visible, for: .navigationBar)
         .toolbarVisibility(.hidden, for: .bottomBar)
         .accessibilityIdentifier("page.history")
         .toolbar {
@@ -314,7 +315,7 @@ struct HistoryView: View {
         .listSectionSpacing(SettingsTemplate.sectionSpacing)
         .contentMargins(.horizontal, SettingsTemplate.pageInset, for: .scrollContent)
         // The list draws its own grouped grey, which is #F2F2F7 and reads as a
-        // seam against the template's #F7F7F7 under the chip row.
+        // seam against the template's #F3F3F3 under the chip row.
         .scrollContentBackground(.hidden)
         .contentMargins(.top, SettingsTemplate.pageInset, for: .scrollContent)
         // Space to scroll the last row clear of the floating scope control,

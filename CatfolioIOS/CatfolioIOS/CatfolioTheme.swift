@@ -330,6 +330,9 @@ enum CatfolioTheme {
     /// Points at the settings template so a screen that has not been moved
     /// over yet still sits on the same ground as one that has.
     static let settingsBackground = SettingsTemplate.pageBackground
+    /// The grey the night thin material adds over black; content panels
+    /// subtract it with plus-darker so black stays black under their fill.
+    static let nightMaterialLift = Color(white: 0.88)
 
     static func pageBackground(for colorScheme: ColorScheme) -> Color {
         Color(uiColor: .systemGroupedBackground)

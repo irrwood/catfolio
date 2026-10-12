@@ -190,11 +190,14 @@ struct HoldingSortMenu: View {
 }
 
 struct PortfolioFilterLabel: View {
+    @Environment(\.portfolioFilterFloats) private var inBar
+
     var body: some View {
         Image("PortfolioHeaderSort")
             .renderingMode(.template).resizable().scaledToFit()
             .frame(width: 24, height: 24)
-            .frame(width: 44, height: 44)
+            // In the bar, the bar sizes the button; inline it is 44 pt.
+            .frame(width: inBar ? nil : 44, height: inBar ? nil : 44)
             .modifier(PortfolioHeaderMaterialControl())
             .contentShape(Circle())
     }

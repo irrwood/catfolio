@@ -188,68 +188,74 @@ struct PortfolioDetailsCard: View {
         return hasher.finalize()
     }
 
+    /// The list's name and its view menu, on the left of the header — and,
+    /// once the header has scrolled away, floating at the top of the page.
+    private var titleMenu: some View {
+        Menu {
+            Button {
+                mergesETF = false
+            } label: {
+                Label(L10n.text("持仓明细"), systemImage: !showsMergedHoldings ? "checkmark" : "list.bullet")
+            }
+            // One look-through list: what was "合并穿透" and "ETF 穿透".
+            Button {
+                mergesETF = true
+            } label: {
+                Label(L10n.text("ETF 穿透"), systemImage: showsMergedHoldings ? "checkmark" : "square.3.layers.3d")
+            }
+            Divider()
+            Toggle(L10n.text("显示股数"), isOn: $showsShares)
+                .accessibilityIdentifier("portfolio-list-show-shares")
+            Toggle(L10n.text("显示股票代码"), isOn: $showsTicker)
+                .accessibilityIdentifier("portfolio-list-show-ticker")
+            Toggle(L10n.text("显示占比"), isOn: $showsWeight)
+                .accessibilityIdentifier("portfolio-list-show-weight")
+            Toggle(L10n.text("显示涨跌幅"), isOn: $showsPerformancePercent)
+                .accessibilityIdentifier("portfolio-list-show-performance-percent")
+            Toggle(L10n.text("显示涨跌金额"), isOn: $showsPerformanceAmount)
+                .accessibilityIdentifier("portfolio-list-show-performance-amount")
+            // One of the two at a time: they share the row's right side.
+            Toggle(L10n.text("52 周"), isOn: Binding(get: { shows52Week && !showsVolume }, set: {
+                shows52Week = $0
+                if $0 { showsVolume = false }
+            }))
+            Toggle(L10n.text("成交量"), isOn: Binding(get: { showsVolume }, set: {
+                showsVolume = $0
+                if $0 { shows52Week = false }
+            }))
+        } label: {
+            // The list's name with the menu's arrow right after it; what
+            // the menu chose goes on the line below, with the count and
+            // the day. A title that never changes keeps the menu's
+            // source bounds still.
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 2) {
+                    Text(tableTitle)
+                        .font(Typography.text(size: 22, weight: .semibold))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: true)
+                    Image("PortfolioHeaderDisclosure")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 20, height: 20)
+                }
+                .foregroundStyle(CatfolioTheme.primaryText)
+                ZStack(alignment: .leading) {
+                    Text("0").appText(.caption, weight: .medium)
+                        .hidden().accessibilityHidden(true)
+                    headerSubtitle
+                }
+            }
+            .fixedSize(horizontal: true, vertical: true)
+        }
+        .buttonStyle(.plain)
+        .menuOrder(.fixed)
+    }
+
     private var headerRow: some View {
         HStack(alignment: .center, spacing: 10) {
-            Menu {
-                Button {
-                    mergesETF = false
-                } label: {
-                    Label(L10n.text("持仓明细"), systemImage: !showsMergedHoldings ? "checkmark" : "list.bullet")
-                }
-                // One look-through list: what was "合并穿透" and "ETF 穿透".
-                Button {
-                    mergesETF = true
-                } label: {
-                    Label(L10n.text("ETF 穿透"), systemImage: showsMergedHoldings ? "checkmark" : "square.3.layers.3d")
-                }
-                Divider()
-                Toggle(L10n.text("显示股数"), isOn: $showsShares)
-                    .accessibilityIdentifier("portfolio-list-show-shares")
-                Toggle(L10n.text("显示股票代码"), isOn: $showsTicker)
-                    .accessibilityIdentifier("portfolio-list-show-ticker")
-                Toggle(L10n.text("显示占比"), isOn: $showsWeight)
-                    .accessibilityIdentifier("portfolio-list-show-weight")
-                Toggle(L10n.text("显示涨跌幅"), isOn: $showsPerformancePercent)
-                    .accessibilityIdentifier("portfolio-list-show-performance-percent")
-                Toggle(L10n.text("显示涨跌金额"), isOn: $showsPerformanceAmount)
-                    .accessibilityIdentifier("portfolio-list-show-performance-amount")
-                // One of the two at a time: they share the row's right side.
-                Toggle(L10n.text("52 周"), isOn: Binding(get: { shows52Week && !showsVolume }, set: {
-                    shows52Week = $0
-                    if $0 { showsVolume = false }
-                }))
-                Toggle(L10n.text("成交量"), isOn: Binding(get: { showsVolume }, set: {
-                    showsVolume = $0
-                    if $0 { shows52Week = false }
-                }))
-            } label: {
-                // The list's name with the menu's arrow right after it; what
-                // the menu chose goes on the line below, with the count and
-                // the day. A title that never changes keeps the menu's
-                // source bounds still.
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 2) {
-                        Text(tableTitle)
-                            .font(Typography.text(size: 22, weight: .semibold))
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: true)
-                        Image("PortfolioHeaderDisclosure")
-                            .renderingMode(.template)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 20, height: 20)
-                    }
-                    .foregroundStyle(CatfolioTheme.primaryText)
-                    ZStack(alignment: .leading) {
-                        Text("0").appText(.caption, weight: .medium)
-                            .hidden().accessibilityHidden(true)
-                        headerSubtitle
-                    }
-                }
-                .fixedSize(horizontal: true, vertical: true)
-            }
-            .buttonStyle(.plain)
-            .menuOrder(.fixed)
+            titleMenu
 
             Spacer()
             if isLoadingVolumeSort {
@@ -263,7 +269,7 @@ struct PortfolioDetailsCard: View {
                 .accessibilityIdentifier("portfolio-inline-filter")
                 .anchorPreference(key: PortfolioFloatingFilterPreference.self, value: .bounds) { anchor in
                     floatsFilter ? PortfolioFloatingFilterSource(bounds: anchor,
-                        menu: AnyView(filterMenu)) : nil
+                        title: AnyView(titleMenu), menu: AnyView(filterMenu)) : nil
                 }
         }
     }

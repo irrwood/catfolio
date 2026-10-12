@@ -129,13 +129,13 @@ enum SettingsTemplate {
     /// `UIView` — it needs the same greys as the rows above it, and this is
     /// what keeps it from carrying a second copy of them.
 
-    /// `#F7F7F7` by day, black at night (Figma 571:5939 / 571:6350). The
+    /// `#F3F3F3` by day, black at night (Figma 571:5939 / 571:6350). The
     /// cards carry their own hairline outline, so the ground no longer has to
     /// be a deep grey for them to read as lifted off it.
     static let uiPageBackground = UIColor { trait in
         trait.userInterfaceStyle == .dark
             ? .black
-            : UIColor(white: 0xF7 / 255, alpha: 1)
+            : UIColor(white: 0xF3 / 255, alpha: 1)
     }
     static let pageBackground = Color(uiColor: uiPageBackground)
 
@@ -149,12 +149,6 @@ enum SettingsTemplate {
             : .white
     }
     static let card = Color(uiColor: uiCard)
-
-    /// A translucent wash over the category bar's backdrop blur.
-    static let uiSegmentBarTint = UIColor { trait in
-        (trait.userInterfaceStyle == .dark ? UIColor.black : UIColor.white)
-            .withAlphaComponent(0.45)
-    }
 
     static let accountConnectGradient = LinearGradient(
         colors: [CatfolioPalette.accountConnectTop, CatfolioPalette.accountConnectBottom],
@@ -174,9 +168,17 @@ enum SettingsTemplate {
     static let cardBorder = Color(uiColor: uiCardBorder)
     static let cardBorderWidth: CGFloat = 1
 
-    /// `#8E8E93` — `systemGray`, which resolves the same in both appearances.
-    /// A row's subtitle and an unselected chip.
-    static let uiSecondaryText = UIColor.systemGray
+    /// A row's subtitle and an unselected chip: translucent ink, like the
+    /// section names, so it takes the tone of the translucent panel under it.
+    /// A fixed grey fell to about 2.7:1 on the blue-tinted night panels; white
+    /// at 60% keeps ~4.4:1. By day black at 50% (`#808080` on white), a touch
+    /// darker than the `systemGray` it replaces.
+    static let uiSecondaryText = UIColor { trait in
+        let high = trait.accessibilityContrast == .high
+        return trait.userInterfaceStyle == .dark
+            ? UIColor.white.withAlphaComponent(high ? 0.8 : 0.6)
+            : UIColor.black.withAlphaComponent(high ? 0.7 : 0.5)
+    }
     static let secondaryText = Color(uiColor: uiSecondaryText)
 
     /// Section names use translucent ink, so their tone follows the actual
@@ -193,13 +195,15 @@ enum SettingsTemplate {
     /// `#999999`.
     static let readOnlyValue = Color.primary.opacity(0.4)
 
-    /// `#F7F7F7` under a finger — one step off the card, and it fills the
-    /// whole row rather than tinting the label. Deliberately light: the press
-    /// has to read against white without the row looking disabled.
+    /// Translucent ink under a finger — one step off the panel, filling the
+    /// whole row rather than tinting the label, and taking the panel's own
+    /// tone. Black at 3% is the drawing's `#F7F7F7` on a white card; white at
+    /// 6% on a night panel is the step `#2C2C2E` used to take. Deliberately
+    /// light: the press has to read without the row looking disabled.
     static let uiRowPressed = UIColor { trait in
         trait.userInterfaceStyle == .dark
-            ? .tertiarySystemGroupedBackground
-            : UIColor(white: 0xF7 / 255, alpha: 1)
+            ? UIColor.white.withAlphaComponent(0.06)
+            : UIColor.black.withAlphaComponent(0.03)
     }
     static let rowPressed = Color(uiColor: uiRowPressed)
 
@@ -222,12 +226,14 @@ enum SettingsTemplate {
         trait.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.3) : .systemGray
     })
 
-    /// The disclosure chevron and the menu caret. `#E0E0E0` is close to
-    /// `systemGray5` in light; the dark side takes the same step from the card.
+    /// The disclosure chevron and the menu caret: translucent ink, like a
+    /// row's subtitle, so it takes the tone of the panel under it. Black at
+    /// 12% is the drawing's `#E0E0E0` on a white card; at night white at 18%
+    /// stands a little clearer of the translucent panel than `systemGray4` did.
     static let uiDisclosure = UIColor { trait in
         trait.userInterfaceStyle == .dark
-            ? .systemGray4
-            : UIColor(white: 0xE0 / 255, alpha: 1)
+            ? UIColor.white.withAlphaComponent(0.18)
+            : UIColor.black.withAlphaComponent(0.12)
     }
     static let disclosure = Color(uiColor: uiDisclosure)
 
@@ -297,7 +303,7 @@ struct SettingsRowIcon: View {
     }
 }
 
-/// The trailing chevron, 5×10 in `#E0E0E0`.
+/// The trailing chevron, 5×10 in the disclosure ink.
 struct SettingsChevron: View {
     @Environment(\.colorScheme) private var colorScheme
 
@@ -315,7 +321,7 @@ struct SettingsChevron: View {
     }
 }
 
-/// The caret that marks a row as opening a menu, 8×5 in `#E0E0E0`.
+/// The caret that marks a row as opening a menu, 8×5 in the disclosure ink.
 struct SettingsCaret: View {
     @Environment(\.colorScheme) private var colorScheme
 
@@ -354,6 +360,9 @@ struct SettingsPage<Content: View>: View {
     /// inline title does not, so it passes the page's own 16 and the first
     /// card sits off the bar by the same gap everything else uses.
     var topInset: CGFloat = 0
+    /// Large for a tab's own page; Settings and the pages inside it use the
+    /// system's small inline bar.
+    var titleDisplayMode: NavigationBarItem.TitleDisplayMode = .large
     @ViewBuilder let content: Content
 
     init(
@@ -361,6 +370,7 @@ struct SettingsPage<Content: View>: View {
         subtitle: String? = nil,
         bottomInset: CGFloat = SettingsTemplate.rootTabBottomInset,
         topInset: CGFloat = 0,
+        titleDisplayMode: NavigationBarItem.TitleDisplayMode = .large,
         pageBackground: Color = SettingsTemplate.pageBackground,
         @ViewBuilder content: () -> Content
     ) {
@@ -368,6 +378,7 @@ struct SettingsPage<Content: View>: View {
         self.subtitle = subtitle
         self.bottomInset = bottomInset
         self.topInset = topInset
+        self.titleDisplayMode = titleDisplayMode
         self.pageBackground = pageBackground
         self.content = content()
     }
@@ -397,7 +408,7 @@ struct SettingsPage<Content: View>: View {
         // Every settings page has a bar over it — the tab's large title or a
         // pushed page's — so the page container carries the soft edge once.
         .softTopScrollEdge()
-        .settingsNavigationTitle(title)
+        .settingsNavigationTitle(title, displayMode: titleDisplayMode)
     }
 }
 
@@ -432,10 +443,11 @@ extension View {
     /// site: the drawing's two states are the large title and what it
     /// collapses into, and a screen that starts inline never shows the first.
     @ViewBuilder
-    func settingsNavigationTitle(_ title: String?) -> some View {
+    func settingsNavigationTitle(_ title: String?,
+                                 displayMode: NavigationBarItem.TitleDisplayMode = .large) -> some View {
         if let title {
             self.navigationTitle(title)
-                .navigationBarTitleDisplayMode(.large)
+                .navigationBarTitleDisplayMode(displayMode)
         } else {
             self
         }

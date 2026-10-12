@@ -3358,6 +3358,7 @@
 "白色光晕" = "White halo";
 "青蓝光晕" = "Cyan halo";
 "晴空" = "Clear sky";
+"纯白 / 纯黑" = "White / Black";
 "经典" = "Classic";
 "已保存" = "Saved";
 "网络不可用" = "No connection";
@@ -4081,3 +4082,7 @@
 "历史最大亏损" = "Maximum loss";
 "展开列表设置与概览" = "Show list settings and overview";
 "收起列表设置与概览" = "Hide list settings and overview";
+
+"盘前" = "Pre-market";
+
+"盘后" = "After-hours";

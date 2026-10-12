@@ -422,7 +422,7 @@ struct StockScreenerView: View {
         .background(SettingsTemplate.pageBackground)
         .softTopScrollEdge()
         .navigationTitle(L10n.text("AI 持仓筛选"))
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
         .toolbar { ToolbarItem(placement: .topBarTrailing) {
             Button(L10n.text("编辑条件"), systemImage: "slider.horizontal.3") { editing = true }.disabled(busy)

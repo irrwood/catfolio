@@ -58,7 +58,11 @@ struct PortfolioHomePageBackdrop: View {
             // the native ScrollView also makes rubber-banding reveal the same
             // background instead of a separate pale-blue extension band.
             Group {
-                if let pattern = backgroundStyle.shaderPattern {
+                if backgroundStyle == .plain {
+                    // The page ground is the whole page: #F3F3F3 by day,
+                    // black at night.
+                    SettingsTemplate.pageBackground
+                } else if let pattern = backgroundStyle.shaderPattern {
                     FlowingGradientBackground(
                         pattern: pattern,
                         palette: backgroundStyle.palette(for: colorScheme),

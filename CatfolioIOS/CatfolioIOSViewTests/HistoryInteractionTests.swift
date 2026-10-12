@@ -26,7 +26,7 @@ final class HistoryInteractionTests: XCTestCase {
     }
 
     @MainActor
-    func testCategoryBackdropStaysTranslucentAndAdaptsToAppearance() async throws {
+    func testCategoryBackdropIsSolidInTheBarColour() async throws {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let previous = scene.windows.first(where: \.isKeyWindow)
         let window = UIWindow(windowScene: scene)
@@ -45,21 +45,19 @@ final class HistoryInteractionTests: XCTestCase {
             bar.layoutIfNeeded()
             let backdrop = try XCTUnwrap(descendants(bar, of: UIVisualEffectView.self)
                 .first { $0.accessibilityIdentifier == "history-category-backdrop" })
-            XCTAssertTrue(backdrop.effect is UIBlurEffect)
+            XCTAssertNil(backdrop.effect, "The category bar is solid, in the navigation bar's colour")
             XCTAssertEqual(backdrop.frame, bar.bounds)
             XCTAssertFalse(backdrop.isHidden)
             XCTAssertFalse(backdrop.isUserInteractionEnabled)
             XCTAssertEqual(backdrop.alpha, 1)
             var white: CGFloat = 0, alpha: CGFloat = 0
-            let tint = try XCTUnwrap(backdrop.contentView.backgroundColor)
+            let fill = try XCTUnwrap(backdrop.contentView.backgroundColor)
                 .resolvedColor(with: bar.traitCollection)
-            XCTAssertTrue(tint.getWhite(&white, alpha: &alpha))
+            XCTAssertTrue(fill.getWhite(&white, alpha: &alpha))
             XCTAssertEqual(white, style == .dark ? 0 : 1, accuracy: 0.01)
-            XCTAssertGreaterThan(alpha, 0)
-            XCTAssertLessThan(alpha, 1)
+            XCTAssertEqual(alpha, 1)
 
-            // A change behind the bar must remain visible through the blur.
-            // Sample its top padding, away from labels and the selected pill.
+            // Nothing behind the bar shows through it.
             controller.view.backgroundColor = .systemRed
             try await Task.sleep(for: .milliseconds(150))
             let red = snapshot(controller.view)
@@ -67,8 +65,8 @@ final class HistoryInteractionTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(150))
             let blue = snapshot(controller.view)
             let patch = CGRect(x: 40, y: bar.frame.minY + 2, width: 100, height: 5)
-            XCTAssertGreaterThan(try patchDifference(red, patch, blue, patch), 5)
-            attach(controller.view, name: "History-category-translucent-\(style == .dark ? "dark" : "light")")
+            XCTAssertLessThan(try patchDifference(red, patch, blue, patch), 1)
+            attach(controller.view, name: "History-category-solid-\(style == .dark ? "dark" : "light")")
 
             bar.frame.size.width = 320
             bar.layoutIfNeeded()
@@ -802,7 +800,7 @@ final class HistoryInteractionTests: XCTestCase {
         let context = try XCTUnwrap(CGContext(data: &pixel, width: 1, height: 1, bitsPerComponent: 8,
             bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
         context.draw(crop, in: CGRect(x: 0, y: 0, width: 1, height: 1))
-        // The page ground itself (#F7F7F7 light, black dark), carried
+        // The page ground itself (#F3F3F3 light, black dark), carried
         // through the home-indicator area rather than a separate bottom bar.
         var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
         SettingsTemplate.uiPageBackground

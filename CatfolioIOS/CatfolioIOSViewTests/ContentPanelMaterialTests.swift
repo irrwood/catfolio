@@ -23,28 +23,29 @@ final class ContentPanelMaterialTests: XCTestCase {
         }
     }
 
-    func testNightPanelBesideAccountOverviewGlass() async throws {
-        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
-        let previous = scene.windows.first(where: \.isKeyWindow)
-        let window = UIWindow(windowScene: scene)
-        window.frame = CGRect(x: 0, y: 0, width: 390, height: 440)
-        window.overrideUserInterfaceStyle = .dark
-        let host = UIHostingController(rootView: VStack(spacing: 20) {
-            SettingsSectionHeader("Accounts")
-            HStack(spacing: 12) {
-                Text("Overview glass").frame(maxWidth: .infinity, minHeight: 130)
-                    .modifier(SettingsHistoryTileGlass())
-                Text("Content panel").frame(maxWidth: .infinity, minHeight: 130)
-                    .modifier(ContentPanelSurface())
-            }
-            SettingsCard { SettingsRowContainer { Text("List content") } }
-        }.padding(20).frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.black).preferredColorScheme(.dark))
-        window.rootViewController = host
-        window.makeKeyAndVisible()
-        defer { window.isHidden = true; window.rootViewController = nil; previous?.makeKeyAndVisible() }
-        try await Task.sleep(for: .milliseconds(300))
-        try save(window, name: "night-panel-glass-comparison")
+    func testOverviewTileUsesTheSharedPanel() async throws {
+        for scheme in [ColorScheme.light, .dark] {
+            let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+            let previous = scene.windows.first(where: \.isKeyWindow)
+            let window = UIWindow(windowScene: scene)
+            window.frame = CGRect(x: 0, y: 0, width: 390, height: 190)
+            window.overrideUserInterfaceStyle = scheme == .dark ? .dark : .light
+            let host = UIHostingController(rootView: HStack(spacing: 12) {
+                SettingsHistoryOverviewTile(title: "Dividends", icon: .dividend, caption: "",
+                                            value: "$1.00", valueColor: .primary)
+                    .frame(height: 130)
+                Color.clear.frame(height: 130).modifier(ContentPanelSurface())
+            }.padding(20).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background(SettingsTemplate.pageBackground).ignoresSafeArea().preferredColorScheme(scheme))
+            window.rootViewController = host
+            window.makeKeyAndVisible()
+            defer { window.isHidden = true; window.rootViewController = nil; previous?.makeKeyAndVisible() }
+            try await Task.sleep(for: .milliseconds(300))
+            let image = try save(window, name: "overview-tile-panel-\(scheme)")
+            // Clear space in each: right of the tile's icon, above its figures.
+            XCTAssertLessThan(try distance(pixel(image, x: 140, y: 65), pixel(image, x: 321, y: 65)), 0.02,
+                              "\(scheme): the overview tile must be the page's panel, not glass")
+        }
     }
 
     func testPanelPicksUpBackdropColourAndBlursItsDetail() async throws {
@@ -65,6 +66,89 @@ final class ContentPanelMaterialTests: XCTestCase {
             let contrast = scheme == .dark ? 1.05 / (luminance + 0.05) : (luminance + 0.05) / 0.05
             XCTAssertGreaterThan(contrast, 4.5, "Primary cell text needs a readable backing")
         }
+    }
+
+    func testSubtitleInkStaysReadableOnTintedPanels() {
+        let night = UITraitCollection(userInterfaceStyle: .dark)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        SettingsTemplate.uiSecondaryText.resolvedColor(with: night).getRed(&r, green: &g, blue: &b, alpha: &a)
+        XCTAssertEqual(r, 1); XCTAssertEqual(g, 1); XCTAssertEqual(b, 1)
+        XCTAssertEqual(a, 0.6, accuracy: 0.001, "Night subtitles are translucent white")
+        // The bluest night panel on Research: 12% white over the night glow.
+        for panel in [(r: 31.0, g: 31.0, b: 31.0), (r: 64.0, g: 75.0, b: 93.0)] {
+            let ink = (r: (255 * a + panel.r * (1 - a)) / 255, g: (255 * a + panel.g * (1 - a)) / 255,
+                       b: (255 * a + panel.b * (1 - a)) / 255)
+            let ground = (r: panel.r / 255, g: panel.g / 255, b: panel.b / 255)
+            let contrast = (relativeLuminance(ink) + 0.05) / (relativeLuminance(ground) + 0.05)
+            XCTAssertGreaterThan(contrast, 4.3, "Subtitle on \(panel)")
+        }
+        SettingsTemplate.uiSecondaryText.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))
+            .getRed(&r, green: &g, blue: &b, alpha: &a)
+        XCTAssertEqual(r, 0); XCTAssertEqual(g, 0); XCTAssertEqual(b, 0)
+        XCTAssertEqual(a, 0.5, accuracy: 0.001, "Day subtitles are translucent black")
+        // A day panel over the home page's sky blue reads about (240, 250, 255).
+        let ink = (r: 240 * 0.5 / 255, g: 250 * 0.5 / 255, b: 255 * 0.5 / 255)
+        let contrast = (relativeLuminance((r: 240 / 255, g: 250 / 255, b: 1)) + 0.05) / (relativeLuminance(ink) + 0.05)
+        XCTAssertGreaterThan(contrast, 3.5, "Day subtitle on a sky-tinted panel")
+    }
+
+    func testDisclosureInkIsTranslucent() {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        SettingsTemplate.uiDisclosure.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))
+            .getRed(&r, green: &g, blue: &b, alpha: &a)
+        XCTAssertEqual([r, g, b], [0, 0, 0])
+        // On a white card: the drawing's #E0E0E0.
+        XCTAssertEqual(255 * (1 - a), 0xE0, accuracy: 1)
+        SettingsTemplate.uiDisclosure.resolvedColor(with: UITraitCollection(userInterfaceStyle: .dark))
+            .getRed(&r, green: &g, blue: &b, alpha: &a)
+        XCTAssertEqual([r, g, b], [1, 1, 1])
+        XCTAssertEqual(a, 0.18, accuracy: 0.001)
+    }
+
+    func testPressedPanelLetsMoreOfThePageThrough() async throws {
+        for scheme in [ColorScheme.light, .dark] {
+            let resting = try pixel(try await render(scheme: scheme, green: false), x: 160, y: 160)
+            let pressed = try pixel(try await render(scheme: scheme, green: false, pressed: true), x: 160, y: 160)
+            XCTAssertGreaterThan(distance(resting, pressed), 0.03, "\(scheme): the press must show")
+            XCTAssertLessThan(relativeLuminance(pressed), relativeLuminance(resting),
+                              "\(scheme): a pressed panel carries less white")
+            XCTAssertGreaterThan(pressed.b, pressed.r, "\(scheme): the page's blue comes through")
+        }
+    }
+
+    func testPressedRowIsTranslucentInk() {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        SettingsTemplate.uiRowPressed.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))
+            .getRed(&r, green: &g, blue: &b, alpha: &a)
+        XCTAssertEqual([r, g, b], [0, 0, 0])
+        // On a white card: the drawing's #F7F7F7.
+        XCTAssertEqual(255 * (1 - a), 0xF7, accuracy: 1)
+        SettingsTemplate.uiRowPressed.resolvedColor(with: UITraitCollection(userInterfaceStyle: .dark))
+            .getRed(&r, green: &g, blue: &b, alpha: &a)
+        XCTAssertEqual([r, g, b], [1, 1, 1])
+        // On a night panel (12% white over black, 31): about #2C2C2E.
+        XCTAssertEqual(31 + (255 - 31) * a, 44, accuracy: 2)
+    }
+
+    func testNightPanelIsTranslucentWhiteOverTheNightGround() async throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 320, height: 320)
+        window.overrideUserInterfaceStyle = .dark
+        window.rootViewController = UIHostingController(rootView: ZStack {
+            Color.black
+            ContentPanelMaterial(colorScheme: .dark, isOpaque: false, increasedContrast: false).padding(32)
+        }.ignoresSafeArea().preferredColorScheme(.dark))
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; window.rootViewController = nil; previous?.makeKeyAndVisible() }
+        try await Task.sleep(for: .milliseconds(220))
+        let panel = try pixel(try save(window, name: "content-panel-night-ground"), x: 160, y: 160)
+        // 12% white over black: the material's grey lift is taken back out.
+        XCTAssertEqual(panel.r, 0.12, accuracy: 0.015)
+        XCTAssertEqual(panel.g, panel.r, accuracy: 0.005)
+        XCTAssertEqual(panel.b, panel.r, accuracy: 0.005)
+        XCTAssertGreaterThan(1.05 / (relativeLuminance(panel) + 0.05), 4.5, "White text must stay readable")
     }
 
     func testOpaqueAndIncreasedContrastPanelsDoNotDependOnBackdrop() async throws {
@@ -125,7 +209,7 @@ final class ContentPanelMaterialTests: XCTestCase {
     }
 
     private func render(scheme: ColorScheme, green: Bool, opaque: Bool = false,
-                        increasedContrast: Bool = false) async throws -> UIImage {
+                        increasedContrast: Bool = false, pressed: Bool = false) async throws -> UIImage {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let previous = scene.windows.first(where: \.isKeyWindow)
         let window = UIWindow(windowScene: scene)
@@ -133,14 +217,15 @@ final class ContentPanelMaterialTests: XCTestCase {
         window.overrideUserInterfaceStyle = scheme == .dark ? .dark : .light
         let host = UIHostingController(rootView: ZStack {
             PanelTestBackdrop(green: green)
-            ContentPanelMaterial(colorScheme: scheme, isOpaque: opaque, increasedContrast: increasedContrast)
+            ContentPanelMaterial(colorScheme: scheme, isOpaque: opaque, increasedContrast: increasedContrast,
+                                 isPressed: pressed)
                 .padding(32)
         }.ignoresSafeArea().preferredColorScheme(scheme))
         window.rootViewController = host
         window.makeKeyAndVisible()
         defer { window.isHidden = true; window.rootViewController = nil; previous?.makeKeyAndVisible() }
         try await Task.sleep(for: .milliseconds(220))
-        return try save(window, name: "content-panel-\(scheme)-\(green ? "green" : "blue")-\(opaque ? "opaque" : "material")-\(increasedContrast)")
+        return try save(window, name: "content-panel-\(scheme)-\(green ? "green" : "blue")-\(opaque ? "opaque" : "material")-\(increasedContrast)\(pressed ? "-pressed" : "")")
     }
 
     @discardableResult

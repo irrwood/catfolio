@@ -211,21 +211,18 @@ struct HoldingsHeatmapTile: View {
 
     private var tileBody: some View {
         ZStack {
+            // Translucent over the page itself, so the tiles take the tone
+            // of whatever backdrop the page has. A tiny tile gives up a
+            // hairline on each side, so a gap — not a painted line — keeps
+            // it apart from its neighbour.
             RoundedRectangle(cornerRadius: tileRadius, style: tileCornerStyle)
                 .fill(backgroundColor)
-
-            if usesMicroSeparator {
-                RoundedRectangle(cornerRadius: tileRadius, style: tileCornerStyle)
-                    .strokeBorder(Color(uiColor: .systemBackground), lineWidth: 0.75)
-            }
+                .padding(usesMicroSeparator ? 0.75 : 0)
 
             tileContent
                 .padding(tilePadding)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Keep financial shades stable while gaps reveal the page gradient;
-        // repeated hero textures must not accumulate translucent tile fills.
-        .background(Color(uiColor: .systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: tileRadius, style: tileCornerStyle))
         .contentShape(RoundedRectangle(cornerRadius: tileRadius, style: tileCornerStyle))
     }

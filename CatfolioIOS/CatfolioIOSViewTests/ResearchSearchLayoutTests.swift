@@ -37,7 +37,8 @@ final class ResearchSearchLayoutTests: XCTestCase {
             }
             try self.capture(window, name: "research-search-held-at-detent")
             pull.endTouch()
-            try await Task.sleep(for: .milliseconds(800))
+            // The field settles, then flies back down with the page.
+            try await Task.sleep(for: .milliseconds(1100))
             XCTAssertFalse(search.isActive)
             XCTAssertFalse(field.isFirstResponder)
             XCTAssertEqual(field.text, "")
@@ -101,7 +102,14 @@ final class ResearchSearchLayoutTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(450))
             XCTAssertTrue(search.isActive)
             XCTAssertTrue(field.isFirstResponder)
-            XCTAssertLessThanOrEqual(field.convert(field.bounds, to: window).minY, origin.minY)
+            if #available(iOS 26.0, *) {
+                let bar = navigation.navigationBar.convert(navigation.navigationBar.bounds, to: window)
+                XCTAssertLessThan(field.convert(field.bounds, to: window).minY, origin.minY - 30,
+                                  "Opening search must fly the field to the top")
+                XCTAssertLessThanOrEqual(field.convert(field.bounds, to: window).maxY, bar.maxY + 1)
+            } else {
+                XCTAssertLessThanOrEqual(field.convert(field.bounds, to: window).minY, origin.minY)
+            }
             let backdrop = try XCTUnwrap(self.find(UIVisualEffectView.self, in: window,
                                                    identifier: "research.search.backdrop"))
             let blur = try XCTUnwrap(backdrop.effect as? UIBlurEffect)
@@ -204,10 +212,12 @@ final class ResearchSearchLayoutTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(750))
             XCTAssertEqual(field.convert(field.bounds, to: window).minY, try XCTUnwrap(pinnedY), accuracy: 1,
                            "Closing search while scrolled must keep its pinned position")
-            // Restore the expanded title's starting position; the collapsed
-            // bar currently reports a smaller adjusted top inset.
-            scroll.setContentOffset(initialOffset, animated: false)
-            try await Task.sleep(for: .milliseconds(350))
+            // Scroll back to the top as a reader's scroll-to-top does, so the
+            // large title expands again. An instant jump to the expanded
+            // offset under a collapsed bar leaves the title collapsed or not
+            // depending on the page's height.
+            scroll.setContentOffset(initialOffset, animated: true)
+            try await Task.sleep(for: .milliseconds(800))
             XCTAssertEqual(field.convert(field.bounds, to: window).minY, origin.minY, accuracy: 1)
             XCTAssertTrue(try self.searchController(in: navigation).searchBar === search.searchBar)
             try self.capture(window, name: "research-search-restored-below-title")
@@ -288,8 +298,10 @@ final class ResearchSearchLayoutTests: XCTestCase {
     func testDarkSearchCanOpenAndClose() async throws {
         try await withResearch { window, host in
             window.overrideUserInterfaceStyle = .dark
+            try await Task.sleep(for: .milliseconds(300))
             let navigation = try XCTUnwrap(self.controller(UINavigationController.self, in: host))
             let search = try self.searchController(in: navigation)
+            try self.capture(window, name: "research-system-search-dark-idle")
             try await self.activate(search, in: window)
             try await Task.sleep(for: .milliseconds(450))
             XCTAssertTrue(search.searchBar.searchTextField.isFirstResponder)

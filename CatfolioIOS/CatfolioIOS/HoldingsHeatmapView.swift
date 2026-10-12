@@ -25,7 +25,7 @@ struct HoldingsHeatmapView: View {
     private let maximumHoldingTiles = 20
     private let minimumIndividualFraction = 0.008
     private let groupedScreenInset: CGFloat = 16
-    private let heatmapHeight: CGFloat = 700
+    private let heatmapHeight: CGFloat = 525
 
     var body: some View {
         let sectorGroups = groupsBySector ? makeSectorGroups() : []
@@ -37,7 +37,7 @@ struct HoldingsHeatmapView: View {
                 // the whole plane down at an angle, where a sentence reads as
                 // a smudge. Standing upright, the heatmap keeps them.
                 HoldingsHeatmapPlaceholder(showsCaption: isInteractive, isLoading: isLoading)
-                    .frame(height: 320)
+                    .frame(height: 240)
             } else {
                 Group {
                     if groupsBySector {

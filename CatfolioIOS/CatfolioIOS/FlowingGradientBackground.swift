@@ -33,6 +33,8 @@ enum HomeBackgroundStyle: String, CaseIterable, Identifiable {
     /// A wide arch of light over sky blue (Figma 486:6627).
     case clearSky
     case classic
+    /// No glow at all: the plain page ground, #F3F3F3 by day and black at night.
+    case plain
 
     static let preferenceKey = "catfolio.homeBackgroundStyle"
     /// What a reader who has never picked a backdrop sees.
@@ -55,6 +57,7 @@ enum HomeBackgroundStyle: String, CaseIterable, Identifiable {
         case .haloCyan: L10n.text("青蓝光晕")
         case .clearSky: L10n.text("晴空")
         case .classic: L10n.text("经典")
+        case .plain: L10n.text("纯白 / 纯黑")
         }
     }
 
@@ -69,7 +72,7 @@ enum HomeBackgroundStyle: String, CaseIterable, Identifiable {
         case .mist: .mist
         case .haloWhite, .haloCyan: .bigHalo
         case .clearSky, .flowingSky: .arch
-        case .classic: nil
+        case .classic, .plain: nil
         }
     }
 
@@ -77,6 +80,11 @@ enum HomeBackgroundStyle: String, CaseIterable, Identifiable {
         let dark = colorScheme == .dark
         switch self {
         case .flowing, .flowingAroundChart, .classic: return dark ? .night : .day
+        case .plain:
+            var palette = dark ? FlowingGradientPalette.night : .day
+            palette.baseTop = SettingsTemplate.pageBackground
+            palette.baseBottom = palette.baseTop
+            return palette
         case .flowingBright: return dark ? .nightBright : .day
         case .flowingSoft: return dark ? .softNight : .softDay
         case .flowingSky:

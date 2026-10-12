@@ -458,7 +458,9 @@ final class HistoryPagingScrollView: UIScrollView {
 /// slides with the page.
 final class HistoryCategoryBar: UIView {
     let scrollView = UIScrollView()
-    private let backdrop = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
+    /// Solid, in the navigation bar's own colour: white by day, black at
+    /// night, so the title and the chips read as one bar.
+    private let backdrop = UIVisualEffectView(effect: nil)
     private let separator = UIView()
     let pill: UIVisualEffectView = {
         if #available(iOS 26.0, *) {
@@ -484,10 +486,8 @@ final class HistoryCategoryBar: UIView {
     init(categories: [HistoryCategory] = HistoryCategory.allCases) {
         self.categories = categories
         super.init(frame: .zero)
-        // Keep the blur at full strength; translucency belongs to its tint,
-        // so both the resting strip and scrolling content use the same surface.
         backgroundColor = .clear
-        backdrop.contentView.backgroundColor = SettingsTemplate.uiSegmentBarTint
+        backdrop.contentView.backgroundColor = .systemBackground
         backdrop.isUserInteractionEnabled = false
         backdrop.accessibilityIdentifier = "history-category-backdrop"
         addSubview(backdrop)

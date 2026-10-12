@@ -19,7 +19,8 @@ struct AppSettingsView: View {
     @State private var reconciliation: LedgerReconciliation.Report?
 
     var body: some View {
-        SettingsPage(title: L10n.text("设置")) {
+        SettingsPage(title: L10n.text("设置"), topInset: SettingsTemplate.sectionSpacing,
+                     titleDisplayMode: .inline) {
             SettingsSection(L10n.text("行情与 AI")) {
                 SettingsNavigationRow(icon: .symbol("key"), title: L10n.text("服务商")) {
                     LocalServicesSettingsView()

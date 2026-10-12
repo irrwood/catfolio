@@ -21,7 +21,8 @@ struct NewsSettingsView: View {
     private var blockedSites: [String] { NewsSettings.sites(from: blockedSitesText) }
 
     var body: some View {
-        SettingsPage(title: L10n.text("新闻"), bottomInset: 32) {
+        SettingsPage(title: L10n.text("新闻"), bottomInset: 32, topInset: SettingsTemplate.sectionSpacing,
+                     titleDisplayMode: .inline) {
             SettingsSection(L10n.text("新闻来源")) {
                 toggle(.googleNews, isOn: $googleNews)
                 toggle(.yahooFinance, isOn: $yahooFinance)

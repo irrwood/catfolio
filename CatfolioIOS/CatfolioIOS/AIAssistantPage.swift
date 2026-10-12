@@ -144,7 +144,7 @@ struct AIConversationTopFade: View {
 
     private var topColor: Color {
         let style = HomeBackgroundStyle(rawValue: backgroundStyleRawValue) ?? .defaultStyle
-        return style == .classic && colorScheme == .dark ? .black : style.palette(for: colorScheme).baseTop
+        return (style == .classic || style == .plain) && colorScheme == .dark ? .black : style.palette(for: colorScheme).baseTop
     }
 
     var body: some View {

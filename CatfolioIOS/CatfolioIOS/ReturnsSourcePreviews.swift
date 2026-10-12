@@ -351,15 +351,13 @@ private struct ReturnsSourceCard: View {
                 .contentTransition(.numericText(value: amount))
                 .refreshGlow(isActive: isRefreshing)
         } else {
+            // No skeleton: the saved cards open at once, so this only shows
+            // for an account set seen for the first time, and briefly. The
+            // line keeps its height, so the figure fades in where it belongs.
             Text(isUnavailable ? "—" : " ")
                 .font(Typography.number(size: 20, weight: .semibold))
                 .foregroundStyle(palette.amount.opacity(0.5))
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(alignment: .leading) {
-                    if !isUnavailable {
-                        Capsule().fill(Color.white.opacity(0.15)).frame(width: 96, height: 18)
-                    }
-                }
         }
     }
 

@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ReturnsView: View {
     @Environment(\.locale) private var appLocale
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(AppModel.self) private var model
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var selectedHolding: Holding?
@@ -41,17 +40,10 @@ struct ReturnsView: View {
                 )
             )
             .accessibilityIdentifier("performance.heatmap")
-            HStack(alignment: .center) {
-                RootTabTitle(title: L10n.text("Performance"))
-                    .layoutPriority(1)
-                    .accessibilityIdentifier("performance.title")
-                Spacer(minLength: 12)
-                heatmapButton
-                    .frame(minHeight: 44)
-                    .contentShape(Capsule())
-                    .accessibilityIdentifier("performance.heatmap.toggle")
-            }
-            .padding(.horizontal, 4)
+            RootTabTitle(title: L10n.text("Performance"))
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .accessibilityIdentifier("performance.title")
+                .padding(.horizontal, 4)
             VStack(spacing: SettingsTemplate.tileSpacing) {
                 ReturnsSourceCards(store: sourcePreviews)
                 HStack(spacing: SettingsTemplate.tileSpacing) {
@@ -111,6 +103,15 @@ struct ReturnsView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
+        .toolbar {
+            // The system's own glass button in the bar's top-right corner.
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(L10n.text("热力图"), action: toggleHeatmap)
+                    // The ink colour: black by day, white at night.
+                    .tint(CatfolioTheme.primaryText)
+                    .accessibilityIdentifier("performance.heatmap.toggle")
+            }
+        }
         .sheet(item: $selectedHolding) { holding in
             HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
                 .environment(model)
@@ -125,27 +126,6 @@ struct ReturnsView: View {
             ReturnsChartPage(chart: chart)
         }
         #endif
-    }
-
-    @ViewBuilder
-    private var heatmapButton: some View {
-        let button = Button(action: toggleHeatmap) {
-            Text(L10n.text("热力图"))
-                .appText(.body, weight: .semibold)
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-        }
-        if #available(iOS 26.0, *) {
-            button
-                .buttonStyle(.glass(.regular.tint(colorScheme == .dark ? .clear : .white.opacity(0.65))))
-                .buttonBorderShape(.capsule)
-        } else {
-            button
-                .buttonStyle(.plain)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .settingsCardSurface(cornerRadius: 22)
-        }
     }
 }
 

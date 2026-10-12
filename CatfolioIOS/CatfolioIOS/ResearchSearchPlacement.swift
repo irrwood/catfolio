@@ -69,6 +69,9 @@ extension ResearchToolbarSearch {
         private var barObservation: NSKeyValueObservation?
         private var isVisible = false
         private var lastResultsInset: CGFloat?
+        /// Where the page sat before search lifted it, so closing returns
+        /// the field and the large title to the same place.
+        private var offsetBeforeSearch: CGPoint?
 
         init(placement: ResearchSearchPlacement) {
             self.placement = placement
@@ -121,8 +124,10 @@ extension ResearchToolbarSearch {
             let natural = slot.convert(slot.bounds, to: container)
             let bar = navigation.navigationBar.convert(navigation.navigationBar.bounds, to: container)
             // The first row remains below the large title. Only an upward
-            // scroll can carry it into the compact navigation row.
-            field.frame = CGRect(x: natural.minX, y: max(natural.minY, bar.minY),
+            // scroll can carry it into the compact navigation row; an open
+            // search always holds it there.
+            let y = field.isPresented ? bar.minY : max(natural.minY, bar.minY)
+            field.frame = CGRect(x: natural.minX, y: y,
                                  width: natural.width, height: 44)
             field.layoutIfNeeded()
             let inset = max(0, field.frame.maxY + SettingsTemplate.sectionSpacing - bar.maxY)
@@ -134,6 +139,49 @@ extension ResearchToolbarSearch {
                     self.onResultsInset(inset)
                 }
             }
+        }
+
+        /// Opening flies the field to the navigation row and scrolls the page
+        /// with it, so the large title collapses instead of sitting between
+        /// the field and the results. Closing flies both back.
+        func setPresented(_ presented: Bool) {
+            guard presented != field.isPresented else {
+                field.setPresented(presented)
+                return
+            }
+            let animated = isVisible && !UIAccessibility.isReduceMotionEnabled
+            field.setPresented(presented, animated: animated)
+            if !presented { lowerPage(animated: animated) }
+            let flight = {
+                if presented { self.liftPage() }
+                self.layoutSearch()
+                self.navigationController?.view.layoutIfNeeded()
+            }
+            guard animated else { flight(); return }
+            UIView.animate(withDuration: ResearchToolbarSearch.flightDuration, delay: 0,
+                           usingSpringWithDamping: 0.86, initialSpringVelocity: 0,
+                           options: [.beginFromCurrentState, .allowUserInteraction], animations: flight)
+        }
+
+        private func liftPage() {
+            guard let navigation = navigationController, let slot = placement.slot,
+                  slot.window != nil, let scroll else { return }
+            let container = navigation.view!
+            let natural = slot.convert(slot.bounds, to: container)
+            let bar = navigation.navigationBar.convert(navigation.navigationBar.bounds, to: container)
+            let rise = natural.minY - bar.minY
+            guard rise > 0.5 else { offsetBeforeSearch = nil; return }
+            let start = scroll.contentOffset
+            let bottom = scroll.contentSize.height - scroll.bounds.height + scroll.adjustedContentInset.bottom
+            offsetBeforeSearch = start
+            scroll.setContentOffset(CGPoint(x: start.x, y: max(start.y, min(start.y + rise, bottom))),
+                                    animated: false)
+        }
+
+        private func lowerPage(animated: Bool) {
+            guard let start = offsetBeforeSearch else { return }
+            offsetBeforeSearch = nil
+            scroll?.setContentOffset(start, animated: animated)
         }
 
         private func observeScroll(from slot: UIView, navigation: UINavigationController) {

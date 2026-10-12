@@ -18,13 +18,13 @@ final class HomeScrollInteractionTests: XCTestCase {
 
     func testFloatingFilterRequiresTheWholeOriginalControlToExitAboveViewport() {
         for y: CGFloat in [700, 0, -20, -43.5] {
-            XCTAssertFalse(PortfolioFloatingFilterOverlay.shouldFloat(sourceFrame: CGRect(x: 300, y: y, width: 58, height: 44)))
+            XCTAssertFalse(PortfolioFloatingHeaderReporter.shouldFloat(sourceFrame: CGRect(x: 300, y: y, width: 58, height: 44)))
         }
         for y: CGFloat in [-44, -45, -800] {
-            XCTAssertTrue(PortfolioFloatingFilterOverlay.shouldFloat(sourceFrame: CGRect(x: 300, y: y, width: 58, height: 44)))
+            XCTAssertTrue(PortfolioFloatingHeaderReporter.shouldFloat(sourceFrame: CGRect(x: 300, y: y, width: 58, height: 44)))
         }
-        XCTAssertFalse(PortfolioFloatingFilterOverlay.shouldFloat(sourceFrame: .zero))
-        XCTAssertFalse(PortfolioFloatingFilterOverlay.shouldFloat(sourceFrame: .null))
+        XCTAssertFalse(PortfolioFloatingHeaderReporter.shouldFloat(sourceFrame: .zero))
+        XCTAssertFalse(PortfolioFloatingHeaderReporter.shouldFloat(sourceFrame: .null))
     }
 
     @MainActor

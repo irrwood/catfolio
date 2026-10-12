@@ -14,6 +14,8 @@ struct ResearchMetricCard: View {
     @ScaledMetric(relativeTo: .subheadline) private var titleSize = 16.0
     @ScaledMetric(relativeTo: .title3) private var valueSize = 20.0
     @ScaledMetric(relativeTo: .subheadline) private var changeSize = 14.0
+    /// The figure's font, which also sets the height of its line.
+    private var valueFont: Font { .system(size: valueSize, weight: .semibold, design: .rounded) }
 
     private var seriesColor: Color {
         switch symbol {
@@ -42,11 +44,20 @@ struct ResearchMetricCard: View {
 
                 // Set like the macro cards below: the value, then its move
                 // in quiet grey on the same baseline.
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    quote
-                    change
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                // One value line tall whatever it holds — the figure, the
+                // loading bar or 暂无数据 — so the card keeps its height
+                // when the data lands.
+                Text("0")
+                    .font(valueFont)
+                    .hidden()
+                    .accessibilityHidden(true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .overlay(alignment: Alignment(horizontal: .leading, vertical: .firstTextBaseline)) {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            quote
+                            change
+                        }
+                    }
                 .chartLoadingShimmer(active: showsSkeleton, appearanceID: "research-metric|\(symbol)")
 
                 sparkline
@@ -64,7 +75,7 @@ struct ResearchMetricCard: View {
             Text(symbol == "^TNX"
                  ? (value / 100).formatted(.percent.precision(.fractionLength(2)))
                  : value.formatted(.number.precision(.fractionLength(2))))
-                .font(.system(size: valueSize, weight: .semibold, design: .rounded))
+                .font(valueFont)
                 .monospacedDigit()
                 .foregroundStyle(CatfolioTheme.primaryText)
                 .lineLimit(1)

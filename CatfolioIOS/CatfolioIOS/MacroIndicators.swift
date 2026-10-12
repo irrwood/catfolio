@@ -290,6 +290,8 @@ struct MacroIndicatorCard: View {
     @ScaledMetric(relativeTo: .subheadline) private var titleSize = 16.0
     @ScaledMetric(relativeTo: .title3) private var valueSize = 20.0
     @ScaledMetric(relativeTo: .subheadline) private var changeSize = 14.0
+    /// The figure's font, which also sets the height of its line.
+    private var valueFont: Font { .system(size: valueSize, weight: .semibold, design: .rounded) }
 
     private var showsSkeleton: Bool { isLoading && indicator == nil }
 
@@ -301,30 +303,39 @@ struct MacroIndicatorCard: View {
                     .foregroundStyle(color)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    if let value = indicator?.latest?.value {
-                        FinancialText(indicator?.format == .exchangeRate
-                             ? value.formatted(.number.precision(.fractionLength(4)))
-                             : value.formatted(.number.precision(.fractionLength(2))) + "%")
-                            .font(.system(size: valueSize, weight: .semibold, design: .rounded))
-                            .monospacedDigit()
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                        if let change = changeText {
-                            FinancialText(change)
-                                .font(.system(size: changeSize, weight: .semibold, design: .rounded))
-                                .monospacedDigit()
-                                .foregroundStyle(.secondary)
-                                .fixedSize()
+                // One value line tall whatever it holds, so the card keeps
+                // its height when the data lands.
+                Text("0")
+                    .font(valueFont)
+                    .hidden()
+                    .accessibilityHidden(true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .overlay(alignment: Alignment(horizontal: .leading, vertical: .firstTextBaseline)) {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            if let value = indicator?.latest?.value {
+                                FinancialText(indicator?.format == .exchangeRate
+                                     ? value.formatted(.number.precision(.fractionLength(4)))
+                                     : value.formatted(.number.precision(.fractionLength(2))) + "%")
+                                    .font(valueFont)
+                                    .monospacedDigit()
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
+                                if let change = changeText {
+                                    FinancialText(change)
+                                        .font(.system(size: changeSize, weight: .semibold, design: .rounded))
+                                        .monospacedDigit()
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize()
+                                }
+                            } else if showsSkeleton {
+                                ChartSkeletonShape(width: 82, height: valueSize)
+                            } else {
+                                Text(L10n.text("暂无数据"))
+                                    .font(.system(size: changeSize, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                            }
                         }
-                    } else if showsSkeleton {
-                        ChartSkeletonShape(width: 82, height: valueSize)
-                    } else {
-                        Text(L10n.text("暂无数据"))
-                            .font(.system(size: changeSize, design: .rounded))
-                            .foregroundStyle(.secondary)
                     }
-                }
                 .chartLoadingShimmer(active: showsSkeleton, appearanceID: "macro|\(title)")
                 sparkline.frame(height: 53)
             }

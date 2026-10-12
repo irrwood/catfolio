@@ -19,6 +19,8 @@ struct PortfolioView: View {
     @State private var showsTodayDetail = false
     @State private var homeScrollState = PortfolioHomeScrollState()
     @State private var homeScrollController = PortfolioHomeScrollController()
+    /// The holdings header once it has scrolled away, carried by the bar.
+    @State private var floatingHeader: PortfolioFloatingHeader?
     // One namespace per origin. A security shown both in the Today bars and
     // in the holdings list would otherwise publish two sources under the same
     // id, and the transition has no way to know which one it grew from.
@@ -206,7 +208,7 @@ struct PortfolioView: View {
                     .task(id: model.wantedCurrencyHistories) {
                         await model.loadCurrencyHistories()
                     }
-                .modifier(PortfolioFloatingFilterOverlay())
+                .modifier(PortfolioFloatingHeaderReporter(header: $floatingHeader))
                 .fullScreenCover(item: $selectedHolding) { holding in
                     HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
                         .environment(model)
@@ -222,7 +224,26 @@ struct PortfolioView: View {
                     )
                 }
             }
-            .toolbarVisibility(.hidden, for: .navigationBar)
+            // No bar over the hero. Once the holdings header has scrolled
+            // away, the system bar takes its title and sort button, and
+            // brings the system's own edge under them.
+            .toolbarVisibility(floatingHeader == nil ? .hidden : .visible, for: .navigationBar)
+            .navigationBarTitleDisplayMode(.inline)
+            // The gradient edge, not the hard one.
+            .softTopScrollEdge()
+            .toolbar {
+                if let floatingHeader {
+                    ToolbarItem(placement: .topBarLeading) {
+                        floatingHeader.title
+                    }
+                    .withoutSharedBackground()
+                    ToolbarItem(placement: .topBarTrailing) {
+                        floatingHeader.menu
+                            .environment(\.portfolioFilterFloats, true)
+                            .accessibilityIdentifier("portfolio-floating-filter")
+                    }
+                }
+            }
         }
         .accessibilityIdentifier("page.portfolio")
     }

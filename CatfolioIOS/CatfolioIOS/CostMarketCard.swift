@@ -492,6 +492,10 @@ struct CostMarketCard: View {
                 }
             )
             .accessibilityLabel(response.accountNAV != nil ? L10n.text("账户资产与净入金对比图，长按查看单日，双指测量区间") : L10n.text("成本与市值对比图，长按后单指拖动查看单日，保持第一指并加入第二指测量区间"))
+            // A refresh keeps the lines already drawn and runs the amount's
+            // light along them, instead of swapping them for a skeleton.
+            // Not while the reader is holding the chart to read a day.
+            .refreshGlow(isActive: isRefreshingBehindCache && selectedDate == nil && measuredRange == nil)
         } else {
             // The header still shows the available account figures. No
             // historical curve is implied when no real observations exist,

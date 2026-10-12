@@ -222,7 +222,9 @@ struct LocalServicesSettingsView: View {
     var body: some View {
             SettingsPage(
                 title: L10n.text("服务商"),
-                bottomInset: 32
+                bottomInset: 32,
+                topInset: SettingsTemplate.sectionSpacing,
+                titleDisplayMode: .inline
             ) {
                 SettingsCard {
                     SettingsButtonRow(icon: .symbol("list.number"), title: L10n.text("API 配置引导")) {
@@ -648,7 +650,8 @@ struct LocalServiceDetailView: View {
     }
 
     var body: some View {
-        SettingsPage(title: provider.shortTitle, bottomInset: 32) {
+        SettingsPage(title: provider.shortTitle, bottomInset: 32, topInset: SettingsTemplate.sectionSpacing,
+                     titleDisplayMode: .inline) {
             SettingsSectionHeader(L10n.text("服务用途"))
             SettingsCard {
                 SettingsRowContainer {

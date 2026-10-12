@@ -5,7 +5,7 @@ import XCTest
 
 @MainActor
 final class SettingsHeaderStabilityTests: XCTestCase {
-    func testSettingsSubpagesKeepNativeTitlesAndRestoreTheirScrollPosition() async throws {
+    func testSettingsSubpagesKeepSmallTitlesAndRestoreTheirScrollPosition() async throws {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let previous = scene.windows.first(where: \.isKeyWindow)
         let suite = "settings-header-stability-\(UUID())"
@@ -42,23 +42,22 @@ final class SettingsHeaderStabilityTests: XCTestCase {
         withAnimation { route.path = [.settings] }
         try await Task.sleep(for: .milliseconds(800))
 
-        let expandedScroll = try XCTUnwrap(navigation.topViewController?.contentScrollView(for: .top))
-        let expandedOffset = -expandedScroll.adjustedContentInset.top
-        let expandedBarHeight = navigation.navigationBar.frame.height
+        // Settings and the pages inside it use the system's small bar: it
+        // has one height, at rest and scrolled.
+        let topScroll = try XCTUnwrap(navigation.topViewController?.contentScrollView(for: .top))
+        let restingOffset = -topScroll.adjustedContentInset.top
+        let barHeight = navigation.navigationBar.frame.height
+        XCTAssertNil(largeTitle(Destination.settings.title, in: window), "Settings has no large title")
         for style in [UIUserInterfaceStyle.light, .dark] {
             window.overrideUserInterfaceStyle = style
             for parentCollapsed in [false, true] {
                 let parent = try XCTUnwrap(navigation.topViewController)
                 let parentScroll = try XCTUnwrap(parent.contentScrollView(for: .top))
-                parentScroll.setContentOffset(CGPoint(x: 0, y: parentCollapsed ? 200 : expandedOffset), animated: true)
+                parentScroll.setContentOffset(CGPoint(x: 0, y: parentCollapsed ? 200 : restingOffset), animated: true)
                 try await Task.sleep(for: .milliseconds(650))
                 let parentOffset = parentScroll.contentOffset.y
                 let parentBarHeight = navigation.navigationBar.frame.height
-                if parentCollapsed {
-                    XCTAssertLessThan(parentBarHeight, expandedBarHeight)
-                } else {
-                    XCTAssertEqual(parentBarHeight, expandedBarHeight, accuracy: 1)
-                }
+                XCTAssertEqual(parentBarHeight, barHeight, accuracy: 1)
 
                 for destination in [Destination.news, .services] {
                     withAnimation { route.path = [.settings, destination] }
@@ -68,16 +67,13 @@ final class SettingsHeaderStabilityTests: XCTestCase {
                     XCTAssertFalse(scroll === parentScroll, "Each subpage must own its navigation scroll view")
                     XCTAssertEqual(page.navigationItem.title, destination.title)
                     XCTAssertEqual(scroll.contentOffset.y, -scroll.adjustedContentInset.top, accuracy: 1)
-                    let largeTitle = try XCTUnwrap(largeTitle(destination.title, in: window))
-                    let titleY = largeTitle.convert(.zero, to: window).y
-                    XCTAssertGreaterThan(titleY, window.safeAreaInsets.top)
-                    XCTAssertLessThan(titleY, window.safeAreaInsets.top + 85)
+                    XCTAssertNil(largeTitle(destination.title, in: window), "\(destination) uses the small bar")
+                    XCTAssertEqual(navigation.navigationBar.frame.height, barHeight, accuracy: 1)
                     try await assertStable(navigation, page: page, scroll: scroll, route: route, defaults: defaults)
-                    XCTAssertEqual(largeTitle.convert(.zero, to: window).y, titleY, accuracy: 1)
 
                     scroll.setContentOffset(CGPoint(x: 0, y: 200), animated: true)
                     try await Task.sleep(for: .milliseconds(650))
-                    XCTAssertLessThan(navigation.navigationBar.frame.height, expandedBarHeight)
+                    XCTAssertEqual(navigation.navigationBar.frame.height, barHeight, accuracy: 1)
                     try await assertStable(navigation, page: page, scroll: scroll, route: route, defaults: defaults)
 
                     withAnimation { route.path = [.settings] }

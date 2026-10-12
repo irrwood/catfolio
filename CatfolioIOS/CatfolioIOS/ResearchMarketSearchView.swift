@@ -25,11 +25,14 @@ struct ResearchMarketSearch: ViewModifier {
         let dashboard = content.overlay {
             if isPresented {
                 ResearchMarketSearchView(holdings: holdings, onSelect: { result in
-                    dismissSearch()
+                    // Keep the query, loaded results and scroll position under
+                    // the detail sheet; selecting only dismisses the keyboard.
+                    isFocused = false
+                    motion.field?.endEditing(true)
                     onSelect(result)
                 }, query: query, onDismiss: dismissSearch, pullObserver: pullObserver,
-                   onPull: motion.pull, onPullCancel: motion.cancelPull, onPullDismiss: dismissAfterPull)
-                    .padding(.top, resultsTopInset)
+                   onPull: motion.pull, onPullCancel: motion.cancelPull, onPullDismiss: dismissAfterPull,
+                   contentTopInset: resultsTopInset)
                     .opacity(isClosing ? 0 : 1)
                     .allowsHitTesting(!isClosing)
             }
@@ -125,8 +128,7 @@ struct ResearchToolbarSearch: UIViewControllerRepresentable {
         field.searchBar.placeholder = L10n.text("搜索股票、ETF 或公司名")
         field.cancelButton.accessibilityLabel = L10n.text("取消")
         if field.searchBar.text != query { field.searchBar.text = query }
-        field.setPresented(isPresented)
-        controller.layoutSearch()
+        controller.setPresented(isPresented)
     }
 
     static func dismantleUIViewController(_ controller: PositionController, coordinator: Coordinator) {
@@ -170,7 +172,7 @@ struct ResearchToolbarSearch: UIViewControllerRepresentable {
         }
     }
 
-    final class Field: UIView {
+    final class Field: UIView, UIGestureRecognizerDelegate {
         // Scroll positioning owns the outer frame. The child moves
         // independently, so a layout pass cannot reset a held pull.
         let movingContent = UIView()
@@ -179,16 +181,34 @@ struct ResearchToolbarSearch: UIViewControllerRepresentable {
         let cancelButton = UIButton(configuration: .glass())
         var onCancel: (() -> Void)?
         private(set) var isPresented = false
-        private let surface = UIVisualEffectView()
+        /// At rest the field is the page's own content panel, drawn by the
+        /// same SwiftUI material; presenting fades it and materialises glass.
+        private let panel = UIHostingController(rootView: SearchPanel())
+        /// Brightens the resting panel under a finger.
+        private let pressHighlight = UIView()
+        private let press = UILongPressGestureRecognizer()
+        private let glass = UIVisualEffectView()
 
         override init(frame: CGRect) {
             super.init(frame: frame)
             addGestureRecognizer(pullObserver)
             pullObserver.isEnabled = false
             addSubview(movingContent)
-            surface.isUserInteractionEnabled = false
-            surface.clipsToBounds = true
-            movingContent.addSubview(surface)
+            panel.view.backgroundColor = .clear
+            panel.safeAreaRegions = []
+            for surface in [panel.view!, glass, pressHighlight] {
+                surface.isUserInteractionEnabled = false
+                surface.clipsToBounds = true
+                movingContent.addSubview(surface)
+            }
+            pressHighlight.alpha = 0
+            // Watches the touch without taking it from the text field.
+            press.minimumPressDuration = 0
+            press.cancelsTouchesInView = false
+            press.delaysTouchesBegan = false
+            press.delegate = self
+            press.addTarget(self, action: #selector(pressChanged))
+            addGestureRecognizer(press)
             searchBar.searchBarStyle = .minimal
             searchBar.autocapitalizationType = .none
             searchBar.autocorrectionType = .no
@@ -200,11 +220,19 @@ struct ResearchToolbarSearch: UIViewControllerRepresentable {
             cancelButton.accessibilityIdentifier = "research.search.cancel"
             cancelButton.accessibilityLabel = L10n.text("取消")
             cancelButton.isHidden = true
+            cancelButton.alpha = 0
+            cancelButton.transform = Self.cancelHiddenTransform
             cancelButton.addAction(UIAction { [weak self] _ in self?.onCancel?() }, for: .touchUpInside)
             movingContent.addSubview(cancelButton)
+            applyPressStyle()
+            registerForTraitChanges([UITraitUserInterfaceStyle.self]) {
+                (self: Self, _: UITraitCollection) in self.applyPressStyle()
+            }
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+        private static let cancelHiddenTransform = CGAffineTransform(translationX: 18, y: 0).scaledBy(x: 0.4, y: 0.4)
 
         override func layoutSubviews() {
             super.layoutSubviews()
@@ -212,33 +240,87 @@ struct ResearchToolbarSearch: UIViewControllerRepresentable {
             movingContent.center = CGPoint(x: bounds.midX, y: bounds.midY)
             let cancelWidth: CGFloat = isPresented ? 52 : 0
             searchBar.frame = CGRect(x: -8, y: -6, width: bounds.width + 16 - cancelWidth, height: bounds.height + 12)
-            cancelButton.frame = CGRect(x: bounds.width - 44, y: 0, width: 44, height: 44)
+            // The transform scales the button in place; keep its frame
+            // assignment off the transformed geometry.
+            cancelButton.bounds = CGRect(x: 0, y: 0, width: 44, height: 44)
+            cancelButton.center = CGPoint(x: bounds.width - 22, y: 22)
             searchBar.layoutIfNeeded()
             let textField = searchBar.searchTextField
-            surface.frame = textField.convert(textField.bounds, to: movingContent)
-            surface.layer.cornerRadius = surface.bounds.height / 2
+            let surfaceFrame = textField.convert(textField.bounds, to: movingContent)
+            for surface in [panel.view!, glass, pressHighlight] {
+                surface.frame = surfaceFrame
+                surface.layer.cornerRadius = surfaceFrame.height / 2
+            }
         }
 
-        func setPresented(_ presented: Bool) {
+        private func applyPressStyle() {
+            let dark = traitCollection.userInterfaceStyle == .dark
+            pressHighlight.backgroundColor = UIColor.white.withAlphaComponent(dark ? 0.08 : 0.6)
+        }
+
+        @objc private func pressChanged() {
+            let pressed = !isPresented && (press.state == .began || press.state == .changed)
+                && bounds.contains(press.location(in: self))
+            guard (pressHighlight.alpha > 0.5) != pressed else { return }
+            let reduceMotion = UIAccessibility.isReduceMotionEnabled
+            UIView.animate(withDuration: reduceMotion ? 0 : (pressed ? 0.12 : 0.25), delay: 0,
+                           options: [.beginFromCurrentState, .allowUserInteraction]) {
+                self.pressHighlight.alpha = pressed ? 1 : 0
+            }
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+
+        func setPresented(_ presented: Bool, animated: Bool = false) {
             pullObserver.isEnabled = presented
-            if isPresented != presented {
-                isPresented = presented
-                cancelButton.isHidden = !presented
-                if presented {
-                    let glass = UIGlassEffect(style: .regular)
-                    surface.effect = glass
-                    surface.backgroundColor = .clear
-                } else {
-                    surface.effect = nil
-                    searchBar.resignFirstResponder()
-                }
+            guard isPresented != presented else { return }
+            isPresented = presented
+            if !presented { searchBar.resignFirstResponder() }
+            cancelButton.isHidden = false
+            let changes = {
+                // Effects animate between states; fading a visual effect
+                // view's alpha would not.
+                self.glass.effect = presented ? UIGlassEffect(style: .regular) : nil
+                self.panel.view.alpha = presented ? 0 : 1
+                self.pressHighlight.alpha = 0
+                self.cancelButton.alpha = presented ? 1 : 0
+                self.cancelButton.transform = presented ? .identity : Self.cancelHiddenTransform
+                self.setNeedsLayout()
+                self.layoutIfNeeded()
             }
-            if !presented {
-                surface.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.85)
+            let finish = { (_: Bool) in
+                if self.isPresented == presented { self.cancelButton.isHidden = !presented }
             }
-            setNeedsLayout()
+            guard animated else {
+                UIView.performWithoutAnimation(changes)
+                finish(true)
+                return
+            }
+            UIView.animate(withDuration: ResearchToolbarSearch.flightDuration, delay: 0,
+                           usingSpringWithDamping: 0.86, initialSpringVelocity: 0,
+                           options: [.beginFromCurrentState, .allowUserInteraction],
+                           animations: changes, completion: finish)
         }
     }
+
+    /// `ContentPanelMaterial` as a capsule, following the reader's
+    /// transparency and contrast settings like every other panel.
+    struct SearchPanel: View {
+        @Environment(\.colorScheme) private var colorScheme
+        @Environment(\.colorSchemeContrast) private var contrast
+        @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+        var body: some View {
+            ContentPanelMaterial(colorScheme: colorScheme, isOpaque: reduceTransparency,
+                                 increasedContrast: contrast == .increased, cornerRadius: 999)
+                .ignoresSafeArea()
+        }
+    }
+
+    /// Opening and closing share one spring for the flight, the glass and
+    /// the cancel button.
+    static let flightDuration: TimeInterval = 0.5
 }
 
 /// One system blur over the still-mounted dashboard. No full-page raster blur
@@ -275,6 +357,9 @@ struct ResearchMarketSearchView: View {
     var onPull: (CGFloat) -> Void = { _ in }
     var onPullCancel: () -> Void = {}
     var onPullDismiss: (() -> Void)? = nil
+    /// Pushes the results below the field. Only the content moves: the
+    /// backdrop keeps touching the top edge so it blurs under the bar too.
+    var contentTopInset: CGFloat = 0
     @State private var searchResults: [MarketSecurityResult] = []
     /// The query `searchResults` answer, so a stale list is not mistaken
     /// for an empty one while the next search runs.
@@ -313,6 +398,7 @@ struct ResearchMarketSearchView: View {
                 .scrollDismissesKeyboard(.interactively)
             }
         }
+        .padding(.top, contentTopInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .gesture(ResearchSearchPullToDismiss(hapticsEnabled: hapticsEnabled,
                                             onDismiss: onPullDismiss ?? onDismiss,
