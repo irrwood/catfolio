@@ -33,6 +33,7 @@ def render():
 <h3 class="capability-label">{e['label']}</h3><p class="capability-description">{e['description']}</p><details class="capability-details"><summary>Details &amp; data notes</summary><ul>{rows}</ul><p class="capability-note">{e['note']}</p></details></article>''')
     html = html.replace('<!-- ENGLISH_GALLERY -->', '<div class="capability-grid">\n' + '\n'.join(cards) + '\n</div>')
     html = html.replace('assets/zh-latest/', 'assets/en-latest/')
+    html = html.replace('href="/support-zh"', 'href="/support"').replace('href="/privacy-zh"', 'href="/privacy"')
     html = html.replace('lang="zh-CN"', 'lang="en"', 1)
     html = html.replace('href="index.html" hreflang="zh-CN" lang="zh-CN" data-language-switch aria-current="page">Chinese', 'href="index.html" hreflang="zh-CN" lang="zh-CN" data-language-switch>Chinese')
     html = html.replace('href="en.html" hreflang="en" lang="en" data-language-switch>English', 'href="en.html" hreflang="en" lang="en" data-language-switch aria-current="page">English')

@@ -1,0 +1,20 @@
+.document { max-width: 780px; padding: 58px 0 90px; }
+.document h1 { font-size: clamp(34px, 6vw, 54px); letter-spacing: -1.4px; }
+.document .lead { font-size: 19px; line-height: 1.8; color: #666; margin: 25px 0; }
+.document h2 { font-size: 23px; letter-spacing: -.4px; margin: 38px 0 14px; }
+.document p, .document li { font-size: 16px; line-height: 1.9; color: #555; }
+.document ul, .document ol { padding-left: 24px; }
+.document li { margin-bottom: 10px; }
+.document a { text-decoration: underline; text-underline-offset: 4px; overflow-wrap: anywhere; }
+.document .note { padding: 22px 25px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.document .note p { margin: 0; }
+.document .updated { font-size: 13px; color: #777; }
+.document-nav { display: flex; flex-wrap: wrap; gap: 12px 24px; font-size: 14px; padding: 24px 0; border-block: 1px solid var(--line); }
+.legal-header nav > a { display: inline-flex; align-items: center; min-height: 44px; }
+@media (max-width: 760px) {
+  .document { padding-top: 28px; }
+  .document .lead { font-size: 17px; }
+  .document p, .document li { font-size: 15px; }
+  .legal-header { height: auto; min-height: 88px; flex-wrap: wrap; padding-block: 18px; }
+  .legal-header nav { flex-wrap: wrap; gap: 12px 20px; }
+}

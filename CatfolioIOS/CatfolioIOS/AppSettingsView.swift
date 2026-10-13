@@ -4,6 +4,7 @@ import UIKit
 /// App-wide preferences and maintenance, opened from the Account page.
 struct AppSettingsView: View {
     @Environment(\.locale) private var appLocale
+    @Environment(\.openURL) private var openURL
     @Environment(AppModel.self) private var model
     private let dataSourceHealth = DataSourceHealth.shared
     @AppStorage(AppLanguage.preferenceKey) private var languageRawValue = AppLanguage.system.rawValue
@@ -212,11 +213,20 @@ struct AppSettingsView: View {
                     value: appVersion,
                     valueIsNumeric: true
                 )
-                // Every test entry lives on this one page.
+                SettingsButtonRow(icon: .symbol("questionmark.circle"), title: L10n.text("支持与帮助")) {
+                    openInformationPage("support")
+                }
+                .accessibilityIdentifier("settings.support")
+                SettingsButtonRow(icon: .symbol("hand.raised"), title: L10n.text("隐私政策")) {
+                    openInformationPage("privacy")
+                }
+                .accessibilityIdentifier("settings.privacy")
+                #if DEBUG
                 SettingsNavigationRow(icon: .symbol("testtube.2"), title: L10n.text("测试")) {
                     SettingsTestView()
                 }
                 .accessibilityIdentifier("settings-test")
+                #endif
             }
         }
         .accessibilityIdentifier("app-settings")
@@ -245,6 +255,12 @@ struct AppSettingsView: View {
             Text(L10n.message(portfolioResetError ?? ""))
         }
         .tint(CatfolioTheme.accent)
+    }
+
+    private func openInformationPage(_ page: String) {
+        let suffix = AppLanguage.currentIdentifier == "zh-Hans" ? "-zh" : ""
+        guard let url = URL(string: "https://catfolio-app.vercel.app/\(page)\(suffix)") else { return }
+        openURL(url)
     }
 
     private var appVersion: String {

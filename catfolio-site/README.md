@@ -7,6 +7,8 @@
 - `index.html`：中文页面及整体结构。
 - `features.json` / `features.en.json`：35 项功能、截图路径、说明和数据口径。
 - `translations.en.json`：页面英文翻译；`en.html` 由脚本生成。
+- `render_legal.py`：中英文支持页和隐私政策的内容源；联系方式与政策更新日期也在此维护。修改后运行 `python3 catfolio-site/render_legal.py`。
+- `legal.css`：支持页和隐私政策的共享样式。
 - 修改内容后运行 `python3 catfolio-site/render_features.py`（在仓库根目录运行）。
 - 本地预览：`python3 -m http.server 4318 --bind 127.0.0.1 --directory catfolio-site`。
 
@@ -33,6 +35,8 @@
 ## 构建与发布
 
 线上：https://catfolio-app.vercel.app/。英文 `/`，中文 `/zh`。
+
+商店公开链接：英文 `/support`、`/privacy`，中文 `/support-zh`、`/privacy-zh`。隐私选择段落使用 `#choices` 锚点。发布后需同时检查四个地址；App 内“设置 → 关于”也使用这些链接。
 
 在仓库根目录构建：
 

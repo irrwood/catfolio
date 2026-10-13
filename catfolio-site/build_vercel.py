@@ -31,7 +31,7 @@ def build():
         for old, new in LINKS.items():
             html = html.replace(old, new)
         (DIST / target).write_text(html)
-    for name in ('style.css', 'app.js'):
+    for name in ('style.css', 'app.js', 'legal.css', 'support.html', 'support-zh.html', 'privacy.html', 'privacy-zh.html'):
         shutil.copy(ROOT / name, DIST / name)
     for name in ('cat.svg', 'nunito.ttf'):
         shutil.copy(ROOT / 'assets' / name, DIST / 'assets' / name)

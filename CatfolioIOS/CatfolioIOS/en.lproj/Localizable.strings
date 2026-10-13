@@ -4108,6 +4108,8 @@
 "新增" = "New";
 "将移除" = "Will be removed";
 "股数变化" = "Shares change";
+"支持与帮助" = "Support & Help";
+"隐私政策" = "Privacy Policy";
 "已在导入前备份原组合" = "Original portfolio backed up before importing";
 "现金流" = "Cash flow";
 "MWR：缺少完整资金账本和账户估值，暂不可用。" = "MWR is unavailable without a complete cash ledger and account valuations.";
