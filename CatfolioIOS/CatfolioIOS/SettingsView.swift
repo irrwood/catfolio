@@ -142,6 +142,14 @@ struct SettingsView: View {
                     }
                 }
                 .id(presentationPreferencesID)
+            } else {
+                // Nothing connected yet: the list starts with the way in.
+                SettingsSection {
+                    SettingsButtonRow(icon: .symbol("plus.circle"), title: L10n.text("添加账户")) {
+                        showsAddAccount = true
+                    }
+                    .accessibilityIdentifier("account.add-first")
+                }
             }
 
             // The Mac has Settings in the sidebar instead.

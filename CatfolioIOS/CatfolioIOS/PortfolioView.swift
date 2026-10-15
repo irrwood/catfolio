@@ -18,6 +18,7 @@ struct PortfolioView: View {
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var selectedHolding: Holding?
     @State private var showsTodayDetail = false
+    @State private var showsAddAccount = false
     @State private var homeScrollState = PortfolioHomeScrollState()
     @State private var homeScrollController = PortfolioHomeScrollController()
     /// The holdings header once it has scrolled away, carried by the bar.
@@ -60,6 +61,12 @@ struct PortfolioView: View {
                             } else if model.holdings.isEmpty, model.overview != nil {
                                 if model.isPublicInvestorMode && !model.isPortfolioLoading {
                                     ContentUnavailableView(L10n.text("暂无持仓数据"), systemImage: "person.crop.circle", description: Text(L10n.text("请在设置中选择账户。")))
+                                } else if model.accounts.isEmpty && !model.isPortfolioLoading {
+                                    // Loaded, and nothing connected: the still
+                                    // skeleton, with a small way in where the
+                                    // chart would be.
+                                    PortfolioLoadingView(isAnimating: false, scrollState: homeScrollState,
+                                                         onAddAccount: { showsAddAccount = true })
                                 } else {
                                     PortfolioLoadingView(isAnimating: model.isPortfolioLoading, scrollState: homeScrollState)
                                 }
@@ -253,6 +260,10 @@ struct PortfolioView: View {
                         await model.loadCurrencyHistories()
                     }
                 .modifier(PortfolioFloatingHeaderReporter(header: $floatingHeader))
+                .appSheet(isPresented: $showsAddAccount) {
+                    AddAccountView().environment(model)
+                        .presentationDetents([.large]).presentationDragIndicator(.visible)
+                }
                 .fullScreenCover(item: $selectedHolding) { holding in
                     HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
                         .environment(model)

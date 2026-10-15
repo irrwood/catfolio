@@ -129,6 +129,16 @@ private struct RootTabs: View {
                 tabIcon(for: .research, artwork: .research, label: L10n.text("研究"))
             }
 
+            // The fourth tab, before the account.
+            Tab(value: .assistant) {
+                RootPageNavigation {
+                    AIAssistantPage().ownsTabBar()
+                }
+                .id(presentationPreferencesID)
+            } label: {
+                tabIcon(for: .assistant, artwork: .assistant, label: L10n.text("AI 助手"))
+            }
+
             Tab(value: .settings) {
                 // Keep the settings navigation stack while its preferences change.
                 RootPageNavigation {
@@ -146,17 +156,6 @@ private struct RootTabs: View {
                     Label(Destination.preferences.title, image: "AccountSettings")
                         .labelStyle(.titleAndIcon)
                 }
-            }
-
-            // The search role is the system's own separate circle at the end
-            // of the bar, where the assistant's button used to float.
-            Tab(value: .assistant, role: .search) {
-                RootPageNavigation {
-                    AIAssistantPage().ownsTabBar()
-                }
-                .id(presentationPreferencesID)
-            } label: {
-                tabIcon(for: .assistant, artwork: .assistant, label: L10n.text("AI 助手"))
             }
         }
         .tint(.primary)

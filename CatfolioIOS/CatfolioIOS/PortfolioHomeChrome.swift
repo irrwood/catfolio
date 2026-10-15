@@ -646,11 +646,13 @@ struct PortfolioLoadingView: View {
     @Environment(\.colorScheme) private var colorScheme
     var isAnimating = true
     let scrollState: PortfolioHomeScrollState
+    /// With no account connected, a small button in the empty chart adds one.
+    var onAddAccount: (() -> Void)?
 
     var body: some View {
         let color = HomeSkeletonStyle.color(for: colorScheme)
         VStack(spacing: 0) {
-            PortfolioChartLoadingPlaceholder(isAnimating: isAnimating)
+            PortfolioChartLoadingPlaceholder(isAnimating: isAnimating, onAddAccount: onAddAccount)
                 .frame(height: PortfolioHeroChartLayout.sectionHeight)
                 .modifier(PortfolioPinnedHero(scrollState: scrollState))
 
@@ -708,8 +710,9 @@ struct PortfolioLoadingView: View {
             }
             .zIndex(1)
         }
-        .allowsHitTesting(false)
-        .accessibilityElement(children: .ignore)
+        // Only the add-account button, when there is one, takes a touch.
+        .allowsHitTesting(onAddAccount != nil)
+        .accessibilityElement(children: onAddAccount == nil ? .ignore : .contain)
         .accessibilityLabel(isAnimating ? L10n.text("正在读取投资组合") : L10n.text("暂无持仓数据"))
     }
 }

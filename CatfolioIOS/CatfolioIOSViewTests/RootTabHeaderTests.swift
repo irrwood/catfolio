@@ -35,8 +35,8 @@ final class RootTabHeaderTests: XCTestCase {
             window.overrideUserInterfaceStyle = style
             var referenceTitle: CGRect?
             var referenceBarBottom: CGFloat?
-            for (index, title) in [(3, L10n.text("账户")), (0, L10n.text("持仓")), (2, L10n.text("研究")),
-                                   (4, L10n.text("AI 助手")), (3, L10n.text("账户")), (0, L10n.text("持仓"))] {
+            for (index, title) in [(4, L10n.text("账户")), (0, L10n.text("持仓")), (2, L10n.text("研究")),
+                                   (3, L10n.text("AI 助手")), (4, L10n.text("账户")), (0, L10n.text("持仓"))] {
                 tabs.selectedIndex = index
                 tabs.delegate?.tabBarController?(tabs, didSelect: try XCTUnwrap(tabs.selectedViewController))
                 try await Task.sleep(for: .milliseconds(800))
@@ -53,7 +53,7 @@ final class RootTabHeaderTests: XCTestCase {
                     try capture(window, name: "home-no-header-\(style == .light ? "light" : "dark")")
                     continue
                 }
-                if index == 4 {
+                if index == 3 {
                     XCTAssertFalse(navigation.isNavigationBarHidden)
                     XCTAssertEqual(navigation.topViewController?.navigationItem.title, "")
                     XCTAssertEqual(navigation.topViewController?.navigationItem.largeTitleDisplayMode, .never)
@@ -113,7 +113,7 @@ final class RootTabHeaderTests: XCTestCase {
                 let scroll = try XCTUnwrap(navigation.topViewController?.contentScrollView(for: .top), title)
                 XCTAssertEqual(scroll.contentOffset.y + scroll.adjustedContentInset.top, 0, accuracy: 1,
                                "\(title) must start at its native content inset without an extra header spacer")
-                if index == 3 {
+                if index == 4 {
                     let initialOffset = scroll.contentOffset
                     scroll.setContentOffset(CGPoint(x: 0, y: 250), animated: true)
                     try await Task.sleep(for: .milliseconds(650))

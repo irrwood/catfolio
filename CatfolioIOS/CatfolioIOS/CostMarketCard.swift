@@ -560,6 +560,8 @@ struct CostMarketCard: View {
 struct PortfolioChartLoadingPlaceholder: View {
     @Environment(\.colorScheme) private var colorScheme
     var isAnimating = true
+    /// No account yet: a small button in the middle of the empty chart.
+    var onAddAccount: (() -> Void)?
 
     var body: some View {
         let color = HomeSkeletonStyle.heroColor(for: colorScheme)
@@ -580,6 +582,23 @@ struct PortfolioChartLoadingPlaceholder: View {
             Color.clear
                 .frame(height: PortfolioHeroChartLayout.plotHeight)
                 .offset(y: PortfolioHeroChartLayout.plotTop)
+
+            if let onAddAccount {
+                Button(action: onAddAccount) {
+                    Label(L10n.text("添加账户"), systemImage: "plus")
+                        .appText(.footnote, weight: .semibold)
+                        .foregroundStyle(CatfolioTheme.primaryText)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(color, in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("home.add-account")
+                .frame(maxWidth: .infinity)
+                .frame(height: PortfolioHeroChartLayout.plotHeight)
+                .offset(y: PortfolioHeroChartLayout.plotTop)
+            }
 
             // No slot drawn as chosen: the chart opens on YTD, or on MAX for
             // a short history, and a fixed highlight showed a different one.

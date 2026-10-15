@@ -7,8 +7,8 @@ enum RootDestination: Hashable, CaseIterable {
     case portfolio
     case returns
     case research
-    case settings
     case assistant
+    case settings
     /// The app's settings, a sidebar page of its own on the Mac. On iOS they
     /// are a row on the account page.
     case preferences
@@ -17,8 +17,8 @@ enum RootDestination: Hashable, CaseIterable {
     /// returns side by side on one Overview page.
     static var sidebarCases: [RootDestination] {
         MacPlatform.isMac
-            ? [.portfolio, .research, .settings, .assistant, .preferences]
-            : [.portfolio, .returns, .research, .settings, .assistant]
+            ? [.portfolio, .research, .assistant, .settings, .preferences]
+            : [.portfolio, .returns, .research, .assistant, .settings]
     }
 
     /// Where a request for this page lands: returns are part of the Mac's

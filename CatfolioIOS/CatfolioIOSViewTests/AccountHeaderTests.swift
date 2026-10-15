@@ -25,7 +25,8 @@ final class AccountHeaderTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(500))
         let tabs = try XCTUnwrap(controller(UITabBarController.self, in: host))
 
-        for (index, style) in [(2, UIUserInterfaceStyle.light), (3, .light), (2, .dark), (3, .dark)] {
+        // Research is the third tab and Account the fifth, after the assistant.
+        for (index, style) in [(2, UIUserInterfaceStyle.light), (4, .light), (2, .dark), (4, .dark)] {
             window.overrideUserInterfaceStyle = style
             tabs.selectedIndex = index
             tabs.delegate?.tabBarController?(tabs, didSelect: try XCTUnwrap(tabs.selectedViewController))
