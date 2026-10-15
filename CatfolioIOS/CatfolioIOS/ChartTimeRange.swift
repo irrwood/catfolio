@@ -245,10 +245,14 @@ struct ChartTimeRangePickerSkeleton: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var itemCount = ChartTimeRange.choiceGroups.count
-    var selectedIndex = 1
+    /// The slot drawn as chosen; nil draws none, for a chart whose chosen
+    /// range is not known while it loads.
+    var selectedIndex: Int? = 1
+    /// The marks' colour; nil uses the standard skeleton grey.
+    var fill: Color?
 
     private var skeletonColor: Color {
-        CatfolioTheme.skeletonFill
+        fill ?? CatfolioTheme.skeletonFill
     }
 
     var body: some View {

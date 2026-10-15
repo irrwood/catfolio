@@ -12,6 +12,8 @@ enum FinancialSign: String, Hashable {
     /// advance is taken back, so the triangle sits as close to its figures as
     /// a digit to the next.
     static let trimInEm: CGFloat = 0.36
+    /// The triangle's ink starts this far into the 12 pt asset (3.08 pt).
+    static let inkInsetInAsset: CGFloat = 3.08 / 12
 
     var assetName: String {
         self == .increase ? "FinancialIncrease" : "FinancialDecrease"
@@ -28,6 +30,21 @@ enum FinancialSign: String, Hashable {
         guard let fontSize, fontSize > 0 else { return block }
         return block.kerning(-Self.trimInEm * fontSize)
     }
+}
+
+/// How a triangle in front of its figures is drawn. By default it sits in
+/// the middle of its place, in the figures' own colour. A headline can start
+/// it at the very front of its place, so nothing shows before it, and colour
+/// it as the move: gain green or loss red.
+struct FinancialSignStyle: Equatable {
+    var hugsLeadingEdge = false
+    var usesDirectionColors = false
+
+    static let leadingColored = FinancialSignStyle(hugsLeadingEdge: true, usesDirectionColors: true)
+}
+
+extension EnvironmentValues {
+    @Entry var financialSignStyle = FinancialSignStyle()
 }
 
 enum FinancialTextPart: Equatable {
@@ -91,6 +108,8 @@ struct FinancialNumberAttribute: TextAttribute {}
 struct FinancialText: View {
     @Environment(\.font) private var font
     @Environment(\.fontResolutionContext) private var fontContext
+    @Environment(\.financialSignStyle) private var signStyle
+    @Environment(\.colorScheme) private var colorScheme
     private let content: (CGFloat?) -> Text
     private let alignmentFont: Font?
 
@@ -120,14 +139,23 @@ struct FinancialText: View {
 
     var body: some View {
         let metrics = fontMetrics
-        content(metrics.pointSize).textRenderer(FinancialSignRenderer(capHeightToAscent: metrics.capHeightToAscent,
-                                                   pointSizeToAscent: metrics.pointSizeToAscent))
+        content(metrics.pointSize).textRenderer(FinancialSignRenderer(
+            capHeightToAscent: metrics.capHeightToAscent,
+            pointSizeToAscent: metrics.pointSizeToAscent,
+            hugsLeadingEdge: signStyle.hugsLeadingEdge,
+            directionColors: signStyle.usesDirectionColors
+                ? (CatfolioTheme.gain(for: colorScheme), CatfolioTheme.loss(for: colorScheme))
+                : nil
+        ))
     }
 }
 
 private struct FinancialSignRenderer: TextRenderer {
     let capHeightToAscent: CGFloat
     let pointSizeToAscent: CGFloat
+    var hugsLeadingEdge = false
+    /// Gain and loss colours for the triangles; nil keeps the text's colour.
+    var directionColors: (gain: Color, loss: Color)?
 
     func draw(layout: Text.Layout, in context: inout GraphicsContext) {
         for line in layout {
@@ -145,15 +173,22 @@ private struct FinancialSignRenderer: TextRenderer {
                 let digitCenter = bounds.origin.y - bounds.ascent * capHeightToAscent / 2
                 let imageBounds = run.typographicBounds.rect
                 let edge = bounds.ascent * pointSizeToAscent * FinancialSign.sizeInEm
+                let x = hugsLeadingEdge
+                    ? imageBounds.minX - edge * FinancialSign.inkInsetInAsset
+                    : imageBounds.midX - edge / 2
                 var aligned = context
                 // Only the asset's alpha is used. Drawing the attributed run
                 // through this mask keeps semantic colours and opacity intact.
                 aligned.clipToLayer { mask in
                     mask.draw(Image(attribute.sign.assetName).renderingMode(.original),
-                        in: CGRect(x: imageBounds.midX - edge / 2, y: digitCenter - edge / 2,
-                                   width: edge, height: edge))
+                        in: CGRect(x: x, y: digitCenter - edge / 2, width: edge, height: edge))
                 }
-                aligned.draw(run)
+                if let directionColors {
+                    let color = attribute.sign == .increase ? directionColors.gain : directionColors.loss
+                    aligned.fill(Path(imageBounds.insetBy(dx: -edge, dy: -edge)), with: .color(color))
+                } else {
+                    aligned.draw(run)
+                }
             }
         }
     }

@@ -562,7 +562,7 @@ struct PortfolioChartLoadingPlaceholder: View {
     var isAnimating = true
 
     var body: some View {
-        let color = Color.primary.opacity(colorScheme == .light ? 0.08 : 0.14)
+        let color = HomeSkeletonStyle.heroColor(for: colorScheme)
         ZStack(alignment: .topLeading) {
             HomeSkeletonBlock(width: 88, height: 10, color: color)
                 .offset(x: CatfolioStyle.pageHorizontalInset, y: 15)
@@ -581,7 +581,9 @@ struct PortfolioChartLoadingPlaceholder: View {
                 .frame(height: PortfolioHeroChartLayout.plotHeight)
                 .offset(y: PortfolioHeroChartLayout.plotTop)
 
-            ChartTimeRangePickerSkeleton()
+            // No slot drawn as chosen: the chart opens on YTD, or on MAX for
+            // a short history, and a fixed highlight showed a different one.
+            ChartTimeRangePickerSkeleton(selectedIndex: nil, fill: color)
                 .frame(height: PortfolioHeroChartLayout.pickerHeight)
                 .offset(y: PortfolioHeroChartLayout.pickerTop)
         }

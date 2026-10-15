@@ -605,6 +605,13 @@ enum HomeSkeletonStyle {
     static func color(for scheme: ColorScheme) -> Color {
         CatfolioTheme.skeletonFill
     }
+
+    /// Placeholders lying straight on the blue home backdrop: a clear white
+    /// by day, which reads as the page still forming where grey looked
+    /// dirty, and the faint white they already were at night.
+    static func heroColor(for scheme: ColorScheme) -> Color {
+        Color.white.opacity(scheme == .light ? 0.5 : 0.14)
+    }
 }
 
 struct HomeSkeletonBlock: View {

@@ -149,6 +149,7 @@ struct TodayContributionCard: View {
                     HStack(alignment: .center, spacing: 2) {
                         Text(L10n.text("今日变化"))
                             .appCaps(.caption, weight: .semibold)
+                            .textCase(.uppercase)
                             .foregroundStyle(CatfolioTheme.primaryText)
                         if onOpenDetail != nil {
                             // Small and close: it marks the title as a way in,
@@ -179,8 +180,7 @@ struct TodayContributionCard: View {
                                 size: 26,
                                 symbolSize: 26,
                                 color: .primary,
-                                isDirectional: true,
-                                signFollowsValue: true
+                                isDirectional: true
                             )
                             .contentTransition(.numericText(value: totalAmount))
                             .refreshGlow(isActive: isRefreshingBehindCache)
@@ -197,7 +197,7 @@ struct TodayContributionCard: View {
                                     .foregroundStyle(.secondary)
                             }
                         } else {
-                            FinancialText(DisplayFormat.percent(totalPercent), signFollowsValue: true)
+                            FinancialText(DisplayFormat.percent(totalPercent))
                                 .foregroundStyle(CatfolioTheme.primaryText)
                             Text("·")
                                 .foregroundStyle(.tertiary)
@@ -210,6 +210,9 @@ struct TodayContributionCard: View {
                     .minimumScaleFactor(0.72)
                     .frame(height: 20, alignment: .bottomLeading)
                 }
+                // Triangles lead their figures, flush at the front and in the
+                // move's own green or red.
+                .environment(\.financialSignStyle, .leadingColored)
                 // The title, the amount and the line under it all open the
                 // day's detail, up to the direction picker.
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -278,9 +281,10 @@ struct TodayContributionCard: View {
     @ViewBuilder
     private var benchmarkSummary: some View {
         if let benchmarkChange, benchmarkChange.isFinite {
-            // SPY's own move, as the Today page writes it. The gap to the
-            // portfolio read as SPY falling ("-SPY 0.8%").
-            FinancialText("SPY " + DisplayFormat.percent(benchmarkChange, signed: true), signFollowsValue: true)
+            // SPY's own move, as the Today page writes it. The triangle
+            // stays with the figures, after the name: in front of "SPY" it
+            // read as SPY falling.
+            FinancialText("SPY " + DisplayFormat.percent(benchmarkChange, signed: true))
         } else {
             Text(L10n.text("SPY 暂无数据"))
         }

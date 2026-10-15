@@ -117,6 +117,7 @@ extension View {
 /// size, and adding to it at display sizes visibly loosens the figure.
 struct CatfolioDisplayAmountText: View {
     @Environment(\.locale) private var appLocale
+    @Environment(\.financialSignStyle) private var signStyle
     let text: String
     var size: CGFloat = 32
     var symbolSize: CGFloat = 20.64
@@ -129,7 +130,10 @@ struct CatfolioDisplayAmountText: View {
             .reduce(Text(verbatim: "")) { result, part in
                 switch part {
                 case .sign(let sign):
-                    result + sign.text.font(Typography.number(size: size))
+                    // A triangle at the front takes only its own width, so
+                    // it sits as close to the figures as they do to each other.
+                    result + sign.text(fontSize: signStyle.hugsLeadingEdge ? size : nil)
+                        .font(Typography.number(size: size))
                 case .text(let value):
                     if let digitIndex = value.firstIndex(where: \.isNumber) {
                         result
