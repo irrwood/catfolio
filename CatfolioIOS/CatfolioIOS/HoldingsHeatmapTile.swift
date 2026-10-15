@@ -155,9 +155,21 @@ struct HoldingsHeatmapTile: View {
         size.width >= 44 && size.height >= 44
     }
 
-    private var showsLogo: Bool {
-        size.width >= 88 && size.height >= 112
+    /// The logo takes the height the ticker, the return and the weight leave
+    /// on a tile, so more tiles carry one: never above its standard 28 pt or
+    /// two fifths of the tile's short side, and none below 14 pt, where a
+    /// logo stops reading as one.
+    private var logoSize: CGFloat? {
+        guard showsChange, showsTicker else { return nil }
+        let figures = [identifierScale, returnScale, detailScale]
+            .reduce(CGFloat(0)) { $0 + $1.size * 1.25 }
+        let room = size.height - tilePadding * 2 - figures - Self.figureSpacing * 2 - Self.logoSpacing
+        let fitted = min(28, room, min(size.width, size.height) * 0.4).rounded(.down)
+        return fitted >= 14 ? fitted : nil
     }
+
+    private static let figureSpacing: CGFloat = 3
+    private static let logoSpacing: CGFloat = 5
 
     /// Wherever a return is shown, so is the weight. These were 8pt apart in
     /// height, which is why most mid-sized tiles carried one figure and not the
@@ -251,7 +263,7 @@ struct HoldingsHeatmapTile: View {
 
     @ViewBuilder
     private func securityContent(ticker: String, logoSymbol: String?) -> some View {
-        if !showsChange && !showsLogo {
+        if !showsChange {
             if showsTicker {
                 Text(ticker)
                     .appText(identifierScale, weight: .semibold)
@@ -262,9 +274,10 @@ struct HoldingsHeatmapTile: View {
                 AssetLogo(ticker: ticker, logoSymbol: logoSymbol, size: min(22, min(size.width, size.height) - 6))
             }
         } else {
-            VStack(spacing: showsLogo ? 6 : 3) {
-                if showsLogo {
-                    AssetLogo(ticker: ticker, logoSymbol: logoSymbol)
+            VStack(spacing: Self.figureSpacing) {
+                if let logoSize {
+                    AssetLogo(ticker: ticker, logoSymbol: logoSymbol, size: logoSize)
+                        .padding(.bottom, Self.logoSpacing - Self.figureSpacing)
                 }
 
                 if showsTicker {

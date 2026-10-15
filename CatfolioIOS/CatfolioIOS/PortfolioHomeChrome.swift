@@ -37,15 +37,24 @@ struct PortfolioTopScrollEdge: ViewModifier {
 struct PortfolioHomeTopBackground: View {
     @Environment(\.locale) private var appLocale
     let colorScheme: ColorScheme
+    /// White at the top and bottom with the light blue between them, for a
+    /// page whose header is already a picture (Performance's heatmap).
+    var isBand = false
 
     var body: some View {
         LinearGradient(
             stops: colorScheme == .light
-                ? [
-                    // Figma 223:31122: #9ADCFF.
-                    .init(color: CatfolioPalette.homeSky, location: 0),
-                    .init(color: .white, location: 1),
-                ]
+                ? (isBand
+                    ? [
+                        .init(color: .white, location: 0),
+                        .init(color: CatfolioPalette.homeSky.opacity(0.55), location: 0.45),
+                        .init(color: .white, location: 1),
+                    ]
+                    : [
+                        // Figma 223:31122: #9ADCFF.
+                        .init(color: CatfolioPalette.homeSky, location: 0),
+                        .init(color: .white, location: 1),
+                    ])
                 : [
                     .init(color: .black, location: 0),
                     .init(color: Color(red: 0.192, green: 0.208, blue: 0.235), location: 1),
@@ -69,6 +78,8 @@ struct PortfolioHomePageBackdrop: View {
     /// The navigation underlay only appears between moving pages; keep its
     /// shader still rather than running a second hidden animation.
     var isPaused = false
+    /// The classic daylight sky as a band: white, light blue, white.
+    var classicBand = false
 
     private var backgroundStyle: HomeBackgroundStyle {
         HomeBackgroundStyle(rawValue: backgroundStyleRawValue) ?? .defaultStyle
@@ -122,7 +133,7 @@ struct PortfolioHomePageBackdrop: View {
                             }
                         }
                 } else {
-                    PortfolioHomeTopBackground(colorScheme: colorScheme)
+                    PortfolioHomeTopBackground(colorScheme: colorScheme, isBand: classicBand)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -139,16 +150,19 @@ struct PortfolioHomePageBackdrop: View {
 
 private struct HomeTabBackground: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
+    var classicBand = false
 
     func body(content: Content) -> some View {
         content.background {
-            PortfolioHomePageBackdrop(colorScheme: colorScheme)
+            PortfolioHomePageBackdrop(colorScheme: colorScheme, classicBand: classicBand)
         }
     }
 }
 
 extension View {
-    func homeTabBackground() -> some View { modifier(HomeTabBackground()) }
+    func homeTabBackground(classicBand: Bool = false) -> some View {
+        modifier(HomeTabBackground(classicBand: classicBand))
+    }
 }
 
 /// Figma 398:3114's night page. There is no gradient and no coloured light:

@@ -62,7 +62,9 @@ struct ReturnsView: View {
             TodayAttentionEntry()
             CorporateEventsCard(holdings: model.holdings)
         }
-        .homeTabBackground()
+        // White, light blue, white: the heatmap above already carries the
+        // page's colour, and sky blue behind it muddied the tiles.
+        .homeTabBackground(classicBand: true)
         // Only what the hero needs, so ordinary scrolling does not redraw
         // the page: the pull past the top, the bar's height, and whether the
         // hero is still in sight.
@@ -96,6 +98,14 @@ struct ReturnsView: View {
         }
         .task(id: "\(sourcePreviewScope)|\(model.portfolioChartRevision)") {
             if !model.isReturnsLoading { await model.refreshReturns() }
+        }
+        // The heatmap reads the holdings the home tab loads. Opened before
+        // that tab has run, it said "no holdings yet" over a portfolio that
+        // simply had not loaded: load it here too, as the home tab would.
+        .task {
+            if model.overview == nil && !model.isPortfolioLoading {
+                await model.refreshPortfolio()
+            }
         }
         .onDisappear { heroScroll.isScrolling = false }
         .accessibilityIdentifier("returns-root")

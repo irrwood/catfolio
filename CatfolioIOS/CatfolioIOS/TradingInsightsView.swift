@@ -172,13 +172,16 @@ struct TradingInsightsView: View {
             rows.append(InsightRow(id: "best-buyer", label: L10n.text("最会买的股票"), ticker: buyer.ticker,
                                    title: name(buyer.ticker),
                                    detail: L10n.text("\(buyer.afterBuys.count) 次买入，平均买入后至今"),
-                                   value: DisplayFormat.percent(after), tone: .positive))
+                                   value: DisplayFormat.percent(after), tone: after < 0 ? .negative : .positive))
         }
         if let seller = insights.bestSeller, let after = seller.averageAfterSale {
             rows.append(InsightRow(id: "best-seller", label: L10n.text("最会卖的股票"), ticker: seller.ticker,
                                    title: name(seller.ticker),
                                    detail: L10n.text("卖出后至今的平均走势"),
-                                   value: DisplayFormat.percent(after), tone: .positive))
+                                   // The figure is the stock's own move since the
+                                   // sale; selling well means it fell, and a fall is
+                                   // red like every other fall, not green for "good".
+                                   value: DisplayFormat.percent(after), tone: after < 0 ? .negative : .positive))
         }
         if let afterBuy = insights.averageAfterBuy, let afterSale = insights.averageAfterSale {
             let verdict: String
