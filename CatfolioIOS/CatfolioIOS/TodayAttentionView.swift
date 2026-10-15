@@ -48,28 +48,21 @@ enum TodayAttentionTab: String, CaseIterable {
     }
 }
 
-/// The selector belongs to the child page, above either complete report.
+/// The selector belongs to the child page, above either complete report:
+/// the system's segmented control.
 struct TodayAttentionTabs: View {
     @Binding var selection: TodayAttentionTab
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
 
     var body: some View {
-        HStack(spacing: 20) {
+        Picker(L10n.text("今天值得关注"), selection: $selection) {
             ForEach(TodayAttentionTab.allCases, id: \.self) { tab in
-                Button { selection = tab } label: {
-                    Text(tab.title)
-                        .appText(.body, weight: selection == tab ? .semibold : .medium)
-                        .foregroundStyle(selection == tab ? CatfolioTheme.primaryText : SettingsTemplate.sectionHeader)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(minWidth: 44, minHeight: 44, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(selection == tab ? .isSelected : [])
-                .accessibilityIdentifier("attention.tab.\(tab.rawValue)")
+                Text(tab.title).tag(tab)
             }
-            Spacer(minLength: 0)
         }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .accessibilityIdentifier("attention.tabs")
         .sensoryFeedback(.selection, trigger: selection) { _, _ in hapticsEnabled }
     }
 }
