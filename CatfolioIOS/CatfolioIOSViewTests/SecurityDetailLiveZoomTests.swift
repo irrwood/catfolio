@@ -112,12 +112,194 @@ final class SecurityDetailLiveZoomTests: XCTestCase {
         try await checkTabBarVisibility(initiallyHidden: true)
     }
 
+    func testRootTitleAndTabBarStayInTheLiveHomeBehindZoom() async throws {
+        try await checkRootChromeReturn(cancelled: nil)
+    }
+
+    func testInteractiveReturnRevealsTheSameLiveRootBars() async throws {
+        try await checkRootChromeReturn(cancelled: false)
+    }
+
+    func testCancelledReturnKeepsHomeChromeAndCanReturnAgain() async throws {
+        try await checkRootChromeReturn(cancelled: true)
+    }
+
+    func testZoomReturnPreservesTheHomesTuckedTabBar() async throws {
+        try await checkRootChromeReturn(cancelled: nil, tucked: true)
+    }
+
+    func testNextStockOpenedDuringReturnKeepsBothBarsInsideHome() async throws {
+        try await checkRootChromeReturn(cancelled: nil, reopenDuringReturn: true)
+    }
+
+    private func checkRootChromeReturn(cancelled: Bool?, tucked: Bool = false,
+                                       reopenDuringReturn: Bool = false) async throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        var key: SecurityDetailSources.SourceKey?
+        let host = UIHostingController(rootView: SecurityDetailNavigationContainer {
+            TabView {
+                Tab("Holdings", systemImage: "chart.bar") {
+                    RootPageNavigation {
+                        ZoomSourceFixture { key = $0 }
+                            .toolbarVisibility(.visible, for: .navigationBar)
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar { ToolbarItem(placement: .topBarLeading) { Text("Holdings") } }
+                            .ownsTabBar()
+                    }
+                }
+                Tab("Settings", systemImage: "gearshape") { Text("Settings") }
+            }
+        }.ignoresSafeArea())
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer {
+            RootTabBar.setTucked(false, animated: false)
+            window.isHidden = true
+            previous?.makeKeyAndVisible()
+        }
+        try await waitUntil { key.flatMap { SecurityDetailSources.shared.liveSourceViews(for: $0) } != nil }
+        let sourceKey = try XCTUnwrap(key)
+        let navigation = try XCTUnwrap(findController(SecurityDetailNavigationController.self, in: host))
+        let tabs = try XCTUnwrap(findController(UITabBarController.self, in: host))
+        let homeNavigation = try XCTUnwrap(findController(UINavigationController.self,
+            in: XCTUnwrap(tabs.selectedViewController)))
+        let root = try XCTUnwrap(navigation.topViewController)
+        let titleBar = homeNavigation.navigationBar
+        let tabBar = tabs.tabBar
+        try await waitUntil { self.isVisible(titleBar, in: window) && !tabs.isTabBarHidden }
+        XCTAssertTrue(navigation.isNavigationBarHidden, "Only the tab's own navigation bar occupies space")
+        RootTabBar.setTucked(tucked, animated: false)
+        let titleFrame = titleBar.convert(titleBar.bounds, to: root.view)
+        let tabFrame = tabBar.convert(tabBar.bounds, to: root.view)
+        let transition = SecurityDetailLiveZoom()
+        var dismissals = 0
+        XCTAssertTrue(transition.open(id: sourceKey.id, namespace: sourceKey.namespace,
+                                      page: Self.page, didEnd: { dismissals += 1 }))
+        try await waitUntil { navigation.topViewController !== root && navigation.transitionCoordinator == nil }
+        var detail = try XCTUnwrap(navigation.topViewController)
+        XCTAssertEqual(homeNavigation.viewControllers.count, 1, "The home stack must remain untouched")
+        let zoom = detail.preferredTransition
+        let originalDelegate = navigation.delegate
+        let driver = InteractiveReturnDriver(forwarding: originalDelegate)
+        defer { navigation.delegate = originalDelegate }
+
+        func checkLiveChrome() {
+            // These are the original UIKit bars, still descendants of the
+            // complete home page. The detail is a sibling above that page.
+            XCTAssertTrue(titleBar === homeNavigation.navigationBar)
+            XCTAssertTrue(tabBar === tabs.tabBar)
+            XCTAssertTrue(titleBar.isDescendant(of: root.view))
+            XCTAssertTrue(tabBar.isDescendant(of: root.view))
+            XCTAssertFalse(titleBar.isDescendant(of: detail.view))
+            XCTAssertFalse(tabBar.isDescendant(of: detail.view))
+            XCTAssertFalse(homeNavigation.isNavigationBarHidden)
+            XCTAssertFalse(tabs.isTabBarHidden)
+            XCTAssertEqual(titleBar.alpha, 1)
+            XCTAssertEqual(tabBar.alpha, 1)
+            XCTAssertEqual(titleBar.layer.presentation()?.opacity ?? titleBar.layer.opacity, 1)
+            XCTAssertEqual(tabBar.layer.presentation()?.opacity ?? tabBar.layer.opacity, 1)
+            XCTAssertEqual(RootTabBar.isTucked, tucked)
+            if root.view.window != nil {
+                XCTAssertEqual(titleBar.convert(titleBar.bounds, to: root.view).minY, titleFrame.minY, accuracy: 1)
+                XCTAssertEqual(tabBar.convert(tabBar.bounds, to: root.view).minY, tabFrame.minY, accuracy: 1)
+            }
+            if root.view.window != nil, detail.view.window != nil {
+                self.assertBelow(root.view, detail.view)
+            }
+        }
+        checkLiveChrome()
+
+        if let cancelled {
+            // Exercise UIKit's actual percent-driven appearance/cancellation
+            // callbacks; the separate native-zoom case covers its animator.
+            detail.preferredTransition = nil
+            navigation.delegate = driver
+            navigation.popViewController(animated: true)
+            try await waitUntil { navigation.transitionCoordinator?.isInteractive == true }
+            for progress in [0.15, 0.5, 0.25] {
+                driver.interaction.update(progress)
+                try await Task.sleep(for: .milliseconds(80))
+                checkLiveChrome()
+                XCTAssertTrue(isVisible(titleBar, in: window))
+                XCTAssertEqual(isVisible(tabBar, in: window), !tucked)
+            }
+            if cancelled { driver.interaction.cancel() } else { driver.interaction.finish() }
+        } else {
+            transition.close()
+            try await waitUntil { navigation.transitionCoordinator != nil }
+            if reopenDuringReturn {
+                let first = detail
+                XCTAssertTrue(transition.open(id: sourceKey.id, namespace: sourceKey.namespace,
+                                              page: Self.page, didEnd: { dismissals += 1 }))
+                try await waitUntil {
+                    navigation.topViewController !== root && navigation.topViewController !== first
+                        && navigation.transitionCoordinator == nil && dismissals == 1
+                }
+                detail = try XCTUnwrap(navigation.topViewController)
+                checkLiveChrome()
+                transition.close()
+                try await waitUntil { navigation.transitionCoordinator != nil }
+            }
+        }
+
+        var frames = 0
+        while navigation.transitionCoordinator != nil {
+            checkLiveChrome()
+            frames += 1
+            try await Task.sleep(for: .milliseconds(20))
+            if frames > 200 { XCTFail("Zoom return did not finish"); break }
+        }
+        XCTAssertGreaterThan(frames, 2, "Sample the transition, not only its endpoints")
+        if cancelled == true {
+            XCTAssertTrue(navigation.topViewController === detail)
+            XCTAssertTrue(transition.isShowingPage)
+            checkLiveChrome()
+            navigation.delegate = originalDelegate
+            detail.preferredTransition = zoom
+            transition.close()
+            try await waitUntil { navigation.topViewController === root && navigation.transitionCoordinator == nil }
+        }
+        try await waitUntil {
+            self.isVisible(titleBar, in: window) && self.isVisible(tabBar, in: window) != tucked
+        }
+        XCTAssertTrue(navigation.topViewController === root)
+        XCTAssertEqual(dismissals, reopenDuringReturn ? 2 : 1)
+        checkLiveChrome()
+    }
+
+    private func assertBelow(_ background: UIView, _ foreground: UIView) {
+        var backgroundPath: [UIView] = []
+        var ancestor: UIView? = background
+        while let current = ancestor {
+            backgroundPath.append(current)
+            ancestor = current.superview
+        }
+        var foregroundBranch = foreground
+        while let parent = foregroundBranch.superview {
+            if let index = backgroundPath.firstIndex(where: { $0 === parent }), index > 0 {
+                let backgroundBranch = backgroundPath[index - 1]
+                if backgroundBranch.layer.zPosition != foregroundBranch.layer.zPosition {
+                    XCTAssertLessThan(backgroundBranch.layer.zPosition, foregroundBranch.layer.zPosition)
+                } else {
+                    XCTAssertLessThan(parent.subviews.firstIndex(of: backgroundBranch)!,
+                                      parent.subviews.firstIndex(of: foregroundBranch)!,
+                                      "The entire live home, including both bars, must be behind the detail")
+                }
+                return
+            }
+            foregroundBranch = parent
+        }
+        XCTFail("The home and detail must share a native transition container")
+    }
+
     private func checkTabBarVisibility(initiallyHidden: Bool) async throws {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let previous = scene.windows.first(where: \.isKeyWindow)
         var key: SecurityDetailSources.SourceKey?
         // Match the app's hierarchy: the navigation stack belongs to a tab.
-        let host = UIHostingController(rootView: TabView {
+        let host = UIHostingController(rootView: SecurityDetailNavigationContainer { TabView {
             Tab("Holdings", systemImage: "chart.bar") {
                 NavigationStack {
                     ZoomSourceFixture { key = $0 }
@@ -126,7 +308,7 @@ final class SecurityDetailLiveZoomTests: XCTestCase {
                 }
             }
             Tab("Settings", systemImage: "gearshape") { Text("Settings") }
-        })
+        }}.ignoresSafeArea())
         let window = UIWindow(windowScene: scene)
         window.rootViewController = host
         window.makeKeyAndVisible()
@@ -146,6 +328,8 @@ final class SecurityDetailLiveZoomTests: XCTestCase {
             try await waitUntil { stack.topViewController !== root && stack.transitionCoordinator == nil }
             let detail = try XCTUnwrap(stack.topViewController)
             XCTAssertTrue(detail.hidesBottomBarWhenPushed)
+            XCTAssertEqual(tabs.isTabBarHidden, initiallyHidden,
+                "Covering the home must preserve the tab bar's own visibility state")
             XCTAssertFalse(isVisible(tabs.tabBar, in: window), "The stock page must hide the root tab bar")
             XCTAssertEqual(detail.view.safeAreaInsets.bottom, window.safeAreaInsets.bottom, accuracy: 1,
                 "The stock page must not reserve space for the hidden tab bar")
@@ -217,10 +401,13 @@ final class SecurityDetailLiveZoomTests: XCTestCase {
     private func isVisible(_ view: UIView, in window: UIWindow) -> Bool {
         var ancestor: UIView? = view
         while let current = ancestor {
-            if current.isHidden || current.alpha <= 0.01 { return false }
+            let layer = current.layer.presentation() ?? current.layer
+            if current.isHidden || layer.opacity <= 0.01 { return false }
             ancestor = current.superview
         }
-        return view.window === window && window.bounds.intersects(view.convert(view.bounds, to: window))
+        let layer = view.layer.presentation() ?? view.layer
+        let frame = layer.convert(layer.bounds, to: window.layer.presentation() ?? window.layer)
+        return view.window === window && window.bounds.intersects(frame)
     }
 
     func testCloseAnimatesBackBeforeReleasingSourceAndCanOpenAgain() async throws {
@@ -349,6 +536,49 @@ final class SecurityDetailLiveZoomTests: XCTestCase {
             if condition() { return }
         }
         XCTFail("Timed out waiting for the live zoom lifecycle")
+    }
+}
+
+@MainActor
+private final class InteractiveReturnDriver: NSObject, UINavigationControllerDelegate, UIViewControllerAnimatedTransitioning {
+    let interaction = UIPercentDrivenInteractiveTransition()
+    weak var forwarding: UINavigationControllerDelegate?
+
+    init(forwarding: UINavigationControllerDelegate?) { self.forwarding = forwarding }
+
+    func navigationController(_ navigationController: UINavigationController,
+                              animationControllerFor operation: UINavigationController.Operation,
+                              from fromVC: UIViewController, to toVC: UIViewController) -> UIViewControllerAnimatedTransitioning? {
+        operation == .pop ? self : nil
+    }
+
+    func navigationController(_ navigationController: UINavigationController,
+                              interactionControllerFor animationController: UIViewControllerAnimatedTransitioning)
+        -> UIViewControllerInteractiveTransitioning? { interaction }
+
+    func navigationController(_ navigationController: UINavigationController, willShow viewController: UIViewController,
+                              animated: Bool) {
+        forwarding?.navigationController?(navigationController, willShow: viewController, animated: animated)
+    }
+
+    func navigationController(_ navigationController: UINavigationController, didShow viewController: UIViewController,
+                              animated: Bool) {
+        forwarding?.navigationController?(navigationController, didShow: viewController, animated: animated)
+    }
+
+    func transitionDuration(using transitionContext: UIViewControllerContextTransitioning?) -> TimeInterval { 0.5 }
+
+    func animateTransition(using context: UIViewControllerContextTransitioning) {
+        let from = context.viewController(forKey: .from)!
+        let to = context.viewController(forKey: .to)!
+        context.containerView.insertSubview(to.view, belowSubview: from.view)
+        to.view.frame = context.finalFrame(for: to)
+        UIView.animate(withDuration: transitionDuration(using: context), animations: {
+            from.view.transform = CGAffineTransform(translationX: context.containerView.bounds.width, y: 0)
+        }, completion: { _ in
+            from.view.transform = .identity
+            context.completeTransition(!context.transitionWasCancelled)
+        })
     }
 }
 

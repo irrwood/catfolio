@@ -13,20 +13,25 @@ final class AccountGuideLayoutTests: XCTestCase {
         for language in ["zh-Hans", "en"] {
             defaults.set(language, forKey: AppLanguage.preferenceKey)
             for dark in [false, true] {
-                for step in [Trading212GuideStep.prepare, .settings, .permissions] {
-                    try await capture(SettingsPage {
+                for step in [Trading212GuideStep.prepare] {
+                    try await capture(OnboardingPage(progress: OnboardingProgress(step: step.progressStep, total: 3)) {
                         Trading212GuideProgress(step: step)
-                        Trading212GuideLesson(step: step, next: {}, skip: {})
-                    }.accountFlowActions {
-                        Trading212GuideLesson(step: step, next: {}, skip: {}).actions
-                    }.accountFlowBrand(.trading212), name: "trading212-\(step)-\(language)-\(dark)", dark: dark, directory: directory)
+                        Trading212GuideLesson(step: step, next: {})
+                    } actions: {
+                        Trading212GuideLesson(step: step, next: {}).actions
+                    }, name: "trading212-\(step)-\(language)-\(dark)", dark: dark, directory: directory)
                 }
+                try await capture(OnboardingPage(progress: OnboardingProgress(step: 1, total: 2)) {
+                    IBKRSetupIntro(showGuide: {})
+                } actions: {
+                    OnboardingPrimaryButton(title: L10n.text("填写 Token 和 Query ID"), action: {})
+                }, name: "ibkr-prepare-\(language)-\(dark)", dark: dark, directory: directory)
                 for step in 0..<3 {
-                    try await capture(SettingsPage {
+                    try await capture(OnboardingPage(progress: OnboardingProgress(step: step + 1, total: 3)) {
                         IBKRAccountGuide(step: step, next: {}, skip: {})
-                    }.accountFlowActions {
+                    } actions: {
                         IBKRAccountGuide(step: step, next: {}, skip: {}).actions
-                    }.accountFlowBrand(.ibkr), name: "ibkr-\(step)-\(language)-\(dark)", dark: dark, directory: directory)
+                    }, name: "ibkr-\(step)-\(language)-\(dark)", dark: dark, directory: directory)
                 }
             }
         }
@@ -36,16 +41,33 @@ final class AccountGuideLayoutTests: XCTestCase {
         let directory = URL(fileURLWithPath: "/tmp/catfolio-account-guide", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         for dark in [false, true] {
-            try await capture(SettingsPage {
-                IBKRConnectionIntro(showGuide: {})
+            try await capture(OnboardingPage(progress: OnboardingProgress(step: 2, total: 2)) {
+                IBKRConnectionIntro()
                 SettingsSectionHeader(L10n.text("Flex 凭证"))
                 SettingsCard {
                     SettingsFieldRow("Flex Token", text: .constant(""), isSecure: true, isMonospaced: true)
                     SettingsFieldRow("Query ID", text: .constant(""), isMonospaced: true)
                 }
-            }.accountFlowActions {
-                GlassPrimaryButton(title: L10n.text("保存并创建账户"), isDisabled: true, action: {})
-            }.accountFlowBrand(.ibkr), name: "ibkr-connection-\(dark)", dark: dark, directory: directory)
+            } actions: {
+                OnboardingPrimaryButton(title: L10n.text("保存并创建账户"), isDisabled: true, action: {})
+            }, name: "ibkr-connection-\(dark)", dark: dark, directory: directory)
+        }
+    }
+
+    func testTrading212CredentialsLayout() async throws {
+        let suite = "trading212-form-layout-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var draft: String?
+        let store = Trading212SetupStore(defaults: defaults, read: { _ in draft }, write: { _, value in draft = value })
+        try store.save(.init(step: .credentials, environment: .live, apiKey: "", apiSecret: "",
+                             accountSlot: 1, nickname: "Test", nicknameEdited: true), for: .create)
+        let model = AppModel(defaults: defaults, personalDocumentLoader: { .empty })
+        let directory = URL(fileURLWithPath: "/tmp/catfolio-account-guide", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        for dark in [false, true] {
+            try await capture(Trading212View(setupStore: store).environment(model),
+                              name: "trading212-key-\(dark)", dark: dark, directory: directory)
         }
     }
 

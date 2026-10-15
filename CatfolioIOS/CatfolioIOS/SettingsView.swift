@@ -97,6 +97,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     let showsCloseButton: Bool
     let presentationPreferencesID: String
+    private let trading212SetupStore: Trading212SetupStore
     @State private var showsPaywallPreview = false
     @State private var showsAddAccount = false
     @State private var showsCSVImport = false
@@ -106,6 +107,7 @@ struct SettingsView: View {
     @State private var showsMoomooOAuth = false
     @State private var showsRobinhood = false
     @State private var showsLocalServices = false
+    @State private var hasAppliedLaunchRoute = false
     #if DEBUG
     @State private var showsRotationPreview = LaunchArguments.contains("--show-sector-rotation")
     @State private var showsSentimentPreview = LaunchArguments.contains("--show-industry-sentiment")
@@ -117,9 +119,11 @@ struct SettingsView: View {
     @State private var showsIsometricHeatmap = LaunchArguments.contains("--show-isometric-heatmap")
     #endif
 
-    init(showsCloseButton: Bool = false, presentationPreferencesID: String = "") {
+    init(showsCloseButton: Bool = false, presentationPreferencesID: String = "",
+         trading212SetupStore: Trading212SetupStore = .shared) {
         self.showsCloseButton = showsCloseButton
         self.presentationPreferencesID = presentationPreferencesID
+        self.trading212SetupStore = trading212SetupStore
     }
 
     var body: some View {
@@ -140,11 +144,14 @@ struct SettingsView: View {
                 .id(presentationPreferencesID)
             }
 
-            SettingsCard {
-                SettingsNavigationRow(icon: .asset("AccountSettings"), title: L10n.text("设置")) {
-                    AppSettingsView()
+            // The Mac has Settings in the sidebar instead.
+            if !MacPlatform.isMac {
+                SettingsCard {
+                    SettingsNavigationRow(icon: .asset("AccountSettings"), title: L10n.text("设置")) {
+                        AppSettingsView()
+                    }
+                    .accessibilityIdentifier("account.settings")
                 }
-                .accessibilityIdentifier("account.settings")
             }
 
             PublicInvestorSettingsSection()
@@ -193,23 +200,27 @@ struct SettingsView: View {
                 }
             }
             .task {
-                let arguments = LaunchArguments.all
-                showsPaywallPreview = arguments.contains("--show-paywall")
-                showsAddAccount = arguments.contains("--show-add-account")
-                showsCSVImport = arguments.contains("--show-csv")
-                showsTrading212 = arguments.contains("--show-trading212")
-                showsIBKRFlex = arguments.contains("--show-flex")
-                showsSnapTrade = arguments.contains("--show-snaptrade")
-                showsMoomooOAuth = arguments.contains("--show-moomoo")
-                showsLocalServices = arguments.contains("--show-local-services")
-                    || arguments.contains { $0.hasPrefix("--show-local-service-") }
+                if !hasAppliedLaunchRoute {
+                    hasAppliedLaunchRoute = true
+                    let arguments = LaunchArguments.all
+                    showsPaywallPreview = arguments.contains("--show-paywall")
+                    showsAddAccount = arguments.contains("--show-add-account") || trading212SetupStore.resumesAtLaunch
+                    showsCSVImport = arguments.contains("--show-csv")
+                    showsTrading212 = arguments.contains("--show-trading212")
+                    showsIBKRFlex = arguments.contains("--show-flex")
+                    showsSnapTrade = arguments.contains("--show-snaptrade")
+                    showsMoomooOAuth = arguments.contains("--show-moomoo")
+                    showsLocalServices = arguments.contains("--show-local-services")
+                        || arguments.contains { $0.hasPrefix("--show-local-service-") }
+                        || ServiceAPISetupState.shared.resumesSettingsProviderAtLaunch
+                }
                 if model.overview == nil { await model.refreshPortfolio() }
             }
             .fullScreenCover(isPresented: $showsPaywallPreview) {
                 PaywallView()
             }
             .appSheet(isPresented: $showsAddAccount) {
-                AddAccountView().environment(model)
+                AddAccountView(setupStore: trading212SetupStore).environment(model)
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
             }
             .appSheet(isPresented: $showsCSVImport) {
@@ -217,7 +228,7 @@ struct SettingsView: View {
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
             }
             .appSheet(isPresented: $showsTrading212) {
-                Trading212View(context: .create).environment(model)
+                Trading212View(context: .create, setupStore: trading212SetupStore).environment(model)
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
             }
             .appSheet(isPresented: $showsSnapTrade) {

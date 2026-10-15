@@ -971,11 +971,9 @@ struct HistoryView: View {
         isSyncing = true
         defer { isSyncing = false }
         do {
-            let environment = UserDefaults.standard.string(forKey: "trading212.environment")
-                .flatMap(Trading212Environment.init(rawValue:)) ?? .live
             let snapshot = try await Trading212Client().fetchSnapshot(
                 accounts: credentials,
-                environment: environment
+                environment: .live
             )
             try Task.checkCancellation()
             let names = Dictionary(uniqueKeysWithValues: targetAccounts.compactMap { account in

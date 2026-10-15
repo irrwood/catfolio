@@ -32,12 +32,12 @@ final class AccountHeaderTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(650))
             XCTAssertTrue(isVisible(tabs.tabBar, in: window), "Root pages must keep the tab bar visible")
             if index == 2 {
-                let navigation = try XCTUnwrap(controller(UINavigationController.self, in: try XCTUnwrap(tabs.selectedViewController)))
+                let navigation = try await selectedNavigation(in: tabs)
                 XCTAssertFalse(navigation.isNavigationBarHidden, "Research uses the same native header as Account")
                 XCTAssertEqual(navigation.topViewController?.navigationItem.title, L10n.text("研究"))
                 continue
             }
-            let navigation = try XCTUnwrap(controller(UINavigationController.self, in: try XCTUnwrap(tabs.selectedViewController)))
+            let navigation = try await selectedNavigation(in: tabs)
             XCTAssertFalse(navigation.isNavigationBarHidden, "Account must have its native navigation header")
             XCTAssertEqual(navigation.topViewController?.navigationItem.title, L10n.text("账户"))
             let title = try XCTUnwrap(descendants(window).compactMap { $0 as? UILabel }.first {
@@ -58,7 +58,7 @@ final class AccountHeaderTests: XCTestCase {
             addAttachment(attachment)
             try image.pngData()?.write(to: URL(fileURLWithPath: "/tmp/\(name).png"))
         }
-        let navigation = try XCTUnwrap(controller(UINavigationController.self, in: try XCTUnwrap(tabs.selectedViewController)))
+        let navigation = try await selectedNavigation(in: tabs)
         let add = try await NativeToolbarTestSupport.button(in: navigation, leading: false,
                                                             identifier: "settings-add-account")
         try add.tap()
@@ -77,6 +77,17 @@ final class AccountHeaderTests: XCTestCase {
     }
 
     private func addAttachment(_ attachment: XCTAttachment) { add(attachment) }
+
+    /// A newly selected tab builds its stack on its first visit, sometimes
+    /// after a fixed wait has passed; wait for it rather than fail early.
+    private func selectedNavigation(in tabs: UITabBarController) async throws -> UINavigationController {
+        for _ in 0..<40 {
+            if let selected = tabs.selectedViewController,
+               let navigation = controller(UINavigationController.self, in: selected) { return navigation }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        return try XCTUnwrap(controller(UINavigationController.self, in: try XCTUnwrap(tabs.selectedViewController)))
+    }
 
     private func controller<T: UIViewController>(_ type: T.Type, in parent: UIViewController) -> T? {
         if let match = parent as? T { return match }

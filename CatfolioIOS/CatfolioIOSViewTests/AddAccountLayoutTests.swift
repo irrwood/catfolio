@@ -100,7 +100,11 @@ final class AddAccountLayoutTests: XCTestCase {
             UserDefaults.standard.set(previousLanguage, forKey: AppLanguage.preferenceKey)
         }
         UserDefaults.standard.set("en", forKey: AppLanguage.preferenceKey)
-        let host = UIHostingController(rootView: AddAccountView().environment(model)
+        // Its own store: the app's shared one may carry a resume flag from
+        // elsewhere, which opens the Trading 212 page instead of the list.
+        let host = UIHostingController(rootView: AddAccountView(setupStore: Trading212SetupStore(
+                defaults: defaults, read: { _ in nil }, write: { _, _ in }))
+            .environment(model)
             .environment(\.locale, Locale(identifier: "en_GB"))
             .preferredColorScheme(.light))
         window.rootViewController = host

@@ -79,7 +79,11 @@ struct PortfolioDetailsCard: View {
                 )
             } else {
                 VStack(alignment: .leading, spacing: 18) {
-                    if !showsHeatmap { headerRow }
+                    if !showsHeatmap {
+                        headerRow
+                    } else if MacPlatform.isMac {
+                        heatmapHeaderRow
+                    }
 
                     Group {
                         if !showsHeatmap {
@@ -96,7 +100,8 @@ struct PortfolioDetailsCard: View {
             }
         }
         .toolbar {
-            if showsHeatmap, hero?.isExpanded ?? true {
+            // The Mac's heatmap card carries its filter in its own header.
+            if showsHeatmap, hero?.isExpanded ?? true, !MacPlatform.isMac {
                 ToolbarItem(placement: .topBarTrailing) {
                     HeatmapPerformancePeriodMenu(period: $heatmapPerformancePeriod,
                         groupsBySector: $heatmapGroupsBySector, looksThroughETF: $heatmapLooksThroughETF,
@@ -271,6 +276,20 @@ struct PortfolioDetailsCard: View {
                     floatsFilter ? PortfolioFloatingFilterSource(bounds: anchor,
                         title: AnyView(titleMenu), menu: AnyView(filterMenu)) : nil
                 }
+        }
+    }
+
+    /// The Mac's heatmap card: its title, and its filter at the top right.
+    private var heatmapHeaderRow: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Text(tableTitle)
+                .font(Typography.text(size: 22, weight: .semibold))
+                .foregroundStyle(CatfolioTheme.primaryText)
+                .lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
+            Spacer()
+            filterMenu
+                .accessibilityIdentifier("performance.heatmap.filter")
         }
     }
 

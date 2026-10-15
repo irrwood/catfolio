@@ -42,7 +42,8 @@ struct ContentPanelMaterial: View {
 
     var body: some View {
         Group {
-            if isOpaque || increasedContrast {
+            // The Mac's panels are plain white cards, like its Overview.
+            if isOpaque || increasedContrast || MacPlatform.isMac {
                 shape.fill(SettingsTemplate.card)
             } else if colorScheme == .dark {
                 shape.fill(.ultraThinMaterial)
@@ -114,8 +115,12 @@ struct PanelPressButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.modifier(PanelPressFeedback(isPressed: configuration.isPressed,
-                                                         reduceMotion: reduceMotion))
+        // The Mac pointer dims a card a touch, the way a press does more.
+        MacHover { isHovered in
+            configuration.label.modifier(PanelPressFeedback(isPressed: configuration.isPressed,
+                                                             reduceMotion: reduceMotion))
+                .brightness(isHovered && !configuration.isPressed ? -0.03 : 0)
+        }
     }
 }
 

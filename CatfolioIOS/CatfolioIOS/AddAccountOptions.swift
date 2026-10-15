@@ -1,9 +1,19 @@
 import SwiftUI
 
-enum AddAccountProvider: String, CaseIterable, Identifiable {
+enum AddAccountProvider: String, CaseIterable, Identifiable, Codable {
     case trading212, ibkr, moomoo, robinhood, snaptrade, csv
 
     var id: String { rawValue }
+
+    var connectionSummary: String {
+        switch self {
+        case .trading212: "API Key + Secret"
+        case .ibkr: "Flex Token + Query ID"
+        case .moomoo, .robinhood: L10n.text("授权连接")
+        case .snaptrade: "Client ID + Consumer Key"
+        case .csv: L10n.text("导入交易记录")
+        }
+    }
 
     var title: String {
         switch self {

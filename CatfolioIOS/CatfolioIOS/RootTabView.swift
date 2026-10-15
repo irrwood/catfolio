@@ -2,24 +2,40 @@ import SwiftUI
 import UIKit
 
 struct RootTabView: View {
-    @Environment(AppModel.self) private var model
+    private let trading212SetupStore: Trading212SetupStore
 
-    private enum Destination: Hashable {
-        case portfolio
-        case returns
-        case research
-        case settings
-        case assistant
+    init(trading212SetupStore: Trading212SetupStore = .shared) {
+        self.trading212SetupStore = trading212SetupStore
     }
+
+    var body: some View {
+        SecurityDetailNavigationContainer {
+            RootTabs(trading212SetupStore: trading212SetupStore)
+        }
+        .ignoresSafeArea()
+    }
+}
+
+/// Keep tab selection and preference observation inside the hosting controller.
+/// Replacing its whole TabView on a preference update recreates presented
+/// sheets; saving an account-flow resume flag must not reset that same flow.
+private struct RootTabs: View {
+    @Environment(AppModel.self) private var model
+    private let trading212SetupStore: Trading212SetupStore
+
+    private typealias Destination = RootDestination
 
     @AppStorage(DisplayCurrency.preferenceKey) private var displayCurrencyRawValue = DisplayCurrency.usd.rawValue
     @AppStorage(CompanyNameDisplay.preferenceKey) private var companyNameDisplayRawValue = CompanyNameDisplay.original.rawValue
     @State private var selection: Destination
+    private let navigationRequests = RootNavigationRequests.shared
 
-    init() {
+    init(trading212SetupStore: Trading212SetupStore = .shared) {
+        self.trading212SetupStore = trading212SetupStore
         let arguments = LaunchArguments.all
         let showsLocalServiceRoute = arguments.contains("--show-local-services")
             || arguments.contains { $0.hasPrefix("--show-local-service-") }
+            || ServiceAPISetupState.shared.resumesSettingsProviderAtLaunch
         let initialSelection: Destination
         if arguments.contains("--show-ai") {
             initialSelection = .assistant
@@ -27,12 +43,13 @@ struct RootTabView: View {
             initialSelection = .returns
         } else if arguments.contains("--show-research-tab") || arguments.contains("--show-dca") {
             initialSelection = .research
-        } else if arguments.contains("--show-settings") || showsLocalServiceRoute {
+        } else if arguments.contains("--show-settings") || showsLocalServiceRoute
+                    || trading212SetupStore.resumesAtLaunch {
             initialSelection = .settings
         } else {
             initialSelection = .portfolio
         }
-        _selection = State(initialValue: initialSelection)
+        _selection = State(initialValue: initialSelection.resolved)
     }
 
     private var presentationPreferencesID: String {
@@ -46,6 +63,10 @@ struct RootTabView: View {
             // selection has gone through SwiftUI.
             // Have the assistant's conversations in memory before it is opened.
             .task { await LocalChatLibraryCache.warm() }
+            // The Mac's Go menu and ⌘, pick a page from outside the tabs.
+            .onChange(of: navigationRequests.serial) {
+                if let requested = navigationRequests.requested { selection = requested.resolved }
+            }
             // A new IBKR account whose first report was still being built
             // when the app closed: pick the wait up again once the accounts
             // are loaded.
@@ -82,17 +103,23 @@ struct RootTabView: View {
     private var rootTabs: some View {
         TabView(selection: $selection) {
             Tab(value: .portfolio) {
-                RootPageNavigation { PortfolioView().ownsTabBar() }
-                    .id(presentationPreferencesID)
+                // On the Mac this is the Overview: returns are on it too.
+                RootPageNavigation(pageWidth: MacPageWidth.overview) {
+                    PortfolioView().ownsTabBar()
+                }
+                .id(presentationPreferencesID)
             } label: {
-                tabIcon(for: .portfolio, artwork: .portfolio, label: L10n.text("持仓"))
+                tabIcon(for: .portfolio, artwork: .portfolio, label: Destination.portfolio.title)
             }
 
-            Tab(value: .returns) {
-                RootPageNavigation { ReturnsView().ownsTabBar() }
-                    .id(presentationPreferencesID)
-            } label: {
-                tabIcon(for: .returns, artwork: .returns, label: L10n.text("收益"))
+            // On the Mac returns sit beside the holdings on the Overview.
+            if !MacPlatform.isMac {
+                Tab(value: .returns) {
+                    RootPageNavigation { ReturnsView().ownsTabBar() }
+                        .id(presentationPreferencesID)
+                } label: {
+                    tabIcon(for: .returns, artwork: .returns, label: L10n.text("收益"))
+                }
             }
 
             Tab(value: .research) {
@@ -105,10 +132,20 @@ struct RootTabView: View {
             Tab(value: .settings) {
                 // Keep the settings navigation stack while its preferences change.
                 RootPageNavigation {
-                    SettingsView(presentationPreferencesID: presentationPreferencesID).ownsTabBar()
+                    SettingsView(presentationPreferencesID: presentationPreferencesID,
+                                 trading212SetupStore: trading212SetupStore).ownsTabBar()
                 }
             } label: {
                 tabIcon(for: .settings, artwork: .settings, label: L10n.text("账户"))
+            }
+
+            if MacPlatform.isMac {
+                Tab(value: .preferences) {
+                    RootPageNavigation { AppSettingsView().ownsTabBar() }
+                } label: {
+                    Label(Destination.preferences.title, image: "AccountSettings")
+                        .labelStyle(.titleAndIcon)
+                }
             }
 
             // The search role is the system's own separate circle at the end
@@ -124,18 +161,24 @@ struct RootTabView: View {
         }
         .tint(.primary)
         .modifier(KeepsTabBarFullWidth())
+        .modifier(MacSidebarTabStyle())
     }
 
-    /// An icon and no title: the label's text stays for VoiceOver only.
+    /// An icon and no title: the label's text stays for VoiceOver only. The
+    /// Mac's sidebar shows the title beside the icon.
+    @ViewBuilder
     private func tabIcon(for destination: Destination, artwork: RootTabArtwork, label: String) -> some View {
-        Label {
+        let item = Label {
             Text(label)
         } icon: {
             Image(selection == destination ? artwork.selected : artwork.unselected)
                 .renderingMode(.template)
         }
-        .labelStyle(.iconOnly)
-        .accessibilityLabel(label)
+        if MacPlatform.isMac {
+            item.labelStyle(.titleAndIcon)
+        } else {
+            item.labelStyle(.iconOnly).accessibilityLabel(label)
+        }
     }
 }
 
@@ -143,9 +186,20 @@ struct RootTabView: View {
 /// on the same page. The root's lifecycle anchor owns tab-bar visibility.
 struct RootPageNavigation<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
+    /// The widest the page grows on the Mac, beside its subpage column.
+    var pageWidth = MacPageWidth.standard
     @ViewBuilder let content: Content
 
     var body: some View {
+        if MacPlatform.isMac {
+            MacSplitPage(pageWidth: pageWidth) { content }
+                .background { PortfolioHomePageBackdrop(colorScheme: colorScheme, isPaused: true) }
+        } else {
+            stack
+        }
+    }
+
+    private var stack: some View {
         NavigationStack { content }
             // Stay behind the entire stack while either page moves during an
             // interactive return, including a gesture that is cancelled.
@@ -163,6 +217,7 @@ private struct RootNavigationVisibilityAnchor: UIViewControllerRepresentable {
     }
 
     final class Controller: UIViewController {
+
         override func loadView() {
             view = UIView(frame: .zero)
             view.isUserInteractionEnabled = false
@@ -306,6 +361,8 @@ enum RootTabBar {
 
     /// Slides the bar down out of the screen, or back up.
     static func setTucked(_ tucked: Bool, animated: Bool = true) {
+        guard !MacPlatform.isMac else { return }
+        if let tabs, SecurityDetailNavigationController.preservesChrome(of: tabs) { return }
         let changed = tucked != isTucked
         isTucked = tucked
         guard let tabs else { return }
@@ -328,6 +385,8 @@ enum RootTabBar {
     }
 
     fileprivate static func navigationDidAppear(_ navigation: UINavigationController) {
+        guard !MacPlatform.isMac else { return }
+        guard !SecurityDetailNavigationController.preservesChrome(of: navigation) else { return }
         guard let owner = navigation.tabBarController else { return }
         tabs = owner
         owner.setTabBarHidden(navigation.viewControllers.count > 1, animated: false)
@@ -336,6 +395,8 @@ enum RootTabBar {
 
     /// A tab's page is on screen: another tab starts with the bar up.
     fileprivate static func pageDidAppear(_ page: UIViewController) {
+        guard !MacPlatform.isMac else { return }
+        guard !SecurityDetailNavigationController.preservesChrome(of: page) else { return }
         guard let owner = page.tabBarController else { return }
         tabs = owner
         // A launch route may already have pushed its destination before the
@@ -346,6 +407,8 @@ enum RootTabBar {
     }
 
     fileprivate static func pageWillAppear(_ page: UIViewController, animated: Bool) {
+        guard !MacPlatform.isMac else { return }
+        guard !SecurityDetailNavigationController.preservesChrome(of: page) else { return }
         guard let owner = page.tabBarController else { return }
         tabs = owner
         setTucked(false, animated: false)
@@ -356,6 +419,8 @@ enum RootTabBar {
     }
 
     fileprivate static func pageWillDisappear(_ page: UIViewController, animated: Bool) {
+        guard !MacPlatform.isMac else { return }
+        guard !SecurityDetailNavigationController.preservesChrome(of: page) else { return }
         guard let navigation = page.navigationController,
               navigation.viewControllers.count > 1,
               let owner = page.tabBarController else { return }
@@ -363,14 +428,37 @@ enum RootTabBar {
         // interactive pop) leaves the root behind another navigation page.
         owner.setTabBarHidden(true, animated: animated)
     }
+
+    fileprivate static func pageIsAppearing(_ page: UIViewController) {
+        guard !MacPlatform.isMac else { return }
+        guard SecurityDetailNavigationController.preservesChrome(of: page),
+              let owner = page.tabBarController else { return }
+        // UIKit lays out the tab bar again when its complete home re-enters
+        // the transition container. Keep the scroll position's existing tuck.
+        UIView.performWithoutAnimation {
+            owner.tabBar.transform = isTucked ? tuckedTransform(for: owner.tabBar, in: owner) : .identity
+        }
+    }
 }
 
 /// Sits on a tab's page and tells `RootTabBar` which page is showing.
 private struct RootTabBarAnchor: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> Anchor { Anchor() }
-    func updateUIViewController(_ controller: Anchor, context: Context) {}
+    func updateUIViewController(_ controller: Anchor, context: Context) {
+        controller.splitWidths = context.environment.macSplitWidths
+        controller.sizeSplitColumns()
+    }
 
     final class Anchor: UIViewController {
+        var splitWidths: MacSplitWidths?
+
+        /// Hands the Mac split page its split view, to keep its columns.
+        func sizeSplitColumns() {
+            guard let splitWidths, let split = parent?.splitViewController else { return }
+            splitWidths.split = split
+            splitWidths.apply()
+        }
+
         override func loadView() {
             let view = UIView(frame: .zero)
             view.isUserInteractionEnabled = false
@@ -385,6 +473,7 @@ private struct RootTabBarAnchor: UIViewControllerRepresentable {
 
         override func viewWillAppear(_ animated: Bool) {
             super.viewWillAppear(animated)
+            sizeSplitColumns()
             guard let page = parent else { return }
             RootTabBar.pageWillAppear(page, animated: animated)
         }
@@ -393,6 +482,12 @@ private struct RootTabBarAnchor: UIViewControllerRepresentable {
             super.viewWillDisappear(animated)
             guard let page = parent else { return }
             RootTabBar.pageWillDisappear(page, animated: animated)
+        }
+
+        override func viewIsAppearing(_ animated: Bool) {
+            super.viewIsAppearing(animated)
+            guard let page = parent else { return }
+            RootTabBar.pageIsAppearing(page)
         }
     }
 }

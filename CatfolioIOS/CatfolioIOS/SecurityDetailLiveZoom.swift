@@ -14,7 +14,7 @@ import UIKit
 /// hidden (`hiddenLogo`) so only one logo is ever on screen. A source with no
 /// logo zooms from the whole of its marker.
 ///
-/// The page is pushed onto the row's navigation stack, not presented: a
+/// The page is pushed above the complete tab interface, not presented: a
 /// navigation zoom can be interrupted, so a tap on the list while a page is
 /// still flying back opens the next one at once. A modal's return holds every
 /// touch until its spring has settled. Without a stack the page is presented.
@@ -138,8 +138,6 @@ final class SecurityDetailLiveZoom {
         controller.modalPresentationStyle = .fullScreen
         controller.hidesBottomBarWhenPushed = true
         if let picture { logoPictures[ObjectIdentifier(controller)] = picture }
-        controller.owningTabBarController = stack?.tabBarController
-        controller.previousTabBarHidden = stack?.tabBarController?.isTabBarHidden ?? false
         controller.didDismiss = { [weak self, weak controller] in
             guard let controller else { return }
             self?.releaseLogoPicture(for: controller)
@@ -312,9 +310,11 @@ final class SecurityDetailLiveZoom {
         var responder: UIResponder? = view
         while let next = responder?.next {
             if let controller = next as? UIViewController {
-                // Also while a page is still popping: that is the interruption.
-                guard let stack = controller.navigationController else { return nil }
-                return stack
+                // Push above the whole tab interface, so its real bars stay
+                // inside the home page underneath the moving detail card.
+                // A source in a separate presented stack keeps that stack.
+                return SecurityDetailNavigationController.enclosing(controller)
+                    ?? controller.navigationController
             }
             responder = next
         }
@@ -332,9 +332,6 @@ final class SecurityDetailLiveZoom {
     /// Reports actual dismissal; a cancelled pull never dismisses the page.
     private final class PageController: UIHostingController<AnyView> {
         var didDismiss: (() -> Void)?
-        weak var owningTabBarController: UITabBarController?
-        var previousTabBarHidden = false
-
         /// On its way back to the row: popped or dismissed, and not pulled
         /// back up yet.
         var isLeaving: Bool { isMovingFromParent || isBeingDismissed || popping }
@@ -350,15 +347,11 @@ final class SecurityDetailLiveZoom {
             if let stack = navigationController, !stack.isNavigationBarHidden {
                 stack.setNavigationBarHidden(true, animated: false)
             }
-            transitionTabBar(hidden: true, animated: animated)
         }
 
         override func viewWillDisappear(_ animated: Bool) {
             super.viewWillDisappear(animated)
             popping = isMovingFromParent
-            if popping {
-                transitionTabBar(hidden: previousTabBarHidden, animated: animated)
-            }
             #if DEBUG
             if isMovingFromParent || isBeingDismissed {
                 let now = CACurrentMediaTime()
@@ -367,36 +360,6 @@ final class SecurityDetailLiveZoom {
                     + " interactive=\(transitionCoordinator?.isInteractive == true)")
             }
             #endif
-        }
-
-        /// SwiftUI's tab container ignores the UIKit push's bottom-bar flag.
-        /// Enroll its visibility change in the page's transition so scrubbing
-        /// and cancelling a return also scrub and restore the tab bar.
-        private func transitionTabBar(hidden: Bool, animated: Bool) {
-            guard let tabs = owningTabBarController, tabs.isTabBarHidden != hidden else { return }
-            guard animated, let coordinator = transitionCoordinator else {
-                tabs.setTabBarHidden(hidden, animated: false)
-                return
-            }
-            let wasHidden = tabs.isTabBarHidden
-            if coordinator.isInteractive {
-                // Keep the home layout and zoom destination stable while the
-                // finger scrubs. Changing SwiftUI's tab container here can
-                // rebuild the destination on the first interactive frame.
-                coordinator.animate(alongsideTransition: nil) { context in
-                    // Nothing changed during the gesture. Cancelling must not
-                    // relayout SwiftUI's tab container as the page becomes live.
-                    guard !context.isCancelled, tabs.isTabBarHidden != hidden else { return }
-                    tabs.setTabBarHidden(hidden, animated: false)
-                }
-                return
-            }
-            let enrolled = coordinator.animate(alongsideTransition: { _ in
-                tabs.setTabBarHidden(hidden, animated: true)
-            }, completion: { context in
-                tabs.setTabBarHidden(context.isCancelled ? wasHidden : hidden, animated: false)
-            })
-            if !enrolled { tabs.setTabBarHidden(hidden, animated: animated) }
         }
 
         override func viewDidAppear(_ animated: Bool) {

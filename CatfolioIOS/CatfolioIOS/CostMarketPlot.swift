@@ -15,6 +15,7 @@ struct FastCostMarketPlot: View {
     let onMeasure: (ChartDateRange) -> Void
     let onInteractionEnded: (Int) -> Void
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.portfolioChartOnCard) private var isOnCard
     @State private var seriesCache = CostMarketPlotSeriesCache()
     private let bottomHeight: CGFloat = 0
 
@@ -22,7 +23,7 @@ struct FastCostMarketPlot: View {
         // A selection changes this view every time the finger crosses a day.
         // Rebuilding both point arrays and sorting them in Series.init on
         // every move makes a long portfolio history compete with scrolling.
-        let prepared = seriesCache.prepared(for: data, scheme: colorScheme,
+        let prepared = seriesCache.prepared(for: data, scheme: colorScheme, isOnCard: isOnCard,
                                             showsLatestPoint: showsLatestPoint)
         StandardLineChart(
             // Canvas paints later series above earlier ones. Keep the blue
@@ -86,6 +87,7 @@ final class CostMarketPlotSeriesCache {
     private struct Key: Equatable {
         let dataID: UUID
         let scheme: ColorScheme
+        let isOnCard: Bool
         let showsLatestPoint: Bool
     }
 
@@ -93,9 +95,9 @@ final class CostMarketPlotSeriesCache {
     private var cachedValue: Prepared?
     private(set) var rebuildCount = 0
 
-    func prepared(for data: CostMarketRangeData, scheme: ColorScheme,
+    func prepared(for data: CostMarketRangeData, scheme: ColorScheme, isOnCard: Bool = false,
                   showsLatestPoint: Bool) -> Prepared {
-        let key = Key(dataID: data.id, scheme: scheme, showsLatestPoint: showsLatestPoint)
+        let key = Key(dataID: data.id, scheme: scheme, isOnCard: isOnCard, showsLatestPoint: showsLatestPoint)
         if key == cachedKey, let cachedValue { return cachedValue }
 
         let market = StandardLineChartSeries(
@@ -103,7 +105,9 @@ final class CostMarketPlotSeriesCache {
             points: data.plottedRows.map {
                 StandardLineChartPoint(id: $0.id, date: $0.date, value: $0.marketValue)
             },
-            color: scheme == .light ? .white : CatfolioTheme.gain(for: .dark),
+            // White over the blue home page; on the Mac's white card the
+            // gain green it already is at night.
+            color: scheme == .light && !isOnCard ? .white : CatfolioTheme.gain(for: scheme),
             lineWidth: 2,
             latestPointRadius: showsLatestPoint ? 5 : 0,
             latestPointColor: scheme == .light ? .black : nil,

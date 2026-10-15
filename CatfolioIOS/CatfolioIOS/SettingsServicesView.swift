@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable {
+enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable, Codable {
     case massive
     case fmp
     case deepSeek
@@ -369,6 +369,8 @@ struct LocalServicesSettingsView: View {
             routedProvider = .finnhub
         } else if arguments.contains("--show-local-service-jev") {
             routedProvider = .jev
+        } else if ServiceAPISetupState.shared.resumesSettingsProviderAtLaunch {
+            routedProvider = ServiceAPISetupState.shared.settingsProvider
         }
     }
 }
@@ -617,8 +619,15 @@ struct LocalServiceFeedback {
 struct LocalServiceDetailView: View {
     @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.isServiceAPISetupGuide) private var isSetupGuide
     let provider: LocalServiceProvider
     let onStatusChanged: (LocalServiceStatus) -> Void
+    private let setup: ServiceAPISetupState
+    private let drafts: ServiceAPIKeyDrafts
+    private let onFinish: (() -> Void)?
+    private let onChooseAnother: (() -> Void)?
+    @State private var savedStatus: LocalServiceStatus = .unconfigured
 
     @State private var apiKey = ""
     @State private var originalKey = ""
@@ -632,6 +641,18 @@ struct LocalServiceDetailView: View {
     @AppStorage(LocalServiceKeys.deepSeekModel) private var deepSeekModel = ""
     @State private var showsModelPicker = false
     @AppStorage(LocalServiceKeys.cloudflareAccountIDKey) private var cloudflareAccountID = ""
+
+    init(provider: LocalServiceProvider, setup: ServiceAPISetupState = .shared,
+         drafts: ServiceAPIKeyDrafts = .shared,
+         onFinish: (() -> Void)? = nil, onChooseAnother: (() -> Void)? = nil,
+         onStatusChanged: @escaping (LocalServiceStatus) -> Void) {
+        self.provider = provider
+        self.setup = setup
+        self.drafts = drafts
+        self.onFinish = onFinish
+        self.onChooseAnother = onChooseAnother
+        self.onStatusChanged = onStatusChanged
+    }
 
     private var trimmedKey: String {
         apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -650,162 +671,147 @@ struct LocalServiceDetailView: View {
     }
 
     var body: some View {
-        SettingsPage(title: provider.shortTitle, bottomInset: 32, topInset: SettingsTemplate.sectionSpacing,
-                     titleDisplayMode: .inline) {
-            SettingsSectionHeader(L10n.text("服务用途"))
-            SettingsCard {
-                SettingsRowContainer {
-                    HStack(alignment: .top, spacing: SettingsTemplate.iconSpacing) {
-                        SettingsRowIcon(.symbol(provider.iconName))
-                        VStack(alignment: .leading, spacing: SettingsTemplate.subtitleSpacing) {
-                            Text(provider.title)
-                                .appText(.subheading)
-                                .foregroundStyle(CatfolioTheme.primaryText)
-                            Text(provider.detail)
-                                .appText(.label, weight: .regular)
-                                .foregroundStyle(SettingsTemplate.secondaryText)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: 0)
-                    }
+        OnboardingPage(progress: isSetupGuide ? OnboardingProgress(step: 3, total: 3) : nil) {
+            OnboardingHeader(title: provider.title,
+                             subtitle: provider.purpose)
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Text(L10n.text("API 密钥")).appText(.subheading, weight: .semibold)
+                    Spacer()
+                    Link(L10n.text("获取 Key"), destination: provider.setupURL)
+                        .appText(.callout, weight: .medium)
                 }
-            }
+                SettingsCard {
+                    SettingsRowContainer {
+                        HStack(spacing: SettingsTemplate.iconSpacing) {
+                            ServiceAPIKeyField(placeholder: keyPlaceholder, text: $apiKey, revealsKey: revealsKey)
+                                .privacySensitive()
 
-            SettingsSectionHeader(L10n.text("API 密钥"))
-            SettingsCard {
-                SettingsRowContainer {
-                    HStack(spacing: SettingsTemplate.iconSpacing) {
-                        Group {
-                            if revealsKey {
-                                TextField(keyPlaceholder, text: $apiKey)
-                            } else {
-                                SecureField(keyPlaceholder, text: $apiKey)
+                            // On the icon artboard and in the row's own greys, so
+                            // the control reads as part of the row rather than a
+                            // tinted button dropped into it.
+                            Button {
+                                revealsKey.toggle()
+                            } label: {
+                                SettingsRowIcon(.symbol(revealsKey ? "eye.slash" : "eye"))
+                                    .foregroundStyle(SettingsTemplate.secondaryText)
+                                    .padding(.vertical, SettingsTemplate.rowVerticalPadding)
+                                    .contentShape(Rectangle())
+                                    .padding(.vertical, -SettingsTemplate.rowVerticalPadding)
                             }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(revealsKey ? L10n.text("隐藏 API 密钥") : L10n.text("显示 API 密钥"))
                         }
-                        .font(.body.monospaced())
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .textContentType(.password)
-                        .submitLabel(.done)
-
-                        // On the icon artboard and in the row's own greys, so
-                        // the control reads as part of the row rather than a
-                        // tinted button dropped into it.
-                        Button {
-                            revealsKey.toggle()
-                        } label: {
-                            SettingsRowIcon(.symbol(revealsKey ? "eye.slash" : "eye"))
-                                .foregroundStyle(SettingsTemplate.secondaryText)
-                                .padding(.vertical, SettingsTemplate.rowVerticalPadding)
-                                .contentShape(Rectangle())
-                                .padding(.vertical, -SettingsTemplate.rowVerticalPadding)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(revealsKey ? L10n.text("隐藏 API 密钥") : L10n.text("显示 API 密钥"))
-                    }
-                }
-                .disabled(isTesting)
-            }
-            SettingsFootnote(L10n.text("仅保存在此 iPhone 的 Keychain"))
-
-            if provider == .jev {
-                SettingsSectionHeader("Account ID")
-                SettingsCard {
-                    SettingsRowContainer {
-                        TextField(L10n.text("Cloudflare Account ID"), text: $cloudflareAccountID)
-                            .font(.body.monospaced())
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .submitLabel(.done)
-                    }
-                }
-                SettingsFootnote(L10n.text("Account ID 和 API Token 可在 Cloudflare 控制台获取。"))
-            }
-
-            if AIModelCatalog.supports(provider) {
-                SettingsSectionHeader(L10n.text("模型"))
-                SettingsCard {
-                    SettingsButtonRow(icon: .symbol("list.bullet.rectangle"), title: L10n.text("获取模型"),
-                                      value: modelBinding.wrappedValue.isEmpty ? L10n.text("默认") : modelBinding.wrappedValue) {
-                        showsModelPicker = true
-                    }
-                    .accessibilityIdentifier("local-service.model-picker")
-                    SettingsRowContainer {
-                        TextField(defaultModel, text: modelBinding)
-                            .font(.body.monospaced())
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .keyboardType(.URL)
-                            .submitLabel(.done)
-                    }
-                }
-                SettingsFootnote(L10n.text("从服务商读取可用模型后选择，也可直接填写模型 ID；留空使用 \(defaultModel)。"))
-            }
-
-            if let feedback {
-                StatusNotice(text: feedback.text, kind: feedback.kind)
-            }
-
-            VStack(spacing: 12) {
-                Button {
-                    startValidation()
-                } label: {
-                    HStack(spacing: 9) {
-                        if isTesting {
-                            ProgressView()
-                                .tint(.white)
-                        }
-                        Text(isTesting ? L10n.text("正在验证…") : L10n.text("保存并验证"))
-                            .appText(.subheading, weight: .semibold)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 54)
-                }
-                .buttonStyle(.borderedProminent)
-                .buttonBorderShape(.roundedRectangle(radius: SettingsTemplate.cardRadius))
-                .tint(CatfolioTheme.accent)
-                .disabled(trimmedKey.isEmpty || isTesting || (provider == .jev && cloudflareAccountID.trimmingCharacters(in: .whitespaces).isEmpty))
-                .accessibilityLabel(isTesting ? L10n.text("正在验证") : L10n.text("保存并验证"))
-                .accessibilityHint(L10n.text("保存 API 密钥并验证连接"))
-
-                Button {
-                    saveWithoutValidation()
-                } label: {
-                    Text(L10n.text("仅保存，不验证"))
-                        .appText(.subheading, weight: .semibold)
-                        .frame(maxWidth: .infinity)
-                        .frame(minHeight: 52)
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.roundedRectangle(radius: SettingsTemplate.cardRadius))
-                .tint(CatfolioTheme.accent)
-                .disabled(trimmedKey.isEmpty || isTesting)
-                .accessibilityLabel(L10n.text("仅保存，不验证"))
-                .accessibilityHint(L10n.text("保存 API 密钥但不验证连接"))
-            }
-
-            if !originalKey.isEmpty {
-                SettingsCard {
-                    SettingsButtonRow(
-                        icon: .symbol("trash"),
-                        title: L10n.text("移除此密钥"),
-                        showsChevron: false,
-                        role: .destructive
-                    ) {
-                        showsRemoveConfirmation = true
                     }
                     .disabled(isTesting)
                 }
+                Text(L10n.text("仅保存在此 iPhone 的 Keychain"))
+                    .appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
+                Text(provider.detail).appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
+
+                if provider == .jev {
+                    SettingsSectionHeader("Account ID")
+                    SettingsCard {
+                        SettingsRowContainer {
+                            TextField(L10n.text("Cloudflare Account ID"), text: $cloudflareAccountID)
+                                .font(.body.monospaced())
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .submitLabel(.done)
+                        }
+                    }
+                    SettingsFootnote(L10n.text("Account ID 和 API Token 可在 Cloudflare 控制台获取。"))
+                }
+
+                if AIModelCatalog.supports(provider) {
+                    DisclosureGroup(L10n.text("模型（可选）")) {
+                        SettingsCard {
+                            SettingsButtonRow(icon: .symbol("list.bullet.rectangle"), title: L10n.text("获取模型"),
+                                              value: modelBinding.wrappedValue.isEmpty ? L10n.text("默认") : modelBinding.wrappedValue) {
+                                showsModelPicker = true
+                            }
+                            .accessibilityIdentifier("local-service.model-picker")
+                            SettingsRowContainer {
+                                TextField(defaultModel, text: modelBinding)
+                                    .font(.body.monospaced())
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .keyboardType(.URL)
+                                    .submitLabel(.done)
+                            }
+                        }
+                        Text(L10n.text("留空使用默认模型。"))
+                            .appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
+                    }
+                    .appText(.callout)
+                    .accessibilityIdentifier("local-service.model-options")
+                }
+
+                DisclosureGroup(L10n.text("如何获取 API Key？")) {
+                    Text(L10n.text("登录服务商官网，在 API Keys 中创建并复制密钥，然后回到这里粘贴。"))
+                        .appText(.body).foregroundStyle(SettingsTemplate.secondaryText)
+                        .padding(.top, 8)
+                    Text(L10n.text("服务商的额度、功能和费用以其账户方案为准。"))
+                        .appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
+                        .padding(.top, 8)
+                }
+                .appText(.callout)
+
+                if let feedback {
+                    StatusNotice(text: feedback.text, kind: feedback.kind)
+                }
+
+                if !originalKey.isEmpty {
+                    SettingsCard {
+                        SettingsButtonRow(
+                            icon: .symbol("trash"),
+                            title: L10n.text("移除此密钥"),
+                            showsChevron: false,
+                            role: .destructive
+                        ) {
+                            showsRemoveConfirmation = true
+                        }
+                        .disabled(isTesting)
+                    }
+                }
+            }
+        } actions: {
+            if let onFinish, savedStatus != .unconfigured, trimmedKey == originalKey, !trimmedKey.isEmpty {
+                Text(savedStatus == .verified ? L10n.text("验证通过，可以开始使用") : L10n.text("已保存，连接尚未验证"))
+                    .appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
+                OnboardingPrimaryButton(title: L10n.text("完成配置"), action: onFinish)
+                if let onChooseAnother {
+                    Button(L10n.text("继续配置其他服务"), action: onChooseAnother)
+                        .appText(.callout, weight: .medium)
+                }
+            } else {
+                OnboardingPrimaryButton(title: isTesting ? L10n.text("正在验证…") : L10n.text("保存并验证"),
+                    isDisabled: trimmedKey.isEmpty || (provider == .jev && cloudflareAccountID.trimmingCharacters(in: .whitespaces).isEmpty),
+                    isBusy: isTesting, action: startValidation)
+                    .accessibilityHint(L10n.text("保存 API 密钥并验证连接"))
+                Button(L10n.text("仅保存，不验证"), action: saveWithoutValidation)
+                    .appText(.callout, weight: .medium)
+                    .disabled(trimmedKey.isEmpty || isTesting)
+                    .accessibilityHint(L10n.text("保存 API 密钥但不验证连接"))
             }
         }
-        .onAppear { loadKeyIfNeeded() }
+        .onAppear {
+            loadKeyIfNeeded()
+            if !isSetupGuide { setup.settingsProvider = provider }
+        }
         .onDisappear {
             validationTask?.cancel()
             validationTask = nil
+            if scenePhase == .active, !isSetupGuide, setup.settingsProvider == provider {
+                setup.settingsProvider = nil
+            }
         }
         .onChange(of: apiKey) { _, newValue in
             let edited = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
             if edited != originalKey { feedback = nil }
+            guard hasLoaded else { return }
+            do { try drafts.update(newValue, for: provider, savedKey: originalKey) }
+            catch { feedback = LocalServiceFeedback(text: error.localizedDescription, kind: .error) }
         }
         .appSheet(isPresented: $showsModelPicker) {
             AIModelPickerView(provider: provider, key: trimmedKey.isEmpty ? nil : trimmedKey,
@@ -827,8 +833,9 @@ struct LocalServiceDetailView: View {
         guard !hasLoaded else { return }
         hasLoaded = true
         let saved = KeychainStore.string(for: provider.keychainKey) ?? ""
-        apiKey = saved
+        apiKey = drafts.text(for: provider, savedKey: saved)
         originalKey = saved
+        if !saved.isEmpty { onStatusChanged(.configured) }
     }
 
     @MainActor
@@ -851,10 +858,12 @@ struct LocalServiceDetailView: View {
                 return
             }
             originalKey = candidate
+            try? drafts.clear(provider)
             if provider == .fmp {
                 await LocalReturnsAnalyticsClient.resetFailedFundamentalAttempts()
             }
             feedback = LocalServiceFeedback(text: message, kind: .success)
+            savedStatus = .verified
             onStatusChanged(.verified)
             announce(message)
             ToastCenter.shared.show(L10n.text("已验证并保存"))
@@ -880,7 +889,9 @@ struct LocalServiceDetailView: View {
         do {
             try KeychainStore.set(trimmedKey, for: provider.keychainKey)
             originalKey = trimmedKey
+            try? drafts.clear(provider)
             feedback = LocalServiceFeedback(text: L10n.text("已安全保存到此 iPhone"), kind: .success)
+            savedStatus = .configured
             onStatusChanged(.configured)
             if provider == .fmp {
                 Task { await LocalReturnsAnalyticsClient.resetFailedFundamentalAttempts() }
@@ -898,8 +909,10 @@ struct LocalServiceDetailView: View {
             try KeychainStore.set("", for: provider.keychainKey)
             apiKey = ""
             originalKey = ""
+            try? drafts.clear(provider)
             revealsKey = false
             feedback = LocalServiceFeedback(text: L10n.text("密钥已从此 iPhone 移除"), kind: .info)
+            savedStatus = .unconfigured
             onStatusChanged(.unconfigured)
             if provider == .fmp {
                 Task { await LocalReturnsAnalyticsClient.resetFailedFundamentalAttempts() }

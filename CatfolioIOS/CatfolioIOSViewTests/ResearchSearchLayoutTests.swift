@@ -425,6 +425,13 @@ final class ResearchSearchLayoutTests: XCTestCase {
             defaults.removePersistentDomain(forName: suite)
         }
         try await Task.sleep(for: .milliseconds(500))
+        // The field is placed once the page has appeared, which can take
+        // longer than the fixed wait; start once it is there.
+        if !rootTabs, #available(iOS 26.0, *) {
+            for _ in 0..<50 where find(UISearchBar.self, in: window, identifier: "research.search.bar") == nil {
+                try await Task.sleep(for: .milliseconds(50))
+            }
+        }
         try await run(window, host)
     }
 

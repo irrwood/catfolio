@@ -306,6 +306,16 @@ struct StandardLineChart: View {
                         width: plot.width,
                         height: max(1, plot.height - interactionBottomInset)
                     )
+                    .modifier(MacChartHover(
+                        onMove: { location in
+                            updateSelection(from: [CGPoint(x: location.x + plot.minX,
+                                                           y: location.y + plot.minY)], plot: plot)
+                        },
+                        onEnd: {
+                            lastHapticDates = []
+                            onInteractionEnded(1)
+                        }
+                    ))
                     .researchLayoutFrame("standard-chart.plot")
                     .offset(x: plot.minX, y: plot.minY)
                     .clipped()

@@ -109,6 +109,8 @@ struct HoldingDetailCloseButton: View {
                 .contentShape(.interaction, Circle())
         }
         .buttonStyle(.plain)
+        // Esc on the Mac and on a hardware keyboard.
+        .keyboardShortcut(.cancelAction)
         .accessibilityLabel(L10n.text("关闭"))
         .accessibilityIdentifier("holding-detail-close")
     }

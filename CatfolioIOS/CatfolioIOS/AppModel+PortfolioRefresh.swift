@@ -168,11 +168,9 @@ extension AppModel {
             return Trading212AccountCredentials(slot: slot, credentials: value)
         }
         guard !credentials.isEmpty else { return loaded }
-        let environment = UserDefaults.standard.string(forKey: "trading212.environment")
-            .flatMap(Trading212Environment.init(rawValue:)) ?? .live
         let cached = await Trading212Client().cachedTransactions(
             accounts: credentials,
-            environment: environment
+            environment: .live
         )
         guard !cached.isEmpty else { return loaded }
         var accountNames: [String: String] = [:]

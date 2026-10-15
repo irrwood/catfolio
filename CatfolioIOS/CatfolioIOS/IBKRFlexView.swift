@@ -31,6 +31,7 @@ struct IBKRFlexView: View {
     @Environment(AppModel.self) private var model
 
     let context: AccountConnectorContext
+    private let isFirstLaunchSetup: Bool
 
     @State private var showsSetupGuide = false
     @State private var guideStep = 0
@@ -59,8 +60,10 @@ struct IBKRFlexView: View {
     private static let legacyTokenKey = "ibkr.flex.token"
     private static let legacyQueryIDKey = "ibkr.flex.query-id"
 
-    init(context: AccountConnectorContext = .create) {
+    init(context: AccountConnectorContext = .create, isFirstLaunchSetup: Bool = false) {
         self.context = context
+        self.isFirstLaunchSetup = isFirstLaunchSetup
+        _guideStep = State(initialValue: isFirstLaunchSetup ? 1 : 0)
     }
 
     private static func tokenKey(accountID: String) -> String {
@@ -85,21 +88,20 @@ struct IBKRFlexView: View {
 
     var body: some View {
         AccountFlowStack {
-            SettingsPage(bottomInset: 32) {
-                if context.isCreating && guideStep < 3 {
-                    IBKRAccountGuide(step: guideStep) { guideStep += 1 } skip: { guideStep = 3 }
+            OnboardingPage(scrollReset: guideStep,
+                           progress: context.isCreating ? OnboardingProgress(
+                            step: isFirstLaunchSetup ? 3 : guideStep + 1, total: isFirstLaunchSetup ? 3 : 2) : nil) {
+                if context.isCreating && guideStep < 1 {
+                    IBKRSetupIntro { showsSetupGuide = true }
                 } else {
-                    connectionContent
+                    VStack(alignment: .leading, spacing: 16) { connectionContent }
                 }
-            }
-            .accountFlowActions { flowActions }
-            .softTopScrollEdge()
-            .navigationTitle(context.isCreating ? L10n.text("新建 IBKR 账户") : "IBKR Flex")
+            } actions: { flowActions }
             // Past the first step the guide's own 上一步 is the back button.
-            .navigationBarBackButtonHidden(context.isCreating && guideStep > 0 && snapshot == nil)
+            .navigationBarBackButtonHidden(context.isCreating && !isFirstLaunchSetup && guideStep > 0 && snapshot == nil)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if context.isCreating && guideStep > 0 && snapshot == nil {
+                if context.isCreating && !isFirstLaunchSetup && guideStep > 0 && snapshot == nil {
                     ToolbarItem(placement: .cancellationAction) {
                         Button {
                             guideStep -= 1
@@ -153,28 +155,26 @@ struct IBKRFlexView: View {
                     : L10n.text("将更新当前 IBKR 账户持仓；其他账户不受影响。"))
             }
         }
-        .accountFlowBrand(.ibkr)
+        .tint(CatfolioTheme.primaryText)
     }
 
     @ViewBuilder
     private var flowActions: some View {
-        if context.isCreating && guideStep < 3 {
-            IBKRAccountGuide(step: guideStep) { guideStep += 1 } skip: { guideStep = 3 }.actions
+        if context.isCreating && guideStep < 1 {
+            OnboardingPrimaryButton(title: L10n.text("填写 Token 和 Query ID")) { guideStep = 1 }
         } else if let snapshot {
-            GlassPrimaryButton(
+            OnboardingPrimaryButton(
                 title: isWorking
                     ? (context.isCreating ? L10n.text("正在创建") : L10n.text("正在同步"))
                     : (context.isCreating ? L10n.text("创建 IBKR 账户") : L10n.text("同步 \(snapshot.positions.count) 项到 Catfolio")),
-                systemImage: "tray.and.arrow.down.fill",
                 isDisabled: !hasValidNickname,
                 isBusy: isWorking
             ) {
                 showsSyncConfirmation = true
             }
         } else {
-            GlassPrimaryButton(
+            OnboardingPrimaryButton(
                 title: context.isCreating ? L10n.text("保存并创建账户") : L10n.text("保存凭证"),
-                systemImage: "tray.and.arrow.down.fill",
                 isDisabled: !hasCompleteCredentials || !hasValidNickname,
                 isBusy: isWorking
             ) {
@@ -199,11 +199,7 @@ struct IBKRFlexView: View {
 
     @ViewBuilder
     private var connectionContent: some View {
-        if context.isCreating {
-            Text(L10n.text("第 \(4) 步，共 4 步"))
-                .appText(.label).foregroundStyle(SettingsTemplate.secondaryText)
-            ProgressView(value: 4, total: 4)
-        }
+        IBKRConnectionIntro()
         if context.isCreating, snapshot != nil {
             SettingsSectionHeader(L10n.text("账户昵称"))
             SettingsCard {
@@ -211,11 +207,6 @@ struct IBKRFlexView: View {
                     .disabled(isWorking)
             }
         }
-
-        IBKRConnectionIntro {
-            showsSetupGuide = true
-        }
-        .disabled(isWorking)
 
         SettingsSectionHeader(L10n.text("Flex 凭证"))
         SettingsCard {
@@ -236,26 +227,18 @@ struct IBKRFlexView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        SettingsFootnote(L10n.text("Query ID 在 Flex Queries 列表的查询名称旁。持仓超过一年时，请将 Period 扩至最早建仓日。"))
 
-        SettingsSectionHeader(L10n.text("连接"))
-        SettingsCard {
-            if let snapshot {
-                SettingsButtonRow(
-                    icon: .symbol("arrow.clockwise"),
-                    title: L10n.text("重新读取持仓"),
-                    showsChevron: false
-                ) {
-                    Task { await testFlex() }
-                }
-                .disabled(isWorking)
 
-            }
-
-            if status.isPresented {
-                SettingsRowContainer { statusView }
-            }
-
+        if status.isPresented { statusView }
+        if snapshot != nil {
+            Button(L10n.text("重新读取持仓")) { Task { await testFlex() } }
+                .appText(.callout).disabled(isWorking)
+        }
+        DisclosureGroup(L10n.text("需要帮助？")) {
+            Button(L10n.text("查看详细教程")) { showsSetupGuide = true }
+                .appText(.callout).padding(.vertical, 12)
+                .accessibilityIdentifier("ibkr-open-setup-guide")
+            SettingsFootnote(L10n.text("Query ID 在 Flex Queries 列表的查询名称旁。持仓超过一年时，请将 Period 扩至最早建仓日。"))
             SettingsButtonRow(
                 icon: .symbol(didCopyBrief ? "checkmark.circle" : "doc.on.doc"),
                 title: didCopyBrief ? L10n.text("已复制，去 IBKR 粘贴给它的助手") : L10n.text("复制配置提示词"),
@@ -280,6 +263,7 @@ struct IBKRFlexView: View {
                 url: "https://www.ibkrguides.com/clientportal/performanceandstatements/flex-web-service.htm"
             )
         }
+        .appText(.callout)
 
         if let snapshot {
             SettingsSectionHeader(L10n.text("Flex 预览"))

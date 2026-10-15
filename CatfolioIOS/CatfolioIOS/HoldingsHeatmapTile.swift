@@ -361,7 +361,9 @@ struct HoldingsHeatmapTile: View {
 /// The highlight stays inside the tile's own clipped shape and dimensions.
 struct HeatmapTileButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .opacity(configuration.isPressed ? 0.65 : 1)
+        MacHover { isHovered in
+            configuration.label
+                .opacity(configuration.isPressed ? 0.65 : (isHovered ? 0.82 : 1))
+        }
     }
 }

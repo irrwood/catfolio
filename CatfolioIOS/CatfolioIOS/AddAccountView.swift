@@ -7,43 +7,81 @@ import SwiftUI
 /// edge swipe return to it, and finishing closes the whole sheet.
 struct AddAccountView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var provider: AddAccountProvider?
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var navigation: AddAccountNavigation
+    private let setupStore: Trading212SetupStore
+
+    init(setupStore: Trading212SetupStore = .shared, navigation: AddAccountNavigation? = nil) {
+        self.setupStore = setupStore
+        _navigation = State(initialValue: navigation ?? AddAccountNavigation(resumesTrading212: setupStore.shouldResumeCreation))
+    }
 
     var body: some View {
-        NavigationStack {
+        @Bindable var navigation = navigation
+        NavigationStack(path: $navigation.path) {
             SettingsPage(bottomInset: 32, topInset: SettingsTemplate.pageInset) {
-                AddAccountOptions { provider = $0 }
+                AddAccountOptions { navigation.select($0) }
                 SettingsFootnote(L10n.text("Trading 212 和 IBKR 提供逐步连接教程。已有凭证可以直接填写。"))
             }
             .navigationTitle(L10n.text("添加账户"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if provider == nil {
+                if navigation.path.isEmpty {
                     ToolbarItem(placement: .confirmationAction) {
                         AppModalDoneButton { dismiss() }
                     }
                 }
             }
-            .navigationDestination(item: $provider) { provider in
-                destination(provider)
+            .navigationDestination(for: AddAccountProvider.self) { provider in
+                AddAccountDestination(provider: provider, setupStore: setupStore)
             }
         }
         // A pushed provider's 完成 closes the sheet, not just its own page.
         .environment(\.accountFlowClose, { dismiss() })
-        .tint(provider?.flowTheme.controlTint ?? CatfolioTheme.accent)
-    }
-
-    @ViewBuilder private func destination(_ provider: AddAccountProvider) -> some View {
-        switch provider {
-        case .trading212: Trading212View(context: .create)
-        case .ibkr: IBKRFlexView(context: .create)
-        case .moomoo: MoomooOAuthView(context: .create)
-        case .robinhood: RobinhoodConnectionView(context: .create)
-        case .snaptrade: SnapTradeView(context: .create)
-        case .csv: CSVImportView(context: .create)
+        .tint(navigation.path.last?.flowTheme.controlTint ?? CatfolioTheme.accent)
+        // The navigation path owns whether the flow is open. A destination
+        // can temporarily disappear during SwiftUI updates or a cancelled
+        // back gesture; that is not a request to close and reopen it.
+        .onChange(of: navigation.path, initial: true) { _, path in
+            setupStore.setCreationPresented(path.last == .trading212)
+        }
+        .onDisappear {
+            if scenePhase == .active { setupStore.setCreationPresented(false) }
         }
     }
 
+}
+
+/// Both entry points use the same catalog and connector destinations.
+struct AddAccountDestination: View {
+    let provider: AddAccountProvider
+    var setupStore: Trading212SetupStore = .shared
+    var isFirstLaunchSetup = false
+
+    @ViewBuilder var body: some View {
+        switch provider {
+        case .trading212:
+            Trading212View(context: .create, setupStore: setupStore, isFirstLaunchSetup: isFirstLaunchSetup)
+        case .ibkr: IBKRFlexView(context: .create, isFirstLaunchSetup: isFirstLaunchSetup)
+        case .moomoo: MoomooOAuthView(context: .create, isFirstLaunchSetup: isFirstLaunchSetup)
+        case .robinhood: RobinhoodConnectionView(context: .create, isFirstLaunchSetup: isFirstLaunchSetup)
+        case .snaptrade: SnapTradeView(context: .create, isFirstLaunchSetup: isFirstLaunchSetup)
+        case .csv: CSVImportView(context: .create, isFirstLaunchSetup: isFirstLaunchSetup)
+        }
+    }
+}
+
+@MainActor @Observable
+final class AddAccountNavigation {
+    var path: [AddAccountProvider]
+
+    init(resumesTrading212: Bool = false) {
+        path = resumesTrading212 ? [.trading212] : []
+    }
+
+    func select(_ provider: AddAccountProvider) {
+        path = [provider]
+    }
 }
 
 private struct AccountFlowCloseKey: EnvironmentKey {

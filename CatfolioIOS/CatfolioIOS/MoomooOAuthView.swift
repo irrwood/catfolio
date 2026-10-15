@@ -9,6 +9,7 @@ struct MoomooOAuthView: View {
     @StateObject private var authorizationSession = MoomooAuthorizationSession()
 
     let context: AccountConnectorContext
+    private let isFirstLaunchSetup: Bool
 
     @State private var snapshot: MoomooSnapshot?
     @State private var status: MoomooViewStatus = .idle
@@ -20,8 +21,9 @@ struct MoomooOAuthView: View {
     @State private var nickname = ""
     @State private var nicknameEdited = false
 
-    init(context: AccountConnectorContext = .create) {
+    init(context: AccountConnectorContext = .create, isFirstLaunchSetup: Bool = false) {
         self.context = context
+        self.isFirstLaunchSetup = isFirstLaunchSetup
     }
 
     /// Inside 添加账户 this closes the whole flow; on its own, the page.
@@ -31,65 +33,29 @@ struct MoomooOAuthView: View {
 
     var body: some View {
         AccountFlowStack {
-            SettingsPage(bottomInset: 32) {
-                if context.isCreating, snapshot != nil {
-                    SettingsSectionHeader(L10n.text("账户昵称"))
-                    SettingsCard {
+            OnboardingPage(scrollReset: flowStep, progress: context.isCreating ? OnboardingProgress(
+                step: flowStep + (isFirstLaunchSetup ? 2 : 0), total: isFirstLaunchSetup ? 5 : 3) : nil) {
+                OnboardingHeader(title: hasCreatedAccount ? L10n.text("账户已添加")
+                    : (snapshot != nil ? L10n.text("确认 Moomoo 持仓") : L10n.text("连接 Moomoo")),
+                    subtitle: hasCreatedAccount ? nil : (snapshot != nil ? L10n.text("检查持仓后，确认同步到账户。")
+                        : L10n.text("登录并授权，然后预览你的持仓。")))
+
+                if !isConnected {
+                    OnboardingFeature(symbol: "person.badge.key", title: L10n.text("登录 Moomoo"),
+                        detail: L10n.text("在授权页面登录，完成后回到这里继续。"))
+                    OnboardingFeature(symbol: "lock", title: L10n.text("只读连接"),
+                        detail: L10n.text("授权时仅允许 trade:read；令牌仅存于此 iPhone。"))
+                } else if snapshot == nil {
+                    OnboardingFeature(symbol: "checkmark.shield", title: L10n.text("已授权 Moomoo"),
+                        detail: L10n.text("先读取持仓预览，确认后再添加账户。"))
+                }
+                if status.isPresented { statusView }
+
+                if context.isCreating, snapshot != nil, !hasCreatedAccount {
+                    SettingsSection(L10n.text("账户昵称")) {
                         AccountNicknameField(nickname: $nickname, edited: $nicknameEdited)
                             .disabled(isWorking)
                     }
-                }
-
-                SettingsSectionHeader("Moomoo OAuth")
-                SettingsCard {
-                    SettingsRowContainer {
-                        SettingsRowLabel(
-                            icon: .symbol(isConnected ? "checkmark.shield" : "person.crop.circle.badge.questionmark"),
-                            title: isConnected ? L10n.text("已授权 Moomoo") : L10n.text("尚未连接"),
-                            titleColor: isConnected ? CatfolioTheme.positive : SettingsTemplate.secondaryText
-                        )
-                    }
-                }
-                SettingsFootnote(L10n.text("授权时仅允许 trade:read；令牌仅存于此 iPhone。"))
-
-                SettingsSectionHeader(L10n.text("连接"))
-                SettingsCard {
-                    if isConnected {
-                        SettingsButtonRow(
-                            icon: .symbol("person.badge.key"),
-                            title: L10n.text("重新授权 Moomoo"),
-                            showsChevron: false
-                        ) {
-                            Task { await connect() }
-                        }
-                        .disabled(isWorking)
-
-                        if snapshot != nil {
-                            SettingsButtonRow(
-                                icon: .symbol("arrow.clockwise"),
-                                title: L10n.text("重新读取持仓"),
-                                showsChevron: false
-                            ) {
-                                Task { await preview() }
-                            }
-                            .disabled(isWorking)
-
-                        }
-                    }
-
-                    if status.isPresented {
-                        SettingsRowContainer { statusView }
-                    }
-
-                    Link(destination: URL(string: "https://open.moomoo.com/zh-cn/api/overview/getting-started")!) {
-                        SettingsRowContainer {
-                            SettingsRowLabel(
-                                icon: .symbol("arrow.up.right.square"),
-                                title: L10n.text("查看 Moomoo OpenAPI 说明")
-                            )
-                        }
-                    }
-                    .buttonStyle(SettingsRowButtonStyle())
                 }
 
                 if let snapshot {
@@ -135,6 +101,23 @@ struct MoomooOAuthView: View {
                     }
                 }
 
+                if !hasCreatedAccount {
+                    DisclosureGroup(L10n.text("需要帮助？")) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            if isConnected {
+                                Button(L10n.text("重新授权 Moomoo")) { Task { await connect() } }
+                                if snapshot != nil {
+                                    Button(L10n.text("重新读取持仓")) { Task { await preview() } }
+                                }
+                            }
+                            Link(L10n.text("查看 Moomoo OpenAPI 说明"),
+                                 destination: URL(string: "https://open.moomoo.com/zh-cn/api/overview/getting-started")!)
+                        }
+                        .padding(.top, 16)
+                    }
+                    .disabled(isWorking)
+                }
+
                 if isConnected && !context.isCreating {
                     SettingsCard {
                         SettingsButtonRow(
@@ -147,11 +130,7 @@ struct MoomooOAuthView: View {
                         }
                     }
                 }
-            }
-            .accountFlowActions { flowActions }
-            .softTopScrollEdge()
-            .navigationTitle(context.isCreating ? L10n.text("新建 Moomoo 账户") : "Moomoo")
-            .navigationBarTitleDisplayMode(.inline)
+            } actions: { flowActions }
             .toolbar {
                 if context.isCreating {
                     ToolbarItem(placement: .cancellationAction) { AccountProviderBackButton() }
@@ -197,31 +176,32 @@ struct MoomooOAuthView: View {
         .accountFlowBrand(.moomoo)
     }
 
+    private var flowStep: Int { snapshot != nil ? 3 : (isConnected ? 2 : 1) }
+
     @ViewBuilder
     private var flowActions: some View {
-        if isConnected, let snapshot {
-            GlassPrimaryButton(
+        if hasCreatedAccount {
+            OnboardingPrimaryButton(title: L10n.text("完成")) { dismiss() }
+        } else if isConnected, let snapshot {
+            OnboardingPrimaryButton(
                 title: isWorking
                     ? (context.isCreating ? L10n.text("正在创建") : L10n.text("正在同步"))
                     : (context.isCreating ? L10n.text("创建 Moomoo 账户") : L10n.text("同步 \(snapshot.positions.count) 项到 Catfolio")),
-                systemImage: "tray.and.arrow.down.fill",
                 isDisabled: !hasValidNickname,
                 isBusy: isWorking
             ) {
                 showsSyncConfirmation = true
             }
         } else if isConnected {
-            GlassPrimaryButton(
+            OnboardingPrimaryButton(
                 title: isWorking ? L10n.text("正在读取") : L10n.text("读取并预览持仓"),
-                systemImage: "arrow.down.circle",
                 isBusy: isWorking
             ) {
                 Task { await preview() }
             }
         } else {
-            GlassPrimaryButton(
+            OnboardingPrimaryButton(
                 title: isWorking ? L10n.text("正在连接") : L10n.text("登录 Moomoo"),
-                systemImage: "person.badge.key",
                 isBusy: isWorking
             ) {
                 Task { await connect() }

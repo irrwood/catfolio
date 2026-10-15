@@ -14,6 +14,7 @@ struct PortfolioView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.macDetailColumn) private var macDetailColumn
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var selectedHolding: Holding?
     @State private var showsTodayDetail = false
@@ -26,6 +27,7 @@ struct PortfolioView: View {
     // id, and the transition has no way to know which one it grew from.
     @Namespace private var holdingsRowZoom
     @Namespace private var todayBarZoom
+    @Namespace private var heatmapZoom
     private var previewsLoading: Bool {
         #if DEBUG
         LaunchArguments.contains("--show-portfolio-loading")
@@ -61,6 +63,60 @@ struct PortfolioView: View {
                                 } else {
                                     PortfolioLoadingView(isAnimating: model.isPortfolioLoading, scrollState: homeScrollState)
                                 }
+                            } else if let overview = model.overview, let chart = model.portfolioChart,
+                                      MacPlatform.isMac {
+                                // The Mac's Overview: holdings and returns on
+                                // one page of white cards, with no sheet over a
+                                // hero.
+                                VStack(spacing: 10) {
+                                    RootTabTitle(title: L10n.text("概览"))
+                                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                        .padding(.horizontal, 4)
+                                        .accessibilityAddTraits(.isHeader)
+
+                                    MacDashboardRow {
+                                        CostMarketCard(
+                                            overview: overview,
+                                            response: chart,
+                                            isAwaitingEnrichedHistory: model.isPortfolioChartLoading
+                                        )
+                                        .id(model.selectedAccountKeys.sorted())
+                                        .environment(\.portfolioChartOnCard, true)
+                                        .macOverviewCard()
+
+                                        PortfolioDetailsCard(
+                                            holdings: model.holdings,
+                                            onSelect: { holding in
+                                                openHolding(holding, from: heatmapZoom)
+                                            },
+                                            showsHeatmap: true,
+                                            zoomNamespace: heatmapZoom
+                                        )
+                                        .macOverviewCard()
+                                        .accessibilityIdentifier("performance.heatmap")
+                                    }
+
+                                    MacDashboardRow {
+                                        todayCard.macOverviewCard()
+                                        MacPerformanceSection()
+                                    }
+
+                                    PortfolioDetailsCard(
+                                        holdings: model.holdings,
+                                        onSelect: { holding in
+                                            openHolding(holding, from: holdingsRowZoom)
+                                        },
+                                        zoomNamespace: holdingsRowZoom
+                                    )
+                                    .macOverviewCard()
+
+                                    MacDashboardRow {
+                                        TodayAttentionEntry()
+                                        CorporateEventsCard(holdings: model.holdings)
+                                    }
+                                }
+                                .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
+                                .padding(.top, 10)
                             } else if let overview = model.overview, let chart = model.portfolioChart {
                                 CostMarketCard(
                                     overview: overview,
@@ -78,23 +134,7 @@ struct PortfolioView: View {
 
                                 PortfolioContentSheet(scrollState: homeScrollState) {
                                     VStack(spacing: 0) {
-                                        TodayContributionCard(
-                                            holdings: model.holdings,
-                                            dailyChanges: model.holdingDayReturns,
-                                            benchmarkChange: model.benchmarkDailyChange,
-                                            sessionDate: model.latestSessionDate,
-                                            isLoading: model.isHoldingDailyChangesLoading || model.isPortfolioLoading || model.isPortfolioChartLoading,
-                                            isRefreshingBehindCache: model.isHomeRefreshingBehindCache,
-                                            onOpenDetail: { showsTodayDetail = true },
-                                            onTitleBottomPositionChange: { titleBottomY in
-                                                homeScrollState.titleMoved(to: titleBottomY)
-                                            },
-                                            zoomNamespace: todayBarZoom,
-                                            onRefresh: { Task { await model.refreshHoldingDailyChanges(forceRefresh: true) } }
-                                        ) { holding in
-                                            openHolding(holding, from: todayBarZoom)
-                                        }
-                                        .id("today-contribution")
+                                        todayCard
 
                                         PortfolioDetailsCard(
                                             holdings: model.holdings,
@@ -126,6 +166,9 @@ struct PortfolioView: View {
                         .padding(.bottom, 96)
                         .coordinateSpace(name: "portfolio-home-content")
                         .background {
+                            // The Mac's Overview has no sheet to settle at a
+                            // detent; ⌘R refreshes it.
+                            if !MacPlatform.isMac {
                             PortfolioHomeScrollBridge(
                                 controller: homeScrollController,
                                 detent: PortfolioContentSheetLayout.firstScrollDetent,
@@ -135,6 +178,7 @@ struct PortfolioView: View {
                                 },
                                 refresh: { await refreshFromUser() }
                             )
+                            }
                         }
                     }
                     .background {
@@ -144,7 +188,7 @@ struct PortfolioView: View {
                     // changing indicator margins leaves content and detents intact.
                     .modifier(PortfolioHomeScrollIndicators(
                         scrollState: homeScrollState,
-                        enabled: !previewsLoading && !model.holdings.isEmpty
+                        enabled: !MacPlatform.isMac && !previewsLoading && !model.holdings.isEmpty
                     ))
                     .tracksRootTabBarScroll()
                     // One native rubber-band and refresh control, armed only
@@ -250,11 +294,36 @@ struct PortfolioView: View {
         .accessibilityIdentifier("page.portfolio")
     }
 
+    private var todayCard: some View {
+        TodayContributionCard(
+            holdings: model.holdings,
+            dailyChanges: model.holdingDayReturns,
+            benchmarkChange: model.benchmarkDailyChange,
+            sessionDate: model.latestSessionDate,
+            isLoading: model.isHoldingDailyChangesLoading || model.isPortfolioLoading || model.isPortfolioChartLoading,
+            isRefreshingBehindCache: model.isHomeRefreshingBehindCache,
+            onOpenDetail: { showsTodayDetail = true },
+            onTitleBottomPositionChange: { titleBottomY in
+                homeScrollState.titleMoved(to: titleBottomY)
+            },
+            zoomNamespace: todayBarZoom,
+            onRefresh: { Task { await model.refreshHoldingDailyChanges(forceRefresh: true) } }
+        ) { holding in
+            openHolding(holding, from: todayBarZoom)
+        }
+        .id("today-contribution")
+    }
+
     private func openHolding(_ holding: Holding, from namespace: Namespace.ID) {
         #if DEBUG
         SecurityDetailLiveZoom.note("row tapped \(holding.ticker) selected=\(selectedHolding?.ticker ?? "nil") caughtMotion=\(homeScrollController.touchCaughtMotion)")
         #endif
         // A page flying back does not block the tap: the next one opens at once.
+        // The Mac opens a security in the column beside the Overview.
+        if let macDetailColumn {
+            macDetailColumn.open(AnyView(HoldingDetailView(holding: holding, onClose: macDetailColumn.close)))
+            return
+        }
         guard selectedHolding == nil, !SecurityDetailLiveZoom.shared.isShowingPage,
               !homeScrollController.touchCaughtMotion else { return }
         openFeedback()

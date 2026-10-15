@@ -36,11 +36,14 @@ struct AppSettingsView: View {
 
             SettingsSectionHeader(L10n.text("偏好设置"))
             SettingsCard {
-                SettingsToggleRow(
-                    icon: .symbol("hand.tap"),
-                    title: L10n.text("触控反馈"),
-                    isOn: $hapticsEnabled
-                )
+                // A Mac has no haptics to turn off.
+                if !MacPlatform.isMac {
+                    SettingsToggleRow(
+                        icon: .symbol("hand.tap"),
+                        title: L10n.text("触控反馈"),
+                        isOn: $hapticsEnabled
+                    )
+                }
 
                 SettingsMenuRow(
                     // The drawing's 语言 row: the region globe, the current

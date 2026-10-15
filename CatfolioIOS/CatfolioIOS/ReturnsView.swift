@@ -129,7 +129,7 @@ struct ReturnsView: View {
     }
 }
 
-private struct ReturnsNavigationCard<Destination: View>: View {
+struct ReturnsNavigationCard<Destination: View>: View {
     let title: String
     let identifier: String
     let returnPercent: Double?

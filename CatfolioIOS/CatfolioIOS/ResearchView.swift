@@ -138,10 +138,9 @@ struct ResearchView: View {
             DCACalculatorView()
                             .toolbarVisibility(.visible, for: .navigationBar)
         }
-        .sheet(item: $selectedSecurity) { holding in
-            HoldingDetailView(holding: holding, onClose: { selectedSecurity = nil })
+        .securityDetail(item: $selectedSecurity) { holding, close in
+            HoldingDetailView(holding: holding, onClose: close)
                 .environment(model)
-                .securityDetailSheet()
         }
         .securityDetailOpenFeedback(trigger: selectedSecurity?.ticker, enabled: hapticsEnabled)
         .task {

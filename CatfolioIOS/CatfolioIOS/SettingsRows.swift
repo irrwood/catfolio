@@ -110,11 +110,15 @@ struct SettingsRowButtonStyle: ButtonStyle {
     @Environment(\.colorScheme) private var colorScheme
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background {
-                (configuration.isPressed ? SettingsTemplate.rowPressed : .clear)
-                    .animation(nil, value: configuration.isPressed)
-            }
+        // The Mac pointer lights the row at half strength.
+        MacHover { isHovered in
+            configuration.label
+                .background {
+                    SettingsTemplate.rowPressed
+                        .opacity(configuration.isPressed ? 1 : (isHovered ? 0.5 : 0))
+                        .animation(nil, value: configuration.isPressed)
+                }
+        }
     }
 }
 
@@ -428,6 +432,9 @@ struct SettingsMenuRow<SelectionValue: Hashable, Options: View>: View {
                     } label: {
                         EmptyView()
                     }
+                    // On the Mac a menu picker nested in a menu becomes an
+                    // untitled submenu, and the menu opened empty.
+                    .modifier(MacInlinePicker())
                 } label: {
                     HStack(spacing: SettingsTemplate.valueSpacing) {
                         Text(value)

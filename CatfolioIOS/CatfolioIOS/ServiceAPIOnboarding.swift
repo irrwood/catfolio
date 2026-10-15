@@ -1,5 +1,9 @@
 import SwiftUI
 
+extension EnvironmentValues {
+    @Entry var isServiceAPISetupGuide = false
+}
+
 /// Launch policy is separate from presentation and does not store credentials.
 enum ServiceAPIOnboardingPolicy {
     static let seenKey = "catfolio.service-api-guide.seen.v1"
@@ -13,6 +17,7 @@ struct ServiceAPIOnboardingPresenter: ViewModifier {
     @AppStorage(ServiceAPIOnboardingPolicy.seenKey) private var hasSeen = false
     @State private var showsGuide = false
     @State private var hasEvaluated = false
+    private let setup = ServiceAPISetupState.shared
 
     func body(content: Content) -> some View {
         content
@@ -32,7 +37,7 @@ struct ServiceAPIOnboardingPresenter: ViewModifier {
                     !(KeychainStore.string(for: $0.keychainKey)?
                         .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
                 }
-                showsGuide = ServiceAPIOnboardingPolicy.shouldPresent(
+                showsGuide = setup.isPresented || ServiceAPIOnboardingPolicy.shouldPresent(
                     hasSeen: hasSeen, hasAnyAPIKey: hasKey,
                     hasConnectedAI: CodexOAuthClient.cachedConnected)
                 if !showsGuide { hasSeen = true }
@@ -42,147 +47,154 @@ struct ServiceAPIOnboardingPresenter: ViewModifier {
 
 struct ServiceAPIOnboardingView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var path: [LocalServiceProvider] = []
-    @State private var started = false
+    @Environment(\.scenePhase) private var scenePhase
+    @Bindable var setup: ServiceAPISetupState
+    private let drafts: ServiceAPIKeyDrafts
+    private let trading212SetupStore: Trading212SetupStore
+    @State private var showsServices = false
+
+    init(setup: ServiceAPISetupState = .shared, drafts: ServiceAPIKeyDrafts = .shared,
+         trading212SetupStore: Trading212SetupStore = .shared) {
+        self.setup = setup
+        self.drafts = drafts
+        self.trading212SetupStore = trading212SetupStore
+    }
 
     var body: some View {
-        NavigationStack(path: $path) {
-            SettingsPage(title: L10n.text("配置行情与 AI"), bottomInset: 32) {
-                if !started {
-                    SettingsCard {
-                        SettingsRowContainer {
-                            VStack(alignment: .leading, spacing: 16) {
-                                Image(systemName: "key.horizontal").font(.largeTitle)
-                                    .accessibilityHidden(true)
-                                Text(L10n.text("让 Catfolio 连接你需要的服务"))
-                                    .font(.title2.weight(.bold))
-                                Text(L10n.text("API Key 是服务商提供的访问密钥。添加后，可以使用对应的行情、新闻或 AI 功能。"))
-                                    .appText(.subheading)
-                                Text(L10n.text("按需配置一个即可，不必一次填完。也可以稍后在设置 › 服务商中继续。"))
-                                    .appText(.label).foregroundStyle(SettingsTemplate.secondaryText)
-                            }
+        NavigationStack(path: $setup.path) {
+            OnboardingPage(scrollReset: setup.started, progress: OnboardingProgress(step: setup.started ? 2 : 1, total: 3)) {
+                if !setup.started {
+                    OnboardingHeader(title: L10n.text("欢迎使用 Catfolio"),
+                                     subtitle: L10n.text("在一处看清持仓与收益。"))
+                    OnboardingFeature(symbol: "chart.pie", title: L10n.text("连接账户"),
+                                      detail: L10n.text("导入券商持仓，也可以手动添加。"))
+                    OnboardingFeature(symbol: "key.horizontal", title: L10n.text("按需连接服务"),
+                                      detail: L10n.text("行情、新闻和 AI，选你需要的就好。"))
+                    OnboardingFeature(symbol: "lock", title: L10n.text("密钥由你掌握"),
+                                      detail: L10n.text("保存在本机钥匙串，随时可以移除。"))
+                } else {
+                    OnboardingHeader(title: L10n.text("连接你的账户"),
+                                     subtitle: L10n.text("选择券商连接，或通过 CSV 导入。"))
+                    VStack(spacing: 20) {
+                        ForEach(AddAccountProvider.allCases) { provider in
+                            accountLink(provider)
                         }
                     }
-                    GlassPrimaryButton(title: L10n.text("开始配置"), systemImage: "arrow.right") {
-                        started = true
+                    DisclosureGroup(L10n.text("行情与 AI（可选）"), isExpanded: $showsServices) {
+                        VStack(alignment: .leading, spacing: 28) {
+                            group(L10n.text("行情与估值"), providers: [.massive, .fmp])
+                            group("AI", providers: [.openRouter, .deepSeek, .jev])
+                            group(L10n.text("新闻"), providers: [.finnhub])
+                            Text(L10n.text("服务商的额度、功能和费用以其账户方案为准。"))
+                                .appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
+                        }
+                        .padding(.top, 20)
                     }
-                } else {
-                    SettingsFootnote(L10n.text("选择需要的功能，再获取对应服务商的 Key。"))
-                    group(L10n.text("行情与估值"), providers: [.massive, .fmp])
-                    group("AI", providers: [.openRouter, .deepSeek, .jev])
-                    group(L10n.text("新闻"), providers: [.finnhub])
-                    SettingsFootnote(L10n.text("服务商的额度、功能和费用以其账户方案为准。"))
+                    .appText(.callout, weight: .medium)
+                    Text(L10n.text("也可以稍后在账户和设置中继续。"))
+                        .appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
                 }
-            }
-            .navigationDestination(for: LocalServiceProvider.self) { provider in
-                APIKeySetupGuide(title: provider.title, purpose: provider.purpose,
-                                 detail: provider.detail, consoleURL: provider.setupURL,
-                                 extraInstruction: provider == .jev
-                                    ? L10n.text("Cloudflare 需要 Workers AI 的 API Token 和 Account ID，请一并准备。") : nil) {
-                    ServiceAPISetupDestination(provider: provider, chooseAnother: { path = [] }, finish: { dismiss() })
+            } actions: {
+                if !setup.started {
+                    OnboardingPrimaryButton(title: L10n.text("继续")) { setup.started = true }
+                }
+                Button(L10n.text("稍后设置")) { setup.isPresented = false; dismiss() }
+                    .appText(.callout, weight: .medium)
+                if !setup.started {
+                    Link(L10n.text("隐私政策"), destination: privacyURL)
+                        .appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
                 }
             }
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.text("稍后设置")) { dismiss() }
+                if setup.started {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button {
+                            setup.started = false
+                        } label: {
+                            Label(L10n.text("上一步"), systemImage: "chevron.left")
+                        }
+                        .accessibilityIdentifier("service-onboarding-back")
+                    }
+                }
+            }
+            .navigationDestination(for: ServiceAPISetupState.Step.self) { step in
+                if let provider = step.accountProvider {
+                    AddAccountDestination(provider: provider, setupStore: trading212SetupStore, isFirstLaunchSetup: true)
+                        .environment(\.accountFlowClose, { setup.finish(); dismiss() })
+                } else {
+                    switch step {
+                    case .guide(let provider), .key(let provider):
+                        ServiceAPISetupDestination(provider: provider, setup: setup, drafts: drafts,
+                            chooseAnother: { setup.path = [] }, finish: { setup.finish(); dismiss() })
+                    case .trading212, .ibkr, .account: EmptyView()
+                    }
                 }
             }
         }
-        .tint(CatfolioTheme.accent)
+        .tint(CatfolioTheme.primaryText)
+        .environment(\.isServiceAPISetupGuide, true)
+        .onChange(of: setup.path, initial: true) { _, path in
+            switch path.last {
+            case .guide, .key: showsServices = true
+            default: break
+            }
+        }
+        .onAppear { setup.isPresented = true }
+        .onDisappear {
+            if scenePhase == .active { setup.isPresented = false }
+        }
+    }
+
+    private var privacyURL: URL {
+        let suffix = AppLanguage.currentIdentifier == "zh-Hans" ? "-zh" : ""
+        return URL(string: "https://catfolio-app.vercel.app/privacy\(suffix)")!
+    }
+
+    private func accountLink(_ provider: AddAccountProvider) -> some View {
+        NavigationLink(value: ServiceAPISetupState.Step.account(provider)) {
+            HStack(spacing: 16) {
+                AddAccountProviderIcon(provider: provider)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(provider.title).appText(.subheading, weight: .semibold)
+                    Text(provider.connectionSummary).appText(.body).foregroundStyle(SettingsTemplate.secondaryText)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.right").appText(.label)
+                    .foregroundStyle(SettingsTemplate.secondaryText)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("onboarding-account-\(provider.rawValue)")
     }
 
     private func group(_ title: String, providers: [LocalServiceProvider]) -> some View {
-        SettingsSection(title) {
+        VStack(alignment: .leading, spacing: 20) {
+            Text(title).appText(.label).foregroundStyle(SettingsTemplate.secondaryText)
             ForEach(providers) { provider in
-                NavigationLink(value: provider) {
-                    SettingsRowContainer {
-                        HStack(spacing: 12) {
-                            Image(systemName: provider.iconName).frame(width: 24)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(provider.title).appText(.subheading)
-                                Text(provider.purpose).appText(.label)
-                                    .foregroundStyle(SettingsTemplate.secondaryText)
-                            }
-                            Spacer(minLength: 0)
-                            Image(systemName: "chevron.right").foregroundStyle(.tertiary)
-                        }
+                NavigationLink(value: ServiceAPISetupState.Step.key(provider)) {
+                    HStack(spacing: 12) {
+                        OnboardingFeature(symbol: provider.iconName, title: provider.title, detail: provider.purpose)
+                        Image(systemName: "chevron.right").appText(.label)
+                            .foregroundStyle(SettingsTemplate.secondaryText)
                     }
+                    .contentShape(Rectangle())
                 }
-                .buttonStyle(SettingsRowButtonStyle())
+                .buttonStyle(.plain)
             }
-        }
-    }
-}
-
-/// Reusable explanation and acquisition steps. The caller supplies its existing form.
-struct APIKeySetupGuide<Destination: View>: View {
-    let title: String
-    let purpose: String
-    let detail: String
-    let consoleURL: URL
-    var extraInstruction: String? = nil
-    @ViewBuilder let destination: () -> Destination
-
-    var body: some View {
-        SettingsPage(title: title, bottomInset: 32) {
-            SettingsSectionHeader(L10n.text("1 · 了解用途"))
-            SettingsCard {
-                SettingsRowContainer {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(purpose).appText(.subheading, weight: .semibold)
-                        Text(detail).appText(.label).foregroundStyle(SettingsTemplate.secondaryText)
-                    }
-                }
-            }
-            SettingsSectionHeader(L10n.text("2 · 获取 API Key"))
-            SettingsCard {
-                SettingsRowContainer {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(L10n.text("打开服务商官网，登录或注册后，在控制台的 API Keys 页面创建或复制密钥。"))
-                        if let extraInstruction { Text(extraInstruction) }
-                        Text(L10n.text("复制后回到 Catfolio。无需填写服务商登录密码。"))
-                    }
-                    .appText(.subheading)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-                Link(destination: consoleURL) {
-                    SettingsRowContainer {
-                        Label(L10n.text("打开服务商官网"), systemImage: "arrow.up.right.square")
-                    }
-                }
-                .buttonStyle(SettingsRowButtonStyle())
-            }
-            SettingsSectionHeader(L10n.text("3 · 填写并验证"))
-            SettingsFootnote(L10n.text("下一步粘贴 Key，选择保存并验证。验证失败时可以修改重试，或选择仅保存。密钥保存在此 iPhone 的 Keychain 中。"))
-            NavigationLink(destination: destination) {
-                Text(L10n.text("已有 Key，继续填写"))
-                    .frame(maxWidth: .infinity).padding(.vertical, 10)
-            }
-            .buttonStyle(.borderedProminent)
         }
     }
 }
 
 private struct ServiceAPISetupDestination: View {
     let provider: LocalServiceProvider
+    let setup: ServiceAPISetupState
+    let drafts: ServiceAPIKeyDrafts
     let chooseAnother: () -> Void
     let finish: () -> Void
-    @State private var status: LocalServiceStatus = .unconfigured
-
     var body: some View {
-        LocalServiceDetailView(provider: provider) { status = $0 }
-            .safeAreaInset(edge: .bottom) {
-                if status != .unconfigured {
-                    VStack(spacing: 10) {
-                        Text(status == .verified ? L10n.text("验证通过，可以开始使用") : L10n.text("已保存，连接尚未验证"))
-                            .appText(.label)
-                        GlassPrimaryButton(title: L10n.text("完成配置"), action: finish)
-                        Button(L10n.text("继续配置其他服务"), action: chooseAnother)
-                    }
-                    .padding(16)
-                    .background(SettingsTemplate.pageBackground)
-                }
-            }
+        LocalServiceDetailView(provider: provider, setup: setup, drafts: drafts,
+                               onFinish: finish, onChooseAnother: chooseAnother) { _ in }
     }
 }
 

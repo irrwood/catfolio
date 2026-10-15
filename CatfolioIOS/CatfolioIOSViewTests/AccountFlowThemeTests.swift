@@ -1,10 +1,11 @@
 import SwiftUI
+import Vision
 import XCTest
 @testable import CatfolioIOS
 
 @MainActor
 final class AccountFlowThemeTests: XCTestCase {
-    func testCreationAndManagementPagesRenderTheirBrandInBothAppearances() async throws {
+    func testConnectorActionsUseAdaptiveMonochromeInBothAppearances() async throws {
         let suite = "account-brand-pages-\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         let previousLanguage = UserDefaults.standard.object(forKey: AppLanguage.preferenceKey)
@@ -15,16 +16,12 @@ final class AccountFlowThemeTests: XCTestCase {
         }
         let model = AppModel(defaults: defaults, personalDocumentLoader: { .empty })
         for dark in [false, true] {
-            let traits = UITraitCollection(userInterfaceStyle: dark ? .dark : .light)
             for provider in AddAccountProvider.allCases {
-                let theme = provider.flowTheme
-                let targets = [theme.accent, theme.controlTint].map {
-                    UIColor($0).resolvedColor(with: traits)
-                }
                 for context in [AccountConnectorContext.create, .manage(account(provider))] {
                     let image = try await render(page(provider, context: context).environment(model), dark: dark)
-                    XCTAssertGreaterThan(try matchingPixels(in: image, colors: targets), 80,
-                        "\(provider.rawValue) must retain its brand when managing an existing account")
+                    try image.pngData()?.write(to: URL(fileURLWithPath:
+                        "/tmp/catfolio-connector-\(provider.rawValue)-\(context.isCreating ? "create" : "manage")-\(dark ? "dark" : "light").png"))
+                    try verifyAction(in: image, provider: provider, context: context, dark: dark)
                     let attachment = XCTAttachment(image: image)
                     attachment.name = "Account-brand-\(provider.rawValue)-\(context.isCreating ? "create" : "manage")-\(dark ? "dark" : "light")"
                     attachment.lifetime = .keepAlways
@@ -106,9 +103,20 @@ final class AccountFlowThemeTests: XCTestCase {
         XCTAssertEqual(captured["unknown"], false)
     }
 
+    /// The Trading 212 page marks setup as unfinished while it is shown. In the
+    /// app's own defaults that flag outlived this test and reopened the setup
+    /// sheet over every later test that shows the Account tab.
+    private static let isolatedDefaults: UserDefaults = {
+        let suite = "account-flow-theme-trading212"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        return defaults
+    }()
+
     @ViewBuilder private func page(_ provider: AddAccountProvider, context: AccountConnectorContext) -> some View {
         switch provider {
-        case .trading212: Trading212View(context: context)
+        case .trading212: Trading212View(context: context, setupStore: Trading212SetupStore(
+            defaults: Self.isolatedDefaults, read: { _ in nil }, write: { _, _ in }))
         case .ibkr: IBKRFlexView(context: context)
         case .moomoo: MoomooOAuthView(context: context)
         case .robinhood: RobinhoodConnectionView(context: context)
@@ -149,6 +157,43 @@ final class AccountFlowThemeTests: XCTestCase {
         return UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
             host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
         }
+    }
+
+    /// Verify the actual bottom action is readable and its capsule is neutral,
+    /// including disabled credential actions. Account logos keep their own brand.
+    private func verifyAction(in image: UIImage, provider: AddAccountProvider,
+                              context: AccountConnectorContext, dark: Bool) throws {
+        let title: String = switch provider {
+        case .trading212: context.isCreating ? L10n.text("填写 Key 和 Secret") : L10n.text("读取并预览持仓")
+        case .ibkr: context.isCreating ? L10n.text("填写 Token 和 Query ID") : L10n.text("保存凭证")
+        case .moomoo: L10n.text("登录 Moomoo")
+        case .robinhood: L10n.text("生成桌面登录链接")
+        case .snaptrade: L10n.text("连接券商")
+        case .csv: L10n.text("选择 CSV 文件")
+        }
+        let cg = try XCTUnwrap(image.cgImage)
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.recognitionLanguages = ["en-US"]
+        try VNImageRequestHandler(cgImage: cg).perform([request])
+        func normalized(_ text: String) -> String { text.filter { $0.isLetter || $0.isNumber }.lowercased() }
+        let action = try XCTUnwrap(request.results?.first {
+            normalized($0.topCandidates(1).first?.string ?? "") == normalized(title)
+                && $0.boundingBox.midY < 0.4
+        }, "The primary action must remain visible near the bottom: \(provider), \(title). Recognized: \(request.results?.compactMap { $0.topCandidates(1).first?.string } ?? [])")
+        let x = CGFloat(cg.width) * 48 / image.size.width
+        let y = CGFloat(cg.height) * (1 - action.boundingBox.midY)
+        let sample = try XCTUnwrap(cg.cropping(to: CGRect(x: x, y: y, width: 3, height: 3)))
+        var pixels = [UInt8](repeating: 0, count: 4)
+        let bitmap = try XCTUnwrap(CGContext(data: &pixels, width: 1, height: 1, bitsPerComponent: 8,
+            bytesPerRow: 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        bitmap.draw(sample, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        let rgb = pixels.prefix(3).map { Double($0) / 255 }
+        XCTAssertLessThan((rgb.max() ?? 1) - (rgb.min() ?? 0), 0.04,
+                          "The shared setup action must not inherit a broker color")
+        if dark { XCTAssertGreaterThan(rgb[0], 0.15) }
+        else { XCTAssertLessThan(rgb[0], 0.85) }
     }
 
     private func matchingPixels(in image: UIImage, colors: [UIColor]) throws -> Int {

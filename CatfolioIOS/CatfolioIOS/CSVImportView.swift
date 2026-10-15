@@ -8,6 +8,7 @@ struct CSVImportView: View {
     @Environment(AppModel.self) private var model
 
     let context: AccountConnectorContext
+    private let isFirstLaunchSetup: Bool
 
     @State private var showsFileImporter = false
     @State private var showsImportConfirmation = false
@@ -23,8 +24,9 @@ struct CSVImportView: View {
     @State private var nickname = ""
     @State private var newAccountID = UUID().uuidString.lowercased()
 
-    init(context: AccountConnectorContext = .create) {
+    init(context: AccountConnectorContext = .create, isFirstLaunchSetup: Bool = false) {
         self.context = context
+        self.isFirstLaunchSetup = isFirstLaunchSetup
     }
 
     /// Inside 添加账户 this closes the whole flow; on its own, the page.
@@ -34,8 +36,18 @@ struct CSVImportView: View {
 
     var body: some View {
         AccountFlowStack {
-            SettingsPage(bottomInset: 32) {
-                if context.isCreating {
+            OnboardingPage(scrollReset: flowStep, progress: context.isCreating ? OnboardingProgress(
+                step: flowStep + (isFirstLaunchSetup ? 2 : 0), total: isFirstLaunchSetup ? 4 : 2) : nil) {
+                OnboardingHeader(title: importResult != nil ? L10n.text("导入完成")
+                    : (selectedFile != nil ? L10n.text("确认交易记录") : L10n.text("导入 CSV")),
+                    subtitle: importResult != nil ? nil : L10n.text("选择交易记录文件，预览后确认导入。"))
+                if selectedFile == nil && !isReadingFile {
+                    OnboardingFeature(symbol: "doc.text", title: L10n.text("选择交易记录"),
+                        detail: L10n.text("从券商导出 CSV 文件，再从这里选择。"))
+                    OnboardingFeature(symbol: "checkmark.shield", title: L10n.text("先预览，再导入"),
+                        detail: L10n.text("本机处理，不上传；最大 50 MB。"))
+                }
+                if context.isCreating, selectedFile != nil, importResult == nil {
                     SettingsSectionHeader(L10n.text("账户昵称"))
                     SettingsCard {
                         SettingsFieldRow(L10n.text("账户昵称"), text: $nickname)
@@ -67,17 +79,6 @@ struct CSVImportView: View {
                         }
                     }
                 }
-                SettingsFootnote(L10n.text("本机处理，不上传；最大 50 MB。"))
-
-                SettingsSection(L10n.text("格式")) {
-                    requiredColumn("Date / Time", detail: L10n.text("支持 Time (UTC) 和带时分秒日期"))
-                    requiredColumn("Action", detail: L10n.text("BUY / SELL / DIVIDEND 及 212 交易类型"))
-                    requiredColumn("Ticker", detail: L10n.text("例如 AAPL、LLOY.L"))
-                    requiredColumn("Quantity", detail: L10n.text("交易股数"))
-                    requiredColumn("Price", detail: L10n.text("每股成交价"))
-                    SettingsValueRow(title: L10n.text("可选"), value: "Currency · Name", valueIsNumeric: false)
-                }
-
                 if let selectedFile, selectedFile.dataRowCount == 0 {
                     SettingsCard {
                         SettingsRowContainer {
@@ -108,11 +109,19 @@ struct CSVImportView: View {
                         }
                     }
                 }
-            }
-            .accountFlowActions { flowActions }
-            .softTopScrollEdge()
-            .navigationTitle(context.isCreating ? L10n.text("新建 CSV 账户") : L10n.text("CSV 导入"))
-            .navigationBarTitleDisplayMode(.inline)
+                if importResult == nil {
+                    DisclosureGroup(L10n.text("查看 CSV 格式要求")) {
+                        SettingsSection(L10n.text("格式")) {
+                            requiredColumn("Date / Time", detail: L10n.text("支持 Time (UTC) 和带时分秒日期"))
+                            requiredColumn("Action", detail: L10n.text("BUY / SELL / DIVIDEND 及 212 交易类型"))
+                            requiredColumn("Ticker", detail: L10n.text("例如 AAPL、LLOY.L"))
+                            requiredColumn("Quantity", detail: L10n.text("交易股数"))
+                            requiredColumn("Price", detail: L10n.text("每股成交价"))
+                            SettingsValueRow(title: L10n.text("可选"), value: "Currency · Name", valueIsNumeric: false)
+                        }
+                    }
+                }
+            } actions: { flowActions }
             .toolbar {
                 if context.isCreating {
                     ToolbarItem(placement: .cancellationAction) { AccountProviderBackButton() }
@@ -174,16 +183,17 @@ struct CSVImportView: View {
         return lines.joined(separator: "\n")
     }
 
+    private var flowStep: Int { selectedFile != nil || importResult != nil ? 2 : 1 }
+
     @ViewBuilder
     private var flowActions: some View {
         if importResult != nil {
-            GlassPrimaryButton(title: L10n.text("完成")) { dismiss() }
+            OnboardingPrimaryButton(title: L10n.text("完成")) { dismiss() }
         } else if let selectedFile {
-            GlassPrimaryButton(
+            OnboardingPrimaryButton(
                 title: isImporting
                     ? L10n.text("正在导入")
                     : (context.isCreating ? L10n.text("创建 CSV 账户") : L10n.text("导入并更新账户")),
-                systemImage: "arrow.down.doc",
                 isDisabled: !selectedFile.hasDataRows || isReadingFile || preview == nil
                     || (context.isCreating && nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty),
                 isBusy: isImporting || isPreparing
@@ -191,7 +201,7 @@ struct CSVImportView: View {
                 showsImportConfirmation = true
             }
         } else {
-            GlassPrimaryButton(title: L10n.text("选择 CSV 文件"), systemImage: "folder",
+            OnboardingPrimaryButton(title: L10n.text("选择 CSV 文件"),
                 isBusy: isReadingFile) { showsFileImporter = true }
         }
     }

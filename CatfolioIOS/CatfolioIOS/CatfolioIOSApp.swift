@@ -33,6 +33,7 @@ struct CatfolioIOSApp: App {
                 #endif
             }
         }
+        .commands { CatfolioCommands(model: model) }
     }
 
     /// Opt-in XCTest host: public-news checks must not start portfolio refresh,
@@ -50,6 +51,7 @@ struct CatfolioIOSApp: App {
                 .modifier(ServiceAPIOnboardingPresenter())
                 .fontDesign(.rounded)
                 .task { ReferenceCatalogs.warm() }
+                .onAppear { MacPlatform.configureWindowScenes() }
                 .task {
                     if model.isPublicInvestorMode { PublicInvestorCatalogState.shared.loadIfNeeded() }
                 }

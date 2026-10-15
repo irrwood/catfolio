@@ -22,16 +22,19 @@ struct HoldingPressBody: View {
     private var isPressed: Bool { configuration.isPressed && isEnabled }
 
     var body: some View {
-        configuration.label
-            .background {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(SettingsTemplate.rowPressed)
-                    .padding(.horizontal, -10)
-                    .padding(.vertical, -2)
-                    .opacity(isPressed ? 1 : 0)
-                    // On at once; off with a short fade, as a system row does.
-                    .animation(isPressed || reduceMotion ? nil : .easeOut(duration: 0.25), value: isPressed)
-            }
+        // The Mac pointer lights the row at half strength.
+        MacHover { isHovered in
+            configuration.label
+                .background {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(SettingsTemplate.rowPressed)
+                        .padding(.horizontal, -10)
+                        .padding(.vertical, -2)
+                        .opacity(isPressed ? 1 : (isHovered ? 0.5 : 0))
+                        // On at once; off with a short fade, as a system row does.
+                        .animation(isPressed || reduceMotion ? nil : .easeOut(duration: 0.25), value: isPressed)
+                }
+        }
     }
 }
 

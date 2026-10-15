@@ -1,7 +1,7 @@
 import Foundation
 import CryptoKit
 
-enum Trading212Environment: String, CaseIterable, Identifiable {
+enum Trading212Environment: String, CaseIterable, Identifiable, Codable {
     case live
     case demo
 

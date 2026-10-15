@@ -257,10 +257,9 @@ struct TodayDetailView: View {
                 SectorMembersView(breakdown: selectedSector)
             }
         }
-        .sheet(item: $selectedHolding) { holding in
-            // The sheet inherits the model from the page, as the heatmap's does.
-            HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
-                .securityDetailSheet()
+        // The sheet inherits the model from the page, as the heatmap's does.
+        .securityDetail(item: $selectedHolding) { holding, close in
+            HoldingDetailView(holding: holding, onClose: close)
         }
         .securityDetailOpenFeedback(trigger: selectedHolding?.ticker, enabled: hapticsEnabled)
         .softTopScrollEdge()
@@ -538,10 +537,9 @@ private struct SectorMembersView: View {
         }
         .scrollContentBackground(.hidden)
         .background(SettingsTemplate.pageBackground)
-        .sheet(item: $selectedHolding) { holding in
-            // The sheet inherits the model from the page, as the heatmap's does.
-            HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
-                .securityDetailSheet()
+        // The sheet inherits the model from the page, as the heatmap's does.
+        .securityDetail(item: $selectedHolding) { holding, close in
+            HoldingDetailView(holding: holding, onClose: close)
         }
         .securityDetailOpenFeedback(trigger: selectedHolding?.ticker, enabled: hapticsEnabled)
         .softTopScrollEdge()
