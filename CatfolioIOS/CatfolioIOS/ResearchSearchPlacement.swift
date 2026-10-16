@@ -167,12 +167,12 @@ extension ResearchToolbarSearch {
                 isReturning = true
             }
             field.setPresented(presented, animated: animated)
-            if !presented { lowerPage(animated: animated) }
             let flight = {
                 if presented {
                     self.liftPage()
                     self.layoutSearch()
                 } else {
+                    self.lowerPage()
                     if let frame = self.frameBeforeSearch { self.field.frame = frame }
                     self.field.movingContent.transform = .identity
                     self.field.layoutIfNeeded()
@@ -198,21 +198,39 @@ extension ResearchToolbarSearch {
             let container = navigation.view!
             let natural = slot.convert(slot.bounds, to: container)
             let bar = navigation.navigationBar.convert(navigation.navigationBar.bounds, to: container)
-            let rise = natural.minY - bar.minY
-            guard rise > 0.5 else { offsetBeforeSearch = nil; return }
-            let start = scroll.contentOffset
-            let bottom = scroll.contentSize.height - scroll.bounds.height + scroll.adjustedContentInset.bottom
-            offsetBeforeSearch = start
-            scroll.setContentOffset(CGPoint(x: start.x, y: max(start.y, min(start.y + rise, bottom))),
-                                    animated: false)
+            guard natural.minY - bar.minY > 0.5 else { offsetBeforeSearch = nil; return }
+            offsetBeforeSearch = scroll.contentOffset
+            align(slot, to: bar.minY, in: scroll, container: container)
         }
 
-        private func lowerPage(animated: Bool) {
-            guard let start = offsetBeforeSearch else { return }
+        /// Runs inside the field's flight, so the page and the field share
+        /// one spring back to where they started.
+        private func lowerPage() {
+            guard let start = offsetBeforeSearch, let scroll else { return }
             offsetBeforeSearch = nil
-            // Native scrolling restores the large title's inset correctly.
-            // The field has a separate, single flight to its original slot.
-            scroll?.setContentOffset(start, animated: animated)
+            scroll.setContentOffset(start, animated: false)
+            guard let container = navigationController?.view,
+                  let frame = frameBeforeSearch, let slot = placement.slot else { return }
+            align(slot, to: frame.minY, in: scroll, container: container)
+        }
+
+        /// Collapsing or expanding the large title changes the scroll inset,
+        /// and UIKit keeps the distance scrolled past the top, so a single
+        /// offset change lands the page a title's height away from the field.
+        /// Settle the bar, then correct by whatever the slot missed.
+        private func align(_ slot: UIView, to y: CGFloat, in scroll: UIScrollView, container: UIView) {
+            for _ in 0..<3 {
+                container.layoutIfNeeded()
+                let miss = slot.convert(slot.bounds, to: container).minY - y
+                guard abs(miss) > 0.5 else { return }
+                let top = -scroll.adjustedContentInset.top
+                let bottom = max(top, scroll.contentSize.height - scroll.bounds.height
+                    + scroll.adjustedContentInset.bottom)
+                let offset = scroll.contentOffset
+                let target = min(max(offset.y + miss, top), bottom)
+                guard abs(target - offset.y) > 0.5 else { return }
+                scroll.setContentOffset(CGPoint(x: offset.x, y: target), animated: false)
+            }
         }
 
         private func observeScroll(from slot: UIView, navigation: UINavigationController) {

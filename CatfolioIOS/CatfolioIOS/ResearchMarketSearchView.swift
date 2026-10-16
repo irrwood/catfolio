@@ -32,7 +32,8 @@ struct ResearchMarketSearch: ViewModifier {
                 }, query: query, onDismiss: dismissSearch, pullObserver: pullObserver,
                    onPull: motion.pull, onPullCancel: motion.cancelPull, onPullDismiss: dismissAfterPull,
                    contentTopInset: resultsTopInset)
-                    .transition(.opacity)
+                    .transition(.asymmetric(insertion: .opacity,
+                                            removal: .opacity.animation(reduceMotion ? nil : .easeOut(duration: 0.2))))
             }
         }
         return Group {
@@ -79,9 +80,10 @@ struct ResearchMarketSearch: ViewModifier {
     }
 
     private func dismissAfterPull() {
-        motion.finishPull {
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { dismissSearch() }
-        }
+        // No animated transaction here: under one, SwiftUI animates the
+        // large title's expansion on its own clock, apart from the field's
+        // flight. The results fade through their removal transition instead.
+        motion.finishPull { dismissSearch() }
     }
 }
 

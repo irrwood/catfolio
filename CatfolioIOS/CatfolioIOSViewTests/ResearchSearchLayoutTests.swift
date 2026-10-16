@@ -145,6 +145,8 @@ final class ResearchSearchLayoutTests: XCTestCase {
             let search = try self.searchController(in: navigation)
             let field = search.searchBar.searchTextField
             let origin = field.convert(field.bounds, to: window)
+            let scroll = try XCTUnwrap(navigation.topViewController?.contentScrollView(for: .top))
+            let initialOffset = scroll.contentOffset
             XCTAssertFalse(search.isActive)
             XCTAssertNil(self.find(UIRefreshControl.self, in: host.view))
             try await self.activate(search, in: window)
@@ -154,9 +156,14 @@ final class ResearchSearchLayoutTests: XCTestCase {
             if #available(iOS 26.0, *) {
                 try self.assertSearchGlass(in: window, visible: true)
                 let bar = navigation.navigationBar.convert(navigation.navigationBar.bounds, to: window)
-                XCTAssertLessThan(field.convert(field.bounds, to: window).minY, origin.minY - 30,
+                let lifted = field.convert(field.bounds, to: window)
+                XCTAssertLessThan(lifted.minY, origin.minY - 30,
                                   "Opening search must fly the field to the top")
-                XCTAssertLessThanOrEqual(field.convert(field.bounds, to: window).maxY, bar.maxY + 1)
+                XCTAssertLessThanOrEqual(lifted.maxY, bar.maxY + 1)
+                // Collapsing the large title must not carry the page past
+                // the field: both rise by the same distance.
+                XCTAssertEqual(scroll.contentOffset.y - initialOffset.y, origin.minY - lifted.minY, accuracy: 1,
+                               "The page must rise with the field")
             } else {
                 XCTAssertLessThanOrEqual(field.convert(field.bounds, to: window).minY, origin.minY)
             }
@@ -186,6 +193,8 @@ final class ResearchSearchLayoutTests: XCTestCase {
             XCTAssertFalse(search.isActive)
             XCTAssertFalse(field.isFirstResponder)
             XCTAssertEqual(field.convert(field.bounds, to: window).minY, origin.minY, accuracy: 1)
+            XCTAssertEqual(scroll.contentOffset.y, initialOffset.y, accuracy: 1,
+                           "Closing must return the page with the field")
             try self.capture(window, name: "research-system-search-cancelled")
             if let backdrop = self.find(UIVisualEffectView.self, in: window, identifier: "research.search.backdrop") {
                 XCTAssertFalse(self.isVisible(backdrop), "Cancellation must reveal the dashboard")
