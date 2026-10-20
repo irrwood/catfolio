@@ -1,63 +1,142 @@
 import SwiftUI
 
-/// A sentence with inline controls, rather than a chat or a row of chips.
+/// Immediate attribution, then a compact sourced update. Topic taps open articles.
 struct TodayBriefView: View {
     let context: TodayBriefContext
     var store: TodayBriefStore = .shared
-    @ScaledMetric(relativeTo: .title2) private var fontSize: CGFloat = 24
+    @ScaledMetric(relativeTo: .headline) private var fontSize: CGFloat = TypeScale.heading.size
+    @State private var selectedTopic: Topic?
+    private struct Topic: Identifiable { let id: String }
 
     var body: some View {
         let entry = store.entry(for: context)
-        VStack(alignment: .leading, spacing: 14) {
-            if entry.paragraphs.isEmpty {
-                paragraph(context.seed, generating: false, entry: entry)
-            } else {
-                ForEach(entry.paragraphs) { item in
-                    paragraph(item.text,
-                              generating: item.isGenerating && item.target == nil || !item.isGenerating && entry.isGenerating,
-                              entry: entry, activeTarget: entry.paragraphs.first(where: \.isGenerating)?.target,
-                              paragraphID: item.id)
+        VStack(alignment: .leading, spacing: 20) {
+            prose(context.seed)
+                .accessibilityIdentifier("today.brief.computed")
+            ForEach(entry.paragraphs) { item in
+                prose(item.text).accessibilityIdentifier("today.brief.ai")
+            }
+            ZStack(alignment: .leading) {
+                // Keep the status row's wrapped height when research completes
+                // without an article, so content below it does not jump.
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(context.isChinese ? "正在整理市场动态" : "Preparing market context")
+                }
+                .opacity(entry.isGenerating ? 1 : 0)
+                .accessibilityHidden(!entry.isGenerating)
+                if !entry.isGenerating, let failure = entry.failure {
+                    Button(failure) { store.start(context, force: true) }
+                        .accessibilityIdentifier("today.brief.retry")
+                } else if !entry.isGenerating, !entry.paragraphs.isEmpty, let updatedAt = entry.updatedAt {
+                    HStack(spacing: 8) {
+                        Text(context.isChinese ? "AI 解读" : "AI analysis")
+                        Text(updatedAt, style: .time)
+                    }
                 }
             }
-            // Set when the AI or the news search fails; without it a failed
-            // brief looked exactly like a short successful one.
-            if let failure = entry.failure, !entry.isGenerating {
-                Text(failure)
-                    .appText(.footnote)
-                    .foregroundStyle(SettingsTemplate.secondaryText)
-                    .accessibilityIdentifier("today.brief.failure")
+            .appText(.caption)
+            .foregroundStyle(SettingsTemplate.secondaryText)
+            let sources = TodayBriefEditorial.sources(entry.paragraphs.flatMap(\.sources))
+            if !sources.isEmpty {
+                DisclosureGroup {
+                    TodayBriefSourceLinks(sources: sources)
+                } label: {
+                    Label(context.isChinese ? "\(sources.count) 个来源" : "\(sources.count) sources", systemImage: "newspaper")
+                        .appText(.caption)
+                }
+                .foregroundStyle(SettingsTemplate.secondaryText)
             }
-            let sources = entry.paragraphs.filter { !$0.isGenerating }.flatMap(\.sources)
-            let uniqueSources = sources.reduce(into: [TodayBriefSource]()) { result, source in
-                if !result.contains(where: { $0.url == source.url }) { result.append(source) }
-            }
-            if !uniqueSources.isEmpty { sourceLinks(uniqueSources) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 8)
         .accessibilityIdentifier("today.brief")
-        .task(id: context) { store.start(context) }
+        .task(id: context.briefKey) { store.start(context) }
+        .sheet(item: $selectedTopic) { topic in
+            NavigationStack {
+                TodayBriefArticleView(context: context, target: topic.id, store: store)
+            }
+            .presentationDragIndicator(.visible)
+        }
     }
 
-    private func paragraph(_ text: String, generating: Bool, entry: TodayBriefStore.Entry, activeTarget: String? = nil, paragraphID: UUID? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            ForEach(Array(text.components(separatedBy: "\n").filter { !$0.isEmpty }.enumerated()), id: \.offset) { _, sentence in
-                TodayBriefSentence(text: sentence, context: context, fontSize: fontSize, generating: generating,
-                                   disabled: entry.isGenerating, activeTarget: activeTarget) { target in
-                    store.expand(context, target: target, after: paragraphID)
+    private func prose(_ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ForEach(Array(text.components(separatedBy: "\n").filter { !$0.isEmpty }.enumerated()), id: \.offset) { _, paragraph in
+                TodayBriefSentence(text: paragraph, context: context, fontSize: fontSize) { target in
+                    store.expand(context, target: target)
+                    selectedTopic = Topic(id: target)
                 }
             }
         }
     }
+}
 
-    private func sourceLinks(_ sources: [TodayBriefSource]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(sources.enumerated()), id: \.element.url) { _, source in
+struct TodayBriefArticleView: View {
+    let context: TodayBriefContext
+    let target: String
+    var store: TodayBriefStore = .shared
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        let article = store.entry(for: context).details[target]
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                Text(context.sessionLabel).appText(.caption).foregroundStyle(SettingsTemplate.secondaryText)
+                Text(plain(context.detailSeed(for: target)))
+                    .appText(.subheading).fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("today.brief.article.facts")
+                if let article, !article.text.isEmpty {
+                    ForEach(Array(article.text.components(separatedBy: "\n").filter { !$0.isEmpty }.enumerated()), id: \.offset) { _, paragraph in
+                        Text(plain(paragraph)).appText(.body)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+                    }
+                    TodayBriefSourceLinks(sources: article.sources)
+                }
+                if article?.isGenerating == true {
+                    HStack(spacing: 10) {
+                        ProgressView().controlSize(.small)
+                        Text(context.isChinese ? "正在阅读来源并整理分析" : "Reading sources and preparing analysis")
+                            .appText(.footnote)
+                    }
+                    .foregroundStyle(SettingsTemplate.secondaryText)
+                } else if article?.failure != nil || article?.text.isEmpty != false {
+                    Button(context.isChinese ? "更新分析" : "Update analysis") {
+                        store.expand(context, target: target, force: true)
+                    }
+                    .accessibilityIdentifier("today.brief.article.retry")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(CatfolioStyle.pageHorizontalInset)
+        }
+        .background(SettingsTemplate.pageBackground)
+        .navigationTitle(context.title(for: target))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button(L10n.text("完成"), systemImage: "checkmark") { dismiss() }
+            }
+        }
+        .accessibilityIdentifier("today.brief.article")
+        .task(id: context.briefKey + target) { store.expand(context, target: target) }
+    }
+
+    private func plain(_ text: String) -> String {
+        TodayBriefFragment.parse(text, allowedTargets: context.targets).map(\.text).joined()
+    }
+}
+
+private struct TodayBriefSourceLinks: View {
+    let sources: [TodayBriefSource]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Array(sources.enumerated()), id: \.element.url) { index, source in
                 Link(destination: source.url) {
-                    Label(source.title, systemImage: "newspaper")
-                        .font(Typography.rounded(.caption))
-                        .foregroundStyle(SettingsTemplate.secondaryText)
-                        .lineLimit(2)
+                    Text("[\(index + 1)] " + source.title)
+                        .appText(.caption).foregroundStyle(SettingsTemplate.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -82,12 +161,21 @@ struct TodayBriefSentence: View {
     }
 
     static func pieces(from fragments: [TodayBriefFragment], context: TodayBriefContext) -> [Piece] {
-        fragments.flatMap { fragment in
+        let pieces = fragments.flatMap { fragment in
             let label = fragment.target.map { context.liveLabel(fragment.text, target: $0) } ?? fragment.text
             return words(label).enumerated().map { index, word in
                 Piece(text: word, target: fragment.target,
                       referenceLabel: fragment.target != nil && index == 0 ? label : nil)
             }
+        }
+        return pieces.reduce(into: [Piece]()) { result, piece in
+            let punctuation = piece.target == nil ? String(piece.text.prefix { "，。；：、！？,.!?;:）)]”’".contains($0) }) : ""
+            if !punctuation.isEmpty, let previous = result.popLast() {
+                result.append(Piece(text: previous.text + punctuation, target: previous.target,
+                                    referenceLabel: previous.referenceLabel))
+                let remaining = String(piece.text.dropFirst(punctuation.count))
+                if !remaining.isEmpty { result.append(Piece(text: remaining, target: nil, referenceLabel: nil)) }
+            } else { result.append(piece) }
         }
     }
 
@@ -116,7 +204,7 @@ struct TodayBriefSentence: View {
                         .allowsHitTesting(!disabled)
                         .accessibilityLabel(piece.referenceLabel ?? piece.text)
                         .accessibilityHidden(piece.referenceLabel == nil)
-                        .accessibilityHint(L10n.text("继续展开简报"))
+                        .accessibilityHint(disabled ? "" : (context.isChinese ? "查看详细分析" : "Read detailed analysis"))
                         .accessibilityIdentifier("today.brief.\(target)")
                         .researchLayoutFrame("today.brief.piece.\(index)")
                     } else {

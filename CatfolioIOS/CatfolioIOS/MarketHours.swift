@@ -53,6 +53,9 @@ struct MarketClosedBadge: View {
     @Environment(\.colorScheme) private var colorScheme
     @ScaledMetric(relativeTo: .caption) private var badgeHeight: CGFloat = 18
     @ScaledMetric(relativeTo: .caption) private var iconSize: CGFloat = 10
+    // The exported sun occupies 17 of its 24 points vertically. A 16-point
+    // canvas makes the visible artwork match the adjacent 12-point caption.
+    @ScaledMetric(relativeTo: .caption) private var postMarketIconSize: CGFloat = 16
     private let purple = Color(red: 0.545, green: 0.361, blue: 0.965)
 
     var session: USMarketSession {
@@ -74,12 +77,18 @@ struct MarketClosedBadge: View {
         if session != .regular {
             HStack(spacing: 2) {
                 if session.isExtended {
-                    Image(systemName: session == .preMarket ? "sunrise.fill" : "sunset.fill")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: iconSize, height: iconSize)
-                        .researchLayoutFrame("extended-hours.icon")
+                    Group {
+                        if session == .postMarket {
+                            RotatingSunriseIcon(size: postMarketIconSize)
+                        } else {
+                            Image(systemName: "sunrise.fill")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: iconSize, height: iconSize)
+                        }
+                    }
+                    .researchLayoutFrame("extended-hours.icon")
                 } else {
                     Image(systemName: "moon.fill").font(.system(size: 9, weight: .semibold))
                 }

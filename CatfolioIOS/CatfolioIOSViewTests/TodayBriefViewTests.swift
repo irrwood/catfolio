@@ -12,20 +12,21 @@ final class TodayBriefViewTests: XCTestCase {
     func testBriefRendersInlineLogosInBothAppearances() async throws {
         for dark in [false, true] {
             let context = fixture()
-            let store = TodayBriefStore(generate: { request, _ in
-                .init(text: request.context.seed, sources: [])
+            let store = TodayBriefStore(prefetchLimit: 0, generate: { _, _ in
+                .init(text: "[[stock:NVDA|英伟达]]的测试公告更新了收入指引，[[stock:AAPL|苹果]]公布了新的产品计划。",
+                      sources: [.init(title: "布局测试来源", url: URL(string: "https://example.com/fixture")!)])
             })
             store.start(context)
             try await Task.sleep(for: .milliseconds(30))
             let host = UIHostingController(rootView:
-                VStack(alignment: .leading, spacing: 28) {
+                ScrollView { VStack(alignment: .leading, spacing: 28) {
                     TodayBriefView(context: context, store: store)
                     Text("今日盈亏").foregroundStyle(SettingsTemplate.secondaryText)
                     Text(DisplayFormat.money(context.total, signed: true, fractionDigits: 2))
                         .font(.system(size: 40, weight: .bold, design: .rounded))
                         .foregroundStyle(CatfolioTheme.positive)
                     Spacer()
-                }
+                } }
                 .padding(20)
                 .background(SettingsTemplate.pageBackground)
                 .environment(\.locale, Locale(identifier: "zh_CN"))
@@ -47,6 +48,60 @@ final class TodayBriefViewTests: XCTestCase {
             window.isHidden = true
             previous?.makeKeyAndVisible()
         }
+    }
+
+    @MainActor
+    func testComputedOverviewIsVisibleWhileAIWaitsAndArticleCanOpenIndependently() async throws {
+        let gate = TodayBriefViewGate()
+        defer { Task { await gate.release() } }
+        let value = fixture()
+        let store = TodayBriefStore(prefetchLimit: 0, generate: { request, _ in
+            if request.target == nil { await gate.wait() }
+            return .init(text: "测试公告说明了产品发布时间。[1]\n\n该计划覆盖两个业务部门，测试材料列出了实施步骤。[1]",
+                         sources: [.init(title: "测试公告原文", url: URL(string: "https://example.com/fixture")!)])
+        })
+        let entry = store.entry(for: value)
+        store.start(value)
+        let height = UIHostingController(rootView: TodayBriefView(context: value, store: store))
+            .sizeThatFits(in: CGSize(width: 362, height: 10_000)).height
+        XCTAssertGreaterThan(height, 160, "The immediate readout must contain more than a one-line placeholder")
+        XCTAssertTrue(entry.paragraphs.isEmpty)
+        XCTAssertTrue(entry.isGenerating)
+        store.expand(value, target: "stock:NVDA")
+        for _ in 0..<100 {
+            if entry.details["stock:NVDA"]?.isGenerating == false { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertFalse(try XCTUnwrap(entry.details["stock:NVDA"]).text.isEmpty)
+        XCTAssertTrue(entry.isGenerating, "A topic article can finish while the overview is still preparing")
+        for dark in [false, true] {
+            try await captureArticle(context: value, store: store, dark: dark, typeSize: .large)
+        }
+        try await captureArticle(context: value, store: store, dark: false, typeSize: .accessibility2)
+        await gate.release()
+    }
+
+    @MainActor
+    private func captureArticle(context: TodayBriefContext, store: TodayBriefStore,
+                                dark: Bool, typeSize: DynamicTypeSize) async throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let host = UIHostingController(rootView: NavigationStack {
+            TodayBriefArticleView(context: context, target: "stock:NVDA", store: store)
+        }.environment(\.colorScheme, dark ? .dark : .light).environment(\.dynamicTypeSize, typeSize))
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; window.rootViewController = nil; previous?.makeKeyAndVisible() }
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertGreaterThan(host.view.bounds.width, 300)
+        let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        }
+        let attachment = XCTAttachment(image: image)
+        attachment.name = "Today-article-\(dark ? "dark" : "light")-\(typeSize)"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     @MainActor
@@ -98,6 +153,18 @@ final class TodayBriefViewTests: XCTestCase {
         XCTAssertEqual(company.first?.referenceLabel, name)
         XCTAssertEqual(pieces.filter { $0.target == "portfolio" }.map(\.text).joined(),
                        context.liveLabel("outdated total", target: "portfolio"))
+    }
+
+    func testSentencePunctuationStaysAttachedAcrossInteractiveReferences() {
+        let context = fixture()
+        let pieces = TodayBriefSentence.pieces(from: [
+            .init(text: "42", target: "stock:NVDA"),
+            .init(text: "。下一句", target: nil)
+        ], context: context)
+        XCTAssertEqual(pieces.first?.text, "42。")
+        XCTAssertEqual(pieces.first?.target, "stock:NVDA")
+        XCTAssertEqual(pieces.map(\.text).joined(), "42。下一句")
+        XCTAssertFalse(pieces.contains { $0.text == "。" })
     }
 
     @MainActor
@@ -186,4 +253,14 @@ final class TodayBriefViewTests: XCTestCase {
                      .init(ticker: "AAPL", name: "苹果", logoSymbol: "AAPL", changePercent: -1, amount: -18)],
             sectors: [.init(id: "technology", name: "科技", icon: "cpu", amount: 42)], language: "zh_CN")
     }
+}
+
+private actor TodayBriefViewGate {
+    private var released = false
+    private var continuation: CheckedContinuation<Void, Never>?
+    func wait() async {
+        if released { return }
+        await withCheckedContinuation { continuation = $0 }
+    }
+    func release() { released = true; continuation?.resume(); continuation = nil }
 }

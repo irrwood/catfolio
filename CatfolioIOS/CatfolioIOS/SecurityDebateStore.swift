@@ -497,15 +497,17 @@ struct SecurityDailyMoveNote: Decodable, Sendable {
         }
         let note = try JSONDecoder().decode(Self.self, from: Data(raw[first...last].utf8))
         let text = note.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sources = Array(note.sources.filter {
+            ["https", "http"].contains($0.url.scheme?.lowercased() ?? "") && $0.url.host != nil
+                && $0.url.user == nil && $0.url.password == nil
+        }.prefix(3))
         let hasChinese = text.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) }
-        guard !text.isEmpty, text.count <= (hasChinese ? 180 : 650),
+        guard (!text.isEmpty || sources.isEmpty), text.count <= (hasChinese ? 180 : 650),
               text.split(whereSeparator: \.isWhitespace).count <= 75, !text.contains("\n"),
               text.split(whereSeparator: { "。！？!?".contains($0) }).count <= 2 else {
             throw LocalServiceError.invalidResponse
         }
-        return Self(text: text, sources: Array(note.sources.filter {
-            ["https", "http"].contains($0.url.scheme?.lowercased() ?? "") && $0.url.host != nil
-        }.prefix(3)))
+        return Self(text: text, sources: sources)
     }
 }
 
@@ -608,9 +610,11 @@ final class SecurityDailyMoveStore {
         if context.isFundIntroduction {
             return SecurityDailyMoveNote(text: L10n.text("暂未找到可核实的基金介绍，稍后再试。"), sources: [])
         }
-        let message = context.noteFocus == .priceMove
-            ? L10n.text("暂未找到这次涨跌的明确公开原因。")
-            : L10n.text("近期暂无可核实的重要公司新进展。")
+        let date = DayDateCodec.string(from: context.endDate)
+        let change = DisplayFormat.percent(context.changePercent, signed: true)
+        let message = ContentLanguage.current.hasPrefix("zh")
+            ? "\(date)，\(context.name)的交易日变动为 \(change)。"
+            : "\(context.name) moved \(change) in the \(date) trading session."
         return SecurityDailyMoveNote(text: message, sources: [])
     }
 }
