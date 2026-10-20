@@ -1,5 +1,6 @@
 """Disclosure delivery tests: preserve Core versions, nulls, and dates."""
 import importlib.util
+import copy
 import json
 from pathlib import Path
 import pytest
@@ -29,6 +30,44 @@ def test_export_rejects_future_disclosures():
     bundle['sources'][0]['filedDate'] = '2026-10-01'
     with pytest.raises(ValueError, match='Future'):
         export.project(bundle)
+
+
+def test_supplements_are_idempotent_and_preserve_core_snapshots():
+    catalog = json.loads((ROOT / 'CatfolioIOS/CatfolioIOS/Resources/public_investors.json').read_text())
+    update = json.loads((export.UPDATE_ROOT / 'updates/2026-10-20.json').read_text())
+    base = copy.deepcopy(catalog)
+    added_ids = {a['activityId'] for a in update['activities']}
+    for investor in base['investors']:
+        investor['activities'] = [a for a in investor['activities'] if a['activityId'] not in added_ids]
+    base.pop('supplementalSources', None)
+    base['releaseId'] = base.pop('coreReleaseId')
+    base['asOf'] = '2026-09-09'
+    once = export.apply_updates(base, [update])
+    assert sum(len(i['activities']) for i in once['investors']) - sum(len(i['activities']) for i in base['investors']) == 13
+    assert once['releaseId'] != base['releaseId']
+    assert once == catalog
+    assert export.apply_updates(once, [update]) == once
+    assert once['coreSHA256'] == catalog['coreSHA256']
+    assert len(once['supplementalSources']) == 2
+    for before, after in zip(catalog['investors'], once['investors']):
+        assert after['snapshot'] == before['snapshot']
+        assert after['history'] == before['history']
+        assert len({a['activityId'] for a in after['activities']}) == len(after['activities'])
+    pelosi = next(i for i in once['investors'] if i['investorId'] == 'pelosi')
+    private = next(a for a in pelosi['activities'] if a['activityId'] == 'house-20035553-row-1')
+    assert private['ticker'] is None and private['shares'] is None and private['amount'] is None
+    assert (private['amountLow'], private['amountHigh']) == (500001, 1000000)
+
+
+def test_supplements_reject_tampered_archives_and_future_dates():
+    catalog = json.loads((ROOT / 'CatfolioIOS/CatfolioIOS/Resources/public_investors.json').read_text())
+    update = json.loads((export.UPDATE_ROOT / 'updates/2026-10-20.json').read_text())
+    update['sources'][0]['sha256'] = '0' * 64
+    with pytest.raises(ValueError, match='checksum'):
+        export.apply_updates(catalog, [update])
+    update['sources'][0]['filedDate'] = '2027-01-01'
+    with pytest.raises(ValueError, match='Future'):
+        export.apply_updates(catalog, [update])
 
 
 def test_packaged_data_contains_no_local_paths_or_fake_musk_portfolio():

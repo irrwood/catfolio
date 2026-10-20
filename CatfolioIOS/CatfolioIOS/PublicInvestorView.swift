@@ -25,6 +25,9 @@ struct PublicInvestorSettingsSection: View {
                 ) {
                     PublicInvestorSelectionView()
                 }
+                SettingsNavigationRow(title: L10n.text("持仓动态")) {
+                    PublicInvestorActivityView()
+                }
             }
             if let error = model.fakeDataModeError {
                 SettingsFootnote(error, color: CatfolioTheme.danger)
@@ -73,11 +76,18 @@ struct PublicInvestorSelectionView: View {
             case .some(.success(let catalog)):
                 SettingsCard {
                     ForEach(catalog.investors) { investor in
-                        SettingsToggleRow(
-                            title: investor.title,
-                            subtitle: investor.snapshot == nil ? L10n.text("暂无数据") : investor.displayName,
-                            isOn: selectionBinding(for: investor.id)
-                        )
+                        SettingsRowContainer {
+                            Toggle(isOn: selectionBinding(for: investor.id)) {
+                                HStack(spacing: SettingsTemplate.iconSpacing) {
+                                    PublicInvestorAvatar(investorID: investor.id)
+                                    SettingsRowLabel(
+                                        icon: nil, title: investor.title,
+                                        subtitle: investor.snapshot == nil ? L10n.text("暂无数据") : investor.displayName
+                                    )
+                                }
+                            }
+                            .tint(SettingsTemplate.toggleOn)
+                        }
                         .toggleStyle(.switch)
                         .accessibilityIdentifier("public-investor-\(investor.id)")
                     }

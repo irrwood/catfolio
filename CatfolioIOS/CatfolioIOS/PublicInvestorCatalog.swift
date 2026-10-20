@@ -7,6 +7,22 @@ struct PublicInvestorCatalog: Decodable, Sendable {
     let asOf: String
     let investors: [PublicInvestor]
 
+    func recentActivities(investorID: String? = nil) -> [PublicInvestorActivityItem] {
+        investors.filter { investorID == nil || $0.id == investorID }.flatMap { investor in
+            investor.activities.filter { $0.type != "UNCHANGED" }.map {
+                PublicInvestorActivityItem(investor: investor, activity: $0)
+            }
+        }.sorted {
+            if $0.activity.filedDate != $1.activity.filedDate {
+                return $0.activity.filedDate > $1.activity.filedDate
+            }
+            if $0.activity.sortDate != $1.activity.sortDate {
+                return $0.activity.sortDate > $1.activity.sortDate
+            }
+            return $0.id < $1.id
+        }
+    }
+
     static let loaded: Result<PublicInvestorCatalog, Error> = Result {
         guard let url = Bundle.main.url(forResource: "public_investors", withExtension: "json") else {
             throw CocoaError(.fileNoSuchFile)
@@ -147,7 +163,7 @@ struct PublicInvestor: Decodable, Identifiable, Sendable {
         case "hh": L10n.text("段永平 / H&H")
         case "berkshire": L10n.text("巴菲特 / Berkshire")
         case "scion": L10n.text("Michael Burry / Scion")
-        case "ark": L10n.text("石头姐 / ARK")
+        case "ark": L10n.text("木头姐 / ARK")
         case "musk": L10n.text("埃隆·马斯克")
         default: displayName
         }
@@ -228,6 +244,10 @@ struct PublicInvestorActivity: Decodable, Identifiable, Sendable {
     let option: PublicInvestorOption?
     let eventNature: String?
     let confidence: String
+    let fund: String?
+    let sourceType: String?
+    let dateBasis: String?
+    let note: String?
     var id: String { activityId }
     var sortDate: String { exactDate ?? periodEnd ?? filedDate }
     var title: String { ticker ?? issuerName ?? cusip ?? L10n.text("未匹配证券") }
@@ -251,11 +271,43 @@ struct PublicInvestorActivity: Decodable, Identifiable, Sendable {
         case "OPTION_SELL": return L10n.text("期权卖出")
         case "OPENED": return L10n.text("季度新增")
         case "INCREASED": return L10n.text("季度增加")
-        case "DECREASED": return L10n.text("季度减少")
+        case "DECREASED", "REDUCED": return L10n.text("季度减少")
         case "EXITED": return L10n.text("季度退出")
         case "CLOSED": return L10n.text("披露关闭")
         default: return type
         }
+    }
+}
+
+struct PublicInvestorActivityItem: Identifiable, Sendable {
+    let investor: PublicInvestor
+    let activity: PublicInvestorActivity
+    var id: String { "\(investor.id):\(activity.id)" }
+
+    var securityName: String {
+        let matched = (investor.history ?? investor.snapshot.map { [$0] } ?? [])
+            .reversed().lazy.flatMap(\.positions).first {
+                (activity.cusip != nil && $0.cusip == activity.cusip)
+                    || (activity.ticker != nil && $0.ticker == activity.ticker)
+            }
+        return PublicDisclosureFormat.securityName(
+            ticker: activity.ticker ?? matched?.ticker ?? "",
+            name: activity.issuerName ?? matched?.issuerName ?? activity.title
+        )
+    }
+
+    var quantityLabel: String {
+        if activity.amount != nil || activity.amountLow != nil || activity.amountHigh != nil {
+            return PublicDisclosureFormat.amount(activity.amount, low: activity.amountLow, high: activity.amountHigh)
+        }
+        if let delta = activity.sharesDelta {
+            return L10n.text("股数变化") + " " + delta.formatted(.number.sign(strategy: .always()))
+        }
+        if let shares = activity.shares {
+            return L10n.text(activity.exactDate == nil ? "申报股数" : "交易股数")
+                + " " + shares.formatted(.number)
+        }
+        return L10n.text("数量未披露")
     }
 }
 
@@ -475,7 +527,9 @@ enum PublicInvestorLedger {
         return Array(Set(catalog.investors.filter { selected.contains($0.id) }.flatMap { investor in
             (investor.history ?? investor.snapshot.map { [$0] } ?? []).flatMap(\.positions)
                 .filter { $0.option == nil }.compactMap(\.ticker)
-            + investor.activities.filter { $0.option == nil && ["BUY", "SELL"].contains($0.type) }.compactMap(\.ticker)
+            + (investor.id == "pelosi"
+                ? investor.activities.filter { $0.option == nil && ["BUY", "SELL"].contains($0.type) }.compactMap(\.ticker)
+                : [])
         })).sorted()
     }
 

@@ -112,6 +112,11 @@ struct AccountDetailView: View {
             }
 
             SettingsSection(L10n.text("数据记录")) {
+                if account.source == PublicInvestorAccountAdapter.source {
+                    SettingsNavigationRow(title: L10n.text("持仓动态")) {
+                        PublicInvestorActivityView(investorID: account.accountID ?? "")
+                    }
+                }
                 SettingsNavigationRow(
                     title: L10n.text("History"),
                     value: L10n.text("\(account.transactionCount) 笔交易记录")
@@ -326,7 +331,9 @@ struct AccountDetailHeader: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            if let provider = account.brandProvider {
+            if account.source == PublicInvestorAccountAdapter.source {
+                PublicInvestorAvatar(investorID: account.accountID ?? "", size: 72)
+            } else if let provider = account.brandProvider {
                 AccountDetailProviderIcon(provider: provider, size: 72)
             }
             Text(account.localizedDisplayName)
@@ -370,7 +377,9 @@ struct AccountDetailNavigationTitle: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            if let provider = account.brandProvider {
+            if account.source == PublicInvestorAccountAdapter.source {
+                PublicInvestorAvatar(investorID: account.accountID ?? "", size: SettingsTemplate.iconSize)
+            } else if let provider = account.brandProvider {
                 AccountDetailProviderIcon(provider: provider, size: SettingsTemplate.iconSize)
             }
             Text(account.localizedDisplayName)

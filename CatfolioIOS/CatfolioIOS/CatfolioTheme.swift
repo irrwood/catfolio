@@ -16,6 +16,28 @@ enum CatfolioStyle {
 /// The expanded Catfolio palette. Screens opt into these tokens explicitly so
 /// a palette preview can be evaluated without silently recolouring the app.
 enum CatfolioPalette {
+    /// Stable identity colours for the six public investors, independent of gains and losses.
+    enum InvestorPortrait {
+        static let pelosi = CatfolioPalette.dynamic(light: 0xF7DDE3, dark: 0x775563)
+        static let hh = CatfolioPalette.dynamic(light: 0xDCE9D6, dark: 0x536753)
+        static let berkshire = CatfolioPalette.dynamic(light: 0xF4E8C7, dark: 0x71664B)
+        static let scion = CatfolioPalette.dynamic(light: 0xDDE4F5, dark: 0x52647B)
+        static let ark = CatfolioPalette.dynamic(light: 0xE8DDF4, dark: 0x675779)
+        static let musk = CatfolioPalette.dynamic(light: 0xF5DFCE, dark: 0x765D4C)
+
+        static func background(for investorID: String) -> Color {
+            switch investorID {
+            case "pelosi": pelosi
+            case "hh": hh
+            case "berkshire": berkshire
+            case "scion": scion
+            case "ark": ark
+            case "musk": musk
+            default: Color(uiColor: .secondarySystemFill)
+            }
+        }
+    }
+
     /// Existing chart swatches, shared without rounding their RGB components
     /// to nearby hex colours or changing their categorical assignments.
     enum ChartSeries {

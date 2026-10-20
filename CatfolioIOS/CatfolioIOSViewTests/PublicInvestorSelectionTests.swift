@@ -287,6 +287,13 @@ final class PublicInvestorSelectionTests: XCTestCase {
                 XCTAssertEqual(control.isOn, PublicInvestorPreferences.selectedIDs(selection).contains(id), id)
                 XCTAssertTrue(control.isEnabled, id)
             }
+            let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+                window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+            }
+            let attachment = XCTAttachment(image: image)
+            attachment.name = "investor-portraits-\(scheme)"
+            attachment.lifetime = .keepAlways
+            add(attachment)
         }
     }
 

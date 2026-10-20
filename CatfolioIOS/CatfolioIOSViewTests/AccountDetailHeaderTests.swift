@@ -25,7 +25,7 @@ final class AccountDetailHeaderTests: XCTestCase {
             ("Trading 212", "Trading 212 · Long term retirement account", false, 320.0, .accessibility1),
             ("公开披露", "公开账户", true, 320.0, .large)
         ] {
-            let account = PortfolioAccount(id: "header-fixture", accountID: nil, source: source,
+            let account = PortfolioAccount(id: "header-fixture", accountID: source == "公开披露" ? "pelosi" : nil, source: source,
                 name: name, baseCurrency: "USD", positionCount: 3, transactionCount: 8,
                 manualTransactionCount: 0, hasCSVImport: false, marketValueUSD: 12500)
             let route = Route()
@@ -74,10 +74,12 @@ final class AccountDetailHeaderTests: XCTestCase {
             attachment.lifetime = .keepAlways
             add(attachment)
             if width == 402 {
-                try image.pngData()?.write(to: URL(fileURLWithPath: "/tmp/account-expanded-header-\(dark ? "dark" : "light").png"))
+                try image.pngData()?.write(to: FileManager.default.temporaryDirectory
+                    .appendingPathComponent("account-expanded-header-\(dark ? "dark" : "light").png"))
             }
             if size == .accessibility1 {
-                try image.pngData()?.write(to: URL(fileURLWithPath: "/tmp/account-expanded-header-large-text.png"))
+                try image.pngData()?.write(to: FileManager.default.temporaryDirectory
+                    .appendingPathComponent("account-expanded-header-large-text.png"))
             }
             let scroll = try XCTUnwrap(page.contentScrollView(for: .top))
             let top = scroll.contentOffset
@@ -93,7 +95,8 @@ final class AccountDetailHeaderTests: XCTestCase {
                 let collapsed = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
                     window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
                 }
-                try collapsed.pngData()?.write(to: URL(fileURLWithPath: "/tmp/account-collapsed-header-\(dark ? "dark" : "light").png"))
+                try collapsed.pngData()?.write(to: FileManager.default.temporaryDirectory
+                    .appendingPathComponent("account-collapsed-header-\(dark ? "dark" : "light").png"))
             }
 
             scroll.setContentOffset(top, animated: true)

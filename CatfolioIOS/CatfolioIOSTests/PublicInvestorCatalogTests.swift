@@ -118,7 +118,8 @@ final class PublicInvestorCatalogTests: XCTestCase {
             XCTAssertTrue(investor.activities.allSatisfy { $0.filedDate <= catalog.asOf })
             XCTAssertEqual(Set(investor.activities.map(\.id)).count, investor.activities.count)
             if investor.sourceType == "SEC_13F" {
-                XCTAssertTrue(investor.activities.allSatisfy { $0.exactDate == nil && $0.amount == nil })
+                let quarterly = investor.activities.filter { $0.sourceType != "ARK_TRADE_NOTIFICATION" }
+                XCTAssertTrue(quarterly.allSatisfy { $0.exactDate == nil && $0.amount == nil })
             }
         }
         let musk = try XCTUnwrap(catalog.investors.first { $0.id == "musk" })

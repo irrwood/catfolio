@@ -4213,3 +4213,19 @@
 "更改凭证" = "Change credentials";
 "前往" = "Go";
 "概览" = "Overview";
+
+/* Public investor disclosures and portraits */
+"木头姐 / ARK" = "Cathie Wood / ARK";
+"持仓动态" = "Portfolio activity";
+"全部人物" = "All investors";
+"记录更新至" = "Records updated through";
+"申报股数" = "Reported shares";
+"数量未披露" = "Quantity not disclosed";
+"持有人：配偶" = "Owner: spouse";
+"申报期间" = "Reporting period";
+"交易文件日期" = "Trade file date";
+"披露日期" = "Disclosure date";
+"查看原文" = "View source";
+"ARK 基金交易通知未经对账，不含全部交易，不能据此还原当前完整持仓。" = "ARK fund trade notifications are unreconciled and incomplete; they do not establish current full holdings.";
+"季度持仓差额，不代表实际成交。" = "Quarterly holding changes, not executed trades.";
+"查看最新交易文件" = "View latest trade file";
