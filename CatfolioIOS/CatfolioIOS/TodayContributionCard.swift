@@ -55,7 +55,6 @@ struct TodayContributionCard: View {
     @State private var barRevealProgress: CGFloat = TodayContributionAnimation.hasPlayed ? 1 : 0
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @AppStorage("catfolio.haptics") private var hapticsEnabled = true
 
     init(
@@ -142,6 +141,10 @@ struct TodayContributionCard: View {
         return ([directionKey] + visibleContributions.map(\.id)).joined(separator: "|")
     }
 
+    /// The Mac's Overview starts every card's first line the same distance
+    /// below its top edge; the whole card moves up together.
+    private static let macTopTrim: CGFloat = MacPlatform.isMac ? 11 : 0
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             HStack(alignment: .top, spacing: 12) {
@@ -222,7 +225,7 @@ struct TodayContributionCard: View {
                 directionPicker
             }
             .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
-            .padding(.top, 30)
+            .padding(.top, 30 - Self.macTopTrim)
             .frame(height: 106, alignment: .top)
 
             Group {
@@ -240,9 +243,9 @@ struct TodayContributionCard: View {
                 }
             }
             .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
-            .offset(y: 139)
+            .offset(y: 139 - Self.macTopTrim)
         }
-        .frame(height: 326, alignment: .top)
+        .frame(height: 326 - Self.macTopTrim, alignment: .top)
         .task(id: barAnimationKey) {
             // The bars grow once a launch. The key also changes whenever
             // fresh quotes reorder the top five, and the card is rebuilt on a
@@ -347,37 +350,10 @@ struct TodayContributionCard: View {
         .frame(height: 167)
     }
 
-    @ViewBuilder
     private var directionPicker: some View {
-        if #available(iOS 26.0, *), !reduceTransparency {
-            // The button handles touches directly; glass supplies its surface.
-            // White-tinted by day: untinted, the glass took the page's
-            // cyan through the card and read faintly green on white.
-            directionPickerContent
-                .glassEffect(isNight ? .regular : .regular.tint(.white.opacity(0.7)), in: Capsule())
-        } else {
-            directionPickerContent
-                .background(Color.white.opacity(colorScheme == .dark ? 0.16 : 0.40), in: Capsule())
-        }
-    }
-
-    private var isNight: Bool { colorScheme == .dark }
-
-    private var directionPickerContent: some View {
-        Button {
+        TodayDirectionButton(isGain: direction == .gains) {
             switchDirection(to: direction == .gains ? .losses : .gains)
-        } label: {
-            Image(direction == .gains ? "TodayChangeRise" : "TodayChangeFall")
-                .renderingMode(.template)
-                .foregroundStyle(isNight ? Color.white : Color(red: 17 / 255, green: 17 / 255, blue: 17 / 255))
-                .frame(width: 47, height: 47)
-                .contentShape(Circle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(L10n.text("切换涨跌贡献"))
-        .accessibilityValue(direction == .gains ? L10n.text("上涨贡献") : L10n.text("下跌贡献"))
-        .accessibilityHint(direction == .gains ? L10n.text("查看下跌贡献") : L10n.text("查看上涨贡献"))
-        .accessibilityIdentifier("home.today.direction-toggle")
     }
 
     private func switchDirection(to value: Direction) {
@@ -391,6 +367,36 @@ struct TodayContributionCard: View {
             barRevealProgress = reduceMotion ? 1 : 0
             direction = value
         }
+    }
+}
+
+struct TodayDirectionButton: View {
+    let isGain: Bool
+    let action: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Button(action: action) {
+            Circle()
+                .fill(CatfolioTheme.subtleFill)
+                .frame(width: 47, height: 47)
+                .overlay {
+                    Image("TodayChangeRise")
+                        .renderingMode(.template)
+                        .foregroundStyle(.primary)
+                        .rotationEffect(.degrees(isGain ? 0 : 180))
+                        .animation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.62), value: isGain)
+                        // The bar reset disables inherited animations. Give
+                        // only this glyph its own rotation transaction.
+                        .transaction { $0.disablesAnimations = reduceMotion }
+                }
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.text("切换涨跌贡献"))
+        .accessibilityValue(isGain ? L10n.text("上涨贡献") : L10n.text("下跌贡献"))
+        .accessibilityHint(isGain ? L10n.text("查看下跌贡献") : L10n.text("查看上涨贡献"))
+        .accessibilityIdentifier("home.today.direction-toggle")
     }
 }
 

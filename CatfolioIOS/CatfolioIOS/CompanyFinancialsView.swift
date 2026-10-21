@@ -65,14 +65,7 @@ struct CompanyFinancialsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button {
-                    dismiss()
-                } label: {
-                    Label(L10n.text("关闭"), systemImage: "xmark")
-                }
-                .labelStyle(.iconOnly)
-            }
+            HoldingDetailCloseToolbar { dismiss() }
         }
         .refreshable { await load(forceRefresh: true) }
         .task { await load(forceRefresh: false) }

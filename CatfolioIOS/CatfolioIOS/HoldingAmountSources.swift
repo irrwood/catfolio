@@ -58,7 +58,7 @@ struct HoldingAmountSourcesPage: View {
             .navigationTitle(ticker == "ETF 其他" ? L10n.text("ETF 其他") : ticker)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { AppModalDoneButton { dismiss() } }
+                HoldingDetailCloseToolbar { dismiss() }
             }
         }
         .task(id: "\(model.portfolioSource)|\(model.portfolioChartRevision)|\(retryRevision)") {

@@ -25,6 +25,8 @@ struct HoldingResearchCachedContent {
 
 struct HoldingDetailView: View {
     @Environment(AppModel.self) private var model
+    @AppStorage(ChinaMarketSource.preferenceKey) private var chinaSource = ChinaMarketSource.automatic.rawValue
+    @AppStorage(ChinaMarketConfiguration.revisionKey) private var chinaCredentialsRevision = ""
     let holding: Holding
     let onClose: () -> Void
     var confirmsOpen = false
@@ -32,7 +34,15 @@ struct HoldingDetailView: View {
     var body: some View {
         HoldingDetailContentView(holding: holding, onClose: onClose, confirmsOpen: confirmsOpen,
             cachedContent: model.cachedHoldingDetail(for: holding))
-            .id(model.portfolioSource)
+            .id(DetailSourceIdentity(portfolio: model.portfolioSource,
+                china: ChinaSecurity(holding.ticker, currency: holding.quoteCurrency) == nil ? nil :
+                    ChinaMarketConfiguration(source: ChinaMarketSource(rawValue: chinaSource) ?? .automatic,
+                                             credentialsRevision: chinaCredentialsRevision)))
+    }
+
+    private struct DetailSourceIdentity: Hashable {
+        let portfolio: PortfolioSource
+        let china: ChinaMarketConfiguration?
     }
 }
 
@@ -153,6 +163,12 @@ struct HoldingDetailContentView: View {
                                 onRefresh: { marketDataRevision += 1 },
                                 cachedContent: cachedContent
                             )
+                            if ChinaSecurity(holding.ticker, currency: holding.quoteCurrency) != nil {
+                                ChinaMarketQuoteCaption(attribution: priceHistory?.chinaMarketAttribution)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, HoldingDetailCardStyle.pageInset)
+                                    .padding(.bottom, HoldingDetailCardStyle.spacing)
+                            }
                         }
                     }
 
@@ -251,9 +267,7 @@ struct HoldingDetailContentView: View {
                     HistoryView(ticker: holding.ticker)
                         .environment(model)
                         .toolbar {
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button(L10n.text("关闭")) { showsTransactionHistory = false }
-                            }
+                            HoldingDetailCloseToolbar { showsTransactionHistory = false }
                         }
                 }
             }
@@ -436,16 +450,22 @@ extension HoldingDetailContentView {
     /// still runs and refreshes from the network.
     static func prefetch(_ holding: Holding, model: AppModel) {
         let content = model.cachedHoldingDetail(for: holding)
+        let chinaScope = ChinaMarketConfiguration.scope(ticker: holding.ticker, currency: holding.quoteCurrency)
+        func sourceIsCurrent() -> Bool {
+            chinaScope == ChinaMarketConfiguration.scope(ticker: holding.ticker, currency: holding.quoteCurrency)
+        }
         Task { @MainActor in
+            guard sourceIsCurrent() else { return }
             if content.profile == nil,
                let cached = try? await model.volumeProfile(for: holding.ticker, currency: holding.quoteCurrency,
                                                            cachedOnly: true),
-               content.profile == nil {
+               content.profile == nil, sourceIsCurrent() {
                 content.profile = cached
             }
         }
         guard content.priceHistory == nil else { return }
         Task { @MainActor in
+            guard sourceIsCurrent() else { return }
             var history: SecurityPriceHistory?
             var accountKeys: Set<String> = []
             var shown = holding
@@ -470,7 +490,7 @@ extension HoldingDetailContentView {
             } catch {
                 return
             }
-            guard let history, content.priceHistory == nil else { return }
+            guard let history, content.priceHistory == nil, sourceIsCurrent() else { return }
             content.priceHistory = history
             // The chart, prepared exactly as the page will ask for it, so the
             // page takes it from the cache instead of preparing it again.

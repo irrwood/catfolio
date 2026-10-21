@@ -497,7 +497,7 @@ struct LocalReturnsAnalyticsClient {
         var warnings: [String] = []
         if !needsFetch.isEmpty {
             guard let apiKey = KeychainStore.string(for: LocalServiceKeys.fmp), !apiKey.isEmpty else {
-                warnings.append("估值矩阵需要 FMP API Key；可在设置中填写，Key 只保存在本机。")
+                warnings.append("估值矩阵需要 FMP API Key；可在设置中填写，或开启 iCloud 密钥同步。")
                 return Self.makeValuationMatrix(seeds: seeds, fundamentals: fundamentals, warnings: warnings)
             }
             let results = await Self.fetchFundamentals(seeds: needsFetch, apiKey: apiKey)

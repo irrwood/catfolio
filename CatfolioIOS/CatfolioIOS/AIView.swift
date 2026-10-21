@@ -77,8 +77,7 @@ struct AIView: View {
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbarVisibility(.visible, for: .navigationBar)
                     .toolbarBackground(.hidden, for: .navigationBar)
-                    .softTopScrollEdge()
-                    .overlay { AIConversationTopFade() }
+                    .modifier(AIConversationTopEdge())
                     .toolbar {
                         ToolbarItem(placement: .topBarLeading) {
                             Button {

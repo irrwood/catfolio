@@ -68,6 +68,8 @@ extension ResearchToolbarSearch {
         private var scrollObservation: NSKeyValueObservation?
         private var barObservation: NSKeyValueObservation?
         private var isVisible = false
+        private var isInAppearanceTransition = false
+        private var frameBeforeNavigation: CGRect?
         private var lastResultsInset: CGFloat?
         /// Where the page sat before search lifted it, so closing returns
         /// the field and the large title to the same place.
@@ -80,6 +82,9 @@ extension ResearchToolbarSearch {
             self.placement = placement
             super.init(nibName: nil, bundle: nil)
             placement.onLayout = { [weak self] in self?.layoutSearch() }
+            field.canReceiveTouches = { [weak self] in
+                self?.ownsVisiblePage == true && self?.isInAppearanceTransition == false
+            }
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -89,10 +94,24 @@ extension ResearchToolbarSearch {
             view.isUserInteractionEnabled = false
         }
 
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            isVisible = true
+            isInAppearanceTransition = animated
+            layoutSearch()
+        }
+
+        override func viewIsAppearing(_ animated: Bool) {
+            super.viewIsAppearing(animated)
+            layoutSearch()
+        }
+
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
             isVisible = true
+            isInAppearanceTransition = false
             layoutSearch()
+            frameBeforeNavigation = nil
         }
 
         override func viewDidLayoutSubviews() {
@@ -103,25 +122,108 @@ extension ResearchToolbarSearch {
         override func viewWillDisappear(_ animated: Bool) {
             super.viewWillDisappear(animated)
             isVisible = false
+            isInAppearanceTransition = animated
+            if let page = owningPage, field.superview != nil {
+                frameBeforeNavigation = field.convert(field.bounds, to: page.view)
+            }
             field.endEditing(true)
-            field.removeFromSuperview()
+            layoutSearch()
+        }
+
+        override func viewDidDisappear(_ animated: Bool) {
+            super.viewDidDisappear(animated)
+            isVisible = false
+            isInAppearanceTransition = false
+            hideSearch()
         }
 
         func detach() {
             isVisible = false
-            field.removeFromSuperview()
+            isInAppearanceTransition = false
+            hideSearch()
             scrollObservation = nil
             barObservation = nil
             placement.onLayout = nil
         }
 
+        /// The field lives above the navigation content, so it does not inherit
+        /// its page's visibility. Retained SwiftUI controllers can receive
+        /// appearance/layout callbacks while a child page is still on top.
+        private var ownsVisiblePage: Bool {
+            guard isVisible, isViewLoaded, view.window != nil else { return false }
+            var child: UIViewController = self
+            var foundNavigation = false
+            while let parent = child.parent {
+                if let navigation = parent as? UINavigationController {
+                    guard navigation.topViewController === child else { return false }
+                    foundNavigation = true
+                }
+                if let tabs = parent as? UITabBarController,
+                   tabs.selectedViewController !== child { return false }
+                child = parent
+            }
+            return foundNavigation
+        }
+
+        private var owningPage: UIViewController? {
+            var child: UIViewController = self
+            while let parent = child.parent {
+                if parent is UINavigationController { return child }
+                child = parent
+            }
+            return nil
+        }
+
+        /// During a push/pop the live field belongs to the moving page, so
+        /// UIKit carries and clips it with that page, including cancelled
+        /// interactive returns. At rest it sits above the compact toolbar.
+        private var searchContainer: UIView? {
+            guard isViewLoaded, view.window != nil, owningPage != nil else { return nil }
+            var child: UIViewController = self
+            var followsPage = false
+            while let parent = child.parent {
+                if let navigation = parent as? UINavigationController {
+                    let transition = isInAppearanceTransition ? navigation.transitionCoordinator : nil
+                    let participates = transition?.viewController(forKey: .from) === child
+                        || transition?.viewController(forKey: .to) === child
+                    guard navigation.topViewController === child || participates else { return nil }
+                    followsPage = followsPage || participates
+                }
+                if let tabs = parent as? UITabBarController,
+                   tabs.selectedViewController !== child { return nil }
+                child = parent
+            }
+            // This representable's view is already part of the page. Using
+            // it avoids inserting UIKit children directly into a hosting view.
+            if followsPage { return view }
+            return isVisible ? navigationController?.view : nil
+        }
+
+        private func hideSearch() {
+            field.isUserInteractionEnabled = false
+            field.endEditing(true)
+            field.removeFromSuperview()
+        }
+
         func layoutSearch() {
-            guard isVisible, let navigation = navigationController,
+            guard let container = searchContainer, let navigation = navigationController,
                   let slot = placement.slot, slot.window != nil,
-                  slot.window === navigation.view.window else { return }
-            let container = navigation.view!
+                  slot.window === navigation.view.window else {
+                hideSearch()
+                return
+            }
+            field.isUserInteractionEnabled = ownsVisiblePage && !isInAppearanceTransition
             if field.superview !== container {
+                let previousFrame = field.superview.map { _ in field.convert(field.bounds, to: container) }
                 container.addSubview(field)
+                if let previousFrame { field.frame = previousFrame }
+            }
+            if container === view, let page = owningPage, let frameBeforeNavigation {
+                // The navigation bar changes height for the child. Keep the
+                // parent's saved position throughout the horizontal return.
+                field.frame = page.view.convert(frameBeforeNavigation, to: container)
+                field.layoutIfNeeded()
+                return
             }
             observeScroll(from: slot, navigation: navigation)
             // The page's native large-title expansion has its own layout
@@ -143,7 +245,7 @@ extension ResearchToolbarSearch {
                 lastResultsInset = inset
                 // Avoid mutating SwiftUI state inside its UIKit layout pass.
                 DispatchQueue.main.async { [weak self] in
-                    guard let self, self.isVisible else { return }
+                    guard let self, self.ownsVisiblePage else { return }
                     self.onResultsInset(inset)
                 }
             }
@@ -157,7 +259,7 @@ extension ResearchToolbarSearch {
                 field.setPresented(presented)
                 return
             }
-            let animated = isVisible && !UIAccessibility.isReduceMotionEnabled
+            let animated = ownsVisiblePage && !UIAccessibility.isReduceMotionEnabled
             flightGeneration &+= 1
             let request = flightGeneration
             if presented {

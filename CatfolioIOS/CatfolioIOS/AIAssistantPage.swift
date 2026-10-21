@@ -159,34 +159,35 @@ struct AIConversationCardClip: Shape {
     }
 }
 
-/// A backdrop blur through the status area and compact toolbar, dissolving
-/// into the scrolling content below. The native bar remains transparent.
+/// Use the home's soft scroll edge so content dissolves under the toolbar
+/// without an additional opaque white/black wash.
+struct AIConversationTopEdge: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.modifier(PortfolioTopScrollEdge(hasFloatingHeader: true))
+        } else {
+            content.overlay { AIConversationTopFade() }
+        }
+    }
+}
+
 struct AIConversationTopFade: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorScheme) private var colorScheme
-    @AppStorage(HomeBackgroundStyle.preferenceKey) private var backgroundStyleRawValue = HomeBackgroundStyle.defaultStyle.rawValue
 
     private var topColor: Color {
-        let style = HomeBackgroundStyle(rawValue: backgroundStyleRawValue) ?? .defaultStyle
-        if style == .plain { return SettingsTemplate.pageBackground }
-        return (style == .classic || style == .plain) && colorScheme == .dark ? .black : style.palette(for: colorScheme).baseTop
+        AIConversationGround.base(for: colorScheme)
     }
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                if !reduceTransparency {
+                if reduceTransparency {
+                    LinearGradient(colors: [topColor, .clear], startPoint: .top, endPoint: .bottom)
+                } else {
                     AIStatusBackdropBlur()
                 }
-                LinearGradient(
-                    stops: [
-                        .init(color: topColor.opacity(0.80), location: 0),
-                        .init(color: topColor.opacity(0.35), location: 0.55),
-                        .init(color: topColor.opacity(0), location: 1),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
             }
             .frame(height: max(62, geometry.safeAreaInsets.top) + 32)
             .offset(y: -geometry.safeAreaInsets.top)
@@ -197,16 +198,22 @@ struct AIConversationTopFade: View {
 }
 
 struct AIStatusBackdropBlur: UIViewRepresentable {
-    func makeUIView(context: Context) -> BlurView { BlurView() }
-    func updateUIView(_ view: BlurView, context: Context) {}
+    @Environment(\.colorScheme) private var colorScheme
+
+    func makeUIView(context: Context) -> BlurView { BlurView(scheme: colorScheme) }
+    func updateUIView(_ view: BlurView, context: Context) { view.update(scheme: colorScheme) }
 
     final class BlurView: UIVisualEffectView {
         private let fadeMask = UIView()
         private let gradient = CAGradientLayer()
         private var maskBounds = CGRect.null
+        private var scheme: ColorScheme
 
-        init() {
-            super.init(effect: UIBlurEffect(style: .systemUltraThinMaterial))
+        init(scheme: ColorScheme = .light) {
+            self.scheme = scheme
+            // These blur styles tint towards white/black, without the adaptive
+            // grey surface added by systemUltraThinMaterial.
+            super.init(effect: UIBlurEffect(style: scheme == .dark ? .dark : .extraLight))
             isUserInteractionEnabled = false
             gradient.colors = [UIColor.black.cgColor, UIColor.black.cgColor,
                                UIColor.black.withAlphaComponent(0.65).cgColor,
@@ -219,6 +226,12 @@ struct AIStatusBackdropBlur: UIViewRepresentable {
 
         @available(*, unavailable)
         required init?(coder: NSCoder) { nil }
+
+        func update(scheme: ColorScheme) {
+            guard self.scheme != scheme else { return }
+            self.scheme = scheme
+            effect = UIBlurEffect(style: scheme == .dark ? .dark : .extraLight)
+        }
 
         override func layoutSubviews() {
             super.layoutSubviews()

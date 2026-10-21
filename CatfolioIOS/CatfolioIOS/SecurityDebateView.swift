@@ -149,10 +149,7 @@ struct SecurityPriceMoveSheet: View {
         .navigationTitle(context.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button { dismiss() } label: { Image(systemName: "xmark") }
-                    .accessibilityLabel(L10n.text("关闭"))
-            }
+            HoldingDetailCloseToolbar { dismiss() }
             if result != nil, !progress.isWorking {
                 ToolbarItem(placement: .primaryAction) {
                     Button { store.start(context, force: true) } label: { Image(systemName: "arrow.clockwise") }
@@ -479,10 +476,7 @@ struct SecurityDebateQuestionSheet: View {
             .appPageBackground().navigationTitle(L10n.text("AI 关键变化"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Image(systemName: "xmark") }
-                        .accessibilityLabel(L10n.text("关闭"))
-                }
+                HoldingDetailCloseToolbar { dismiss() }
             }
         }
         .presentationDetents([.medium, .large])

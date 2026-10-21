@@ -1,6 +1,27 @@
 import Foundation
 import CryptoKit
 
+extension Notification.Name {
+    static let localPortfolioDidChange = Notification.Name("Catfolio.localPortfolioDidChange")
+}
+
+enum LocalPortfolioSyncError: LocalizedError {
+    case unsupportedDocument
+    case accountConflict
+    case cancelled
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedDocument:
+            L10n.text("此组合不能同步，请更新 Catfolio 后重试。演示和公开披露数据不会上传。")
+        case .accountConflict:
+            L10n.text("这台设备的 Trading 212 账户与 iCloud 中的账户不一致，已停止合并，请先核对账户配置。")
+        case .cancelled:
+            L10n.text("iCloud 同步已停止。")
+        }
+    }
+}
+
 enum LocalMarketQuoteKey {
     static func make(ticker: String, currency: String) -> String {
         "\(ticker.uppercased())|\(currency.uppercased())"
@@ -134,9 +155,14 @@ enum InstrumentCurrencyRules {
     static func inferredPriceCurrency(for ticker: String) -> String? {
         let normalized = ticker.uppercased()
         if let known = knownPriceCurrency(for: normalized) { return known }
+        // Verified Trading 212 euro listings whose legacy identifiers carry
+        // no Yahoo exchange suffix. Treating every bare code as US silently
+        // mislabelled their historical fill prices as dollars.
+        if ["ANAE", "IBEE", "DHER"].contains(normalized) { return "EUR" }
         if normalized.hasSuffix(".L") { return "GBX" }
         if normalized.hasSuffix(".DE") || normalized.hasSuffix(".AS")
-            || normalized.hasSuffix(".PA") || normalized.hasSuffix(".MI") {
+            || normalized.hasSuffix(".PA") || normalized.hasSuffix(".MI")
+            || normalized.hasSuffix(".MC") || normalized.hasSuffix(".F") {
             return "EUR"
         }
         if normalized.hasSuffix(".HK") { return "HKD" }
@@ -181,13 +207,153 @@ actor LocalPortfolioStore {
     static let shared = LocalPortfolioStore()
 
     private let fileURL: URL
+    private let readCredential: @Sendable (String) -> String?
+    private var excludesCloudBackup = false
     private(set) var recoveryNotice: String?
 
-    init(fileURL: URL) {
+    func csvImportJournal(accountKey: String) throws -> CSVImportJournal? {
+        let url = csvJournalURL(accountKey)
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let journal = try JSONDecoder().decode(CSVImportJournal.self, from: Data(contentsOf: url))
+        if let undo = journal.undo {
+            let state = CSVAccountState(document: try load(), key: accountKey)
+            if state.fingerprint == undo.before.fingerprint && state.fingerprint != undo.afterFingerprint {
+                // Receipt was saved, but the process stopped before the ledger.
+                return .init(info: undo.previousInfo, undo: nil)
+            }
+        }
+        return journal
+    }
+
+    /// Validate and commit without an actor suspension between the two.
+    func commitCSVPreview(_ preview: CSVImportPreview, accountName: String?) throws -> (LocalPortfolioDocument, CSVImportResult) {
+        guard preview.canCommit, let plan = preview.updatePlan else { throw CSVUpdateError.reviewRequired }
+        let current = try load()
+        let before = CSVAccountState(document: current, key: preview.accountKey)
+        guard before.fingerprint == plan.baseline.fingerprint else { throw CSVUpdateError.accountChanged }
+        let priorJournal = try csvImportJournal(accountKey: preview.accountKey)
+        if let oldID = priorJournal?.info?.sourceAccountID, let newID = plan.sourceAccountID, oldID != newID {
+            throw CSVUpdateError.wrongAccount
+        }
+        let name = before.account?.name ?? accountName ?? "CSV"
+        let reference = plan.incoming.first
+        let positions = preview.positions.map { position in
+            let assigned = position.assignedAccount(id: reference?.accountID, name: name, source: reference?.source)
+            guard let latest = before.positions.first(where: {
+                $0.ticker == assigned.ticker && $0.quoteCurrency == assigned.quoteCurrency
+            }), let observed = latest.quoteObservedAt,
+                  observed > (assigned.quoteObservedAt ?? .distantPast) else { return assigned }
+            return assigned.withQuotePrice(latest.quotePrice, observedAt: observed)
+        }
+        let transactions = preview.transactions.map {
+            $0.assignedAccount(id: reference?.accountID, name: name, source: reference?.source)
+        }
+        let updated = Self.currentTickers(in: try replacingCSVAccount(in: current, key: preview.accountKey, positions: positions,
+            transactions: transactions, account: before.account))
+        let info = CSVImportInfo(importedAt: Date(), filename: plan.filename, format: plan.format,
+            fileHash: plan.fileHash, sourceAccountID: plan.sourceAccountID ?? priorJournal?.info?.sourceAccountID,
+            firstDate: transactions.map(\.date).min(), lastDate: transactions.map(\.date).max(),
+            counts: preview.counts ?? CSVImportCounts())
+        let undo = CSVImportUndo(id: UUID(), accountKey: preview.accountKey, before: before,
+            afterFingerprint: CSVAccountState(document: updated, key: preview.accountKey).fingerprint,
+            info: info, previousInfo: priorJournal?.info)
+        let backup = try backupPortfolio(reason: "before-csv")
+        // Write the receipt first. If saving the ledger fails, restore the old
+        // receipt; a crash before the ledger save leaves an unusable undo token.
+        let saved: LocalPortfolioDocument
+        do {
+            try writeCSVJournal(.init(info: info, undo: undo), key: preview.accountKey)
+            saved = try save(updated)
+        }
+        catch {
+            try? writeCSVJournal(priorJournal ?? .init(), key: preview.accountKey)
+            throw error
+        }
+        var result = preview.result
+        result = CSVImportResult(ok: true, holdingsCount: result.holdingsCount,
+            transactionsCount: result.transactionsCount, backupCreated: backup != nil,
+            warnings: result.warnings, holdings: result.holdings, skippedRowCount: result.skippedRowCount,
+            importCounts: preview.counts, undoID: undo.id)
+        return (saved, result)
+    }
+
+    /// Undo only this account. Another account may have changed meanwhile.
+    /// Quote refreshes do not invalidate undo, but ledger edits do.
+    func undoCSVImport(accountKey: String, id: UUID) throws -> LocalPortfolioDocument {
+        guard let journal = try csvImportJournal(accountKey: accountKey),
+              let undo = journal.undo, undo.id == id else { throw CSVUpdateError.undoUnavailable }
+        let current = try load()
+        guard CSVAccountState(document: current, key: accountKey).fingerprint == undo.afterFingerprint else {
+            throw CSVUpdateError.undoUnavailable
+        }
+        let positions = undo.before.positions.map { previous in
+            guard let latest = current.positions.first(where: {
+                $0.accountKey == accountKey && $0.ticker == previous.ticker && $0.quoteCurrency == previous.quoteCurrency
+            }), let observed = latest.quoteObservedAt,
+                  observed > (previous.quoteObservedAt ?? .distantPast) else { return previous }
+            return previous.withQuotePrice(latest.quotePrice, observedAt: observed)
+        }
+        let restored = try replacingCSVAccount(in: current, key: accountKey, positions: positions,
+            transactions: undo.before.transactions, account: undo.before.account)
+        _ = try backupPortfolio(reason: "before-csv-undo")
+        do {
+            try writeCSVJournal(.init(info: undo.previousInfo, undo: nil), key: accountKey)
+            return try save(restored)
+        }
+        catch {
+            try? writeCSVJournal(journal, key: accountKey)
+            throw error
+        }
+    }
+
+    private func csvJournalURL(_ key: String) -> URL {
+        fileURL.deletingLastPathComponent().appendingPathComponent("csv-import-\(CSVTransactionMerger.digest(key)).json")
+    }
+
+    private func writeCSVJournal(_ journal: CSVImportJournal, key: String) throws {
+        let url = csvJournalURL(key)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONEncoder().encode(journal).write(to: url, options: [.atomic, .completeFileProtectionUnlessOpen])
+        // Receipts contain before/after account records; keep them local even
+        // if the user independently enables encrypted CloudKit ledger sync.
+        try excludeFileFromBackup(url)
+    }
+
+    private func replacingCSVAccount(in original: LocalPortfolioDocument, key: String,
+                                     positions: [LocalPositionRecord], transactions: [LocalTransactionRecord],
+                                     account: PortfolioAccount?) throws -> LocalPortfolioDocument {
+        var document = original
+        document.positions = original.positions.filter { $0.accountKey != key } + positions
+        document.transactions = (original.transactions ?? []).filter { $0.accountKey != key } + transactions
+        document.knownAccounts = (original.knownAccounts ?? []).filter { $0.id != key } + (account.map { [$0] } ?? [])
+        document.source = Set(document.positions.map(\.source) + (document.transactions ?? []).map(\.source))
+            .sorted().joined(separator: " + ")
+        document.schemaVersion = max(document.schemaVersion, 4)
+        document.updatedAt = Date()
+        document.marketDataUpdatedAt = document.positions.allSatisfy { $0.quoteObservedAt != nil }
+            ? document.positions.compactMap(\.quoteObservedAt).min() : nil
+        let totals = try LocalPortfolioEngine.totals(for: document.positions)
+        let accountTotals = try Dictionary(grouping: document.positions, by: \.accountKey).mapValues {
+            let values = try LocalPortfolioEngine.totals(for: $0)
+            return LocalAccountSnapshotTotals(marketValueUSD: values.marketValue, costUSD: values.cost)
+        }
+        let today = DayDateCodec.string(from: Date())
+        document.snapshots.removeAll { $0.date == today }
+        document.snapshots.append(.init(date: today, marketValueUSD: totals.marketValue,
+            costUSD: totals.cost, accountTotals: accountTotals))
+        document.snapshots.sort { $0.date < $1.date }
+        document.syncMetadata = PortfolioDocumentMerge.normalized(original).syncMetadata
+        document.syncMetadata?.positionsUpdatedAt[key] = document.updatedAt.timeIntervalSince1970
+        return document
+    }
+
+    init(fileURL: URL, readCredential: @escaping @Sendable (String) -> String? = { KeychainStore.string(for: $0) }) {
         self.fileURL = fileURL
+        self.readCredential = readCredential
     }
 
     init(fileManager: FileManager = .default) {
+        readCredential = { KeychainStore.string(for: $0) }
         let root = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         fileURL = root.appendingPathComponent("Catfolio", isDirectory: true)
             .appendingPathComponent("portfolio.json", isDirectory: false)
@@ -195,6 +361,10 @@ actor LocalPortfolioStore {
 
     func load() throws -> LocalPortfolioDocument {
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return .empty }
+        if (try? fileURL.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup) == true {
+            excludesCloudBackup = true
+        }
+        if excludesCloudBackup { try excludeFileFromBackup(fileURL) }
         let data = try Data(contentsOf: fileURL)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -207,8 +377,110 @@ actor LocalPortfolioStore {
             return .empty
         }
         let migrated = Self.currentTickers(in: try migrateKnownInstrumentCurrencies(in: document))
-        if migrated != document { try save(migrated) }
+        if migrated != document { return try save(migrated) }
         return migrated
+    }
+
+    /// Runs inside this actor without suspension: a local import cannot land
+    /// between reading the current document and committing the merged result.
+    @discardableResult
+    func mergeFromCloud(
+        _ remote: LocalPortfolioDocument,
+        canCommit: @Sendable () -> Bool = { true }
+    ) throws -> LocalPortfolioDocument {
+        let local = try load()
+        try validateAccountBindings(local: local, remote: remote)
+        guard let merged = PortfolioDocumentMerge.merge(local: local, remote: remote) else {
+            throw LocalPortfolioSyncError.unsupportedDocument
+        }
+        guard canCommit() else { throw LocalPortfolioSyncError.cancelled }
+        guard merged != local else { return local }
+        if local.positions.isEmpty == false || local.transactions?.isEmpty == false {
+            _ = try backupPortfolio(reason: "cloud-merge")
+        }
+        guard canCommit() else { throw LocalPortfolioSyncError.cancelled }
+        return try save(merged, tracksLocalChanges: false)
+    }
+
+    /// Opt-in preparation only: bind device-local broker slots and exclude
+    /// plaintext local portfolio files from automatic iCloud device backup.
+    /// Record clocks stay untouched because this is not a portfolio edit.
+    func prepareForCloudSync() throws -> LocalPortfolioDocument {
+        try excludeFromCloudBackup()
+        let original = try load()
+        guard PortfolioDocumentMerge.isUploadable(original), (1...4).contains(original.schemaVersion) else {
+            throw LocalPortfolioSyncError.unsupportedDocument
+        }
+        var document = PortfolioDocumentMerge.normalized(original)
+        var bindings = document.syncMetadata?.accountBindings ?? [:]
+        for account in document.accounts where isTrading212Slot(account.id) && bindings[account.id] == nil {
+            bindings[account.id] = credentialBinding(for: account.id) ?? "local:\(UUID().uuidString)"
+        }
+        if !bindings.isEmpty { document.syncMetadata?.accountBindings = bindings }
+        guard document != original else { return original }
+        return try save(document, tracksLocalChanges: false)
+    }
+
+    func excludeFromCloudBackup() throws {
+        excludesCloudBackup = true
+        let directory = fileURL.deletingLastPathComponent()
+        guard FileManager.default.fileExists(atPath: directory.path) else { return }
+        for url in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            where url == fileURL || (url.lastPathComponent.hasPrefix("portfolio-") && url.pathExtension == "json") {
+            try excludeFileFromBackup(url)
+        }
+    }
+
+    private func excludeFileFromBackup(_ original: URL) throws {
+        var url = original
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try url.setResourceValues(values)
+    }
+
+    private func isTrading212Slot(_ accountKey: String) -> Bool {
+        accountKey.hasPrefix("Trading 212|account-")
+    }
+
+    private func credentialBinding(for accountKey: String) -> String? {
+        let slot = String(accountKey.dropFirst("Trading 212|".count))
+        let connectionID = "trading212.\(slot)"
+        let keys = [connectionID + ".api-key", connectionID + ".api-secret", connectionID + ".portfolio-binding"]
+        let values = Dictionary(uniqueKeysWithValues: keys.compactMap { key in
+            readCredential(key).map { (key, $0) }
+        })
+        // A synced connection carries its stable portfolio identity through
+        // key rotations. The marker is accepted only for its exact key pair.
+        if let binding = CloudCredentialPolicy.trading212PortfolioBinding(accountKey: accountKey, values: values) {
+            return binding
+        }
+        guard let key = values[connectionID + ".api-key"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let secret = values[connectionID + ".api-secret"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !key.isEmpty, !secret.isEmpty,
+              let data = try? JSONEncoder().encode([key, secret]) else { return nil }
+        return "credential:" + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func validateAccountBindings(local: LocalPortfolioDocument, remote: LocalPortfolioDocument) throws {
+        for (key, binding) in local.syncMetadata?.accountBindings ?? [:] {
+            if let other = remote.syncMetadata?.accountBindings?[key], other != binding {
+                // Tombstones retain account identity too: a new account in a
+                // reused slot must never inherit the old account's history.
+                throw LocalPortfolioSyncError.accountConflict
+            }
+        }
+        let localKeys = Set(local.accounts.map(\.id))
+        for account in remote.accounts where isTrading212Slot(account.id) {
+            let remoteBinding = remote.syncMetadata?.accountBindings?[account.id]
+            if localKeys.contains(account.id) {
+                guard let localBinding = local.syncMetadata?.accountBindings?[account.id],
+                      localBinding == remoteBinding else { throw LocalPortfolioSyncError.accountConflict }
+            } else if let credential = credentialBinding(for: account.id), credential != remoteBinding {
+                // Even before its first broker fetch, a configured slot must
+                // not silently receive someone else's account data.
+                throw LocalPortfolioSyncError.accountConflict
+            }
+        }
     }
 
     /// A listing renamed since the broker last reported it is kept under its
@@ -228,11 +500,22 @@ actor LocalPortfolioStore {
         return document
     }
 
-    /// Move before resetting so a failed backup never destroys the original.
+    /// Keep the original before committing deletion markers. A missing file
+    /// would look like a new device and download the old portfolio again.
     @discardableResult
     func resetPortfolio() throws -> URL? {
-        let backup = FileManager.default.fileExists(atPath: fileURL.path)
-            ? try archivePortfolio(reason: "reset") : nil
+        let previous = try load()
+        guard !previous.positions.isEmpty || !(previous.transactions ?? []).isEmpty
+                || !(previous.knownAccounts ?? []).isEmpty || previous.syncMetadata?.resetAt == nil else {
+            return nil
+        }
+        let backup = try backupPortfolio(reason: "reset")
+        var empty = LocalPortfolioDocument.empty
+        empty.schemaVersion = max(4, previous.schemaVersion)
+        empty.updatedAt = Date()
+        empty.syncMetadata = previous.syncMetadata ?? LocalPortfolioSyncMetadata()
+        empty.syncMetadata?.resetAt = empty.updatedAt.timeIntervalSince1970
+        _ = try save(empty)
         recoveryNotice = nil
         return backup
     }
@@ -247,10 +530,37 @@ actor LocalPortfolioStore {
             .appendingPathComponent("portfolio-\(reason)-\(stamp)-\(UUID().uuidString.prefix(8)).json")
         do {
             try FileManager.default.copyItem(at: fileURL, to: backup)
+            if excludesCloudBackup { try excludeFileFromBackup(backup) }
         } catch {
             throw LocalPortfolioError.writeFailed
         }
+        if reason == "cloud-merge" {
+            // copyItem may retain the source's creation date. Retention needs
+            // the backup's creation time, rather than the portfolio's age.
+            try? FileManager.default.setAttributes([.creationDate: Date()], ofItemAtPath: backup.path)
+            pruneCloudMergeBackups(keepingNewest: backup)
+        }
         return backup
+    }
+
+    /// Automatic foreground sync can run often. Limit only its disposable
+    /// recovery copies; manual, import, reset and corruption archives remain.
+    private func pruneCloudMergeBackups(keepingNewest newest: URL) {
+        let directory = fileURL.deletingLastPathComponent()
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: [.creationDateKey, .isRegularFileKey]
+        ) else { return }
+        let older = files.filter { url in
+            url != newest && url.lastPathComponent.hasPrefix("portfolio-cloud-merge-")
+                && url.pathExtension == "json"
+                && (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+        }.sorted { left, right in
+            let leftDate = (try? left.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
+            let rightDate = (try? right.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
+            return leftDate == rightDate ? left.lastPathComponent > right.lastPathComponent : leftDate > rightDate
+        }
+        // Keep the just-created backup plus the four most recent older ones.
+        for url in older.dropFirst(4) { try? FileManager.default.removeItem(at: url) }
     }
 
     /// One account's saved positions, for comparing an import against them.
@@ -262,6 +572,7 @@ actor LocalPortfolioStore {
         let backup = fileURL.deletingLastPathComponent()
             .appendingPathComponent("portfolio-\(reason)-\(UUID().uuidString).json")
         try FileManager.default.moveItem(at: fileURL, to: backup)
+        if excludesCloudBackup { try excludeFileFromBackup(backup) }
         return backup
     }
 
@@ -284,7 +595,8 @@ actor LocalPortfolioStore {
                 : position.source != source
         } + positions.map { position in
             var observed = position
-            if source != "CSV", source != "IBKR Flex", observed.quoteObservedAt == nil {
+            if source != "CSV", source != "IBKR Flex", source != ScreenshotImport.source,
+               observed.quoteObservedAt == nil {
                 observed.quoteObservedAt = Date()
             }
             return observed
@@ -336,7 +648,7 @@ actor LocalPortfolioStore {
         } else {
             combinedTransactions = previous.transactions ?? []
         }
-        let document = LocalPortfolioDocument(
+        var document = LocalPortfolioDocument(
             schemaVersion: 4,
             source: sources.joined(separator: " + "),
             updatedAt: now,
@@ -345,10 +657,16 @@ actor LocalPortfolioStore {
             positions: combinedPositions,
             snapshots: snapshots,
             transactions: combinedTransactions,
-            knownAccounts: Array(Dictionary((previous.accounts + syncedAccounts).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last }).values)
+            knownAccounts: Array(Dictionary((previous.accounts + syncedAccounts).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last }).values),
+            syncMetadata: previous.syncMetadata
         )
-        try save(document)
-        return document
+        // A successful empty broker response is an authoritative empty
+        // snapshot; registration alone deliberately does not set this clock.
+        document.syncMetadata = PortfolioDocumentMerge.normalized(previous).syncMetadata
+        for key in positionAccountKeys {
+            document.syncMetadata?.positionsUpdatedAt[key] = now.timeIntervalSince1970
+        }
+        return try save(document)
     }
 
     func updateMarketQuotes(
@@ -400,8 +718,7 @@ actor LocalPortfolioStore {
         // The aggregate timestamp must not claim that older holdings were refreshed.
         document.marketDataUpdatedAt = document.positions.allSatisfy { $0.quoteObservedAt != nil }
             ? document.positions.compactMap(\.quoteObservedAt).min() : nil
-        try save(document)
-        return document
+        return try save(document)
     }
 
     func renameAccount(_ accountKey: String, to rawName: String) throws -> LocalPortfolioDocument {
@@ -425,8 +742,7 @@ actor LocalPortfolioStore {
                 marketValueUSD: account.marketValueUSD, accountTypeOverride: account.accountTypeOverride)
         }
         document.updatedAt = Date()
-        try save(document)
-        return document
+        return try save(document)
     }
 
     /// Records the broker product the person chose for an account.
@@ -449,8 +765,7 @@ actor LocalPortfolioStore {
                 accountTypeOverride: account.id == accountKey ? accountType : account.accountTypeOverride)
         }
         document.updatedAt = Date()
-        try save(document)
-        return document
+        return try save(document)
     }
 
     func appendHistoricalTransaction(_ transaction: LocalTransactionRecord) throws -> LocalPortfolioDocument {
@@ -462,8 +777,7 @@ actor LocalPortfolioStore {
         transactions.append(transaction)
         document.transactions = transactions
         document.updatedAt = Date()
-        try save(document)
-        return document
+        return try save(document)
     }
 
     func mergeTransactions(_ incoming: [LocalTransactionRecord]) throws -> LocalPortfolioDocument {
@@ -495,8 +809,7 @@ actor LocalPortfolioStore {
         guard merged != sortedExisting else { return document }
         document.transactions = merged
         document.updatedAt = Date()
-        try save(document)
-        return document
+        return try save(document)
     }
 
     func deduplicateTransactions(for accountKey: String) throws -> (LocalPortfolioDocument, Int) {
@@ -514,7 +827,7 @@ actor LocalPortfolioStore {
         }
         if removed > 0 {
             document.updatedAt = Date()
-            try save(document)
+            document = try save(document)
         }
         return (document, removed)
     }
@@ -528,8 +841,7 @@ actor LocalPortfolioStore {
         known.append(account)
         document.knownAccounts = known
         document.updatedAt = Date()
-        try save(document)
-        return document
+        return try save(document)
     }
 
     func removeAccount(_ accountKey: String) throws -> LocalPortfolioDocument {
@@ -554,13 +866,21 @@ actor LocalPortfolioStore {
         }
         document.source = Set(document.positions.map(\.source)).sorted().joined(separator: " + ")
         document.updatedAt = Date()
-        try save(document)
-        return document
+        return try save(document)
     }
 
-    private func save(_ document: LocalPortfolioDocument) throws {
-        let document = Self.currentTickers(in: document)
+    @discardableResult
+    private func save(_ incoming: LocalPortfolioDocument, tracksLocalChanges: Bool = true) throws -> LocalPortfolioDocument {
+        var document = Self.currentTickers(in: incoming)
         do {
+            let previousData = FileManager.default.fileExists(atPath: fileURL.path)
+                ? try Data(contentsOf: fileURL) : nil
+            if tracksLocalChanges {
+                let decoder = JSONDecoder()
+                decoder.dateDecodingStrategy = .iso8601
+                let previous = try previousData.map { try decoder.decode(LocalPortfolioDocument.self, from: $0) } ?? .empty
+                document = PortfolioDocumentMerge.recordingChanges(from: previous, to: document)
+            }
             try FileManager.default.createDirectory(
                 at: fileURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true
@@ -569,10 +889,14 @@ actor LocalPortfolioStore {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             encoder.dateEncodingStrategy = .iso8601
             let data = try encoder.encode(document)
+            guard data != previousData else { return document }
             try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
+            if excludesCloudBackup { try excludeFileFromBackup(fileURL) }
         } catch {
             throw LocalPortfolioError.writeFailed
         }
+        NotificationCenter.default.post(name: .localPortfolioDidChange, object: self)
+        return document
     }
 
     /// Earlier iOS builds treated every `l_EQ` fallback as GBX. Repair those

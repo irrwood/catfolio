@@ -143,7 +143,7 @@ struct ManagementDeliveryCard: View {
                 }
                 .navigationTitle(L10n.text("管理层兑现情况"))
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { AppModalDoneButton { expanded = false } } }
+                .toolbar { HoldingDetailCloseToolbar { expanded = false } }
                 .appSheet(item: $selectedSource) { document in ManagementDeliverySourceView(document: document) }
             }
             .presentationDetents([.large])
@@ -323,7 +323,7 @@ private struct ManagementDeliverySourceView: View {
             }
             .appPageBackground().navigationTitle(L10n.text("来源资料"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { AppModalDoneButton { dismiss() } } }
+            .toolbar { HoldingDetailCloseToolbar { dismiss() } }
         }
     }
 }

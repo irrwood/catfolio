@@ -124,6 +124,16 @@ struct CatfolioDisplayAmountText: View {
     var color: Color = .primary
     var isDirectional = false
     var signFollowsValue = false
+    /// Starts the visible ink, not the layout box, at the leading edge, so
+    /// the figure lines up with the text above it.
+    var alignsInkToLeadingEdge = false
+
+    /// The first glyph's own side bearing, at the size it is set in: the
+    /// smaller currency symbol, or the figure when there is none.
+    private var leadingBearing: CGFloat {
+        guard alignsInkToLeadingEdge, let first = text.first else { return 0 }
+        return Typography.numberLeadingBearing(of: first, size: first.isNumber ? size : symbolSize)
+    }
 
     private var amountText: Text {
         FinancialTextPresentation.parts(in: text, isDirectional: isDirectional, signFollowsValue: signFollowsValue)
@@ -155,6 +165,7 @@ struct CatfolioDisplayAmountText: View {
         .foregroundStyle(color)
         .lineLimit(1)
         .minimumScaleFactor(0.72)
+        .offset(x: -leadingBearing)
         .accessibilityLabel(Text(verbatim: text))
     }
 }

@@ -5,6 +5,15 @@ import XCTest
 
 @MainActor
 final class NavigationTitleReturnTests: XCTestCase {
+    func testExpandedAccountTitleDoesNotJumpWhenOpeningInlineSubpages() async throws {
+        for appearance in [UIUserInterfaceStyle.light, .dark] {
+            for investorPage in [false, true] {
+                try await checkReturn(appearance: appearance, parentScrolled: false,
+                                      investorPage: investorPage, checksPush: true)
+            }
+        }
+    }
+
     func testScrolledChildReturnsWithoutMovingTheExpandedAccountTitle() async throws {
         for appearance in [UIUserInterfaceStyle.light, .dark] {
             try await checkReturn(appearance: appearance, parentScrolled: false)
@@ -17,7 +26,8 @@ final class NavigationTitleReturnTests: XCTestCase {
         }
     }
 
-    private func checkReturn(appearance: UIUserInterfaceStyle, parentScrolled: Bool) async throws {
+    private func checkReturn(appearance: UIUserInterfaceStyle, parentScrolled: Bool,
+                             investorPage: Bool = false, checksPush: Bool = false) async throws {
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let previous = scene.windows.first(where: \.isKeyWindow)
         let suite = "navigation-title-return-\(UUID())"
@@ -36,7 +46,10 @@ final class NavigationTitleReturnTests: XCTestCase {
                     SettingsView().ownsTabBar()
                         .navigationDestination(isPresented: Binding(
                             get: { route.showsChild }, set: { route.showsChild = $0 }
-                        )) { AppSettingsView() }
+                        )) {
+                            if investorPage { PublicInvestorSelectionView() }
+                            else { AppSettingsView() }
+                        }
                 }
             }
             Tab("Other", systemImage: "circle") { Text("Other") }
@@ -68,9 +81,35 @@ final class NavigationTitleReturnTests: XCTestCase {
 
         // Exercise a scrolled child on the first return, then an unscrolled
         // child. Reusing an already-returned title used to mask the first jump.
-        for childOffset in [CGFloat(300), 0] {
+        for childOffset in checksPush ? [CGFloat(300)] : [CGFloat(300), 0] {
+            let outgoingTitle = parentScrolled ? nil : try XCTUnwrap(largeTitle(title, in: root.view))
             route.showsChild = true
-            try await Task.sleep(for: .milliseconds(600))
+            if checksPush, let outgoingTitle, let expectedTitle {
+                var frames: [CGRect] = []
+                var activeTitle = outgoingTitle
+                for tick in 0..<30 {
+                    try await Task.sleep(for: .milliseconds(20))
+                    if activeTitle.window == nil, let replacement = largeTitle(title, in: root.view) {
+                        activeTitle = replacement
+                    }
+                    guard activeTitle.window != nil else { continue }
+                    let layer = activeTitle.layer.presentation() ?? activeTitle.layer
+                    frames.append(layer.convert(layer.bounds, to: window.layer.presentation() ?? window.layer))
+                    if tick == 5 {
+                        let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+                            window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
+                        }
+                        try image.pngData()?.write(to: URL(fileURLWithPath:
+                            "/tmp/catfolio-title-push-\(appearance.rawValue)-\(investorPage).png"))
+                    }
+                }
+                XCTAssertGreaterThan(frames.count, 5)
+                let drift = frames.map { abs($0.minY - expectedTitle.minY) }.max() ?? .infinity
+                XCTAssertLessThanOrEqual(drift, 2,
+                    "Opening an inline page must not pull the outgoing large title up: \(frames.map(\.minY))")
+            } else {
+                try await Task.sleep(for: .milliseconds(600))
+            }
             let child = try XCTUnwrap(navigation.topViewController)
             XCTAssertFalse(child === root)
             let scroll = try XCTUnwrap(child.contentScrollView(for: .top))

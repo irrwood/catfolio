@@ -26,6 +26,8 @@ struct HistoryView: View {
     @State private var category: HistoryCategory = .all
     @State private var ledgerRevision = 0
     @State private var preparedLedger = HistoryPreparedLedger()
+    @State private var publicHistory = PublicInvestorHistory()
+    @State private var preparedTimeline = HistoryTimeline()
     @AppStorage("history.taxYearBasis") private var taxYearBasisRaw = TaxYearBasis.calendar.rawValue
     /// Dividends listed under each security rather than by date.
     @AppStorage("history.dividendsByStock") private var dividendsByStock = false
@@ -67,12 +69,18 @@ struct HistoryView: View {
 
     #if DEBUG
     /// Deterministic native navigation tests without touching stored accounts.
-    init(previewLedger: PortfolioActivityLedger, prepared: HistoryPreparedLedger) {
+    init(previewLedger: PortfolioActivityLedger, prepared: HistoryPreparedLedger,
+         publicHistory: PublicInvestorHistory = PublicInvestorHistory()) {
         initialAccountIDs = nil
         ticker = nil
         usesPreviewLedger = true
         _ledger = State(initialValue: previewLedger)
         _preparedLedger = State(initialValue: prepared)
+        let supplemental = publicHistory.supplemental(to: previewLedger.transactions)
+        _publicHistory = State(initialValue: supplemental)
+        _preparedTimeline = State(initialValue: HistoryTimeline(
+            activities: prepared.page(category: .all, basis: .calendar, year: nil).activities,
+            disclosures: supplemental.scoped(accountIDs: Set(previewLedger.accounts.map(\.id)))))
         _isLoading = State(initialValue: false)
     }
     #endif
@@ -131,7 +139,7 @@ struct HistoryView: View {
                 }
                 .labelStyle(.iconOnly)
                 .tint(.primary)
-                .disabled(filteredActivities.isEmpty)
+                .disabled(filteredActivities.isEmpty && !(category == .all && !timelineGroups.isEmpty))
             }
         }
         .fileExporter(
@@ -245,7 +253,7 @@ struct HistoryView: View {
                     }
                 }
 
-                if page.activities.isEmpty {
+                if page.activities.isEmpty && !(pageCategory == .all && !timelineGroups.isEmpty) {
                     Section {
                         CatfolioEmptyState(title: emptyTitle(for: pageCategory), message: emptyDescription)
                             .padding(.vertical, 56)
@@ -294,6 +302,24 @@ struct HistoryView: View {
                             }
                         }
                     } else {
+                    if pageCategory == .all && isPublicHistory {
+                        ForEach(timelineGroups) { group in
+                            Section {
+                                ForEach(Array(group.entries.enumerated()), id: \.element.id) { index, entry in
+                                    Group {
+                                        switch entry {
+                                        case .transaction(let activity): activityRow(activity, compactLabels: true)
+                                        case .disclosure(let record): HistoryDisclosureRow(record: record)
+                                        }
+                                    }
+                                    .settingsListRow(isFirst: index == 0, isLast: index == group.entries.count - 1)
+                                }
+                            } header: {
+                                Text(HistoryPreparedLedger.dateGroupTitle(group.id, locale: appLocale)).textCase(nil)
+                            }
+                            .headerProminence(.increased)
+                        }
+                    } else {
                     ForEach(page.groups) { group in
                         Section {
                             ForEach(Array(group.activities.enumerated()), id: \.element.id) { index, activity in
@@ -305,6 +331,7 @@ struct HistoryView: View {
                                 .textCase(nil)
                         }
                         .headerProminence(.increased)
+                    }
                     }
                     }
                 }
@@ -508,7 +535,7 @@ struct HistoryView: View {
             } label: {
                 Label(L10n.text("全部年份"), systemImage: selectedTaxYear == nil ? "checkmark" : "infinity")
             }
-            ForEach(preparedLedger.yearLabels[taxYearBasis] ?? [], id: \.self) { year in
+            ForEach(historyYears, id: \.self) { year in
                 Button {
                     selectedTaxYear = year
                 } label: {
@@ -773,6 +800,19 @@ struct HistoryView: View {
         currentPage.activities
     }
 
+    private var isPublicHistory: Bool {
+        ledger.accounts.contains { $0.source == PublicInvestorAccountAdapter.source }
+    }
+
+    private var timelineGroups: [HistoryTimeline.Group] {
+        preparedTimeline.groups(basis: taxYearBasis, year: selectedTaxYear)
+    }
+
+    private var historyYears: [String] {
+        category == .all && isPublicHistory ? preparedTimeline.yearLabels(basis: taxYearBasis)
+            : (preparedLedger.yearLabels[taxYearBasis] ?? [])
+    }
+
     private var selectedAccounts: [PortfolioAccount] {
         ledger.accounts.filter { effectiveAccountIDs.contains($0.id) }
     }
@@ -878,10 +918,17 @@ struct HistoryView: View {
         if showLoading { isLoading = true }
         do {
             let loaded = try await model.activityLedger()
+            if loaded.accounts.contains(where: { $0.source == PublicInvestorAccountAdapter.source }) {
+                let catalog = try await PublicInvestorCatalogState.shared.get()
+                publicHistory = PublicInvestorHistory(records: catalog.recentActivities())
+                    .supplemental(to: loaded.transactions)
+            } else {
+                publicHistory = PublicInvestorHistory()
+            }
             guard !Task.isCancelled else { return }
             // Unchanged since the page opened on it: nothing to rebuild, and
             // rebuilding would re-render every list for the same rows.
-            if !isLoading, ledgerRevision > 0, loaded == ledger {
+            if !isPublicHistory, !isLoading, ledgerRevision > 0, loaded == ledger {
                 errorMessage = nil
                 return
             }
@@ -906,11 +953,17 @@ struct HistoryView: View {
         let accountIDs = effectiveAccountIDs
         let locale = appLocale
         let ticker = ticker
+        let disclosures = publicHistory.scoped(accountIDs: accountIDs, ticker: ticker)
         async let scopedPositions = model.holdings(forAccounts: accountIDs)
         do {
             let prepared = try await model.historyPreparationCache.prepared(
                 ledger: ledger, accountIDs: accountIDs, locale: locale, ticker: ticker)
+            let timeline = await Task.detached(priority: .userInitiated) {
+                HistoryTimeline(activities: prepared.page(category: .all, basis: .calendar, year: nil).activities,
+                                disclosures: disclosures)
+            }.value
             try Task.checkCancellation()
+            preparedTimeline = timeline
             preparedLedger = prepared
             if isLoading {
                 // A new scope cannot show the previous account's market figures.
@@ -992,8 +1045,8 @@ struct HistoryView: View {
     }
 
     private func prepareExport() {
-        let header = ["Date", "Account", "Broker", "Type", "Name", "Ticker", "Amount", "Quantity", "Price", "Currency"]
-        let rows = filteredActivities.map { activity in
+        var header = ["Date", "Account", "Broker", "Type", "Name", "Ticker", "Amount", "Quantity", "Price", "Currency"]
+        var rows = filteredActivities.map { activity in
             let transaction = activity.transaction
             let account = account(for: transaction.accountKey)
             return [
@@ -1008,6 +1061,17 @@ struct HistoryView: View {
                 String(transaction.price),
                 transaction.currency,
             ]
+        }
+        if category == .all && isPublicHistory {
+            let disclosures = publicHistory.scoped(accountIDs: effectiveAccountIDs, ticker: ticker,
+                                                   basis: taxYearBasis, year: selectedTaxYear)
+            if !disclosures.isEmpty {
+                let extra = PublicInvestorHistory.exportHeader.count - header.count
+                header = PublicInvestorHistory.exportHeader
+                rows = rows.map { $0 + Array(repeating: "", count: extra) }
+                rows += disclosures.map(PublicInvestorHistory.exportRow)
+                rows.sort { $0[0] > $1[0] }
+            }
         }
         let csv = ([header] + rows)
             .map { $0.map(csvField).joined(separator: ",") }

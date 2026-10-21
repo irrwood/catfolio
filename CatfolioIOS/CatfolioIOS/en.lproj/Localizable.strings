@@ -268,6 +268,19 @@
 "交易类型" = "Transaction type";
 "交易股数" = "Shares traded";
 "交易记录" = "Transactions";
+"请求签名校验失败。现有数据已保留。" = "Request signature verification failed. Existing data is preserved.";
+"读取账户详情" = "Read account details";
+"检查券商连接" = "Check brokerage connection";
+"读取持仓" = "Read holdings";
+"读取交易历史" = "Read transaction history";
+"生成授权链接" = "Generate authorization link";
+"SnapTrade 拒绝了「%@」请求（HTTP %@）。" = "SnapTrade rejected the “%@” request (HTTP %@).";
+"认证信息未通过校验，请检查已保存的个人 API 凭证和设备时间。现有数据已保留。" = "Authentication was not accepted. Check the saved Personal API credentials and device time. Existing data is preserved.";
+"此请求未获准访问，请检查个人 API 凭证是否有效，以及该项数据的访问权限。现有数据已保留。" = "Access to this request was denied. Check that the Personal API credentials are active and can access this data. Existing data is preserved.";
+"SnapTrade 错误码：%@" = "SnapTrade error code: %@";
+"部分买卖记录的证券类型或市场暂不支持，未导入这些记录。" = "Some trades use unsupported security types or markets and were not imported.";
+"同步股票和基金持仓及买卖记录，用于图表买卖点和交易明细。交易历史范围由券商决定，通常每日更新；不含现金流水。" = "Sync stock and fund holdings and trades for chart markers and transaction details. History coverage depends on the broker and usually updates daily; cash activity is excluded.";
+"更新此账户的持仓并合并买卖记录；其他账户与已有交易历史保留。" = "Update this account’s holdings and merge its trades. Other accounts and existing history are preserved.";
 "交给设置里选择的 AI 转成条件，生成后会先打开编辑器让你确认，不会自动运行。只发送这段描述，不发送持仓。" = "Your selected AI converts this description into conditions for you to review before running. Only the description is sent, not your holdings.";
 "仅保存在此 iPhone 的 Keychain" = "Stored only in this iPhone’s Keychain";
 "仅保存，不验证" = "Save without verifying";
@@ -397,6 +410,7 @@
 "关闭 AI 投资助手" = "Close AI investment assistant";
 "关闭" = "Off";
 "关闭设置" = "Close settings";
+"关闭弹窗" = "Close";
 "其他 %@ 项合并持仓" = "%@ other combined holdings";
 "其他" = "Other";
 "其他持仓" = "Other holdings";
@@ -4214,6 +4228,180 @@
 "前往" = "Go";
 "概览" = "Overview";
 
+// Independent iCloud credential and encrypted portfolio sync
+"偏好、API 密钥与账户持仓可分别开启同步。" = "Preferences, API keys, and accounts and holdings can be synced separately.";
+"同步 API 密钥" = "Sync API keys";
+"账户与持仓" = "Accounts and holdings";
+"同步账户与持仓" = "Sync accounts and holdings";
+"最近同步" = "Last synced";
+"通过 iCloud 钥匙串同步行情、AI、Trading 212 与 IBKR Flex 的密钥及必要连接设置。ChatGPT 登录和设备授权仍需在各设备重新连接。" = "Sync keys and required connection settings for market data, AI, Trading 212 and IBKR Flex through iCloud Keychain. ChatGPT sign-in and device authorizations still require connecting on each device.";
+"账户、持仓与交易记录在本机加密后上传到你的 iCloud 私有数据库。解密密钥通过 iCloud 钥匙串同步，不受 API 密钥开关影响。" = "Accounts, holdings and transactions are encrypted on this device before upload to your private iCloud database. The decryption key syncs through iCloud Keychain independently of API-key sync.";
+"在同一 Apple 账户的每台设备上分别开启，并启用 iCloud 钥匙串。关闭只暂停此设备，保留本机和云端数据，不更改其他设备。同步可能需要一些时间。" = "Enable each feature on every device using the same Apple Account, with iCloud Keychain on. Turning it off pauses this device, keeps local and cloud data, and leaves other devices unchanged. Sync may take some time.";
+"保存在钥匙串；可在设置中开启跨设备密钥同步。" = "Stored in Keychain. Enable key sync across devices in Settings.";
+"保存在钥匙串，可选择跨设备同步。" = "Stored in Keychain, with optional sync across devices.";
+"DeepSeek 模式需要 API Key。请在设置中填写，或开启 iCloud 密钥同步。" = "DeepSeek needs an API key. Enter it in Settings or enable iCloud key sync.";
+"OpenRouter 模式需要 API Key。请在设置中填写，或开启 iCloud 密钥同步。" = "OpenRouter needs an API key. Enter it in Settings or enable iCloud key sync.";
+"复制 Token 和刚保存的 Query ID，下一步填入 Catfolio。凭证保存在钥匙串，可在设置中开启跨设备同步。" = "Copy the Token and saved Query ID, then enter them in Catfolio. Credentials are stored in Keychain; enable sync across devices in Settings.";
+"估值矩阵需要 FMP API Key；可在设置中填写，或开启 iCloud 密钥同步。" = "The valuation matrix needs an FMP API key. Enter it in Settings or enable iCloud key sync.";
+"开启账户与持仓同步后，名称会同步到同一 Apple 账户的设备。" = "With account and holdings sync enabled, the name syncs to devices using the same Apple Account.";
+"正在同步…" = "Syncing…";
+"已同步" = "Synced";
+"等待钥匙串中的解密密钥" = "Waiting for the decryption key in iCloud Keychain";
+"请登录 iCloud" = "Sign in to iCloud";
+"Apple 账户已更改，请切回原账户" = "Apple Account changed. Switch back to the original account.";
+"暂时无法同步，请重试" = "Unable to sync right now. Try again.";
+"iCloud 空间不足" = "Not enough iCloud storage";
+"此版本无法读取云端数据" = "This version cannot read the cloud data";
+"云端数据校验失败" = "Cloud data verification failed";
+"iCloud 尚未配置" = "iCloud is not configured";
+"需要解锁设备后重试" = "Unlock this device and try again";
+"已关闭；现有密钥仍保留在本机。" = "Off. Existing keys remain on this device.";
+"正在同步钥匙串…" = "Syncing Keychain…";
+"已保存到 iCloud 钥匙串，其他设备会在系统同步后收到。" = "Saved to iCloud Keychain. Other devices will receive it when system sync completes.";
+"暂时无法同步密钥，请检查 iCloud 和钥匙串设置后重试。" = "Unable to sync keys right now. Check iCloud and Keychain settings, then try again.";
+"Apple 账户已改变；为保护原账户密钥，请切回原 Apple 账户再开启同步。" = "Apple Account changed. To protect the original account’s keys, switch back to the original Apple Account before enabling sync.";
+"等待 iCloud 钥匙串同步；不会覆盖本机连接。" = "Waiting for iCloud Keychain sync. Local connections are preserved.";
+"部分密钥与 iCloud 中的连接不同；已保留本机配置。请核对连接后重试。" = "Some keys differ from the iCloud connections. Local settings were kept. Check your connections and try again.";
+"同步行情和 AI API Key、Trading 212 与 IBKR Flex 静态凭证及必要连接设置。ChatGPT 登录和设备授权需在各设备重新连接。" = "Sync market data and AI API keys, Trading 212 and IBKR Flex credentials, and required connection settings. ChatGPT sign-in and device authorizations require connecting on each device.";
+"无法读取 Keychain（%@）" = "Unable to read Keychain (%@)";
+
+"设备上的券商账户不一致，请先核对账户连接" = "The brokerage accounts on your devices differ. Check the account connections first.";
+
+"此组合不能同步，请更新 Catfolio 后重试。演示和公开披露数据不会上传。" = "This portfolio cannot be synced. Update Catfolio and try again. Demo and public disclosure data are never uploaded.";
+
+"这台设备的 Trading 212 账户与 iCloud 中的账户不一致，已停止合并，请先核对账户配置。" = "This device’s Trading 212 account differs from the account in iCloud. Merging is paused; check the account configuration.";
+
+"iCloud 同步已停止。" = "iCloud sync has stopped.";
+
+"将删除当前账户的 API Key 与 Secret；开启或重新开启密钥同步后，删除也会同步到其他设备。" = "The API key and secret for this account will be removed. The removal also syncs to other devices when key sync is enabled or resumed.";
+
+"将删除 Token 和 Query ID；开启或重新开启密钥同步后，删除也会同步到其他设备。" = "The token and Query ID will be removed. The removal also syncs to other devices when key sync is enabled or resumed.";
+
+"密钥已移除；开启同步后会同步删除。" = "Key removed. The removal will sync when key sync is enabled.";
+
+"重置组合数据" = "Reset portfolio data";
+
+"重置组合数据？" = "Reset portfolio data?";
+
+"将清空当前持仓、交易和历史快照，并保留一份本机备份。券商授权、API 密钥及 AI 对话会保留。开启或重新开启账户与持仓同步后，重置也会同步到其他设备。" = "Holdings, transactions and historical snapshots will be cleared, with a local backup retained. Broker authorizations, API keys and AI conversations stay. The reset also syncs to other devices when portfolio sync is enabled or resumed.";
+
+"开启或重新开启账户与持仓同步后，删除也会同步到其他设备。" = "The removal also syncs to other devices when portfolio sync is enabled or resumed.";
+
+"组合数据超过当前同步大小限制" = "Portfolio data exceeds the current sync size limit";
+
+"评级数量" = "Rating count";
+
+"来源暂无同期股价。" = "The source has no share price for these observations.";
+
+/* China market data */
+"A 股行情" = "China A-share data";
+"AKShare 来源" = "AKShare sources";
+"长桥 · AKShare 来源" = "Longbridge · AKShare sources";
+"A 股数据格式或证券身份无法确认" = "Unable to verify the A-share data format or listing identity";
+"暂无可用的 A 股行情，请稍后重试" = "A-share quotes are unavailable. Try again later.";
+"请在设置 → 服务商 → A 股行情中配置长桥凭据" = "Configure Longbridge credentials in Settings → Providers → China A-share data.";
+"长桥请求失败（%@），请检查凭据与 OpenAPI 行情权限" = "Longbridge request failed (%@). Check your credentials and OpenAPI quote permissions.";
+"A 股行情请求超时，请稍后重试" = "The A-share data request timed out. Try again later.";
+"长桥凭据已保存在本机" = "Longbridge credentials saved on this device";
+"长桥验证成功，已读取贵州茅台报价" = "Longbridge verified with a Kweichow Moutai quote";
+"自动模式优先使用已配置的长桥，失败时使用 AKShare 来源。" = "Automatic uses configured Longbridge credentials first, then falls back to AKShare sources.";
+"填写长桥 OpenAPI 控制台的三项凭据。凭据仅保存在本机钥匙串。" = "Enter the three credentials from the Longbridge OpenAPI console. They stay in this device’s Keychain.";
+"打开长桥 OpenAPI 控制台" = "Open Longbridge OpenAPI console";
+"长桥 A 股行情在中国大陆以外的 IP 下延迟 15 分钟；权限以 OpenAPI 账户为准。" = "Longbridge A-share quotes are delayed by 15 minutes for IP addresses outside mainland China. Access depends on your OpenAPI account.";
+"移除长桥凭据" = "Remove Longbridge credentials";
+"长桥凭据已移除" = "Longbridge credentials removed";
+"iPhone 直接读取 AKShare 使用的东方财富公开行情，无需 API Key 或服务器。" = "Your iPhone reads the public Eastmoney feeds used by AKShare directly. No API key or server is needed.";
+"iPhone 直连腾讯行情，东方财富作为备用并提供搜索。两者均为 AKShare 使用的公开来源，无需 API Key 或服务器。" = "Your iPhone connects directly to Tencent quotes, with Eastmoney for fallback and search. Both are public sources used by AKShare. No API key or server is needed.";
+"支持沪深股票与 ETF、中文或代码搜索、日线与分时。公开接口不可用时会保留已有图表。" = "Supports Shanghai and Shenzhen stocks and ETFs, Chinese name or symbol search, daily history and intraday charts. Saved charts remain available during outages.";
+"测试公开行情" = "Test public quotes";
+"公开行情可用，已读取贵州茅台报价" = "Public data verified with a Kweichow Moutai quote";
+"行情可能延迟，请以报价时间为准" = "Quotes may be delayed. Check the quote timestamp.";
+"缓存" = "Cached";
+
+/* CSV account updates */
+"更新 CSV" = "Update CSV";
+"当前账户只有持仓快照，请导入完整交易历史并选择重建账户。" = "This account only has a holdings snapshot. Import its complete transaction history and choose Rebuild account.";
+"完整重建要求所有记录均可读取，请先修正文件中的无效行。" = "A full rebuild requires every record to be readable. Correct the invalid rows first.";
+"请先处理待确认记录，再导入。" = "Resolve the records requiring review before importing.";
+"账户记录已发生变化，请重新选择文件并检查预览。" = "The account has changed. Select the file again and review a fresh preview.";
+"CSV 的账户编号与此前导入不一致，请选择对应账户。" = "The account number in this CSV differs from the previous import. Select the matching account.";
+"此账户在导入后已有其他修改，无法直接撤销。导入前的备份仍保留在本机。" = "This account has changed since the import, so it cannot be undone directly. The backup from before the import is still on this device.";
+"撤销上次 CSV 导入" = "Undo last CSV import";
+"新增交易将合并到账户，旧记录和手动补录会保留；按预览中的选择处理冲突。" = "New transactions will be merged into this account. Existing and manual records will be kept; conflicts follow your preview choices.";
+"完整重建将替换此账户原有的导入记录，保留手动补录，并重算持仓和成本。请确认文件包含完整历史。" = "A full rebuild replaces this account's imported records, keeps manual entries, and recalculates holdings and cost. Confirm that the file contains the complete history.";
+"已撤销 CSV 导入。" = "CSV import undone.";
+"更新方式" = "Update method";
+"合并更新" = "Merge update";
+"完整重建" = "Full rebuild";
+"追加新交易，保留旧记录和手动补录；重复与修改会在预览中列出。" = "Add new transactions while keeping existing and manual records. Duplicates and changes appear in the preview.";
+"仅用于完整交易历史：替换此账户原有导入记录，保留手动补录。" = "For complete transaction histories only: replace this account's imported records and keep manual entries.";
+"上次 CSV 更新" = "Last CSV update";
+"导入时间" = "Imported";
+"已保存的交易日期" = "Saved transaction dates";
+"交易记录 CSV" = "Transaction CSV";
+"交易更新" = "Transaction updates";
+"新增交易" = "New transactions";
+"重复，自动跳过" = "Duplicates skipped";
+"确认修改" = "Confirmed corrections";
+"保留原记录" = "Keep existing records";
+"待确认的交易" = "Transactions to review";
+"缺少可匹配的交易编号，可能是重复记录，也可能是另一笔成交。" = "No matching trade ID is available. This could be a duplicate or a separate execution.";
+"相同交易编号的内容发生了变化。" = "The record for this trade ID has changed.";
+"原记录：%@" = "Existing: %@";
+"CSV：%@" = "CSV: %@";
+"处理方式" = "Resolution";
+"请选择" = "Choose";
+"保留原记录，跳过此行" = "Keep existing; skip this row";
+"用 CSV 修正原记录" = "Correct existing with CSV";
+"这是另一笔交易，新增" = "Add as a separate transaction";
+"数据源" = "Data source";
+"验证中…" = "Verifying…";
+"测试连接" = "Test connection";
+"已有交易记录无法重建当前持仓，请导入完整交易历史并选择完整重建。" = "The saved transactions cannot reconstruct these holdings. Import the complete history and choose Full rebuild.";
+"公开行情请求失败（%@），请稍后重试" = "Public quote request failed (%@). Try again later.";
+
+// Screenshot holdings import
+"已识别 %@ 项，请核对是否完整。" = "%@ holdings found. Check that none are missing.";
+"单次最多导入 200 项持仓，请分批选择截图。" = "Import up to 200 holdings at a time. Split larger imports across screenshots.";
+"截图导入" = "Import screenshot";
+"从截图识别持仓" = "Read holdings from a screenshot";
+"请选择有效的持仓截图。" = "Choose a valid holdings screenshot.";
+"请核对股票代码；港股和 A 股请包含交易所后缀。" = "Check the ticker; include the exchange suffix for Hong Kong and mainland China listings.";
+"请补全有效的持仓数量。" = "Enter a valid share quantity.";
+"请补全每股成本，不能用市值或盈亏代替。" = "Enter the cost per share, not the market value or return.";
+"请补全截图中的每股现价。" = "Enter the price per share shown in the screenshot.";
+"请核对价格币种，例如 USD、HKD、CNY 或 GBX。" = "Check the price currency, such as USD, HKD, CNY or GBX.";
+"持仓金额超出可处理范围。" = "The holding value is outside the supported range.";
+"请先识别持仓并填写账户名称。" = "Read a screenshot and enter an account name first.";
+"截图中有重复股票，请保留一条正确的持仓。" = "A ticker appears more than once. Keep one correct holding for each ticker.";
+"账户已发生变化，请关闭后重新导入。" = "The account has changed. Close this page and start the import again.";
+"请切换到个人组合后导入持仓。" = "Switch to your personal portfolio before importing holdings.";
+"无法读取图片，请选择小于 30 MB 的清晰持仓截图。" = "Choose a clear holdings screenshot smaller than 30 MB.";
+"选择持仓截图，核对后即可加入。" = "Choose a holdings screenshot, review it, and add your holdings.";
+"选择持仓截图" = "Choose holdings screenshot";
+"自动识别股票代码、数量、每股成本和现价。" = "Read tickers, quantities, cost per share and prices automatically.";
+"本机识别" = "On-device recognition";
+"图片不会上传，也不需要配置 AI。" = "Images stay on this device. No AI setup needed.";
+"正在识别截图…" = "Reading screenshot…";
+"重新选择截图" = "Choose another screenshot";
+"查看原图" = "View original image";
+"已选择的持仓截图" = "Selected holdings screenshot";
+"请核对识别结果；缺失项需补全。只导入股票持仓快照，不生成历史交易。" = "Check the results and fill in missing fields. Imports a stock holdings snapshot without creating historical trades.";
+"同名股票更新数量和成本；截图外的持仓会保留。" = "Updates quantities and costs for matching tickers. Keeps holdings outside this screenshot.";
+"未识别到股票持仓，请换一张含列标题的清晰截图，或手动补充。" = "No stock holdings found. Try a clear screenshot with column headings, or add a holding manually.";
+"补充一项持仓" = "Add a holding";
+"现价用于初始估值，导入后可刷新行情。导入前会自动备份组合。" = "Screenshot prices provide the initial valuation; refresh quotes after importing. Your portfolio is backed up before import.";
+"确认加入持仓" = "Confirm and add holdings";
+"无法读取图片，请重新选择截图。" = "Unable to read this image. Choose another screenshot.";
+"持仓数量" = "Shares";
+"每股成本" = "Cost per share";
+"每股现价" = "Price per share";
+"价格币种" = "Price currency";
+"移除此项" = "Remove holding";
+"Screenshot" = "Screenshot";
+
+"全部保留原记录，跳过对应 CSV 行" = "Keep all existing records; skip matching CSV rows";
+
 /* Public investor disclosures and portraits */
 "木头姐 / ARK" = "Cathie Wood / ARK";
 "持仓动态" = "Portfolio activity";
@@ -4229,3 +4417,37 @@
 "ARK 基金交易通知未经对账，不含全部交易，不能据此还原当前完整持仓。" = "ARK fund trade notifications are unreconciled and incomplete; they do not establish current full holdings.";
 "季度持仓差额，不代表实际成交。" = "Quarterly holding changes, not executed trades.";
 "查看最新交易文件" = "View latest trade file";
+
+/* Direct broker accounts */
+"实盘" = "Live";
+"模拟盘" = "Paper";
+"请填写完整的券商 API 凭证。" = "Enter all broker API credentials.";
+"券商持仓、成本或行情不完整，现有持仓未更新。" = "Broker positions, cost basis, or quotes are incomplete. Existing holdings were not updated.";
+"账户包含暂不支持的持仓类型或币种；目前支持股票和 ETF 多头持仓，现有持仓未更新。" = "This account contains unsupported assets or currencies. Long stock and ETF positions are supported. Existing holdings were not updated.";
+"持仓预览已过期，请重新读取。" = "The position preview has expired. Fetch it again.";
+"此券商账户已添加，请从账户详情更新持仓。" = "This broker account is already added. Update holdings from its account details.";
+"返回的券商账户与当前账户不匹配，现有持仓未更新。" = "The returned broker account does not match this account. Existing holdings were not updated.";
+"券商授权失败，请检查凭证、有效期及账户权限；Alpaca 凭证需与所选实盘或模拟盘一致。" = "Broker authorization failed. Check credentials, expiry, and account permissions. Alpaca keys must match the selected live or paper environment.";
+"券商请求过于频繁，请稍后重试。" = "Too many broker requests. Try again shortly.";
+"券商服务暂不可用，错误代码" = "Broker service is unavailable. Error code";
+"直接连接券商，预览后同步持仓。" = "Connect directly to your broker and preview holdings before syncing.";
+"仅同步股票和 ETF 多头持仓，不含现金、场外基金和交易流水。Catfolio 不发送交易指令。" = "Sync long stock and ETF holdings. Cash, mutual funds, and transaction history are excluded. Catfolio does not submit trades.";
+"长桥账户下的股票持仓合并显示；行情权限沿用该账户的 OpenAPI 权限。" = "Stock holdings across this Longbridge user’s accounts are combined. Quotes use the account’s OpenAPI permissions.";
+"移除本机账户凭证" = "Remove account credentials from this device";
+"移除本机账户凭证？" = "Remove account credentials from this device?";
+"确认同步券商持仓？" = "Sync these broker holdings?";
+"账户环境" = "Account environment";
+"实盘和模拟盘使用不同凭证，账户与持仓分别保存。" = "Live and paper trading use different keys. Their accounts and holdings are kept separate.";
+"凭证保存在本机钥匙串；更换设备后需重新填写。" = "Credentials are saved in this device’s Keychain. Enter them again on a new device.";
+"填写开发者中心的 App Key、App Secret 和 Access Token；此处使用 API Key 凭证。" = "Enter the App Key, App Secret, and Access Token from the developer center. This connection uses API Key credentials.";
+"打开 Alpaca Dashboard" = "Open Alpaca Dashboard";
+"读取时间" = "Fetched at";
+"Longbridge 同步" = "Longbridge sync";
+"Alpaca 同步" = "Alpaca sync";
+"Longbridge API / 同步数据" = "Longbridge API / synced data";
+"Alpaca API / 同步数据" = "Alpaca API / synced data";
+
+"填入个人 API 凭证，直接读取已关联的券商账户。" = "Enter your Personal API credentials to read linked brokerage accounts directly.";
+"直接读取 SnapTrade 已关联账户；仅同步股票和基金持仓，不含现金或交易流水。" = "Read accounts already linked to SnapTrade. Only stock and fund holdings are synced; cash and transaction history are excluded.";
+"此 Key 下没有已关联的券商账户。请先在 SnapTrade Dashboard 关联账户，再回来读取。" = "No brokerage accounts are linked to this key. Link an account in the SnapTrade Dashboard, then fetch it here.";
+"没有可添加的新账户；已有账户请从账户详情同步。" = "No new accounts are available. Sync existing accounts from their account details.";

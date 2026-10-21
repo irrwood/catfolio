@@ -53,7 +53,7 @@ struct IBKRAccountGuide: View {
                 OnboardingFeature(symbol: "key.horizontal", title: "Flex Web Service",
                     detail: L10n.text("回到 Flex Queries，打开 Flex Web Service 的设置，启用服务并生成 Token，检查有效期和 IP 限制。"))
                 OnboardingFeature(symbol: "lock", title: L10n.text("填写连接凭证"),
-                    detail: L10n.text("复制 Token 和刚保存的 Query ID，下一步填入 Catfolio。凭证仅保存在此 iPhone 的钥匙串中。"))
+                    detail: L10n.text("复制 Token 和刚保存的 Query ID，下一步填入 Catfolio。凭证保存在钥匙串，可在设置中开启跨设备同步。"))
                 OnboardingFeature(symbol: "arrow.triangle.2.circlepath", title: L10n.text("预览与同步"),
                     detail: L10n.text("可以先保存并创建账户，稍后同步；也可以立即读取持仓，预览后再确认。IBKR 生成报表可能需要几分钟。"))
             }

@@ -1,5 +1,4 @@
 import SwiftUI
-import SafariServices
 
 struct SnapTradeView: View {
     @Environment(AppModel.self) private var model
@@ -15,13 +14,10 @@ struct SnapTradeView: View {
     @State private var previewCredentials: SnapTradeCredentials?
     @State private var operation = SnapTradeOperation()
     @State private var status = ""
-    @State private var portal: Portal?
     @State private var confirmsSync = false
     @State private var confirmsRemoval = false
-    @State private var hasOpenedPortal = false
     @State private var hasPrepared = false
 
-    private struct Portal: Identifiable { let id = UUID(); let url: URL }
     private var busy: Bool { operation.isRunning }
     private var hasCredentials: Bool { !clientID.isEmpty && !consumerKey.isEmpty }
     private var allowedAccounts: [SnapTradeAccount] {
@@ -41,15 +37,11 @@ struct SnapTradeView: View {
             OnboardingPage(scrollReset: flowStep, progress: context.isCreating ? OnboardingProgress(
                 step: flowStep + (isFirstLaunchSetup ? 2 : 0), total: isFirstLaunchSetup ? 5 : 3) : nil) {
                 OnboardingHeader(title: preview != nil ? L10n.text("确认持仓") : L10n.text("连接其他券商"),
-                    subtitle: flowStep == 1 ? L10n.text("填入 SnapTrade 凭证，然后选择券商授权。")
+                    subtitle: flowStep == 1 ? L10n.text("填入个人 API 凭证，直接读取已关联的券商账户。")
                         : L10n.text("选择账户，预览后同步持仓。"))
                 Group {
                     if flowStep == 1 {
                         credentialsForm
-                    }
-                    if hasOpenedPortal && allowedAccounts.isEmpty {
-                        OnboardingFeature(symbol: "checkmark.shield", title: L10n.text("完成券商授权后继续"),
-                            detail: L10n.text("关闭授权网页，再读取账户列表。"))
                     }
                     if !allowedAccounts.isEmpty {
                         SettingsSection(L10n.text("选择账户")) {
@@ -63,6 +55,7 @@ struct SnapTradeView: View {
                         SettingsSection(L10n.text("持仓预览")) {
                             SettingsValueRow(title: L10n.text("数据时间"), value: preview.asOf.formatted(date: .abbreviated, time: .shortened), valueIsNumeric: false)
                             SettingsValueRow(title: L10n.text("持仓"), value: String(preview.positions.count))
+                            SettingsValueRow(title: L10n.text("交易记录"), value: String(preview.transactions.count))
                             ForEach(preview.positions.prefix(10), id: \.ticker) { position in
                                 SettingsValueRow(title: position.ticker, value: DisplayFormat.shares(position.shares))
                             }
@@ -70,8 +63,11 @@ struct SnapTradeView: View {
                         if preview.positions.count > 10 {
                             SettingsFootnote(L10n.text("仅显示前 10 项；同步处理全部持仓。"))
                         }
+                        ForEach(preview.warnings, id: \.self) { warning in
+                            SettingsFootnote(warning)
+                        }
                     }
-                    SettingsFootnote(L10n.text("授权后关闭网页并读取账户；仅同步股票和基金持仓，不含现金或交易流水。"))
+                    SettingsFootnote(L10n.text("同步股票和基金持仓及买卖记录，用于图表买卖点和交易明细。交易历史范围由券商决定，通常每日更新；不含现金流水。"))
                     if !status.isEmpty { StatusNotice(text: status) }
                     if busy { SettingsFootnote(L10n.text("停止等待不会撤销已确认的更新。")) }
                     DisclosureGroup(L10n.text("需要帮助？")) {
@@ -80,8 +76,6 @@ struct SnapTradeView: View {
                                 Button(L10n.text("更改凭证")) { resetCredentialsPreview() }
                             }
                             Link(L10n.text("打开 SnapTrade Dashboard"), destination: URL(string: "https://dashboard.snaptrade.com")!)
-                            Button(L10n.text("连接或重新授权券商")) { perform { try await connectBroker() } }
-                                .disabled(!hasCredentials)
                             Button(L10n.text("读取账户列表")) { perform { try await loadAccounts() } }
                                 .disabled(!hasCredentials)
                             Button(L10n.text("保存凭证")) {
@@ -127,14 +121,13 @@ struct SnapTradeView: View {
             .onChange(of: clientID) { _, _ in resetCredentialsPreview() }
             .onChange(of: consumerKey) { _, _ in resetCredentialsPreview() }
             .onChange(of: selectedID) { _, _ in preview = nil; previewCredentials = nil }
-            .appSheet(item: $portal) { item in SnapTradeBrowser(url: item.url).ignoresSafeArea() }
             .confirmationDialog(L10n.text("确认同步 SnapTrade 账户？"), isPresented: $confirmsSync, titleVisibility: .visible) {
                 Button(L10n.text("同步并更新")) { perform { try await commit() } }
                 Button(L10n.text("取消"), role: .cancel) {}
             } message: {
                 Text(preview?.positions.isEmpty == true
                     ? L10n.text("此账户当前没有持仓。确认后将清空此账户的旧持仓，保留历史记录。")
-                    : L10n.text("仅更新预览中的账户持仓；其他账户与已有交易历史保留。"))
+                    : L10n.text("更新此账户的持仓并合并买卖记录；其他账户与已有交易历史保留。"))
             }
             .confirmationDialog(L10n.text("移除本机 SnapTrade 凭证？"), isPresented: $confirmsRemoval, titleVisibility: .visible) {
                 Button(L10n.text("移除"), role: .destructive) {
@@ -149,7 +142,7 @@ struct SnapTradeView: View {
         .accountFlowBrand(.snaptrade)
     }
 
-    private var flowStep: Int { preview != nil ? 3 : (!allowedAccounts.isEmpty || hasOpenedPortal ? 2 : 1) }
+    private var flowStep: Int { preview != nil ? 3 : (!allowedAccounts.isEmpty ? 2 : 1) }
 
     private var credentialsForm: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -170,31 +163,10 @@ struct SnapTradeView: View {
         } else if !allowedAccounts.isEmpty {
             OnboardingPrimaryButton(title: L10n.text("预览持仓"), isDisabled: selectedID.isEmpty,
                 isBusy: busy) { perform { try await loadPreview() } }
-        } else if hasOpenedPortal {
+        } else {
             OnboardingPrimaryButton(title: L10n.text("读取账户列表"), isDisabled: !hasCredentials,
                 isBusy: busy) { perform { try await loadAccounts() } }
-        } else {
-            OnboardingPrimaryButton(title: L10n.text("连接券商"), isDisabled: !hasCredentials,
-                isBusy: busy) { perform { try await connectBroker() } }
-            Button(L10n.text("已授权，读取账户")) { perform { try await loadAccounts() } }
-                .disabled(!hasCredentials || busy)
         }
-    }
-
-    private func connectBroker() async throws {
-        let saved = try credentials()
-        try saved.save(accountID: context.account?.accountID)
-        var reconnect: String?
-        if let currentID = context.account?.accountID {
-            let linked = try await SnapTradeClient().accounts(credentials: saved)
-            try Task.checkCancellation()
-            guard let current = linked.first(where: { $0.id == currentID }) else { throw SnapTradeError.accountUnavailable }
-            reconnect = current.brokerage_authorization
-        }
-        let url = try await SnapTradeClient().portal(credentials: saved, reconnect: reconnect)
-        try Task.checkCancellation()
-        hasOpenedPortal = true
-        portal = Portal(url: url)
     }
 
     private func loadPreview() async throws {
@@ -210,7 +182,7 @@ struct SnapTradeView: View {
 
     private func credentials() throws -> SnapTradeCredentials { try .init(clientID: clientID, consumerKey: consumerKey) }
     private func resetCredentialsPreview() {
-        preview = nil; previewCredentials = nil; accounts = []; selectedID = ""; hasOpenedPortal = false
+        preview = nil; previewCredentials = nil; accounts = []; selectedID = ""
     }
     private func perform(_ action: @escaping @MainActor () async throws -> Void) {
         guard !busy, !model.isFakeDataMode, !model.isPublicInvestorMode else { return }
@@ -233,7 +205,11 @@ struct SnapTradeView: View {
         try saved.save(accountID: context.account?.accountID)
         accounts = fetched
         selectedID = allowedAccounts.first?.id ?? ""
-        if allowedAccounts.isEmpty { status = L10n.text("没有可用的新账户，请先完成券商授权；已有账户请从账户详情同步。") }
+        if allowedAccounts.isEmpty {
+            status = fetched.isEmpty
+                ? L10n.text("此 Key 下没有已关联的券商账户。请先在 SnapTrade Dashboard 关联账户，再回来读取。")
+                : L10n.text("没有可添加的新账户；已有账户请从账户详情同步。")
+        }
     }
 
     private func commit() async throws {
@@ -289,10 +265,4 @@ final class SnapTradeOperation {
         task = nil
         isRunning = false
     }
-}
-
-private struct SnapTradeBrowser: UIViewControllerRepresentable {
-    let url: URL
-    func makeUIViewController(context: Context) -> SFSafariViewController { SFSafariViewController(url: url) }
-    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }

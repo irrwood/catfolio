@@ -130,35 +130,93 @@ extension EnvironmentValues {
 enum MacSplitColumns {
     static let minimumPageWidth: CGFloat = 420
     static let minimumDetailWidth: CGFloat = 360
+    /// The share of the split the subpage column keeps, so a security's page
+    /// opened beside the page still has room to read.
+    static let detailShare: CGFloat = 0.4
+
+    /// The page's width in a split this wide: as wide as it grows, after the
+    /// subpage column has its share, and never below its own minimum.
+    static func pageWidth(available: CGFloat, maximum: CGFloat) -> CGFloat {
+        let detail = max(minimumDetailWidth, (available * detailShare).rounded())
+        let page = min(maximum, available - detail)
+        return max(min(minimumPageWidth, maximum), page).rounded()
+    }
 }
 
 /// A sidebar page on the Mac keeps its own width and the column beside it,
-/// where subpages open, takes the rest. Left alone the split view holds the
-/// page to a sidebar's narrow width, whatever SwiftUI asks for, and falls
-/// back to it again as columns change. This sets the widths straight on
-/// the split view, outside SwiftUI's update, so restoring them cannot start
-/// another update; setting values it already has changes nothing.
+/// where subpages open, takes the rest. On the Mac the split is a divider a
+/// person can drag, and a preferred width only seeds where it starts: left
+/// alone it settled at about half the window, whatever SwiftUI or a
+/// preferred width asked for. The page's width is pinned instead (the same
+/// minimum and maximum), worked out again whenever the window changes.
+/// Set straight on the split view, outside SwiftUI's update, so restoring it
+/// cannot start another update; values it already has are left alone.
 @MainActor
 final class MacSplitWidths {
-    weak var split: UISplitViewController?
+    weak var split: UISplitViewController? {
+        didSet { if split !== oldValue { observeResizing() } }
+    }
     let pageWidth: CGFloat
 
     init(pageWidth: CGFloat) {
         self.pageWidth = pageWidth
     }
 
+    /// SwiftUI reports a new window size before UIKit has resized the split
+    /// view, so the width it read then was the old one. A view riding along
+    /// inside the split hears each real change of its width instead.
+    private func observeResizing() {
+        guard let split else { return }
+        guard !split.view.subviews.contains(where: { $0 is SplitResizeObserver }) else { return }
+        let observer = SplitResizeObserver(frame: split.view.bounds)
+        observer.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        observer.isUserInteractionEnabled = false
+        observer.onResize = { [weak self] in self?.apply() }
+        split.view.insertSubview(observer, at: 0)
+    }
+
     func apply() {
         guard let split else { return }
-        let minimum = min(MacSplitColumns.minimumPageWidth, pageWidth)
+        let available = split.view.bounds.width
+        guard available > 0 else { return }
+        let page = MacSplitColumns.pageWidth(available: available, maximum: pageWidth)
         if split.preferredSplitBehavior != .tile { split.preferredSplitBehavior = .tile }
         if split.preferredDisplayMode != .oneBesideSecondary { split.preferredDisplayMode = .oneBesideSecondary }
-        if split.minimumPrimaryColumnWidth != minimum { split.minimumPrimaryColumnWidth = minimum }
-        if split.maximumPrimaryColumnWidth != pageWidth { split.maximumPrimaryColumnWidth = pageWidth }
-        if split.preferredPrimaryColumnWidth != pageWidth { split.preferredPrimaryColumnWidth = pageWidth }
-        if #available(iOS 26.0, macCatalyst 26.0, *),
-           split.minimumSecondaryColumnWidth != MacSplitColumns.minimumDetailWidth {
-            split.minimumSecondaryColumnWidth = MacSplitColumns.minimumDetailWidth
+        // Widen the range before narrowing it, so the two never cross.
+        if page > split.maximumPrimaryColumnWidth {
+            split.maximumPrimaryColumnWidth = page
+            split.minimumPrimaryColumnWidth = page
+        } else {
+            if split.minimumPrimaryColumnWidth != page { split.minimumPrimaryColumnWidth = page }
+            if split.maximumPrimaryColumnWidth != page { split.maximumPrimaryColumnWidth = page }
         }
+        if split.preferredPrimaryColumnWidth != page { split.preferredPrimaryColumnWidth = page }
+        if #available(iOS 26.0, macCatalyst 26.0, *) {
+            if split.minimumSecondaryColumnWidth != MacSplitColumns.minimumDetailWidth {
+                split.minimumSecondaryColumnWidth = MacSplitColumns.minimumDetailWidth
+            }
+            let secondary = available - page
+            if split.preferredSecondaryColumnWidth != secondary { split.preferredSecondaryColumnWidth = secondary }
+        }
+        // A changed width does not move the divider until the split lays out.
+        if abs(split.primaryColumnWidth - page) > 0.5 {
+            split.view.setNeedsLayout()
+            split.view.layoutIfNeeded()
+        }
+    }
+}
+
+/// Calls back once the split view it sits in has really changed width.
+private final class SplitResizeObserver: UIView {
+    var onResize: (() -> Void)?
+    private var lastWidth: CGFloat = 0
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard abs(bounds.width - lastWidth) > 0.5 else { return }
+        lastWidth = bounds.width
+        // After this layout pass, not inside it.
+        DispatchQueue.main.async { [weak self] in self?.onResize?() }
     }
 }
 
@@ -205,6 +263,9 @@ struct MacSplitPage<Content: View>: View {
                 .ignoresSafeArea()
         }
         .navigationSplitViewStyle(.balanced)
+        // The sidebar takes the accent for its selection; the pages keep the
+        // ink they have on the phone.
+        .tint(.primary)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { _ in widths.apply() }
     }
 }
@@ -225,19 +286,42 @@ struct MacHover<Content: View>: View {
 }
 
 /// A chart follows the Mac pointer the way it follows a held finger: the
-/// point under it is selected, and leaving the plot clears it.
+/// point under it is selected, and leaving the plot clears it. Pressing and
+/// dragging measures from where the press began to the pointer, as two
+/// held fingers do on a touch screen; letting go clears it.
 struct MacChartHover: ViewModifier {
     let onMove: (CGPoint) -> Void
     let onEnd: () -> Void
+    var onDrag: ((CGPoint, CGPoint) -> Void)?
+    var onDragEnd: (() -> Void)?
+    @State private var isDragging = false
 
     func body(content: Content) -> some View {
         if MacPlatform.isMac {
-            content.onContinuousHover { phase in
-                switch phase {
-                case .active(let location): onMove(location)
-                case .ended: onEnd()
+            content
+                .onContinuousHover { phase in
+                    // While a press measures, the pointer is its end, not a
+                    // single day of its own.
+                    guard !isDragging else { return }
+                    switch phase {
+                    case .active(let location): onMove(location)
+                    case .ended: onEnd()
+                    }
                 }
-            }
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 3)
+                        .onChanged { value in
+                            guard let onDrag else { return }
+                            isDragging = true
+                            onDrag(value.startLocation, value.location)
+                        }
+                        .onEnded { _ in
+                            guard isDragging else { return }
+                            isDragging = false
+                            onDragEnd?()
+                        },
+                    including: onDrag == nil ? .subviews : .all
+                )
         } else {
             content
         }
@@ -291,10 +375,23 @@ struct MacOverviewCard: ViewModifier {
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius, style: .continuous)
         content
+            .environment(\.sitsOnMacOverviewCard, true)
             .padding(.vertical, 6)
+            // Given a row's height, the card takes all of it, so the two
+            // cards of a row end on the same line.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(SettingsTemplate.card, in: shape)
             .clipShape(shape)
     }
+}
+
+extension EnvironmentValues {
+    /// The Mac Overview's heatmap fills the height its card is given, so it
+    /// matches the chart card beside it, rather than its own fixed height.
+    @Entry var heatmapFillsHeight = false
+    /// Inside a Mac Overview card: the card paints the one card colour, and
+    /// what sits on it leaves its own ground off.
+    @Entry var sitsOnMacOverviewCard = false
 }
 
 extension View {

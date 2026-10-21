@@ -493,6 +493,12 @@ extension LocalMarketDataClient {
     /// Yahoo quote.close is split-adjusted. Undo subsequent splits to get the
     /// contemporaneous price used with actual historical share quantities.
     private func ledgerPriceHistory(symbol: String, from: String, to: String, cachedOnly: Bool = false, forceRefresh: Bool = false) async throws -> LedgerPriceHistory {
+        if let archive = DelistedPriceArchive.entry(for: symbol) {
+            let closes = archive.closes(from: from, to: to)
+            guard !closes.isEmpty else { throw LocalServiceError.noHistoricalPrices }
+            return LedgerPriceHistory(currency: archive.currency, closes: closes, splits: [],
+                fetchedAt: DayDateCodec.date(from: archive.retrievedAt) ?? .distantPast)
+        }
         let cacheKey = Data("ledger-v1|\(symbol)|\(from)|\(to)".utf8).base64EncodedString()
             .replacingOccurrences(of: "/", with: "_")
         let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]

@@ -64,11 +64,23 @@ final class AccountFlowThemeTests: XCTestCase {
                         isSelected: selected, title: account.localizedDisplayName,
                         selectionAccessibilityLabel: "Include account", toggle: {}
                     ).accountFlowBrand(account.brandProvider), dark: dark)
-                    let coloredPixels = try matchingPixels(in: row, colors: [target])
+                    // Inspect only the selection column. Monochrome brands share
+                    // their tint with the account title, even when unselected.
+                    let selection = try XCTUnwrap(row.cgImage?.cropping(to: CGRect(
+                        x: SettingsTemplate.rowHorizontalPadding * row.scale, y: 0,
+                        width: SettingsTemplate.iconSize * row.scale,
+                        height: row.size.height * row.scale)))
+                    let coloredPixels = try matchingPixels(in: UIImage(cgImage: selection), colors: [target])
                     if selected {
                         XCTAssertGreaterThan(coloredPixels, 80, "Selected accounts use their connector's color")
                     } else {
-                        XCTAssertEqual(coloredPixels, 0, "Unselected circles remain neutral")
+                        let neutral = UIColor(CatfolioTheme.primaryText).resolvedColor(with: traits)
+                        XCTAssertGreaterThan(try matchingPixels(in: UIImage(cgImage: selection), colors: [neutral]), 80,
+                                             "Unselected circles use the neutral text color")
+                        // For a monochrome provider, the brand tint is itself neutral.
+                        if zip(rgb(neutral), rgb(target)).contains(where: { abs($0 - $1) > 0.2 }) {
+                            XCTAssertEqual(coloredPixels, 0, "Unselected circles do not acquire a colored brand tint")
+                        }
                     }
                 }
             }
@@ -121,7 +133,10 @@ final class AccountFlowThemeTests: XCTestCase {
         case .moomoo: MoomooOAuthView(context: context)
         case .robinhood: RobinhoodConnectionView(context: context)
         case .snaptrade: SnapTradeView(context: context)
+        case .longbridge: DirectBrokerAccountView(broker: .longbridge, context: context)
+        case .alpaca: DirectBrokerAccountView(broker: .alpaca, context: context)
         case .csv: CSVImportView(context: context)
+        case .screenshot: ScreenshotImportView(context: context)
         }
     }
 
@@ -130,9 +145,12 @@ final class AccountFlowThemeTests: XCTestCase {
         case .trading212: "Trading 212"
         case .ibkr: "IBKR Flex"
         case .moomoo: "Moomoo"
+        case .longbridge: "Longbridge"
+        case .alpaca: "Alpaca"
         case .robinhood: "Robinhood"
         case .snaptrade: "SnapTrade"
         case .csv: "CSV"
+        case .screenshot: "Screenshot"
         }
         return PortfolioAccount(id: "brand-test-\(provider.rawValue)", accountID: nil,
             source: source, name: "\(source) · Orange", baseCurrency: "USD", positionCount: 3,
@@ -168,8 +186,10 @@ final class AccountFlowThemeTests: XCTestCase {
         case .ibkr: context.isCreating ? L10n.text("填写 Token 和 Query ID") : L10n.text("保存凭证")
         case .moomoo: L10n.text("登录 Moomoo")
         case .robinhood: L10n.text("生成桌面登录链接")
-        case .snaptrade: L10n.text("连接券商")
+        case .snaptrade: L10n.text("读取账户列表")
+        case .longbridge, .alpaca: L10n.text("预览持仓")
         case .csv: L10n.text("选择 CSV 文件")
+        case .screenshot: L10n.text("选择持仓截图")
         }
         let cg = try XCTUnwrap(image.cgImage)
         let request = VNRecognizeTextRequest()
@@ -206,6 +226,7 @@ final class AccountFlowThemeTests: XCTestCase {
         let targets = colors.map(rgb)
         var matches = 0
         for offset in stride(from: 0, to: pixels.count, by: 4) {
+            guard pixels[offset + 3] > 250 else { continue }
             let red = Double(pixels[offset]) / 255
             let green = Double(pixels[offset + 1]) / 255
             let blue = Double(pixels[offset + 2]) / 255

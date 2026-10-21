@@ -71,7 +71,7 @@ struct ServiceAPIOnboardingView: View {
                     OnboardingFeature(symbol: "key.horizontal", title: L10n.text("按需连接服务"),
                                       detail: L10n.text("行情、新闻和 AI，选你需要的就好。"))
                     OnboardingFeature(symbol: "lock", title: L10n.text("密钥由你掌握"),
-                                      detail: L10n.text("保存在本机钥匙串，随时可以移除。"))
+                                      detail: L10n.text("保存在钥匙串，可选择跨设备同步。"))
                 } else {
                     OnboardingHeader(title: L10n.text("连接你的账户"),
                                      subtitle: L10n.text("选择券商连接，或通过 CSV 导入。"))

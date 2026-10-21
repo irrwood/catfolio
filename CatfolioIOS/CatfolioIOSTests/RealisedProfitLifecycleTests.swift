@@ -111,7 +111,9 @@ final class RealisedProfitLifecycleTests: XCTestCase {
         XCTAssertTrue(model.accounts.isEmpty)
         let reset = try await store.load()
         XCTAssertTrue(reset.positions.isEmpty)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: portfolioURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: portfolioURL.path))
+        XCTAssertNotNil(reset.syncMetadata?.resetAt, "The reset marker must prevent stale iCloud data from restoring the old ledger")
+        XCTAssertTrue((reset.transactions ?? []).isEmpty)
         let backup = try XCTUnwrap(FileManager.default.contentsOfDirectory(at: directory,
             includingPropertiesForKeys: nil).first { $0.lastPathComponent.hasPrefix("portfolio-reset-") })
         let recovered = try await LocalPortfolioStore(fileURL: backup).load()

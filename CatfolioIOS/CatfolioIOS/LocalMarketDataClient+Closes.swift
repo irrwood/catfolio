@@ -62,6 +62,16 @@ extension LocalMarketDataClient {
         cachedOnly: Bool = false,
         forceRefresh: Bool = false
     ) async throws -> [String: Double] {
+        if let security = ChinaSecurity(symbol) {
+            let bars = try await ChinaMarketDataClient().daily(security, from: from, to: to,
+                adjusted: dividendAdjusted, forceRefresh: forceRefresh, cachedOnly: cachedOnly)
+            return Dictionary(uniqueKeysWithValues: bars.map { ($0.date, $0.close) })
+        }
+        if let archive = DelistedPriceArchive.entry(for: symbol) {
+            let closes = archive.closes(from: from, to: to)
+            guard !closes.isEmpty else { throw LocalServiceError.noHistoricalPrices }
+            return closes
+        }
         let cacheSymbol = dividendAdjusted ? symbol : symbol + "#split-only"
         let cached = await LocalHistoricalPriceCache.shared.lookup(symbol: cacheSymbol, from: from, to: to)
         if cachedOnly {

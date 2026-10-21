@@ -25,9 +25,6 @@ struct PublicInvestorSettingsSection: View {
                 ) {
                     PublicInvestorSelectionView()
                 }
-                SettingsNavigationRow(title: L10n.text("持仓动态")) {
-                    PublicInvestorActivityView()
-                }
             }
             if let error = model.fakeDataModeError {
                 SettingsFootnote(error, color: CatfolioTheme.danger)
@@ -55,7 +52,9 @@ struct PublicInvestorSelectionView: View {
         SettingsPage(
             title: L10n.text("选择人物"),
             subtitle: L10n.text("可选择多个"),
-            bottomInset: 32
+            bottomInset: 32,
+            topInset: SettingsTemplate.pageInset,
+            titleDisplayMode: .inline
         ) {
             // Its own card, above the filers and separated from them: the
             // others are real people's disclosed holdings, this one is not

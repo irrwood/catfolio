@@ -314,6 +314,15 @@ struct StandardLineChart: View {
                         onEnd: {
                             lastHapticDates = []
                             onInteractionEnded(1)
+                        },
+                        onDrag: { start, current in
+                            updateSelection(from: [start, current].map {
+                                CGPoint(x: $0.x + plot.minX, y: $0.y + plot.minY)
+                            }, plot: plot)
+                        },
+                        onDragEnd: {
+                            lastHapticDates = []
+                            onInteractionEnded(2)
                         }
                     ))
                     .researchLayoutFrame("standard-chart.plot")

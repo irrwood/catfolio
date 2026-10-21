@@ -32,6 +32,9 @@ extension AddAccountProvider {
         case .csv:
             .init(accent: CatfolioPalette.accountImportTop,
                   controlTint: CatfolioPalette.accountImportControl, onAccent: .white)
+        case .screenshot, .longbridge, .alpaca:
+            .init(accent: CatfolioTheme.primaryText,
+                  controlTint: CatfolioTheme.primaryText, onAccent: SettingsTemplate.pageBackground)
         }
     }
 }
@@ -43,9 +46,12 @@ extension PortfolioAccount {
         case "Trading 212": .trading212
         case "IBKR Flex": .ibkr
         case "Moomoo": .moomoo
+        case "Longbridge": .longbridge
+        case "Alpaca": .alpaca
         case "Robinhood": .robinhood
         case "SnapTrade": .snaptrade
         case "CSV": .csv
+        case "Screenshot": .screenshot
         default: nil
         }
     }

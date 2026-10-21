@@ -286,7 +286,9 @@ struct CostMarketCard: View {
                 ),
                 size: 40,
                 symbolSize: 25.8,
-                color: .primary
+                color: .primary,
+                // Optically under the label: the "$" carries its own blank.
+                alignsInkToLeadingEdge: true
             )
             .contentTransition(.numericText(value: displayedPrimaryAmount))
             .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: displayedPrimaryAmount)
@@ -356,6 +358,9 @@ struct CostMarketCard: View {
             .appNumber(.footnote)
             .lineLimit(1)
             .minimumScaleFactor(0.62)
+            // The leading triangle starts at the edge, under the label and
+            // the total, rather than in the middle of its own slot.
+            .environment(\.financialSignStyle, FinancialSignStyle(hugsLeadingEdge: true))
             .offset(x: CatfolioStyle.pageHorizontalInset, y: 82)
 
             chartContent(data: data)

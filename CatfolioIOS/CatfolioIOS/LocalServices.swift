@@ -73,9 +73,9 @@ enum LocalServiceError: LocalizedError {
         case .missingMassiveKey:
             L10n.text("请先在设置中填写 Massive API Key。")
         case .missingAIKey:
-            L10n.text("DeepSeek 模式需要 API Key。请在设置中填写，Key 只保存在此 iPhone。")
+            L10n.text("DeepSeek 模式需要 API Key。请在设置中填写，或开启 iCloud 密钥同步。")
         case .missingOpenRouterKey:
-            L10n.text("OpenRouter 模式需要 API Key。请在设置中填写，Key 只保存在此 iPhone。")
+            L10n.text("OpenRouter 模式需要 API Key。请在设置中填写，或开启 iCloud 密钥同步。")
         case .missingCodexConnection:
             L10n.text("请先在设置中连接 ChatGPT Codex。")
         case let .appleModelUnavailable(reason):
@@ -119,7 +119,7 @@ enum AIProviderPreference: String, CaseIterable, Identifiable {
         case .codex:
             return AIProviderPreference.automatic.readiness
         case .deepSeek:
-            return (hasDeepSeekKey, L10n.text("DeepSeek 模式需要 API Key。请在设置中填写，Key 只保存在此 iPhone。"))
+            return (hasDeepSeekKey, L10n.text("DeepSeek 模式需要 API Key。请在设置中填写，或开启 iCloud 密钥同步。"))
         case .openRouter:
             return (LocalServiceKeys.hasOpenRouterKey, L10n.text("OpenRouter 需要 API Key，请在设置 › 服务商中填写。"))
         case .automatic:

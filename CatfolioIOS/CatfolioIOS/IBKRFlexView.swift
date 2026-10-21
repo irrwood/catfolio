@@ -32,6 +32,7 @@ struct IBKRFlexView: View {
 
     let context: AccountConnectorContext
     private let isFirstLaunchSetup: Bool
+    private let credentialValues: () -> [String: String]
 
     @State private var showsSetupGuide = false
     @State private var guideStep = 0
@@ -47,6 +48,7 @@ struct IBKRFlexView: View {
     @State private var nicknameEdited = false
     @State private var usesLegacyCredentials = false
     @State private var didCopyBrief = false
+    @State private var hasPrepared = false
 
     // Credentials are normally keyed by account ID, but that ID only arrives
     // with the first successful report — which IBKR can take minutes to
@@ -60,9 +62,11 @@ struct IBKRFlexView: View {
     private static let legacyTokenKey = "ibkr.flex.token"
     private static let legacyQueryIDKey = "ibkr.flex.query-id"
 
-    init(context: AccountConnectorContext = .create, isFirstLaunchSetup: Bool = false) {
+    init(context: AccountConnectorContext = .create, isFirstLaunchSetup: Bool = false,
+         credentialValues: @escaping () -> [String: String] = BrokerCredentialPrefill.storedValues) {
         self.context = context
         self.isFirstLaunchSetup = isFirstLaunchSetup
+        self.credentialValues = credentialValues
         _guideStep = State(initialValue: isFirstLaunchSetup ? 1 : 0)
     }
 
@@ -138,7 +142,7 @@ struct IBKRFlexView: View {
                 Button(L10n.text("移除"), role: .destructive) { clearCredentials() }
                 Button(L10n.text("取消"), role: .cancel) {}
             } message: {
-                Text(L10n.text("只会删除此 iPhone Keychain 中的 Token 和 Query ID。"))
+                Text(L10n.text("将删除 Token 和 Query ID；开启或重新开启密钥同步后，删除也会同步到其他设备。"))
             }
             .confirmationDialog(
                 context.isCreating ? L10n.text("创建 IBKR 账户？") : L10n.text("更新 IBKR 账户？"),
@@ -221,7 +225,7 @@ struct IBKRFlexView: View {
                 .keyboardType(.numberPad)
 
             SettingsRowContainer {
-                Text(L10n.text("凭证仅存于此 iPhone。"))
+                Text(L10n.text("保存在钥匙串；可在设置中开启跨设备密钥同步。"))
                     .appText(.label, weight: .regular)
                     .foregroundStyle(SettingsTemplate.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
@@ -342,27 +346,34 @@ struct IBKRFlexView: View {
     }
 
     private func prepareAccount() {
+        guard !hasPrepared else { return }
+        hasPrepared = true
+        let stored = credentialValues()
         if isPendingAccount {
             nickname = context.account.map { AccountNaming.nickname(from: $0.displayName, provider: "IBKR") } ?? ""
-            token = KeychainStore.string(for: Self.pendingTokenKey) ?? ""
-            queryID = KeychainStore.string(for: Self.pendingQueryIDKey) ?? ""
+            token = stored[Self.pendingTokenKey] ?? ""
+            queryID = stored[Self.pendingQueryIDKey] ?? ""
             if let phase = IBKRFirstSync.shared.phase { status = Self.status(for: phase) }
         } else if let account = context.account {
             nickname = AccountNaming.nickname(from: account.displayName, provider: "IBKR")
             if let accountID = account.accountID,
-               let savedToken = KeychainStore.string(for: Self.tokenKey(accountID: accountID)),
-               let savedQueryID = KeychainStore.string(for: Self.queryIDKey(accountID: accountID)) {
+               let savedToken = stored[Self.tokenKey(accountID: accountID)],
+               let savedQueryID = stored[Self.queryIDKey(accountID: accountID)] {
                 token = savedToken
                 queryID = savedQueryID
             } else {
-                token = KeychainStore.string(for: Self.legacyTokenKey) ?? ""
-                queryID = KeychainStore.string(for: Self.legacyQueryIDKey) ?? ""
+                token = stored[Self.legacyTokenKey] ?? ""
+                queryID = stored[Self.legacyQueryIDKey] ?? ""
                 usesLegacyCredentials = !token.isEmpty || !queryID.isEmpty
             }
         } else {
             nickname = model.suggestedAccountNickname()
-            token = KeychainStore.string(for: Self.pendingTokenKey) ?? ""
-            queryID = KeychainStore.string(for: Self.pendingQueryIDKey) ?? ""
+            token = stored[Self.pendingTokenKey] ?? ""
+            queryID = stored[Self.pendingQueryIDKey] ?? ""
+            if let credentials = BrokerCredentialPrefill.ibkr(pendingToken: token, pendingQueryID: queryID, values: stored) {
+                token = credentials.token
+                queryID = credentials.queryID
+            }
         }
     }
 

@@ -62,11 +62,14 @@ struct AddAccountDestination: View {
         switch provider {
         case .trading212:
             Trading212View(context: .create, setupStore: setupStore, isFirstLaunchSetup: isFirstLaunchSetup)
+        case .longbridge: DirectBrokerAccountView(broker: .longbridge, context: .create, isFirstLaunchSetup: isFirstLaunchSetup)
+        case .alpaca: DirectBrokerAccountView(broker: .alpaca, context: .create, isFirstLaunchSetup: isFirstLaunchSetup)
         case .ibkr: IBKRFlexView(context: .create, isFirstLaunchSetup: isFirstLaunchSetup)
         case .moomoo: MoomooOAuthView(context: .create, isFirstLaunchSetup: isFirstLaunchSetup)
         case .robinhood: RobinhoodConnectionView(context: .create, isFirstLaunchSetup: isFirstLaunchSetup)
         case .snaptrade: SnapTradeView(context: .create, isFirstLaunchSetup: isFirstLaunchSetup)
         case .csv: CSVImportView(context: .create, isFirstLaunchSetup: isFirstLaunchSetup)
+        case .screenshot: ScreenshotImportView(context: .create, isFirstLaunchSetup: isFirstLaunchSetup)
         }
     }
 }

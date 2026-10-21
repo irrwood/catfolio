@@ -4,13 +4,9 @@ import Observation
 /// Mirrors a named set of preferences to iCloud, so a second device starts
 /// configured rather than blank.
 ///
-/// Only preferences. The portfolio document is not synced and is not meant to
-/// be: every one of this ledger's 1,977 transactions came from a broker, so a
-/// device holding the same API keys rebuilds it exactly. Syncing it would be
-/// syncing a cache — and syncing it *as a file* would be worse than useless,
-/// because a 600 KB document is last-writer-wins, so two devices that both
-/// refreshed would silently drop one device's transactions and leave a ledger
-/// where every remaining row still looks correct.
+/// Only preferences. Credentials use CloudCredentialSync and the encrypted
+/// ledger uses CloudPortfolioSync, with separate per-device opt-ins. Neither
+/// secrets nor investment records belong in the ubiquitous key-value store.
 ///
 /// The list is an allow-list rather than a deny-list. A preference added
 /// later stays on its own device until someone decides otherwise, which is
@@ -52,11 +48,16 @@ enum CloudPreferences {
     ///   minted per device as brokers connect, so a synced selection can
     ///   resolve to no accounts at all on the other side.
     /// - `catfolio.currentFX.v1`: a cache, refetched in seconds.
-    /// - Broker credentials: Keychain, and deliberately
-    ///   `WhenUnlockedThisDeviceOnly`. Changing that is a security decision,
-    ///   not a sync one.
+    /// - Broker credentials: managed separately by CloudCredentialSync.
+    /// - Sensitive sync toggles/ownership: local device consent, never mirrored.
     static let deliberatelyLocal: Set<String> = [
         enabledKey,
+        "catfolio.iCloudCredentialsEnabled",
+        "catfolio.iCloudCredentialsOwner.v1",
+        "catfolio.iCloudCredentialsBaseline.v1",
+        "catfolio.iCloudPortfolioEnabled",
+        "catfolio.iCloudPortfolioOwner.v1",
+        "catfolio.iCloudPortfolioPendingKeys.v1",
         "catfolio.fakeDataMode",
         "catfolio.fakeDataSelectedAccounts",
         "catfolio.fakeDataSelectsAllAccounts",

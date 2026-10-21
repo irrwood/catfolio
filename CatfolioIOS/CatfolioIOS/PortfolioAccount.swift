@@ -68,7 +68,7 @@ struct PortfolioAccount: Identifiable, Equatable, Codable {
     /// SnapTrade accounts are created only after a confirmed complete preview,
     /// so an empty SnapTrade account has already synced successfully.
     var awaitsFirstSync: Bool {
-        !["SnapTrade", "Robinhood"].contains(source) && positionCount == 0 && transactionCount == 0
+        !["SnapTrade", "Robinhood", "Longbridge", "Alpaca"].contains(source) && positionCount == 0 && transactionCount == 0
     }
 
     var brokerName: String {
@@ -91,7 +91,8 @@ struct PortfolioAccount: Identifiable, Equatable, Codable {
             "未设置"
         case "IBKR Flex": "Individual"
         case "Moomoo": "Individual"
-        case "CSV": "手动账户"
+        case "Alpaca": accountID?.hasPrefix("paper:") == true ? "模拟盘" : "实盘"
+        case "CSV", "Screenshot": "手动账户"
         case "假数据": "演示账户"
         case "公开披露": "投资账户"
         default: "投资账户"
@@ -116,7 +117,10 @@ struct PortfolioAccount: Identifiable, Equatable, Codable {
         case "Trading 212": "Trading 212 API / 同步数据"
         case "IBKR Flex": "IBKR Flex / 同步数据"
         case "Moomoo": "Moomoo API / 同步数据"
+        case "Longbridge": "Longbridge API / 同步数据"
+        case "Alpaca": "Alpaca API / 同步数据"
         case "CSV": "CSV 导入"
+        case "Screenshot": "截图导入"
         case "假数据": "本机演示数据"
         default: "本机数据"
         }

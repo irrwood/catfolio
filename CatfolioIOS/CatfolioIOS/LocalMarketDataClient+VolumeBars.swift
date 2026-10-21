@@ -45,6 +45,13 @@ extension LocalMarketDataClient {
             from: Calendar.current.date(byAdding: .day, value: -370, to: Date()) ?? Date()
         )
         let marketSymbol = Self.yahooSymbol(ticker: ticker, currency: currency)
+        if let security = ChinaSecurity(marketSymbol) {
+            return try await transform(ChinaMarketDataClient().daily(security, from: start, to: end,
+                adjusted: false, forceRefresh: forceRefresh, cachedOnly: cachedOnly))
+        }
+        if let archive = DelistedPriceArchive.entry(for: marketSymbol) {
+            return try transform(archive.dailyBars(from: start, to: end))
+        }
         let cached = await LocalVolumeBarCache.shared.lookup(symbol: marketSymbol)
         if let cached, cachedOnly || (!forceRefresh && cached.isFresh) {
             return try transform(cached.bars)

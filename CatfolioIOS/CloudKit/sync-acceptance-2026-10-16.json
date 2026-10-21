@@ -1,0 +1,64 @@
+{
+  "checkedAt": "2026-10-16T23:26:59+01:00",
+  "environment": "Production",
+  "devices": [
+    "iPhone 17 Pro",
+    "Mac Catalyst"
+  ],
+  "bothIndependentSwitchesEnabled": true,
+  "appleAccountOwnerMatches": true,
+  "activeCredentialBaselineCount": 8,
+  "credentialBaselinesMatch": true,
+  "macConfiguredProviders": 6,
+  "forwardRestore": {
+    "passed": true,
+    "accounts": 3,
+    "positions": 140,
+    "transactions": 3870,
+    "snapshots": 46,
+    "positionsTransactionsSnapshotsMatched": true
+  },
+  "reverseRename": {
+    "passed": true,
+    "completeDecodedDocumentsMatched": true
+  },
+  "restoration": {
+    "macOriginalNamesRestored": true,
+    "macUploadConfirmed": true,
+    "phoneRestorationConfirmed": true,
+    "originalNamesExactlyRestoredOnBothDevices": true,
+    "allFourBusinessCollectionsMatch": true,
+    "finalDocumentDifferenceFields": [
+      "updatedAt",
+      "syncMetadata"
+    ]
+  },
+  "latestObservedCounts": {
+    "iPhone": {
+      "knownAccounts": 3,
+      "positions": 140,
+      "transactions": 3870,
+      "snapshots": 46
+    },
+    "Mac": {
+      "knownAccounts": 3,
+      "positions": 140,
+      "transactions": 3870,
+      "snapshots": 46
+    }
+  },
+  "limitations": [
+    "Provider configuration presence was checked; every external provider API was not tested.",
+    "IBKR displayed an invalid Flex token format warning.",
+    "Full hardware fault/offline matrix was not run."
+  ],
+  "privacy": "No raw keys, credential fingerprints, account identifiers, account names, balances, or ledger contents retained in this report.",
+  "basicLiveAcceptancePassed": true,
+  "duplicateReconciliation": {
+    "earlierPhoneRawCount": 3871,
+    "earlierPhoneUniqueRowCount": 3870,
+    "exactDuplicateRowsRemoved": 1,
+    "allUniqueTransactionContentsPreservedIgnoringOnlyRestoredAccountName": true
+  },
+  "foregroundObservation": "Phone foreground refresh was required; final restoration was confirmed after the earlier background pause."
+}

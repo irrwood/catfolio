@@ -16,6 +16,7 @@ enum MarketHours {
         func local(_ zone: String, _ open: (Int, Int), _ close: (Int, Int)) -> Session {
             Session(timeZone: zone, open: open.0 * 60 + open.1, close: close.0 * 60 + close.1)
         }
+        if ChinaSecurity(symbol) != nil { return local("Asia/Shanghai", (9, 30), (15, 0)) }
         if symbol.hasSuffix(".L") { return local("Europe/London", (8, 0), (16, 30)) }
         if symbol.hasSuffix(".DE") || symbol.hasSuffix(".F") { return local("Europe/Berlin", (9, 0), (17, 30)) }
         if symbol.hasSuffix(".PA") || symbol.hasSuffix(".AS") || symbol.hasSuffix(".BR") || symbol.hasSuffix(".LS") {
@@ -40,6 +41,7 @@ enum MarketHours {
         let parts = calendar.dateComponents([.weekday, .hour, .minute], from: date)
         guard let weekday = parts.weekday, (2...6).contains(weekday) else { return false }
         let minute = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        if ChinaSecurity(ticker) != nil && (690..<780).contains(minute) { return false }
         return minute >= session.open && minute < session.close
     }
 }

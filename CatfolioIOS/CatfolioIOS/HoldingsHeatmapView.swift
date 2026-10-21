@@ -26,6 +26,7 @@ struct HoldingsHeatmapView: View {
     private let minimumIndividualFraction = 0.008
     private let groupedScreenInset: CGFloat = 16
     private let heatmapHeight: CGFloat = 525
+    @Environment(\.heatmapFillsHeight) private var fillsHeight
 
     var body: some View {
         let sectorGroups = groupsBySector ? makeSectorGroups() : []
@@ -49,7 +50,11 @@ struct HoldingsHeatmapView: View {
                         HoldingsHeatmapTileCloud(models: models, isInteractive: isInteractive, onSelect: select)
                     }
                 }
-                .frame(height: heatmapHeight)
+                // The Mac Overview's heatmap takes the height its card has;
+                // left to itself, still its usual height.
+                .frame(minHeight: fillsHeight ? 160 : heatmapHeight,
+                       idealHeight: heatmapHeight,
+                       maxHeight: fillsHeight ? .infinity : heatmapHeight)
                 .padding(
                     .horizontal,
                     groupsBySector

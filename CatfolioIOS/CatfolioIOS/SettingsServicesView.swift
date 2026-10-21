@@ -235,6 +235,11 @@ struct LocalServicesSettingsView: View {
                 SettingsSection(L10n.text("行情与估值")) {
                     providerLink(.massive)
                     providerLink(.fmp)
+                    SettingsNavigationRow(icon: .symbol("chart.line.uptrend.xyaxis"),
+                        title: L10n.text("A 股行情"), subtitle: L10n.text("长桥 · AKShare 来源")) {
+                        ChinaMarketSettingsView()
+                    }
+                    .accessibilityIdentifier("settings.china-market")
                 }
 
                 SettingsSection(L10n.text("新闻")) {
@@ -705,7 +710,7 @@ struct LocalServiceDetailView: View {
                     }
                     .disabled(isTesting)
                 }
-                Text(L10n.text("仅保存在此 iPhone 的 Keychain"))
+                Text(L10n.text("保存在钥匙串；可在设置中开启跨设备密钥同步。"))
                     .appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
                 Text(provider.detail).appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
 
@@ -911,7 +916,7 @@ struct LocalServiceDetailView: View {
             originalKey = ""
             try? drafts.clear(provider)
             revealsKey = false
-            feedback = LocalServiceFeedback(text: L10n.text("密钥已从此 iPhone 移除"), kind: .info)
+            feedback = LocalServiceFeedback(text: L10n.text("密钥已移除；开启同步后会同步删除。"), kind: .info)
             savedStatus = .unconfigured
             onStatusChanged(.unconfigured)
             if provider == .fmp {

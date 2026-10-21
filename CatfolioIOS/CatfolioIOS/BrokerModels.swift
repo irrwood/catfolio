@@ -72,6 +72,9 @@ struct CSVImportResult: Decodable {
     /// Rows the local importer could not read and left out. Not part of the
     /// server payload.
     var skippedRowCount = 0
+    var securityNames: [String: String] = [:]
+    var importCounts: CSVImportCounts? = nil
+    var undoID: UUID? = nil
 
     enum CodingKeys: String, CodingKey {
         case ok, warnings, holdings

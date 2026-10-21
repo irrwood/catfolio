@@ -10,6 +10,21 @@ enum HoldingDetailCardStyle {
     static let minimumRowHeight: CGFloat = 105
 }
 
+/// Every child modal of a security uses the same native leading close button.
+struct HoldingDetailCloseToolbar: ToolbarContent {
+    let action: () -> Void
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button(L10n.text("关闭弹窗"), systemImage: "xmark", action: action)
+                .labelStyle(.iconOnly)
+                .tint(CatfolioTheme.primaryText)
+                .keyboardShortcut(.cancelAction)
+                .accessibilityIdentifier("holding-modal-close")
+        }
+    }
+}
+
 /// Shared label for the Financial and AI entry cards. The caller owns the
 /// button action and presentation; the label owns only appearance.
 struct HoldingDetailActionCardLabel: View {
@@ -63,7 +78,7 @@ struct HoldingDetailChildPage<Content: View>: View {
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { AppModalDoneButton { dismiss() } }
+                HoldingDetailCloseToolbar { dismiss() }
             }
             .accessibilityIdentifier("holding-research-child-page")
         }

@@ -19,6 +19,10 @@ struct LocalPortfolioDocument: Codable, Equatable {
     /// "demo" or "fake" sails straight past. Provenance is something a
     /// producer states, not something a reader guesses.
     var isSynthetic: Bool? = nil
+    /// Optional so documents saved before iCloud sync still decode. Record
+    /// clocks survive unrelated edits; absence from another device is never
+    /// interpreted as a deletion.
+    var syncMetadata: LocalPortfolioSyncMetadata? = nil
 
     static let empty = LocalPortfolioDocument(
         source: "local",
@@ -26,6 +30,22 @@ struct LocalPortfolioDocument: Codable, Equatable {
         positions: [],
         snapshots: []
     )
+}
+
+struct LocalPortfolioSyncMetadata: Codable, Equatable {
+    // Numeric timestamps preserve subsecond ordering even when the document's
+    // legacy ISO-8601 updatedAt is encoded with whole-second precision.
+    var positionsUpdatedAt: [String: TimeInterval] = [:]
+    var accountsUpdatedAt: [String: TimeInterval] = [:]
+    var transactionsUpdatedAt: [String: TimeInterval] = [:]
+    var snapshotsUpdatedAt: [String: TimeInterval] = [:]
+    var deletedAccounts: [String: TimeInterval] = [:]
+    var deletedTransactions: [String: TimeInterval] = [:]
+    /// A Trading 212 slot is local to a device, not a broker account ID.
+    /// Bindings prevent unrelated accounts occupying slot 1 from combining.
+    var accountBindings: [String: String]? = nil
+    /// Also deletes records on an offline device that this device never saw.
+    var resetAt: TimeInterval? = nil
 }
 
 extension LocalPortfolioDocument {

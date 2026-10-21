@@ -63,10 +63,7 @@ struct InsiderTradesSheet: View {
             .appPageBackground().navigationTitle(L10n.text("内部人士交易"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Image(systemName: "xmark") }
-                        .accessibilityLabel(L10n.text("关闭"))
-                }
+                HoldingDetailCloseToolbar { dismiss() }
                 ToolbarItem(placement: .primaryAction) {
                     if isLoading, snapshot != nil {
                         ProgressView().controlSize(.small)

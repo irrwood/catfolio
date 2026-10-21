@@ -130,7 +130,8 @@ enum LocalCSVImporter {
     static func parse(
         _ data: Data,
         splitCatalog: StockSplitCatalog? = try? StockSplitCatalog.bundled.get(),
-        resolvedISINs: [String: String] = [:]
+        resolvedISINs: [String: String] = [:],
+        rebuildPositions: Bool = true
     ) throws -> ([LocalPositionRecord], [LocalTransactionRecord], CSVImportResult) {
         guard var text = decodedText(from: data) else {
             throw LocalPortfolioError.invalidCSV(L10n.text("文件编码无法识别，请使用 UTF-8 或 UTF-16"))
@@ -241,19 +242,72 @@ enum LocalCSVImporter {
         }
         guard !transactions.isEmpty else { throw LocalPortfolioError.invalidCSV(L10n.text("没有有效交易")) }
 
+        let storedTransactions = transactions.map {
+            LocalTransactionRecord(
+                date: DayDateCodec.string(from: $0.date),
+                action: $0.action,
+                ticker: $0.ticker,
+                quantity: $0.quantity,
+                price: $0.price,
+                currency: $0.currency,
+                source: "CSV",
+                accountID: nil,
+                accountName: "CSV",
+                tradeID: $0.reference,
+                entryMethod: "csv",
+                realisedProfitLoss: $0.realisedProfitLoss,
+                realisedProfitLossCurrency: $0.realisedProfitLossCurrency,
+                executedAt: ISO8601DateFormatter().string(from: $0.date),
+                cashPostings: ledgerIncomplete ? nil : $0.cashPostings
+            )
+        }
+        let names = Dictionary(transactions.map { ($0.ticker, $0.name) }, uniquingKeysWith: { old, new in new.isEmpty ? old : new })
+        let positions = rebuildPositions ? try positions(from: storedTransactions, names: names, splitCatalog: splitCatalog) : []
+        let imported = positions.map {
+            CSVImportedHolding(ticker: $0.ticker, name: $0.name, shares: $0.shares, averageCost: $0.averageCost, currency: $0.currency)
+        }
+        return (positions, storedTransactions, CSVImportResult(
+            ok: true,
+            holdingsCount: positions.count,
+            transactionsCount: transactions.count,
+            backupCreated: false,
+            warnings: warnings,
+            holdings: imported,
+            skippedRowCount: skippedRows,
+            securityNames: names
+        ))
+    }
+
+    static func sourceAccountID(in data: Data) -> String? {
+        guard let text = decodedText(from: data) else { return nil }
+        let records = parseRecords(text.replacingOccurrences(of: "\u{feff}", with: ""))
+        guard let header = headerRowIndex(in: records),
+              let column = records[header].firstIndex(where: {
+                  ["account", "account id", "account number", "账户", "账户编号"].contains(normalizeHeader($0))
+              }) else { return nil }
+        return records.dropFirst(header + 1).compactMap { row in
+            guard row.indices.contains(column) else { return nil }
+            let value = row[column].trimmingCharacters(in: .whitespacesAndNewlines)
+            return value.isEmpty ? nil : value
+        }.first
+    }
+
+    /// The same cost calculation for a standalone file and a merged account ledger.
+    static func positions(from transactions: [LocalTransactionRecord], names: [String: String] = [:],
+                          splitCatalog: StockSplitCatalog? = try? StockSplitCatalog.bundled.get()) throws -> [LocalPositionRecord] {
         struct PositionState {
             var shares = 0.0
             var average = 0.0
             var currency = "USD"
             var name = ""
-            var openedDate: Date?
+            var openedDate: String?
         }
         var states: [String: PositionState] = [:]
-        for transaction in transactions.sorted(by: { $0.date < $1.date }) {
+        for transaction in LocalTransactionRecord.orderedForLotMatching(transactions) {
             guard transaction.action == "BUY" || transaction.action == "SELL" else { continue }
             let key = "\(transaction.ticker)|\(transaction.currency)"
             let adjustment = splitCatalog.map { $0.adjustment(ticker: transaction.ticker,
-                    from: DayDateCodec.string(from: transaction.date)) } ?? 1
+                    from: transaction.date) } ?? 1
             guard let factor = adjustment, factor.isFinite, factor > 0 else {
                 throw LocalPortfolioError.invalidCSV(transaction.ticker)
             }
@@ -261,7 +315,7 @@ enum LocalCSVImporter {
             let price = transaction.price / factor
             var state = states[key] ?? PositionState()
             state.currency = transaction.currency
-            if !transaction.name.isEmpty { state.name = transaction.name }
+            state.name = names[transaction.ticker] ?? state.name
             if transaction.action == "BUY" {
                 if state.shares <= 0.001 {
                     state.openedDate = transaction.date
@@ -294,40 +348,10 @@ enum LocalCSVImporter {
                 quotePrice: state.average,
                 quoteCurrency: state.currency,
                 source: "CSV",
-                openedDate: state.openedDate.map { DayDateFormatter.shared.string(from: $0) }
+                openedDate: state.openedDate
             )
         }.sorted { $0.ticker < $1.ticker }
-        let imported = positions.map {
-            CSVImportedHolding(ticker: $0.ticker, name: $0.name, shares: $0.shares, averageCost: $0.averageCost, currency: $0.currency)
-        }
-        let storedTransactions = transactions.map {
-            LocalTransactionRecord(
-                date: DayDateCodec.string(from: $0.date),
-                action: $0.action,
-                ticker: $0.ticker,
-                quantity: $0.quantity,
-                price: $0.price,
-                currency: $0.currency,
-                source: "CSV",
-                accountID: nil,
-                accountName: "CSV",
-                tradeID: $0.reference,
-                entryMethod: "csv",
-                realisedProfitLoss: $0.realisedProfitLoss,
-                realisedProfitLossCurrency: $0.realisedProfitLossCurrency,
-                executedAt: ISO8601DateFormatter().string(from: $0.date),
-                cashPostings: ledgerIncomplete ? nil : $0.cashPostings
-            )
-        }
-        return (positions, storedTransactions, CSVImportResult(
-            ok: true,
-            holdingsCount: positions.count,
-            transactionsCount: transactions.count,
-            backupCreated: false,
-            warnings: warnings,
-            holdings: imported,
-            skippedRowCount: skippedRows
-        ))
+        return positions
     }
 
     private static func number(_ value: String) throws -> Double {

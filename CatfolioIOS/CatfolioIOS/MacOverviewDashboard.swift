@@ -6,6 +6,9 @@ import SwiftUI
 struct MacDashboardRow: Layout {
     static let sideBySideWidth: CGFloat = 860
     var spacing: CGFloat = 10
+    /// Side by side, the row is as tall as its first card rather than its
+    /// tallest one, and the others fill that height.
+    var matchesFirst = false
 
     private func isSideBySide(_ width: CGFloat) -> Bool {
         width >= Self.sideBySideWidth
@@ -16,12 +19,20 @@ struct MacDashboardRow: Layout {
         return (width - spacing * CGFloat(count - 1)) / CGFloat(count)
     }
 
+    /// The height every card of a side-by-side row is given.
+    private func rowHeight(column: CGFloat, subviews: Subviews) -> CGFloat {
+        let proposal = ProposedViewSize(width: column, height: nil)
+        if matchesFirst, let first = subviews.first {
+            return first.sizeThatFits(proposal).height
+        }
+        return subviews.map { $0.sizeThatFits(proposal).height }.max() ?? 0
+    }
+
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? Self.sideBySideWidth
         if isSideBySide(width) {
             let column = columnWidth(width, count: subviews.count)
-            let heights = subviews.map { $0.sizeThatFits(ProposedViewSize(width: column, height: nil)).height }
-            return CGSize(width: width, height: heights.max() ?? 0)
+            return CGSize(width: width, height: rowHeight(column: column, subviews: subviews))
         }
         let heights = subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height }
         let gaps = spacing * CGFloat(max(0, subviews.count - 1))
@@ -31,10 +42,11 @@ struct MacDashboardRow: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         if isSideBySide(bounds.width) {
             let column = columnWidth(bounds.width, count: subviews.count)
+            let height = rowHeight(column: column, subviews: subviews)
             for (index, subview) in subviews.enumerated() {
                 let x = bounds.minX + CGFloat(index) * (column + spacing)
                 subview.place(at: CGPoint(x: x, y: bounds.minY), anchor: .topLeading,
-                              proposal: ProposedViewSize(width: column, height: nil))
+                              proposal: ProposedViewSize(width: column, height: height))
             }
             return
         }

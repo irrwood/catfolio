@@ -10,6 +10,7 @@ struct Trading212View: View {
     let context: AccountConnectorContext
     private let setupStore: Trading212SetupStore
     private let isFirstLaunchSetup: Bool
+    private let credentialValues: () -> [String: String]
 
     @State private var guideStep: Trading212GuideStep = .prepare
     @State private var apiKey = ""
@@ -31,10 +32,12 @@ struct Trading212View: View {
     private var isWorking: Bool { operation.isRunning }
 
     init(context: AccountConnectorContext = .create, setupStore: Trading212SetupStore = .shared,
-         isFirstLaunchSetup: Bool = false) {
+         isFirstLaunchSetup: Bool = false,
+         credentialValues: @escaping () -> [String: String] = BrokerCredentialPrefill.storedValues) {
         self.context = context
         self.setupStore = setupStore
         self.isFirstLaunchSetup = isFirstLaunchSetup
+        self.credentialValues = credentialValues
         _guideStep = State(initialValue: isFirstLaunchSetup ? .credentials : .prepare)
     }
 
@@ -129,7 +132,7 @@ struct Trading212View: View {
                 Button(L10n.text("移除"), role: .destructive) { clearCredentials() }
                 Button(L10n.text("取消"), role: .cancel) {}
             } message: {
-                Text(L10n.text("只会删除当前账户保存在此 iPhone Keychain 中的 API Key 与 Secret。"))
+                Text(L10n.text("将删除当前账户的 API Key 与 Secret；开启或重新开启密钥同步后，删除也会同步到其他设备。"))
             }
             .confirmationDialog(
                 context.isCreating ? L10n.text("创建 Trading 212 账户？") : L10n.text("更新 Trading 212 账户？"),
@@ -288,7 +291,7 @@ struct Trading212View: View {
             credentialRow("API Key", text: $apiKey, revealed: $revealsKey, id: "trading212.api-key")
             credentialRow("API Secret", text: $apiSecret, revealed: $revealsSecret, id: "trading212.api-secret")
         }
-        Text(L10n.text("仅保存在此 iPhone 的 Keychain"))
+        Text(L10n.text("保存在钥匙串；可在设置中开启跨设备密钥同步。"))
             .appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
 
     }
@@ -356,17 +359,22 @@ struct Trading212View: View {
             nicknameEdited = saved.nicknameEdited
             return
         }
+        let stored = credentialValues()
         if let account = context.account {
             if let slot = account.accountID.flatMap({ Int($0.replacingOccurrences(of: "account-", with: "")) }) {
                 accountSlot = slot
             }
-            apiKey = KeychainStore.string(for: Self.apiKeyKey(slot: accountSlot)) ?? ""
-            apiSecret = KeychainStore.string(for: Self.apiSecretKey(slot: accountSlot)) ?? ""
+            apiKey = stored[Self.apiKeyKey(slot: accountSlot)] ?? ""
+            apiSecret = stored[Self.apiSecretKey(slot: accountSlot)] ?? ""
             nickname = AccountNaming.nickname(from: account.displayName, provider: "Trading 212")
             return
         }
 
         accountSlot = availableAccountSlot()
+        if let credentials = BrokerCredentialPrefill.trading212(slot: accountSlot, values: stored) {
+            apiKey = credentials.apiKey
+            apiSecret = credentials.apiSecret
+        }
         nickname = model.suggestedAccountNickname()
     }
 

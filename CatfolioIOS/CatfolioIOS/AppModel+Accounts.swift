@@ -234,22 +234,35 @@ extension AppModel {
     func prepareCSVImport(
         _ data: Data,
         accountID: String? = nil,
-        source: String = "CSV"
+        source: String = "CSV",
+        filename: String = "CSV",
+        mode: CSVImportMode = .merge
     ) async throws -> CSVImportPreview {
         let isins = await Task.detached(priority: .userInitiated) {
             LocalCSVImporter.isinRequests(in: data)
         }.value
         let resolved = isins.isEmpty ? [:] : await SecurityIdentityResolver.shared.tickers(forISINs: isins)
-        let (positions, transactions, result) = try await Task.detached(priority: .userInitiated) {
-            try LocalCSVImporter.parse(data, resolvedISINs: resolved)
+        let (transactions, result, sourceAccountID, fileHash) = try await Task.detached(priority: .userInitiated) {
+            let (_, transactions, result) = try LocalCSVImporter.parse(data, resolvedISINs: resolved, rebuildPositions: false)
+            return (transactions, result, LocalCSVImporter.sourceAccountID(in: data), CSVTransactionMerger.digest(data))
         }.value
-        let accountKey = positions.first?.assignedAccount(id: accountID, name: "", source: source).accountKey
-            ?? "\(source)|\(accountID.flatMap { $0.isEmpty ? nil : $0 } ?? "default")"
-        let previous = try await LocalPortfolioStore.shared.positions(accountKey: accountKey)
-        let comparison = CSVImportPreview.changes(previous: previous, incoming: positions)
-        return CSVImportPreview(positions: positions, transactions: transactions, result: result,
-                                accountKey: accountKey, changes: comparison.changes,
-                                unchangedCount: comparison.unchanged)
+        let accountKey = "\(source)|\(accountID.flatMap { $0.isEmpty ? nil : $0 } ?? "default")"
+        let current = try await LocalPortfolioStore.shared.load()
+        let baseline = CSVAccountState(document: current, key: accountKey)
+        let journal = try await LocalPortfolioStore.shared.csvImportJournal(accountKey: accountKey)
+        if let previousID = journal?.info?.sourceAccountID, let sourceAccountID, previousID != sourceAccountID {
+            throw CSVUpdateError.wrongAccount
+        }
+        let assigned = transactions.map {
+            $0.assignedAccount(id: accountID, name: baseline.account?.name ?? "CSV", source: source)
+        }
+        let previousNames = Dictionary(baseline.positions.map { ($0.ticker, $0.name) }, uniquingKeysWith: { first, _ in first })
+        let names = previousNames.merging(result.securityNames) { old, new in new.isEmpty ? old : new }
+        let plan = CSVAccountUpdatePlan(baseline: baseline, accountKey: accountKey, incoming: assigned, names: names,
+            parsedResult: result, filename: filename, format: "交易记录 CSV",
+            fileHash: fileHash, sourceAccountID: sourceAccountID,
+            previousInfo: journal?.info, mode: mode)
+        return await Task.detached(priority: .userInitiated) { plan.preview() }.value
     }
 
     /// Writes a previewed CSV into its account, after copying the portfolio
@@ -261,6 +274,17 @@ extension AppModel {
         source: String = "CSV",
         replacingAccountsOnly: Bool = false
     ) async throws -> CSVImportResult {
+        if preview.updatePlan != nil {
+            guard preview.accountKey == "\(source)|\(accountID.flatMap { $0.isEmpty ? nil : $0 } ?? "default")" else {
+                throw CSVUpdateError.wrongAccount
+            }
+            invalidateInFlightRequests()
+            let generation = portfolioRequestGeneration
+            let (saved, result) = try await LocalPortfolioStore.shared.commitCSVPreview(preview, accountName: accountName)
+            try await apply(activeDocument(from: saved))
+            await enrichPortfolioChart(from: document, generation: generation)
+            return result
+        }
         let positions = accountName.map { name in
             preview.positions.map { $0.assignedAccount(id: accountID, name: name, source: source) }
         } ?? preview.positions
@@ -288,15 +312,23 @@ extension AppModel {
     /// Prepare and commit in one step, for callers with nobody to confirm.
     func importCSV(
         _ data: Data,
-        filename _: String,
+        filename: String,
         accountID: String? = nil,
         accountName: String? = nil,
         source: String = "CSV",
         replacingAccountsOnly: Bool = false
     ) async throws -> CSVImportResult {
-        let preview = try await prepareCSVImport(data, accountID: accountID, source: source)
+        let preview = try await prepareCSVImport(data, accountID: accountID, source: source, filename: filename)
         return try await commitCSVImport(preview, accountID: accountID, accountName: accountName,
                                          source: source, replacingAccountsOnly: replacingAccountsOnly)
+    }
+
+    func undoCSVImport(accountKey: String, id: UUID) async throws {
+        invalidateInFlightRequests()
+        let generation = portfolioRequestGeneration
+        let saved = try await LocalPortfolioStore.shared.undoCSVImport(accountKey: accountKey, id: id)
+        try await apply(activeDocument(from: saved))
+        await enrichPortfolioChart(from: document, generation: generation)
     }
 
     func importTrading212(
@@ -519,6 +551,17 @@ extension AppModel {
         )
     }
 
+    func importDirectBroker(_ snapshot: DirectBrokerSnapshot, context: AccountConnectorContext,
+                            nickname: String) async throws -> CSVImportResult {
+        guard !isFakeDataMode && !isPublicInvestorMode else { throw DirectBrokerError.wrongAccount }
+        try Task.checkCancellation()
+        try snapshot.validate(context: context, existing: accounts)
+        let name = context.account?.name ?? AccountNaming.displayName(provider: snapshot.broker.title, nickname: nickname)
+        return try await replace(snapshot.positions.map { $0.renamedAccount(to: name) },
+            source: snapshot.broker.title, warnings: [], replacingAccountsOnly: true,
+            syncedAccounts: [snapshot.portfolioAccount(name: name)])
+    }
+
     func importSnapTrade(
         _ snapshot: SnapTradeSnapshot,
         context: AccountConnectorContext,
@@ -529,8 +572,9 @@ extension AppModel {
         let name = context.account?.name ?? AccountNaming.displayName(provider: "SnapTrade", nickname: nickname)
         return try await replace(
             snapshot.positions.map { $0.renamedAccount(to: name) },
-            source: "SnapTrade", warnings: [], replacingAccountsOnly: true,
-            syncedAccounts: [snapshot.portfolioAccount(name: name)]
+            source: "SnapTrade", warnings: snapshot.warnings,
+            transactions: snapshot.transactions.map { $0.renamedAccount(to: name) }, replacingAccountsOnly: true,
+            syncedAccounts: [snapshot.portfolioAccount(name: name)], mergesTransactionHistory: true
         )
     }
 

@@ -6,6 +6,14 @@ import XCTest
 @MainActor
 final class AccountHistoryPresentationTests: XCTestCase {
     func testMountedHomeLoadsAndDrawsNewAccountHistoryWithoutPullToRefresh() async throws {
+        try await checkHomeHistory(firstVisit: false)
+    }
+
+    func testFirstVisitDrawsHistoryAsSoonAsItArrives() async throws {
+        try await checkHomeHistory(firstVisit: true)
+    }
+
+    private func checkHomeHistory(firstVisit: Bool) async throws {
         let suite = "AccountHistoryPresentation.\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -39,9 +47,12 @@ final class AccountHistoryPresentationTests: XCTestCase {
             defaults.removePersistentDomain(forName: suite)
             try? FileManager.default.removeItem(at: directory)
         }
-        for key in ["CSV|A", "CSV|B"] {
-            await model.updateAccountSelection([key], selectsAll: false)
-            let task = try XCTUnwrap(model.accountHistoryTask)
+        for key in firstVisit ? ["CSV|A,CSV|B"] : ["CSV|A", "CSV|B"] {
+            // On first visit only mounting the view starts the request; no
+            // account change, manual refresh or test-only model call does.
+            if !firstVisit {
+                await model.updateAccountSelection([key], selectsAll: false)
+            }
             for _ in 0..<100 {
                 if await loader.isPending { break }
                 try await Task.sleep(for: .milliseconds(20))
@@ -50,6 +61,7 @@ final class AccountHistoryPresentationTests: XCTestCase {
                 XCTFail("The selected account did not start its history request")
                 throw LocalServiceError.noHistoricalPrices
             }
+            let task = try XCTUnwrap(model.accountHistoryTask)
             try await Task.sleep(for: .milliseconds(200))
             XCTAssertTrue(model.isPortfolioChartLoading)
             XCTAssertFalse(chartReady, "A snapshot must not present the plot as finished while history is still loading")
@@ -60,7 +72,7 @@ final class AccountHistoryPresentationTests: XCTestCase {
                 try await Task.sleep(for: .milliseconds(50))
             }
             XCTAssertTrue(chartReady, "The mounted home must draw after account history arrives without a refresh gesture")
-            XCTAssertEqual(model.selectedAccountKeys, [key])
+            XCTAssertEqual(model.selectedAccountKeys, Set(key.split(separator: ",").map(String.init)))
             XCTAssertEqual(model.portfolioChart?.positionHistory.rows.count, 5)
             XCTAssertFalse(model.isPortfolioChartLoading)
             try await Task.sleep(for: .milliseconds(200))
@@ -72,9 +84,12 @@ final class AccountHistoryPresentationTests: XCTestCase {
             XCTAssertGreaterThan(try blueLinePixels(in: image, window: window), 100,
                                  "The actual blue cost curve must be visible after switching accounts")
             let attachment = XCTAttachment(image: image)
-            attachment.name = "Home after switching to \(key)"
+            attachment.name = firstVisit ? "Home first history" : "Home after switching to \(key)"
             attachment.lifetime = .keepAlways
             add(attachment)
+            if firstVisit {
+                try image.pngData()?.write(to: URL(fileURLWithPath: "/tmp/catfolio-home-first-history.png"))
+            }
         }
     }
 

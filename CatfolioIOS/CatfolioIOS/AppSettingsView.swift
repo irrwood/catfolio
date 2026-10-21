@@ -120,6 +120,7 @@ struct AppSettingsView: View {
             SettingsFootnote(LocalPortfolioEngine.fxStatus)
 
             CloudPreferencesSettingsSection(sync: CloudPreferences.shared)
+            CloudDataSettingsSection()
 
             SettingsSection(L10n.text("本机数据")) {
                 SettingsValueRow(
@@ -188,7 +189,7 @@ struct AppSettingsView: View {
             SettingsCard {
                 SettingsButtonRow(
                     icon: .symbol("trash"),
-                    title: L10n.text("重置本机组合数据"),
+                    title: L10n.text("重置组合数据"),
                     showsChevron: false,
                     role: .destructive
                 ) {
@@ -237,7 +238,7 @@ struct AppSettingsView: View {
             if model.overview == nil { await model.refreshPortfolio() }
             await loadReconciliation()
         }
-        .confirmationDialog(L10n.text("重置本机组合数据？"), isPresented: $showsPortfolioResetConfirmation, titleVisibility: .visible) {
+        .confirmationDialog(L10n.text("重置组合数据？"), isPresented: $showsPortfolioResetConfirmation, titleVisibility: .visible) {
             Button(L10n.text("备份并重置"), role: .destructive) {
                 isResettingPortfolio = true
                 Task {
@@ -247,7 +248,7 @@ struct AppSettingsView: View {
                 }
             }
         } message: {
-            Text(L10n.text("将清空当前持仓、交易和历史快照，并保留一份本机备份。券商授权、API 密钥及 AI 对话会保留。"))
+            Text(L10n.text("将清空当前持仓、交易和历史快照，并保留一份本机备份。券商授权、API 密钥及 AI 对话会保留。开启或重新开启账户与持仓同步后，重置也会同步到其他设备。"))
         }
         .alert(L10n.text("无法重置组合"), isPresented: Binding(
             get: { portfolioResetError != nil },

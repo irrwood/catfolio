@@ -81,7 +81,8 @@ struct PortfolioView: View {
                                         .padding(.horizontal, 4)
                                         .accessibilityAddTraits(.isHeader)
 
-                                    MacDashboardRow {
+                                    // The heatmap fills the chart card's height.
+                                    MacDashboardRow(matchesFirst: true) {
                                         CostMarketCard(
                                             overview: overview,
                                             response: chart,
@@ -89,6 +90,9 @@ struct PortfolioView: View {
                                         )
                                         .id(model.selectedAccountKeys.sorted())
                                         .environment(\.portfolioChartOnCard, true)
+                                        // Its first line on the same line as
+                                        // the other cards' first lines.
+                                        .padding(.top, 2.5)
                                         .macOverviewCard()
 
                                         PortfolioDetailsCard(
@@ -99,6 +103,7 @@ struct PortfolioView: View {
                                             showsHeatmap: true,
                                             zoomNamespace: heatmapZoom
                                         )
+                                        .environment(\.heatmapFillsHeight, true)
                                         .macOverviewCard()
                                         .accessibilityIdentifier("performance.heatmap")
                                     }
@@ -117,10 +122,11 @@ struct PortfolioView: View {
                                     )
                                     .macOverviewCard()
 
-                                    MacDashboardRow {
-                                        TodayAttentionEntry()
-                                        CorporateEventsCard(holdings: model.holdings)
-                                    }
+                                    // One short row and a list: full width, one
+                                    // above the other, rather than a pair of
+                                    // unequal cards.
+                                    TodayAttentionEntry()
+                                    CorporateEventsCard(holdings: model.holdings)
                                 }
                                 .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
                                 .padding(.top, 10)
@@ -189,7 +195,11 @@ struct PortfolioView: View {
                         }
                     }
                     .background {
-                        PortfolioHomePageBackdrop(colorScheme: colorScheme, scrollState: homeScrollState)
+                        // The phone fades the sky as its sheet rises over the
+                        // chart. The Mac's Overview has no sheet: its backdrop
+                        // stays put however far the page scrolls.
+                        PortfolioHomePageBackdrop(colorScheme: colorScheme,
+                                                  scrollState: MacPlatform.isMac ? nil : homeScrollState)
                     }
                     // Keep the native indicator track beside the holdings only;
                     // changing indicator margins leaves content and detents intact.

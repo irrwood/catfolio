@@ -57,7 +57,9 @@ final class LocalPortfolioStoreRecoveryTests: XCTestCase {
         let backup = try await store.resetPortfolio()
         XCTAssertEqual(try Data(contentsOf: XCTUnwrap(backup)), valid)
         let afterReset = try await store.load()
-        XCTAssertEqual(afterReset, .empty)
+        XCTAssertTrue(afterReset.positions.isEmpty)
+        XCTAssertTrue(afterReset.accounts.isEmpty)
+        XCTAssertNotNil(afterReset.syncMetadata?.resetAt, "Reset must survive a stale cloud download")
         let nothingToKeep = try await store.resetPortfolio()
         XCTAssertNil(nothingToKeep)
     }

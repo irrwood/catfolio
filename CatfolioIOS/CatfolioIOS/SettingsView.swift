@@ -28,7 +28,7 @@ struct CloudPreferencesSettingsSection: View {
             }
         }
         SettingsFootnote([
-            L10n.text("仅同步偏好；账户、持仓、交易和密钥留在本机。"),
+            L10n.text("偏好、API 密钥与账户持仓可分别开启同步。"),
             detailText
         ].compactMap { $0 }.joined(separator: "\n"))
     }

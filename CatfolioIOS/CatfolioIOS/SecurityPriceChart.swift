@@ -57,7 +57,8 @@ struct HoldingDetailPriceSection: View {
                     holding: holding,
                     // Regular-session prices still sync with the home list.
                     // Extended hours use this same quote area in the detail.
-                    marketTodayChange: model?.holdingDailyChanges[holding.ticker.uppercased()],
+                    marketTodayChange: ChinaSecurity(holding.ticker, currency: holding.quoteCurrency) != nil
+                        ? movement?.changePercent : model?.holdingDailyChanges[holding.ticker.uppercased()],
                     selectedPrice: priceSelection?.price,
                     selectedReturn: priceSelection?.returnPercent,
                     marketPrice: priceHistory?.latestAvailablePrice,

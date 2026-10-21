@@ -47,9 +47,9 @@ struct FastCostMarketPlot: View {
             appearanceID: "portfolio-assets",
             dataTransition: .viewportZoom,
             seriesChangeBounce: 12,
-            // No morph out of the loading lines at launch: the blue line
-            // slid from the placeholder's slope to its real level.
-            animatesInitialAppearance: false,
+            // Morph the loading curves into the portfolio's real geometry.
+            // The shared renderer handles reduced motion and first appearance.
+            animatesInitialAppearance: true,
             selectedDate: selectedPoint?.date,
             measuredRange: measuredRange,
             selectionIndicatorLabel: selectionIndicatorLabel,

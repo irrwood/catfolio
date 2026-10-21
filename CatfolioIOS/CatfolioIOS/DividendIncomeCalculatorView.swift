@@ -72,7 +72,7 @@ struct DividendIncomeCalculatorView: View {
             .navigationTitle(L10n.text("股息收入计算器"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { AppModalDoneButton { dismiss() } }
+                HoldingDetailCloseToolbar { dismiss() }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
                     Button(L10n.text("完成")) { editing = false }

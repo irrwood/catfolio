@@ -7,7 +7,10 @@ enum AccountManagementSheet: String, Identifiable {
     case trading212
     case moomoo
     case ibkr
+    case longbridge
+    case alpaca
     case csv
+    case screenshot
     case manualTransaction
 
     var id: String { rawValue }
@@ -33,6 +36,7 @@ struct AccountDetailView: View {
     @State private var showsDeleteConfirmation = false
     @State private var accountNameDraft = ""
     @State private var notice: AccountNotice?
+    @State private var csvInfo: CSVImportInfo?
     @State private var isWorking = false
     @State private var dataMatchStatus = L10n.text("无异常")
     @State private var headerHeight: CGFloat = 0
@@ -99,10 +103,18 @@ struct AccountDetailView: View {
                 .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
 
                 if account.source != "CSV" {
-                    SettingsButtonRow(title: L10n.text("CSV 导入"), value: csvImportStatus) {
+                    SettingsButtonRow(title: L10n.text("更新 CSV"), value: csvImportStatus) {
                         activeSheet = .csv
                     }
                     .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
+                }
+                if let csvInfo {
+                    SettingsValueRow(title: L10n.text("上次 CSV 更新"),
+                        value: csvInfo.importedAt.formatted(date: .abbreviated, time: .shortened), valueIsNumeric: false)
+                    if let first = csvInfo.firstDate, let last = csvInfo.lastDate {
+                        SettingsValueRow(title: L10n.text("已保存的交易日期"),
+                            value: "\(first) – \(last)", valueIsNumeric: false)
+                    }
                 }
 
                 SettingsButtonRow(title: L10n.text("手动补充"), value: L10n.text("\(manualTransactionCount) 笔")) {
@@ -112,11 +124,6 @@ struct AccountDetailView: View {
             }
 
             SettingsSection(L10n.text("数据记录")) {
-                if account.source == PublicInvestorAccountAdapter.source {
-                    SettingsNavigationRow(title: L10n.text("持仓动态")) {
-                        PublicInvestorActivityView(investorID: account.accountID ?? "")
-                    }
-                }
                 SettingsNavigationRow(
                     title: L10n.text("History"),
                     value: L10n.text("\(account.transactionCount) 笔交易记录")
@@ -176,7 +183,7 @@ struct AccountDetailView: View {
             Button(L10n.text("取消"), role: .cancel) {}
             Button(L10n.text("删除"), role: .destructive) { deleteAccount() }
         } message: {
-            Text(L10n.text("将删除 \(account.localizedDisplayName) 的持仓、交易和历史快照，此操作无法撤销。"))
+            Text(L10n.text("将删除 \(account.localizedDisplayName) 的持仓、交易和历史快照，此操作无法撤销。") + "\n" + L10n.text("开启或重新开启账户与持仓同步后，删除也会同步到其他设备。"))
         }
         .alert(
             Text(notice?.title ?? ""),
@@ -199,6 +206,9 @@ struct AccountDetailView: View {
                 .presentationDragIndicator(.visible)
         }
         .accountFlowBrand(account.brandProvider)
+        .task(id: activeSheet) {
+            csvInfo = try? await LocalPortfolioStore.shared.csvImportJournal(accountKey: accountID)?.info
+        }
     }
 
     @ViewBuilder
@@ -212,10 +222,16 @@ struct AccountDetailView: View {
             RobinhoodConnectionView(context: .manage(account))
         case .snaptrade:
             SnapTradeView(context: .manage(account))
+        case .longbridge:
+            DirectBrokerAccountView(broker: .longbridge, context: .manage(account))
+        case .alpaca:
+            DirectBrokerAccountView(broker: .alpaca, context: .manage(account))
         case .ibkr:
             IBKRFlexView(context: .manage(account))
         case .csv:
             CSVImportView(context: .manage(account))
+        case .screenshot:
+            ScreenshotImportView(context: .manage(account))
         case .manualTransaction:
             ManualTransactionView(account: account)
         }
@@ -225,9 +241,12 @@ struct AccountDetailView: View {
         switch account.source {
         case "Trading 212": .trading212
         case "Moomoo": .moomoo
+        case "Longbridge": .longbridge
+        case "Alpaca": .alpaca
         case "Robinhood": .robinhood
         case "SnapTrade": .snaptrade
         case "IBKR Flex": .ibkr
+        case "Screenshot": .screenshot
         default: .csv
         }
     }
@@ -236,10 +255,13 @@ struct AccountDetailView: View {
         switch account.source {
         case "Trading 212": L10n.text("Trading 212 同步")
         case "Moomoo": L10n.text("Moomoo 同步")
+        case "Longbridge": L10n.text("Longbridge 同步")
+        case "Alpaca": L10n.text("Alpaca 同步")
         case "Robinhood": L10n.text("Robinhood 同步")
         case "SnapTrade": L10n.text("SnapTrade 同步")
         case "IBKR Flex": L10n.text("IBKR 同步")
-        case "CSV": L10n.text("CSV 导入")
+        case "CSV": L10n.text("更新 CSV")
+        case "Screenshot": L10n.text("截图导入")
         case "假数据": L10n.text("本机演示数据")
         default: account.syncedSourceTitle
         }
@@ -247,7 +269,7 @@ struct AccountDetailView: View {
 
     private var primarySourceStatus: String {
         if account.source == "假数据" { return L10n.text("已启用") }
-        let connection = account.source == "CSV" ? L10n.text("已导入") : L10n.text("已连接")
+        let connection = ["CSV", "Screenshot"].contains(account.source) ? L10n.text("已导入") : L10n.text("已连接")
         guard let updatedAt = model.localUpdatedAt else { return connection }
         let interval = max(0, Date().timeIntervalSince(updatedAt))
         if interval < 60 { return L10n.text("\(connection) · 刚刚同步") }
@@ -416,7 +438,7 @@ struct AccountRenameSheet: View {
                         .padding(.horizontal, SettingsTemplate.rowHorizontalPadding)
                         .frame(minHeight: SettingsTemplate.rowMinHeight)
                 }
-                SettingsFootnote(L10n.text("名称只保存在这台 iPhone 上。"))
+                SettingsFootnote(L10n.text("开启账户与持仓同步后，名称会同步到同一 Apple 账户的设备。"))
             }
             .navigationTitle(L10n.text("编辑账户名称"))
             .navigationBarTitleDisplayMode(.inline)

@@ -342,6 +342,10 @@ struct LocalMarketDataClient {
     }
 
     private func latestRawPrice(for symbol: String, forceRefresh: Bool) async -> ObservedMarketQuote? {
+        if let security = ChinaSecurity(symbol) {
+            guard let quote = try? await ChinaMarketDataClient().quote(security) else { return nil }
+            return ObservedMarketQuote(price: quote.price, observedAt: quote.observedAt)
+        }
         // Display charts may retain stale bars; a failed live refresh must
         // never turn those bars into a newly observed portfolio quote.
         if let bars = try? await intradayBars(symbol: symbol, forceRefresh: forceRefresh, allowsStaleFallback: false),
@@ -558,6 +562,9 @@ struct LocalMarketDataClient {
     }
 
     func dailyChange(ticker: String, currency: String = "USD", forceRefresh: Bool = false) async -> Double? {
+        if let security = ChinaSecurity(ticker, currency: currency) {
+            return try? await ChinaMarketDataClient().quote(security).changePercent
+        }
         let endDate = Date.now
         let startDate = Calendar(identifier: .gregorian).date(
             byAdding: .day,
@@ -592,6 +599,10 @@ struct LocalMarketDataClient {
         var bars: [MarketDailyBar]?
         var latestError: Error?
 
+        if let security = ChinaSecurity(symbol) {
+            let chinaBars = try await ChinaMarketDataClient().daily(security, from: start, to: end, adjusted: false)
+            return chinaBars.map { .init(date: $0.date, close: $0.close, high: $0.high, low: $0.low, volume: $0.volume) }
+        }
         if let cached, cached.isFresh {
             bars = cached.bars
         }
@@ -656,15 +667,29 @@ struct LocalMarketDataClient {
     }
 
     private static func listingSymbol(ticker: String, currency: String) -> String {
-        let normalized = ticker.uppercased()
+        let normalized = ticker.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if let security = ChinaSecurity(normalized, currency: currency) { return security.ticker }
         let overrides = [
             "BRK.B": "BRK-B",
             "VUAG": "VUAG.L",
             "VUSA": "VUSA.L",
             "BARC": "BARC.L",
         ]
-        if currency.uppercased() == "EUR", ["ENR", "RWE"].contains(normalized) {
-            return "\(normalized).DE"
+        if currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == "EUR" {
+            // Same-currency quote sources for verified broker listings. Keep
+            // these out of TickerRenames: the broker's position/trade identity
+            // stays intact when we use another venue's prices.
+            let euroQuoteSymbols = [
+                "ANAE": "ANA.MC",  // Acciona, ES0125220311 (Cboe ANAe)
+                "IBEE": "IBE.MC",  // Iberdrola, ES0144580Y14 (Cboe IBEe)
+                "DHER": "DHER.DE",  // Delivery Hero, DE000A2E4K43
+                "ENL1": "ENL.DE", "ENL1.DE": "ENL.DE",  // Trading 212's Enel identifier
+                "MIH.DE": "MIH.F",  // Mitsubishi Heavy Industries, JP3900000005
+                "FOT.DE": "FOT.F",  // Fortum, FI0009007132
+                "SDV1.DE": "SDV1.F",  // Saab B, SE0021921269
+            ]
+            if let symbol = euroQuoteSymbols[normalized] { return symbol }
+            if ["ENR", "RWE"].contains(normalized) { return "\(normalized).DE" }
         }
         if let override = overrides[normalized] { return override }
         if let londonSymbol = InstrumentCurrencyRules.marketDataSymbol(for: normalized) {

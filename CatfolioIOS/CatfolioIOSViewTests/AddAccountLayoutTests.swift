@@ -12,11 +12,11 @@ final class AddAccountLayoutTests: XCTestCase {
             for dark in [false, true] {
                 let options = try await render(AddAccountOptions { _ in }, width: 370, dark: dark)
                 XCTAssertEqual(options.size.width, 370, accuracy: 0.5)
-                // Five broker rows, four hairlines, a 12pt gap, and one import row.
-                XCTAssertEqual(options.size.height, 6 * 96 + 12 + 4 / options.scale, accuracy: 1)
+                // Broker choices and imports have one gap; each card separates its rows.
+                XCTAssertEqual(options.size.height, CGFloat(AddAccountProvider.allCases.count) * 96 + 12 + CGFloat(AddAccountProvider.allCases.count - 2) / options.scale, accuracy: 1)
                 if dark {
-                    try assertLightGlyph(in: options, center: CGPoint(x: 48, y: 436.5))
-                    try assertLightGlyph(in: options, center: CGPoint(x: 48, y: 544))
+                    try assertLightGlyph(in: options, center: CGPoint(x: 48, y: CGFloat(AddAccountProvider.allCases.firstIndex(of: .snaptrade)!) * (96 + 1 / options.scale) + 48))
+                    try assertLightGlyph(in: options, center: CGPoint(x: 48, y: CGFloat(AddAccountProvider.allCases.firstIndex(of: .csv)!) * 96 + 12 + CGFloat(AddAccountProvider.allCases.count - 3) / options.scale + 48))
                 }
                 attach(options, name: "Add-account-\(language)-\(dark ? "dark" : "light")")
                 for provider in AddAccountProvider.allCases {
@@ -47,7 +47,7 @@ final class AddAccountLayoutTests: XCTestCase {
     }
 
     func testAllIconsLoadAndExportedGlyphDimensionsArePreserved() throws {
-        for provider in AddAccountProvider.allCases {
+        for provider in AddAccountProvider.allCases where provider.monogram == nil {
             let icon = try XCTUnwrap(UIImage(named: provider.iconAsset), provider.rawValue)
             XCTAssertGreaterThan(icon.size.width, 0)
             XCTAssertGreaterThan(icon.size.height, 0)

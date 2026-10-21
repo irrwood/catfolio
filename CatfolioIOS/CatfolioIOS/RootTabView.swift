@@ -158,7 +158,9 @@ private struct RootTabs: View {
                 }
             }
         }
-        .tint(.primary)
+        // White behind white text in the Mac sidebar's dark selection: the
+        // sidebar takes the accent there, and each page sets its own ink back.
+        .tint(MacPlatform.isMac ? CatfolioTheme.accent : .primary)
         .modifier(KeepsTabBarFullWidth())
         .modifier(MacSidebarTabStyle())
     }
@@ -425,7 +427,21 @@ enum RootTabBar {
               let owner = page.tabBarController else { return }
         // Tab switches and sheets do not hide the bar. A push (or cancelled
         // interactive pop) leaves the root behind another navigation page.
-        owner.setTabBarHidden(true, animated: animated)
+        // Hiding the tab bar changes the safe area and relays out the
+        // outgoing large title against the incoming compact bar. Move only
+        // the tab bar during the push; release its inset after the root has
+        // left the screen. The same completion also handles a cancelled pop.
+        guard animated, let transition = navigation.transitionCoordinator else {
+            owner.setTabBarHidden(true, animated: false)
+            return
+        }
+        transition.animate(alongsideTransition: { _ in
+            owner.tabBar.transform = tuckedTransform(for: owner.tabBar, in: owner)
+        }, completion: { [weak navigation, weak owner] _ in
+            guard let navigation, let owner, navigation.viewIfLoaded?.window != nil else { return }
+            owner.setTabBarHidden(navigation.viewControllers.count > 1, animated: false)
+            setTucked(false, animated: false)
+        })
     }
 
     fileprivate static func pageIsAppearing(_ page: UIViewController) {

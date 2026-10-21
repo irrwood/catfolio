@@ -23,6 +23,10 @@ struct CSVImportView: View {
     @State private var fileSelectionGeneration = UUID()
     @State private var nickname = ""
     @State private var newAccountID = UUID().uuidString.lowercased()
+    @State private var importMode = CSVImportMode.merge
+    @State private var conflictChoices: [String: CSVConflictChoice] = [:]
+    @State private var lastImport: CSVImportInfo?
+    @State private var availableUndo: UUID?
 
     init(context: AccountConnectorContext = .create, isFirstLaunchSetup: Bool = false) {
         self.context = context
@@ -39,7 +43,7 @@ struct CSVImportView: View {
             OnboardingPage(scrollReset: flowStep, progress: context.isCreating ? OnboardingProgress(
                 step: flowStep + (isFirstLaunchSetup ? 2 : 0), total: isFirstLaunchSetup ? 4 : 2) : nil) {
                 OnboardingHeader(title: importResult != nil ? L10n.text("导入完成")
-                    : (selectedFile != nil ? L10n.text("确认交易记录") : L10n.text("导入 CSV")),
+                    : (selectedFile != nil ? L10n.text("确认交易记录") : (context.isCreating ? L10n.text("导入 CSV") : L10n.text("更新 CSV"))),
                     subtitle: importResult != nil ? nil : L10n.text("选择交易记录文件，预览后确认导入。"))
                 if selectedFile == nil && !isReadingFile {
                     OnboardingFeature(symbol: "doc.text", title: L10n.text("选择交易记录"),
@@ -56,6 +60,10 @@ struct CSVImportView: View {
                     }
                 }
 
+                if !context.isCreating, importResult == nil {
+                    CSVUpdateOptionsSection(mode: $importMode, info: lastImport)
+                        .disabled(isImporting || isPreparing || isReadingFile)
+                }
                 if selectedFile != nil || isReadingFile {
                     SettingsSectionHeader(L10n.text("交易记录"))
                     SettingsCard {
@@ -90,7 +98,16 @@ struct CSVImportView: View {
                 if let importResult {
                     CSVImportResultSection(result: importResult)
                 } else if let preview {
-                    CSVImportPreviewSection(preview: preview)
+                    CSVImportPreviewSection(preview: preview, onResolve: { id, choice in
+                        conflictChoices[id] = choice
+                        rebuildPreview()
+                    }, onKeepAll: {
+                        for conflict in preview.conflicts where conflict.choice == nil {
+                            conflictChoices[conflict.id] = .keepExisting
+                        }
+                        rebuildPreview()
+                    })
+                    .disabled(isImporting || isPreparing)
                 } else if isPreparing {
                     SettingsCard {
                         SettingsRowContainer {
@@ -102,11 +119,21 @@ struct CSVImportView: View {
                             }
                         }
                     }
-                } else if let statusMessage {
+                }
+                if let statusMessage {
                     SettingsCard {
                         SettingsRowContainer {
                             StatusNotice(text: statusMessage)
                         }
+                    }
+                }
+                if let availableUndo {
+                    SettingsCard {
+                        SettingsButtonRow(title: L10n.text("撤销上次 CSV 导入"), showsChevron: false) {
+                            Task { await undoImport(availableUndo) }
+                        }
+                        .disabled(isImporting || isPreparing || isReadingFile)
+                        .accessibilityIdentifier("csv-undo")
                     }
                 }
                 if importResult == nil {
@@ -140,6 +167,7 @@ struct CSVImportView: View {
                 handleFileSelection(result)
             }
             .task {
+                await loadImportJournal()
                 guard nickname.isEmpty else { return }
                 if let account = context.account {
                     nickname = AccountNaming.nickname(
@@ -149,6 +177,10 @@ struct CSVImportView: View {
                 } else {
                     nickname = model.suggestedAccountNickname()
                 }
+            }
+            .onChange(of: importMode) { _, _ in
+                conflictChoices = [:]
+                rebuildPreview()
             }
             .confirmationDialog(
                 context.isCreating ? L10n.text("创建 CSV 账户？") : L10n.text("更新当前账户？"),
@@ -170,7 +202,9 @@ struct CSVImportView: View {
     private var confirmationMessage: String {
         var lines = [context.isCreating
             ? L10n.text("导入将创建新账户并重算成本。")
-            : L10n.text("导入将用这份 CSV 替换当前账户的持仓和交易，并重算成本；其他账户不受影响。")]
+            : (importMode == .merge
+                ? L10n.text("新增交易将合并到账户，旧记录和手动补录会保留；按预览中的选择处理冲突。")
+                : L10n.text("完整重建将替换此账户原有的导入记录，保留手动补录，并重算持仓和成本。请确认文件包含完整历史。"))]
         if let preview {
             if preview.result.skippedRowCount > 0 {
                 lines.append(L10n.text("有 \(preview.result.skippedRowCount) 行无法读取，不会导入。"))
@@ -195,6 +229,7 @@ struct CSVImportView: View {
                     ? L10n.text("正在导入")
                     : (context.isCreating ? L10n.text("创建 CSV 账户") : L10n.text("导入并更新账户")),
                 isDisabled: !selectedFile.hasDataRows || isReadingFile || preview == nil
+                    || preview?.canCommit != true || isPreparing
                     || (context.isCreating && nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty),
                 isBusy: isImporting || isPreparing
             ) {
@@ -226,9 +261,11 @@ struct CSVImportView: View {
         let generation = UUID()
         fileSelectionGeneration = generation
         isReadingFile = true
+        isPreparing = false
         selectedFile = nil
         importResult = nil
         preview = nil
+        conflictChoices = [:]
         statusMessage = nil
         Task {
             defer { if fileSelectionGeneration == generation { isReadingFile = false } }
@@ -257,7 +294,10 @@ struct CSVImportView: View {
     }
 
     private var targetSource: String { context.account?.source ?? "CSV" }
-    private var targetAccountID: String { context.account?.accountID ?? newAccountID }
+    private var targetAccountID: String? { context.isCreating ? newAccountID : context.account?.accountID }
+    private var targetAccountKey: String {
+        "\(targetSource)|\(targetAccountID.flatMap { $0.isEmpty ? nil : $0 } ?? "default")"
+    }
 
     /// Reads the whole file and compares it with the account. Writes nothing.
     private func prepare(_ file: SelectedCSVFile, generation: UUID) async {
@@ -265,7 +305,7 @@ struct CSVImportView: View {
         defer { if fileSelectionGeneration == generation { isPreparing = false } }
         do {
             let prepared = try await model.prepareCSVImport(file.data, accountID: targetAccountID,
-                                                            source: targetSource)
+                source: targetSource, filename: file.filename, mode: importMode)
             guard fileSelectionGeneration == generation else { return }
             preview = prepared
         } catch {
@@ -275,7 +315,7 @@ struct CSVImportView: View {
     }
 
     private func importSelectedFile() async {
-        guard !isImporting, !isReadingFile, let preview else { return }
+        guard !isImporting, !isReadingFile, !isPreparing, let preview, preview.canCommit else { return }
         isImporting = true
         statusMessage = nil
         importResult = nil
@@ -291,9 +331,45 @@ struct CSVImportView: View {
                 source: targetSource,
                 replacingAccountsOnly: true
             )
+            await loadImportJournal()
         } catch {
             statusMessage = error.localizedDescription
         }
+    }
+
+    private func rebuildPreview() {
+        guard var plan = preview?.updatePlan else { return }
+        plan.mode = importMode
+        let choices = conflictChoices
+        let generation = UUID()
+        fileSelectionGeneration = generation
+        isPreparing = true
+        Task {
+            let updated = await Task.detached(priority: .userInitiated) { plan.preview(choices: choices) }.value
+            guard generation == fileSelectionGeneration else { return }
+            preview = updated
+            isPreparing = false
+        }
+    }
+
+    private func loadImportJournal() async {
+        guard let journal = try? await LocalPortfolioStore.shared.csvImportJournal(accountKey: targetAccountKey) else { return }
+        lastImport = journal.info
+        availableUndo = journal.undo?.id
+    }
+
+    private func undoImport(_ id: UUID) async {
+        isImporting = true
+        defer { isImporting = false }
+        do {
+            try await model.undoCSVImport(accountKey: targetAccountKey, id: id)
+            importResult = nil
+            preview = nil
+            selectedFile = nil
+            availableUndo = nil
+            statusMessage = L10n.text("已撤销 CSV 导入。")
+            await loadImportJournal()
+        } catch { statusMessage = error.localizedDescription }
     }
 }
 
@@ -301,13 +377,28 @@ struct CSVImportView: View {
 /// and each holding the import would add, remove or change.
 struct CSVImportPreviewSection: View {
     let preview: CSVImportPreview
+    var onResolve: ((String, CSVConflictChoice) -> Void)? = nil
+    var onKeepAll: (() -> Void)? = nil
 
     var body: some View {
         let result = preview.result
+        if let counts = preview.counts {
+            CSVImportCountsSection(counts: counts)
+        }
+        if !preview.conflicts.isEmpty {
+            CSVConflictSection(conflicts: preview.conflicts, onResolve: onResolve, onKeepAll: onKeepAll)
+        }
+        if let problem = preview.problem {
+            SettingsCard {
+                SettingsRowContainer { StatusNotice(text: problem) }
+            }
+        }
         SettingsSection(result.skippedRowCount > 0 || preview.removedCount > 0
                 ? L10n.text("导入前请检查") : L10n.text("导入预览")) {
             SettingsValueRow(title: L10n.text("有效交易"), value: L10n.text("\(result.transactionsCount ?? 0) 条"))
-            SettingsValueRow(title: L10n.text("导入后持仓"), value: L10n.text("\(result.holdingsCount) 个持仓"))
+            if preview.canCommit {
+                SettingsValueRow(title: L10n.text("导入后持仓"), value: L10n.text("\(result.holdingsCount) 个持仓"))
+            }
             if result.skippedRowCount > 0 {
                 SettingsValueRow(title: L10n.text("无法读取，将跳过"), value: L10n.text("\(result.skippedRowCount) 行"))
             }
@@ -371,6 +462,9 @@ struct CSVImportResultSection: View {
     let result: CSVImportResult
 
     var body: some View {
+        if let counts = result.importCounts {
+            CSVImportCountsSection(counts: counts)
+        }
         SettingsSection(result.warnings.isEmpty
                 ? L10n.text("导入完成") : L10n.text("导入完成，请检查提示")) {
             SettingsRowContainer {

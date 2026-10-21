@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum AddAccountProvider: String, CaseIterable, Identifiable, Codable {
-    case trading212, ibkr, moomoo, robinhood, snaptrade, csv
+    case trading212, ibkr, moomoo, longbridge, alpaca, robinhood, snaptrade, csv, screenshot
 
     var id: String { rawValue }
 
@@ -11,7 +11,10 @@ enum AddAccountProvider: String, CaseIterable, Identifiable, Codable {
         case .ibkr: "Flex Token + Query ID"
         case .moomoo, .robinhood: L10n.text("授权连接")
         case .snaptrade: "Client ID + Consumer Key"
+        case .longbridge: "App Key + Secret + Token"
+        case .alpaca: "API Key + Secret"
         case .csv: L10n.text("导入交易记录")
+        case .screenshot: L10n.text("从截图识别持仓")
         }
     }
 
@@ -20,11 +23,16 @@ enum AddAccountProvider: String, CaseIterable, Identifiable, Codable {
         case .trading212: "Trading 212"
         case .ibkr: "Interactive Brokers"
         case .moomoo: "Moomoo"
-        case .robinhood: "Robinhood"
+        case .robinhood: "Robinhood Agents"
+        case .longbridge: "Longbridge"
+        case .alpaca: "Alpaca"
         case .snaptrade: L10n.text("连接其他 2000+ 券商")
         case .csv: "CSV"
+        case .screenshot: L10n.text("截图导入")
         }
     }
+
+    var monogram: String? { self == .longbridge ? "LB" : (self == .alpaca ? "A" : nil) }
 
     var iconAsset: String {
         switch self {
@@ -34,6 +42,8 @@ enum AddAccountProvider: String, CaseIterable, Identifiable, Codable {
         case .robinhood: "BrokerRobinhood"
         case .snaptrade: "AddAccountConnection"
         case .csv: "AddAccountCSV"
+        case .screenshot: "AddAccountCSV"
+        case .longbridge, .alpaca: ""
         }
     }
 }
@@ -45,12 +55,13 @@ struct AddAccountOptions: View {
     var body: some View {
         VStack(spacing: SettingsTemplate.tileSpacing) {
             SettingsCard {
-                ForEach(AddAccountProvider.allCases.filter { $0 != .csv }) { provider in
+                ForEach(AddAccountProvider.allCases.filter { $0 != .csv && $0 != .screenshot }) { provider in
                     AddAccountProviderRow(provider: provider) { onSelect(provider) }
                 }
             }
             SettingsCard {
                 AddAccountProviderRow(provider: .csv) { onSelect(.csv) }
+                AddAccountProviderRow(provider: .screenshot) { onSelect(.screenshot) }
             }
         }
     }
@@ -87,7 +98,19 @@ struct AddAccountProviderIcon: View {
 
     var body: some View {
         Group {
-            if provider == .snaptrade || provider == .csv {
+            if let monogram = provider.monogram {
+                badgeShape.fill(CatfolioTheme.neutralFill)
+                    .overlay {
+                        Text(monogram).appText(.title, weight: .bold)
+                            .foregroundStyle(CatfolioTheme.primaryText)
+                    }
+            } else if provider == .screenshot {
+                badgeShape.fill(CatfolioTheme.neutralFill)
+                    .overlay {
+                        Image(systemName: "photo.badge.plus")
+                            .appText(.title).foregroundStyle(CatfolioTheme.primaryText)
+                    }
+            } else if provider == .snaptrade || provider == .csv {
                 badgeShape
                     .fill(provider == .csv
                         ? AnyShapeStyle(SettingsTemplate.accountImportGradient)

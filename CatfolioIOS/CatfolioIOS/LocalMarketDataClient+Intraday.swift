@@ -26,12 +26,26 @@ extension LocalMarketDataClient {
         let start = "1900-01-01"
         let end = DayDateCodec.string(from: Date())
         let symbol = Self.yahooSymbol(ticker: ticker, currency: currency)
-        async let dailyCloses = historicalCloses(symbol: symbol, from: start, to: end,
-                                                cachedOnly: cachedOnly, forceRefresh: forceRefresh)
-        async let latestIntradayBars = intradayBars(symbol: symbol, forceRefresh: forceRefresh,
-                                                    cachedOnly: cachedOnly, includingExtendedHours: true)
-        let closes = try await dailyCloses
-        let intradayBars = (try? await latestIntradayBars) ?? []
+        let chinaConfiguration = ChinaMarketConfiguration.scope(ticker: symbol, currency: currency)
+        let closes: [String: Double]
+        let intradayBars: [MarketIntradayBar]
+        let chinaAttribution: ChinaMarketAttribution?
+        if let security = ChinaSecurity(symbol), let chinaConfiguration {
+            let history = try await ChinaMarketDataClient(selection: chinaConfiguration.source)
+                .history(security, from: start, to: end, forceRefresh: forceRefresh, cachedOnly: cachedOnly)
+            guard chinaConfiguration == .current else { throw CancellationError() }
+            closes = Dictionary(uniqueKeysWithValues: history.daily.map { ($0.date, $0.close) })
+            intradayBars = history.intraday
+            chinaAttribution = history.attribution
+        } else {
+            async let dailyCloses = historicalCloses(symbol: symbol, from: start, to: end,
+                                                    cachedOnly: cachedOnly, forceRefresh: forceRefresh)
+            async let latestIntradayBars = self.intradayBars(symbol: symbol, forceRefresh: forceRefresh,
+                                                        cachedOnly: cachedOnly, includingExtendedHours: true)
+            closes = try await dailyCloses
+            intradayBars = (try? await latestIntradayBars) ?? []
+            chinaAttribution = nil
+        }
         guard !closes.isEmpty else { throw LocalServiceError.noHistoricalPrices }
 
         let latestMarketClose = closes.max(by: { $0.key < $1.key })?.value
@@ -94,13 +108,20 @@ extension LocalMarketDataClient {
             points: points,
             intradayPoints: regularPoints,
             trades: trades,
-            extendedHoursPoints: extendedPoints
+            extendedHoursPoints: extendedPoints,
+            chinaMarketAttribution: chinaAttribution,
+            chinaMarketConfiguration: chinaConfiguration
         )
     }
 
     func intradayBars(symbol: String, forceRefresh: Bool = false, allowsStaleFallback: Bool = true,
                       cachedOnly: Bool = false, includingExtendedHours: Bool = false) async throws -> [MarketIntradayBar] {
-        try await Self.loadIntradayBars(symbol: symbol, forceRefresh: forceRefresh,
+        if DelistedPriceArchive.entry(for: symbol) != nil { return [] }
+        if let security = ChinaSecurity(symbol) {
+            return try await ChinaMarketDataClient().intraday(security, forceRefresh: forceRefresh,
+                cachedOnly: cachedOnly, allowsStaleFallback: allowsStaleFallback)
+        }
+        return try await Self.loadIntradayBars(symbol: symbol, forceRefresh: forceRefresh,
             allowsStaleFallback: allowsStaleFallback, cachedOnly: cachedOnly,
             includingExtendedHours: includingExtendedHours, cache: .shared,
             yahoo: { try await yahooIntradayBars(symbol: symbol) },
@@ -317,6 +338,7 @@ extension LocalMarketDataClient {
     }
 
     private static func marketTimeZone(for symbol: String) -> TimeZone {
+        if ChinaSecurity(symbol) != nil { return ChinaSecurity.timeZone }
         if symbol.hasSuffix(".L") { return TimeZone(identifier: "Europe/London")! }
         if symbol.hasSuffix(".HK") { return TimeZone(identifier: "Asia/Hong_Kong")! }
         if symbol.hasSuffix(".T") { return TimeZone(identifier: "Asia/Tokyo")! }

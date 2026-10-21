@@ -28,6 +28,12 @@ struct CSVImportPreview {
     /// Holdings that appear, disappear or change their share count.
     let changes: [Change]
     let unchangedCount: Int
+    var updatePlan: CSVAccountUpdatePlan? = nil
+    var conflicts: [CSVTransactionConflict] = []
+    var counts: CSVImportCounts? = nil
+    var problem: String? = nil
+
+    var canCommit: Bool { problem == nil && conflicts.allSatisfy { $0.choice != nil } }
 
     var removedCount: Int { changes.filter { $0.kind == .removed }.count }
 

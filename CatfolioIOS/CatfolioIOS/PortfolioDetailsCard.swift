@@ -5,6 +5,7 @@ struct PortfolioDetailsCard: View {
     @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.sitsOnMacOverviewCard) private var sitsOnMacOverviewCard
     let holdings: [Holding]
     let onSelect: (Holding) -> Void
     let showsHeatmap: Bool
@@ -94,9 +95,13 @@ struct PortfolioDetailsCard: View {
                     }
                 }
                 .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
-                .padding(.top, 24)
+                .padding(.top, topInset)
                 .padding(.bottom, 18)
-                .background(colorScheme == .light ? Color.white : Color(red: 0, green: 0.008, blue: 0))
+                // On a Mac Overview card the card is the ground, in the one
+                // card colour every card there shares.
+                .background(sitsOnMacOverviewCard
+                    ? Color.clear
+                    : (colorScheme == .light ? Color.white : Color(red: 0, green: 0.008, blue: 0)))
             }
         }
         .toolbar {
@@ -311,6 +316,14 @@ struct PortfolioDetailsCard: View {
 
     private var activePerformancePeriod: HoldingPerformancePeriod {
         showsHeatmap ? heatmapPerformancePeriod : holdingPerformancePeriod
+    }
+
+    /// On the Mac's Overview each card's first line sits the same distance
+    /// below its top edge; the heatmap's title is centred on its taller
+    /// filter button, so it starts higher to land on the same line.
+    private var topInset: CGFloat {
+        guard MacPlatform.isMac else { return 24 }
+        return showsHeatmap ? 8 : 16
     }
 
     private var tableTitle: String {

@@ -7,6 +7,8 @@ struct SecurityPriceHistory: Equatable, Sendable {
     let intradayPoints: [SecurityPricePoint]
     let trades: [SecurityTrade]
     var extendedHoursPoints: [SecurityPricePoint] = []
+    var chinaMarketAttribution: ChinaMarketAttribution? = nil
+    var chinaMarketConfiguration: ChinaMarketConfiguration? = nil
 
     /// One observed trading day, including its pre-market and after-hours.
     /// Regular minute prices remain separate for daily closes and valuations.
@@ -91,7 +93,8 @@ struct SecurityPriceHistory: Equatable, Sendable {
         let change = previous.map { (last.close / $0.close - 1) * 100 }
         return SecurityMarketObservation(ticker: ticker.uppercased(), currency: currency,
                                          price: last.close, observedAt: minute?.date ?? last.date,
-                                         changePercent: change.flatMap { $0.isFinite ? $0 : nil })
+                                         changePercent: change.flatMap { $0.isFinite ? $0 : nil },
+                                         chinaMarketConfiguration: chinaMarketConfiguration)
     }
 }
 
@@ -101,6 +104,7 @@ struct SecurityMarketObservation: Sendable {
     let price: Double
     let observedAt: Date
     let changePercent: Double?
+    var chinaMarketConfiguration: ChinaMarketConfiguration? = nil
 }
 
 struct SecurityPricePoint: Equatable, Identifiable, Sendable {

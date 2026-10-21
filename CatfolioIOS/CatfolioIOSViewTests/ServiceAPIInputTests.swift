@@ -200,7 +200,8 @@ final class ServiceAPIInputTests: XCTestCase {
             (.moomoo, L10n.text("连接 Moomoo")),
             (.robinhood, L10n.text("连接 Robinhood")),
             (.snaptrade, L10n.text("连接其他券商")),
-            (.csv, L10n.text("导入 CSV"))
+            (.csv, L10n.text("导入 CSV")),
+            (.screenshot, L10n.text("截图导入"))
         ]
         for (provider, title) in destinations {
             let fixture = try WindowFixture()

@@ -1,9 +1,9 @@
 import SwiftUI
 import UIKit
 
-/// With no toolbar, only the status area needs a fade. The system's soft
-/// edge extends below that area and blurs the pinned portfolio heading.
-/// Once the holdings toolbar appears, let its native edge take over.
+/// Keep the hero's backdrop uninterrupted through the status area. A material
+/// overlay here tints the sky grey even while no content is scrolling beneath
+/// a bar. Only the floating holdings toolbar needs the native soft edge.
 struct PortfolioTopScrollEdge: ViewModifier {
     let hasFloatingHeader: Bool
 
@@ -12,22 +12,6 @@ struct PortfolioTopScrollEdge: ViewModifier {
             content
                 .scrollEdgeEffectStyle(.soft, for: .top)
                 .scrollEdgeEffectHidden(!hasFloatingHeader, for: .top)
-                .overlay(alignment: .top) {
-                    if !hasFloatingHeader {
-                        GeometryReader { geometry in
-                            Rectangle()
-                                .fill(.ultraThinMaterial)
-                                .mask {
-                                    LinearGradient(colors: [.black, .clear],
-                                                   startPoint: .top, endPoint: .bottom)
-                                }
-                                .frame(height: geometry.safeAreaInsets.top)
-                                .offset(y: -geometry.safeAreaInsets.top)
-                        }
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                    }
-                }
         } else {
             content
         }

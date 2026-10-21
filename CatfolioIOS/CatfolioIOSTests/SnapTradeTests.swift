@@ -73,7 +73,7 @@ final class SnapTradeTests: XCTestCase {
             credentials: .init(clientID: "client +&", consumerKey: "secret"), body: ["connectionType": "read"],
             now: Date(timeIntervalSince1970: 1_715_123_456))
         XCTAssertEqual(portal.httpMethod, "POST")
-        XCTAssertEqual(portal.value(forHTTPHeaderField: "Signature"), "FofhFcOUon2/kasPs4patl93KLwT1blqzz+zmObRmR0=")
+        XCTAssertEqual(portal.value(forHTTPHeaderField: "Signature"), "v2VaVzBE5ORh/YkBX7Ir7HoyGyH7MedlOkaC++pIa5s=")
         XCTAssertEqual(try JSONSerialization.jsonObject(with: portal.httpBody!) as? [String: String], ["connectionType": "read"])
     }
 
@@ -159,6 +159,17 @@ final class SnapTradeTests: XCTestCase {
         XCTAssertFalse(empty.portfolioAccount(name: "Main").awaitsFirstSync)
     }
 
+    func testPersonalKeyReadsAccountsWithoutOpeningAConnectionPortal() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [SnapTradeTestProtocol.self]
+        let client = SnapTradeClient(session: URLSession(configuration: config))
+        // Only the accounts endpoint exists. Any registration/login/portal call fails this request.
+        SnapTradeTestProtocol.responses = ["/api/v1/accounts": (200, "[]")]
+        defer { SnapTradeTestProtocol.responses = [:] }
+        let accounts = try await client.accounts(credentials: .init(clientID: "personal", consumerKey: "secret"))
+        XCTAssertTrue(accounts.isEmpty)
+    }
+
     func testNetworkFlowRequiresActiveConnectionAndCompletePayload() async throws {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [SnapTradeTestProtocol.self]
@@ -173,6 +184,7 @@ final class SnapTradeTests: XCTestCase {
         SnapTradeTestProtocol.responses = [
             base + "/accounts/\(accountID)": (200, accountJSON),
             base + "/authorizations/\(connectionID)": (200, "{\"disabled\":false}"),
+            "/accounts/\(accountID)/activities": (200, "{\"data\":[],\"pagination\":{\"offset\":0,\"limit\":1000,\"total\":0}}"),
             base + "/accounts/\(accountID)/positions/all": (200, "{\"results\":[],\"data_freshness\":{\"as_of\":\"2026-09-01T00:00:00Z\"}}")
         ]
         defer { SnapTradeTestProtocol.responses = [:] }

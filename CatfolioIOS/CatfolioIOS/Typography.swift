@@ -187,6 +187,19 @@ enum Typography {
         )).monospacedDigit()
     }
 
+    /// The blank a figure's first glyph carries before its ink — the side
+    /// bearing that makes a "$" sit visibly right of a label above it.
+    static func numberLeadingBearing(of character: Character, size: CGFloat,
+                                     weight: Font.Weight = .medium) -> CGFloat {
+        let font = NumericAlternates.font(size: size, weight: NumericAlternates.uiWeight(weight), rounded: true) as CTFont
+        var characters = Array(String(character).utf16)
+        var glyphs = [CGGlyph](repeating: 0, count: characters.count)
+        guard CTFontGetGlyphsForCharacters(font, &characters, &glyphs, characters.count) else { return 0 }
+        var bounds = CGRect.zero
+        CTFontGetBoundingRectsForGlyphs(font, .horizontal, &glyphs, &bounds, 1)
+        return max(0, bounds.minX)
+    }
+
     /// Measure the same alternate, tabular digits used by `number(size:)`.
     static func numberWidth(_ text: String, size: CGFloat, weight: Font.Weight = .medium) -> CGFloat {
         let base = NumericAlternates.font(size: size, weight: NumericAlternates.uiWeight(weight), rounded: true)

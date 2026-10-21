@@ -1,4 +1,5 @@
 import SwiftUI
+import CloudKit
 
 @main
 struct CatfolioIOSApp: App {
@@ -56,6 +57,33 @@ struct CatfolioIOSApp: App {
                     if model.isPublicInvestorMode { PublicInvestorCatalogState.shared.loadIfNeeded() }
                 }
                 .task { CloudPreferences.start() }
+                .task(id: scenePhase) {
+                    guard scenePhase == .active else { return }
+                    CloudCredentialSync.shared.start()
+                    CloudPortfolioSync.shared.start()
+                    // Also receives updates when the other device is the only
+                    // writer. Foreground polling needs no push entitlement and
+                    // naturally stops when this scene goes into the background.
+                    while !Task.isCancelled {
+                        await CloudCredentialSync.shared.refresh()
+                        await CloudPortfolioSync.shared.refresh()
+                        do { try await Task.sleep(for: .seconds(60)) }
+                        catch { break }
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .CKAccountChanged)) { _ in
+                    CloudCredentialSync.shared.invalidateAccount()
+                    CloudPortfolioSync.shared.invalidateAccount()
+                    Task {
+                        await CloudCredentialSync.shared.refresh()
+                        await CloudPortfolioSync.shared.refresh()
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .cloudPortfolioDidReceive)) { _ in
+                    Task {
+                        await model.reloadPortfolioAfterSync()
+                    }
+                }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .active { CloudPreferences.shared.refresh() }
                 }
@@ -64,6 +92,7 @@ struct CatfolioIOSApp: App {
                 .environment(\.locale, Locale(identifier: AppLanguage.resolvedIdentifier(languageRawValue)))
                 .tint(CatfolioTheme.accent)
                 .preferredColorScheme(preferredColorScheme)
+                .allowedDynamicRange(.standard)
                 #if DEBUG
                 .task {
                     if LaunchArguments.contains("--run-foundation-checks") {

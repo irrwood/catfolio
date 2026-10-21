@@ -261,7 +261,7 @@ final class PublicInvestorSelectionTests: XCTestCase {
     }
 
     @MainActor
-    func testSelectionPageUsesNativeSwitchesInBothAppearances() async throws {
+    func testSelectionPageUsesCompactHeaderAndNativeSwitchesInBothAppearances() async throws {
         let suite = "PublicInvestorSwitchTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -283,6 +283,11 @@ final class PublicInvestorSelectionTests: XCTestCase {
             defer { window.isHidden = true; previousWindow?.makeKeyAndVisible() }
             try await Task.sleep(for: .milliseconds(350))
 
+            let navigation = try XCTUnwrap(navigationController(in: controller))
+            XCTAssertEqual(navigation.topViewController?.navigationItem.title, L10n.text("选择人物"))
+            XCTAssertEqual(navigation.topViewController?.navigationItem.largeTitleDisplayMode, .never)
+            XCTAssertLessThan(navigation.navigationBar.bounds.height, 70,
+                              "The investor picker opens with a compact title without needing to scroll")
             let switches = nativeSwitches(in: controller.view).sorted {
                 $0.convert(.zero, to: controller.view).y < $1.convert(.zero, to: controller.view).y
             }
@@ -295,11 +300,19 @@ final class PublicInvestorSelectionTests: XCTestCase {
             let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
                 window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
             }
+            try image.pngData()?.write(to: FileManager.default.temporaryDirectory
+                .appendingPathComponent("catfolio-investor-inline-\(scheme).png"))
             let attachment = XCTAttachment(image: image)
             attachment.name = "investor-portraits-\(scheme)"
             attachment.lifetime = .keepAlways
             add(attachment)
         }
+    }
+
+    @MainActor
+    private func navigationController(in controller: UIViewController) -> UINavigationController? {
+        if let navigation = controller as? UINavigationController { return navigation }
+        return controller.children.lazy.compactMap { self.navigationController(in: $0) }.first
     }
 
     @MainActor

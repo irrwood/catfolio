@@ -7,6 +7,7 @@ extension AppModel {
         let source: PortfolioSource
         let quote: String
         let accounts: [String]
+        let chinaMarket: ChinaMarketConfiguration?
     }
 
     /// Keep prepared detail content alive after its sheet closes. Account data
@@ -14,7 +15,8 @@ extension AppModel {
     func cachedHoldingDetail(for holding: Holding) -> HoldingDetailCachedContent {
         let key = HoldingDetailContentKey(source: portfolioSource,
             quote: LocalMarketQuoteKey.make(ticker: holding.ticker, currency: holding.quoteCurrency ?? "USD"),
-            accounts: accounts.map(\.id).sorted())
+            accounts: accounts.map(\.id).sorted(),
+            chinaMarket: ChinaMarketConfiguration.scope(ticker: holding.ticker, currency: holding.quoteCurrency))
         observeMemoryWarningsForHoldingDetails()
         holdingDetailContentOrder.removeAll { $0 == key }
         holdingDetailContentOrder.append(key)
@@ -200,18 +202,24 @@ extension AppModel {
     func publishSecurityPriceHistory(_ history: SecurityPriceHistory, source: PortfolioSource,
                                      now: Date = .now) async throws {
         guard !Task.isCancelled, source == portfolioSource,
+              history.chinaMarketConfiguration.map({ $0 == .current }) ?? true,
               let observation = history.latestMarketObservation,
               observation.observedAt <= now.addingTimeInterval(60),
               observation.observedAt >= now.addingTimeInterval(-7 * 86_400) else { return }
         let key = LocalMarketQuoteKey.make(ticker: history.ticker, currency: history.currency)
-        guard detailMarketObservations[source]?[key].map({ observation.observedAt > $0.observedAt }) ?? true else { return }
+        guard detailMarketObservations[source]?[key].map({
+            $0.chinaMarketConfiguration != observation.chinaMarketConfiguration
+                || observation.observedAt > $0.observedAt
+        }) ?? true else { return }
         let matching = document.positions.filter {
             LocalMarketQuoteKey.make(ticker: $0.ticker, currency: $0.quoteCurrency) == key
         }
         if matching.isEmpty {
-            // ETF-only constituents have no position to reprice. Share their
-            // USD market change without creating a holding or changing totals.
-            guard history.currency.uppercased() == "USD",
+            // Search results and ETF constituents have no position to
+            // reprice. Share their market change without creating a holding.
+            let supportedCurrency = history.currency.uppercased() == "USD"
+                || (history.currency.uppercased() == "CNY" && ChinaSecurity(history.ticker) != nil)
+            guard supportedCurrency,
                   !holdings.contains(where: { $0.ticker.uppercased() == observation.ticker }) else { return }
             detailMarketObservations[source, default: [:]][key] = observation
             applyDetailDailyChanges(now: now)
@@ -283,13 +291,18 @@ extension AppModel {
             LocalMarketQuoteKey.make(ticker: $0.ticker, currency: $0.quoteCurrency)
         }
         for observation in observations.values where !heldTickers.contains(observation.ticker) {
-            guard observation.currency.uppercased() == "USD", let change = observation.changePercent,
+            let supportedCurrency = observation.currency.uppercased() == "USD"
+                || (observation.currency.uppercased() == "CNY" && ChinaSecurity(observation.ticker) != nil)
+            guard supportedCurrency, observation.chinaMarketConfiguration.map({ $0 == .current }) ?? true,
+                  let change = observation.changePercent,
                   observation.observedAt >= now.addingTimeInterval(-7 * 86_400) else { continue }
             holdingDailyChanges[observation.ticker] = change
         }
         for holding in holdings {
             let key = LocalMarketQuoteKey.make(ticker: holding.ticker, currency: holding.quoteCurrency ?? "USD")
-            guard let observation = observations[key], let change = observation.changePercent,
+            guard let observation = observations[key],
+                  observation.chinaMarketConfiguration.map({ $0 == .current }) ?? true,
+                  let change = observation.changePercent,
                   observation.observedAt >= now.addingTimeInterval(-7 * 86_400) else { continue }
             let matching = positionsByQuoteKey[key] ?? []
             guard matching.allSatisfy({ observation.observedAt >= quoteDate($0, in: document) }) else { continue }

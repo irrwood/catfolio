@@ -14,6 +14,12 @@ struct DataSource: Hashable, Identifiable, Sendable {
     let kind: Kind
 
     private static let catalog: [(hosts: [String], source: DataSource)] = [
+        (["openapi.longbridge.com", "openapi-quote.longbridge.com"],
+         .init(id: "longbridge", title: "Longbridge", kind: .marketData)),
+        (["push2.eastmoney.com", "push2his.eastmoney.com", "searchapi.eastmoney.com"],
+         .init(id: "akshare", title: "AKShare · Eastmoney", kind: .marketData)),
+        (["web.ifzq.gtimg.cn", "proxy.finance.qq.com", "qt.gtimg.cn"],
+         .init(id: "akshare-tencent", title: "AKShare · Tencent", kind: .marketData)),
         (["data.sec.gov", "www.sec.gov", "efts.sec.gov"], .init(id: "sec", title: "SEC EDGAR", kind: .filings)),
         (["query1.finance.yahoo.com", "query2.finance.yahoo.com", "fc.yahoo.com"],
          .init(id: "yahoo", title: "Yahoo Finance", kind: .marketData)),

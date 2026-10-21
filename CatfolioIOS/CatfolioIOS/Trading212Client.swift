@@ -242,6 +242,9 @@ struct Trading212Position: Decodable, Identifiable, Equatable {
         }
         if rawTicker.hasSuffix("l_EQ") { return "GBX" }
         if rawTicker.hasSuffix("_US_EQ") { return "USD" }
+        // Verified euro listings without a recognized exchange suffix. Cboe's
+        // `e` marker is retained in the portfolio ticker; older payloads omit currency.
+        if ["ANAe_EQ", "IBEe_EQ", "DHER_EQ"].contains(rawTicker) { return "EUR" }
         if rawTicker.hasSuffix("d_EQ") || rawTicker.hasSuffix("a_EQ")
             || rawTicker.hasSuffix("p_EQ") || rawTicker.hasSuffix("i_EQ") {
             return "EUR"

@@ -2,6 +2,8 @@
 
 独立运行的原生 SwiftUI 投资组合客户端。组合数据保存在 iPhone 本地，不需要 Mac、OpenD、Gateway 或 Catfolio 服务端常开。
 
+设置中的“同步 API 密钥”和“同步账户与持仓”默认关闭，可在同一 Apple 账户的设备上分别开启。支持的密钥通过 iCloud 钥匙串同步；账户、持仓、交易及快照先在设备上加密，再上传到 CloudKit 私有数据库，解密密钥独立于 API 密钥开关同步。关闭只暂停本设备并保留现有数据；删除和重置可在重新开启后继续同步。[同步范围、恢复与验证说明](docs/icloud-sync.md)。
+
 开发入口：[引擎与能力清单](../ENGINE_CATALOG.md)。列明已有计算实现、调用方、测试位置和限制；新增或抽取引擎前先查此表，避免重复建设。
 
 ## 页面
@@ -11,17 +13,19 @@
 - ETF 穿透：按成本或市值展开 ETF 底层股票，并合并直接与间接暴露
 - 收益：组合与 SPY、QQQ、VTI、GLD 对比
 - 全局悬浮 AI：从持仓、收益或设置任一主界面打开组合简报与问答
-- 设置：券商直连、本机行情与 AI Key
+- 设置：券商直连、行情与 AI Key、独立的密钥和加密组合同步
 - CSV 导入：从“文件”选择交易记录，在 iPhone 内解析并保存
 
 ## 券商 API
 
-- 支持 iPhone 直连 Trading 212 正式或模拟环境，可合并两个账户；API Key 与 Secret 仅保存在设备 Keychain。
+- 支持 iPhone 直连 Trading 212 正式或模拟环境，可合并两个账户；API Key 与 Secret 保存在设备 Keychain，可选择通过 iCloud 钥匙串同步已绑定账户的凭据。
 - 支持 iPhone 通过 OAuth 2.1 + PKCE 直连新版 Moomoo REST OpenAPI，无需 OpenD 或 API Key；自动读取全部授权账户。
 - Moomoo OAuth 使用官方支持的 `http://localhost:60355/callback` 本机回调；授权时只需授予 `trade:read` 权限。同步会按账户和市场分页读取持仓与历史成交。
-- 支持 iPhone 直连 IBKR Flex Web Service；Token 与 Query ID 仅保存在设备 Keychain，不需要 Gateway。
+- 支持 iPhone 直连 IBKR Flex Web Service；Token 与 Query ID 保存在设备 Keychain，可选择通过 iCloud 钥匙串同步已绑定账户的凭据，不需要 Gateway。
 
-- 支持 iPhone 通过 SnapTrade Personal API Key 直连：券商授权、单账户持仓预览与确认同步，凭证只存本机 Keychain。首版不导入现金或交易流水。[配置与覆盖范围](../docs/ios-snaptrade.md)。
+- 支持 iPhone 通过 SnapTrade Personal API Key 直连：填入凭证直接读取已关联账户，预览持仓与买卖记录后确认同步；交易历史分页导入现有账本，供图表买卖点和交易明细使用，不导入现金流水。凭证保存在 Keychain。[配置与覆盖范围](../docs/ios-snaptrade.md)。
+
+- 支持 iPhone 直连 Longbridge 和 Alpaca 账户，预览并确认同步股票 / ETF 持仓。Alpaca 实盘与模拟盘分别保存；长桥复用已有行情签名与连接。凭证按账户存入本机 Keychain，不导入现金或交易流水。[配置与覆盖范围](docs/direct-broker-accounts.md)。
 
 ### Robinhood MCP（实验性）
 
@@ -44,11 +48,13 @@ IBKR 的 Activity Flex Query 应输出 XML，时间范围覆盖完整成交历�
 
 ## 本机数据与第三方服务
 
+- A 股行情支持 Longbridge 和 AKShare 使用的公开源，iPhone 直连。设置 → 服务商 → A 股行情可选自动回退或固定来源；长桥凭据仅保存在本机钥匙串。[配置、范围与价格口径](docs/china-market-data.md)。
+
 - 持仓账本写入 App 的 Application Support，使用 iOS 文件保护；每天同步时保留一份市值/成本快照。
 - 首页已计算的资产曲线、持仓数字和今日涨跌保存在 `Application Support/Catfolio/HomePresentation/`。冷启动先校验本地账本、所选账户、数据模式和语言并恢复结果，显示上次显示时间，再后台刷新；报价、报价时间和派生快照变化不会使已有结果失效，未完成的加载结果不能覆盖有效缓存；刷新失败保留已有曲线。缓存使用文件保护并排除备份，删除账户或重置组合会清除个人首页缓存。首次使用或账本变更后仍需生成新结果。
-- CSV 不上传，导入会替换手机上的当前持仓。
+- 原始 CSV 文件不上传。账户创建后可通过「更新 CSV」持续合并交易、核对重复和修改，或选择完整重建；支持撤销上次导入。导入后的账本记录可随账户与持仓开关进行加密同步。[更新规则与撤销范围](docs/csv-account-updates.md)。
 - ETF 穿透使用 App 内置的 Vanguard S&P 500 与 Invesco EQQQ 官方持仓快照；支持 VUAG、VUSA、SPY、VOO、IVV、EQQQ 和 XS2D（含同基金常见欧洲上市代码）。XS2D 的净持仓金额只分配一次，2x 日杠杆不会再次乘到市值或成本上。
-- 成交量与历史日线支持直连 Massive 和 Financial Modeling Prep，并保留 Yahoo 自动回退；API Key 只保存在设备 Keychain。
+- 成交量与历史日线支持直连 Massive 和 Financial Modeling Prep，并保留 Yahoo 自动回退；API Key 保存在设备 Keychain，可选择开启 iCloud 密钥同步。
 - 个股 OI 持仓墙直接读取 Yahoo 期权链，无需 Massive Key、Python 或桌面服务；沿用 yfinance 的到期日清单与逐到期日读取方式。7/30/90 天范围内逐个校验，缺失 OI、缺失到期日或请求失败不会发布新的部分持仓墙，也不会用成交量替代 OI。仅处理可核对的 REGULAR 合约；数据源覆盖不代表交易所全合约覆盖。
 - OI 使用独立 Yahoo 本地缓存（不混用旧 Massive 缓存），手动刷新，失败保留旧数据并显示获取时间。OI 结算日期未提供时明确标为未知；429 停止请求并冷却，不绕过限流。当前网络已观察到 Yahoo 429，不能保证自动获取成功。回归检查：`python3 v3_backend/tests/test_ios_options_oi.py`（包括模拟网络的多到期日、缺数、缓存与限流测试）。
 - AI 可选直连 DeepSeek；只发送组合摘要与当前问题，API Key 保存在 Keychain。问答历史使用 iOS 文件保护保存在本机，并排除 iCloud 备份。

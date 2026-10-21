@@ -353,7 +353,7 @@ struct OptionsOIView: View {
                     }
                 }
             }.softTopScrollEdge().appPageBackground().navigationTitle(L10n.text("全部墙位"))
-                .toolbar { ToolbarItem(placement: .confirmationAction) { AppModalDoneButton { showsWalls = false } } }
+                .toolbar { HoldingDetailCloseToolbar { showsWalls = false } }
         }
     }
 

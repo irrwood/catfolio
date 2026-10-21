@@ -265,10 +265,16 @@ struct CompanyReferenceCatalog: Decodable, Sendable {
     func entry(brokerSymbol: String, defaultMarket: String = "US") -> Entry? {
         let symbol = brokerSymbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         // A renamed listing resolves under whichever code the snapshot used.
-        for code in TickerRenames.equivalents(of: symbol) {
+        let equivalents = TickerRenames.equivalents(of: symbol)
+        for code in equivalents {
             if let key = brokerAliases[code], let entry = entries[key] { return entry }
         }
-        return entry(symbol: symbol, market: defaultMarket)
+        // Bare US symbols do not need brokerAliases, but their former codes
+        // still need the same rename lookup as exchange-qualified listings.
+        for code in equivalents {
+            if let entry = entry(symbol: code, market: defaultMarket) { return entry }
+        }
+        return nil
     }
 
     /// Exact symbols rank first, then prefixes, then company-name matches;

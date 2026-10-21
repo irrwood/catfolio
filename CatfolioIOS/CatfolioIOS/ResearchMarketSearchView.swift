@@ -40,12 +40,14 @@ struct ResearchMarketSearch: ViewModifier {
             if #available(iOS 26.0, *) {
                 dashboard
                     .environment(\.researchSearchPlacement, placement)
-                    .background {
+                    .overlay {
                         ResearchToolbarSearch(query: $query, isPresented: $isPresented,
                                               motion: motion, hapticsEnabled: hapticsEnabled,
                                               onPullDismiss: dismissAfterPull, placement: placement,
                                               onResultsInset: { resultsTopInset = $0 })
-                            .frame(width: 0, height: 0)
+                            // The field travels inside this page overlay
+                            // during navigation, above the dashboard's surface.
+                            .allowsHitTesting(false)
                     }
                     .toolbar {
                         ToolbarItem(placement: .principal) {
@@ -181,6 +183,7 @@ struct ResearchToolbarSearch: UIViewControllerRepresentable {
         let pullObserver = ResearchSearchPullToDismiss.Observer()
         let cancelButton = UIButton(configuration: .glass())
         var onCancel: (() -> Void)?
+        var canReceiveTouches: () -> Bool = { true }
         private(set) var isPresented = false
         private var isPinned = false
         /// Inline search uses the page's panel material. Floating above the
@@ -235,6 +238,12 @@ struct ResearchToolbarSearch: UIViewControllerRepresentable {
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            // Navigation can change before the next placement/layout callback.
+            guard canReceiveTouches() else { return nil }
+            return super.hitTest(point, with: event)
+        }
 
         private static let cancelHiddenTransform = CGAffineTransform(translationX: 18, y: 0).scaledBy(x: 0.4, y: 0.4)
 
@@ -535,10 +544,19 @@ struct ResearchMarketSearchView: View {
             return MarketSecurityResult.search(text, in: catalog, limit: limit + 1,
                                                shouldCancel: { Task.isCancelled })
         }
-        let results = await withTaskCancellationHandler {
+        var results = await withTaskCancellationHandler {
             await worker.value
         } onCancel: {
             worker.cancel()
+        }
+        guard !Task.isCancelled, text == searchText, limit == searchLimit else { return }
+        searchResults = Array(results.prefix(limit))
+        hasMoreSearchResults = results.count > limit
+        searchedQuery = text
+        if ChinaMarketDataClient.shouldSearch(text),
+           let mainland = try? await AKShareMarketDataClient().search(text) {
+            let existing = Set(mainland.map(\.ticker))
+            results = mainland + results.filter { !existing.contains($0.ticker) }
         }
         guard !Task.isCancelled, text == searchText, limit == searchLimit else { return }
         let applying = CompanyReferenceCatalog.searchSignposter.beginInterval("search.apply")

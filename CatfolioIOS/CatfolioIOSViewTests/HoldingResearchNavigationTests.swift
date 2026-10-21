@@ -38,8 +38,14 @@ final class HoldingResearchNavigationTests: XCTestCase {
                 // rather than competing with it on the holding page.
                 probe.nested = true
                 try await waitUntil { page.presentedViewController != nil }
-                probe.nested = false
+                let nestedPage = try XCTUnwrap(page.presentedViewController)
+                try await waitUntil { self.navigation(in: nestedPage) != nil }
+                let nestedNavigation = try XCTUnwrap(navigation(in: nestedPage))
+                let nestedDone = try await NativeToolbarTestSupport.button(in: nestedNavigation,
+                    leading: true, identifier: "holding-modal-close")
+                try nestedDone.tap()
                 try await waitUntil { page.presentedViewController == nil }
+                XCTAssertFalse(probe.nested)
                 XCTAssertTrue(host.presentedViewController === page)
             }
 
@@ -50,8 +56,12 @@ final class HoldingResearchNavigationTests: XCTestCase {
             attachment.lifetime = .keepAlways
             add(attachment)
 
-            probe.isPresented = false
+            let navigation = try XCTUnwrap(navigation(in: page))
+            let done = try await NativeToolbarTestSupport.button(in: navigation,
+                leading: true, identifier: "holding-modal-close")
+            try done.tap()
             try await waitUntil { host.presentedViewController == nil && probe.dismissals == visit }
+            XCTAssertFalse(probe.isPresented)
             XCTAssertEqual(probe.entryHeight, height, accuracy: 0.5)
             XCTAssertEqual(parent.contentOffset.y, offset.y, accuracy: 1)
         }
@@ -60,6 +70,11 @@ final class HoldingResearchNavigationTests: XCTestCase {
     private func scrollView(in view: UIView) -> UIScrollView? {
         if let scroll = view as? UIScrollView { return scroll }
         return view.subviews.lazy.compactMap { self.scrollView(in: $0) }.first
+    }
+
+    private func navigation(in controller: UIViewController) -> UINavigationController? {
+        if let navigation = controller as? UINavigationController { return navigation }
+        return controller.children.lazy.compactMap { self.navigation(in: $0) }.first
     }
 
     private func waitUntil(_ condition: () -> Bool) async throws {
@@ -96,7 +111,9 @@ private struct ResearchNavigationFixture: View {
                         }
                     }
                     .onAppear { probe.visits += 1 }
-                    .appSheet(isPresented: $probe.nested) { Text("Development details") }
+                    .appSheet(isPresented: $probe.nested) {
+                        HoldingDetailChildPage(title: "Development") { Text("Development details") }
+                    }
                 }
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { probe.entryHeight = $0 }
                 Color.clear.frame(height: 1200)
