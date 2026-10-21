@@ -74,14 +74,16 @@ final class CSVImportPresentationTests: XCTestCase {
         }
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
-        request.recognitionLanguages = ["en-US", "zh-Hans"]
+        request.recognitionLanguages = ["zh-Hans", "en-US"]
         try VNImageRequestHandler(cgImage: XCTUnwrap(image.cgImage)).perform([request])
         let text = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
         XCTAssertEqual(preview.removedCount, 1)
         XCTAssertTrue(text.contains { $0.contains("MSFT") }, "The holding the import removes is listed: \(text)")
         // The skipped row's own line, with its row number.
-        XCTAssertTrue(text.contains { $0.contains("Row 3") || $0.contains("第 3 行") },
-                      "The unreadable row and its reason are shown: \(text)")
+        XCTAssertTrue(text.contains {
+            let compact = $0.filter { !$0.isWhitespace }
+            return compact.contains("Row3") || compact.contains("第3行")
+        }, "The unreadable row and its reason are shown: \(text)")
         XCTAssertFalse(text.contains { $0.contains("accounts") }, "Holding counts read as holdings: \(text)")
     }
 

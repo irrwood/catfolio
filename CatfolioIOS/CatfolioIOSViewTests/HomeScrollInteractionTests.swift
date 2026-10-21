@@ -219,8 +219,10 @@ final class HomeScrollInteractionTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(100))
         print("FREEZE_PROBE settings before off")
         model.setPortfolioMode(enabled: false, selection: "ark")
+        // This fixture supplies an in-memory ledger. Keep the source switch's
+        // live quote refresh from replacing it with the real on-disk ledger.
+        model.portfolioSourceTask?.cancel()
         probe.selection = 0
-        await Task.yield()
         print("FREEZE_PROBE off and home requested")
         await model.refreshPortfolio(refreshMarketData: false)
         print("FREEZE_PROBE personal loaded")
@@ -234,7 +236,7 @@ final class HomeScrollInteractionTests: XCTestCase {
         print("FREEZE_PROBE complete cycle \(cycle)")
         if cycle < 3 {
             model.setPortfolioMode(enabled: true, selection: "ark")
-            await Task.yield()
+            model.portfolioSourceTask?.cancel()
             await model.refreshPortfolio(refreshMarketData: false)
             probe.selection = 0
             try await Task.sleep(for: .milliseconds(100))

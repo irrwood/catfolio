@@ -116,10 +116,56 @@ final class AccountHistoryLoadingTests: XCTestCase {
         XCTAssertFalse(model.isPortfolioChartLoading)
     }
 
+    func testFirstHomeLoadsMissingHistoryAndSurvivesCallerCancellation() async throws {
+        let input = fixture()
+        let requests = AccountHistoryRequests()
+        let model = model(input, cache: .init(directory: directory), requests: requests)
+        await model.refreshPortfolio(refreshMarketData: false)
+        XCTAssertTrue(model.portfolioChart?.isCurrentHoldingsOnly == true)
+        let home = Task { await model.loadPortfolioHomeIfNeeded() }
+        let key = "CSV|A,CSV|B"
+        try await waitForRequest(key, in: requests)
+        XCTAssertTrue(model.isPortfolioChartLoading)
+        home.cancel()
+        let remountedHome = Task { await model.loadPortfolioHomeIfNeeded() }
+        await requests.complete(key, with: chart(input))
+        await home.value
+        await remountedHome.value
+        XCTAssertEqual(model.portfolioChart?.positionHistory.rows.count, 3)
+        XCTAssertFalse(model.isPortfolioChartLoading)
+        XCTAssertNil(model.accountHistoryTask)
+        let calls = await requests.calls
+        XCTAssertEqual(calls.map(\.cachedOnly), [true, false], "Remounting must reuse the in-flight history request")
+        XCTAssertTrue(calls.allSatisfy { !$0.forceRefresh })
+        let saved = await model.savedHomeChart()
+        XCTAssertEqual(saved?.positionHistory.rows.count, 3)
+        await model.loadPortfolioHomeIfNeeded()
+        let subsequentCalls = await requests.calls
+        XCTAssertEqual(subsequentCalls.count, calls.count, "A completed curve must not reload on each appearance")
+    }
+
+    func testCloudReloadFillsMissingHistoryWithoutReenteringHome() async throws {
+        let input = fixture()
+        let requests = AccountHistoryRequests()
+        let model = model(input, cache: .init(directory: directory), requests: requests)
+        await model.refreshPortfolio(refreshMarketData: false)
+        let sync = Task { await model.reloadPortfolioAfterSync() }
+        try await waitForRequest("CSV|A,CSV|B", in: requests)
+        await requests.complete("CSV|A,CSV|B", with: chart(input))
+        await sync.value
+        XCTAssertEqual(model.portfolioChart?.positionHistory.rows.count, 3)
+        XCTAssertFalse(model.isPortfolioChartLoading)
+    }
+
     private func model(_ input: LocalPortfolioDocument, cache: PortfolioPresentationCache,
                        requests: AccountHistoryRequests) -> AppModel {
         AppModel(defaults: defaults, personalDocumentLoader: { input }, presentationCache: cache,
-                 portfolioChartLoader: { try await requests.load($0, cachedOnly: $1, forceRefresh: $2) })
+                 portfolioChartLoader: { try await requests.load($0, cachedOnly: $1, forceRefresh: $2) },
+                 dailyMarketLoader: { holdings, _, _ in
+                     .init(closes: Dictionary(uniqueKeysWithValues: holdings.map {
+                         ($0.ticker, ["2026-10-19": 100.0, "2026-10-20": 101.0])
+                     }), benchmark: 0)
+                 })
     }
 
     private func waitForRequest(_ key: String, in requests: AccountHistoryRequests) async throws {

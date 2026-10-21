@@ -87,6 +87,8 @@ final class ExtendedHoursHeaderTests: XCTestCase {
             XCTAssertEqual(MarketClosedBadge(ticker: "AAPL", extendedHoursQuote: quote,
                 date: observed.addingTimeInterval(300)).session, session)
             XCTAssertEqual(MarketClosedBadge(ticker: "AAPL", extendedHoursQuote: quote,
+                date: observed.addingTimeInterval(300)).sunMotion, session == .preMarket ? .rising : .setting)
+            XCTAssertEqual(MarketClosedBadge(ticker: "AAPL", extendedHoursQuote: quote,
                 date: observed.addingTimeInterval(3600)).session, .closed)
         }
         let regular = ISO8601DateFormatter().date(from: "2026-10-12T10:00:00-04:00")!

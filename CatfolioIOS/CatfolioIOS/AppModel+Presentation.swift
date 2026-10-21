@@ -43,7 +43,6 @@ extension AppModel {
                        localSelectionOnly: Bool = false,
                        preparedScope suppliedScope: PreparedAccountScope? = nil) async throws {
         let generation = portfolioRequestGeneration
-        let previousDailyChanges = holdingDailyChanges
         let preparedScope: PreparedAccountScope
         if let suppliedScope {
             preparedScope = suppliedScope
@@ -58,13 +57,18 @@ extension AppModel {
         var presentation = try await Task.detached(priority: .userInitiated) {
             try LocalPortfolioEngine.presentation(for: initialDocument)
         }.value
+        let savedSelection: PortfolioPresentationSnapshot?
+        if localSelectionOnly {
+            savedSelection = await presentationCache.load(document: loaded,
+                context: homeCacheContext(accountKeys: accountKeys))
+        } else {
+            savedSelection = nil
+        }
         let cachedChart: PortfolioChartResponse?
         if loadsCachedChart && !preservesChart && !isFakeDataMode && !isPublicInvestorMode && (!scoped.positions.isEmpty || !(scoped.transactions ?? []).isEmpty) {
             // Switching accounts must also reuse the finished curve saved for
             // that exact selection. Its underlying price cache may be absent.
-            if localSelectionOnly,
-               let saved = await presentationCache.load(document: loaded,
-                   context: homeCacheContext(accountKeys: accountKeys)),
+            if let saved = savedSelection,
                saved.chart.positionHistory.rows.count > 1 {
                 cachedChart = saved.chart
             } else {
@@ -133,9 +137,14 @@ extension AppModel {
         }
         holdings = presentation.2
         if invalidatesDailyChanges {
-            dailyChangesRequestGeneration &+= 1
+            invalidateHoldingDailyChanges()
         }
-        holdingDailyChanges = previousDailyChanges.filter { $0.value.isFinite }
+        holdingDailyChanges = holdingDailyChanges.filter { $0.value.isFinite }
+        if let saved = savedSelection {
+            holdingDailyChanges.merge(saved.dailyChanges.filter { $0.value.isFinite }) { current, _ in current }
+            holdingRecentCloses.merge(saved.recentCloses ?? [:]) { current, _ in current }
+            if benchmarkDailyChange == nil { benchmarkDailyChange = saved.benchmark }
+        }
         for holding in presentation.2 {
             if let value = holding.todayChangePercent, value.isFinite {
                 holdingDailyChanges[holding.ticker.uppercased()] = value
@@ -147,7 +156,6 @@ extension AppModel {
             isHoldingDailyChangesLoading = !presentation.2.isEmpty
         }
         if localSelectionOnly {
-            holdingDailyChangesSignature = Self.dailyChangesSignature(for: presentation.2)
             isHoldingDailyChangesLoading = false
         }
         localSource = isPublicInvestorMode ? scoped.accounts.map(\.displayName).joined(separator: "、") : scoped.source
@@ -333,6 +341,7 @@ extension AppModel {
     func saveHomePresentation(generation: Int? = nil) async {
         guard !Task.isCancelled, generation == nil || generation == portfolioRequestGeneration,
               presentedSource == portfolioSource, let overview, var chart = portfolioChart else { return }
+        let requestGeneration = portfolioRequestGeneration
         let context = homeCacheContext(accountKeys: selectedAccountKeys)
         // A curve that came back as a single point — offline, prices missing —
         // must not replace the last full one on disk, or every later launch
@@ -342,6 +351,7 @@ extension AppModel {
            saved.positionHistory.rows.count > 1 {
             chart = saved
         }
+        guard !Task.isCancelled, requestGeneration == portfolioRequestGeneration else { return }
         let snapshot = PortfolioPresentationSnapshot(overview: overview, chart: chart, holdings: holdings,
             dailyChanges: holdingDailyChanges, benchmark: benchmarkDailyChange,
             updatedAt: localUpdatedAt, savedAt: Date(), recentCloses: holdingRecentCloses)
@@ -422,6 +432,7 @@ extension AppModel {
             // history is filled separately, without refreshing broker positions.
             try await apply(fullDocument, invalidatesDailyChanges: false, localSelectionOnly: true)
             guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
+            startHoldingDailyChangesRefresh()
             if (portfolioChart?.positionHistory.rows.count ?? 0) <= 1,
                !document.positions.isEmpty || !(document.transactions ?? []).isEmpty,
                !isFakeDataMode, !isPublicInvestorMode {

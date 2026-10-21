@@ -244,7 +244,7 @@ final class ServiceAPIInputTests: XCTestCase {
             try XCTUnwrap(image.pngData()).write(to: URL(fileURLWithPath: "/tmp/catfolio-first-launch-\(provider.rawValue).png"))
             let recognition = VNRecognizeTextRequest()
             recognition.recognitionLevel = .accurate
-            recognition.recognitionLanguages = ["en-US", "zh-Hans"]
+            recognition.recognitionLanguages = ["zh-Hans", "en-US"]
             try VNImageRequestHandler(cgImage: XCTUnwrap(image.cgImage)).perform([recognition])
             let text = (recognition.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined()
             let normalized = text.filter { !$0.isWhitespace }.lowercased()

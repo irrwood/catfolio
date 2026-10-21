@@ -129,6 +129,8 @@ final class AppModel {
     @ObservationIgnored var returnsPageRequestGeneration = 0
     @ObservationIgnored var dailyChangesRequestGeneration = 0
     @ObservationIgnored var holdingDailyChangesSignature = ""
+    @ObservationIgnored var holdingDailyChangesUpdatedAt: Date?
+    @ObservationIgnored var holdingDailyChangesTask: Task<Void, Never>?
     @ObservationIgnored var detailMarketObservations: [PortfolioSource: [String: SecurityMarketObservation]] = [:]
     @ObservationIgnored var detailQuoteGeneration = 0
     @ObservationIgnored var holdingDetailContent: [HoldingDetailContentKey: HoldingDetailCachedContent] = [:]
@@ -150,6 +152,8 @@ final class AppModel {
     @ObservationIgnored let personalDocumentResetter: @Sendable () async throws -> URL?
     @ObservationIgnored let presentationCache: PortfolioPresentationCache
     @ObservationIgnored let portfolioChartLoader: @Sendable (LocalPortfolioDocument, Bool, Bool) async throws -> PortfolioChartResponse
+    @ObservationIgnored let dailyMarketLoader: @Sendable ([Holding], [LocalPositionRecord], Bool) async -> HoldingDailyMarketData
+    @ObservationIgnored let dailyMarketRetryWait: @Sendable (Duration) async throws -> Void
     static let brokerKey = "catfolio.activeBroker"
     static let selectedAccountsKey = "catfolio.selectedAccounts"
     static let selectsAllAccountsKey = "catfolio.selectsAllAccounts"
@@ -169,6 +173,12 @@ final class AppModel {
         presentationCache: PortfolioPresentationCache = .shared,
         portfolioChartLoader: @escaping @Sendable (LocalPortfolioDocument, Bool, Bool) async throws -> PortfolioChartResponse = {
             try await LocalMarketDataClient().portfolioChart(document: $0, cachedOnly: $1, forceRefresh: $2)
+        },
+        dailyMarketLoader: @escaping @Sendable ([Holding], [LocalPositionRecord], Bool) async -> HoldingDailyMarketData = {
+            await HoldingDailyMarketData.load(holdings: $0, positions: $1, forceRefresh: $2)
+        },
+        dailyMarketRetryWait: @escaping @Sendable (Duration) async throws -> Void = {
+            try await Task.sleep(for: $0)
         }
     ) {
         modeDefaults = defaults
@@ -177,6 +187,8 @@ final class AppModel {
         self.personalDocumentResetter = personalDocumentResetter
         self.presentationCache = presentationCache
         self.portfolioChartLoader = portfolioChartLoader
+        self.dailyMarketLoader = dailyMarketLoader
+        self.dailyMarketRetryWait = dailyMarketRetryWait
         storedPublicInvestorSelection = defaults.string(forKey: PublicInvestorPreferences.selectionKey) ?? PublicInvestorPreferences.defaultSelection
         storedFakeDataMode = defaults.bool(forKey: Self.fakeDataModeKey)
         storedPublicInvestorMode = defaults.bool(forKey: PublicInvestorPreferences.enabledKey)

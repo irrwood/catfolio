@@ -210,15 +210,13 @@ struct PortfolioView: View {
                     // showing nothing, rather than waiting for a pull.
                     .onReceive(NotificationCenter.default.publisher(
                         for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
-                        reloadIfEmpty()
+                        reloadHomeIfNeeded()
                     }
                     .onChange(of: scenePhase) { _, phase in
-                        if phase == .active { reloadIfEmpty() }
+                        if phase == .active { reloadHomeIfNeeded() }
                     }
                     .task {
-                        if model.overview == nil && !model.isPortfolioLoading {
-                            await model.refreshPortfolio()
-                        }
+                        await model.loadPortfolioHomeIfNeeded()
                         let arguments = LaunchArguments.all
                         if arguments.contains("--show-volume"), selectedHolding == nil {
                             let requestedTicker = arguments
@@ -360,11 +358,11 @@ struct PortfolioView: View {
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 0.8)
     }
 
-    /// Nothing on screen and no load running: start one. A home that is
-    /// already showing data is left to its own refresh.
-    @MainActor private func reloadIfEmpty() {
-        guard model.overview == nil, !model.isPortfolioLoading else { return }
-        Task { await model.refreshPortfolio() }
+    /// Returning to the foreground also fills missing or stale daily quotes
+    /// when the local portfolio is already visible.
+    @MainActor private func reloadHomeIfNeeded() {
+        guard !model.isPortfolioLoading else { return }
+        Task { await model.loadPortfolioHomeIfNeeded() }
     }
 
     /// The spinner goes back at once; the refresh runs behind the page and

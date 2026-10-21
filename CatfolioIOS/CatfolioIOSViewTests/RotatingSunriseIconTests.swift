@@ -45,6 +45,59 @@ final class RotatingSunriseIconTests: XCTestCase {
         XCTAssertEqual(RotatingSunriseIcon.angle(elapsed: 12.75).degrees, 22.5)
     }
 
+    func testPreMarketRisesAndPostMarketSetsBehindTheSameFixedHorizon() throws {
+        for (motion, times) in [(RotatingSunriseIcon.Motion.rising, [0.4, 1.4, 2.4]),
+                                (.setting, [0.0, 1.0, 2.0])] {
+            let frames = times.map { RotatingSunriseIcon.frame(elapsed: $0, motion: motion) }
+            if motion == .rising {
+                XCTAssertGreaterThan(frames[0].offset, frames[1].offset)
+                XCTAssertGreaterThan(frames[1].offset, frames[2].offset)
+            } else {
+                XCTAssertLessThan(frames[0].offset, frames[1].offset)
+                XCTAssertLessThan(frames[1].offset, frames[2].offset)
+            }
+            let images = try frames.map { try render(SunriseIconFrame(sunOffset: $0.offset, sunOpacity: $0.opacity)) }
+            XCTAssertGreaterThan(difference(images[0], images[2], rows: 0..<96), 0.04)
+            for image in images.dropFirst() {
+                XCTAssertLessThan(difference(images[0], image, rows: 96..<144), 0.001,
+                                  "The horizon, gap and area below it never move or fade")
+            }
+            for (index, image) in images.enumerated() { attach(image, name: "sun-\(motion)-\(index)") }
+        }
+        let preview = ImageRenderer(content: VStack(spacing: 20) {
+            ForEach(0..<2) { row in
+                HStack(spacing: 12) {
+                    Text(row == 0 ? "盘前" : "盘后").font(.system(size: 16))
+                    ForEach(0..<3) { column in
+                        let motion = row == 0 ? RotatingSunriseIcon.Motion.rising : .setting
+                        let time = (row == 0 ? 0.4 : 0) + Double(column)
+                        let frame = RotatingSunriseIcon.frame(elapsed: time, motion: motion)
+                        SunriseIconFrame(sunOffset: frame.offset, sunOpacity: frame.opacity)
+                            .scaleEffect(2).frame(width: 48, height: 48)
+                    }
+                }
+            }
+        }.foregroundStyle(.black).padding(24).background(.white))
+        preview.scale = 3
+        let image = try XCTUnwrap(preview.uiImage)
+        try image.pngData()?.write(to: URL(fileURLWithPath: "/tmp/catfolio-sunrise-sunset-preview.png"))
+    }
+
+    func testLoopResetIsHiddenAndRestingStatesKeepTheOriginalIcon() throws {
+        for (motion, wrap) in [(RotatingSunriseIcon.Motion.rising, 6.0), (.setting, 2.4)] {
+            func at(_ time: Double) throws -> UIImage {
+                let frame = RotatingSunriseIcon.frame(elapsed: time, motion: motion)
+                return try render(SunriseIconFrame(angle: RotatingSunriseIcon.angle(elapsed: time),
+                    sunOffset: frame.offset, sunOpacity: frame.opacity))
+            }
+            XCTAssertLessThan(difference(try at(wrap - 0.001), try at(wrap + 0.001), rows: 0..<144), 0.001,
+                              "A repeated rise/set must not visibly jump back across the horizon")
+            let resting = try render(RotatingSunriseIcon(motion: motion))
+            let original = try render(Image("SunriseRest").renderingMode(.template))
+            XCTAssertLessThan(difference(resting, original, rows: 0..<144), 0.001)
+        }
+    }
+
     func testHomeHeaderUsesCaptionSizedIconOnlyForItsClosedState() throws {
         for scheme in [ColorScheme.light, .dark] {
             func header(closed: Bool) throws -> UIImage {
@@ -58,8 +111,8 @@ final class RotatingSunriseIconTests: XCTestCase {
             }
             let open = try header(closed: false)
             let closed = try header(closed: true)
-            XCTAssertEqual(closed.size.width - open.size.width, 21, accuracy: 0.5,
-                           "The closed state adds the 16-point shared icon and existing five-point spacing")
+            XCTAssertEqual(closed.size.width - open.size.width, 15, accuracy: 0.5,
+                           "The closed state adds the original 10-point moon and existing five-point spacing")
             XCTAssertEqual(closed.size.height, open.size.height, accuracy: 2)
             attach(closed, name: "Home-market-icon-\(scheme)")
         }

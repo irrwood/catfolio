@@ -19,6 +19,50 @@ extension AppModel {
         _ = await refreshPortfolioResult(refreshMarketData: refreshMarketData, policy: .automatic)
     }
 
+    /// A local/cloud load can publish the amount before the home is mounted.
+    /// That snapshot still needs history. Own the work outside the view task
+    /// so a preference change rebuilding the root page cannot abandon it.
+    func loadPortfolioHomeIfNeeded() async {
+        guard !Task.isCancelled else { return }
+        if overview == nil {
+            guard !isPortfolioLoading else { return }
+            let task = Task { await self.refreshPortfolio() }
+            await task.value
+            return
+        }
+        guard !isPortfolioLoading else { return }
+        let dailyTask = startHoldingDailyChangesRefresh()
+        await loadPortfolioHistoryIfNeeded()
+        await dailyTask?.value
+    }
+
+    private func loadPortfolioHistoryIfNeeded() async {
+        if let task = accountHistoryTask {
+            await task.value
+            return
+        }
+        guard !isPortfolioLoading, !isPortfolioChartLoading,
+              !isFakeDataMode, !isPublicInvestorMode,
+              (portfolioChart?.positionHistory.rows.count ?? 0) <= 1,
+              !document.positions.isEmpty || !(document.transactions ?? []).isEmpty else { return }
+        let generation = portfolioRequestGeneration
+        let selected = document
+        isPortfolioChartLoading = true
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.refreshHistoricalChart(from: selected, generation: generation, forceRefresh: false)
+            if generation == self.portfolioRequestGeneration { self.accountHistoryTask = nil }
+        }
+        accountHistoryTask = task
+        await task.value
+    }
+
+    func reloadPortfolioAfterSync() async {
+        guard !isFakeDataMode, !isPublicInvestorMode else { return }
+        await refreshPortfolio(refreshMarketData: false)
+        await loadPortfolioHomeIfNeeded()
+    }
+
     /// Only the two explicit home actions use this result. Automatic loads and
     /// source switches keep using `refreshPortfolio()` without user feedback.
     func refreshPortfolioReportingResult(refreshMarketData: Bool = true) async -> PortfolioRefreshResult? {
@@ -36,6 +80,9 @@ extension AppModel {
         refreshMarketData: Bool, policy: PortfolioRefreshPolicy
     ) async -> PortfolioRefreshResult? {
         guard !Task.isCancelled else { return nil }
+        accountHistoryTask?.cancel()
+        accountHistoryTask = nil
+        invalidateHoldingDailyChanges()
         portfolioRequestGeneration &+= 1
         let generation = portfolioRequestGeneration
         let previousDocument = presentedSource == portfolioSource && overview != nil ? fullDocument : nil
@@ -75,6 +122,9 @@ extension AppModel {
                 return PortfolioRefreshResult.completed(previous: previousDocument, loaded: loaded,
                     acceptedQuoteCount: 0, refreshedDisclosure: false, tracksQuotes: false)
             }
+            // The displayed cache can lack today's changes. Keep this pending
+            // while quotes/disclosures are prepared, before the daily task starts.
+            isHoldingDailyChangesLoading = !holdings.isEmpty
             if isPublicInvestorMode {
                 let catalog = try await PublicInvestorCatalogState.shared.get()
                 if let fresh = try await publicInvestorStore.refreshIfNeeded(
@@ -85,9 +135,9 @@ extension AppModel {
                     guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
                     refreshedDisclosure = true
                 }
+                let dailyTask = startHoldingDailyChangesRefresh(forceRefresh: policy.forcesProviderRefresh)
                 await enrichPortfolioChart(from: document, generation: generation)
-                guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
-                await refreshHoldingDailyChanges()
+                await dailyTask?.value
                 guard generation == portfolioRequestGeneration, !Task.isCancelled else { return nil }
                 await saveHomePresentation(generation: generation)
                 return PortfolioRefreshResult.completed(previous: previousDocument, loaded: fullDocument,
@@ -148,6 +198,9 @@ extension AppModel {
             isHoldingDailyChangesLoading = false
             isPortfolioChartLoading = false
             portfolioFailure = error
+            // A broker/local refresh failure must not prevent recovery of the
+            // daily quotes for holdings that are already visible.
+            if refreshMarketData { startHoldingDailyChangesRefresh() }
             return .failed(retainsData: overview != nil)
         }
     }
@@ -217,7 +270,7 @@ extension AppModel {
         // A new/invalid result cache should still try existing price history
         // locally before entering the slow provider refresh/fallback pipeline.
         if !hasUsableHomeChart || portfolioChart?.isCurrentHoldingsOnly == true,
-           let cached = try? await LocalMarketDataClient().portfolioChart(document: loaded, cachedOnly: true),
+           let cached = try? await portfolioChartLoader(loaded, true, false),
            cached.currentPoint.marketValue.isFinite {
             guard generation == portfolioRequestGeneration, !Task.isCancelled else { return }
             portfolioChart = cached
@@ -276,15 +329,13 @@ extension AppModel {
         portfolioRequestGeneration &+= 1
         returnsRequestGeneration &+= 1
         returnsAnalyticsRequestGeneration &+= 1
-        dailyChangesRequestGeneration &+= 1
+        invalidateHoldingDailyChanges()
         isPortfolioLoading = false
         isPortfolioChartLoading = false
         isReturnsLoading = false
         isReturnsAnalyticsLoading = false
         returnsAnalyticsPendingParts = []
-        isHoldingDailyChangesLoading = false
         benchmarkDailyChange = nil
-        holdingDailyChangesSignature = ""
     }
 
     /// A daily-change cache is keyed by tickers, independent of quote updates.

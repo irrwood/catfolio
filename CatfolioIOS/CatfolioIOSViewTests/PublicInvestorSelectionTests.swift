@@ -22,7 +22,10 @@ final class AccountVisibilityTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
         let loader = AccountVisibilityLoader(fixture())
         let model = AppModel(defaults: defaults, personalDocumentLoader: { await loader.load() },
-            portfolioChartLoader: { _, _, _ in throw LocalServiceError.noHistoricalPrices })
+            portfolioChartLoader: { _, _, _ in throw LocalServiceError.noHistoricalPrices },
+            dailyMarketLoader: { _, _, _ in
+                .init(closes: ["SCOPE_TEST": ["2026-10-19": 140, "2026-10-20": 150]], benchmark: 1)
+            })
         await model.refreshPortfolio(refreshMarketData: false)
         XCTAssertEqual(model.holdings.first?.shares, 13)
         await model.toggleAccount("CSV|B")
@@ -33,10 +36,12 @@ final class AccountVisibilityTests: XCTestCase {
         XCTAssertEqual(model.overview?.summary.marketValue, 1500)
         XCTAssertEqual(model.portfolioChart?.currentPoint.marketValue, 1500)
         XCTAssertFalse(model.isPortfolioLoading)
-        // Holdings update immediately; a missing curve finishes separately.
+        // Holdings update immediately; missing history and daily quotes finish separately.
         await model.accountHistoryTask?.value
+        await model.holdingDailyChangesTask?.value
         XCTAssertFalse(model.isPortfolioChartLoading)
         XCTAssertFalse(model.isHoldingDailyChangesLoading)
+        XCTAssertEqual(try XCTUnwrap(model.holdingDailyChanges["SCOPE_TEST"]), 100.0 / 14, accuracy: 0.0001)
         await model.selectAllAccounts()
         await model.toggleAccount("CSV|A")
         XCTAssertEqual(model.selectedAccountKeys, ["CSV|B"])
