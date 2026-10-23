@@ -47,6 +47,7 @@ enum PortfolioRefreshResult: Equatable {
 @Observable
 @MainActor
 final class AppModel {
+    let watchlist: WatchlistStore
     var overview: PortfolioOverview?
     /// Profit already taken in the selected accounts, in USD: the broker's own
     /// result on every sale it reported one for. `.nan` when no sale carries
@@ -163,6 +164,7 @@ final class AppModel {
 
     init(
         defaults: UserDefaults = .standard,
+        watchlist: WatchlistStore? = nil,
         publicInvestorStore: PublicInvestorSimulationStore = .shared,
         personalDocumentLoader: @escaping @Sendable () async throws -> LocalPortfolioDocument = {
             try LocalPortfolioStore.shared.load()
@@ -182,6 +184,7 @@ final class AppModel {
         }
     ) {
         modeDefaults = defaults
+        self.watchlist = watchlist ?? WatchlistStore(defaults: defaults)
         self.publicInvestorStore = publicInvestorStore
         self.personalDocumentLoader = personalDocumentLoader
         self.personalDocumentResetter = personalDocumentResetter

@@ -73,7 +73,7 @@ struct FastReturnsPlot: View {
                 }
                 ForEach(prepared.yTicks.indices, id: \.self) { index in
                     let value = domain.contains(0) && index == zeroIndex ? 0 : prepared.yTicks[index]
-                    FinancialText(axisLabel(value))
+                    Text(verbatim: axisLabel(value))
                         .font(Typography.rounded(size: 14, weight: .regular))
                         .tracking(2)
                         .foregroundStyle(Color.white.opacity(0.3))

@@ -14,6 +14,7 @@ struct MoomooOAuthView: View {
     @State private var snapshot: MoomooSnapshot?
     @State private var status: MoomooViewStatus = .idle
     @State private var isWorking = false
+    @State private var previewTask: Task<Void, Never>?
     @State private var isConnected = false
     @State private var showsDisconnectConfirmation = false
     @State private var showsSyncConfirmation = false
@@ -32,22 +33,35 @@ struct MoomooOAuthView: View {
     }
 
     var body: some View {
-        AccountFlowStack {
-            OnboardingPage(scrollReset: flowStep, progress: context.isCreating ? OnboardingProgress(
-                step: flowStep + (isFirstLaunchSetup ? 2 : 0), total: isFirstLaunchSetup ? 5 : 3) : nil) {
-                OnboardingHeader(title: hasCreatedAccount ? L10n.text("账户已添加")
+        AccountFlowStack { page(1) }
+            .accountFlowBrand(.moomoo)
+    }
+
+    private func page(_ page: Int) -> some View {
+        let isConnected = !context.isCreating || page >= 2 ? self.isConnected : false
+        let snapshot = !context.isCreating || page >= 3 ? self.snapshot : nil
+        return AccountFlowPage(showsNext: Binding(
+            get: { context.isCreating && min(flowStep, 3) > page },
+            set: { shown in
+                guard !shown, min(flowStep, 3) > page else { return }
+                previewTask?.cancel()
+                self.snapshot = nil
+                status = .idle
+                if page == 1 { self.isConnected = false }
+            })) {
+            OnboardingPage(scrollReset: page, isAccountPreparation: true) {
+                AccountConnectionHeader(provider: .moomoo, title: hasCreatedAccount ? L10n.text("账户已添加")
                     : (snapshot != nil ? L10n.text("确认 Moomoo 持仓") : L10n.text("连接 Moomoo")),
                     subtitle: hasCreatedAccount ? nil : (snapshot != nil ? L10n.text("检查持仓后，确认同步到账户。")
                         : L10n.text("登录并授权，然后预览你的持仓。")))
 
                 if !isConnected {
-                    OnboardingFeature(symbol: "person.badge.key", title: L10n.text("登录 Moomoo"),
-                        detail: L10n.text("在授权页面登录，完成后回到这里继续。"))
-                    OnboardingFeature(symbol: "lock", title: L10n.text("只读连接"),
-                        detail: L10n.text("授权时仅允许 trade:read；令牌仅存于此 iPhone。"))
+                    BrokerPreparationInstructions(provider: .moomoo)
                 } else if snapshot == nil {
-                    OnboardingFeature(symbol: "checkmark.shield", title: L10n.text("已授权 Moomoo"),
-                        detail: L10n.text("先读取持仓预览，确认后再添加账户。"))
+                    AccountPreparationList {
+                        AccountPreparationFeature(symbol: "checkmark.shield.fill", title: L10n.text("已授权 Moomoo"),
+                            detail: L10n.text("先读取持仓预览，确认后再添加账户。"))
+                    }
                 }
                 if status.isPresented { statusView }
 
@@ -101,21 +115,13 @@ struct MoomooOAuthView: View {
                     }
                 }
 
-                if !hasCreatedAccount {
-                    DisclosureGroup(L10n.text("需要帮助？")) {
-                        VStack(alignment: .leading, spacing: 16) {
-                            if isConnected {
-                                Button(L10n.text("重新授权 Moomoo")) { Task { await connect() } }
-                                if snapshot != nil {
-                                    Button(L10n.text("重新读取持仓")) { Task { await preview() } }
-                                }
-                            }
-                            Link(L10n.text("查看 Moomoo OpenAPI 说明"),
-                                 destination: URL(string: "https://open.moomoo.com/zh-cn/api/overview/getting-started")!)
+                if isConnected && !hasCreatedAccount {
+                    DisclosureGroup(L10n.text("连接管理")) {
+                        Button(L10n.text("重新授权 Moomoo")) { Task { await connect() } }
+                        if snapshot != nil {
+                            Button(L10n.text("重新读取持仓")) { startPreview() }
                         }
-                        .padding(.top, 16)
-                    }
-                    .disabled(isWorking)
+                    }.disabled(isWorking)
                 }
 
                 if isConnected && !context.isCreating {
@@ -130,11 +136,9 @@ struct MoomooOAuthView: View {
                         }
                     }
                 }
-            } actions: { flowActions }
+            } actions: { flowActions(page) }
+            .accountConnectionTutorial(.moomoo)
             .toolbar {
-                if context.isCreating {
-                    ToolbarItem(placement: .cancellationAction) { AccountProviderBackButton() }
-                }
                 if !context.isCreating || hasCreatedAccount {
                     ToolbarItem(placement: .confirmationAction) {
                         AppModalDoneButton { dismiss() }
@@ -142,6 +146,9 @@ struct MoomooOAuthView: View {
                 }
             }
             .task { prepareNickname() }
+            .onDisappear {
+                if !context.isCreating || min(flowStep, 3) == page { previewTask?.cancel() }
+            }
             .confirmationDialog(
                 L10n.text("断开 Moomoo？"),
                 isPresented: $showsDisconnectConfirmation,
@@ -172,14 +179,15 @@ struct MoomooOAuthView: View {
                 }
                 .ignoresSafeArea()
             }
-        }
-        .accountFlowBrand(.moomoo)
+        } next: { AnyView(self.page(page + 1)) }
     }
 
-    private var flowStep: Int { snapshot != nil ? 3 : (isConnected ? 2 : 1) }
+    private var flowStep: Int { hasCreatedAccount ? 4 : (snapshot != nil ? 3 : (isConnected ? 2 : 1)) }
 
     @ViewBuilder
-    private var flowActions: some View {
+    private func flowActions(_ page: Int) -> some View {
+        let isConnected = !context.isCreating || page >= 2 ? self.isConnected : false
+        let snapshot = !context.isCreating || page >= 3 ? self.snapshot : nil
         if hasCreatedAccount {
             OnboardingPrimaryButton(title: L10n.text("完成")) { dismiss() }
         } else if isConnected, let snapshot {
@@ -197,7 +205,7 @@ struct MoomooOAuthView: View {
                 title: isWorking ? L10n.text("正在读取") : L10n.text("读取并预览持仓"),
                 isBusy: isWorking
             ) {
-                Task { await preview() }
+                startPreview()
             }
         } else {
             OnboardingPrimaryButton(
@@ -261,6 +269,11 @@ struct MoomooOAuthView: View {
         }
     }
 
+    private func startPreview() {
+        previewTask?.cancel()
+        previewTask = Task { await preview() }
+    }
+
     private func preview() async {
         isWorking = true
         status = .working(L10n.text("正在读取全部授权账户…"))
@@ -271,6 +284,7 @@ struct MoomooOAuthView: View {
             ).fetchSnapshot(
                 reportingCurrency: DisplayCurrency.current.rawValue
             )
+            try Task.checkCancellation()
             let result = snapshotForContext(fetched)
             guard !result.accounts.isEmpty else {
                 status = .failure(context.isCreating
@@ -286,7 +300,7 @@ struct MoomooOAuthView: View {
             snapshot = result
             status = .success(L10n.text("读取成功：\(result.accounts.count) 个账户，\(result.positions.count) 项持仓"))
         } catch {
-            status = .failure(error.localizedDescription)
+            status = Task.isCancelled ? .idle : .failure(error.localizedDescription)
         }
     }
 

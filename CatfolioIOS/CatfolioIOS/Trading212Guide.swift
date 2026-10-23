@@ -1,5 +1,17 @@
 import SwiftUI
 
+/// Shared route state advances between native preparation and credential pages.
+@MainActor @Observable
+final class AccountSetupNavigation {
+    var step: Trading212GuideStep
+
+    init(startsAtCredentials: Bool = false) {
+        step = startsAtCredentials ? .credentials : .prepare
+    }
+
+    func showCredentials() { step = .credentials }
+}
+
 /// Tutorial navigation cannot advance into review or success without a broker response.
 enum Trading212GuideStep: Int, CaseIterable, Codable {
     case prepare, settings, permissions, credentials, review, complete
@@ -56,22 +68,17 @@ struct Trading212GuideLesson: View {
     static let helpURL = URL(string: "https://helpcentre.trading212.com/hc/en-us/articles/14584770928157-Trading-212-API-key")!
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 28) {
-            OnboardingFeature(symbol: "person.crop.rectangle", title: L10n.text("创建 API Key"),
+        AccountPreparationList {
+            AccountPreparationFeature(symbol: "key.fill", title: L10n.text("创建 API Key"),
                 detail: L10n.text("在目标 Invest / ISA 账户，打开 Settings → API (Beta) → Generate API key。"))
-            OnboardingFeature(symbol: "checklist", title: L10n.text("只开启读取权限"),
+            AccountPreparationFeature(symbol: "lock.shield.fill", title: L10n.text("只开启读取权限"),
                 detail: L10n.text("Portfolio、Account data、History。不启用交易权限。"))
-            OnboardingFeature(symbol: "key.horizontal", title: L10n.text("保存 Key 和 Secret"),
+            AccountPreparationFeature(symbol: "doc.on.doc.fill", title: L10n.text("保存 Key 和 Secret"),
                 detail: L10n.text("Secret 只显示一次，复制后回到这里。"))
-        }
-        Link(destination: Self.helpURL) {
-            Label(L10n.text("查看详细教程"), systemImage: "arrow.up.right.square")
-                .appText(.callout, weight: .medium).padding(.vertical, 8)
         }
     }
 
     var actions: some View {
-        OnboardingPrimaryButton(title: L10n.text("填写 Key 和 Secret"), action: next)
-            .accessibilityIdentifier("account-guide-next")
+        AccountPreparationNextButton(labelColor: .white, action: next)
     }
 }

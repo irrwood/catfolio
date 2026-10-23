@@ -163,12 +163,6 @@ struct HoldingDetailContentView: View {
                                 onRefresh: { marketDataRevision += 1 },
                                 cachedContent: cachedContent
                             )
-                            if ChinaSecurity(holding.ticker, currency: holding.quoteCurrency) != nil {
-                                ChinaMarketQuoteCaption(attribution: priceHistory?.chinaMarketAttribution)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, HoldingDetailCardStyle.pageInset)
-                                    .padding(.bottom, HoldingDetailCardStyle.spacing)
-                            }
                         }
                     }
 

@@ -38,6 +38,34 @@ struct BalanceSheetPeriod: Codable, Identifiable, Sendable {
     var id: String { "balance-\(kind.rawValue)-\(periodEnd)-\(fiscalPeriod)" }
 }
 
+enum CashFlowLineItem: String, Codable, CaseIterable, Sendable {
+    case netIncome, depreciationAndAmortization, deferredIncomeTaxes, stockBasedCompensation
+    case changeInWorkingCapital, otherNonCashItems
+    case acquisitions, investmentPurchases, investmentSalesAndMaturities, otherInvestingActivities
+    case debtIssued, debtRepaid, dividendsPaid, commonStockRepurchased, commonStockIssued
+    case financeLeasePrincipalPayments, otherFinancingActivities
+    case effectOfExchangeRates, changeInCash, cashAtBeginningOfPeriod, cashAtEndOfPeriod
+}
+
+struct CashFlowDetails: Codable, Sendable {
+    /// Flow items are signed cash effects; cash balances are positive amounts.
+    var amounts: [CashFlowLineItem: Double] = [:]
+    var cashIncludesRestrictedCash: Bool? = nil
+    var sourceFreeCashFlow: Double? = nil
+    /// Standard taxonomy can omit company-specific components of a subtotal.
+    var partialItems: Set<CashFlowLineItem>? = nil
+    /// Retains constituent coverage so cumulative quarters never subtract
+    /// different sets of disclosed facts.
+    var sourceConcepts: [CashFlowLineItem: Set<String>]? = nil
+
+    func isPartial(_ item: CashFlowLineItem) -> Bool { partialItems?.contains(item) == true }
+
+    func value(_ item: CashFlowLineItem) -> Double? {
+        guard let amount = amounts[item], amount.isFinite else { return nil }
+        return amount
+    }
+}
+
 struct CashFlowStatementPeriod: Codable, Identifiable, Sendable {
     let periodEnd: String
     let filedDate: String?
@@ -46,12 +74,37 @@ struct CashFlowStatementPeriod: Codable, Identifiable, Sendable {
     let kind: FinancialPeriodKind
     let currency: String
     let operatingCashFlow: Double
-    let capitalExpenditure: Double
-    let freeCashFlow: Double
+    let capitalExpenditure: Double?
+    let freeCashFlow: Double?
     let investingCashFlow: Double?
     let financingCashFlow: Double?
 
+    var details: CashFlowDetails? = nil
+
     var id: String { "cash-\(kind.rawValue)-\(periodEnd)-\(fiscalPeriod)" }
+
+    /// A comparison measure, not a claim about a company's published FCF definition.
+    var leaseAdjustedFreeCashFlow: Double? {
+        guard let freeCashFlow, freeCashFlow.isFinite,
+              let lease = details?.value(.financeLeasePrincipalPayments) else { return nil }
+        return freeCashFlow + lease
+    }
+
+    var cashReconciliationDifference: Double? {
+        guard let beginning = details?.value(.cashAtBeginningOfPeriod),
+              let ending = details?.value(.cashAtEndOfPeriod),
+              let change = details?.value(.changeInCash) else { return nil }
+        return ending - beginning - change
+    }
+
+    var cashFlowTotalDifference: Double? {
+        guard operatingCashFlow.isFinite,
+              let investingCashFlow, investingCashFlow.isFinite,
+              let financingCashFlow, financingCashFlow.isFinite,
+              let exchange = details?.value(.effectOfExchangeRates),
+              let change = details?.value(.changeInCash) else { return nil }
+        return change - operatingCashFlow - investingCashFlow - financingCashFlow - exchange
+    }
 }
 
 struct CompanyFinancialsData: Codable, Sendable {
@@ -68,11 +121,13 @@ struct CompanyFinancialsData: Codable, Sendable {
     var sharesOutstanding: Double? = nil
     var valuationQuality: ValuationQuality? = nil
     var valuationSchemaVersion: Int? = nil
+    /// Versions statement parsing separately from valuation calculations.
+    var cashFlowSchemaVersion: Int? = nil
 
     var hasUsableStatements: Bool {
         income.contains { [$0.revenue, $0.costOfRevenue, $0.grossProfit, $0.operatingExpenses, $0.operatingIncome].allSatisfy(\.isFinite) }
         || balance.contains { [$0.assets, $0.liabilities, $0.equity].allSatisfy(\.isFinite) }
-        || cashFlow.contains { [$0.operatingCashFlow, $0.capitalExpenditure, $0.freeCashFlow].allSatisfy(\.isFinite) }
+        || cashFlow.contains { $0.operatingCashFlow.isFinite }
     }
 }
 
@@ -196,6 +251,36 @@ actor CompanyFinancialsClient {
         let netCashUsedForInvestingActivites: Double?
         let netCashUsedProvidedByFinancingActivities: Double?
         let fillingDate: String?
+        var filingDate: String? = nil
+        var netIncome: Double? = nil
+        var depreciationAndAmortization: Double? = nil
+        var deferredIncomeTax: Double? = nil
+        var stockBasedCompensation: Double? = nil
+        var changeInWorkingCapital: Double? = nil
+        var otherNonCashItems: Double? = nil
+        var acquisitionsNet: Double? = nil
+        var investmentsInPropertyPlantAndEquipment: Double? = nil
+        var purchasesOfInvestments: Double? = nil
+        var salesMaturitiesOfInvestments: Double? = nil
+        var otherInvestingActivities: Double? = nil
+        var debtRepayment: Double? = nil
+        var netDebtIssuance: Double? = nil
+        var longTermNetDebtIssuance: Double? = nil
+        var shortTermNetDebtIssuance: Double? = nil
+        var dividendsPaid: Double? = nil
+        var netDividendsPaid: Double? = nil
+        var commonStockRepurchased: Double? = nil
+        var commonStockIssued: Double? = nil
+        var commonDividendsPaid: Double? = nil
+        var otherFinancingActivities: Double? = nil
+        var effectOfForexChangesOnCash: Double? = nil
+        var netChangeInCash: Double? = nil
+        var cashAtBeginningOfPeriod: Double? = nil
+        var cashAtEndOfPeriod: Double? = nil
+        var financeLeasePrincipalPayments: Double? = nil
+        // FMP has used both spellings in statement payloads.
+        var netCashProvidedByInvestingActivities: Double? = nil
+        var netCashProvidedByFinancingActivities: Double? = nil
     }
 
     struct NasdaqFinancialsResponse: Decodable {
@@ -250,6 +335,7 @@ actor CompanyFinancialsClient {
         if !forceRefresh,
            let stale,
            Date().timeIntervalSince(stale.fetchedAt) < freshness,
+           stale.data.cashFlowSchemaVersion == 2,
            (!stale.data.source.hasPrefix("SEC") || stale.data.valuationSchemaVersion == 1) {
             return stale.data
         }
@@ -268,6 +354,7 @@ actor CompanyFinancialsClient {
         // A recently cached report is more trustworthy than silently changing
         // providers merely because SEC is applying a temporary network block.
         if let stale,
+           !forceRefresh, stale.data.cashFlowSchemaVersion == 2,
            Date().timeIntervalSince(stale.fetchedAt) < 7 * 24 * 60 * 60 {
             return stale.data
         }
@@ -347,7 +434,8 @@ actor CompanyFinancialsClient {
             warnings: [],
             sharesOutstanding: Self.latestShares(payload.facts),
             valuationQuality: SECQualityCalculator.calculate(payload.facts, cik: payload.cik),
-            valuationSchemaVersion: 1
+            valuationSchemaVersion: 1,
+            cashFlowSchemaVersion: 2
         )
     }
 
@@ -377,24 +465,51 @@ actor CompanyFinancialsClient {
         _ sec: CompanyFinancialsData,
         ticker: String
     ) async throws -> CompanyFinancialsData {
-        guard sec.income.isEmpty || sec.balance.isEmpty || sec.cashFlow.isEmpty,
-              let apiKey = KeychainStore.string(for: LocalServiceKeys.fmp)?
+        guard let apiKey = KeychainStore.string(for: LocalServiceKeys.fmp)?
                 .trimmingCharacters(in: .whitespacesAndNewlines),
               !apiKey.isEmpty else { return sec }
-        guard let fmp = try? await loadFromFMP(ticker: ticker, apiKey: apiKey) else { return sec }
-        let usedFallback = sec.income.isEmpty || sec.balance.isEmpty || sec.cashFlow.isEmpty
+        let missingStatement = sec.income.isEmpty || sec.balance.isEmpty || sec.cashFlow.isEmpty
+        var fmp: CompanyFinancialsData?
+        var newerCash: [CashFlowStatementPeriod] = []
+        if missingStatement {
+            fmp = try? await loadFromFMP(ticker: ticker, apiKey: apiKey)
+            newerCash = fmp?.cashFlow ?? []
+        } else {
+            // A nonempty SEC statement can still lag a newly released quarter.
+            // Check just the quarterly cash endpoint rather than refetching all
+            // six statements merely to discover the most recent cash report.
+            for symbol in Self.fmpSymbolCandidates(ticker) {
+                do {
+                    let rows: [FMPCashRow] = try await fmpRows(
+                        endpoint: "cash-flow-statement", symbol: symbol, period: "quarter", apiKey: apiKey
+                    )
+                    newerCash = Self.makeFMPCashFlow(rows, kind: .quarterly)
+                    if !newerCash.isEmpty { break }
+                } catch {
+                    try Task.checkCancellation()
+                }
+            }
+        }
+        try Task.checkCancellation()
+        let detailMerge = Self.supplementingCashFlowDetails(to: sec.cashFlow, from: newerCash)
+        let cash = Self.addingNewerCashFlowPeriods(to: detailMerge.periods, from: newerCash)
+        let usedFallback = (sec.income.isEmpty && fmp?.income.isEmpty == false)
+            || (sec.balance.isEmpty && fmp?.balance.isEmpty == false)
+            || cash.count > sec.cashFlow.count || detailMerge.didSupplement
+        guard usedFallback else { return sec }
         return CompanyFinancialsData(
             ticker: sec.ticker,
             entityName: sec.entityName,
             cik: sec.cik,
-            source: usedFallback ? L10n.text("SEC 为主 · FMP 补充缺失报表") : sec.source,
-            income: sec.income.isEmpty ? fmp.income : sec.income,
-            balance: sec.balance.isEmpty ? fmp.balance : sec.balance,
-            cashFlow: sec.cashFlow.isEmpty ? fmp.cashFlow : sec.cashFlow,
-            warnings: usedFallback ? [L10n.text("部分报表在 SEC Company Facts 中缺失，已用 FMP 补充。")] : [],
+            source: L10n.text("SEC 为主 · FMP 补充缺失或较新报表"),
+            income: sec.income.isEmpty ? (fmp?.income ?? []) : sec.income,
+            balance: sec.balance.isEmpty ? (fmp?.balance ?? []) : sec.balance,
+            cashFlow: cash,
+            warnings: sec.warnings + [L10n.text("部分现金流明细或较新的报告期来自 FMP 标准化数据；已有 SEC 汇总金额保留原始申报口径。")],
             sharesOutstanding: sec.sharesOutstanding,
             valuationQuality: sec.valuationQuality,
-            valuationSchemaVersion: sec.valuationSchemaVersion
+            valuationSchemaVersion: sec.valuationSchemaVersion,
+            cashFlowSchemaVersion: sec.cashFlowSchemaVersion
         )
     }
 
@@ -572,13 +687,13 @@ actor CompanyFinancialsClient {
         async let annualBytes = request(
             url: annualURL,
             isSEC: false,
-            forceRefresh: false,
+            forceRefresh: true,
             isNasdaq: true
         )
         async let quarterlyBytes = request(
             url: quarterlyURL,
             isSEC: false,
-            forceRefresh: false,
+            forceRefresh: true,
             isNasdaq: true
         )
         let (annualData, quarterlyData) = try await (annualBytes, quarterlyBytes)
@@ -672,6 +787,8 @@ actor CompanyFinancialsClient {
     }
 
     private func save(_ data: CompanyFinancialsData, key: String) {
+        var data = data
+        data.cashFlowSchemaVersion = 2
         statementCache[key] = CacheEntry(fetchedAt: Date(), data: data)
         let oldest = Date().addingTimeInterval(-30 * 24 * 60 * 60)
         statementCache = statementCache.filter { $0.value.fetchedAt >= oldest }
@@ -835,25 +952,118 @@ extension CompanyFinancialsClient {
     }
 
     static func makeSECCashFlow(namespace: [String: SECFact]) -> [CashFlowStatementPeriod] {
-        let anchors = anchors(for: secConcepts.operatingCashFlow, namespace: namespace, instantaneous: false)
-        return anchors.compactMap { anchor in
-            guard let operating = value(for: secConcepts.operatingCashFlow, namespace: namespace, anchor: anchor) else { return nil }
-            let capex = abs(value(for: secConcepts.capitalExpenditure, namespace: namespace, anchor: anchor) ?? 0)
-            return CashFlowStatementPeriod(
-                periodEnd: anchor.entry.end,
-                filedDate: anchor.entry.filed,
-                fiscalYear: year(from: anchor.entry.end),
-                fiscalPeriod: anchor.entry.fiscalPeriod ?? (anchor.kind == .annual ? "FY" : "Q"),
-                kind: anchor.kind,
-                currency: anchor.unit,
-                operatingCashFlow: operating,
-                capitalExpenditure: capex,
-                freeCashFlow: operating - capex,
-                investingCashFlow: value(for: secConcepts.investingCashFlow, namespace: namespace, anchor: anchor),
-                financingCashFlow: value(for: secConcepts.financingCashFlow, namespace: namespace, anchor: anchor)
-            )
+        // Most 10-Q cash flow statements report fiscal year-to-date amounts.
+        // Rejecting durations longer than 130 days left Q2 and Q3 absent.
+        var byDuration: [String: AnchorPeriod] = [:]
+        for concept in secConcepts.operatingCashFlow {
+            guard let fact = namespace[concept], let unit = preferredMonetaryUnit(fact.units) else { continue }
+            for entry in fact.units[unit] ?? [] {
+                guard let quarters = cashFlowQuarterCount(entry), entry.value.isFinite else { continue }
+                let key = "\(unit)|\(entry.start ?? "")|\(entry.end)"
+                if let existing = byDuration[key], (existing.entry.filed ?? "") >= (entry.filed ?? "") { continue }
+                byDuration[key] = AnchorPeriod(entry: entry, unit: unit, kind: quarters == 4 ? .annual : .quarterly)
+            }
         }
-        .sorted { $0.periodEnd > $1.periodEnd }
+        let anchors = Array(byDuration.values)
+        var result: [String: CashFlowStatementPeriod] = [:]
+        for anchor in anchors.sorted(by: { ($0.entry.filed ?? "") < ($1.entry.filed ?? "") }) {
+            guard let count = cashFlowQuarterCount(anchor.entry) else { continue }
+            let filed = anchor.entry.filed ?? "9999-12-31"
+            func amount(_ concepts: [String], _ period: AnchorPeriod) -> Double? {
+                cashFlowValue(concepts, namespace: namespace, anchor: period, asOf: filed)
+            }
+            guard let operating = amount(secConcepts.operatingCashFlow, anchor) else { continue }
+            let capex = amount(secConcepts.capitalExpenditure, anchor).map(abs)
+            let investing = amount(secConcepts.investingCashFlow, anchor)
+            let financing = amount(secConcepts.financingCashFlow, anchor)
+            let details = secCashFlowDetails(namespace: namespace, anchor: anchor, asOf: filed)
+            func row(kind: FinancialPeriodKind, quarter: Int, operating: Double, capex: Double?,
+                     investing: Double?, financing: Double?, details: CashFlowDetails) -> CashFlowStatementPeriod {
+                CashFlowStatementPeriod(periodEnd: anchor.entry.end, filedDate: anchor.entry.filed,
+                    fiscalYear: cashFlowFiscalYear(end: anchor.entry.end, quarter: quarter),
+                    fiscalPeriod: kind == .annual ? "FY" : "Q\(quarter)", kind: kind, currency: anchor.unit,
+                    operatingCashFlow: operating, capitalExpenditure: capex.map(abs),
+                    freeCashFlow: capex.map { operating - abs($0) }, investingCashFlow: investing,
+                    financingCashFlow: financing, details: details)
+            }
+            if count == 4 {
+                result["annual|\(anchor.entry.end)"] = row(kind: .annual, quarter: 4, operating: operating,
+                    capex: capex, investing: investing, financing: financing, details: details)
+            }
+            let quarterKey = "quarterly|\(anchor.entry.end)"
+            if count == 1 {
+                let quarter = Int((anchor.entry.fiscalPeriod ?? "Q1").dropFirst()) ?? 1
+                result[quarterKey] = row(kind: .quarterly, quarter: min(4, max(1, quarter)),
+                    operating: operating, capex: capex, investing: investing, financing: financing, details: details)
+            } else if let previous = anchors.first(where: {
+                $0.unit == anchor.unit && $0.entry.start == anchor.entry.start
+                    && cashFlowQuarterCount($0.entry) == count - 1
+                    && (60...130).contains(daysBetween($0.entry.end, anchor.entry.end))
+            }), let previousOperating = amount(secConcepts.operatingCashFlow, previous) {
+                // Both cumulative periods must have the same fiscal start,
+                // currency and a disclosed predecessor. Never subtract a
+                // different year or label six/nine months as one quarter.
+                let previousCapex = amount(secConcepts.capitalExpenditure, previous).map(abs)
+                let quarterCapex = capex.flatMap { total in previousCapex.map { total - $0 } }
+                func difference(_ current: Double?, _ concepts: [String]) -> Double? {
+                    current.flatMap { total in amount(concepts, previous).map { total - $0 } }
+                }
+                let derived = row(kind: .quarterly, quarter: count, operating: operating - previousOperating,
+                    capex: quarterCapex, investing: difference(investing, secConcepts.investingCashFlow),
+                    financing: difference(financing, secConcepts.financingCashFlow),
+                    details: secQuarterCashFlowDetails(current: details, namespace: namespace,
+                        anchor: anchor, previous: previous, asOf: filed))
+                // Prefer an explicitly disclosed standalone quarter where it
+                // exists, regardless of dictionary iteration order.
+                let hasDirectQuarter = anchors.contains {
+                    $0.entry.end == anchor.entry.end && $0.unit == anchor.unit && cashFlowQuarterCount($0.entry) == 1
+                        && ($0.entry.filed ?? "") >= (anchor.entry.filed ?? "")
+                }
+                if !hasDirectQuarter { result[quarterKey] = derived }
+            }
+        }
+        return result.values.sorted {
+            if $0.periodEnd != $1.periodEnd { return $0.periodEnd > $1.periodEnd }
+            return $0.kind.rawValue < $1.kind.rawValue
+        }.prefix(32).map { $0 }
+    }
+
+    private static func cashFlowQuarterCount(_ entry: SECFactValue) -> Int? {
+        guard let start = entry.start else { return nil }
+        let days = daysBetween(start, entry.end)
+        let form = (entry.form ?? "").replacingOccurrences(of: "/A", with: "")
+        if ["10-K", "20-F", "40-F"].contains(form), (330...400).contains(days) { return 4 }
+        guard ["10-Q", "6-K"].contains(form) else { return nil }
+        if (60...130).contains(days) { return 1 }
+        if (150...220).contains(days) { return 2 }
+        if (240...310).contains(days) { return 3 }
+        return nil
+    }
+
+    private static func cashFlowValue(_ concepts: [String], namespace: [String: SECFact],
+                                      anchor: AnchorPeriod, asOf filed: String) -> Double? {
+        // Exact durations and units, with no later filing silently changing
+        // one side of a historical cumulative subtraction.
+        let candidates = concepts.enumerated().flatMap { rank, concept in
+            (namespace[concept]?.units[anchor.unit] ?? []).filter {
+                $0.start == anchor.entry.start && $0.end == anchor.entry.end
+                    && ($0.filed ?? "") <= filed && $0.value.isFinite
+            }.map { (rank: rank, entry: $0) }
+        }
+        return candidates.sorted {
+            if $0.entry.filed != $1.entry.filed { return ($0.entry.filed ?? "") > ($1.entry.filed ?? "") }
+            return $0.rank < $1.rank
+        }.first?.entry.value
+    }
+
+    private static func cashFlowFiscalYear(end: String, quarter: Int) -> Int {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        guard let date = FinancialDateCodec.date(from: end),
+              let yearEnd = calendar.date(byAdding: .month, value: (4 - quarter) * 3, to: date) else {
+            return year(from: end)
+        }
+        return calendar.component(.year, from: yearEnd)
     }
 
     static func anchors(
@@ -993,19 +1203,20 @@ extension CompanyFinancialsClient {
     static func makeFMPCashFlow(_ rows: [FMPCashRow], kind: FinancialPeriodKind) -> [CashFlowStatementPeriod] {
         rows.compactMap { row in
             guard let operating = row.operatingCashFlow ?? row.netCashProvidedByOperatingActivities else { return nil }
-            let capex = abs(row.capitalExpenditure ?? 0)
+            let capex = (row.capitalExpenditure ?? row.investmentsInPropertyPlantAndEquipment).map(abs)
             return CashFlowStatementPeriod(
                 periodEnd: row.date,
-                filedDate: row.fillingDate,
+                filedDate: row.filingDate ?? row.fillingDate,
                 fiscalYear: Int(row.fiscalYear ?? "") ?? year(from: row.date),
                 fiscalPeriod: row.period ?? (kind == .annual ? "FY" : "Q"),
                 kind: kind,
                 currency: row.reportedCurrency ?? "USD",
                 operatingCashFlow: operating,
                 capitalExpenditure: capex,
-                freeCashFlow: row.freeCashFlow ?? (operating - capex),
-                investingCashFlow: row.netCashUsedForInvestingActivites,
-                financingCashFlow: row.netCashUsedProvidedByFinancingActivities
+                freeCashFlow: capex.map { operating - $0 },
+                investingCashFlow: row.netCashProvidedByInvestingActivities ?? row.netCashUsedForInvestingActivites,
+                financingCashFlow: row.netCashProvidedByFinancingActivities ?? row.netCashUsedProvidedByFinancingActivities,
+                details: fmpCashFlowDetails(row)
             )
         }
     }
@@ -1096,7 +1307,7 @@ extension CompanyFinancialsClient {
                 column: column,
                 rows: rows
             ) else { return nil }
-            let capex = abs(nasdaqValue(["Capital Expenditures"], column: column, rows: rows) ?? 0)
+            let capex = nasdaqValue(["Capital Expenditures"], column: column, rows: rows).map(abs)
             return CashFlowStatementPeriod(
                 periodEnd: periodEnd,
                 filedDate: nil,
@@ -1106,7 +1317,7 @@ extension CompanyFinancialsClient {
                 currency: "USD",
                 operatingCashFlow: operating,
                 capitalExpenditure: capex,
-                freeCashFlow: operating - capex,
+                freeCashFlow: capex.map { operating - $0 },
                 investingCashFlow: nasdaqValue(
                     ["Net Cash Flows-Investing"],
                     column: column,
@@ -1116,7 +1327,8 @@ extension CompanyFinancialsClient {
                     ["Net Cash Flows-Financing"],
                     column: column,
                     rows: rows
-                )
+                ),
+                details: nasdaqCashFlowDetails(column: column, rows: rows)
             )
         }
         .sorted { $0.periodEnd > $1.periodEnd }

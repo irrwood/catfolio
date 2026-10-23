@@ -39,17 +39,36 @@ struct CSVImportView: View {
     }
 
     var body: some View {
-        AccountFlowStack {
-            OnboardingPage(scrollReset: flowStep, progress: context.isCreating ? OnboardingProgress(
-                step: flowStep + (isFirstLaunchSetup ? 2 : 0), total: isFirstLaunchSetup ? 4 : 2) : nil) {
-                OnboardingHeader(title: importResult != nil ? L10n.text("导入完成")
+        AccountFlowStack { page(1) }
+            .accountFlowBrand(.csv)
+    }
+
+    private func page(_ page: Int) -> some View {
+        let selectedFile = !context.isCreating || page == 2 ? self.selectedFile : nil
+        let preview = !context.isCreating || page == 2 ? self.preview : nil
+        return AccountFlowPage(showsNext: Binding(
+            get: { context.isCreating && flowStep > page },
+            set: { shown in
+                guard !shown, flowStep > page else { return }
+                fileSelectionGeneration = UUID()
+                self.selectedFile = nil
+                self.preview = nil
+                conflictChoices = [:]
+                statusMessage = nil
+                isReadingFile = false
+                isPreparing = false
+            })) {
+            OnboardingPage(scrollReset: page, isAccountPreparation: selectedFile == nil && !isReadingFile) {
+                AccountConnectionHeader(provider: .csv, title: importResult != nil ? L10n.text("导入完成")
                     : (selectedFile != nil ? L10n.text("确认交易记录") : (context.isCreating ? L10n.text("导入 CSV") : L10n.text("更新 CSV"))),
                     subtitle: importResult != nil ? nil : L10n.text("选择交易记录文件，预览后确认导入。"))
                 if selectedFile == nil && !isReadingFile {
-                    OnboardingFeature(symbol: "doc.text", title: L10n.text("选择交易记录"),
-                        detail: L10n.text("从券商导出 CSV 文件，再从这里选择。"))
-                    OnboardingFeature(symbol: "checkmark.shield", title: L10n.text("先预览，再导入"),
-                        detail: L10n.text("本机处理，不上传；最大 50 MB。"))
+                    VStack(spacing: 0) {
+                        AccountPreparationFeature(symbol: "doc.text.fill", title: L10n.text("选择交易记录"),
+                            detail: L10n.text("从券商导出 CSV 文件，再从这里选择。"))
+                        AccountPreparationFeature(symbol: "checkmark.seal.fill", title: L10n.text("先预览，再导入"),
+                            detail: L10n.text("本机处理，不上传；最大 50 MB。"))
+                    }
                 }
                 if context.isCreating, selectedFile != nil, importResult == nil {
                     SettingsSectionHeader(L10n.text("账户昵称"))
@@ -148,11 +167,8 @@ struct CSVImportView: View {
                         }
                     }
                 }
-            } actions: { flowActions }
+            } actions: { flowActions(page) }
             .toolbar {
-                if context.isCreating {
-                    ToolbarItem(placement: .cancellationAction) { AccountProviderBackButton() }
-                }
                 if !context.isCreating || importResult != nil {
                     ToolbarItem(placement: .confirmationAction) {
                         AppModalDoneButton { dismiss() }
@@ -194,8 +210,7 @@ struct CSVImportView: View {
             } message: {
                 Text(confirmationMessage)
             }
-        }
-        .accountFlowBrand(.csv)
+        } next: { AnyView(self.page(page + 1)) }
     }
 
     /// What confirming will do, including what the preview found missing.
@@ -220,7 +235,8 @@ struct CSVImportView: View {
     private var flowStep: Int { selectedFile != nil || importResult != nil ? 2 : 1 }
 
     @ViewBuilder
-    private var flowActions: some View {
+    private func flowActions(_ page: Int) -> some View {
+        let selectedFile = !context.isCreating || page == 2 ? self.selectedFile : nil
         if importResult != nil {
             OnboardingPrimaryButton(title: L10n.text("完成")) { dismiss() }
         } else if let selectedFile {

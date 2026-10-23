@@ -47,7 +47,7 @@ final class AddAccountLayoutTests: XCTestCase {
     }
 
     func testAllIconsLoadAndExportedGlyphDimensionsArePreserved() throws {
-        for provider in AddAccountProvider.allCases where provider.monogram == nil {
+        for provider in AddAccountProvider.allCases {
             let icon = try XCTUnwrap(UIImage(named: provider.iconAsset), provider.rawValue)
             XCTAssertGreaterThan(icon.size.width, 0)
             XCTAssertGreaterThan(icon.size.height, 0)
@@ -57,6 +57,81 @@ final class AddAccountLayoutTests: XCTestCase {
         }
         for name in ["AddAccountConnection", "AddAccountCSV"] {
             XCTAssertEqual(try XCTUnwrap(UIImage(named: name)).size, CGSize(width: 32, height: 32))
+        }
+    }
+
+    func testSuppliedBrokerLogosPreserveTheirBrandColorsInBothAppearances() async throws {
+        let samples: [(AddAccountProvider, [(CGPoint, [Int])])] = [
+            (.longbridge, [
+                (CGPoint(x: 28, y: 20), [0, 0, 0]),
+                (CGPoint(x: 16, y: 28), [1, 218, 181]),
+                (CGPoint(x: 33, y: 41), [254, 81, 0])
+            ]),
+            (.alpaca, [
+                (CGPoint(x: 28, y: 8), [252, 215, 43]),
+                (CGPoint(x: 17, y: 28), [1, 1, 1])
+            ])
+        ]
+        for dark in [false, true] {
+            for (provider, colors) in samples {
+                let image = try await render(AddAccountProviderIcon(provider: provider), width: 56, dark: dark)
+                XCTAssertEqual(image.size, CGSize(width: 56, height: 56))
+                // Sample flat areas inside each supplied SVG's background and artwork.
+                for (point, expected) in colors {
+                    let crop = try XCTUnwrap(image.cgImage?.cropping(to: CGRect(
+                        x: point.x * image.scale, y: point.y * image.scale, width: 1, height: 1)))
+                    var pixel = [UInt8](repeating: 0, count: 4)
+                    let context = try XCTUnwrap(CGContext(data: &pixel, width: 1, height: 1,
+                        bitsPerComponent: 8, bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(),
+                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+                    context.draw(crop, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+                    for channel in 0..<3 {
+                        XCTAssertEqual(Int(pixel[channel]), expected[channel], accuracy: 3, provider.rawValue)
+                    }
+                }
+                attach(image, name: "\(provider.rawValue)-logo-\(dark ? "dark" : "light")")
+            }
+        }
+    }
+
+    func testBrokerLogoOpticalSizingKeepsListAndHeaderSlotsAligned() async throws {
+        for size in [CGFloat(56), 58] {
+            for dark in [false, true] {
+                let logos = HStack(spacing: 16) {
+                    ForEach([AddAccountProvider.trading212, .ibkr, .moomoo, .longbridge, .alpaca]) { provider in
+                        AddAccountProviderIcon(provider: provider, size: size)
+                    }
+                }
+                let row = try await render(logos, width: size * 5 + 64, dark: dark)
+                XCTAssertEqual(row.size.height, size, accuracy: 0.5)
+                try row.pngData()?.write(to: URL(fileURLWithPath:
+                    "/tmp/catfolio-broker-logo-comparison-\(Int(size))-\(dark ? "dark" : "light").png"))
+                attach(row, name: "Broker-logo-optical-sizing-\(size)-\(dark)")
+                let logo = try await render(AddAccountProviderIcon(provider: .longbridge, size: size),
+                                            width: size, dark: dark)
+                let cgImage = try XCTUnwrap(logo.cgImage)
+                var pixels = [UInt8](repeating: 0, count: cgImage.width * cgImage.height * 4)
+                let context = try XCTUnwrap(CGContext(data: &pixels, width: cgImage.width, height: cgImage.height,
+                    bitsPerComponent: 8, bytesPerRow: cgImage.width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+                context.draw(cgImage, in: CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height))
+                var left = cgImage.width
+                var right = 0
+                for y in 0..<cgImage.height {
+                    for x in 0..<cgImage.width {
+                        let offset = (y * cgImage.width + x) * 4
+                        // Colored bars exclude the black badge and neutral page corners.
+                        let channels = [pixels[offset], pixels[offset + 1], pixels[offset + 2]]
+                        if Int(channels.max()!) - Int(channels.min()!) > 100 {
+                            left = min(left, x)
+                            right = max(right, x)
+                        }
+                    }
+                }
+                let extent = CGFloat(right - left + 1) / logo.scale
+                XCTAssertGreaterThan(extent, size * 0.48, "The mark should remain legible at both badge sizes")
+                XCTAssertLessThan(extent, size * 0.6, "The mark must keep breathing room inside the badge")
+            }
         }
     }
 
@@ -102,8 +177,8 @@ final class AddAccountLayoutTests: XCTestCase {
         UserDefaults.standard.set("en", forKey: AppLanguage.preferenceKey)
         // Its own store: the app's shared one may carry a resume flag from
         // elsewhere, which opens the Trading 212 page instead of the list.
-        let host = UIHostingController(rootView: AddAccountView(setupStore: Trading212SetupStore(
-                defaults: defaults, read: { _ in nil }, write: { _, _ in }))
+        let host = UIHostingController(rootView: NavigationStack { AddAccountView(setupStore: Trading212SetupStore(
+                defaults: defaults, read: { _ in nil }, write: { _, _ in })) }
             .environment(model)
             .environment(\.locale, Locale(identifier: "en_GB"))
             .preferredColorScheme(.light))

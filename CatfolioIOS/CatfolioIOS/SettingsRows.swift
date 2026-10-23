@@ -394,9 +394,8 @@ private struct SettingsFieldFont: ViewModifier {
     }
 }
 
-/// A row whose value opens a menu. The value is in the primary colour, not
-/// grey — the drawing distinguishes a value you can change from one you cannot
-/// by exactly that, plus the caret beside it.
+/// A row whose current selection uses the same grey as other trailing values.
+/// The caret and menu interaction indicate that the value can be changed.
 struct SettingsMenuRow<SelectionValue: Hashable, Options: View>: View {
     let icon: SettingsIconSource?
     let title: String
@@ -439,7 +438,7 @@ struct SettingsMenuRow<SelectionValue: Hashable, Options: View>: View {
                     HStack(spacing: SettingsTemplate.valueSpacing) {
                         Text(value)
                             .appText(.subheading)
-                            .foregroundStyle(CatfolioTheme.primaryText)
+                            .foregroundStyle(SettingsTemplate.readOnlyValue)
                             .lineLimit(1)
                         SettingsCaret()
                     }

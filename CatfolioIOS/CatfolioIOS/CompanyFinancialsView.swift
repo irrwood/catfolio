@@ -4,24 +4,15 @@ struct CompanyFinancialsView: View {
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @Environment(\.locale) private var appLocale
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private enum Statement: String, CaseIterable, Identifiable {
-        case income = "利润表"
-        case segments = "收入构成"
-        case balance = "资产负债表"
-        case cashFlow = "现金流"
-
-        var id: String { rawValue }
-    }
 
     let ticker: String
     let companyName: String
     var onAvailability: (HoldingResearchAvailability) -> Void = { _ in }
 
-    @State private var statement: Statement = .income
-    @State private var periodKind: FinancialPeriodKind = .annual
-    @State private var selectedPeriodEnd: String?
+    @State private var statement: CompanyFinancialStatement = .income
+    @State private var periodKind: FinancialPeriodKind = .quarterly
+    @State private var hasChosenPeriodKind = false
+    @State private var selectedPeriodIDs: [String: String] = [:]
     @State private var financials: CompanyFinancialsData?
     @State private var errorMessage: String?
     @State private var isLoading = false
@@ -70,14 +61,19 @@ struct CompanyFinancialsView: View {
         .refreshable { await load(forceRefresh: true) }
         .task { await load(forceRefresh: false) }
         .task(id: segmentKind) { await loadSegments() }
-        .onChange(of: statement) { _, _ in selectedPeriodEnd = nil }
-        .onChange(of: segmentKind) { _, _ in selectedPeriodEnd = nil }
+        .onChange(of: statement) { _, _ in updateDefaultPeriodKind() }
     }
+
+    private var periodSelectionKey: String {
+        statement == .segments ? "segments-\(segmentKind.rawValue)" : "\(statement.rawValue)-\(periodKind.rawValue)"
+    }
+
+    private var selectedPeriodEnd: String? { selectedPeriodIDs[periodSelectionKey] }
 
     private var periodSelection: Binding<FinancialPeriodKind> {
         Binding(get: { periodKind }, set: { value in
-            selectedPeriodEnd = nil
             periodKind = value
+            hasChosenPeriodKind = true
         })
     }
 
@@ -85,7 +81,7 @@ struct CompanyFinancialsView: View {
         VStack(alignment: .leading, spacing: 5) {
             Text(companyName)
                 .font(.title2.weight(.bold))
-            Text(L10n.text("\(ticker) · SEC 原始申报数据"))
+            Text(financials.map { "\(ticker) · \(L10n.message($0.source))" } ?? L10n.text("\(ticker) · SEC 原始申报数据"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -95,25 +91,7 @@ struct CompanyFinancialsView: View {
 
     private var statementSelector: some View {
         VStack(spacing: 14) {
-            HStack(spacing: 0) {
-                ForEach(Statement.allCases) { item in
-                    Button {
-                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { statement = item }
-                    } label: {
-                        VStack(spacing: 9) {
-                            Text(L10n.label(item.rawValue))
-                                .font(.subheadline.weight(statement == item ? .semibold : .regular))
-                                .foregroundStyle(statement == item ? .primary : .secondary)
-                                .frame(maxWidth: .infinity)
-                            Capsule()
-                                .fill(statement == item ? Color.primary : Color.clear)
-                                .frame(height: 3)
-                                .padding(.horizontal, 8)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
+            CompanyFinancialStatementTabs(selection: $statement)
 
             // Segments are only disclosed by fiscal year, so their tab picks
             // how revenue is split instead of a reporting period.
@@ -144,9 +122,10 @@ struct CompanyFinancialsView: View {
     private var segmentContent: some View {
         if let periods = segmentPeriods {
             if let selected = selected(from: periods) {
-                SegmentFlowDiagram(period: selected)
+                let colors = RevenueSegmentColors(periods: periods)
+                SegmentFlowDiagram(period: selected, colors: colors)
                 periodSelector(periods, label: { String($0.fy) })
-                SegmentRows(period: selected)
+                SegmentRows(period: selected, colors: colors)
                 segmentFooter(selected)
             } else {
                 ContentUnavailableView(
@@ -218,11 +197,11 @@ struct CompanyFinancialsView: View {
         case .segments:
             EmptyView()
         case .cashFlow:
-            let periods = data.cashFlow.filter { $0.kind == periodKind }
+            let periods = CashFlowPeriodSelection.periods(in: data.cashFlow, kind: periodKind)
             if let selected = selected(from: periods) {
                 CashFlowDiagram(period: selected)
                 periodSelector(periods, label: { periodLabel($0.fiscalYear, $0.fiscalPeriod) })
-                cashFlowRows(selected)
+                CashFlowStatementRows(period: selected)
             } else {
                 missingPeriodState
             }
@@ -242,7 +221,8 @@ struct CompanyFinancialsView: View {
                 ForEach(periods) { period in
                     let isSelected = selectedPeriodEnd.map(period.id.contains) ?? (period.id == periods.first?.id)
                     Button {
-                        selectedPeriodEnd = period.id
+                        selectedPeriodIDs[periodSelectionKey] = period.id
+                        hasChosenPeriodKind = true
                     } label: {
                         Text(label(period))
                             .font(.subheadline.weight(.semibold))
@@ -281,16 +261,6 @@ struct CompanyFinancialsView: View {
             (L10n.text("股东权益"), period.equity, true),
             (L10n.text("现金及等价物"), period.cash, true),
             (L10n.text("有息债务"), period.debt, false),
-        ])
-    }
-
-    private func cashFlowRows(_ period: CashFlowStatementPeriod) -> some View {
-        FinancialRows(currency: period.currency, rows: [
-            (L10n.text("经营现金流"), period.operatingCashFlow, true),
-            (L10n.text("资本开支"), period.capitalExpenditure, false),
-            (L10n.text("自由现金流"), period.freeCashFlow, true),
-            (L10n.text("投资现金流"), period.investingCashFlow, false),
-            (L10n.text("融资现金流"), period.financingCashFlow, false),
         ])
     }
 
@@ -351,11 +321,96 @@ struct CompanyFinancialsView: View {
                 ticker: ticker,
                 forceRefresh: forceRefresh
             )
+            updateDefaultPeriodKind()
             errorMessage = nil
             onAvailability(financials?.hasUsableStatements == true ? .available : .empty)
         } catch {
             errorMessage = error.localizedDescription
             onAvailability(error as? CompanyFinancialsError == .noStatements ? .empty : .failed)
+        }
+    }
+
+    private func updateDefaultPeriodKind() {
+        guard !hasChosenPeriodKind, let financials else { return }
+        let hasQuarter: Bool
+        switch statement {
+        case .income: hasQuarter = financials.income.contains { $0.kind == .quarterly }
+        case .balance: hasQuarter = financials.balance.contains { $0.kind == .quarterly }
+        case .cashFlow: hasQuarter = CashFlowPeriodSelection.preferredKind(in: financials.cashFlow) == .quarterly
+        case .segments: return
+        }
+        periodKind = hasQuarter ? .quarterly : .annual
+    }
+}
+
+enum CompanyFinancialStatement: String, CaseIterable, Identifiable {
+    case income = "利润表"
+    case segments = "收入构成"
+    case balance = "资产负债表"
+    case cashFlow = "现金流"
+
+    var id: String { rawValue }
+
+    var tabTitle: String {
+        switch self {
+        case .income: L10n.text("财务页签·利润表")
+        case .segments: L10n.text("财务页签·收入构成")
+        case .balance: L10n.text("财务页签·资产负债表")
+        case .cashFlow: L10n.text("现金流")
+        }
+    }
+}
+
+struct CompanyFinancialStatementTabs: View {
+    @Binding var selection: CompanyFinancialStatement
+    @Environment(\.locale) private var appLocale
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .subheadline) private var lineHeight: CGFloat = 20
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            tabs
+            if #available(iOS 26.0, *) {
+                scrollingTabs.scrollEdgeEffectHidden(true, for: .all)
+            } else {
+                scrollingTabs
+            }
+        }
+        .frame(height: max(44, lineHeight + 12))
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var scrollingTabs: some View {
+        ScrollView(.horizontal) {
+            tabs.fixedSize(horizontal: true, vertical: false)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private var tabs: some View {
+        HStack(spacing: 8) {
+            ForEach(CompanyFinancialStatement.allCases) { item in
+                Button {
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { selection = item }
+                } label: {
+                    VStack(spacing: 9) {
+                        Text(item.tabTitle)
+                            .font(.subheadline.weight(selection == item ? .semibold : .regular))
+                            .foregroundStyle(selection == item ? .primary : .secondary)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .padding(.horizontal, 4)
+                        Capsule()
+                            .fill(selection == item ? Color.primary : Color.clear)
+                            .frame(height: 3)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.label(item.rawValue))
+                .accessibilityAddTraits(selection == item ? .isSelected : [])
+            }
         }
     }
 }
@@ -390,17 +445,19 @@ private struct BalanceFlowView: View {
     }
 }
 
-private struct CashFlowDiagram: View {
+struct CashFlowDiagram: View {
     @Environment(\.locale) private var appLocale
     let period: CashFlowStatementPeriod
 
     var body: some View {
-        FinancialSplitDiagram(
-            currency: period.currency,
-            source: .init(L10n.text("经营现金流"), period.operatingCashFlow, .inflow),
-            upper: .init(L10n.text("自由现金流"), period.freeCashFlow, .inflow),
-            lower: .init(L10n.text("资本开支"), period.capitalExpenditure, .outflow)
-        )
+        if let free = period.freeCashFlow, let capex = period.capitalExpenditure {
+            FinancialSplitDiagram(
+                currency: period.currency,
+                source: .init(L10n.text("经营现金流"), period.operatingCashFlow, .inflow),
+                upper: .init(L10n.text("自由现金流"), free, .inflow),
+                lower: .init(L10n.text("资本开支"), capex, .outflow)
+            )
+        }
     }
 }
 
@@ -674,11 +731,13 @@ private func pairedFlowThickness(
 /// instead of above it, since there can be many.
 struct SegmentFlowDiagram: View {
     let period: RevenueSegmentCatalog.Period
+    var colors: RevenueSegmentColors? = nil
 
     struct Row {
         let title: String
         let value: Double
         let isUnallocated: Bool
+        var isAggregated = false
     }
 
     /// Largest first, the long tail folded into one row so every label fits.
@@ -688,7 +747,7 @@ struct SegmentFlowDiagram: View {
             let tail = rows[(limit - 1)...]
             rows = Array(rows[..<(limit - 1)])
             rows.append(Row(title: L10n.text("其他 \(tail.count) 项"), value: tail.reduce(0) { $0 + $1.value },
-                            isUnallocated: false))
+                            isUnallocated: false, isAggregated: true))
         }
         if let unallocated = period.unallocated, unallocated > 0 {
             rows.append(Row(title: L10n.text("未归入分部"), value: unallocated, isUnallocated: true))
@@ -714,6 +773,7 @@ struct SegmentFlowDiagram: View {
 
     var body: some View {
         let rows = Self.rows(for: period)
+        let colors = colors ?? RevenueSegmentColors(periods: [period])
         let base = period.base
         let currency = period.currency ?? "USD"
         let span: CGFloat = 220
@@ -741,13 +801,10 @@ struct SegmentFlowDiagram: View {
                     var sourceY = sourceTop
                     for (index, row) in rows.enumerated() {
                         let t = thickness[index]
-                        let node = FlowNode(row.title, row.value, row.isUnallocated ? .outflow : .inflow)
-                        // Neighbouring ribbons alternate in depth so they
-                        // stay apart where they cross.
-                        let ribbonColor = node.ribbonColor.opacity(index.isMultiple(of: 2) ? 1 : 0.7)
+                        let color = colors.color(for: row)
                         ribbon(context: &context, from: CGPoint(x: x0, y: sourceY + t / 2),
-                               to: CGPoint(x: x1, y: centers[index]), thickness: t, color: ribbonColor)
-                        bar(context: &context, x: x1, y: centers[index] - t / 2, height: t, color: node.color)
+                               to: CGPoint(x: x1, y: centers[index]), thickness: t, color: color.opacity(0.35))
+                        bar(context: &context, x: x1, y: centers[index] - t / 2, height: t, color: color)
                         sourceY += t
                     }
                     bar(context: &context, x: x0, y: sourceTop, height: span, color: CatfolioPalette.statementInflow)
@@ -756,7 +813,6 @@ struct SegmentFlowDiagram: View {
                     .position(x: x0, y: sourceTop - 30)
                 ForEach(rows.indices, id: \.self) { index in
                     let row = rows[index]
-                    let node = FlowNode(row.title, row.value, row.isUnallocated ? .outflow : .inflow)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(row.title)
                             .font(.caption.weight(.semibold))
@@ -764,7 +820,7 @@ struct SegmentFlowDiagram: View {
                             .minimumScaleFactor(0.85)
                         FinancialText("\(FinancialAmountFormatter.string(row.value, currency: currency)) · \(DisplayFormat.percent(row.value / base * 100, signed: false))")
                             .currencyFont(.caption1, weight: .bold)
-                            .foregroundStyle(node.textColor)
+                            .foregroundStyle(CatfolioTheme.primaryText)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                     }
@@ -778,17 +834,38 @@ struct SegmentFlowDiagram: View {
     }
 }
 
-private struct SegmentRows: View {
+struct RevenueSegmentColors {
+    private let indices: [String: Int]
+
+    init(periods: [RevenueSegmentCatalog.Period]) {
+        let names = Set(periods.flatMap { $0.items.map(\.name) }).sorted()
+        indices = Dictionary(uniqueKeysWithValues: names.enumerated().map { ($0.element, $0.offset) })
+    }
+
+    func color(for row: SegmentFlowDiagram.Row) -> Color {
+        if row.isUnallocated { return CatfolioTheme.neutralIcon }
+        if row.isAggregated { return CatfolioPalette.ChartSeries.neutral }
+        return CatfolioPalette.revenueSegment(at: indices[row.title] ?? 0)
+    }
+}
+
+struct SegmentRows: View {
     let period: RevenueSegmentCatalog.Period
+    var colors: RevenueSegmentColors? = nil
 
     var body: some View {
         let rows = SegmentFlowDiagram.rows(for: period, limit: .max)
+        let colors = colors ?? RevenueSegmentColors(periods: [period])
         let base = period.base
         let currency = period.currency ?? "USD"
         VStack(spacing: 0) {
             ForEach(rows.indices, id: \.self) { index in
                 let row = rows[index]
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Circle()
+                        .fill(colors.color(for: row))
+                        .frame(width: 8, height: 8)
+                        .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 2 }
                     Text(row.title)
                         .foregroundStyle(row.isUnallocated ? .secondary : .primary)
                         .lineLimit(2)

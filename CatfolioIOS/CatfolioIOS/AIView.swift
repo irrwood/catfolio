@@ -101,10 +101,13 @@ struct AIView: View {
                             .id(showsSidebar)
                         }
                         ToolbarItem(placement: .topBarTrailing) {
-                            Button(L10n.text("新对话"), systemImage: "square.and.pencil") {
+                            Button {
                                 startNewConversation()
                                 dismissSidebar()
+                            } label: {
+                                Label(L10n.text("新对话"), image: "AssistantCompose")
                             }
+                            .labelStyle(.iconOnly)
                             .accessibilityIdentifier("ai.conversations.new")
                             .disabled(isRestoringHistory)
                         }
@@ -630,6 +633,7 @@ struct AIView: View {
         case .codex: L10n.text("正在使用 ChatGPT Codex 分析…")
         case .deepSeek: L10n.text("正在使用 DeepSeek 分析…")
         case .openRouter: L10n.text("正在使用 OpenRouter 分析…")
+        case .claude: L10n.text("正在使用 Claude 分析…")
         }
     }
 
@@ -793,7 +797,8 @@ struct AIView: View {
                         let events: AsyncThrowingStream<AIStreamEvent, Error>
                         if let researchRequest {
                             events = LocalAIClient().streamPublicResearch(
-                                cleanQuestion, context: researchRequest.context, webSearch: usesWebSearch)
+                                cleanQuestion, context: researchRequest.context, webSearch: usesWebSearch,
+                                newsQueries: researchRequest.newsQueries)
                         } else {
                             events = try await model.streamAI(cleanQuestion, attentionContext: context, webSearch: usesWebSearch)
                         }

@@ -35,6 +35,7 @@ struct DataSource: Hashable, Identifiable, Sendable {
         (["news.google.com"], .init(id: "google-news", title: "Google News", kind: .news)),
         (["api.openai.com", "chatgpt.com", "auth.openai.com"], .init(id: "openai", title: "ChatGPT", kind: .ai)),
         (["api.deepseek.com"], .init(id: "deepseek", title: "DeepSeek", kind: .ai)),
+        (["api.anthropic.com"], .init(id: "claude", title: "Claude", kind: .ai)),
         (["openrouter.ai"], .init(id: "openrouter", title: "OpenRouter", kind: .ai)),
         (["api.cloudflare.com"], .init(id: "cloudflare", title: "Cloudflare Workers AI", kind: .ai)),
         (["live.trading212.com", "demo.trading212.com"], .init(id: "trading212", title: "Trading 212", kind: .broker)),
@@ -264,6 +265,7 @@ final class DataSourceHealth {
     /// could not be used.
     nonisolated static func reportUnusable(_ source: DataSource?, issue: DataSourceDataIssue, subject: String? = nil) {
         guard let source else { return }
+        NewsSearchTrace.current?.record(.unusable(issue.description), source: source)
         DataSourceReportQueue.shared.enqueue(.unusable(issue.description), for: source, at: Date())
     }
 
@@ -271,6 +273,7 @@ final class DataSourceHealth {
     /// Unknown strings become a generic issue so response text cannot leak.
     nonisolated static func reportUnusable(_ source: DataSource?, _ reason: String, subject: String? = nil) {
         guard let source else { return }
+        NewsSearchTrace.current?.record(.unusable(reason), source: source)
         DataSourceReportQueue.shared.enqueue(.unusable(reason), for: source, at: Date())
     }
 
@@ -290,11 +293,13 @@ final class DataSourceHealth {
     /// without waiting for the Settings model to run on the main actor.
     nonisolated static func enqueue(_ url: URL?, response: URLResponse) {
         guard let source = DataSource.of(url) else { return }
+        NewsSearchTrace.current?.record(outcome(for: response), source: source)
         DataSourceReportQueue.shared.enqueue(outcome(for: response), for: source, at: Date())
     }
 
     nonisolated static func enqueue(_ url: URL?, error: Error) {
         guard let source = DataSource.of(url), let outcome = outcome(for: error) else { return }
+        NewsSearchTrace.current?.record(outcome, source: source)
         DataSourceReportQueue.shared.enqueue(outcome, for: source, at: Date())
     }
 

@@ -22,7 +22,7 @@ final class AccountGuideLayoutTests: XCTestCase {
                     }, name: "trading212-\(step)-\(language)-\(dark)", dark: dark, directory: directory)
                 }
                 try await capture(OnboardingPage(progress: OnboardingProgress(step: 1, total: 2)) {
-                    IBKRSetupIntro(showGuide: {})
+                    IBKRSetupIntro()
                 } actions: {
                     OnboardingPrimaryButton(title: L10n.text("填写 Token 和 Query ID"), action: {})
                 }, name: "ibkr-prepare-\(language)-\(dark)", dark: dark, directory: directory)

@@ -61,6 +61,40 @@ enum AIStreamParsing {
         return (error["message"] as? String) ?? L10n.text("AI 请求失败")
     }
 
+    /// Claude sends text and thinking as typed content-block deltas. Usage,
+    /// signatures, keep-alives and future event types do not contain answer text.
+    static func claudeEvents(_ line: String) throws -> [AIStreamEvent] {
+        guard let event = payload(line) else { return [] }
+        switch event["type"] as? String {
+        case "content_block_delta":
+            guard let delta = event["delta"] as? [String: Any] else { return [] }
+            switch delta["type"] as? String {
+            case "text_delta":
+                guard let text = delta["text"] as? String, !text.isEmpty else { return [] }
+                return [.text(text)]
+            case "thinking_delta":
+                guard let thinking = delta["thinking"] as? String, !thinking.isEmpty else { return [] }
+                return [.reasoning(thinking)]
+            default:
+                return []
+            }
+        case "message_delta":
+            let delta = event["delta"] as? [String: Any]
+            try ClaudeAPI.validateStopReason(delta?["stop_reason"] as? String)
+            return []
+        case "error":
+            let error = event["error"] as? [String: Any]
+            let message = (error?["message"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw LocalServiceError.remote(message?.isEmpty == false ? message! : L10n.text("Claude 请求失败"))
+        default:
+            return []
+        }
+    }
+
+    static func isClaudeDone(_ line: String) -> Bool {
+        payload(line)?["type"] as? String == "message_stop"
+    }
+
     /// Whether a line ends a chat-completions stream.
     static func isDone(_ line: String) -> Bool {
         line.hasPrefix("data:") && line.dropFirst(5).trimmingCharacters(in: .whitespaces) == "[DONE]"

@@ -523,7 +523,8 @@ enum ReturnsAxisLabels {
         let scale = pow(10.0, Double(digits))
         let rounded = (value * scale).rounded() / scale
         return (rounded == 0 ? 0 : rounded).formatted(
-            .number.grouping(.never).precision(.fractionLength(0...digits)).locale(locale)
+            .number.grouping(.never).precision(.fractionLength(0...digits))
+                .sign(strategy: .always(includingZero: false)).locale(locale)
         ) + "%"
     }
 }
@@ -580,7 +581,8 @@ struct ReturnsRankingRow: View {
 
             if let value = item.returnValue {
                 HStack(spacing: 0) {
-                    FinancialText("\(value >= 0 ? "+" : "")\((value * 100).formatted(.number.precision(.fractionLength(1))))", isDirectional: true)
+                    Text(verbatim: (value * 100).formatted(.number.precision(.fractionLength(1))
+                        .sign(strategy: .always(includingZero: false))))
                     Text("%")
                         .foregroundStyle(.primary.opacity(0.3))
                 }

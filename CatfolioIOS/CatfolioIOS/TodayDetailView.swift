@@ -218,10 +218,6 @@ struct TodayDetailView: View {
                 }
                 summary
 
-                if !sectorRows.isEmpty {
-                    sectorSection
-                }
-
                 if !percentageGainers.isEmpty {
                     ranking(percentageGainers, title: L10n.text("持仓涨幅榜"))
                         .accessibilityIdentifier("today.percentage-gainers")
@@ -268,9 +264,7 @@ struct TodayDetailView: View {
     }
 
     private var summary: some View {
-        // One card, read top to bottom: the net, then what it is made of —
-        // the gainers and the losers side by side under a hairline, each a
-        // quiet label over its figure, split by a thin rule.
+        // One shared surface from the day's net through its sector breakdown.
         VStack(spacing: 0) {
             VStack(spacing: 6) {
                 Text(L10n.text("今日盈亏"))
@@ -315,6 +309,10 @@ struct TodayDetailView: View {
                     .padding(.horizontal, SettingsTemplate.rowHorizontalPadding)
                     .padding(.vertical, 14)
             }
+
+            if !sectorRows.isEmpty {
+                sectorSection
+            }
         }
         .settingsCardSurface()
     }
@@ -342,56 +340,12 @@ struct TodayDetailView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// The standard cell, like the rankings below: a row per sector, its
-    /// mark and name on the left and what it moved on the right, the largest
-    /// move first whichever way it went, unclassified last.
+    /// The industry breakdown continues inside the summary's shared card.
     private var sectorSection: some View {
-        VStack(alignment: .leading, spacing: SettingsTemplate.sectionSpacing) {
-            SettingsSectionHeader(L10n.text("按行业"))
-            SettingsCard {
-                ForEach(sectorRows) { row in
-                    sectorRow(row)
-                }
-            }
-        }
-    }
-
-    private func sectorRow(_ row: SectorBreakdown) -> some View {
-        Button {
+        TodaySectorCard(rows: sectorRows) { row in
             selectedSector = row
             showsSectorMembers = true
-        } label: {
-            HStack(alignment: .center, spacing: 12) {
-                Image(systemName: row.symbolName)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 36)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(row.displayName)
-                        .font(.body.weight(.medium))
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(L10n.text("\(row.components.count) 项"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 8)
-                FinancialText(DisplayFormat.money(row.amount, signed: true, fractionDigits: 2), isDirectional: true)
-                    .appNumber(.body, weight: .semibold)
-                    .foregroundStyle(row.amount >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
-            }
-            .padding(.horizontal, SettingsTemplate.rowHorizontalPadding)
-            .padding(.vertical, SettingsTemplate.rowVerticalPadding)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(SettingsRowButtonStyle())
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("today-sector.\(row.id)")
     }
 
     /// The standard cell: a section title over one card, a row per holding,

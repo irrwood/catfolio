@@ -8,6 +8,7 @@ enum LocalServiceKeys {
     static let massive = "catfolio.massive.api-key"
     static let deepSeek = "catfolio.deepseek.api-key"
     static let openRouter = "catfolio.openrouter.api-key"
+    static let claude = "catfolio.claude.api-key"
     static let finnhub = "catfolio.finnhub.api-key"
     /// A Cloudflare API token with Workers AI access, for Jev.
     static let cloudflareAIToken = "catfolio.cloudflare.ai-token"
@@ -21,6 +22,18 @@ enum LocalServiceKeys {
     /// Not a secret, so in UserDefaults: which DeepSeek model answers.
     static let deepSeekModel = "catfolio.deepseek.model"
     static let defaultDeepSeekModel = "deepseek-chat"
+    static let claudeModel = "catfolio.claude.model"
+    static let defaultClaudeModel = "claude-sonnet-5-5"
+
+    static var claudeModelID: String {
+        let stored = UserDefaults.standard.string(forKey: claudeModel)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return stored.isEmpty ? defaultClaudeModel : stored
+    }
+
+    static var hasClaudeKey: Bool {
+        !(KeychainStore.string(for: claude)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+    }
 
     static var deepSeekModelID: String {
         let stored = UserDefaults.standard.string(forKey: deepSeekModel)?
@@ -57,6 +70,7 @@ enum LocalServiceError: LocalizedError {
     case missingMassiveKey
     case missingAIKey
     case missingOpenRouterKey
+    case missingClaudeKey
     case missingCodexConnection
     case appleModelUnavailable(String)
     case noAvailableAIProvider(String)
@@ -76,6 +90,8 @@ enum LocalServiceError: LocalizedError {
             L10n.text("DeepSeek 模式需要 API Key。请在设置中填写，或开启 iCloud 密钥同步。")
         case .missingOpenRouterKey:
             L10n.text("OpenRouter 模式需要 API Key。请在设置中填写，或开启 iCloud 密钥同步。")
+        case .missingClaudeKey:
+            L10n.text("Claude 模式需要 API Key。请在设置中填写，或开启 iCloud 密钥同步。")
         case .missingCodexConnection:
             L10n.text("请先在设置中连接 ChatGPT Codex。")
         case let .appleModelUnavailable(reason):
@@ -102,6 +118,7 @@ enum AIProviderPreference: String, CaseIterable, Identifiable {
     case codex
     case deepSeek
     case openRouter
+    case claude
 
     static let storageKey = "catfolio.ai.provider"
 
@@ -122,9 +139,11 @@ enum AIProviderPreference: String, CaseIterable, Identifiable {
             return (hasDeepSeekKey, L10n.text("DeepSeek 模式需要 API Key。请在设置中填写，或开启 iCloud 密钥同步。"))
         case .openRouter:
             return (LocalServiceKeys.hasOpenRouterKey, L10n.text("OpenRouter 需要 API Key，请在设置 › 服务商中填写。"))
+        case .claude:
+            return (LocalServiceKeys.hasClaudeKey, LocalServiceError.missingClaudeKey.localizedDescription)
         case .automatic:
             let ready = LocalAIClient.appleModelStatus.isAvailable
-                || LocalServiceKeys.hasOpenRouterKey || hasDeepSeekKey
+                || LocalServiceKeys.hasOpenRouterKey || LocalServiceKeys.hasClaudeKey || hasDeepSeekKey
             return (ready, L10n.text("没有可用的 AI：请在设置 › 服务商中连接一个模型。"))
         }
     }
@@ -142,13 +161,14 @@ enum AIProviderPreference: String, CaseIterable, Identifiable {
         case .codex: "Codex"
         case .deepSeek: "DeepSeek"
         case .openRouter: "OpenRouter"
+        case .claude: "Claude"
         }
     }
 
     var detail: String {
         switch self {
         case .automatic:
-            L10n.text("自动使用本地或已连接的 Codex、OpenRouter、DeepSeek。")
+            L10n.text("自动使用本地或已连接的 Codex、OpenRouter、Claude、DeepSeek。")
         case .apple:
             L10n.text("仅在本机处理，可离线使用。")
         case .codex:
@@ -157,6 +177,8 @@ enum AIProviderPreference: String, CaseIterable, Identifiable {
             L10n.text("组合摘要和问题会发送给 DeepSeek。")
         case .openRouter:
             L10n.text("组合摘要和问题会经 OpenRouter 发送给所选模型。")
+        case .claude:
+            L10n.text("组合摘要和问题会发送给 Anthropic 的 Claude。")
         }
     }
 }
@@ -258,10 +280,19 @@ struct AIModelOption: Identifiable, Hashable, Sendable {
 /// rather than typed.
 enum AIModelCatalog {
     static func supports(_ provider: LocalServiceProvider) -> Bool {
-        provider == .openRouter || provider == .deepSeek
+        provider == .openRouter || provider == .deepSeek || provider == .claude
     }
 
     static func fetch(_ provider: LocalServiceProvider, key: String?) async throws -> [AIModelOption] {
+        if provider == .claude {
+            let request = try ClaudeAPI.modelsRequest(apiKey: key ?? KeychainStore.string(for: LocalServiceKeys.claude) ?? "")
+            let (data, response) = try await LocalRequestSessions.ephemeral.recordedData(for: request)
+            guard let http = response as? HTTPURLResponse else { throw LocalServiceError.invalidResponse }
+            guard (200..<300).contains(http.statusCode) else {
+                throw LocalServiceError.remote(ClaudeAPI.errorMessage(data, status: http.statusCode))
+            }
+            return try decode(data)
+        }
         let url: URL
         switch provider {
         case .openRouter: url = URL(string: "https://openrouter.ai/api/v1/models")!
@@ -282,7 +313,11 @@ enum AIModelCatalog {
 
     static func decode(_ data: Data) throws -> [AIModelOption] {
         struct Payload: Decodable {
-            struct Model: Decodable { let id: String; let name: String? }
+            struct Model: Decodable {
+                let id: String
+                let name: String?
+                let display_name: String?
+            }
             let data: [Model]
         }
         let models = try JSONDecoder().decode(Payload.self, from: data).data
@@ -290,7 +325,8 @@ enum AIModelCatalog {
         return models.compactMap { model in
             let id = model.id.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !id.isEmpty, seen.insert(id).inserted else { return nil }
-            return AIModelOption(id: id, name: model.name?.isEmpty == false ? model.name! : id)
+            let name = model.name?.isEmpty == false ? model.name : model.display_name
+            return AIModelOption(id: id, name: name?.isEmpty == false ? name! : id)
         }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 }

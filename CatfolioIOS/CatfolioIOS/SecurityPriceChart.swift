@@ -140,7 +140,12 @@ struct HoldingDetailPriceSection: View {
                 .disabled(movement == nil)
                 .background(SecurityPaperSourceReader(anchor: explanationAnchor))
                 .accessibilityIdentifier("holding-detail-why-move")
+                .researchLayoutFrame("holding-detail.ai-action")
                 .accessibilityHint(movement?.intervalText ?? L10n.text("等待带日期的价格走势"))
+                if let model {
+                    WatchlistToggleButton(holding: holding, store: model.watchlist,
+                                          observation: priceHistory?.latestMarketObservation)
+                }
                 // Refreshing is a tap on the price above, not a button here.
             }
             .padding(.horizontal, 20)

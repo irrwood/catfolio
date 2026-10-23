@@ -63,6 +63,7 @@ enum CloudCredentialPolicy {
         "service.massive": LocalServiceKeys.massive,
         "service.deepseek": LocalServiceKeys.deepSeek,
         "service.openrouter": LocalServiceKeys.openRouter,
+        "service.claude": LocalServiceKeys.claude,
         "service.finnhub": LocalServiceKeys.finnhub,
         "service.cloudflare": LocalServiceKeys.cloudflareAIToken,
     ]
@@ -88,6 +89,7 @@ enum CloudCredentialPolicy {
         case "service.cloudflare": [LocalServiceKeys.cloudflareAccountIDKey]
         case "service.deepseek": [LocalServiceKeys.deepSeekModel]
         case "service.openrouter": [LocalServiceKeys.openRouterModel]
+        case "service.claude": [LocalServiceKeys.claudeModel]
         default: []
         }
     }

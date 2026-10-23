@@ -80,7 +80,6 @@ final class ChinaMarketLiveViewTests: XCTestCase {
                 VStack(spacing: 12) {
                     HoldingDetailPriceSection(holding: holding, priceHistory: history, priceHistoryError: nil,
                         averageCost: nil, selectedAccountKeys: [])
-                    ChinaMarketQuoteCaption(attribution: history.chinaMarketAttribution)
                 }
                 .padding(.top, 24)
             }.environment(model).environment(\.locale, Locale(identifier: "zh-Hans")).preferredColorScheme(.light))

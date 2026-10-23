@@ -34,20 +34,23 @@ struct IBKRFlexView: View {
     private let isFirstLaunchSetup: Bool
     private let credentialValues: () -> [String: String]
 
-    @State private var showsSetupGuide = false
-    @State private var guideStep = 0
+    @State private var setupNavigation: AccountSetupNavigation
+    private var guideStep: Int {
+        get { setupNavigation.step.isTutorial ? 0 : 1 }
+        nonmutating set { setupNavigation.step = newValue == 0 ? .prepare : .credentials }
+    }
     @State private var token = ""
     @State private var queryID = ""
     @State private var snapshot: IBKRFlexSnapshot?
     @State private var snapshotCredentials: IBKRFlexCredentials?
     @State private var status: FlexViewStatus = .idle
     @State private var isWorking = false
+    @State private var previewTask: Task<Void, Never>?
     @State private var showsClearConfirmation = false
     @State private var showsSyncConfirmation = false
     @State private var nickname = ""
     @State private var nicknameEdited = false
     @State private var usesLegacyCredentials = false
-    @State private var didCopyBrief = false
     @State private var hasPrepared = false
 
     // Credentials are normally keyed by account ID, but that ID only arrives
@@ -63,11 +66,13 @@ struct IBKRFlexView: View {
     private static let legacyQueryIDKey = "ibkr.flex.query-id"
 
     init(context: AccountConnectorContext = .create, isFirstLaunchSetup: Bool = false,
+         setupNavigation: AccountSetupNavigation? = nil,
          credentialValues: @escaping () -> [String: String] = BrokerCredentialPrefill.storedValues) {
         self.context = context
         self.isFirstLaunchSetup = isFirstLaunchSetup
         self.credentialValues = credentialValues
-        _guideStep = State(initialValue: isFirstLaunchSetup ? 1 : 0)
+        _setupNavigation = State(initialValue: setupNavigation ?? AccountSetupNavigation(
+            startsAtCredentials: !context.isCreating))
     }
 
     private static func tokenKey(accountID: String) -> String {
@@ -81,6 +86,8 @@ struct IBKRFlexView: View {
     /// The placeholder made by "保存并创建账户", still waiting for its first
     /// report. It has no IBKR account ID yet, so its credentials are the
     /// parked ones.
+
+
     private var isPendingAccount: Bool {
         context.account?.id == Self.pendingAccountID
     }
@@ -90,48 +97,41 @@ struct IBKRFlexView: View {
         if let accountFlowClose { accountFlowClose() } else { dismissPage() }
     }
 
+    private var pageIndex: Int { guideStep == 0 ? 0 : (snapshot == nil ? 1 : 2) }
+
     var body: some View {
-        AccountFlowStack {
-            OnboardingPage(scrollReset: guideStep,
-                           progress: context.isCreating ? OnboardingProgress(
-                            step: isFirstLaunchSetup ? 3 : guideStep + 1, total: isFirstLaunchSetup ? 3 : 2) : nil) {
-                if context.isCreating && guideStep < 1 {
-                    IBKRSetupIntro { showsSetupGuide = true }
+        AccountFlowStack { page(context.isCreating ? 0 : 1) }
+            .accountFlowBrand(.ibkr)
+    }
+
+    private func page(_ page: Int) -> some View {
+        AccountFlowPage(showsNext: Binding(
+            get: { context.isCreating && pageIndex > page },
+            set: { shown in
+                guard !shown, pageIndex > page else { return }
+                invalidatePreview()
+                if page == 0 { guideStep = 0 }
+            })) {
+            OnboardingPage(scrollReset: page, isAccountPreparation: true) {
+                if context.isCreating && page == 0 {
+                    IBKRSetupIntro()
                 } else {
-                    VStack(alignment: .leading, spacing: 16) { connectionContent }
+                    VStack(alignment: .leading, spacing: 16) { connectionContent(page) }
                 }
-            } actions: { flowActions }
-            // Past the first step the guide's own 上一步 is the back button.
-            .navigationBarBackButtonHidden(context.isCreating && !isFirstLaunchSetup && guideStep > 0 && snapshot == nil)
+            } actions: { flowActions(page) }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if context.isCreating && !isFirstLaunchSetup && guideStep > 0 && snapshot == nil {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button {
-                            guideStep -= 1
-                        } label: {
-                            Label(L10n.text("上一步"), systemImage: "chevron.left")
-                        }
-                        .disabled(isWorking)
-                    }
-                } else if context.isCreating && snapshot == nil {
-                    ToolbarItem(placement: .cancellationAction) {
-                        AccountProviderBackButton().disabled(isWorking)
-                    }
-                }
-
                 if !context.isCreating {
                     ToolbarItem(placement: .confirmationAction) {
                         AppModalDoneButton { dismiss() }
                     }
                 }
             }
-            .appSheet(isPresented: $showsSetupGuide) {
-                IBKRGuideHelpView()
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-            }
+            .accountConnectionTutorial(.ibkr)
             .task { prepareAccount() }
+            .onDisappear {
+                if !context.isCreating || pageIndex == page { previewTask?.cancel() }
+            }
             .onChange(of: token) { _, _ in invalidatePreview() }
             .onChange(of: queryID) { _, _ in invalidatePreview() }
             .confirmationDialog(
@@ -158,14 +158,14 @@ struct IBKRFlexView: View {
                     ? L10n.text("将使用预览中的数据创建新账户；现有账户不受影响。")
                     : L10n.text("将更新当前 IBKR 账户持仓；其他账户不受影响。"))
             }
-        }
-        .tint(CatfolioTheme.primaryText)
+        } next: { AnyView(self.page(page + 1)) }
     }
 
     @ViewBuilder
-    private var flowActions: some View {
-        if context.isCreating && guideStep < 1 {
-            OnboardingPrimaryButton(title: L10n.text("填写 Token 和 Query ID")) { guideStep = 1 }
+    private func flowActions(_ page: Int) -> some View {
+        let snapshot = !context.isCreating || page == 2 ? self.snapshot : nil
+        if context.isCreating && page == 0 {
+            AccountPreparationNextButton(action: setupNavigation.showCredentials)
         } else if let snapshot {
             OnboardingPrimaryButton(
                 title: isWorking
@@ -185,25 +185,18 @@ struct IBKRFlexView: View {
                 Task { await saveAndClose() }
             }
             Button(isWorking ? L10n.text("正在读取") : L10n.text("现在就读取持仓")) {
-                Task { await testFlex() }
+                startPreview()
             }
             .appText(.callout, weight: .medium)
             .disabled(isWorking || !hasCompleteCredentials)
         }
     }
 
-    private func settingsLink(_ title: String, url: String) -> some View {
-        Link(destination: URL(string: url)!) {
-            SettingsRowContainer {
-                SettingsRowLabel(icon: .symbol("arrow.up.right.square"), title: title)
-            }
-        }
-        .buttonStyle(SettingsRowButtonStyle())
-    }
-
     @ViewBuilder
-    private var connectionContent: some View {
-        IBKRConnectionIntro()
+    private func connectionContent(_ page: Int) -> some View {
+        let snapshot = !context.isCreating || page == 2 ? self.snapshot : nil
+        AccountConnectionHeader(provider: .ibkr, title: L10n.text("连接 IBKR"),
+                                subtitle: L10n.text("只开启读取权限"))
         if context.isCreating, snapshot != nil {
             SettingsSectionHeader(L10n.text("账户昵称"))
             SettingsCard {
@@ -212,68 +205,26 @@ struct IBKRFlexView: View {
             }
         }
 
-        SettingsSectionHeader(L10n.text("Flex 凭证"))
-        SettingsCard {
-            SettingsFieldRow("Flex Token", text: $token, isSecure: true, isMonospaced: true)
-                .privacySensitive()
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-
-            SettingsFieldRow("Query ID", text: $queryID, isMonospaced: true)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .keyboardType(.numberPad)
-
-            SettingsRowContainer {
-                Text(L10n.text("保存在钥匙串；可在设置中开启跨设备密钥同步。"))
-                    .appText(.label, weight: .regular)
-                    .foregroundStyle(SettingsTemplate.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        if !context.isCreating || page == 1 {
+        VStack(alignment: .leading, spacing: 16) {
+            AccountCredentialRow(title: "Flex Token", text: $token, accessibilityIdentifier: "ibkr.flex-token")
+            AccountCredentialRow(title: "Query ID", text: $queryID, accessibilityIdentifier: "ibkr.query-id", isSecret: false)
         }
+        AccountCredentialFootnote()
 
+        }
 
         if status.isPresented { statusView }
         if snapshot != nil {
-            Button(L10n.text("重新读取持仓")) { Task { await testFlex() } }
+            Button(L10n.text("重新读取持仓")) { startPreview() }
                 .appText(.callout).disabled(isWorking)
         }
-        DisclosureGroup(L10n.text("需要帮助？")) {
-            Button(L10n.text("查看详细教程")) { showsSetupGuide = true }
-                .appText(.callout).padding(.vertical, 12)
-                .accessibilityIdentifier("ibkr-open-setup-guide")
-            SettingsFootnote(L10n.text("Query ID 在 Flex Queries 列表的查询名称旁。持仓超过一年时，请将 Period 扩至最早建仓日。"))
-            SettingsButtonRow(
-                icon: .symbol(didCopyBrief ? "checkmark.circle" : "doc.on.doc"),
-                title: didCopyBrief ? L10n.text("已复制，去 IBKR 粘贴给它的助手") : L10n.text("复制配置提示词"),
-                showsChevron: false,
-                tint: didCopyBrief ? CatfolioTheme.positive : nil
-            ) {
-                UIPasteboard.general.string = IBKRFlexQueryBrief.prompt
-                withAnimation { didCopyBrief = true }
-                Task {
-                    try? await Task.sleep(for: .seconds(2))
-                    withAnimation { didCopyBrief = false }
-                }
-            }
-
-            settingsLink(
-                L10n.text("如何创建 Activity Flex Query"),
-                url: "https://www.ibkrguides.com/clientportal/performanceandstatements/activityflex.htm"
-            )
-
-            settingsLink(
-                L10n.text("如何启用 Flex Web Service 并生成 Token"),
-                url: "https://www.ibkrguides.com/clientportal/performanceandstatements/flex-web-service.htm"
-            )
-        }
-        .appText(.callout)
-
         if let snapshot {
             SettingsSectionHeader(L10n.text("Flex 预览"))
             SettingsCard {
                 SettingsValueRow(title: L10n.text("报表日期"), value: snapshot.reportDate ?? L10n.text("最新"), valueIsNumeric: false)
-                SettingsValueRow(title: "Open Positions", value: L10n.text("\(snapshot.positions.count) 项"))
+                SettingsValueRow(title: "Open Positions", value: snapshot.positions.isEmpty
+                    ? L10n.text("暂无持仓") : L10n.text("\(snapshot.positions.count) 项"))
                 SettingsValueRow(title: L10n.text("成交明细"), value: L10n.text("\(snapshot.transactions.count) 笔"))
 
                 ForEach(snapshot.positions.prefix(10)) { position in
@@ -444,6 +395,16 @@ struct IBKRFlexView: View {
         Task { try? await model.deleteAccount(Self.pendingAccountID) }
     }
 
+    private var newAccountExclusions: Set<String>? {
+        guard context.isCreating || isPendingAccount else { return nil }
+        return Set(model.accounts.filter { $0.source == IBKRFlexKeys.source }.compactMap(\.accountID))
+    }
+
+    private func startPreview() {
+        previewTask?.cancel()
+        previewTask = Task { await testFlex() }
+    }
+
     private func testFlex() async {
         if context.isCreating || isPendingAccount { IBKRFirstSync.shared.cancel() }
         isWorking = true
@@ -453,12 +414,15 @@ struct IBKRFlexView: View {
             let credentials = try credentials()
             let fetched = try await IBKRFlexClient().fetchOpenPositions(
                     credentials: credentials,
+                    newAccountExclusions: newAccountExclusions,
                     onProgress: { seconds in
                         Task { @MainActor in
+                            guard previewTask?.isCancelled == false else { return }
                             status = .working(L10n.text("IBKR 正在生成报表… 已等待 \(seconds) 秒"))
                         }
                     }
                 )
+            try Task.checkCancellation()
             let result = snapshotForContext(fetched)
             guard !result.syncedPositionAccountIDs.isEmpty else {
                 status = .failure(context.isCreating
@@ -475,7 +439,7 @@ struct IBKRFlexView: View {
             snapshotCredentials = credentials
             status = .success(L10n.text("Flex 连接成功，读取 \(result.positions.count) 项持仓"))
         } catch {
-            status = .failure(error.localizedDescription)
+            status = Task.isCancelled ? .idle : .failure(error.localizedDescription)
         }
     }
 
@@ -492,6 +456,7 @@ struct IBKRFlexView: View {
             } else {
                 let fetched = try await IBKRFlexClient().fetchOpenPositions(
                     credentials: credentials,
+                    newAccountExclusions: newAccountExclusions,
                     onProgress: { seconds in
                         Task { @MainActor in
                             status = .working(L10n.text("IBKR 正在生成报表… 已等待 \(seconds) 秒"))
@@ -543,7 +508,7 @@ struct IBKRFlexView: View {
     }
 
     private func invalidatePreview() {
-        guard !isWorking else { return }
+        previewTask?.cancel()
         snapshot = nil
         snapshotCredentials = nil
         status = .idle

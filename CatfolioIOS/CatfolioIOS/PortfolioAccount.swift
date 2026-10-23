@@ -62,13 +62,13 @@ struct PortfolioAccount: Identifiable, Equatable, Codable {
 
     /// Registered but never synced.
     ///
-    /// Derived rather than stored: an account only reaches `knownAccounts`
-    /// with no positions and no transactions when it was created ahead of its
-    /// first sync, and the flag clears itself the moment anything lands.
+    /// IBKR has a dedicated placeholder until its first report identifies the
+    /// real account. A real IBKR account may have no positions or transactions.
     /// SnapTrade accounts are created only after a confirmed complete preview,
     /// so an empty SnapTrade account has already synced successfully.
     var awaitsFirstSync: Bool {
-        !["SnapTrade", "Robinhood", "Longbridge", "Alpaca"].contains(source) && positionCount == 0 && transactionCount == 0
+        if source == IBKRFlexKeys.source { return id == IBKRFlexKeys.pendingAccountID }
+        return !["SnapTrade", "Robinhood", "Longbridge", "Alpaca"].contains(source) && positionCount == 0 && transactionCount == 0
     }
 
     var brokerName: String {

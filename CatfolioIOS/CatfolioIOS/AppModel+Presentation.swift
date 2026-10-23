@@ -176,7 +176,7 @@ extension AppModel {
 
     /// The two flags and selection change synchronously, before any suspension.
     /// Switching never clears persisted portfolio or shared public-data caches.
-    func setPortfolioMode(enabled: Bool, selection: String) {
+    func setPortfolioMode(enabled: Bool, selection: String, refreshMarketData: Bool = true) {
         let chosen = enabled && selection.isEmpty ? PublicInvestorPreferences.defaultSelection : selection
         let normalized = PublicInvestorPreferences.selectedIDs(chosen).sorted().joined(separator: ",")
         let demo = enabled && PublicInvestorPreferences.isDemo(normalized)
@@ -214,9 +214,9 @@ extension AppModel {
         portfolioSourceTask = Task { @MainActor [weak self] in
             guard let self, !Task.isCancelled,
                   generation == self.portfolioSourceGeneration else { return }
-            await self.refreshPortfolio()
+            await self.refreshPortfolio(refreshMarketData: refreshMarketData)
             guard !Task.isCancelled, generation == self.portfolioSourceGeneration else { return }
-            await self.refreshReturnsPage()
+            if refreshMarketData { await self.refreshReturnsPage() }
             if generation == self.portfolioSourceGeneration { self.portfolioSourceTask = nil }
         }
     }

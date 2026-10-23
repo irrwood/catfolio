@@ -62,10 +62,14 @@ final class AccountHeaderTests: XCTestCase {
         let navigation = try await selectedNavigation(in: tabs)
         let add = try await NativeToolbarTestSupport.button(in: navigation, leading: false,
                                                             identifier: "settings-add-account")
+        let originalDepth = navigation.viewControllers.count
         try add.tap()
         try await Task.sleep(for: .milliseconds(500))
-        XCTAssertNotNil(host.presentedViewController ?? navigation.presentedViewController,
-                        "The restored add button must still present account creation")
+        XCTAssertEqual(navigation.viewControllers.count, originalDepth + 1,
+                       "The restored add button must push account creation onto the existing stack")
+        XCTAssertEqual(navigation.topViewController?.navigationItem.title, L10n.text("添加账户"))
+        XCTAssertNil(host.presentedViewController ?? navigation.presentedViewController,
+                     "Account creation uses native back navigation rather than a separate modal")
     }
 
     private func isVisible(_ view: UIView, in window: UIWindow) -> Bool {

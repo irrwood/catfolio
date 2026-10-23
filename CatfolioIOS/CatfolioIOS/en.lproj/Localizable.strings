@@ -4451,3 +4451,145 @@
 "直接读取 SnapTrade 已关联账户；仅同步股票和基金持仓，不含现金或交易流水。" = "Read accounts already linked to SnapTrade. Only stock and fund holdings are synced; cash and transaction history are excluded.";
 "此 Key 下没有已关联的券商账户。请先在 SnapTrade Dashboard 关联账户，再回来读取。" = "No brokerage accounts are linked to this key. Link an account in the SnapTrade Dashboard, then fetch it here.";
 "没有可添加的新账户；已有账户请从账户详情同步。" = "No new accounts are available. Sync existing accounts from their account details.";
+
+// Paywall
+"你的投资，\n一目了然。" = "Your investments.\nThe whole picture.";
+"预览模式 · 不会扣费" = "Preview only · No charge";
+"按月" = "Monthly";
+"终身" = "Lifetime";
+"/月" = "/mo";
+
+"粘贴" = "Paste";
+
+"加入观察列表" = "Add to Watchlist";
+
+"移出观察列表" = "Remove from Watchlist";
+
+"已收藏" = "Saved";
+
+"未收藏" = "Not saved";
+
+"观察列表 · 现价与今日涨跌" = "Current prices and daily changes";
+
+"还没有观察的股票" = "Your watchlist is empty";
+
+"在个股页点击 AI 按钮旁的星星，即可加入观察列表。" = "Tap the star beside the AI button on a stock page to add it here.";
+
+"部分行情未更新，下拉可重试。" = "Some quotes could not refresh. Pull down to retry.";
+
+"财务页签·利润表" = "Income";
+"财务页签·收入构成" = "Revenue";
+"财务页签·资产负债表" = "Balance";
+
+/* Cash-flow statement detail */
+"折旧与摊销" = "Depreciation & amortization";
+"递延所得税" = "Deferred income taxes";
+"股权激励" = "Stock-based compensation";
+"营运资本变动" = "Change in working capital";
+"其他非现金项目" = "Other non-cash items";
+"收购支出" = "Acquisitions";
+"购买投资" = "Investment purchases";
+"出售及到期投资" = "Investment sales & maturities";
+"其他投资活动" = "Other investing activities";
+"新增借款" = "Debt issued";
+"偿还借款" = "Debt repaid";
+"支付股息" = "Dividends paid";
+"回购普通股" = "Common stock repurchased";
+"发行普通股" = "Common stock issued";
+"融资租赁本金支付" = "Finance lease principal payments";
+"其他融资活动" = "Other financing activities";
+"汇率变动影响" = "Effect of exchange rates";
+"现金净变动" = "Change in cash";
+"期初现金" = "Opening cash";
+"期末现金" = "Closing cash";
+"数据源口径自由现金流" = "Source-defined free cash flow";
+"SEC 为主 · FMP 补充缺失或较新报表" = "SEC primary · FMP fills missing or newer reports";
+"部分缺失或较新的报告期来自 FMP 标准化数据；已有 SEC 报告期保留原始申报口径。" = "Some missing or newer periods use FMP standardized data. Existing SEC periods retain their original filing definitions.";
+"（已披露项）" = " (disclosed items)";
+
+"部分现金流明细或较新的报告期来自 FMP 标准化数据；已有 SEC 汇总金额保留原始申报口径。" = "Some cash-flow details or newer reporting periods use FMP standardized data. Existing SEC totals retain their original filing definitions.";
+"融资租赁调整后自由现金流" = "Finance lease-adjusted free cash flow";
+"（含受限现金）" = " (incl. restricted cash)";
+
+/* Claude API */
+"Claude 请求失败" = "Claude request failed";
+"直连 Anthropic 的 Claude 模型" = "Connect directly to Anthropic’s Claude models";
+"组合摘要和问题会发送给 Anthropic 的 Claude。" = "Portfolio summaries and questions are sent to Anthropic’s Claude.";
+"连接成功，Claude Key 可用" = "Connected. The Claude API key works.";
+"正在使用 Claude 分析…" = "Analyzing with Claude…";
+"Claude 模式需要 API Key。请在设置中填写，或开启 iCloud 密钥同步。" = "Claude needs an API key. Enter it in Settings or enable iCloud key sync.";
+"自动使用本地或已连接的 Codex、OpenRouter、Claude、DeepSeek。" = "Automatically uses an on-device model or a connected Codex, OpenRouter, Claude, or DeepSeek provider.";
+"Claude 请求失败（%@）" = "Claude request failed (%@)";
+"Claude 回复达到长度上限，请缩短问题后重试。" = "Claude reached the response length limit. Shorten your question and try again.";
+
+"连接 IBKR" = "Connect IBKR";
+
+"连接 %@" = "Connect %@";
+
+"连接 Trading 212" = "Connect Trading 212";
+
+"通过 API 连接" = "Connect via API";
+
+"跳过" = "Skip";
+
+"教程" = "Guide";
+
+"读取" = "Read";
+
+"获取 OpenAPI 凭证" = "Get OpenAPI credentials";
+
+"复制连接凭证" = "Copy connection credentials";
+
+"复制凭证后回到 Catfolio，下一步粘贴并预览持仓。" = "Return to Catfolio with your credentials, then paste them to preview your holdings.";
+
+"在 Alpaca Dashboard 创建 API Key，并保存 Secret Key。" = "Create an API Key in the Alpaca Dashboard and save the Secret Key.";
+
+"选择账户环境" = "Choose an account environment";
+
+"创建个人 API Key" = "Create a personal API Key";
+
+"关联券商账户" = "Link your brokerage account";
+
+"先在 SnapTrade Dashboard 关联券商账户，再复制 Client ID 和 Consumer Key。" = "Link your brokerage account in the SnapTrade Dashboard, then copy the Client ID and Consumer Key.";
+
+"选择券商，按照步骤完成连接；详细教程在连接页右上角。" = "Choose a broker and follow the connection steps. Find the detailed tutorial at the top right.";
+
+"网络连接不可用" = "Network connection is unavailable";
+
+"连接失败" = "Connection failed";
+
+"没有可用的新闻来源，请检查设置中的新闻来源开关和凭证。" = "No news sources are available. Check the enabled news sources and credentials in Settings.";
+
+"无法确定要搜索的公开主题，请在问题中注明公司或事件。" = "Could not identify a public search topic. Include the company or event in your question.";
+
+"未找到符合当前来源和日期规则的相关新闻。" = "No relevant news matched the current source and date rules.";
+
+"新闻来源获取失败：" = "Could not fetch news sources: ";
+
+"新闻搜索未完成：" = "News search did not complete: ";
+
+"以下回答仅基于已有数据，不包含本次实时搜索结果。" = "This answer uses only existing data and does not include live results from this search.";
+
+"正在搜索新闻…" = "Searching news…";
+
+"已获取新闻来源，正在整理回答…" = "Found news sources, preparing the answer…";
+
+"无法加载教程" = "Unable to load the guide";
+
+"在浏览器中打开" = "Open in browser";
+
+"官方教程" = "Official guide";
+
+/* Compact names for the Today sector card. */
+"today.sector.technology" = "Tech";
+"today.sector.healthcare" = "Health";
+"today.sector.financials" = "Finance";
+"today.sector.consumerCyclical" = "Discretionary";
+"today.sector.consumerDefensive" = "Staples";
+"today.sector.industrials" = "Industry";
+"today.sector.energy" = "Energy";
+"today.sector.materials" = "Materials";
+"today.sector.realEstate" = "Property";
+"today.sector.utilities" = "Utilities";
+"today.sector.communication" = "Telecom";
+"today.sector.unclassified" = "Other";

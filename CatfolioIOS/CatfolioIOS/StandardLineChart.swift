@@ -1583,7 +1583,7 @@ struct StandardLineChart: View {
     private func yAxisLabels(plot: CGRect) -> some View {
         ForEach(Array(yTicks.enumerated()), id: \.offset) { entry in
             if shouldShowAxisTick(entry.element, plot: plot) {
-                FinancialText(yAxisLabel(entry.element))
+                Text(verbatim: yAxisLabel(entry.element))
                     .font(yAxisFont)
                     .foregroundStyle(yAxisColor)
                     .researchLayoutFrame("standard-chart.axis.tick.\(entry.offset)")
@@ -1614,7 +1614,7 @@ struct StandardLineChart: View {
     @ViewBuilder
     private func referenceAxisLabels(plot: CGRect, progress: CGFloat) -> some View {
         ForEach(referenceLines) { reference in
-            FinancialText(reference.label)
+            Text(verbatim: reference.label)
                 .font(referenceAxisFont)
                 .foregroundStyle(reference.color)
                 .researchLayoutFrame("standard-chart.axis.reference.\(reference.id)")

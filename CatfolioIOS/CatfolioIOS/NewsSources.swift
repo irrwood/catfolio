@@ -13,6 +13,7 @@ enum NewsProvider: String, CaseIterable, Identifiable, Sendable {
     case finnhub
 
     var id: String { rawValue }
+    var requiresTicker: Bool { self != .googleNews }
 
     var title: String {
         switch self {
@@ -139,6 +140,7 @@ struct NewsQuery: Sendable {
     let ticker: String
     let name: String
     let language: String
+    var key: String { ticker.isEmpty ? "topic:" + name : ticker }
 }
 
 protocol NewsSourceProvider: Sendable {
@@ -157,7 +159,7 @@ extension NewsSourceProvider {
         for chunk in stride(from: 0, to: queries.count, by: 4).map({ Array(queries[$0..<min($0 + 4, queries.count)]) }) {
             await withTaskGroup(of: (String, [PortfolioAttentionSource]).self) { group in
                 for query in chunk {
-                    group.addTask { (query.ticker, await sources(for: query)) }
+                    group.addTask { (query.key, await sources(for: query)) }
                 }
                 for await (ticker, sources) in group { result[ticker] = sources }
             }
@@ -170,15 +172,21 @@ struct GoogleNewsProvider: NewsSourceProvider {
     let kind = NewsProvider.googleNews
     var usesQueryPlan = NewsSettings.usesQueryPlan
 
+    static func url(for query: NewsQuery, language: String) -> URL {
+        query.ticker.isEmpty
+            ? ContentLanguage.newsURL(query: query.name, language: language)
+            : ContentLanguage.newsURL(ticker: query.ticker, name: query.name, language: language)
+    }
+
     func sources(for query: NewsQuery) async -> [PortfolioAttentionSource] {
         var searches: [(label: String, url: URL, limit: Int)] = [
-            (query.language, ContentLanguage.newsURL(ticker: query.ticker, name: query.name, language: query.language), 20),
+            (query.language, Self.url(for: query, language: query.language), 20),
         ]
         // A Chinese reader still needs the original reporting, which is in English.
         if query.language.hasPrefix("zh") {
-            searches.append(("en", ContentLanguage.newsURL(ticker: query.ticker, name: query.name, language: "en"), 20))
+            searches.append(("en", Self.url(for: query, language: "en"), 20))
         }
-        if usesQueryPlan {
+        if usesQueryPlan && !query.ticker.isEmpty {
             for plan in NewsQueryPlan.allCases {
                 guard let text = plan.query(name: query.name, ticker: query.ticker) else { continue }
                 searches.append(("en-\(plan.rawValue)", ContentLanguage.newsURL(query: text, language: "en"), 10))
@@ -191,7 +199,7 @@ struct GoogleNewsProvider: NewsSourceProvider {
                         return (index, [])
                     }
                     guard let stories = SecurityDebateResearch.parseRSSChecked(
-                        data, ticker: "\(query.ticker)-\(search.label)", limit: search.limit
+                        data, ticker: "\(query.key)-\(search.label)", limit: search.limit
                     ) else {
                         DataSourceHealth.reportUnusable(DataSource.of(search.url), issue: .invalidFormat)
                         return (index, [])
@@ -454,18 +462,25 @@ struct NewsSourceHub {
         }
     }
 
+    init(providers: [any NewsSourceProvider]) {
+        self.providers = providers
+    }
+
     private static let order: [NewsProvider] = [.secEdgar, .finnhub, .yahooFinance, .gdelt, .googleNews]
 
     func sources(ticker: String, name: String,
                  language: String = ContentLanguage.current) async -> [PortfolioAttentionSource] {
-        await sources(for: [NewsQuery(ticker: ticker, name: name, language: language)])[ticker] ?? []
+        let query = NewsQuery(ticker: ticker, name: name, language: language)
+        return await sources(for: [query])[query.key] ?? []
     }
 
     func sources(for queries: [NewsQuery]) async -> [String: [PortfolioAttentionSource]] {
         guard !queries.isEmpty else { return [:] }
         let collected = await withTaskGroup(of: (NewsProvider, [String: [PortfolioAttentionSource]]).self) { group in
             for provider in providers {
-                group.addTask { (provider.kind, await provider.sources(for: queries)) }
+                let supported = queries.filter { !provider.kind.requiresTicker || !$0.ticker.isEmpty }
+                guard !supported.isEmpty else { continue }
+                group.addTask { (provider.kind, await provider.sources(for: supported)) }
             }
             var result: [NewsProvider: [String: [PortfolioAttentionSource]]] = [:]
             for await (kind, sources) in group { result[kind] = sources }
@@ -475,11 +490,11 @@ struct NewsSourceHub {
         let excludesAggregators = AttentionEvidenceRules.excludeAggregators
         var result: [String: [PortfolioAttentionSource]] = [:]
         for query in queries {
-            let merged = Self.order.flatMap { collected[$0]?[query.ticker] ?? [] }.filter { source in
+            let merged = Self.order.flatMap { collected[$0]?[query.key] ?? [] }.filter { source in
                 !NewsSettings.isBlocked(source, sites: blocked)
                     && !(excludesAggregators && AttentionEvidenceRules.isAggregator(source.publisher))
             }
-            result[query.ticker] = SecurityDebateResearch.deduplicated(merged)
+            result[query.key] = SecurityDebateResearch.deduplicated(merged)
         }
         return result
     }

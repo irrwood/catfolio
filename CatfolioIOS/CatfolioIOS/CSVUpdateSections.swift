@@ -12,6 +12,7 @@ struct CSVUpdateOptionsSection: View {
                     Text(L10n.text("完整重建")).tag(CSVImportMode.rebuild)
                 }
                 .pickerStyle(.menu)
+                .tint(SettingsTemplate.readOnlyValue)
                 .accessibilityIdentifier("csv-update-mode")
             }
             SettingsRowContainer {
@@ -93,6 +94,7 @@ struct CSVConflictSection: View {
                             }
                         }
                         .pickerStyle(.menu)
+                        .tint(SettingsTemplate.readOnlyValue)
                         .accessibilityIdentifier("csv-conflict-\(conflict.id)")
                     }
                     .fixedSize(horizontal: false, vertical: true)

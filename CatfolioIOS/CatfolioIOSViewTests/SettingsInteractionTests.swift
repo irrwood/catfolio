@@ -4,6 +4,50 @@ import XCTest
 
 final class SettingsInteractionTests: XCTestCase {
     @MainActor
+    func testAccountSettingsEntryUsesLeadingToolbarAndPushesSettings() async throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previous = scene.keyWindow
+        let suite = "settings-toolbar-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let model = AppModel(defaults: defaults, personalDocumentLoader: { .empty })
+        await model.refreshPortfolio(refreshMarketData: false)
+        let window = UIWindow(windowScene: scene)
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+            previous?.makeKeyAndVisible()
+            defaults.removePersistentDomain(forName: suite)
+        }
+        func navigation(in controller: UIViewController) -> UINavigationController? {
+            if let controller = controller as? UINavigationController { return controller }
+            return controller.children.lazy.compactMap { navigation(in: $0) }.first
+        }
+        for dark in [false, true] {
+            let host = UIHostingController(rootView: NavigationStack {
+                SettingsView(trading212SetupStore: Trading212SetupStore(defaults: defaults))
+            }.environment(model).defaultAppStorage(defaults).preferredColorScheme(dark ? .dark : .light))
+            window.rootViewController = host
+            window.makeKeyAndVisible()
+            try await Task.sleep(for: .milliseconds(350))
+            let stack = try XCTUnwrap(navigation(in: host))
+            let entry = try await NativeToolbarTestSupport.button(in: stack, leading: true, identifier: "account.settings")
+            _ = try await NativeToolbarTestSupport.button(in: stack, leading: false, identifier: "settings-add-account")
+            let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+                window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+            }
+            try image.pngData()?.write(to: URL(fileURLWithPath: "/tmp/account-settings-toolbar-\(dark ? "dark" : "light").png"))
+            try entry.tap()
+            try await Task.sleep(for: .milliseconds(550))
+            XCTAssertEqual(stack.viewControllers.count, 2)
+            XCTAssertEqual(stack.topViewController?.navigationItem.title, L10n.text("设置"))
+            XCTAssertNil(host.presentedViewController)
+            stack.popViewController(animated: false)
+            try await Task.sleep(for: .milliseconds(200))
+            _ = try await NativeToolbarTestSupport.button(in: stack, leading: true, identifier: "account.settings")
+        }
+    }
+
+    @MainActor
     /// Settings rows wait out the scroll view's touch-down delay, as a system
     /// list does, so a finger that lands to scroll never greys a row.
     func testActualSettingsPageKeepsTheNativeTouchDelayAfterUpdates() async throws {

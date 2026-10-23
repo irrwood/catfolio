@@ -93,6 +93,8 @@ final class IBKRFirstSync {
         do {
             let fetched = try await IBKRFlexClient().fetchOpenPositions(
                 credentials: credentials,
+                newAccountExclusions: Set(model.accounts
+                    .filter { $0.source == IBKRFlexKeys.source }.compactMap(\.accountID)),
                 onProgress: { [weak self] seconds in
                     Task { @MainActor [weak self] in
                         guard let self, case .waiting = self.phase else { return }

@@ -16,6 +16,27 @@ enum CatfolioStyle {
 /// The expanded Catfolio palette. Screens opt into these tokens explicitly so
 /// a palette preview can be evaluated without silently recolouring the app.
 enum CatfolioPalette {
+    /// The paywall's blue field and white plan cards keep their identity in both appearances.
+    enum Paywall {
+        static let top = CatfolioPalette.color(0x073BCE)
+        static let middle = CatfolioPalette.color(0x236CEA)
+        static let glow = CatfolioPalette.color(0x8AB9F7)
+        static let bottom = CatfolioPalette.color(0xDEEDFF)
+        static let action = CatfolioPalette.color(0x155BE5)
+        static let ink = CatfolioPalette.color(0x142D58)
+        static let secondaryInk = CatfolioPalette.color(0x52647F)
+    }
+
+    /// Close blue tones keep first-launch gradients and page changes subtle.
+    enum FirstLaunch {
+        static let top = CatfolioPalette.color(0x405A9D)
+        static let middle = CatfolioPalette.color(0x536DB0)
+        static let bottom = CatfolioPalette.color(0x7F93C9)
+        static let violetTop = CatfolioPalette.color(0x4C589D)
+        static let violetMiddle = CatfolioPalette.color(0x606CB0)
+        static let violetBottom = CatfolioPalette.color(0x8C92C9)
+    }
+
     /// Stable identity colours for the six public investors, independent of gains and losses.
     enum InvestorPortrait {
         static let pelosi = CatfolioPalette.dynamic(light: 0xF7DDE3, dark: 0x775563)
@@ -55,6 +76,16 @@ enum CatfolioPalette {
         static let neutral = Color(red: 0.400, green: 0.400, blue: 0.450)
     }
 
+    /// Categorical colours for revenue lines, independent of gain/loss.
+    static func revenueSegment(at index: Int) -> Color {
+        let colors = [ChartSeries.blue, ChartSeries.orange, ChartSeries.magenta,
+                      ChartSeries.teal, ChartSeries.rose, ChartSeries.lavender,
+                      ChartSeries.mint, ChartSeries.pink, ChartSeries.sky, ChartSeries.peach]
+        if colors.indices.contains(index) { return colors[index] }
+        return Color(hue: (Double(index) * 0.61803398875).truncatingRemainder(dividingBy: 1),
+                     saturation: 0.62, brightness: 0.78)
+    }
+
     /// Grounds and fringe shared by the existing animated backgrounds.
     enum Ambient {
         static let night = Color(red: 0.012, green: 0.020, blue: 0.130)
@@ -82,7 +113,28 @@ enum CatfolioPalette {
     static let accountImportBottom = color(0x75A1FF)
     static let accountIBKRBackground = color(0xC71120)
     static let accountRobinhoodBackground = color(0xCCFF00)
+    /// Connection canvas, Figma 745:7380. Broker colors come from their identities.
+    static let accountConnectionBackground = dynamic(light: 0xFFFFFF, dark: 0x141515)
+    // Keep the black cat readable without a bright white tile at night.
+    static let connectionLogoBackground = dynamic(light: 0xFDFDFD, dark: 0xC8CDD2)
+    // Composite over the live broker gradient, including while the form scrolls.
+    static let accountCredentialBackground = dynamic(light: 0x000000, dark: 0xFFFFFF,
+                                                     lightOpacity: 0.03, darkOpacity: 0.07)
+    static let accountCredentialLabel = dynamic(light: 0x000000, dark: 0xFFFFFF,
+                                                lightOpacity: 0.45, darkOpacity: 0.60)
+    static let accountCredentialBorder = dynamic(light: 0x000000, dark: 0xFFFFFF,
+                                                 lightOpacity: 0.06, darkOpacity: 0.08)
+    static let accountCredentialShadow = Color.black.opacity(0.08)
+    static let accountLongbridgeAccent = color(0x00B8B8)
+    static let accountLongbridgeInk = color(0x003B3B)
+    static let accountLongbridgeControl = dynamic(light: 0x007A7A, dark: 0x00B8B8)
+    static let accountAlpacaAccent = color(0xFCD72B)
+    static let accountAlpacaInk = color(0x3F3500)
+    static let accountAlpacaControl = dynamic(light: 0x776000, dark: 0xFCD72B)
     static let accountTrading212Accent = color(0x00BAFC)
+    static let accountTrading212Link = color(0x009BD2)
+    /// First-launch template, Figma 750:2097.
+    static let onboardingAccent = color(0x00BAFC)
     static let accountTrading212Ink = color(0x00364A)
     static let accountTrading212Control = dynamic(light: 0x006C94, dark: 0x00BAFC)
     static let accountIBKRControl = dynamic(light: 0xC71120, dark: 0xFF747E)
@@ -283,9 +335,10 @@ enum CatfolioPalette {
     }
 
     /// One swatch for each appearance.
-    private static func dynamic(light: UInt32, dark: UInt32) -> Color {
-        let light = uiColor(light)
-        let dark = uiColor(dark)
+    private static func dynamic(light: UInt32, dark: UInt32,
+                                lightOpacity: CGFloat = 1, darkOpacity: CGFloat = 1) -> Color {
+        let light = uiColor(light).withAlphaComponent(lightOpacity)
+        let dark = uiColor(dark).withAlphaComponent(darkOpacity)
         return Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? dark : light })
     }
 }
@@ -293,6 +346,27 @@ enum CatfolioPalette {
 /// Semantic application colors. Views should depend on these roles instead of
 /// palette swatches so changing one token updates every related screen.
 enum CatfolioTheme {
+    /// Two opaque tones from the sector chart's colour families. Reverse the
+    /// tones at night so small glyphs remain distinct on their solid circles.
+    static func sectorIconColors(for sector: PortfolioSector?, scheme: ColorScheme)
+        -> (foreground: Color, background: Color) {
+        let tones: (ink: Color, fill: Color) = switch sector {
+        case .technology: (CatfolioPalette.violet900, CatfolioPalette.violet50)
+        case .healthcare: (CatfolioPalette.yellow900, CatfolioPalette.yellow50)
+        case .financials: (CatfolioPalette.green900, CatfolioPalette.green50)
+        case .consumerCyclical: (CatfolioPalette.sky900, CatfolioPalette.blue50)
+        case .consumerDefensive: (CatfolioPalette.coral900, CatfolioPalette.coral50)
+        case .industrials: (CatfolioPalette.rose900, CatfolioPalette.rose50)
+        case .energy: (CatfolioPalette.magenta900, CatfolioPalette.magenta50)
+        case .materials: (CatfolioPalette.teal900, CatfolioPalette.teal50)
+        case .realEstate: (CatfolioPalette.magenta700, CatfolioPalette.magenta50)
+        case .utilities: (CatfolioPalette.blue900, CatfolioPalette.blue50)
+        case .communication: (CatfolioPalette.sky900, CatfolioPalette.sky50)
+        case nil: (CatfolioPalette.neutral700, CatfolioPalette.neutral200)
+        }
+        return scheme == .dark ? (tones.fill, tones.ink) : (tones.ink, tones.fill)
+    }
+
     /// White glass suggestions over the assistant's shared home backdrop.
     static func assistantSuggestionFill(for scheme: ColorScheme) -> Color {
         .white.opacity(scheme == .dark ? 0.06 : 0.38)

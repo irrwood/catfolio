@@ -58,6 +58,7 @@ struct ReturnsView: View {
                 }
             }
             .padding(.horizontal, 4)
+            WatchlistEntryCard(store: model.watchlist)
             // 估值 · 成长 · 质量 is in 设置 › Lab 实验室.
             TodayAttentionEntry()
             CorporateEventsCard(holdings: model.holdings)

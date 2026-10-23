@@ -557,9 +557,11 @@ struct TodayContributionBar: View {
     }
 
     private func barAmountLabel(_ text: String) -> some View {
-        FinancialText(text)
+        // These unsigned amounts need no custom sign renderer. Keep the ink
+        // on the native Text run as bars animate and their values refresh.
+        Text(verbatim: text)
+            .foregroundStyle(Color.white)
             .appNumber(.caption, weight: .semibold)
-            .foregroundStyle(.white)
             .lineLimit(1)
     }
 

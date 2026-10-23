@@ -102,6 +102,11 @@ struct AIResearchQuestion: Sendable {
     let prompt: String
     let security: AIQuestionSecurity?
 
+    var newsQueries: [NewsQuery] {
+        [NewsQuery(ticker: security?.ticker ?? "", name: security?.name ?? "US stock market",
+                   language: ContentLanguage.current)]
+    }
+
     var context: String {
         let subject = security?.analysisName ?? "US equity market"
         return """

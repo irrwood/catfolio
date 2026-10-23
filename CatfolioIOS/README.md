@@ -57,7 +57,7 @@ IBKR 的 Activity Flex Query 应输出 XML，时间范围覆盖完整成交历�
 - 成交量与历史日线支持直连 Massive 和 Financial Modeling Prep，并保留 Yahoo 自动回退；API Key 保存在设备 Keychain，可选择开启 iCloud 密钥同步。
 - 个股 OI 持仓墙直接读取 Yahoo 期权链，无需 Massive Key、Python 或桌面服务；沿用 yfinance 的到期日清单与逐到期日读取方式。7/30/90 天范围内逐个校验，缺失 OI、缺失到期日或请求失败不会发布新的部分持仓墙，也不会用成交量替代 OI。仅处理可核对的 REGULAR 合约；数据源覆盖不代表交易所全合约覆盖。
 - OI 使用独立 Yahoo 本地缓存（不混用旧 Massive 缓存），手动刷新，失败保留旧数据并显示获取时间。OI 结算日期未提供时明确标为未知；429 停止请求并冷却，不绕过限流。当前网络已观察到 Yahoo 429，不能保证自动获取成功。回归检查：`python3 v3_backend/tests/test_ios_options_oi.py`（包括模拟网络的多到期日、缺数、缓存与限流测试）。
-- AI 可选直连 DeepSeek；只发送组合摘要与当前问题，API Key 保存在 Keychain。问答历史使用 iOS 文件保护保存在本机，并排除 iCloud 备份。
+- AI 可选直连 DeepSeek、Claude，或通过 OpenRouter 调用模型。Claude 在「设置 → 服务商 → Claude」中配置 Anthropic API Key，可验证连接、读取可用模型并选择模型；Key 保存在 Keychain，可选择开启 iCloud 密钥同步。问答会向所选服务发送组合摘要与问题；问答历史使用 iOS 文件保护保存在本机，并排除 iCloud 备份。
 
 ## 运行
 

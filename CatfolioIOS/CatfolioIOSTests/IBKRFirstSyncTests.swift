@@ -5,6 +5,103 @@ import XCTest
 final class IBKRFirstSyncTests: XCTestCase {
     private enum SaveFailure: Error { case denied }
 
+    private func report(_ statements: String) -> Data {
+        Data("<FlexQueryResponse><FlexStatements>\(statements)</FlexStatements></FlexQueryResponse>".utf8)
+    }
+
+    func testFirstSyncAcceptsAnIdentifiedAccountWithoutAPositionsSection() throws {
+        let data = report("""
+            <FlexStatement accountId="U123" toDate="20261022">
+                <AccountInformation accountId="U123" currency="GBP" accountAlias="Empty account" />
+            </FlexStatement>
+            """)
+        let snapshot = try IBKRFlexClient().parseStatement(data, newAccountExclusions: [])
+        XCTAssertTrue(snapshot.positions.isEmpty)
+        XCTAssertTrue(snapshot.transactions.isEmpty)
+        XCTAssertEqual(snapshot.syncedPositionAccountIDs, ["U123"])
+        XCTAssertEqual(snapshot.accountCurrencies, ["U123": "GBP"])
+        XCTAssertEqual(snapshot.accountNames, ["U123": "Empty account"])
+        XCTAssertEqual(snapshot.reportDate, "20261022")
+        XCTAssertEqual(snapshot.restricted(excluding: []).syncedPositionAccountIDs, ["U123"])
+        XCTAssertThrowsError(try IBKRFlexClient().parseStatement(data),
+            "An ordinary refresh must still reject missing positions data")
+    }
+
+    func testFirstSyncAcceptsAStatementWithOnlyAnAccountID() throws {
+        let snapshot = try IBKRFlexClient().parseStatement(
+            report("<FlexStatement accountId=\"U123\" />"), newAccountExclusions: [])
+        XCTAssertEqual(snapshot.syncedPositionAccountIDs, ["U123"])
+        XCTAssertTrue(snapshot.positions.isEmpty)
+    }
+
+    func testFirstSyncCannotTreatAnExistingAccountAsEmpty() throws {
+        let data = report("<FlexStatement accountId=\"OLD\" /><FlexStatement accountId=\"NEW\" />")
+        let snapshot = try IBKRFlexClient().parseStatement(data, newAccountExclusions: ["OLD"])
+        XCTAssertEqual(snapshot.syncedPositionAccountIDs, ["NEW"])
+        XCTAssertThrowsError(try IBKRFlexClient().parseStatement(
+            report("<FlexStatement accountId=\"OLD\" />"), newAccountExclusions: ["OLD"]))
+    }
+
+    func testFirstSyncSupportsMixedEmptyAndPopulatedAccounts() throws {
+        let data = report("""
+            <FlexStatement accountId="EMPTY" />
+            <FlexStatement accountId="FUNDED"><OpenPositions>
+                <OpenPosition accountId="FUNDED" symbol="AAPL" position="2" costBasisPrice="100" levelOfDetail="SUMMARY" />
+            </OpenPositions></FlexStatement>
+            """)
+        let snapshot = try IBKRFlexClient().parseStatement(data, newAccountExclusions: [])
+        XCTAssertEqual(snapshot.syncedPositionAccountIDs, ["EMPTY", "FUNDED"])
+        XCTAssertEqual(snapshot.positions.map(\.accountID), ["FUNDED"])
+        let new = snapshot.restricted(excluding: ["FUNDED"])
+        XCTAssertEqual(new.syncedPositionAccountIDs, ["EMPTY"])
+        XCTAssertTrue(new.positions.isEmpty)
+    }
+
+    func testFirstSyncStillRejectsMalformedUnidentifiedAndLotOnlyReports() {
+        let reports = [
+            Data("<bad>".utf8),
+            report("<FlexStatement />"),
+            report("<FlexStatement accountId=\"   \" />"),
+            Data("<Other><FlexStatement accountId=\"U123\" /></Other>".utf8),
+            report("""
+                <FlexStatement accountId="U123"><OpenPositions>
+                    <OpenPosition levelOfDetail="LOT" accountId="U123" symbol="AAPL" position="10" />
+                </OpenPositions></FlexStatement>
+                """)
+        ]
+        for data in reports {
+            XCTAssertThrowsError(try IBKRFlexClient().parseStatement(data, newAccountExclusions: []))
+        }
+    }
+
+    func testEmptyAccountStaysSyncedAfterSavingAndReloading() async throws {
+        let snapshot = try IBKRFlexClient().parseStatement(
+            report("<FlexStatement accountId=\"U123\" />"), newAccountExclusions: [])
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("ibkr-empty-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = LocalPortfolioStore(fileURL: url)
+        let accounts = snapshot.syncedPositionAccountIDs.map { account(id: "IBKR Flex|\($0)", brokerID: $0) }
+        _ = try await store.replace(positions: [], source: IBKRFlexKeys.source,
+            transactions: [], replacingAccountsOnly: true, syncedAccounts: accounts, mergesTransactionHistory: true)
+        let reloaded = try await LocalPortfolioStore(fileURL: url).load()
+        let saved = try XCTUnwrap(reloaded.accounts.first)
+        XCTAssertEqual(saved.accountID, "U123")
+        XCTAssertEqual(saved.positionCount, 0)
+        XCTAssertEqual(saved.transactionCount, 0)
+        XCTAssertFalse(saved.awaitsFirstSync)
+    }
+
+    func testOnlyIBKRPlaceholderAwaitsItsFirstSync() {
+        XCTAssertTrue(account(id: IBKRFlexKeys.pendingAccountID, brokerID: nil).awaitsFirstSync)
+        XCTAssertFalse(account(id: "IBKR Flex|U123", brokerID: "U123").awaitsFirstSync)
+    }
+
+    private func account(id: String, brokerID: String?) -> PortfolioAccount {
+        PortfolioAccount(id: id, accountID: brokerID, source: IBKRFlexKeys.source, name: "IBKR",
+            baseCurrency: "USD", positionCount: 0, transactionCount: 0,
+            manualTransactionCount: 0, hasCSVImport: false, marketValueUSD: 0)
+    }
+
     func testSavingExistingAccountUsesItsKeysAndTrimmedCredentials() throws {
         let credentials = try IBKRFlexCredentials(token: " 123456 ", queryID: " 789 ")
         var saved: [String: String] = [:]

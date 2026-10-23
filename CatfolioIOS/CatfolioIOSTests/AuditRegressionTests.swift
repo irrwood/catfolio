@@ -52,10 +52,10 @@ final class AuditRegressionTests: XCTestCase {
             let values = [2.2, 1.56, 0.92, 0.28, -0.36, -1.0]
             let labels = values.map { ReturnsAxisLabels.percent($0, step: 0.64, locale: locale) }
             XCTAssertEqual(Set(labels).count, values.count)
-            XCTAssertEqual(labels[0], "2.2%")
+            XCTAssertEqual(labels[0], "+2.2%")
             XCTAssertEqual(labels[4], "-0.4%")
             XCTAssertEqual(ReturnsAxisLabels.percent(-0.001, step: 0.4, locale: locale), "0%")
-            XCTAssertEqual(ReturnsAxisLabels.percent(20, step: 5, locale: locale), "20%")
+            XCTAssertEqual(ReturnsAxisLabels.percent(20, step: 5, locale: locale), "+20%")
         }
     }
 

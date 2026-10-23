@@ -27,6 +27,9 @@ struct RobinhoodConnectionView: View {
             return !model.accounts.contains { $0.source == "Robinhood" && $0.accountID == account.id }
         }
     }
+    @State private var hasPrepared = false
+    @State private var skipsAuthorizationPage = false
+    @State private var hasCompletedAuthorization = false
     @State private var connected = false
     @State private var working = false
     @State private var authorizationURL: URL?
@@ -45,10 +48,26 @@ struct RobinhoodConnectionView: View {
     }
 
     var body: some View {
-        AccountFlowStack {
-            OnboardingPage(scrollReset: flowStep, progress: context.isCreating ? OnboardingProgress(
-                step: flowStep + (isFirstLaunchSetup ? 2 : 0), total: isFirstLaunchSetup ? 5 : 3) : nil) {
-                OnboardingHeader(title: preview != nil ? L10n.text("确认 Robinhood 持仓") : L10n.text("连接 Robinhood"),
+        AccountFlowStack { page(1) }
+            .accountFlowBrand(.robinhood)
+    }
+
+    private func page(_ page: Int) -> some View {
+        let connected = !context.isCreating || page >= 3 ? self.connected : false
+        let authorizationURL = !context.isCreating || page == 2 ? self.authorizationURL : nil
+        let preview = !context.isCreating || page == 4 ? self.preview : nil
+        return AccountFlowPage(showsNext: Binding(
+            get: { context.isCreating && flowStep > page },
+            set: { shown in
+                guard !shown, flowStep > page else { return }
+                operationTask?.cancel()
+                self.preview = nil
+                message = nil
+                if page < 3 { self.connected = false }
+                if page == 1 { self.authorizationURL = nil }
+            })) {
+            OnboardingPage(scrollReset: page, isAccountPreparation: true) {
+                AccountConnectionHeader(provider: .robinhood, title: preview != nil ? L10n.text("确认 Robinhood 持仓") : L10n.text("连接 Robinhood"),
                     subtitle: connected ? L10n.text("选择账户，预览后同步股票持仓。")
                         : L10n.text("需要在电脑浏览器完成 Robinhood 授权。"))
                 if !connected {
@@ -57,18 +76,10 @@ struct RobinhoodConnectionView: View {
                             Label(L10n.text("将登录链接发送到电脑"), systemImage: "square.and.arrow.up")
                         }
                         SettingsFootnote(L10n.text("在电脑打开登录链接并授权。跳转至 localhost 后页面可能无法打开，请复制地址栏的完整链接并粘贴到这里。请在 30 分钟内完成。"))
-                        SettingsCard {
-                            SettingsRowContainer {
-                                TextField(L10n.text("粘贴电脑浏览器的完整回调链接"), text: $callback)
-                                    .textInputAutocapitalization(.never).autocorrectionDisabled()
-                                    .keyboardType(.URL).privacySensitive()
-                            }
-                        }
+                        AccountCredentialRow(title: L10n.text("粘贴电脑浏览器的完整回调链接"), text: $callback,
+                            accessibilityIdentifier: "robinhood.callback")
                     } else {
-                        OnboardingFeature(symbol: "desktopcomputer", title: L10n.text("在电脑上授权"),
-                            detail: L10n.text("生成登录链接，发送到电脑并打开。"))
-                        OnboardingFeature(symbol: "link", title: L10n.text("返回这里完成连接"),
-                            detail: L10n.text("授权后复制浏览器的完整回调链接，粘贴到这里。"))
+                        BrokerPreparationInstructions(provider: .robinhood)
                     }
                 }
                 SettingsFootnote(L10n.text("实验性连接：尚未完成真实账号联调，部分数据可能暂不可用。"))
@@ -81,7 +92,7 @@ struct RobinhoodConnectionView: View {
                                     ForEach(allowedAccounts) { account in
                                         Text(account.displayName).tag(account.id)
                                     }
-                                }
+                                }.tint(SettingsTemplate.readOnlyValue)
                             }
                             if context.isCreating {
                                 SettingsRowContainer { AccountNicknameField(nickname: $nickname, edited: $nicknameEdited) }
@@ -136,16 +147,16 @@ struct RobinhoodConnectionView: View {
                                 SettingsButtonRow(icon: .symbol("link.badge.plus"), title: L10n.text("断开 Robinhood"), showsChevron: false) {
                                     run {
                                         try await RobinhoodMCPClient.shared.disconnect()
-                                        connected = false
+                                        self.connected = false
                                         available = []
                                         rows = []
                                         accounts = []
-                                        preview = nil
+                                        self.preview = nil
                                         selectedID = ""
                                         accountNumber = ""
                                         instrumentIDs = ""
                                         callback = ""
-                                        authorizationURL = nil
+                                        self.authorizationURL = nil
                                     }
                                 }
                             }
@@ -155,25 +166,18 @@ struct RobinhoodConnectionView: View {
                 }
                 if working { ProgressView().frame(maxWidth: .infinity) }
                 if let message { SettingsFootnote(message) }
-                DisclosureGroup(L10n.text("需要帮助？")) {
-                    VStack(alignment: .leading, spacing: 16) {
-                        SettingsFootnote(L10n.text("令牌仅存于此 iPhone 的 Keychain。Catfolio 仅调用读取工具；Robinhood 授权页可能包含交易权限。"))
-                        Link(L10n.text("Robinhood 官方连接说明"), destination: URL(string: "https://robinhood.com/us/en/support/articles/agentic-trading-overview/")!)
-                    }
-                    .padding(.top, 16)
-                }
-            } actions: { flowActions }
+            } actions: { flowActions(page) }
             .disabled(working)
-            .onDisappear { operationTask?.cancel() }
+            .onDisappear { if !context.isCreating || flowStep == page { operationTask?.cancel() } }
             .onChange(of: selectedID) { _, value in
-                preview = nil
+                self.preview = nil
                 rows = []
                 accountNumber = value
             }
             .confirmationDialog(L10n.text("确认导入 Robinhood 股票持仓？"), isPresented: $confirmsSync, titleVisibility: .visible) {
                 Button(L10n.text("确认同步")) {
                     run {
-                        guard let preview, preview.account.id == selectedID else { throw RobinhoodAccountError.expired }
+                        guard let preview = self.preview, preview.account.id == selectedID else { throw RobinhoodAccountError.expired }
                         try Task.checkCancellation()
                         _ = try await model.importRobinhood(preview, context: context, nickname: nickname)
                         dismiss()
@@ -183,43 +187,58 @@ struct RobinhoodConnectionView: View {
             } message: {
                 Text(L10n.text("仅更新所选 Robinhood 账户的股票持仓；不导入现金、期权或历史成交。"))
             }
+            .accountConnectionTutorial(.robinhood)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { AccountProviderBackButton() }
                 if !context.isCreating {
                     ToolbarItem(placement: .confirmationAction) { Button(L10n.text("完成")) { dismiss() } }
                 }
             }
             .task {
-                connected = await RobinhoodMCPClient.shared.isConnected()
-                if connected {
+                guard !hasPrepared else { return }
+                hasPrepared = true
+                let restoredConnection = await RobinhoodMCPClient.shared.isConnected()
+                skipsAuthorizationPage = context.isCreating && restoredConnection
+                hasCompletedAuthorization = restoredConnection
+                self.connected = restoredConnection
+                if self.connected {
                     do { available = Set(try await RobinhoodMCPClient.shared.availableTools()) }
                     catch { message = error.localizedDescription }
                 }
             }
+        } next: {
+            AnyView(self.page(page == 1 && skipsAuthorizationPage ? 3 : page + 1))
         }
-        .accountFlowBrand(.robinhood)
     }
 
-    private var flowStep: Int { preview != nil ? 3 : (connected ? 2 : 1) }
+    private var flowStep: Int { preview != nil ? 4 : (connected ? 3 : (authorizationURL != nil ? 2 : 1)) }
 
     @ViewBuilder
-    private var flowActions: some View {
+    private func flowActions(_ page: Int) -> some View {
+        let connected = !context.isCreating || page >= 3 ? self.connected : false
+        let authorizationURL = !context.isCreating || page == 2 ? self.authorizationURL : nil
+        let preview = !context.isCreating || page == 4 ? self.preview : nil
         if !connected && authorizationURL == nil {
             OnboardingPrimaryButton(title: L10n.text("生成桌面登录链接"), isDisabled: false, isBusy: working) {
                 run {
-                    authorizationURL = try await RobinhoodMCPClient.shared.beginAuthorization()
+                    let url = try await RobinhoodMCPClient.shared.beginAuthorization()
+                    try Task.checkCancellation()
+                    skipsAuthorizationPage = false
+                    hasCompletedAuthorization = false
+                    self.authorizationURL = url
                     callback = ""
                 }
             }
         } else if !connected {
-            OnboardingPrimaryButton(title: L10n.text("完成 Robinhood 连接"), isDisabled: callback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, isBusy: working) {
+            OnboardingPrimaryButton(title: L10n.text("完成 Robinhood 连接"), isDisabled: !hasCompletedAuthorization && callback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, isBusy: working) {
                 run {
-                    try await RobinhoodMCPClient.shared.finishAuthorization(callback: callback)
+                    if !hasCompletedAuthorization {
+                        try await RobinhoodMCPClient.shared.finishAuthorization(callback: callback)
+                        hasCompletedAuthorization = true
+                    }
                     callback = ""
-                    authorizationURL = nil
-                    connected = true
+                    self.connected = true
                     accounts = []
-                    preview = nil
+                    self.preview = nil
                     selectedID = ""
                     available = Set(try await RobinhoodMCPClient.shared.availableTools())
                     try await loadAccounts()
@@ -232,13 +251,13 @@ struct RobinhoodConnectionView: View {
         } else if preview == nil {
             OnboardingPrimaryButton(title: L10n.text("预览 Robinhood 股票持仓"), isDisabled: selectedID.isEmpty, isBusy: working) {
                 run {
-                    preview = nil
+                    self.preview = nil
                     guard let account = allowedAccounts.first(where: { $0.id == selectedID }) else {
                         throw RobinhoodAccountError.wrongAccount
                     }
                     let snapshot = try await RobinhoodMCPClient.shared.snapshot(account: account)
                     try snapshot.validate(context: context, existing: model.accounts)
-                    preview = snapshot
+                    self.preview = snapshot
                 }
             }
         } else {

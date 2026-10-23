@@ -6,6 +6,7 @@ enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable, Codable
     case fmp
     case deepSeek
     case openRouter
+    case claude
     case finnhub
     case jev
 
@@ -17,6 +18,7 @@ enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable, Codable
         case .fmp: "Financial Modeling Prep"
         case .deepSeek: "DeepSeek"
         case .openRouter: "OpenRouter"
+        case .claude: "Claude"
         case .finnhub: "Finnhub"
         case .jev: "Jev (Cloudflare)"
         }
@@ -36,6 +38,7 @@ enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable, Codable
         case .fmp: L10n.text("估值矩阵与行情备用")
         case .deepSeek: L10n.text("云端问答与自动回退")
         case .openRouter: L10n.text("用一个 Key 调用多家模型")
+        case .claude: L10n.text("直连 Anthropic 的 Claude 模型")
         case .finnhub: L10n.text("美股公司新闻")
         case .jev: L10n.text("JEV 今日关注的买卖判断")
         }
@@ -51,6 +54,8 @@ enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable, Codable
             L10n.text("组合摘要和问题会发送给 DeepSeek。")
         case .openRouter:
             L10n.text("组合摘要和问题会经 OpenRouter 发送给所选模型。")
+        case .claude:
+            L10n.text("组合摘要和问题会发送给 Anthropic 的 Claude。")
         case .finnhub:
             L10n.text("仅发送股票代码，读取公司新闻。")
         case .jev:
@@ -64,6 +69,7 @@ enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable, Codable
         case .fmp: LocalServiceKeys.fmp
         case .deepSeek: LocalServiceKeys.deepSeek
         case .openRouter: LocalServiceKeys.openRouter
+        case .claude: LocalServiceKeys.claude
         case .finnhub: LocalServiceKeys.finnhub
         case .jev: LocalServiceKeys.cloudflareAIToken
         }
@@ -75,6 +81,7 @@ enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable, Codable
         case .fmp: "chart.xyaxis.line"
         case .deepSeek: "sparkles"
         case .openRouter: "arrow.triangle.branch"
+        case .claude: "sparkle"
         case .finnhub: "newspaper"
         case .jev: "bolt.fill"
         }
@@ -84,7 +91,7 @@ enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable, Codable
         switch self {
         case .massive: CatfolioTheme.accent
         case .fmp: CatfolioTheme.warning
-        case .deepSeek, .openRouter: CatfolioTheme.services
+        case .deepSeek, .openRouter, .claude: CatfolioTheme.services
         case .finnhub: CatfolioTheme.accent
         case .jev: CatfolioTheme.services
         }
@@ -120,6 +127,9 @@ enum LocalServiceProvider: String, CaseIterable, Identifiable, Hashable, Codable
         case .openRouter:
             try await LocalAIClient().testOpenRouterConnection(apiKey: apiKey)
             return L10n.text("连接成功，OpenRouter Key 可用")
+        case .claude:
+            try await LocalAIClient().testClaudeConnection(apiKey: apiKey)
+            return L10n.text("连接成功，Claude Key 可用")
         case .finnhub:
             let items = try await FinnhubNewsProvider.companyNews(symbol: "AAPL", days: 7, apiKey: apiKey)
             return L10n.text("连接成功，已读取 AAPL 的 \(items.count) 条新闻")
@@ -249,7 +259,7 @@ struct LocalServicesSettingsView: View {
                 SettingsSectionHeader("AI")
                 SettingsCard {
                     // The one row on these pages that is not a row: choosing a
-                    // model is a choice between five — too many to segment on
+                    // model has too many choices to segment on
                     // a phone — so the choice is a menu at the row's trailing
                     // edge. It sits on the card's own 20/16 padding so it
                     // lines up with every row under it.
@@ -266,6 +276,7 @@ struct LocalServicesSettingsView: View {
                                     }
                                 }
                                 .pickerStyle(.menu)
+                                .tint(SettingsTemplate.readOnlyValue)
                                 .labelsHidden()
                                 .padding(.trailing, -12)
                             }
@@ -290,6 +301,7 @@ struct LocalServicesSettingsView: View {
 
                     codexLink
                     providerLink(.openRouter)
+                    providerLink(.claude)
                     providerLink(.deepSeek)
                     providerLink(.jev)
                 }
@@ -370,6 +382,8 @@ struct LocalServicesSettingsView: View {
             routedProvider = .deepSeek
         } else if arguments.contains("--show-local-service-openrouter") {
             routedProvider = .openRouter
+        } else if arguments.contains("--show-local-service-claude") {
+            routedProvider = .claude
         } else if arguments.contains("--show-local-service-finnhub") {
             routedProvider = .finnhub
         } else if arguments.contains("--show-local-service-jev") {
@@ -625,6 +639,7 @@ struct LocalServiceDetailView: View {
     @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accountFlowTheme) private var accountTheme
     @Environment(\.isServiceAPISetupGuide) private var isSetupGuide
     let provider: LocalServiceProvider
     let onStatusChanged: (LocalServiceStatus) -> Void
@@ -644,6 +659,7 @@ struct LocalServiceDetailView: View {
     @State private var validationTask: Task<Void, Never>?
     @AppStorage(LocalServiceKeys.openRouterModel) private var openRouterModel = ""
     @AppStorage(LocalServiceKeys.deepSeekModel) private var deepSeekModel = ""
+    @AppStorage(LocalServiceKeys.claudeModel) private var claudeModel = ""
     @State private var showsModelPicker = false
     @AppStorage(LocalServiceKeys.cloudflareAccountIDKey) private var cloudflareAccountID = ""
 
@@ -664,11 +680,19 @@ struct LocalServiceDetailView: View {
     }
 
     private var modelBinding: Binding<String> {
-        provider == .deepSeek ? $deepSeekModel : $openRouterModel
+        switch provider {
+        case .deepSeek: $deepSeekModel
+        case .claude: $claudeModel
+        default: $openRouterModel
+        }
     }
 
     private var defaultModel: String {
-        provider == .deepSeek ? LocalServiceKeys.defaultDeepSeekModel : LocalServiceKeys.defaultOpenRouterModel
+        switch provider {
+        case .deepSeek: LocalServiceKeys.defaultDeepSeekModel
+        case .claude: LocalServiceKeys.defaultClaudeModel
+        default: LocalServiceKeys.defaultOpenRouterModel
+        }
     }
 
     private var keyPlaceholder: String {
@@ -676,47 +700,43 @@ struct LocalServiceDetailView: View {
     }
 
     var body: some View {
-        OnboardingPage(progress: isSetupGuide ? OnboardingProgress(step: 3, total: 3) : nil) {
+        OnboardingPage {
             OnboardingHeader(title: provider.title,
                              subtitle: provider.purpose)
             VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text(L10n.text("API 密钥")).appText(.subheading, weight: .semibold)
-                    Spacer()
+                if isSetupGuide {
                     Link(L10n.text("获取 Key"), destination: provider.setupURL)
                         .appText(.callout, weight: .medium)
-                }
-                SettingsCard {
-                    SettingsRowContainer {
-                        HStack(spacing: SettingsTemplate.iconSpacing) {
-                            ServiceAPIKeyField(placeholder: keyPlaceholder, text: $apiKey, revealsKey: revealsKey)
-                                .privacySensitive()
-
-                            // On the icon artboard and in the row's own greys, so
-                            // the control reads as part of the row rather than a
-                            // tinted button dropped into it.
-                            Button {
-                                revealsKey.toggle()
-                            } label: {
-                                SettingsRowIcon(.symbol(revealsKey ? "eye.slash" : "eye"))
-                                    .foregroundStyle(SettingsTemplate.secondaryText)
-                                    .padding(.vertical, SettingsTemplate.rowVerticalPadding)
-                                    .contentShape(Rectangle())
-                                    .padding(.vertical, -SettingsTemplate.rowVerticalPadding)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(revealsKey ? L10n.text("隐藏 API 密钥") : L10n.text("显示 API 密钥"))
-                        }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    AccountCredentialRow(title: "API Key", text: $apiKey,
+                        accessibilityIdentifier: "local-service.api-key", placeholder: keyPlaceholder)
+                        .disabled(isTesting)
+                } else {
+                    HStack {
+                        Text(L10n.text("API 密钥")).appText(.subheading, weight: .semibold)
+                        Spacer()
+                        Link(L10n.text("获取 Key"), destination: provider.setupURL)
+                            .appText(.callout, weight: .medium)
                     }
-                    .disabled(isTesting)
+                    SettingsCard(style: .input) {
+                        SettingsRowContainer {
+                            ServiceAPIKeyInput(placeholder: keyPlaceholder, text: $apiKey, revealsKey: $revealsKey)
+                        }
+                        .disabled(isTesting)
+                    }
                 }
                 Text(L10n.text("保存在钥匙串；可在设置中开启跨设备密钥同步。"))
-                    .appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
-                Text(provider.detail).appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
+                    .appText(.footnote).foregroundStyle((isSetupGuide ? .white.opacity(0.82) : SettingsTemplate.secondaryText))
+                Text(provider.detail).appText(.footnote).foregroundStyle((isSetupGuide ? .white.opacity(0.82) : SettingsTemplate.secondaryText))
 
                 if provider == .jev {
+                    if isSetupGuide {
+                        AccountCredentialRow(title: "Account ID", text: $cloudflareAccountID,
+                            accessibilityIdentifier: "local-service.account-id", isSecret: false,
+                            placeholder: L10n.text("Cloudflare Account ID"))
+                    } else {
                     SettingsSectionHeader("Account ID")
-                    SettingsCard {
+                    SettingsCard(style: .input) {
                         SettingsRowContainer {
                             TextField(L10n.text("Cloudflare Account ID"), text: $cloudflareAccountID)
                                 .font(.body.monospaced())
@@ -725,12 +745,19 @@ struct LocalServiceDetailView: View {
                                 .submitLabel(.done)
                         }
                     }
+                    }
                     SettingsFootnote(L10n.text("Account ID 和 API Token 可在 Cloudflare 控制台获取。"))
                 }
 
                 if AIModelCatalog.supports(provider) {
                     DisclosureGroup(L10n.text("模型（可选）")) {
-                        SettingsCard {
+                        if isSetupGuide {
+                            Button(L10n.text("获取模型")) { showsModelPicker = true }
+                                .accessibilityIdentifier("local-service.model-picker")
+                            AccountCredentialRow(title: L10n.text("模型"), text: modelBinding,
+                                accessibilityIdentifier: "local-service.model", isSecret: false, placeholder: defaultModel)
+                        } else {
+                        SettingsCard(style: .input) {
                             SettingsButtonRow(icon: .symbol("list.bullet.rectangle"), title: L10n.text("获取模型"),
                                               value: modelBinding.wrappedValue.isEmpty ? L10n.text("默认") : modelBinding.wrappedValue) {
                                 showsModelPicker = true
@@ -745,22 +772,25 @@ struct LocalServiceDetailView: View {
                                     .submitLabel(.done)
                             }
                         }
+                        }
                         Text(L10n.text("留空使用默认模型。"))
-                            .appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
+                            .appText(.footnote).foregroundStyle((isSetupGuide ? .white.opacity(0.82) : SettingsTemplate.secondaryText))
                     }
                     .appText(.callout)
                     .accessibilityIdentifier("local-service.model-options")
+                    .environment(\.colorScheme, isSetupGuide ? .dark : colorScheme)
                 }
 
                 DisclosureGroup(L10n.text("如何获取 API Key？")) {
                     Text(L10n.text("登录服务商官网，在 API Keys 中创建并复制密钥，然后回到这里粘贴。"))
-                        .appText(.body).foregroundStyle(SettingsTemplate.secondaryText)
+                        .appText(.body).foregroundStyle((isSetupGuide ? .white.opacity(0.82) : SettingsTemplate.secondaryText))
                         .padding(.top, 8)
                     Text(L10n.text("服务商的额度、功能和费用以其账户方案为准。"))
-                        .appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
+                        .appText(.footnote).foregroundStyle((isSetupGuide ? .white.opacity(0.82) : SettingsTemplate.secondaryText))
                         .padding(.top, 8)
                 }
                 .appText(.callout)
+                .environment(\.colorScheme, isSetupGuide ? .dark : colorScheme)
 
                 if let feedback {
                     StatusNotice(text: feedback.text, kind: feedback.kind)
@@ -783,7 +813,7 @@ struct LocalServiceDetailView: View {
         } actions: {
             if let onFinish, savedStatus != .unconfigured, trimmedKey == originalKey, !trimmedKey.isEmpty {
                 Text(savedStatus == .verified ? L10n.text("验证通过，可以开始使用") : L10n.text("已保存，连接尚未验证"))
-                    .appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
+                    .appText(.footnote).foregroundStyle((isSetupGuide ? .white.opacity(0.82) : SettingsTemplate.secondaryText))
                 OnboardingPrimaryButton(title: L10n.text("完成配置"), action: onFinish)
                 if let onChooseAnother {
                     Button(L10n.text("继续配置其他服务"), action: onChooseAnother)
@@ -800,6 +830,8 @@ struct LocalServiceDetailView: View {
                     .accessibilityHint(L10n.text("保存 API 密钥但不验证连接"))
             }
         }
+        .environment(\.usesPaywallOnboardingStyle, isSetupGuide)
+        .environment(\.accountFlowTheme, isSetupGuide ? .firstLaunch : accountTheme)
         .onAppear {
             loadKeyIfNeeded()
             if !isSetupGuide { setup.settingsProvider = provider }

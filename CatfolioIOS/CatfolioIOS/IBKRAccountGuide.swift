@@ -2,22 +2,17 @@ import SwiftUI
 
 /// The main connection flow has one preparation screen; the longer guide is optional.
 struct IBKRSetupIntro: View {
-    let showGuide: () -> Void
-
     var body: some View {
-        OnboardingHeader(title: L10n.text("准备 IBKR 凭证"),
-                         subtitle: L10n.text("需要一个 Flex 报表，以及 Token 和 Query ID。"))
-        OnboardingFeature(symbol: "doc.badge.plus", title: L10n.text("创建 Flex 报表"),
-            detail: L10n.text("在 IBKR 网页端打开 Reporting → Flex Queries，新建 XML 报表。"))
-        OnboardingFeature(symbol: "checklist", title: L10n.text("包含四项数据"),
-            detail: "Account Information · Open Positions · Trades · Cash Transactions")
-        OnboardingFeature(symbol: "key.horizontal", title: L10n.text("复制两项凭证"),
-            detail: L10n.text("记下报表的 Query ID，再启用 Flex Web Service 生成 Token。"))
-        Button(action: showGuide) {
-            Label(L10n.text("查看详细教程"), systemImage: "list.number")
-                .appText(.callout, weight: .medium).padding(.vertical, 8)
+        AccountConnectionHeader(provider: .ibkr, title: L10n.text("准备 IBKR 凭证"),
+                                subtitle: L10n.text("需要一个 Flex 报表，以及 Token 和 Query ID。"))
+        AccountPreparationList {
+            AccountPreparationFeature(symbol: "doc.text.fill", title: L10n.text("创建 Flex 报表"),
+                detail: L10n.text("在 IBKR 网页端打开 Reporting → Flex Queries，新建 XML 报表。"))
+            AccountPreparationFeature(symbol: "square.stack.3d.up.fill", title: L10n.text("包含四项数据"),
+                detail: "Account Information · Open Positions · Trades · Cash Transactions")
+            AccountPreparationFeature(symbol: "doc.on.doc.fill", title: L10n.text("复制两项凭证"),
+                detail: L10n.text("记下报表的 Query ID，再启用 Flex Web Service 生成 Token。"))
         }
-        .accessibilityIdentifier("ibkr-open-setup-guide")
     }
 }
 
@@ -36,43 +31,40 @@ struct IBKRAccountGuide: View {
 
     var body: some View {
         OnboardingHeader(title: title, subtitle: "Interactive Brokers")
-        VStack(alignment: .leading, spacing: 28) {
+        AccountPreparationList {
             if step == 0 {
-                OnboardingFeature(symbol: "person.crop.rectangle", title: L10n.text("打开 Flex Queries"),
+                AccountPreparationFeature(symbol: "person.crop.rectangle.fill", title: L10n.text("打开 Flex Queries"),
                     detail: L10n.text("登录 Interactive Brokers 网页端，进入 Performance & Reports → Flex Queries。也可以从菜单 Reporting → Flex Queries 进入。"))
-                OnboardingFeature(symbol: "doc.text", title: L10n.text("创建账户报表"),
+                AccountPreparationFeature(symbol: "doc.text.fill", title: L10n.text("创建账户报表"),
                     detail: L10n.text("Catfolio 使用自定义 Activity Flex Query，请在这里创建自己的报表。"))
             } else if step == 1 {
-                OnboardingFeature(symbol: "doc.badge.plus", title: "Activity Flex Query",
+                AccountPreparationFeature(symbol: "doc.fill.badge.plus", title: "Activity Flex Query",
                     detail: L10n.text("在 Activity Flex Query 区域点击 +，将查询命名为 Catfolio，选择 XML 格式。"))
-                OnboardingFeature(symbol: "checklist", title: L10n.text("持仓与交易"),
+                AccountPreparationFeature(symbol: "checkmark.rectangle.fill", title: L10n.text("持仓与交易"),
                     detail: L10n.text("包含 Account Information、Open Positions、Trades、Cash Transactions 的全部字段。Trades 使用逐笔 Execution，Open Positions 使用 Summary。"))
-                OnboardingFeature(symbol: "calendar", title: "Query ID",
+                AccountPreparationFeature(symbol: "calendar.circle.fill", title: "Query ID",
                     detail: L10n.text("初次可选择最近 365 天。保存查询，并记下查询名称旁的 Query ID。"))
             } else {
-                OnboardingFeature(symbol: "key.horizontal", title: "Flex Web Service",
+                AccountPreparationFeature(symbol: "key.fill", title: "Flex Web Service",
                     detail: L10n.text("回到 Flex Queries，打开 Flex Web Service 的设置，启用服务并生成 Token，检查有效期和 IP 限制。"))
-                OnboardingFeature(symbol: "lock", title: L10n.text("填写连接凭证"),
+                AccountPreparationFeature(symbol: "pencil.circle.fill", title: L10n.text("填写连接凭证"),
                     detail: L10n.text("复制 Token 和刚保存的 Query ID，下一步填入 Catfolio。凭证保存在钥匙串，可在设置中开启跨设备同步。"))
-                OnboardingFeature(symbol: "arrow.triangle.2.circlepath", title: L10n.text("预览与同步"),
+                AccountPreparationFeature(symbol: "arrow.triangle.2.circlepath.circle.fill", title: L10n.text("预览与同步"),
                     detail: L10n.text("可以先保存并创建账户，稍后同步；也可以立即读取持仓，预览后再确认。IBKR 生成报表可能需要几分钟。"))
             }
         }
-        Link(destination: URL(string: step == 2
-            ? "https://www.ibkrguides.com/clientportal/performanceandstatements/flex-web-service.htm"
-            : "https://www.ibkrguides.com/clientportal/performanceandstatements/activityflex.htm")!) {
-            Label(L10n.text("查看官方图文教程"), systemImage: "arrow.up.right.square")
-                .appText(.callout, weight: .medium).padding(.vertical, 8)
-        }
     }
+
+    var documentationURL: URL {
+        URL(string: step == 2
+            ? "https://www.ibkrguides.com/clientportal/performanceandstatements/flex-web-service.htm"
+            : "https://www.ibkrguides.com/clientportal/performanceandstatements/activityflex.htm")!
+    }
+
     var actions: some View {
         VStack(spacing: 12) {
-            OnboardingPrimaryButton(title: step == 2 ? L10n.text("已准备好，填写凭证") : L10n.text("下一步"),
+            OnboardingPrimaryButton(title: step == 2 ? L10n.text("返回") : L10n.text("下一步"),
                                     action: next)
-            if step == 0 {
-                Button(L10n.text("已有 Token 和 Query ID，直接填写"), action: skip)
-                    .appText(.callout, weight: .medium)
-            }
         }
     }
 
@@ -82,30 +74,41 @@ struct IBKRAccountGuide: View {
 struct IBKRGuideHelpView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var step = 0
+    @State private var didCopyBrief = false
 
     var body: some View {
-        NavigationStack {
-            OnboardingPage(scrollReset: step, progress: OnboardingProgress(step: step + 1, total: 3)) {
-                IBKRAccountGuide(step: step) {
-                    if step < 2 { step += 1 } else { dismiss() }
-                } skip: { dismiss() }
-            } actions: {
-                IBKRAccountGuide(step: step) {
-                    if step < 2 { step += 1 } else { dismiss() }
-                } skip: { dismiss() }.actions
+        OnboardingPage(scrollReset: step, isAccountPreparation: true) {
+            IBKRAccountGuide(step: step) {
+                if step < 2 { step += 1 } else { dismiss() }
+            } skip: { dismiss() }
+            if step == 1 {
+                Button(didCopyBrief ? L10n.text("已复制，去 IBKR 粘贴给它的助手") : L10n.text("复制配置提示词")) {
+                    UIPasteboard.general.string = IBKRFlexQueryBrief.prompt
+                    didCopyBrief = true
+                }
+                .appText(.callout, weight: .medium)
+                .frame(minHeight: 44)
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                if step > 0 {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button { step -= 1 } label: {
-                            Label(L10n.text("上一步"), systemImage: "chevron.left")
-                        }
+        } actions: {
+            IBKRAccountGuide(step: step) {
+                if step < 2 { step += 1 } else { dismiss() }
+            } skip: { dismiss() }.actions
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(step > 0)
+        .toolbar {
+            if step > 0 {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { step -= 1 } label: {
+                        Label(L10n.text("上一步"), systemImage: "chevron.left")
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    AppModalDoneButton { dismiss() }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink(L10n.text("官方教程")) {
+                    OfficialBrokerTutorialPage(url: IBKRAccountGuide(step: step, next: {}, skip: {}).documentationURL)
                 }
+                .accessibilityIdentifier("ibkr-open-official-guide")
             }
         }
         .tint(CatfolioTheme.primaryText)

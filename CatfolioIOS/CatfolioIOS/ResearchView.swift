@@ -105,14 +105,14 @@ struct ResearchView: View {
                             Text(L10n.text("3 项")).tag(3)
                             Text(L10n.text("6 项")).tag(6)
                             Text(L10n.text("12 项")).tag(12)
-                        }
+                        }.tint(SettingsTemplate.readOnlyValue)
                     }
                     Section {
                         Picker(L10n.text("证据最长时效"), selection: $evidenceMaximumAge) {
                             ForEach(AttentionEvidenceRules.ageChoices, id: \.self) { days in
                                 Text(L10n.text("\(days) 天")).tag(days)
                             }
-                        }
+                        }.tint(SettingsTemplate.readOnlyValue)
                         Toggle(L10n.text("只用一手来源和通讯社"), isOn: $evidenceReliableOnly)
                         Toggle(L10n.text("排除转述网站"), isOn: $evidenceExcludesAggregators)
                     } header: {

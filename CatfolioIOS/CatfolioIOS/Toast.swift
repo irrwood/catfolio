@@ -18,41 +18,75 @@ final class ToastCenter {
 
     private(set) var current: AppToast?
     @ObservationIgnored private var window: ToastWindow?
+    @ObservationIgnored private var sceneObserver: NSObjectProtocol?
+    private let notificationCenter: NotificationCenter
+
+    init(notificationCenter: NotificationCenter = .default) {
+        self.notificationCenter = notificationCenter
+    }
 
     func show(_ message: String, kind: AppToast.Kind = .success) {
-        installWindowIfNeeded()
+        guard installWindowIfNeeded() else { return }
         current = AppToast(message: message, kind: kind)
         UIAccessibility.post(notification: .announcement, argument: message)
     }
 
     func finish(_ id: UUID) {
-        if current?.id == id { current = nil }
+        guard current?.id == id else { return }
+        current = nil
+        removeWindow()
+    }
+
+    private func removeWindow() {
+        if let sceneObserver { notificationCenter.removeObserver(sceneObserver) }
+        sceneObserver = nil
+        // An empty hosting view still leaves a full-screen window in the
+        // compositor. Remove it once the toast's exit animation has finished.
+        window?.isHidden = true
+        window?.rootViewController = nil
+        window = nil
     }
 
     /// Its own window, so a sheet presented over the tabs does not cover it.
     /// It takes no touches: everything under it stays usable.
-    private func installWindowIfNeeded() {
+    private func installWindowIfNeeded() -> Bool {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        guard let scene = scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first else { return }
+        guard let scene = scenes.first(where: { $0.activationState == .foregroundActive }) else { return false }
         // Follow the app's own appearance setting, which can differ from the
         // system's.
         let style = scene.windows.first(where: \.isKeyWindow)?.traitCollection.userInterfaceStyle ?? .unspecified
         if let window, window.windowScene === scene {
             window.overrideUserInterfaceStyle = style
-            return
+            return true
         }
+        removeWindow()
         let window = ToastWindow(windowScene: scene)
         window.windowLevel = .alert + 1
+        window.backgroundColor = .clear
+        window.isOpaque = false
         window.overrideUserInterfaceStyle = style
         let host = UIHostingController(rootView: ToastHost(center: self))
         host.view.backgroundColor = .clear
+        host.view.isOpaque = false
         window.rootViewController = host
         window.isHidden = false
         self.window = window
+        // Do not keep a transient overlay suspended over the app when the
+        // scene returns. Its SwiftUI animation task can be paused in background.
+        sceneObserver = notificationCenter.addObserver(
+            forName: UIScene.didEnterBackgroundNotification, object: scene, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let toast = self.current else { return }
+                self.finish(toast.id)
+            }
+        }
+        return true
     }
 }
 
 private final class ToastWindow: UIWindow {
+    override var canBecomeKey: Bool { false }
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? { nil }
 }
 

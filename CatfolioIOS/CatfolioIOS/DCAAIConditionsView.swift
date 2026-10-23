@@ -98,7 +98,7 @@ struct DCAAIConditionsView: View {
                             ForEach(Array(Set([0, 0.5, 1, 1.5, 2, 3] + [editor.draft.fallbackMultiplier].compactMap { $0 })).sorted(), id: \.self) { value in
                                 Text(value == 0 ? L10n.text("暂停本期买入") : "\(value.formatted())×").tag(Optional(value))
                             }
-                        }.disabled(editor.isGenerating)
+                        }.tint(SettingsTemplate.readOnlyValue).disabled(editor.isGenerating)
                         if let error = editor.draft.validationError { Text(L10n.message(error)).font(.footnote).foregroundStyle(.secondary) }
                     } footer: {
                         Text(L10n.text("条件只读取买入前的收盘数据；历史不足时暂停本期。每期直接投入并买入基础金额乘以所选倍数，暂停时不投入。"))
@@ -156,7 +156,7 @@ private struct DCAConditionRuleControls: View {
         if rule.conditions.count > 1 {
             Picker(L10n.text("判断方式"), selection: $rule.join) {
                 ForEach(DCAJoin.allCases) { Text($0.title).tag($0) }
-            }
+            }.tint(SettingsTemplate.readOnlyValue)
         }
         ForEach(rule.conditions.indices, id: \.self) { index in
             VStack(alignment: .leading, spacing: 10) {
@@ -166,7 +166,7 @@ private struct DCAConditionRuleControls: View {
                         ForEach(Array(Set([5, 10, 20, 50, 100, 200, 252, rule.conditions[index].window])).sorted(), id: \.self) {
                             Text(L10n.text("\($0) 个交易日")).tag($0)
                         }
-                    }
+                    }.tint(SettingsTemplate.readOnlyValue)
                 }
                 Picker(L10n.text("判断"), selection: $rule.conditions[index].comparison) {
                     ForEach(DCAConditionComparison.allCases) { Text($0.title).tag($0) }

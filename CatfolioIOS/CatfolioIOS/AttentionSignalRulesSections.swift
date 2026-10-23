@@ -26,11 +26,11 @@ struct AttentionSignalRulesSections: View {
         Section {
             Picker(L10n.text("涨跌幅周期"), selection: $returnWindow) {
                 ForEach(Rules.returnWindowChoices, id: \.self) { Text("\($0)D").tag($0) }
-            }
+            }.tint(SettingsTemplate.readOnlyValue)
             stepper(L10n.text("涨跌幅阈值"), value: $returnThreshold, in: 3...40, step: 1, text: "±\(Int(returnThreshold))%")
             Picker(L10n.text("均线"), selection: $movingAverage) {
                 ForEach(Rules.movingAverageChoices, id: \.self) { Text("MA\($0)").tag($0) }
-            }
+            }.tint(SettingsTemplate.readOnlyValue)
             stepper(L10n.text("接近 52 周高低点"), value: $nearExtreme, in: 0.5...10, step: 0.5,
                     text: L10n.text("\(Self.number(nearExtreme))% 以内"))
         } header: {
@@ -43,7 +43,7 @@ struct AttentionSignalRulesSections: View {
             stepper(L10n.text("放量倍数"), value: $volumeMultiple, in: 1.5...5, step: 0.5, text: "\(Self.number(volumeMultiple))×")
             Picker(L10n.text("放量基准"), selection: $volumeBaseline) {
                 ForEach(Rules.volumeBaselineChoices, id: \.self) { Text(L10n.text("\($0) 日均量")).tag($0) }
-            }
+            }.tint(SettingsTemplate.readOnlyValue)
             stepper(L10n.text("今日异动"), value: $todayMove, in: 1...15, step: 0.5, text: "±\(Self.number(todayMove))%")
             stepper(L10n.text("占今日组合波动"), value: $contributionShare, in: 20...80, step: 5, text: "\(Int(contributionShare))%")
         } header: {

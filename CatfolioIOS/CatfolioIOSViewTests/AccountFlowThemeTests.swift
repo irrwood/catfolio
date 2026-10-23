@@ -5,7 +5,7 @@ import XCTest
 
 @MainActor
 final class AccountFlowThemeTests: XCTestCase {
-    func testConnectorActionsUseAdaptiveMonochromeInBothAppearances() async throws {
+    func testConnectorActionsUseBrokerBrandsInBothAppearances() async throws {
         let suite = "account-brand-pages-\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         let previousLanguage = UserDefaults.standard.object(forKey: AppLanguage.preferenceKey)
@@ -46,8 +46,13 @@ final class AccountFlowThemeTests: XCTestCase {
                     AccountDetailView(accountID: account.id, initialAccount: account)
                 }.environment(model), dark: dark)
                 let logoColor = UIColor(provider.flowTheme.accent).resolvedColor(with: traits)
-                XCTAssertGreaterThan(try matchingPixels(in: detail, colors: [logoColor, target]), 80,
-                                     "The centered account logo retains its brand color")
+                // Longbridge's multicolor artwork uses mint bars; the cyan
+                // action tint is intentionally a different part of its palette.
+                let artworkColors = provider == .longbridge
+                    ? [UIColor(red: 1.0 / 255, green: 218.0 / 255, blue: 181.0 / 255, alpha: 1)]
+                    : [logoColor, target]
+                XCTAssertGreaterThan(try matchingPixels(in: detail, colors: artworkColors), 80,
+                                     "The centered \(provider.rawValue) logo retains its artwork colors")
                 let attachment = XCTAttachment(image: detail)
                 attachment.name = "Account-detail-\(provider.rawValue)-\(dark ? "dark" : "light")"
                 attachment.lifetime = .keepAlways
@@ -177,17 +182,16 @@ final class AccountFlowThemeTests: XCTestCase {
         }
     }
 
-    /// Verify the actual bottom action is readable and its capsule is neutral,
-    /// including disabled credential actions. Account logos keep their own brand.
+    /// Check the actual bottom action, including the native disabled glass state.
     private func verifyAction(in image: UIImage, provider: AddAccountProvider,
                               context: AccountConnectorContext, dark: Bool) throws {
         let title: String = switch provider {
-        case .trading212: context.isCreating ? L10n.text("填写 Key 和 Secret") : L10n.text("读取并预览持仓")
-        case .ibkr: context.isCreating ? L10n.text("填写 Token 和 Query ID") : L10n.text("保存凭证")
+        case .trading212: context.isCreating ? L10n.text("下一步") : L10n.text("读取")
+        case .ibkr: context.isCreating ? L10n.text("下一步") : L10n.text("保存凭证")
         case .moomoo: L10n.text("登录 Moomoo")
         case .robinhood: L10n.text("生成桌面登录链接")
-        case .snaptrade: L10n.text("读取账户列表")
-        case .longbridge, .alpaca: L10n.text("预览持仓")
+        case .snaptrade: context.isCreating ? L10n.text("下一步") : L10n.text("读取账户列表")
+        case .longbridge, .alpaca: context.isCreating ? L10n.text("下一步") : L10n.text("预览持仓")
         case .csv: L10n.text("选择 CSV 文件")
         case .screenshot: L10n.text("选择持仓截图")
         }
@@ -210,10 +214,26 @@ final class AccountFlowThemeTests: XCTestCase {
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
         bitmap.draw(sample, in: CGRect(x: 0, y: 0, width: 1, height: 1))
         let rgb = pixels.prefix(3).map { Double($0) / 255 }
-        XCTAssertLessThan((rgb.max() ?? 1) - (rgb.min() ?? 0), 0.04,
-                          "The shared setup action must not inherit a broker color")
-        if dark { XCTAssertGreaterThan(rgb[0], 0.15) }
-        else { XCTAssertLessThan(rgb[0], 0.85) }
+        let traits = UITraitCollection(userInterfaceStyle: dark ? .dark : .light)
+        let brand = self.rgb(UIColor(provider.flowTheme.accent).resolvedColor(with: traits))
+        let canvas = self.rgb(UIColor(CatfolioPalette.accountConnectionBackground).resolvedColor(with: traits))
+        let preparation = context.isCreating && [.trading212, .ibkr, .longbridge, .alpaca, .snaptrade].contains(provider)
+        let disabled = !preparation && [.trading212, .ibkr, .longbridge, .alpaca, .snaptrade].contains(provider)
+        if #available(iOS 26.0, *), disabled {
+            // Liquid Glass removes the fill tint when disabled. Verify the
+            // neutral, visible action rather than the old alpha-blended fill.
+            XCTAssertLessThan((rgb.max() ?? 0) - (rgb.min() ?? 0), 0.04,
+                              "Empty credential forms must show a neutral disabled action")
+            XCTAssertGreaterThan(abs(rgb.reduce(0, +) / 3 - canvas.reduce(0, +) / 3), 0.05,
+                                 "The disabled action must remain distinguishable from its canvas")
+            return
+        }
+        let opacity = disabled ? 0.3 : 1.0
+        for index in 0..<3 {
+            let expected = brand[index] * opacity + canvas[index] * (1 - opacity)
+            XCTAssertEqual(rgb[index], expected, accuracy: 0.06,
+                           "\(provider.rawValue) must use its own brand on the primary action")
+        }
     }
 
     private func matchingPixels(in image: UIImage, colors: [UIColor]) throws -> Int {

@@ -447,13 +447,13 @@ struct StockScreenerView: View {
     private var editor: some View {
         NavigationStack {
             Form {
-                Picker(L10n.text("板块"), selection: $rules.sector) { ForEach(ScreenRules.sectors, id: \.self) { Text($0.isEmpty ? L10n.text("全部") : $0).tag($0) } }
+                Picker(L10n.text("板块"), selection: $rules.sector) { ForEach(ScreenRules.sectors, id: \.self) { Text($0.isEmpty ? L10n.text("全部") : $0).tag($0) } }.tint(SettingsTemplate.readOnlyValue)
                 Picker(L10n.text("行业"), selection: $rules.industry) {
                     ForEach(["", "Semiconductors", "Software - Application", "Software - Infrastructure"], id: \.self) { Text($0.isEmpty ? L10n.text("全部") : $0).tag($0) }
-                }
+                }.tint(SettingsTemplate.readOnlyValue)
                 ForEach($rules.conditions) { $condition in
                     Section(condition.metric.title) {
-                        Picker(L10n.text("比较"), selection: $condition.comparison) { ForEach(ScreenComparison.allCases) { Text($0.title).tag($0) } }
+                        Picker(L10n.text("比较"), selection: $condition.comparison) { ForEach(ScreenComparison.allCases) { Text($0.title).tag($0) } }.tint(SettingsTemplate.readOnlyValue)
                         LabeledContent(L10n.text("门槛")) {
                             TextField(L10n.text("数值"), value: $condition.value, format: .number)
                                 .keyboardType(.numbersAndPunctuation)

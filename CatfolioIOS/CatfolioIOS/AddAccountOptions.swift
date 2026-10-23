@@ -32,8 +32,6 @@ enum AddAccountProvider: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    var monogram: String? { self == .longbridge ? "LB" : (self == .alpaca ? "A" : nil) }
-
     var iconAsset: String {
         switch self {
         case .trading212: "AddAccountTrading212"
@@ -43,7 +41,8 @@ enum AddAccountProvider: String, CaseIterable, Identifiable, Codable {
         case .snaptrade: "AddAccountConnection"
         case .csv: "AddAccountCSV"
         case .screenshot: "AddAccountCSV"
-        case .longbridge, .alpaca: ""
+        case .longbridge: "BrokerLongbridge"
+        case .alpaca: "BrokerAlpaca"
         }
     }
 }
@@ -95,16 +94,11 @@ struct AddAccountProviderRow: View {
 struct AddAccountProviderIcon: View {
     @Environment(\.colorScheme) private var colorScheme
     let provider: AddAccountProvider
+    var size: CGFloat = SettingsTemplate.accountProviderIconSize
 
     var body: some View {
         Group {
-            if let monogram = provider.monogram {
-                badgeShape.fill(CatfolioTheme.neutralFill)
-                    .overlay {
-                        Text(monogram).appText(.title, weight: .bold)
-                            .foregroundStyle(CatfolioTheme.primaryText)
-                    }
-            } else if provider == .screenshot {
+            if provider == .screenshot {
                 badgeShape.fill(CatfolioTheme.neutralFill)
                     .overlay {
                         Image(systemName: "photo.badge.plus")
@@ -120,8 +114,8 @@ struct AddAccountProviderIcon: View {
                             .renderingMode(.original)
                             .resizable()
                             .scaledToFit()
-                            .frame(width: SettingsTemplate.accountActionGlyphSize,
-                                   height: SettingsTemplate.accountActionGlyphSize)
+                            .frame(width: SettingsTemplate.accountActionGlyphSize * scale,
+                                   height: SettingsTemplate.accountActionGlyphSize * scale)
                             .offset(y: provider == .snaptrade ? SettingsTemplate.accountConnectGlyphOffsetY : 0)
                     }
                     .overlay {
@@ -139,8 +133,8 @@ struct AddAccountProviderIcon: View {
                             .renderingMode(.original)
                             .resizable()
                             .scaledToFit()
-                            .frame(width: SettingsTemplate.accountBrokerArtworkSize,
-                                   height: SettingsTemplate.accountBrokerArtworkSize)
+                            .frame(width: SettingsTemplate.accountBrokerArtworkSize * scale,
+                                   height: SettingsTemplate.accountBrokerArtworkSize * scale)
                             .offset(y: provider == .ibkr
                                 ? SettingsTemplate.accountIBKRArtworkOffsetY
                                 : SettingsTemplate.accountRobinhoodArtworkOffsetY)
@@ -151,17 +145,25 @@ struct AddAccountProviderIcon: View {
                     .renderingMode(.original)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: SettingsTemplate.accountProviderIconSize,
-                           height: SettingsTemplate.accountProviderIconSize)
+                    .frame(width: size,
+                           height: size)
+                    // Match the tall Longbridge mark's visual height to the other brokers.
+                    .scaleEffect(provider == .longbridge ? 0.9 : 1)
+                    .background {
+                        if provider == .longbridge { badgeShape.fill(CatfolioPalette.black) }
+                    }
+                    .clipShape(badgeShape)
             }
         }
-        .frame(width: SettingsTemplate.accountProviderIconSize, height: SettingsTemplate.accountProviderIconSize)
+        .frame(width: size, height: size)
         .environment(\.colorScheme, provider == .ibkr || provider == .robinhood ? .dark : colorScheme)
         .drawingGroup()
         .accessibilityHidden(true)
     }
 
+    private var scale: CGFloat { size / SettingsTemplate.accountProviderIconSize }
+
     private var badgeShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: SettingsTemplate.accountProviderIconRadius, style: .circular)
+        RoundedRectangle(cornerRadius: SettingsTemplate.accountProviderIconRadius * scale, style: .circular)
     }
 }

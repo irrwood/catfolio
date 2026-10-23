@@ -268,9 +268,8 @@ struct PortfolioView: View {
                         await model.loadCurrencyHistories()
                     }
                 .modifier(PortfolioFloatingHeaderReporter(header: $floatingHeader))
-                .appSheet(isPresented: $showsAddAccount) {
+                .navigationDestination(isPresented: $showsAddAccount) {
                     AddAccountView().environment(model)
-                        .presentationDetents([.large]).presentationDragIndicator(.visible)
                 }
                 .fullScreenCover(item: $selectedHolding) { holding in
                     HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })

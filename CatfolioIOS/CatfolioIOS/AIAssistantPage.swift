@@ -79,7 +79,7 @@ struct AIConversationHeader: View {
                     action: onToggleConversations)
                 .accessibilityLabel(L10n.text(showsConversations ? "回到对话" : "对话列表"))
             Spacer(minLength: 0)
-            control("square.and.pencil", action: onNewConversation)
+            control(Image("AssistantCompose").renderingMode(.template), action: onNewConversation)
                 .accessibilityLabel(L10n.text("新对话"))
                 .accessibilityIdentifier("ai.conversations.new")
             if !showsConversations, let onClose {

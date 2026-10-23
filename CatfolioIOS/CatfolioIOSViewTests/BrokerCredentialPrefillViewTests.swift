@@ -8,7 +8,7 @@ final class BrokerCredentialPrefillViewTests: XCTestCase {
         let fixture = try Fixture()
         defer { fixture.close() }
         await fixture.model.refreshPortfolio(refreshMarketData: false)
-        fixture.show(Trading212View(setupStore: fixture.store(), isFirstLaunchSetup: true,
+        fixture.show(Trading212View(setupStore: fixture.store(), isFirstLaunchSetup: true, setupNavigation: AccountSetupNavigation(startsAtCredentials: true),
             credentialValues: { ["trading212.account-1.api-key": "synced-key", "trading212.account-1.api-secret": "synced-secret"] }))
         try await settle()
         XCTAssertEqual(field(id: "trading212.api-key", in: fixture.window)?.text, "synced-key")
@@ -22,7 +22,7 @@ final class BrokerCredentialPrefillViewTests: XCTestCase {
         let store = fixture.store()
         try store.save(.init(step: .credentials, environment: .live, apiKey: "draft-key", apiSecret: "draft-secret",
                             accountSlot: 1, nickname: "Draft", nicknameEdited: true), for: .create)
-        fixture.show(Trading212View(setupStore: store, isFirstLaunchSetup: true,
+        fixture.show(Trading212View(setupStore: store, isFirstLaunchSetup: true, setupNavigation: AccountSetupNavigation(startsAtCredentials: true),
             credentialValues: { ["trading212.account-1.api-key": "synced-key", "trading212.account-1.api-secret": "synced-secret"] }))
         try await settle()
         XCTAssertEqual(field(id: "trading212.api-key", in: fixture.window)?.text, "draft-key")
@@ -34,7 +34,7 @@ final class BrokerCredentialPrefillViewTests: XCTestCase {
         defer { fixture.close() }
         let synced = [IBKRFlexKeys.token(accountID: "U123"): "123456789",
                       IBKRFlexKeys.queryID(accountID: "U123"): "123"]
-        fixture.show(IBKRFlexView(isFirstLaunchSetup: true, credentialValues: { synced }))
+        fixture.show(IBKRFlexView(isFirstLaunchSetup: true, setupNavigation: AccountSetupNavigation(startsAtCredentials: true), credentialValues: { synced }))
         try await settle()
         XCTAssertEqual(field(placeholder: "Flex Token", in: fixture.window)?.text, "123456789")
         XCTAssertEqual(field(placeholder: "Query ID", in: fixture.window)?.text, "123")
@@ -43,7 +43,7 @@ final class BrokerCredentialPrefillViewTests: XCTestCase {
         fixture.window.rootViewController = nil
         var pending = synced
         pending[IBKRFlexKeys.pendingToken] = "987654321"
-        fixture.show(IBKRFlexView(isFirstLaunchSetup: true, credentialValues: { pending }))
+        fixture.show(IBKRFlexView(isFirstLaunchSetup: true, setupNavigation: AccountSetupNavigation(startsAtCredentials: true), credentialValues: { pending }))
         try await settle()
         XCTAssertEqual(field(placeholder: "Flex Token", in: fixture.window)?.text, "987654321")
         XCTAssertEqual(field(placeholder: "Query ID", in: fixture.window)?.text, "")

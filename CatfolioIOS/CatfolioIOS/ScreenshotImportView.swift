@@ -8,6 +8,7 @@ struct ScreenshotImportView: View {
     let context: AccountConnectorContext
     var isFirstLaunchSetup = false
 
+    @State private var imageReadTask: Task<Void, Never>?
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var showsPicker = false
     @State private var imageData: Data?
@@ -38,11 +39,25 @@ struct ScreenshotImportView: View {
     }
 
     var body: some View {
-        AccountFlowStack {
-            OnboardingPage(scrollReset: hasReadImage, progress: context.isCreating ? OnboardingProgress(
-                step: (hasReadImage ? 2 : 1) + (isFirstLaunchSetup ? 2 : 0),
-                total: isFirstLaunchSetup ? 4 : 2) : nil) {
-                OnboardingHeader(
+        AccountFlowStack { page(1) }
+            .accountFlowBrand(.screenshot)
+    }
+
+    private func page(_ page: Int) -> some View {
+        let hasReadImage = !context.isCreating || page == 2 ? self.hasReadImage : false
+        return AccountFlowPage(showsNext: Binding(
+            get: { context.isCreating && self.hasReadImage && page == 1 },
+            set: { shown in
+                guard !shown, self.hasReadImage else { return }
+                imageReadTask?.cancel()
+                selectionGeneration = UUID()
+                selectedPhoto = nil
+                isReading = false
+                self.hasReadImage = false
+                errorMessage = nil
+            })) {
+            OnboardingPage(scrollReset: hasReadImage, isAccountPreparation: !hasReadImage && importedCount == nil) {
+                AccountConnectionHeader(provider: .screenshot,
                     title: L10n.text(importedCount != nil ? "导入完成" : "截图导入"),
                     subtitle: importedCount != nil ? nil : L10n.text("选择持仓截图，核对后即可加入。"))
                 if let importedCount {
@@ -54,10 +69,12 @@ struct ScreenshotImportView: View {
                     }
                 } else {
                     if !hasReadImage {
-                        OnboardingFeature(symbol: "photo", title: L10n.text("选择持仓截图"),
-                            detail: L10n.text("自动识别股票代码、数量、每股成本和现价。"))
-                        OnboardingFeature(symbol: "lock", title: L10n.text("本机识别"),
-                            detail: L10n.text("图片不会上传，也不需要配置 AI。"))
+                        VStack(spacing: 0) {
+                            AccountPreparationFeature(symbol: "photo.fill", title: L10n.text("选择持仓截图"),
+                                detail: L10n.text("自动识别股票代码、数量、每股成本和现价。"))
+                            AccountPreparationFeature(symbol: "lock.shield.fill", title: L10n.text("本机识别"),
+                                detail: L10n.text("图片不会上传，也不需要配置 AI。"))
+                        }
                     }
                     if isReading {
                         ProgressView(L10n.text("正在识别截图…")).padding()
@@ -136,13 +153,19 @@ struct ScreenshotImportView: View {
                 }
             }
             .photosPicker(isPresented: $showsPicker, selection: $selectedPhoto, matching: .images)
-            .task(id: selectedPhoto) { await readPhoto() }
+            .onChange(of: selectedPhoto) { _, photo in
+                guard photo != nil, !context.isCreating || page == (self.hasReadImage ? 2 : 1) else { return }
+                imageReadTask?.cancel()
+                imageReadTask = Task { await readPhoto() }
+            }
+            .onDisappear {
+                if !context.isCreating || page == (self.hasReadImage ? 2 : 1) { imageReadTask?.cancel() }
+            }
             .task {
                 if nickname.isEmpty { nickname = context.account?.name ?? model.suggestedAccountNickname() }
             }
             .interactiveDismissDisabled(isSaving)
-        }
-        .accountFlowBrand(.screenshot)
+        } next: { AnyView(self.page(page + 1)) }
     }
 
     private func dismiss() {

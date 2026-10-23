@@ -2,6 +2,8 @@ import SwiftUI
 
 extension EnvironmentValues {
     @Entry var isServiceAPISetupGuide = false
+    @Entry var hasSharedOnboardingBackground = false
+    @Entry var usesPaywallOnboardingStyle = false
 }
 
 /// Launch policy is separate from presentation and does not store credentials.
@@ -48,90 +50,83 @@ struct ServiceAPIOnboardingPresenter: ViewModifier {
 struct ServiceAPIOnboardingView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var setup: ServiceAPISetupState
     private let drafts: ServiceAPIKeyDrafts
     private let trading212SetupStore: Trading212SetupStore
+    private let accountSetupNavigation: AccountSetupNavigation?
     @State private var showsServices = false
 
     init(setup: ServiceAPISetupState = .shared, drafts: ServiceAPIKeyDrafts = .shared,
-         trading212SetupStore: Trading212SetupStore = .shared) {
+         trading212SetupStore: Trading212SetupStore = .shared,
+         accountSetupNavigation: AccountSetupNavigation? = nil) {
         self.setup = setup
         self.drafts = drafts
         self.trading212SetupStore = trading212SetupStore
+        self.accountSetupNavigation = accountSetupNavigation
     }
 
     var body: some View {
         NavigationStack(path: $setup.path) {
-            OnboardingPage(scrollReset: setup.started, progress: OnboardingProgress(step: setup.started ? 2 : 1, total: 3)) {
-                if !setup.started {
-                    OnboardingHeader(title: L10n.text("欢迎使用 Catfolio"),
-                                     subtitle: L10n.text("在一处看清持仓与收益。"))
-                    OnboardingFeature(symbol: "chart.pie", title: L10n.text("连接账户"),
-                                      detail: L10n.text("导入券商持仓，也可以手动添加。"))
-                    OnboardingFeature(symbol: "key.horizontal", title: L10n.text("按需连接服务"),
-                                      detail: L10n.text("行情、新闻和 AI，选你需要的就好。"))
-                    OnboardingFeature(symbol: "lock", title: L10n.text("密钥由你掌握"),
-                                      detail: L10n.text("保存在钥匙串，可选择跨设备同步。"))
+            ZStack {
+                if setup.started {
+                    introPage(started: true)
+                        .transition(reduceMotion ? .identity : .move(edge: .trailing))
                 } else {
-                    OnboardingHeader(title: L10n.text("连接你的账户"),
-                                     subtitle: L10n.text("选择券商连接，或通过 CSV 导入。"))
-                    VStack(spacing: 20) {
-                        ForEach(AddAccountProvider.allCases) { provider in
-                            accountLink(provider)
-                        }
-                    }
-                    DisclosureGroup(L10n.text("行情与 AI（可选）"), isExpanded: $showsServices) {
-                        VStack(alignment: .leading, spacing: 28) {
-                            group(L10n.text("行情与估值"), providers: [.massive, .fmp])
-                            group("AI", providers: [.openRouter, .deepSeek, .jev])
-                            group(L10n.text("新闻"), providers: [.finnhub])
-                            Text(L10n.text("服务商的额度、功能和费用以其账户方案为准。"))
-                                .appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
-                        }
-                        .padding(.top, 20)
-                    }
-                    .appText(.callout, weight: .medium)
-                    Text(L10n.text("也可以稍后在账户和设置中继续。"))
-                        .appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
-                }
-            } actions: {
-                if !setup.started {
-                    OnboardingPrimaryButton(title: L10n.text("继续")) { setup.started = true }
-                }
-                Button(L10n.text("稍后设置")) { setup.isPresented = false; dismiss() }
-                    .appText(.callout, weight: .medium)
-                if !setup.started {
-                    Link(L10n.text("隐私政策"), destination: privacyURL)
-                        .appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
+                    introPage(started: false)
+                        .transition(reduceMotion ? .identity : .move(edge: .leading))
                 }
             }
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: setup.started)
             .toolbar {
                 if setup.started {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button {
-                            setup.started = false
-                        } label: {
+                        Button { setup.started = false } label: {
                             Label(L10n.text("上一步"), systemImage: "chevron.left")
                         }
+                        .tint(.white)
                         .accessibilityIdentifier("service-onboarding-back")
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(L10n.text("跳过"), action: skip)
+                        .accessibilityIdentifier("service-onboarding-skip")
+                }
             }
+            .environment(\.usesPaywallOnboardingStyle, true)
             .navigationDestination(for: ServiceAPISetupState.Step.self) { step in
                 if let provider = step.accountProvider {
-                    AddAccountDestination(provider: provider, setupStore: trading212SetupStore, isFirstLaunchSetup: true)
+                    AddAccountDestination(provider: provider, setupStore: trading212SetupStore,
+                                          isFirstLaunchSetup: true, setupNavigation: accountSetupNavigation)
                         .environment(\.accountFlowClose, { setup.finish(); dismiss() })
+                        .environment(\.usesPaywallOnboardingStyle, false)
                 } else {
                     switch step {
                     case .guide(let provider), .key(let provider):
                         ServiceAPISetupDestination(provider: provider, setup: setup, drafts: drafts,
                             chooseAnother: { setup.path = [] }, finish: { setup.finish(); dismiss() })
+                            .environment(\.usesPaywallOnboardingStyle, true)
+                            .toolbar {
+                                ToolbarItem(placement: .topBarTrailing) {
+                                    Button(L10n.text("跳过"), action: skip)
+                                        .accessibilityIdentifier("service-onboarding-skip")
+                                }
+                            }
                     case .trading212, .ibkr, .account: EmptyView()
                     }
                 }
             }
         }
-        .tint(CatfolioTheme.primaryText)
+        .transaction(value: setup.path) { transaction in
+            if reduceMotion { transaction.disablesAnimations = true }
+        }
+        .background {
+            FirstLaunchBackground(stage: backgroundStage)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: backgroundStage)
+                .ignoresSafeArea()
+        }
+        .environment(\.hasSharedOnboardingBackground, true)
+        .environment(\.accountFlowTheme, .firstLaunch)
         .environment(\.isServiceAPISetupGuide, true)
         .onChange(of: setup.path, initial: true) { _, path in
             switch path.last {
@@ -145,45 +140,48 @@ struct ServiceAPIOnboardingView: View {
         }
     }
 
-    private var privacyURL: URL {
-        let suffix = AppLanguage.currentIdentifier == "zh-Hans" ? "-zh" : ""
-        return URL(string: "https://catfolio-app.vercel.app/privacy\(suffix)")!
-    }
-
-    private func accountLink(_ provider: AddAccountProvider) -> some View {
-        NavigationLink(value: ServiceAPISetupState.Step.account(provider)) {
-            HStack(spacing: 16) {
-                AddAccountProviderIcon(provider: provider)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(provider.title).appText(.subheading, weight: .semibold)
-                    Text(provider.connectionSummary).appText(.body).foregroundStyle(SettingsTemplate.secondaryText)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "chevron.right").appText(.label)
-                    .foregroundStyle(SettingsTemplate.secondaryText)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("onboarding-account-\(provider.rawValue)")
-    }
-
-    private func group(_ title: String, providers: [LocalServiceProvider]) -> some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text(title).appText(.label).foregroundStyle(SettingsTemplate.secondaryText)
-            ForEach(providers) { provider in
-                NavigationLink(value: ServiceAPISetupState.Step.key(provider)) {
-                    HStack(spacing: 12) {
-                        OnboardingFeature(symbol: provider.iconName, title: provider.title, detail: provider.purpose)
-                        Image(systemName: "chevron.right").appText(.label)
-                            .foregroundStyle(SettingsTemplate.secondaryText)
+    private func introPage(started: Bool) -> some View {
+        OnboardingPage(scrollReset: started,
+                       progress: started ? nil : OnboardingProgress(step: 1, total: 3),
+                       isAccountPreparation: true, showsActions: !started) {
+            if !started {
+                FirstLaunchIntroHeader(title: L10n.text("欢迎使用 Catfolio"),
+                                       subtitle: L10n.text("在一处看清持仓与收益。"), showsAppIcon: true)
+                FirstLaunchIntroFeatures()
+            } else {
+                FirstLaunchIntroHeader(title: L10n.text("连接你的账户"),
+                                       subtitle: L10n.text("选择券商连接，或通过 CSV 导入。"))
+                VStack(spacing: SettingsTemplate.tileSpacing) {
+                    AddAccountOptions { provider in
+                        setup.path.append(.account(provider))
                     }
-                    .contentShape(Rectangle())
+                    FirstLaunchServiceOptions(isExpanded: $showsServices)
                 }
-                .buttonStyle(.plain)
+                Text(L10n.text("也可以稍后在账户和设置中继续。"))
+                    .appText(.footnote).foregroundStyle(.white.opacity(0.82))
+            }
+        } actions: {
+            if !started {
+                AccountPreparationNextButton { setup.started = true }
+                    .accessibilityIdentifier("service-onboarding-next")
             }
         }
     }
+
+    private var backgroundStage: FirstLaunchBackground.Stage {
+        if let provider = setup.path.last?.accountProvider { return .broker(provider) }
+        switch setup.path.last {
+        case .key(let provider), .guide(let provider): return .service(provider)
+        default: return setup.started ? .selection : .welcome
+        }
+    }
+
+    private func skip() {
+        setup.isPresented = false
+        dismiss()
+    }
+
+
 }
 
 private struct ServiceAPISetupDestination: View {
@@ -206,6 +204,7 @@ extension LocalServiceProvider {
         case .fmp: address = "https://site.financialmodelingprep.com/developer/docs"
         case .deepSeek: address = "https://platform.deepseek.com/api_keys"
         case .openRouter: address = "https://openrouter.ai/keys"
+        case .claude: address = "https://platform.claude.com/settings/keys"
         case .finnhub: address = "https://finnhub.io/dashboard"
         case .jev: address = "https://developers.cloudflare.com/workers-ai/get-started/rest-api/"
         }

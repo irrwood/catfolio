@@ -82,6 +82,49 @@ final class AIStreamingTests: XCTestCase {
         XCTAssertNil(AIStreamParsing.chatCompletionError(#"data: {"choices":[{"delta":{"content":"Hi"}}]}"#))
     }
 
+    func testClaudeStreamsThinkingAndAnswerAsNativeContentBlockDeltas() throws {
+        let lines = [
+            "event: message_start",
+            #"data: {"type":"message_start","message":{"content":[]}}"#,
+            #"data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Checking weights."}}"#,
+            #"data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"signature"}}"#,
+            #"data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Your top "}}"#,
+            #"data: {"type":"ping"}"#,
+            #"data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"holding."}}"#,
+            #"data: {"type":"content_block_delta","delta":{"type":"text_delta","text":""}}"#,
+            #"data: {"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":""}}"#,
+            #"data: {"type":"content_block_delta","delta":{"type":"future_delta","text":"not an answer"}}"#,
+            #"data: {"type":"future_event"}"#,
+            #"data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}"#,
+            #"data: {"type":"message_stop"}"#,
+        ]
+        XCTAssertEqual(try lines.flatMap { try AIStreamParsing.claudeEvents($0) }, [
+            .reasoning("Checking weights."), .text("Your top "), .text("holding."),
+        ])
+    }
+
+    func testClaudeFinishesOnlyAtItsNativeMessageStop() {
+        XCTAssertTrue(AIStreamParsing.isClaudeDone(#"data: {"type":"message_stop"}"#))
+        for line in ["event: message_stop", "data: [DONE]", #"data: {"type":"content_block_stop"}"#,
+                     #"data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}"#] {
+            XCTAssertFalse(AIStreamParsing.isClaudeDone(line))
+        }
+    }
+
+    func testClaudeReportsInlineErrorsAndTruncation() {
+        XCTAssertThrowsError(try AIStreamParsing.claudeEvents(
+            #"data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#
+        )) { error in
+            XCTAssertEqual(error.localizedDescription, LocalServiceError.remote("Overloaded").localizedDescription)
+        }
+        XCTAssertThrowsError(try AIStreamParsing.claudeEvents(#"data: {"type":"error","error":{}}"#))
+        XCTAssertThrowsError(try AIStreamParsing.claudeEvents(
+            #"data: {"type":"message_delta","delta":{"stop_reason":"max_tokens"}}"#
+        )) { error in
+            guard case LocalServiceError.remote = error else { return XCTFail("Expected truncation to be reported") }
+        }
+    }
+
     func testTheTypewriterSpeedsUpWhenItFallsBehind() {
         XCTAssertEqual(SmoothReveal.step(backlog: 0), 0)
         XCTAssertEqual(SmoothReveal.step(backlog: 1), 1, "never past what has arrived")

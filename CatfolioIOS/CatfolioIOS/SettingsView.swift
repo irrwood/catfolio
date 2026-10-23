@@ -100,12 +100,7 @@ struct SettingsView: View {
     private let trading212SetupStore: Trading212SetupStore
     @State private var showsPaywallPreview = false
     @State private var showsAddAccount = false
-    @State private var showsCSVImport = false
-    @State private var showsTrading212 = false
-    @State private var showsIBKRFlex = false
-    @State private var showsSnapTrade = false
-    @State private var showsMoomooOAuth = false
-    @State private var showsRobinhood = false
+    @State private var initialAddAccountProvider: AddAccountProvider?
     @State private var showsLocalServices = false
     @State private var hasAppliedLaunchRoute = false
     #if DEBUG
@@ -152,16 +147,6 @@ struct SettingsView: View {
                 }
             }
 
-            // The Mac has Settings in the sidebar instead.
-            if !MacPlatform.isMac {
-                SettingsCard {
-                    SettingsNavigationRow(icon: .asset("AccountSettings"), title: L10n.text("设置")) {
-                        AppSettingsView()
-                    }
-                    .accessibilityIdentifier("account.settings")
-                }
-            }
-
             PublicInvestorSettingsSection()
         }
         .homeTabBackground()
@@ -189,6 +174,21 @@ struct SettingsView: View {
             .navigationDestination(isPresented: $showsIsometricHeatmap) { IsometricHeatmapLabView().environment(model) }
             #endif
             .toolbar {
+                // Native toolbar chrome supplies the glass around our existing icon.
+                // The Mac keeps its dedicated Settings sidebar entry.
+                if !MacPlatform.isMac {
+                    ToolbarItem(placement: .topBarLeading) {
+                        NavigationLink {
+                            AppSettingsView()
+                        } label: {
+                            Label(L10n.text("设置"), image: "AccountSettings")
+                        }
+                        .labelStyle(.iconOnly)
+                        .tint(CatfolioTheme.primaryText)
+                        .accessibilityLabel(L10n.text("设置"))
+                        .accessibilityIdentifier("account.settings")
+                    }
+                }
                 if showsCloseButton {
                     ToolbarItem(placement: .cancellationAction) {
                         Button(L10n.text("关闭"), systemImage: "xmark") { dismiss() }
@@ -212,12 +212,14 @@ struct SettingsView: View {
                     hasAppliedLaunchRoute = true
                     let arguments = LaunchArguments.all
                     showsPaywallPreview = arguments.contains("--show-paywall")
-                    showsAddAccount = arguments.contains("--show-add-account") || trading212SetupStore.resumesAtLaunch
-                    showsCSVImport = arguments.contains("--show-csv")
-                    showsTrading212 = arguments.contains("--show-trading212")
-                    showsIBKRFlex = arguments.contains("--show-flex")
-                    showsSnapTrade = arguments.contains("--show-snaptrade")
-                    showsMoomooOAuth = arguments.contains("--show-moomoo")
+                    let connectorRoutes: [(String, AddAccountProvider)] = [
+                        ("--show-trading212", .trading212), ("--show-flex", .ibkr),
+                        ("--show-snaptrade", .snaptrade), ("--show-moomoo", .moomoo),
+                        ("--show-robinhood", .robinhood), ("--show-csv", .csv)
+                    ]
+                    initialAddAccountProvider = connectorRoutes.first { arguments.contains($0.0) }?.1
+                    showsAddAccount = arguments.contains("--show-add-account")
+                        || initialAddAccountProvider != nil || trading212SetupStore.resumesAtLaunch
                     showsLocalServices = arguments.contains("--show-local-services")
                         || arguments.contains { $0.hasPrefix("--show-local-service-") }
                         || ServiceAPISetupState.shared.resumesSettingsProviderAtLaunch
@@ -227,33 +229,12 @@ struct SettingsView: View {
             .fullScreenCover(isPresented: $showsPaywallPreview) {
                 PaywallView()
             }
-            .appSheet(isPresented: $showsAddAccount) {
-                AddAccountView(setupStore: trading212SetupStore).environment(model)
-                    .presentationDetents([.large]).presentationDragIndicator(.visible)
+            .navigationDestination(isPresented: $showsAddAccount) {
+                AddAccountView(setupStore: trading212SetupStore, initialProvider: initialAddAccountProvider)
+                    .environment(model)
             }
-            .appSheet(isPresented: $showsCSVImport) {
-                CSVImportView(context: .create).environment(model)
-                    .presentationDetents([.large]).presentationDragIndicator(.visible)
-            }
-            .appSheet(isPresented: $showsTrading212) {
-                Trading212View(context: .create, setupStore: trading212SetupStore).environment(model)
-                    .presentationDetents([.large]).presentationDragIndicator(.visible)
-            }
-            .appSheet(isPresented: $showsSnapTrade) {
-                SnapTradeView(context: .create).environment(model)
-                    .presentationDetents([.large]).presentationDragIndicator(.visible)
-            }
-            .appSheet(isPresented: $showsIBKRFlex) {
-                IBKRFlexView(context: .create).environment(model)
-                    .presentationDetents([.large]).presentationDragIndicator(.visible)
-            }
-            .appSheet(isPresented: $showsRobinhood) {
-                RobinhoodConnectionView(context: .create).environment(model)
-                    .presentationDetents([.large]).presentationDragIndicator(.visible)
-            }
-            .appSheet(isPresented: $showsMoomooOAuth) {
-                MoomooOAuthView(context: .create).environment(model)
-                    .presentationDetents([.large]).presentationDragIndicator(.visible)
+            .onChange(of: showsAddAccount) { _, presented in
+                if !presented { initialAddAccountProvider = nil }
             }
         // A launch argument opens the providers as if their row were tapped.
         .navigationDestination(isPresented: $showsLocalServices) { LocalServicesSettingsView() }
@@ -306,7 +287,8 @@ struct SettingsView: View {
             title: account.localizedDisplayName,
             subtitle: account.awaitsFirstSync
                 ? (model.isPublicInvestorMode ? L10n.text("暂无数据") : firstSyncSubtitle(for: account))
-                : L10n.text("\(account.positionCount) 项 · \(DisplayFormat.money(account.marketValueUSD))"),
+                : (account.positionCount == 0 ? L10n.text("暂无持仓")
+                   : L10n.text("\(account.positionCount) 项 · \(DisplayFormat.money(account.marketValueUSD))")),
             // Not the accent: in this row the filled circle already means
             // "included in the portfolio", and reusing its colour for a sync
             // state makes an unsynced account read as a selected one.

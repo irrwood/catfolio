@@ -59,6 +59,7 @@ struct ChinaMarketSettingsView: View {
                     ForEach(ChinaMarketSource.allCases) { Text($0.title).tag($0.rawValue) }
                 }
                 .pickerStyle(.menu)
+                .tint(SettingsTemplate.readOnlyValue)
                 .accessibilityIdentifier("china-market.source")
                 Text(L10n.text("自动模式优先使用已配置的长桥，失败时使用 AKShare 来源。"))
                     .appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
@@ -145,26 +146,5 @@ struct ChinaMarketSettingsView: View {
                 .textFieldStyle(.roundedBorder)
                 .disabled(setup.testing)
         }
-    }
-}
-
-struct ChinaMarketQuoteCaption: View {
-    let attribution: ChinaMarketAttribution?
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let attribution {
-                HStack(spacing: 6) {
-                    Text(attribution.source.title)
-                    if attribution.cached { Text(L10n.text("缓存")) }
-                    if let date = attribution.observedAt {
-                        Text(date.formatted(date: .abbreviated, time: .shortened))
-                    }
-                }
-            }
-            Text(L10n.text("行情可能延迟，请以报价时间为准"))
-        }
-        .appText(.caption)
-        .foregroundStyle(SettingsTemplate.secondaryText)
-        .accessibilityIdentifier("china-market.quote-caption")
     }
 }

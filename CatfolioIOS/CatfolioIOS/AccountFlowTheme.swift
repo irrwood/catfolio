@@ -5,6 +5,9 @@ struct AccountFlowTheme {
     let accent: Color
     let controlTint: Color
     let onAccent: Color
+
+    /// Keep small glyphs in the brand hue, with more contrast than large fills.
+    var iconTint: Color { accent.mix(with: controlTint, by: 0.7) }
 }
 
 extension AddAccountProvider {
@@ -32,7 +35,15 @@ extension AddAccountProvider {
         case .csv:
             .init(accent: CatfolioPalette.accountImportTop,
                   controlTint: CatfolioPalette.accountImportControl, onAccent: .white)
-        case .screenshot, .longbridge, .alpaca:
+        case .longbridge:
+            .init(accent: CatfolioPalette.accountLongbridgeAccent,
+                  controlTint: CatfolioPalette.accountLongbridgeControl,
+                  onAccent: CatfolioPalette.accountLongbridgeInk)
+        case .alpaca:
+            .init(accent: CatfolioPalette.accountAlpacaAccent,
+                  controlTint: CatfolioPalette.accountAlpacaControl,
+                  onAccent: CatfolioPalette.accountAlpacaInk)
+        case .screenshot:
             .init(accent: CatfolioTheme.primaryText,
                   controlTint: CatfolioTheme.primaryText, onAccent: SettingsTemplate.pageBackground)
         }

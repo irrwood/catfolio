@@ -12,7 +12,11 @@ struct Trading212View: View {
     private let isFirstLaunchSetup: Bool
     private let credentialValues: () -> [String: String]
 
-    @State private var guideStep: Trading212GuideStep = .prepare
+    @State private var setupNavigation: AccountSetupNavigation
+    private var guideStep: Trading212GuideStep {
+        get { setupNavigation.step }
+        nonmutating set { setupNavigation.step = newValue }
+    }
     @State private var apiKey = ""
     @State private var apiSecret = ""
     @State private var accountSlot = 1
@@ -26,30 +30,21 @@ struct Trading212View: View {
     @State private var showsSyncConfirmation = false
     @State private var historyRetryTask: Task<Void, Never>?
     @State private var hasPrepared = false
-    @State private var revealsKey = false
-    @State private var revealsSecret = false
 
     private var isWorking: Bool { operation.isRunning }
 
     init(context: AccountConnectorContext = .create, setupStore: Trading212SetupStore = .shared,
-         isFirstLaunchSetup: Bool = false,
+         isFirstLaunchSetup: Bool = false, setupNavigation: AccountSetupNavigation? = nil,
          credentialValues: @escaping () -> [String: String] = BrokerCredentialPrefill.storedValues) {
         self.context = context
         self.setupStore = setupStore
         self.isFirstLaunchSetup = isFirstLaunchSetup
         self.credentialValues = credentialValues
-        _guideStep = State(initialValue: isFirstLaunchSetup ? .credentials : .prepare)
+        _setupNavigation = State(initialValue: setupNavigation ?? AccountSetupNavigation(
+            startsAtCredentials: !context.isCreating))
     }
 
-    private var previousStep: Trading212GuideStep? {
-        isFirstLaunchSetup && guideStep == .credentials ? nil : guideStep.previous
-    }
 
-    private var progress: OnboardingProgress? {
-        guard context.isCreating else { return nil }
-        return OnboardingProgress(step: guideStep.progressStep + (isFirstLaunchSetup ? 1 : 0),
-                                  total: isFirstLaunchSetup ? 4 : 3)
-    }
 
     private static func apiKeyKey(slot: Int) -> String { "trading212.account-\(slot).api-key" }
     private static func apiSecretKey(slot: Int) -> String { "trading212.account-\(slot).api-secret" }
@@ -61,51 +56,46 @@ struct Trading212View: View {
     }
 
     var body: some View {
-        AccountFlowStack {
-            OnboardingPage(scrollReset: guideStep, progress: progress) {
-                if context.isCreating {
-                    Trading212GuideProgress(step: guideStep)
+        AccountFlowStack { page(context.isCreating ? .prepare : .credentials) }
+            .accountFlowBrand(.trading212)
+    }
+
+    private func page(_ guideStep: Trading212GuideStep) -> some View {
+        AccountFlowPage(showsNext: Binding(
+            get: { context.isCreating && !self.guideStep.isTutorial && self.guideStep.rawValue > guideStep.rawValue },
+            set: { shown in
+                guard !shown, self.guideStep.rawValue > guideStep.rawValue else { return }
+                stopWaiting()
+                if guideStep == .prepare || guideStep == .credentials { invalidatePreview() }
+                self.guideStep = guideStep
+            })) {
+            OnboardingPage(scrollReset: guideStep, isAccountPreparation: true) {
+                if !context.isCreating || guideStep.isTutorial || guideStep == .credentials {
+                    AccountConnectionHeader(provider: .trading212, title: L10n.text("连接 Trading 212"),
+                                            subtitle: guideStep.isTutorial ? L10n.text("通过 API 连接") : L10n.text("只开启读取权限"))
                 } else {
-                    OnboardingHeader(title: "Trading 212", subtitle: L10n.text("填写连接凭证"))
+                    AccountConnectionHeader(provider: .trading212, title: guideStep.title, subtitle: guideStep.subtitle)
                 }
                 if context.isCreating && guideStep.isTutorial {
                     Trading212GuideLesson(step: guideStep) {
-                        guideStep = guideStep.nextTutorialStep
+                        setupNavigation.showCredentials()
                     }
                 } else if context.isCreating && guideStep == .complete {
                     completionContent
                 } else {
-                    VStack(alignment: .leading, spacing: 16) { connectionContent }
+                    VStack(alignment: .leading, spacing: 16) { connectionContent(guideStep) }
                 }
-            } actions: { flowActions }
+            } actions: { flowActions(guideStep) }
             .disabled(isWorking)
-            // Past the first step the guide's own 上一步 is the back button;
-            // the bar's, which leaves the guide, would make two.
-            .navigationBarBackButtonHidden(context.isCreating && previousStep != nil)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if context.isCreating, let previous = previousStep {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button {
-                            if guideStep == .review { invalidatePreview() }
-                            guideStep = previous
-                        } label: {
-                            Label(L10n.text("上一步"), systemImage: "chevron.left")
-                        }
-                        .disabled(isWorking)
-                        .accessibilityIdentifier("account-guide-back")
-                    }
-                } else if context.isCreating {
-                    ToolbarItem(placement: .cancellationAction) {
-                        AccountProviderBackButton().disabled(isWorking)
-                    }
-                }
                 if !context.isCreating {
                     ToolbarItem(placement: .confirmationAction) {
                         AppModalDoneButton { stopWaiting(); dismiss() }
                     }
                 }
             }
+            .accountConnectionTutorial(.trading212)
             .task { prepareAccount() }
             .onAppear {
                 if context.isCreating, accountFlowClose == nil, guideStep != .complete {
@@ -115,8 +105,8 @@ struct Trading212View: View {
             .onDisappear {
                 persistDraft()
                 guard scenePhase == .active else { return }
-                stopWaiting()
-                if context.isCreating, accountFlowClose == nil { setupStore.setCreationPresented(false) }
+                if !context.isCreating || self.guideStep == guideStep { stopWaiting() }
+                if context.isCreating, accountFlowClose == nil, self.guideStep == guideStep { setupStore.setCreationPresented(false) }
             }
             .onChange(of: draft) { _, _ in persistDraft() }
             .onChange(of: scenePhase) { _, phase in
@@ -148,15 +138,17 @@ struct Trading212View: View {
                     ? L10n.text("将使用预览中的数据创建新账户；现有账户不受影响。")
                     : L10n.text("将更新当前 Trading 212 账户持仓；其他账户不受影响。"))
             }
+        } next: {
+            AnyView(page(guideStep.isTutorial ? .credentials : (guideStep == .credentials ? .review : .complete)))
         }
-        .tint(CatfolioTheme.primaryText)
     }
 
     @ViewBuilder
-    private var flowActions: some View {
+    private func flowActions(_ guideStep: Trading212GuideStep) -> some View {
+        let snapshot = !context.isCreating || guideStep == .review ? self.snapshot : nil
         if context.isCreating && guideStep.isTutorial {
             Trading212GuideLesson(step: guideStep) {
-                guideStep = guideStep.nextTutorialStep
+                setupNavigation.showCredentials()
             }.actions
         } else if context.isCreating && guideStep == .complete {
             OnboardingPrimaryButton(title: L10n.text("完成")) { stopWaiting(); dismiss() }
@@ -172,9 +164,10 @@ struct Trading212View: View {
             }
         } else {
             OnboardingPrimaryButton(
-                title: isWorking ? L10n.text("正在读取") : L10n.text("读取并预览持仓"),
+                title: isWorking ? L10n.text("正在读取") : L10n.text("读取"),
                 isDisabled: !credentialsReady,
-                isBusy: isWorking
+                isBusy: isWorking,
+                usesGlass: true
             ) {
                 perform(.preview)
             }
@@ -182,7 +175,8 @@ struct Trading212View: View {
     }
 
     @ViewBuilder
-    private var connectionContent: some View {
+    private func connectionContent(_ guideStep: Trading212GuideStep) -> some View {
+        let snapshot = !context.isCreating || guideStep == .review ? self.snapshot : nil
         if context.isCreating, snapshot != nil {
             SettingsSectionHeader(L10n.text("账户昵称"))
             SettingsCard {
@@ -193,8 +187,6 @@ struct Trading212View: View {
 
         if !context.isCreating || guideStep == .credentials {
             credentialsSection
-            Link(L10n.text("如何获取 Key？"), destination: Trading212GuideLesson.helpURL)
-                .appText(.callout, weight: .medium).padding(.vertical, 8)
 
         }
 
@@ -287,33 +279,11 @@ struct Trading212View: View {
 
     @ViewBuilder
     private var credentialsSection: some View {
-        SettingsCard {
-            credentialRow("API Key", text: $apiKey, revealed: $revealsKey, id: "trading212.api-key")
-            credentialRow("API Secret", text: $apiSecret, revealed: $revealsSecret, id: "trading212.api-secret")
+        VStack(alignment: .leading, spacing: 16) {
+            AccountCredentialRow(title: "API Key", text: $apiKey, accessibilityIdentifier: "trading212.api-key", isSecret: false)
+            AccountCredentialRow(title: "API Secret", text: $apiSecret, accessibilityIdentifier: "trading212.api-secret")
         }
-        Text(L10n.text("保存在钥匙串；可在设置中开启跨设备密钥同步。"))
-            .appText(.footnote).foregroundStyle(SettingsTemplate.secondaryText)
-
-    }
-
-    private func credentialRow(_ title: String, text: Binding<String>, revealed: Binding<Bool>, id: String) -> some View {
-        SettingsRowContainer {
-            HStack(spacing: SettingsTemplate.iconSpacing) {
-                ServiceAPIKeyField(placeholder: title, text: text, revealsKey: revealed.wrappedValue,
-                                   accessibilityIdentifier: id)
-                    .privacySensitive()
-                Button { revealed.wrappedValue.toggle() } label: {
-                    SettingsRowIcon(.symbol(revealed.wrappedValue ? "eye.slash" : "eye"))
-                        .foregroundStyle(SettingsTemplate.secondaryText)
-                        .padding(.vertical, SettingsTemplate.rowVerticalPadding)
-                        .contentShape(Rectangle())
-                        .padding(.vertical, -SettingsTemplate.rowVerticalPadding)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(revealed.wrappedValue ? L10n.text("隐藏 API 密钥") : L10n.text("显示 API 密钥"))
-                .accessibilityValue(title)
-            }
-        }
+        AccountCredentialFootnote()
     }
 
     @ViewBuilder
@@ -351,7 +321,7 @@ struct Trading212View: View {
         guard !hasPrepared else { return }
         defer { hasPrepared = true }
         if let saved = setupStore.load(for: context) {
-            guideStep = isFirstLaunchSetup && saved.restoredStep.isTutorial ? .credentials : saved.restoredStep
+            guideStep = !context.isCreating ? .credentials : saved.restoredStep
             apiKey = saved.apiKey
             apiSecret = saved.apiSecret
             accountSlot = context.isCreating ? availableAccountSlot(preferred: saved.accountSlot) : saved.accountSlot

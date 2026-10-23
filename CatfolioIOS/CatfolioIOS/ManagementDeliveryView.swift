@@ -120,7 +120,7 @@ struct ManagementDeliveryCard: View {
             return L10n.text("财报新闻稿与财报在 iPhone 下载、分析和保存，资料不上传服务器。")
         case .automatic:
             return L10n.text("财报新闻稿与财报在 iPhone 下载和保存；分析时，新闻稿片段会发送给你已连接的云端 AI。没有连接云端 AI 时，才用 Apple 本地模型。")
-        case .codex, .deepSeek, .openRouter:
+        case .codex, .deepSeek, .openRouter, .claude:
             return L10n.text("财报新闻稿与财报在 iPhone 下载和保存；分析时，新闻稿片段会发送给你在服务商中选择的 AI。")
         }
     }

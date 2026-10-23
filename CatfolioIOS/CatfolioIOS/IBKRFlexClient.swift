@@ -182,6 +182,7 @@ struct IBKRFlexClient {
 
     func fetchOpenPositions(
         credentials: IBKRFlexCredentials,
+        newAccountExclusions: Set<String>? = nil,
         onProgress: (@Sendable (Int) -> Void)? = nil
     ) async throws -> IBKRFlexSnapshot {
         let requestURL = try url(
@@ -232,7 +233,7 @@ struct IBKRFlexClient {
                     status.errorMessage ?? L10n.text("报表生成失败")
                 )
             }
-            return try parseStatement(statementData)
+            return try parseStatement(statementData, newAccountExclusions: newAccountExclusions)
         }
         throw IBKRFlexError.generationTimedOut
     }
@@ -281,22 +282,31 @@ struct IBKRFlexClient {
         return delegate.envelope
     }
 
-    func parseStatement(_ data: Data) throws -> IBKRFlexSnapshot {
+    /// Only onboarding may register a reported account without a positions
+    /// section. Exclude all existing accounts so missing data cannot clear them.
+    func parseStatement(_ data: Data, newAccountExclusions: Set<String>? = nil) throws -> IBKRFlexSnapshot {
         let delegate = FlexStatementParser()
         let parser = XMLParser(data: data)
         parser.delegate = delegate
         guard parser.parse() else { throw IBKRFlexError.invalidResponse }
+        var positionAccountIDs = delegate.positionAccountIDs.subtracting(
+            delegate.lotAccounts.subtracting(delegate.summaryAccounts))
+        if let newAccountExclusions {
+            positionAccountIDs.formUnion(delegate.statementAccountIDs
+                .subtracting(newAccountExclusions)
+                .subtracting(delegate.positionAccountIDs)
+                .subtracting(delegate.lotAccounts))
+        }
         let snapshot = IBKRFlexSnapshot(
             positions: delegate.positions,
             transactions: delegate.transactions,
             accountCurrencies: delegate.accountCurrencies,
             accountNames: delegate.accountNames,
             reportDate: delegate.reportDate,
-            positionAccountIDs: delegate.positionAccountIDs.subtracting(
-                delegate.lotAccounts.subtracting(delegate.summaryAccounts))
+            positionAccountIDs: positionAccountIDs
         )
         // An explicitly empty OpenPositions section is authoritative. A
-        // statement with no positions section says nothing about holdings.
+        // statement with no positions section cannot replace existing holdings.
         guard !snapshot.syncedPositionAccountIDs.isEmpty else { throw IBKRFlexError.noPositions }
         return snapshot
     }
@@ -348,12 +358,19 @@ private final class FlexStatementParser: NSObject, XMLParserDelegate {
     var positionAccountIDs: Set<String> = []
     var lotAccounts: Set<String> = []
     var summaryAccounts: Set<String> = []
+    var statementAccountIDs: Set<String> = []
     private var currentAccountID = ""
+    private var elementPath: [String] = []
 
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String: String] = [:]) {
+        elementPath.append(elementName.lowercased())
         let attributes = Dictionary(uniqueKeysWithValues: attributeDict.map { ($0.key.lowercased(), $0.value) })
         if elementName.caseInsensitiveCompare("FlexStatement") == .orderedSame {
-            currentAccountID = attributes["accountid"] ?? attributes["acctid"] ?? ""
+            currentAccountID = (attributes["accountid"] ?? attributes["acctid"] ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if elementPath == ["flexqueryresponse", "flexstatements", "flexstatement"], !currentAccountID.isEmpty {
+                statementAccountIDs.insert(currentAccountID)
+            }
             reportDate = attributes["todate"] ?? attributes["fromdate"] ?? reportDate
             return
         }
@@ -504,6 +521,11 @@ private final class FlexStatementParser: NSObject, XMLParserDelegate {
             fxRateToBase: number(attributes["fxratetobase"]),
             realisedProfitLoss: nil
         ))
+    }
+
+    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
+        if elementName.caseInsensitiveCompare("FlexStatement") == .orderedSame { currentAccountID = "" }
+        elementPath.removeLast()
     }
 
     private func normalizedDate(_ value: String?) -> String? {

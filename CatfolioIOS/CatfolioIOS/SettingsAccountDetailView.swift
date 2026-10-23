@@ -56,7 +56,8 @@ struct AccountDetailView: View {
     private func page(titleWidth: CGFloat) -> some View {
         SettingsPage(
             bottomInset: 24,
-            topInset: SettingsTemplate.pageInset
+            topInset: SettingsTemplate.pageInset,
+            pageBackground: account.brandProvider == nil ? SettingsTemplate.pageBackground : .clear
         ) {
             AccountDetailHeader(account: account)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
@@ -153,6 +154,12 @@ struct AccountDetailView: View {
                     showsDeleteConfirmation = true
                 }
                 .disabled(model.isFakeDataMode || model.isPublicInvestorMode)
+            }
+        }
+        .background {
+            if let provider = account.brandProvider {
+                AccountConnectionBackground(theme: provider.flowTheme, isPreparation: true)
+                    .ignoresSafeArea()
             }
         }
         // Observe only the handoff to the compact title, not every scroll pixel.
@@ -370,7 +377,7 @@ struct AccountDetailHeader: View {
                 CatfolioDisplayAmountText(text: DisplayFormat.money(account.marketValueUSD),
                                           size: amountSize, symbolSize: currencySize)
                     .accessibilityIdentifier("account-detail-balance")
-                Text(L10n.text("\(account.positionCount) 个持仓"))
+                Text(account.positionCount == 0 ? L10n.text("暂无持仓") : L10n.text("\(account.positionCount) 个持仓"))
                     .appText(.callout, weight: .medium)
                     .foregroundStyle(SettingsTemplate.subtitleText)
             }

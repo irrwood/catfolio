@@ -3,6 +3,14 @@ import Foundation
 // Account selection actions, ledger edits and broker/CSV imports.
 // Shared observable state remains owned by AppModel.
 extension AppModel {
+    /// Creation belongs to the personal portfolio. Load its accounts before
+    /// a connector chooses a free credential slot; quotes and returns can wait.
+    func prepareForAccountCreation() async {
+        guard isFakeDataMode || isPublicInvestorMode else { return }
+        setPortfolioMode(enabled: false, selection: publicInvestorSelection, refreshMarketData: false)
+        await portfolioSourceTask?.value
+    }
+
     func selectBroker(_ provider: BrokerProvider) {
         storedActiveBroker = provider
         UserDefaults.standard.set(provider.rawValue, forKey: Self.brokerKey)

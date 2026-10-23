@@ -168,6 +168,11 @@ enum SettingsTemplate {
     static let cardBorder = Color(uiColor: uiCardBorder)
     static let cardBorderWidth: CGFloat = 1
 
+    /// Editable fields need an opaque surface and a visible edge on both
+    /// white onboarding pages and grouped settings backgrounds.
+    static let inputBackground = Color(uiColor: .secondarySystemBackground)
+    static let inputBorder = Color(uiColor: .opaqueSeparator)
+
     /// A row's subtitle and an unselected chip: translucent ink, like the
     /// section names, so it takes the tone of the translucent panel under it.
     /// A fixed grey fell to about 2.7:1 on the blue-tinted night panels; white
@@ -189,7 +194,7 @@ enum SettingsTemplate {
     }
     static let sectionHeader = Color(uiColor: uiSectionHeader)
 
-    /// A read-only trailing value: the row's own ink at 40%, not the subtitle
+    /// Trailing row values, including current selections: ink at 40%, not the subtitle
     /// grey. They are close in the light drawing and come apart in the dark,
     /// which is why this follows the label colour rather than freezing
     /// `#999999`.
@@ -499,22 +504,54 @@ struct SettingsSectionHeader: View {
     }
 }
 
-/// One material behind the whole group, with a subtle rule between rows.
+enum SettingsCardStyle {
+    case content
+    case input
+    case accountInput
+}
+
+/// One surface behind the whole group, with a subtle rule between rows.
 /// Clip once so the first and last rows inherit the panel's outer corners.
 struct SettingsCard<Content: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
+    var style: SettingsCardStyle
     @ViewBuilder let content: Content
 
-    init(@ViewBuilder content: () -> Content) {
+    init(style: SettingsCardStyle = .content, @ViewBuilder content: () -> Content) {
+        self.style = style
         self.content = content()
     }
 
+    @ViewBuilder
     var body: some View {
+        switch style {
+        case .content:
+            rows.settingsCardSurface()
+        case .input:
+            let shape = RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius, style: .continuous)
+            rows
+                .background(SettingsTemplate.inputBackground, in: shape)
+                .clipShape(shape)
+                .overlay {
+                    shape.strokeBorder(SettingsTemplate.inputBorder, lineWidth: SettingsTemplate.cardBorderWidth)
+                        .allowsHitTesting(false)
+                }
+        case .accountInput:
+            let shape = RoundedRectangle(cornerRadius: SettingsTemplate.cardRadius, style: .continuous)
+            rows
+                .background(SettingsTemplate.card, in: shape)
+                .clipShape(shape)
+                .shadow(color: colorScheme == .dark ? .clear : CatfolioPalette.accountCredentialShadow,
+                        radius: 18, x: 0, y: 2)
+        }
+    }
+
+    private var rows: some View {
         // The card puts the rule between its rows itself, so no call site has
         // to know whether it is the last row of a group. `_VariadicView` is
         // how SwiftUI exposes a container's children for exactly this; if it
         // ever goes away, the fallback is an explicit `isLast` on every row.
         _VariadicView.Tree(SettingsCardRows()) { content }
-            .settingsCardSurface()
     }
 }
 

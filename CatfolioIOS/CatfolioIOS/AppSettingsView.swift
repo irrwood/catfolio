@@ -46,9 +46,6 @@ struct AppSettingsView: View {
                 }
 
                 SettingsMenuRow(
-                    // The drawing's 语言 row: the region globe, the current
-                    // answer in the primary colour, and the caret that says it
-                    // opens.
                     icon: .asset("SettingsRegion"),
                     title: L10n.text("语言"),
                     value: AppLanguage(rawValue: languageRawValue)?.title ?? AppLanguage.system.title,

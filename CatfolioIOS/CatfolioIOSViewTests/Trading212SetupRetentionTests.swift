@@ -11,7 +11,7 @@ final class Trading212SetupRetentionTests: XCTestCase {
         await fixture.model.refreshPortfolio(refreshMarketData: false)
         let route = AddAccountNavigation()
         let store = fixture.store()
-        let host = UIHostingController(rootView: AddAccountView(setupStore: store, navigation: route)
+        let host = UIHostingController(rootView: NavigationStack { AddAccountView(setupStore: store, navigation: route) }
             .environment(fixture.model).environment(\.scenePhase, .active))
         fixture.window.rootViewController = host
         fixture.window.makeKeyAndVisible()
@@ -38,6 +38,49 @@ final class Trading212SetupRetentionTests: XCTestCase {
         }
     }
 
+    func testAddingAccountFromPublicAndDemoModesLoadsPersonalSlotsBeforeOpeningConnector() async throws {
+        let account = PortfolioAccount(id: "Trading 212|account-1", accountID: "account-1",
+            source: "Trading 212", name: "Existing personal account", baseCurrency: "USD",
+            positionCount: 0, transactionCount: 0, manualTransactionCount: 0,
+            hasCSVImport: false, marketValueUSD: 0)
+        var personal = LocalPortfolioDocument.empty
+        personal.knownAccounts = [account]
+        for selection in ["pelosi", "demo"] {
+            let fixture = try Fixture(selection: selection, personal: personal)
+            defer { fixture.close() }
+            XCTAssertTrue(fixture.model.isPublicInvestorMode || fixture.model.isFakeDataMode)
+            let route = AddAccountNavigation(resumesTrading212: true)
+            let store = fixture.store()
+            let host = UIHostingController(rootView: NavigationStack {
+                AddAccountView(setupStore: store, navigation: route)
+            }.environment(fixture.model).environment(\.scenePhase, .active))
+            fixture.window.rootViewController = host
+            fixture.window.makeKeyAndVisible()
+            try await waitUntil { store.load(for: .create)?.accountSlot == 2 }
+            XCTAssertNil(self.field("trading212.api-secret", in: fixture.window))
+            XCTAssertEqual(route.setup.step, .prepare)
+            route.setup.showCredentials()
+            try await waitUntil { self.field("trading212.api-secret", in: fixture.window) != nil }
+            XCTAssertFalse(fixture.model.isPublicInvestorMode)
+            XCTAssertFalse(fixture.model.isFakeDataMode)
+            XCTAssertEqual(fixture.model.publicInvestorSelection, selection)
+            XCTAssertEqual(fixture.model.accounts.map(\.id), [account.id])
+            try await waitUntil { store.load(for: .create)?.accountSlot == 2 }
+            let navigation = try XCTUnwrap(formNavigation(in: host))
+            try await waitUntil { navigation.transitionCoordinator == nil }
+            navigation.popViewController(animated: true)
+            try await waitUntil { route.setup.step == .prepare && navigation.transitionCoordinator == nil }
+            XCTAssertEqual(route.path, [.trading212])
+            navigation.popViewController(animated: true)
+            try await waitUntil { route.path.isEmpty && navigation.transitionCoordinator == nil }
+            route.select(.trading212)
+            try await waitUntil { navigation.viewControllers.count == 2 && navigation.transitionCoordinator == nil }
+            route.setup.showCredentials()
+            try await waitUntil { self.field("trading212.api-secret", in: fixture.window) != nil }
+            XCTAssertEqual(store.load(for: .create)?.accountSlot, 2)
+        }
+    }
+
     private func formNavigation(in controller: UIViewController) -> UINavigationController? {
         if let navigation = controller as? UINavigationController { return navigation }
         return controller.children.lazy.compactMap { self.formNavigation(in: $0) }.first
@@ -49,8 +92,9 @@ final class Trading212SetupRetentionTests: XCTestCase {
         try fixture.seed(step: .settings)
         await fixture.model.refreshPortfolio(refreshMarketData: false)
         let host = fixture.show(phase: Phase())
-        try await waitUntil { self.presentedController(in: host) != nil }
+        try await waitUntil { fixture.store().load(for: .create)?.step == .prepare }
         try await settle()
+        XCTAssertNil(self.field("trading212.api-secret", in: fixture.window))
         let reads = fixture.reads
         let writes = fixture.writes
         fixture.defaults.set(DisplayCurrency.eur.rawValue, forKey: DisplayCurrency.preferenceKey)
@@ -59,7 +103,7 @@ final class Trading212SetupRetentionTests: XCTestCase {
         XCTAssertEqual(fixture.writes, writes, "An idle tutorial must not keep saving its restored draft")
     }
 
-    func testSwitchingAppsKeepsTheActualAddAccountSheetAndBothInputs() async throws {
+    func testSwitchingAppsKeepsThePushedAccountPageAndBothInputs() async throws {
         let fixture = try Fixture()
         defer { fixture.close() }
         try fixture.seed()
@@ -69,7 +113,8 @@ final class Trading212SetupRetentionTests: XCTestCase {
         try await waitUntil { self.field("trading212.api-secret", in: fixture.window) != nil }
         let key = try XCTUnwrap(field("trading212.api-key", in: fixture.window))
         let secret = try XCTUnwrap(field("trading212.api-secret", in: fixture.window))
-        let sheet = try XCTUnwrap(presentedController(in: host))
+        let navigation = try XCTUnwrap(accountNavigation(in: host))
+        let page = try XCTUnwrap(navigation.topViewController)
         key.text = "edited-key"
         key.sendActions(for: .editingChanged)
         secret.text = "edited-secret"
@@ -78,7 +123,8 @@ final class Trading212SetupRetentionTests: XCTestCase {
         for value in [ScenePhase.inactive, .background, .inactive, .active] {
             phase.value = value
             try await settle()
-            XCTAssertTrue(presentedController(in: host) === sheet, "Switching apps must not dismiss the account sheet")
+            XCTAssertTrue(navigation.topViewController === page, "Switching apps must keep the account page")
+            XCTAssertNil(presentedController(in: host))
             XCTAssertTrue(field("trading212.api-key", in: fixture.window) === key)
             XCTAssertTrue(field("trading212.api-secret", in: fixture.window) === secret)
             XCTAssertEqual(key.text, "edited-key")
@@ -91,7 +137,7 @@ final class Trading212SetupRetentionTests: XCTestCase {
         host.beginAppearanceTransition(true, animated: false)
         host.endAppearanceTransition()
         try await settle()
-        XCTAssertTrue(presentedController(in: host) === sheet)
+        XCTAssertTrue(navigation.topViewController === page)
         XCTAssertEqual(key.text, "edited-key")
         XCTAssertEqual(secret.text, "edited-secret")
         XCTAssertEqual(fixture.store().load(for: .create)?.apiKey, "edited-key")
@@ -128,17 +174,23 @@ final class Trading212SetupRetentionTests: XCTestCase {
         XCTAssertFalse(restoredKey === key)
         XCTAssertEqual(restoredKey.text, "key-before-background")
         XCTAssertEqual(restoredSecret.text, "secret-before-background")
-        XCTAssertTrue(restoredKey.isSecureTextEntry)
+        XCTAssertFalse(restoredKey.isSecureTextEntry, "The API Key is visible, as designed; the Secret stays hidden")
         XCTAssertTrue(restoredSecret.isSecureTextEntry)
         XCTAssertEqual(fixture.store().load(for: .create)?.step, .credentials)
         let restoredHost = try XCTUnwrap(host)
-        let sheet = try XCTUnwrap(presentedController(in: restoredHost))
-        // Inputs mount before the sheet finishes presenting. Dismissing during
-        // that transition does not exercise a user's close of the restored sheet.
-        try await waitUntil { !sheet.isBeingPresented && sheet.transitionCoordinator == nil }
-        sheet.dismiss(animated: false)
-        try await waitUntil { self.presentedController(in: restoredHost) == nil }
-        XCTAssertFalse(fixture.store().shouldResumeCreation, "An explicit close must not reopen the sheet on launch")
+        let navigation = try XCTUnwrap(accountNavigation(in: restoredHost))
+        try await waitUntil { navigation.transitionCoordinator == nil && navigation.viewControllers.count == 4 }
+        XCTAssertNil(presentedController(in: restoredHost))
+        navigation.popViewController(animated: true)
+        try await waitUntil { navigation.transitionCoordinator == nil && navigation.viewControllers.count == 3 }
+        XCTAssertEqual(fixture.store().load(for: .create)?.step, .prepare)
+        navigation.popViewController(animated: true)
+        try await waitUntil { navigation.transitionCoordinator == nil && navigation.viewControllers.count == 2 }
+        XCTAssertFalse(fixture.store().shouldResumeCreation, "Going back to the catalog must stop reopening the connector")
+        navigation.popViewController(animated: true)
+        try await waitUntil { navigation.transitionCoordinator == nil && navigation.viewControllers.count == 1 }
+        XCTAssertFalse(fixture.store().shouldResumeCreation)
+
     }
 
     struct Root: View {
@@ -165,10 +217,15 @@ final class Trading212SetupRetentionTests: XCTestCase {
         var values: [String: String] = [:]
         var reads = 0
         var writes = 0
-        init() throws {
+        init(selection: String? = nil, personal: LocalPortfolioDocument = .empty) throws {
             defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-            defaults.set(false, forKey: PublicInvestorPreferences.enabledKey)
-            model = AppModel(defaults: defaults, personalDocumentLoader: { .empty })
+            defaults.set(selection != nil && selection != "demo", forKey: PublicInvestorPreferences.enabledKey)
+            defaults.set(selection == "demo", forKey: "catfolio.fakeDataMode")
+            if let selection { defaults.set(selection, forKey: PublicInvestorPreferences.selectionKey) }
+            model = AppModel(defaults: defaults, personalDocumentLoader: {
+                try await Task.sleep(for: .milliseconds(150))
+                return personal
+            })
             let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
             previous = scene.windows.first(where: \.isKeyWindow)
             window = UIWindow(windowScene: scene)
@@ -201,13 +258,35 @@ final class Trading212SetupRetentionTests: XCTestCase {
     }
 
     private func field(_ id: String, in view: UIView) -> UITextField? {
-        if let field = view as? UITextField, field.accessibilityIdentifier == id { return field }
-        return view.subviews.lazy.compactMap { self.field(id, in: $0) }.first
+        // Visit each view once. Lazy compactMap.first can evaluate the same
+        // recursive lookup repeatedly across the full TabView hierarchy.
+        var pending = [view]
+        while let next = pending.popLast() {
+            if let field = next as? UITextField, field.accessibilityIdentifier == id { return field }
+            pending.append(contentsOf: next.subviews.reversed())
+        }
+        return nil
+    }
+
+    private func accountNavigation(in controller: UIViewController) -> UINavigationController? {
+        // SecurityDetailNavigationContainer also owns an outer navigation
+        // controller. Return the innermost stack that owns the credential page.
+        for child in controller.children {
+            if let navigation = accountNavigation(in: child) { return navigation }
+        }
+        if let navigation = controller as? UINavigationController,
+           navigation.viewIfLoaded?.window != nil,
+           let page = navigation.topViewController?.viewIfLoaded,
+           field("trading212.api-secret", in: page) != nil { return navigation }
+        return nil
     }
 
     private func presentedController(in controller: UIViewController) -> UIViewController? {
         if let presented = controller.presentedViewController { return presented }
-        return controller.children.lazy.compactMap { self.presentedController(in: $0) }.first
+        for child in controller.children {
+            if let presented = presentedController(in: child) { return presented }
+        }
+        return nil
     }
 
     private func settle() async throws { try await Task.sleep(for: .milliseconds(500)) }

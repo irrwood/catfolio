@@ -3,35 +3,66 @@ import SwiftUI
 /// UI preview only. No StoreKit requests or entitlement changes are made here.
 struct PaywallView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selectedPlan: PaywallPlan = .monthly
     @State private var notice: PaywallPreviewNotice?
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    hero
-                    plans
-                    benefits
+            GeometryReader { geometry in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        hero
+                        benefits.padding(.top, 26)
+                        Spacer(minLength: 28)
+                        plans
+                    }
+                    .frame(maxWidth: 520)
+                    .frame(minHeight: max(0, geometry.size.height - 28), alignment: .top)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 12)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 10)
-                .padding(.bottom, 24)
+                .scrollIndicators(.hidden)
+                .accessibilityIdentifier("paywall-content")
             }
-            .background(SettingsTemplate.pageBackground)
             .safeAreaInset(edge: .bottom, spacing: 0) { purchaseFooter }
+            .background {
+                LinearGradient(stops: [
+                    .init(color: CatfolioPalette.Paywall.top, location: 0),
+                    .init(color: CatfolioPalette.Paywall.middle, location: 0.52),
+                    .init(color: CatfolioPalette.Paywall.glow, location: 0.82),
+                    .init(color: CatfolioPalette.Paywall.bottom, location: 1)
+                ], startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+            }
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
+                    Button(L10n.text("关闭弹窗"), systemImage: "xmark") { dismiss() }
+                        .labelStyle(.iconOnly)
+                        .accessibilityIdentifier("paywall-close")
+                }
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 7) {
+                        Text("CATFOLIO").appCaps(.label).tracking(2)
+                        Text("PRO")
+                            .appText(.micro, weight: .bold)
+                            .padding(.horizontal, 7).padding(.vertical, 4)
+                            .background(.white.opacity(0.18), in: Capsule())
                     }
-                    .accessibilityLabel(L10n.text("关闭"))
-                    .accessibilityIdentifier("paywall-close")
+                    .foregroundStyle(.white)
+                    .accessibilityElement(children: .combine)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.text("恢复购买")) { notice = .restore }
+                    Button(L10n.text("恢复")) { notice = .restore }
                         .appText(.label)
+                        .accessibilityLabel(L10n.text("恢复购买"))
+                        .accessibilityIdentifier("paywall-restore")
                 }
             }
             .alert(item: $notice) { item in
@@ -42,127 +73,165 @@ struct PaywallView: View {
                       dismissButton: .default(Text(L10n.text("好"))))
             }
         }
-        .tint(CatfolioTheme.accent)
+        .tint(.white)
+        .preferredColorScheme(.dark)
     }
 
     private var hero: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "chart.pie.fill")
-                .font(.system(size: 34, weight: .medium))
-                .foregroundStyle(CatfolioTheme.accent)
-                .frame(width: 68, height: 68)
-                .background(SettingsTemplate.card, in: RoundedRectangle(cornerRadius: 26))
-                .accessibilityHidden(true)
-            Text("CATFOLIO PRO")
-                .font(.caption.weight(.bold))
-                .tracking(3)
-                .foregroundStyle(SettingsTemplate.secondaryText)
-            Text(L10n.text("看清你的每一笔投资"))
-                .font(.largeTitle.weight(.bold))
-                .multilineTextAlignment(.center)
+        VStack(alignment: .leading, spacing: 12) {
+            Text(L10n.text("你的投资，\n一目了然。"))
+                .appText(.display, weight: .bold)
+                .foregroundStyle(.white)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
             Text(L10n.text("账户、收益与研究，在一处看得更完整。"))
-                .appText(.subheading)
-                .foregroundStyle(SettingsTemplate.secondaryText)
-                .multilineTextAlignment(.center)
+                .appText(.footnote)
+                .foregroundStyle(.white.opacity(0.86))
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var benefits: some View {
-        SettingsCard {
-            benefit("square.stack.3d.up", L10n.text("账户全景"), L10n.text("汇总多个账户，统一查看资产与现金。"))
+        VStack(alignment: .leading, spacing: 16) {
+            benefit("square.stack.3d.up.fill", L10n.text("账户全景"), L10n.text("汇总多个账户，统一查看资产与现金。"))
             benefit("chart.bar.xaxis", L10n.text("深入理解收益"), L10n.text("追踪收益来源、持仓贡献与历史表现。"))
             benefit("sparkles", L10n.text("AI 辅助研究"), L10n.text("结合持仓与公司信息，梳理投资问题。"))
         }
     }
 
     private func benefit(_ icon: String, _ title: String, _ detail: String) -> some View {
-        SettingsRowContainer {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: icon)
-                    .font(.title3)
-                    .frame(width: 26)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title).appText(.subheading, weight: .semibold)
-                    Text(detail).appText(.label)
-                        .foregroundStyle(SettingsTemplate.secondaryText)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .medium))
+                .frame(width: 38, height: 38)
+                .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 12))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).appText(.callout, weight: .semibold)
+                Text(detail).appText(.caption)
+                    .foregroundStyle(.white.opacity(0.82))
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            Spacer(minLength: 0)
         }
+        .foregroundStyle(.white)
+        .accessibilityElement(children: .combine)
     }
 
     private var plans: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(L10n.text("选择你的方案")).appText(.subheading, weight: .semibold)
+                Text(L10n.text("选择你的方案"))
+                    .appText(.heading, weight: .bold)
+                    .foregroundStyle(.white)
                 Spacer()
-                Text("USD").appText(.label).foregroundStyle(SettingsTemplate.secondaryText)
+                Text("USD").appText(.micro, weight: .semibold)
+                    .foregroundStyle(CatfolioPalette.Paywall.ink)
+                    .padding(.horizontal, 7).padding(.vertical, 3)
+                    .background(.white.opacity(0.85), in: Capsule())
             }
-            ForEach(PaywallPlan.allCases) { plan in
-                Button { selectedPlan = plan } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: selectedPlan == plan ? "checkmark.circle.fill" : "circle")
-                            .font(.title2)
-                            .foregroundStyle(selectedPlan == plan ? CatfolioTheme.accent : SettingsTemplate.secondaryText)
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(plan.title).appText(.subheading, weight: .semibold)
-                            Text(plan == .monthly ? L10n.text("按月续订") : L10n.text("一次付费，无需续订"))
-                                .appText(.label).foregroundStyle(SettingsTemplate.secondaryText)
-                        }
-                        Spacer(minLength: 8)
-                        VStack(alignment: .trailing, spacing: 5) {
-                            Text(plan == .monthly ? "$7.99" : "$129")
-                                .font(.title2.weight(.bold)).monospacedDigit()
-                            Text(plan == .monthly ? L10n.text("每月") : L10n.text("一次购买"))
-                                .appText(.label).foregroundStyle(SettingsTemplate.secondaryText)
-                        }
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(spacing: 12))
+                : AnyLayout(HStackLayout(alignment: .top, spacing: 12))
+            layout {
+                ForEach(PaywallPlan.allCases) { plan in
+                    PaywallPlanCard(plan: plan, isSelected: selectedPlan == plan) {
+                        selectedPlan = plan
                     }
-                    .padding(18)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(SettingsTemplate.card, in: RoundedRectangle(cornerRadius: 18))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 18)
-                            .strokeBorder(selectedPlan == plan ? CatfolioTheme.accent : SettingsTemplate.separator,
-                                          lineWidth: selectedPlan == plan ? 2 : 1)
-                    }
-                    .contentShape(RoundedRectangle(cornerRadius: 18))
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(selectedPlan == plan ? .isSelected : [])
-                .accessibilityIdentifier("paywall-plan-\(plan.rawValue)")
             }
-            Text(L10n.text("行情与 AI 仍使用你配置的服务商。"))
-                .appText(.label).foregroundStyle(SettingsTemplate.secondaryText)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: selectedPlan)
+            Text(selectedPlan == .monthly
+                 ? L10n.text("每月 $7.99，自动续订，可在 App Store 管理或取消。")
+                 : L10n.text("一次支付 $129，终身使用，无需续订。"))
+                .appText(.caption)
+                .foregroundStyle(CatfolioPalette.Paywall.ink)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: 32, alignment: .topLeading)
+                .accessibilityIdentifier("paywall-billing-summary")
         }
     }
 
     private var purchaseFooter: some View {
         VStack(spacing: 10) {
-            Text(selectedPlan == .monthly
-                 ? L10n.text("每月 $7.99，自动续订，可在 App Store 管理或取消。")
-                 : L10n.text("一次支付 $129，终身使用，无需续订。"))
-                .appText(.label).foregroundStyle(SettingsTemplate.secondaryText)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-            GlassPrimaryButton(title: selectedPlan == .monthly ? L10n.text("订阅 · $7.99/月") : L10n.text("解锁终身版 · $129"), systemImage: "arrow.right") {
-                notice = .purchase
+            Button { notice = .purchase } label: {
+                Text(L10n.text("继续"))
+                    .appText(.subheading, weight: .semibold)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 54)
+                    .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 8 : 0)
+                    .background(CatfolioPalette.Paywall.action, in: RoundedRectangle(cornerRadius: 20))
+                    .contentShape(RoundedRectangle(cornerRadius: 20))
             }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("paywall-continue")
-            Text(L10n.text("界面预览，不会扣费。套餐与权益仅作展示。"))
-                .appText(.label)
-                .foregroundStyle(SettingsTemplate.secondaryText)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+            Text(L10n.text("预览模式 · 不会扣费"))
+                .appText(.micro)
+                .foregroundStyle(CatfolioPalette.Paywall.secondaryInk)
         }
+        .frame(maxWidth: 520)
         .padding(.horizontal, 20)
         .padding(.top, 12)
         .padding(.bottom, 12)
-        .background(SettingsTemplate.pageBackground)
+        .frame(maxWidth: .infinity)
+        .background {
+            LinearGradient(colors: [CatfolioPalette.Paywall.bottom.opacity(0), CatfolioPalette.Paywall.bottom],
+                           startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea(edges: .bottom)
+        }
+    }
+}
+
+struct PaywallPlanCard: View {
+    let plan: PaywallPlan
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 6) {
+                    Text(plan == .monthly ? L10n.text("按月") : L10n.text("终身"))
+                        .appText(.subheading, weight: .semibold)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                    Spacer(minLength: 0)
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 23, weight: .regular))
+                        .foregroundStyle(isSelected ? CatfolioPalette.Paywall.action : CatfolioPalette.Paywall.secondaryInk.opacity(0.3))
+                        .accessibilityHidden(true)
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text(plan == .monthly ? "$7.99" : "$129")
+                        .appNumber(.display, weight: .semibold, monospaced: false)
+                        .lineLimit(1).minimumScaleFactor(0.75)
+                    if plan == .monthly {
+                        Text(L10n.text("/月")).appText(.caption)
+                            .foregroundStyle(CatfolioPalette.Paywall.secondaryInk)
+                    }
+                }
+                Text(plan == .monthly ? L10n.text("按月续订") : L10n.text("一次付费，无需续订"))
+                    .appText(.caption)
+                    .foregroundStyle(CatfolioPalette.Paywall.secondaryInk)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(minHeight: 32, alignment: .topLeading)
+            }
+            .foregroundStyle(CatfolioPalette.Paywall.ink)
+            .padding(16)
+            .frame(maxWidth: .infinity, minHeight: 148, alignment: .topLeading)
+            .background(.white, in: RoundedRectangle(cornerRadius: 24))
+            .overlay {
+                RoundedRectangle(cornerRadius: 24)
+                    .strokeBorder(isSelected ? CatfolioPalette.Paywall.action : .white.opacity(0.6),
+                                  lineWidth: isSelected ? 2.5 : 1)
+            }
+            .shadow(color: CatfolioPalette.Paywall.ink.opacity(isSelected ? 0.16 : 0.06), radius: 16, y: 7)
+            .contentShape(RoundedRectangle(cornerRadius: 24))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(plan.title + ", " + plan.priceDescription)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityIdentifier("paywall-plan-\(plan.rawValue)")
     }
 }
 
@@ -170,7 +239,6 @@ private enum PaywallPreviewNotice: String, Identifiable {
     case purchase, restore
     var id: String { rawValue }
 }
-
 
 enum PaywallPlan: String, CaseIterable, Identifiable {
     case monthly, lifetime
