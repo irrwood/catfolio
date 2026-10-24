@@ -159,19 +159,22 @@ final class HoldingRowLayoutTests: XCTestCase {
             etfWeightPercent: 5, sector: nil, allocatedCostUSD: 16_720.01)
         let item = PortfolioHoldingListItem.exposure(exposure, direct: nil, portfolioTotal: 100_000,
             performance: .init(amount: 3_504.15, percent: 21))
-        for size: DynamicTypeSize in [.large, .accessibility3] {
-            let renderer = ImageRenderer(content: HoldingRow(item: item, performancePeriod: .holdingPeriod)
-                .frame(width: 328).background(.white)
-                .environment(\.dynamicTypeSize, size).environment(\.colorScheme, .light))
-            renderer.scale = 3
-            let image = try XCTUnwrap(renderer.uiImage)
-            if size == .large { XCTAssertEqual(image.size.height, 64, accuracy: 1) }
-            else { XCTAssertGreaterThan(image.size.height, 64) }
-            let attachment = XCTAttachment(image: image)
-            attachment.name = "holding-row-lookthrough-\(size)"
-            attachment.lifetime = .keepAlways
-            add(attachment)
-            try image.pngData()?.write(to: URL(fileURLWithPath: "/tmp/catfolio-holding-row-lookthrough-\(size).png"))
+        for sidebar in [false, true] {
+            for size: DynamicTypeSize in [.large, .accessibility3] {
+                let renderer = ImageRenderer(content: HoldingRow(item: item, performancePeriod: .holdingPeriod)
+                    .frame(width: 328).background(.white)
+                    .environment(\.isSidebarHoldingRow, sidebar)
+                    .environment(\.dynamicTypeSize, size).environment(\.colorScheme, .light))
+                renderer.scale = 3
+                let image = try XCTUnwrap(renderer.uiImage)
+                if size == .large { XCTAssertEqual(image.size.height, 64, accuracy: 1) }
+                else { XCTAssertGreaterThan(image.size.height, 64) }
+                let attachment = XCTAttachment(image: image)
+                attachment.name = "holding-row-lookthrough-\(sidebar ? "sidebar" : "phone")-\(size)"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+                try image.pngData()?.write(to: URL(fileURLWithPath: "/tmp/catfolio-holding-row-lookthrough-\(sidebar ? "sidebar" : "phone")-\(size).png"))
+            }
         }
     }
 

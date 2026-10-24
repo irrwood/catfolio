@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ReturnsView: View {
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
     @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
@@ -20,7 +21,7 @@ struct ReturnsView: View {
     #endif
 
     var body: some View {
-        SettingsPage(pageBackground: .clear) {
+        SettingsPage(navigationRole: .root, pageBackground: .clear) {
             // The heatmap lives on the tab itself, not behind a row: it reads
             // the same holdings and daily changes the home list already has.
             // It starts lying on an isometric plane; a pull stands it up.
@@ -40,10 +41,12 @@ struct ReturnsView: View {
                 )
             )
             .accessibilityIdentifier("performance.heatmap")
-            RootTabTitle(title: L10n.text("Performance"))
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                .accessibilityIdentifier("performance.title")
-                .padding(.horizontal, 4)
+            if !isWorkspaceDetail {
+                RootTabTitle(title: L10n.text("Performance"))
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .accessibilityIdentifier("performance.title")
+                    .padding(.horizontal, 4)
+            }
             VStack(spacing: SettingsTemplate.tileSpacing) {
                 ReturnsSourceCards(store: sourcePreviews)
                 HStack(spacing: SettingsTemplate.tileSpacing) {
@@ -111,8 +114,8 @@ struct ReturnsView: View {
         .onDisappear { heroScroll.isScrolling = false }
         .accessibilityIdentifier("returns-root")
         .softTopScrollEdge()
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(isWorkspaceDetail ? RootDestination.returns.title : "")
+        .navigationBarTitleDisplayMode(isWorkspaceDetail ? .large : .inline)
         .toolbarVisibility(.visible, for: .navigationBar)
         .toolbar {
             // The system's own glass button in the bar's top-right corner.
@@ -123,10 +126,8 @@ struct ReturnsView: View {
                     .accessibilityIdentifier("performance.heatmap.toggle")
             }
         }
-        .sheet(item: $selectedHolding) { holding in
-            HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
-                .environment(model)
-                .securityDetailSheet()
+        .securityDetail(item: $selectedHolding) { holding, close in
+            HoldingDetailView(holding: holding, onClose: close).environment(model)
         }
         .securityDetailOpenFeedback(trigger: selectedHolding?.ticker, enabled: hapticsEnabled)
         #if DEBUG
@@ -200,6 +201,7 @@ enum ReturnsChartDestination: String, CaseIterable, Identifiable {
 }
 
 struct ReturnsChartPage: View {
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
     @Environment(AppModel.self) private var model
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     let chart: ReturnsChartDestination
@@ -249,15 +251,13 @@ struct ReturnsChartPage: View {
         }
         .background(sourceTheme?.footer ?? Color(uiColor: .systemBackground))
         .softTopScrollEdge()
-        .toolbarColorScheme(sourceTheme != nil ? .dark : nil, for: .navigationBar)
-        .tint(sourceTheme != nil ? .white : .accentColor)
+        .toolbarColorScheme(sourceTheme != nil || usesPhoneComparisonBar ? .dark : nil, for: .navigationBar)
+        .tint(sourceTheme != nil || usesPhoneComparisonBar ? .white : .accentColor)
         .navigationTitle(chart.title)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarVisibility(chart == .comparison ? .hidden : .visible, for: .navigationBar)
-        .sheet(item: $selectedHolding) { holding in
-            HoldingDetailView(holding: holding, onClose: { selectedHolding = nil })
-                .environment(model)
-                .securityDetailSheet()
+        .toolbarVisibility(chart == .comparison && !isWorkspaceDetail && !ReturnsComparisonNavigation.usesSystemBarOnPhone ? .hidden : .visible, for: .navigationBar)
+        .securityDetail(item: $selectedHolding) { holding, close in
+            HoldingDetailView(holding: holding, onClose: close).environment(model)
         }
         .securityDetailOpenFeedback(trigger: selectedHolding?.ticker, enabled: hapticsEnabled)
         .task {
@@ -274,6 +274,10 @@ struct ReturnsChartPage: View {
                 await model.refreshReturnsAnalytics()
             }
         }
+    }
+
+    private var usesPhoneComparisonBar: Bool {
+        chart == .comparison && ReturnsComparisonNavigation.usesSystemBarOnPhone
     }
 
     private var sourceTheme: ReturnsSourceChartTheme? {

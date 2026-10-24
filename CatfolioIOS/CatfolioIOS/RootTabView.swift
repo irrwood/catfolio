@@ -9,10 +9,7 @@ struct RootTabView: View {
     }
 
     var body: some View {
-        SecurityDetailNavigationContainer {
-            RootTabs(trading212SetupStore: trading212SetupStore)
-        }
-        .ignoresSafeArea()
+        RootTabs(trading212SetupStore: trading212SetupStore)
     }
 }
 
@@ -57,7 +54,7 @@ private struct RootTabs: View {
     }
 
     var body: some View {
-        rootTabs
+        rootInterface
             // The tab bar's haptic is played from its own touches (see
             // `RootTabBarHaptics`), at the finger rather than after the
             // selection has gone through SwiftUI.
@@ -98,13 +95,29 @@ private struct RootTabs: View {
             #endif
     }
 
-    /// The system tab bar, icons only. The assistant is a tab too: it is built once and kept, rather than pushed and rebuilt —
+    @ViewBuilder private var rootInterface: some View {
+        if MacPlatform.usesWorkspace {
+            NativeWorkspace(tab: $selection, presentationPreferencesID: presentationPreferencesID,
+                            trading212SetupStore: trading212SetupStore)
+        } else {
+            AdaptivePhoneWorkspace {
+                SecurityDetailNavigationContainer { rootTabs }
+                    .ignoresSafeArea()
+            } workspace: {
+                NativeWorkspace(tab: $selection, presentationPreferencesID: presentationPreferencesID,
+                                trading212SetupStore: trading212SetupStore)
+            }
+            .ignoresSafeArea()
+        }
+    }
+
+    /// The compact phone's system tab bar. The assistant is a tab too: it is built once and kept, rather than pushed and rebuilt —
     /// long conversation included — every time it opens.
     private var rootTabs: some View {
         TabView(selection: $selection) {
             Tab(value: .portfolio) {
                 // On the Mac this is the Overview: returns are on it too.
-                RootPageNavigation(pageWidth: MacPageWidth.overview) {
+                RootPageNavigation {
                     PortfolioView().ownsTabBar()
                 }
                 .id(presentationPreferencesID)
@@ -162,11 +175,9 @@ private struct RootTabs: View {
         // sidebar takes the accent there, and each page sets its own ink back.
         .tint(MacPlatform.isMac ? CatfolioTheme.accent : .primary)
         .modifier(KeepsTabBarFullWidth())
-        .modifier(MacSidebarTabStyle())
     }
 
-    /// An icon and no title: the label's text stays for VoiceOver only. The
-    /// Mac's sidebar shows the title beside the icon.
+    /// Compact tabs keep their existing icons and VoiceOver labels.
     @ViewBuilder
     private func tabIcon(for destination: Destination, artwork: RootTabArtwork, label: String) -> some View {
         let item = Label {
@@ -187,21 +198,13 @@ private struct RootTabs: View {
 /// on the same page. The root's lifecycle anchor owns tab-bar visibility.
 struct RootPageNavigation<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
-    /// The widest the page grows on the Mac, beside its subpage column.
-    var pageWidth = MacPageWidth.standard
     @ViewBuilder let content: Content
 
-    var body: some View {
-        if MacPlatform.isMac {
-            MacSplitPage(pageWidth: pageWidth) { content }
-                .background { PortfolioHomePageBackdrop(colorScheme: colorScheme, isPaused: true) }
-        } else {
-            stack
-        }
-    }
+    var body: some View { stack }
 
     private var stack: some View {
         NavigationStack { content }
+            .environment(\.pageNavigationPresentation, .tabs)
             // Stay behind the entire stack while either page moves during an
             // interactive return, including a gesture that is cancelled.
             .background { PortfolioHomePageBackdrop(colorScheme: colorScheme, isPaused: true) }
@@ -234,6 +237,13 @@ private struct RootNavigationVisibilityAnchor: UIViewControllerRepresentable {
         override func viewIsAppearing(_ animated: Bool) {
             super.viewIsAppearing(animated)
             prepareBackdrop()
+        }
+
+        override func viewDidLayoutSubviews() {
+            super.viewDidLayoutSubviews()
+            guard let parent, let navigation = findNavigation(in: parent),
+                  let tabs = navigation.tabBarController else { return }
+            RootTabBar.layoutDidChange(in: tabs)
         }
 
         func prepareBackdrop() {
@@ -364,6 +374,10 @@ enum RootTabBar {
     static func setTucked(_ tucked: Bool, animated: Bool = true) {
         guard !MacPlatform.isMac else { return }
         if let tabs, SecurityDetailNavigationController.preservesChrome(of: tabs) { return }
+        if let tabs, !canTuck(in: tabs) {
+            layoutDidChange(in: tabs)
+            return
+        }
         let changed = tucked != isTucked
         isTucked = tucked
         guard let tabs else { return }
@@ -380,9 +394,24 @@ enum RootTabBar {
     }
 
     private static func tuckedTransform(for bar: UITabBar, in tabs: UITabBarController) -> CGAffineTransform {
+        guard canTuck(in: tabs) else { return .identity }
         // From where the bar sits to just past the bottom of the screen.
         let top = bar.convert(CGPoint(x: 0, y: bar.bounds.minY), to: tabs.view).y - bar.transform.ty
         return CGAffineTransform(translationX: 0, y: max(0, tabs.view.bounds.maxY - top) + 8)
+    }
+
+    private static func canTuck(in owner: UITabBarController) -> Bool {
+        if #available(iOS 27.0, *), owner.sidebar.isAvailable { return false }
+        let bar = owner.tabBar
+        let restingFrame = bar.convert(bar.bounds, to: owner.view)
+            .offsetBy(dx: -bar.transform.tx, dy: -bar.transform.ty)
+        return AdaptivePhoneTabNavigation.isBottomBar(restingFrame, in: owner.view.bounds)
+    }
+
+    fileprivate static func layoutDidChange(in owner: UITabBarController) {
+        guard !canTuck(in: owner) else { return }
+        owner.tabBar.transform = .identity
+        if tabs === owner { isTucked = false }
     }
 
     fileprivate static func navigationDidAppear(_ navigation: UINavigationController) {
@@ -459,21 +488,9 @@ enum RootTabBar {
 /// Sits on a tab's page and tells `RootTabBar` which page is showing.
 private struct RootTabBarAnchor: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> Anchor { Anchor() }
-    func updateUIViewController(_ controller: Anchor, context: Context) {
-        controller.splitWidths = context.environment.macSplitWidths
-        controller.sizeSplitColumns()
-    }
+    func updateUIViewController(_ controller: Anchor, context: Context) {}
 
     final class Anchor: UIViewController {
-        var splitWidths: MacSplitWidths?
-
-        /// Hands the Mac split page its split view, to keep its columns.
-        func sizeSplitColumns() {
-            guard let splitWidths, let split = parent?.splitViewController else { return }
-            splitWidths.split = split
-            splitWidths.apply()
-        }
-
         override func loadView() {
             let view = UIView(frame: .zero)
             view.isUserInteractionEnabled = false
@@ -488,7 +505,6 @@ private struct RootTabBarAnchor: UIViewControllerRepresentable {
 
         override func viewWillAppear(_ animated: Bool) {
             super.viewWillAppear(animated)
-            sizeSplitColumns()
             guard let page = parent else { return }
             RootTabBar.pageWillAppear(page, animated: animated)
         }

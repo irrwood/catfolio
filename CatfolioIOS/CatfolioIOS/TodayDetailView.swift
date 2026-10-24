@@ -5,6 +5,8 @@ import SwiftUI
 /// All attribution is arithmetic on the page's holdings and daily quotes.
 /// The top brief narrates those computed facts and can expand with sourced news.
 struct TodayDetailView: View {
+    enum Presentation { case page, home }
+    let presentation: Presentation
     @Environment(\.locale) private var appLocale
     @Environment(\.dynamicTypeSize) private var typeSize
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
@@ -31,7 +33,9 @@ struct TodayDetailView: View {
     private let sectorTotals: (rows: [SectorBreakdown], lookThroughUsed: Bool, unclassifiedWeight: Double)
 
     init(holdings: [Holding], dailyChanges: [String: Double], benchmarkChange: Double?,
-         sessionDate: String? = nil, isLoading: Bool = false, briefStore: TodayBriefStore = .shared) {
+         sessionDate: String? = nil, isLoading: Bool = false, briefStore: TodayBriefStore = .shared,
+         presentation: Presentation = .page) {
+        self.presentation = presentation
         self.holdings = holdings
         self.dailyChanges = dailyChanges
         self.benchmarkChange = benchmarkChange
@@ -211,6 +215,23 @@ struct TodayDetailView: View {
     }
 
     var body: some View {
+        Group {
+            if presentation == .home { homeCards }
+            else { detailPage }
+        }
+        .navigationDestination(isPresented: $showsSectorMembers) {
+            if let selectedSector {
+                SectorMembersView(breakdown: selectedSector)
+            }
+        }
+        // The sheet inherits the model from the page, as the heatmap's does.
+        .securityDetail(item: $selectedHolding) { holding, close in
+            HoldingDetailView(holding: holding, onClose: close)
+        }
+        .securityDetailOpenFeedback(trigger: selectedHolding?.ticker, enabled: hapticsEnabled)
+    }
+
+    private var detailPage: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 if !contributions.isEmpty, !holdings.contains(where: { $0.publicDisclosure != nil }) {
@@ -248,19 +269,116 @@ struct TodayDetailView: View {
         // The standard cell's ground, so the cards read as they do in Settings.
         .background(SettingsTemplate.pageBackground)
         .accessibilityIdentifier("today-detail-scroll")
-        .navigationDestination(isPresented: $showsSectorMembers) {
-            if let selectedSector {
-                SectorMembersView(breakdown: selectedSector)
-            }
-        }
-        // The sheet inherits the model from the page, as the heatmap's does.
-        .securityDetail(item: $selectedHolding) { holding, close in
-            HoldingDetailView(holding: holding, onClose: close)
-        }
-        .securityDetailOpenFeedback(trigger: selectedHolding?.ticker, enabled: hapticsEnabled)
         .softTopScrollEdge()
         .navigationTitle(L10n.text("今日"))
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// The workspace home owns scrolling; each attribution region retains
+    /// its own surface, with no embedded page or second navigation bar.
+    private var homeCards: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            MacDashboardRow {
+                VStack(alignment: .leading, spacing: 10) {
+                    summary.accessibilityIdentifier("home.today.summary")
+                    if !percentageGainers.isEmpty || !percentageLosers.isEmpty {
+                        homeMoversRanking
+                    }
+                }
+                .frame(maxHeight: .infinity, alignment: .top)
+                if !sectorRows.isEmpty {
+                    VStack(alignment: .leading, spacing: 0) {
+                        homeCardTitle(L10n.text("行业贡献"))
+                        sectorSection
+                            .padding(.horizontal, 8)
+                    }
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .settingsCardSurface()
+                    .accessibilityIdentifier("home.today.sectors")
+                }
+            }
+            if !contributions.isEmpty, !holdings.contains(where: { $0.publicDisclosure != nil }) {
+                TodayBriefView(context: briefContext, store: briefStore)
+                    .padding(20)
+                    .settingsCardSurface()
+            }
+            if contributions.isEmpty {
+                if isLoading { ProgressView().frame(maxWidth: .infinity) }
+                else {
+                    ContentUnavailableView(L10n.text("暂无今日行情"), systemImage: "chart.bar.xaxis",
+                                           description: Text(L10n.text("持仓的当日涨跌还没有读取到。")))
+                }
+            }
+            Text(appDisclaimer)
+                .appText(.caption)
+                .foregroundStyle(SettingsTemplate.secondaryText)
+        }
+    }
+
+
+    // These titles live inside the cards, so they own one inset rather than
+    // inheriting the Settings section header's outside-the-card spacing.
+    private func homeCardTitle(_ title: String) -> some View {
+        Text(title)
+            .font(Typography.text(size: 22, weight: .semibold))
+            .foregroundStyle(CatfolioTheme.primaryText)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, SettingsTemplate.rowHorizontalPadding)
+            .padding(.top, 20)
+            .padding(.bottom, 8)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Keep both original top-five selections in one compact list beneath
+    /// the daily summary, alongside the taller industry breakdown.
+    private var homeMoversRanking: some View {
+        let rows = percentageGainers + percentageLosers
+        return VStack(alignment: .leading, spacing: 0) {
+            homeCardTitle(L10n.text("持仓涨跌榜"))
+            ForEach(Array(rows.enumerated()), id: \.element.id) { index, contribution in
+                if index > 0 {
+                    SettingsTemplate.separator.frame(height: SettingsTemplate.separatorHeight)
+                        .padding(.horizontal, SettingsTemplate.rowHorizontalPadding)
+                }
+                if typeSize.isAccessibilitySize {
+                    contributionRow(contribution)
+                } else {
+                    compactMoverRow(contribution)
+                }
+            }
+        }
+        .settingsCardSurface()
+        .accessibilityIdentifier("home.today.movers")
+    }
+
+    private func compactMoverRow(_ contribution: Contribution) -> some View {
+        Button { selectedHolding = contribution.holding } label: {
+            HStack(spacing: 10) {
+                AssetLogo(ticker: contribution.holding.ticker,
+                          logoSymbol: contribution.holding.logoSymbol, size: 28)
+                Text(contribution.holding.shortName)
+                    .appText(.callout, weight: .medium)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                FinancialText(DisplayFormat.percent(contribution.changePercent, signed: true))
+                    .appNumber(.callout, weight: .semibold)
+                    .foregroundStyle(contribution.changePercent >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger)
+                    .fixedSize()
+                    .frame(minWidth: 62, alignment: .trailing)
+                FinancialText(DisplayFormat.money(contribution.amount, signed: true, fractionDigits: 2), isDirectional: true)
+                    .appNumber(.caption)
+                    .foregroundStyle(SettingsTemplate.secondaryText)
+                    .fixedSize()
+                    .frame(minWidth: 80, alignment: .trailing)
+            }
+            .padding(.horizontal, SettingsTemplate.rowHorizontalPadding)
+            .padding(.vertical, 8)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SettingsRowButtonStyle())
+        .accessibilityIdentifier("today.holding.\(contribution.holding.ticker)")
     }
 
     private var summary: some View {
@@ -310,7 +428,7 @@ struct TodayDetailView: View {
                     .padding(.vertical, 14)
             }
 
-            if !sectorRows.isEmpty {
+            if presentation == .page, !sectorRows.isEmpty {
                 sectorSection
             }
         }

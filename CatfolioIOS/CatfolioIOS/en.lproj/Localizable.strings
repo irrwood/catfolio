@@ -4593,3 +4593,8 @@
 "today.sector.utilities" = "Utilities";
 "today.sector.communication" = "Telecom";
 "today.sector.unclassified" = "Other";
+
+"持仓涨跌榜" = "Top holding movers";
+"行业贡献" = "Sector contribution";
+"股票" = "Stock";
+"股票代码" = "Ticker symbol";

@@ -169,7 +169,7 @@ struct TodayContributionCard: View {
                         onTitleBottomPositionChange?(newValue)
                     }
                     .accessibilityAddTraits(onOpenDetail == nil ? [] : .isButton)
-                    .accessibilityLabel(L10n.text("今日盈亏详情"))
+                    .accessibilityLabel(L10n.text(onOpenDetail == nil ? "今日变化" : "今日盈亏详情"))
 
                     Group {
                         if contributions.isEmpty {
@@ -216,11 +216,12 @@ struct TodayContributionCard: View {
                 // Triangles lead their figures, flush at the front and in the
                 // move's own green or red.
                 .environment(\.financialSignStyle, .leadingColored)
-                // The title, the amount and the line under it all open the
-                // day's detail, up to the direction picker.
+                // Phone opens the day's detail here; the workspace already
+                // shows that content on its home page.
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
-                .onTapGesture { onOpenDetail?() }
+                .gesture(TapGesture().onEnded { onOpenDetail?() },
+                         including: onOpenDetail == nil ? .none : .all)
 
                 directionPicker
             }

@@ -64,8 +64,7 @@ struct StockChartsRotationView: View {
         .background(Color(uiColor: .systemBackground)).foregroundStyle(.primary).tint(.primary)
         .navigationTitle(L10n.text("市场轮动 · RRG"))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color(uiColor: .systemBackground), for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .adaptiveNavigationBackground(Color(uiColor: .systemBackground))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {

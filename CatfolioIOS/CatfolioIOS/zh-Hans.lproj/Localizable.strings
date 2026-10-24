@@ -4594,3 +4594,8 @@
 "today.sector.utilities" = "公用";
 "today.sector.communication" = "通信";
 "today.sector.unclassified" = "其他";
+
+"持仓涨跌榜" = "持仓涨跌榜";
+"行业贡献" = "行业贡献";
+"股票" = "股票";
+"股票代码" = "股票代码";

@@ -626,6 +626,7 @@ struct HomeSkeletonBlock: View {
 }
 
 struct PortfolioLoadingView: View {
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
     @Environment(\.locale) private var appLocale
     @Environment(\.colorScheme) private var colorScheme
     var isAnimating = true
@@ -653,6 +654,7 @@ struct PortfolioLoadingView: View {
             }
             .frame(height: 326, alignment: .top)
 
+            if !isWorkspaceDetail {
             VStack(spacing: 18) {
                 HStack {
                     HomeSkeletonBlock(width: 118, height: 22, color: color)
@@ -690,6 +692,7 @@ struct PortfolioLoadingView: View {
             .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
             .padding(.vertical, 24)
             .frame(maxWidth: .infinity, minHeight: 240, alignment: .top)
+            }
             }
             }
             .zIndex(1)

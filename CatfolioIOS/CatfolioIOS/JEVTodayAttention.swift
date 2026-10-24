@@ -1470,6 +1470,7 @@ enum JEVLabels {
 // MARK: - The page
 
 struct JEVTodayAttentionView: View {
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
     var titleDisplayMode: NavigationBarItem.TitleDisplayMode = .large
     @Environment(AppModel.self) private var model
     @State private var runner = JEVRunner()
@@ -1498,7 +1499,7 @@ struct JEVTodayAttentionView: View {
             ])
         }
         .navigationTitle(L10n.text("JEV 今日关注"))
-        .navigationBarTitleDisplayMode(titleDisplayMode)
+        .navigationBarTitleDisplayMode(isWorkspaceDetail ? .inline : titleDisplayMode)
         .toolbarVisibility(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

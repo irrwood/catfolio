@@ -23,7 +23,7 @@ struct OfficialBrokerTutorialPage: View {
             }
             .navigationTitle(L10n.text("教程"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.visible, for: .navigationBar)
+            .adaptiveNavigationBackground()
             .tint(CatfolioTheme.primaryText)
     }
 }

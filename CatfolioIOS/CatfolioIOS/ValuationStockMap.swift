@@ -137,14 +137,13 @@ struct ValuationStockMap: View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .center) {
                 Menu {
-                    ForEach(matrix.rows) { item in
-                        Button {
-                            selectedTicker = item.ticker
-                        } label: {
-                            Label(item.ticker, systemImage: item.ticker == selected?.ticker ? "checkmark" : "circle")
+                    Picker(L10n.text("股票"), selection: Binding(get: { selected?.ticker }, set: { selectedTicker = $0 })) {
+                        ForEach(matrix.rows) { item in
+                            Text(item.ticker).tag(Optional(item.ticker))
+                                .accessibilityLabel("\(item.ticker), P/E \(item.pe.formatted(.number.precision(.fractionLength(1)))), EPS Growth \(percent(item.epsGrowthPercent)), ROIC \(percent(item.roicPercent))")
                         }
-                        .accessibilityLabel("\(item.ticker), P/E \(item.pe.formatted(.number.precision(.fractionLength(1)))), EPS Growth \(percent(item.epsGrowthPercent)), ROIC \(percent(item.roicPercent))")
                     }
+                    .pickerStyle(.inline)
                 } label: {
                     HStack(spacing: 9) {
                         Circle().fill(StockMapAppearance.color(row.ticker, tickers: plotted.map(\.ticker))).frame(width: 8, height: 8)

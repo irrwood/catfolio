@@ -1033,6 +1033,11 @@ struct SecurityPaperRequest: Identifiable {
     let id = UUID()
     let context: SecurityPriceMoveContext
     let sourceFrame: CGRect
+    /// Native toolbar actions open the paper in place, without a UIKit origin.
+    init(context: SecurityPriceMoveContext) {
+        self.context = context
+        self.sourceFrame = .zero
+    }
     init?(context: SecurityPriceMoveContext, sourceFrame: CGRect) {
         guard !sourceFrame.isEmpty,
               [sourceFrame.minX, sourceFrame.minY, sourceFrame.width, sourceFrame.height].allSatisfy({ $0.isFinite }) else { return nil }

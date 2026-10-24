@@ -2,6 +2,59 @@ import SwiftUI
 import UIKit
 import Observation
 
+private struct HoldingWorkspaceTitle: ViewModifier {
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
+    let ticker: String
+    let isVisible: Bool
+
+    func body(content: Content) -> some View {
+        if isWorkspaceDetail {
+            content.navigationTitle(isVisible ? ticker : "")
+                .navigationBarTitleDisplayMode(.inline)
+                #if targetEnvironment(macCatalyst)
+                .background(HoldingWindowTitleVisibility(isVisible: isVisible).frame(width: 0, height: 0))
+                #endif
+        } else {
+            content
+        }
+    }
+}
+
+#if targetEnvironment(macCatalyst)
+/// Empty navigation titles otherwise fall back to the app name in AppKit.
+private struct HoldingWindowTitleVisibility: UIViewRepresentable {
+    let isVisible: Bool
+    func makeUIView(context: Context) -> TitleView { TitleView() }
+    func updateUIView(_ view: TitleView, context: Context) {
+        view.isTitleVisible = isVisible
+        view.apply()
+    }
+    static func dismantleUIView(_ view: TitleView, coordinator: ()) { view.restore() }
+
+    final class TitleView: UIView {
+        private final class Owner { weak var view: TitleView?; init(_ view: TitleView) { self.view = view } }
+        private static var owners: [String: Owner] = [:]
+        private weak var scene: UIWindowScene?
+        var isTitleVisible = false
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window == nil { restore() } else { apply() }
+        }
+        func apply() {
+            guard let scene = window?.windowScene else { return }
+            self.scene = scene
+            Self.owners[scene.session.persistentIdentifier] = Owner(self)
+            scene.titlebar?.titleVisibility = isTitleVisible ? .visible : .hidden
+        }
+        func restore() {
+            guard let scene, Self.owners[scene.session.persistentIdentifier]?.view === self else { return }
+            scene.titlebar?.titleVisibility = .visible
+            Self.owners.removeValue(forKey: scene.session.persistentIdentifier)
+        }
+    }
+}
+#endif
+
 @MainActor @Observable
 final class HoldingDetailCachedContent {
     var profile: VolumeProfile?
@@ -47,6 +100,7 @@ struct HoldingDetailView: View {
 }
 
 struct HoldingDetailContentView: View {
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
     @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
@@ -59,6 +113,7 @@ struct HoldingDetailContentView: View {
     var confirmsOpen = false
     let cachedContent: HoldingDetailCachedContent
     @State private var hasConfirmedOpen = false
+    @State private var showsNavigationTitle = false
 
     private var profile: VolumeProfile? {
         get { cachedContent.profile }
@@ -256,8 +311,15 @@ struct HoldingDetailContentView: View {
                 .background(HoldingDetailScrollBoundary())
             }
             .accessibilityIdentifier("holding-detail-scroll")
-            .sheet(isPresented: $showsTransactionHistory) {
-                NavigationStack {
+            .accessibilityValue(holding.ticker)
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top > 80
+            } action: { _, scrolled in
+                showsNavigationTitle = scrolled
+            }
+            .modifier(HoldingWorkspaceTitle(ticker: holding.ticker, isVisible: showsNavigationTitle))
+            .workspacePage(isPresented: $showsTransactionHistory) {
+                DetailPageNavigation {
                     HistoryView(ticker: holding.ticker)
                         .environment(model)
                         .toolbar {
@@ -279,18 +341,23 @@ struct HoldingDetailContentView: View {
                 // Ask at the press, so the answer is researched while the
                 // paper opens.
                 SecurityCardInsightStore.shared.start(context)
-                SecurityDailyMovePresentation.withoutSystemTransition {
-                    cardInsight = SecurityCardInsightRequest(context: context, sourceFrame: source)
+                let request = SecurityCardInsightRequest(context: context, sourceFrame: isWorkspaceDetail ? .zero : source)
+                if isWorkspaceDetail {
+                    cardInsight = request
+                } else {
+                    SecurityDailyMovePresentation.withoutSystemTransition { cardInsight = request }
                 }
             })
-            .appFullScreenCover(item: $cardInsight) { request in
+            .securityPaper(item: $cardInsight) { request in
                 SecurityDailyMovePaper(card: request.context, logoSymbol: holding.logoSymbol,
                                        sourceFrame: request.sourceFrame)
             }
             .overlay(alignment: .topTrailing) {
-                HoldingDetailCloseButton(action: onClose)
-                    .padding(.horizontal, HoldingDetailHeader.inset)
-                    .padding(.top, HoldingDetailHeader.topInset)
+                if !isWorkspaceDetail {
+                    HoldingDetailCloseButton(action: onClose)
+                        .padding(.horizontal, HoldingDetailHeader.inset)
+                        .padding(.top, HoldingDetailHeader.topInset)
+                }
             }
             // Transparent: the ground is the presentation's, so the one
             // background there is is the one the system rounds.

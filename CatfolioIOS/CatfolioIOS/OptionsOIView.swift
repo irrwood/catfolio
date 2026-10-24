@@ -66,7 +66,7 @@ struct OptionsOIView: View {
         // The page's own refresh is this section's refresh: the design has no
         // button of its own, and one request per tap is still the rule.
         .onChange(of: refreshRevision) { _, _ in if supported { refreshID += 1 } }
-        .appSheet(isPresented: $showsWalls) {
+        .workspacePage(isPresented: $showsWalls) {
             if let snapshot { wallsDetail(OIDistribution(contracts: snapshot.contracts, currentPrice: price)) }
         }
         .task(id: "\(symbol)|\(days)|\(refreshID)") {
@@ -338,7 +338,7 @@ struct OptionsOIView: View {
     }
 
     private func wallsDetail(_ distribution: OIDistribution) -> some View {
-        NavigationStack {
+        DetailPageNavigation {
             List {
                 ForEach([false, true], id: \.self) { call in
                     Section(L10n.text(call ? "Call 墙" : "Put 墙")) {

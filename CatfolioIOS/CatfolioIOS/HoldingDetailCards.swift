@@ -12,15 +12,18 @@ enum HoldingDetailCardStyle {
 
 /// Every child modal of a security uses the same native leading close button.
 struct HoldingDetailCloseToolbar: ToolbarContent {
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
     let action: () -> Void
 
     var body: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            Button(L10n.text("关闭弹窗"), systemImage: "xmark", action: action)
-                .labelStyle(.iconOnly)
-                .tint(CatfolioTheme.primaryText)
-                .keyboardShortcut(.cancelAction)
-                .accessibilityIdentifier("holding-modal-close")
+        if !isWorkspaceDetail {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(L10n.text("关闭弹窗"), systemImage: "xmark", action: action)
+                    .labelStyle(.iconOnly)
+                    .tint(CatfolioTheme.primaryText)
+                    .keyboardShortcut(.cancelAction)
+                    .accessibilityIdentifier("holding-modal-close")
+            }
         }
     }
 }
@@ -58,7 +61,7 @@ struct HoldingDetailChildPageCard<Content: View>: View {
         }
         .buttonStyle(PanelPressButtonStyle())
         .disabled(!isEnabled)
-        .appSheet(isPresented: $isPresented, onDismiss: onDismiss) {
+        .workspacePage(isPresented: $isPresented, onDismiss: onDismiss) {
             HoldingDetailChildPage(title: title, content: content)
         }
         .sensoryFeedback(.selection, trigger: isPresented) { _, presented in hapticsEnabled && presented }
@@ -71,7 +74,7 @@ struct HoldingDetailChildPage<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        NavigationStack {
+        DetailPageNavigation {
             SettingsPage(bottomInset: 24, topInset: SettingsTemplate.sectionSpacing) {
                 HoldingDetailChildPageContent(content: content)
             }

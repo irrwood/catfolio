@@ -4,56 +4,38 @@ import SwiftUI
 struct TodaySectorCard: View {
     let rows: [TodayDetailView.SectorBreakdown]
     let onSelect: (TodayDetailView.SectorBreakdown) -> Void
+    @ScaledMetric(relativeTo: .callout) private var amountFontSize = TypeScale.callout.size
 
     private var largestMagnitude: Double { rows.map { abs($0.amount) }.max() ?? 0 }
-    private var zeroFraction: CGFloat { TodaySectorBar.centeredZeroFraction(for: rows.map(\.amount)) }
     private var sortOrder: TodaySectorSortOrder { .automatic(for: rows.map(\.amount)) }
+    private var amountColumnWidth: CGFloat {
+        let widest = rows.map {
+            Typography.numberWidth(TodaySectorRow.amountText($0.amount), size: amountFontSize, weight: .semibold)
+        }.max() ?? 0
+        return min(96, max(48, ceil(widest) + 2))
+    }
 
     var body: some View {
         sectorRows
             .padding(.bottom, 12)
-            .overlayPreferenceValue(TodaySectorAxisBounds.self) { anchors in
-                GeometryReader { geometry in
-                    if let first = anchors.first, let last = anchors.last {
-                        let firstBar = geometry[first]
-                        let lastBar = geometry[last]
-                        let top = firstBar.midY - TodaySectorBar.barHeight / 2
-                        let bottom = lastBar.midY + TodaySectorBar.barHeight / 2
-                        Rectangle()
-                            .fill(SettingsTemplate.separator)
-                            .frame(width: SettingsTemplate.separatorHeight, height: bottom - top)
-                            .offset(x: firstBar.minX + firstBar.width * zeroFraction
-                                - SettingsTemplate.separatorHeight / 2, y: top)
-                    }
-                }
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-            }
     }
 
     private var sectorRows: some View {
         VStack(spacing: 0) {
             ForEach(sortOrder.sorted(rows, amount: \.amount, id: \.id)) { row in
                 Button { onSelect(row) } label: {
-                    TodaySectorRow(row: row, largestMagnitude: largestMagnitude, zeroFraction: zeroFraction)
+                    TodaySectorRow(row: row, largestMagnitude: largestMagnitude,
+                                   amountColumnWidth: amountColumnWidth)
                         .padding(.horizontal, 12)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(SettingsRowButtonStyle())
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(row.displayName)
-                .accessibilityValue(DisplayFormat.money(row.amount, signed: true, fractionDigits: 2))
+                .accessibilityValue(TodaySectorRow.amountText(row.amount))
                 .accessibilityIdentifier("today-sector.\(row.id)")
             }
         }
-    }
-}
-
-private struct TodaySectorAxisBounds: PreferenceKey {
-    static let defaultValue: [Anchor<CGRect>] = []
-
-    static func reduce(value: inout [Anchor<CGRect>], nextValue: () -> [Anchor<CGRect>]) {
-        value.append(contentsOf: nextValue())
     }
 }
 
@@ -63,7 +45,7 @@ struct TodaySectorRow: View {
     @Environment(\.locale) private var appLocale
     let row: TodayDetailView.SectorBreakdown
     let largestMagnitude: Double
-    var zeroFraction: CGFloat = 0.5
+    let amountColumnWidth: CGFloat
 
     private var title: String {
         switch row.sector {
@@ -84,6 +66,12 @@ struct TodaySectorRow: View {
 
     private var tint: Color { row.amount >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger }
 
+    static func amountText(_ amount: Double) -> String {
+        let magnitude = abs(DisplayCurrency.current.fromUSD(amount))
+        return DisplayFormat.money(amount, signed: true,
+                                   fractionDigits: magnitude > 0 && magnitude < 1 ? 2 : 0)
+    }
+
     var body: some View {
         Group {
             if typeSize.isAccessibilitySize {
@@ -97,8 +85,7 @@ struct TodaySectorRow: View {
                         Spacer(minLength: 0)
                     }
                     HStack(spacing: 12) {
-                        TodaySectorBar(amount: row.amount, largestMagnitude: largestMagnitude, tint: tint,
-                                       zeroFraction: zeroFraction)
+                        TodaySectorBar(amount: row.amount, largestMagnitude: largestMagnitude, tint: tint)
                             .frame(width: 48)
                         HStack(spacing: 4) {
                             amount
@@ -116,19 +103,19 @@ struct TodaySectorRow: View {
     }
 
     private var compactRow: some View {
-        HStack(spacing: 8) {
-            icon
-            Text(title)
-                .appText(.callout, weight: .medium)
-                .foregroundStyle(CatfolioTheme.primaryText)
-                .lineLimit(1)
-                .minimumScaleFactor(0.65)
-                .frame(width: appLocale.identifier.hasPrefix("zh") ? 36 : 64, alignment: .leading)
-            TodaySectorBar(amount: row.amount, largestMagnitude: largestMagnitude, tint: tint,
-                           zeroFraction: zeroFraction)
-                .anchorPreference(key: TodaySectorAxisBounds.self, value: .bounds) { [$0] }
+        HStack(spacing: 12) {
+            HStack(spacing: 8) {
+                icon
+                Text(title)
+                    .appText(.callout, weight: .medium)
+                    .foregroundStyle(CatfolioTheme.primaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                    .frame(width: appLocale.identifier.hasPrefix("zh") ? 36 : 64, alignment: .leading)
+            }
+            TodaySectorBar(amount: row.amount, largestMagnitude: largestMagnitude, tint: tint)
             HStack(spacing: 4) {
-                amount.frame(width: 88, alignment: .trailing)
+                amount.frame(width: amountColumnWidth, alignment: .trailing)
                 chevron
             }
         }
@@ -147,7 +134,7 @@ struct TodaySectorRow: View {
     }
 
     private var amount: some View {
-        FinancialText(DisplayFormat.money(row.amount, signed: true, fractionDigits: 2), isDirectional: true)
+        FinancialText(Self.amountText(row.amount), isDirectional: true)
             .appNumber(.callout, weight: .semibold)
             .foregroundStyle(tint)
             .lineLimit(1)
@@ -164,21 +151,10 @@ struct TodaySectorRow: View {
 
 struct TodaySectorBar: View {
     static let height: CGFloat = 24
-    fileprivate static let barHeight: CGFloat = 20
+    private static let barHeight: CGFloat = 8
     let amount: Double
     let largestMagnitude: Double
     let tint: Color
-    var zeroFraction: CGFloat = 0.5
-
-    /// Translate the occupied range as one group, keeping every bar's length
-    /// and the common money-to-width scale unchanged.
-    static func centeredZeroFraction(for amounts: [Double]) -> CGFloat {
-        let gain = max(0, amounts.max() ?? 0)
-        let loss = max(0, -(amounts.min() ?? 0))
-        let maximum = max(gain, loss)
-        guard maximum > 0 else { return 0.5 }
-        return 0.5 + CGFloat(loss / maximum - gain / maximum) / 4
-    }
 
     static func ratio(amount: Double, largestMagnitude: Double) -> Double {
         largestMagnitude > 0 ? min(1, abs(amount) / largestMagnitude) : 0
@@ -186,19 +162,35 @@ struct TodaySectorBar: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let zero = geometry.size.width * zeroFraction
+            let zero = geometry.size.width / 2
             let width = geometry.size.width / 2 * Self.ratio(amount: amount, largestMagnitude: largestMagnitude)
             let isLoss = amount < 0
             ZStack(alignment: .topLeading) {
-                UnevenRoundedRectangle(cornerRadii: .init(
-                    topLeading: isLoss ? 5 : 0,
-                    bottomLeading: isLoss ? 5 : 0,
-                    bottomTrailing: isLoss ? 0 : 5,
-                    topTrailing: isLoss ? 0 : 5))
-                    .fill(tint)
-                    .frame(width: width, height: Self.barHeight)
-                    .offset(x: isLoss ? zero - width : zero,
+                Capsule()
+                    .fill(CatfolioTheme.subtleFill)
+                    .frame(width: geometry.size.width, height: Self.barHeight)
+                    .offset(y: (Self.height - Self.barHeight) / 2)
+                // Keep the gradient on the shared magnitude scale so short
+                // bars only reach a hint of teal/violet, rather than its tip.
+                LinearGradient(
+                    colors: [tint, isLoss ? CatfolioTheme.sectorLossTip : CatfolioTheme.sectorGainTip],
+                    startPoint: isLoss ? .trailing : .leading,
+                    endPoint: isLoss ? .leading : .trailing)
+                    .frame(width: zero, height: Self.barHeight)
+                    .mask(alignment: isLoss ? .trailing : .leading) {
+                        UnevenRoundedRectangle(cornerRadii: .init(
+                            topLeading: isLoss ? 4 : 0,
+                            bottomLeading: isLoss ? 4 : 0,
+                            bottomTrailing: isLoss ? 0 : 4,
+                            topTrailing: isLoss ? 0 : 4))
+                            .frame(width: width, height: Self.barHeight)
+                    }
+                    .offset(x: isLoss ? 0 : zero,
                             y: (Self.height - Self.barHeight) / 2)
+                Capsule()
+                    .fill(CatfolioTheme.primaryText)
+                    .frame(width: 2, height: Self.barHeight)
+                    .offset(x: zero - 1, y: (Self.height - Self.barHeight) / 2)
             }
         }
         .frame(height: Self.height)

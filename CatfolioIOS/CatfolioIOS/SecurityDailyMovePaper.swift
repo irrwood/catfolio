@@ -1,5 +1,28 @@
 import SwiftUI
 
+/// The workspace owns a detail navigation stack; phone papers retain their
+/// full-screen presentation and source-anchored entrance.
+private struct SecurityPaperPresentation<Item: Identifiable, Paper: View>: ViewModifier {
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
+    @Binding var item: Item?
+    let paper: (Item) -> Paper
+
+    func body(content: Content) -> some View {
+        if isWorkspaceDetail {
+            content.workspacePage(item: $item, content: paper)
+        } else {
+            content.appFullScreenCover(item: $item, content: paper)
+        }
+    }
+}
+
+extension View {
+    func securityPaper<Item: Identifiable, Paper: View>(item: Binding<Item?>,
+                                                       @ViewBuilder content: @escaping (Item) -> Paper) -> some View {
+        modifier(SecurityPaperPresentation(item: item, paper: content))
+    }
+}
+
 enum SecurityDailyMovePresentation {
     /// Suppress only UIKit's modal slide; the paper owns its in-place animation.
     static func withoutSystemTransition(_ action: () -> Void) {
@@ -64,6 +87,7 @@ enum SecurityPaperTopic {
 /// isolated `init` alone would not cover it.
 @MainActor
 struct SecurityDailyMovePaper: View {
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.locale) private var locale
@@ -101,9 +125,23 @@ struct SecurityDailyMovePaper: View {
     @ScaledMetric(relativeTo: .body) private var halfHeight: CGFloat = 225
 
     var body: some View {
+        if isWorkspaceDetail {
+            stage
+                .background(SecurityDetailPresentation.ground)
+                .clipped()
+                .navigationTitle(L10n.text("AI 解读"))
+                .accessibilityIdentifier("workspace.security-insight")
+        } else {
+            stage
+        }
+    }
+
+    private var stage: some View {
         GeometryReader { geometry in
             let frame = geometry.frame(in: .global)
-            let source = CGPoint(x: sourceFrame.midX - frame.minX, y: sourceFrame.midY - frame.minY)
+            let source = sourceFrame.isEmpty
+                ? CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
+                : CGPoint(x: sourceFrame.midX - frame.minX, y: sourceFrame.midY - frame.minY)
             let visibility = SecurityPaperMotion.visibility(entrance: entranceProgress, offset: dragOffset, travel: exitTravel)
             ZStack {
                 SecurityPaperBlur(amount: visibility)
@@ -116,18 +154,20 @@ struct SecurityDailyMovePaper: View {
                             y: (reduceMotion ? 0 : (source.y - geometry.size.height / 2) * (1 - entranceProgress)) + dragOffset - 20 * entranceProgress)
                     .opacity(min(1, entranceProgress * 2) * min(1, visibility * 4))
                     .contentShape(Rectangle())
-                    .gesture(paperDrag)
+                    .gesture(paperDrag, including: isWorkspaceDetail ? .none : .all)
                     .allowsHitTesting(entranceProgress >= 0.999 && !closing)
                 VStack(spacing: 20) {
                     Spacer()
-                    Button { close(direction: 1) } label: {
-                        Image(systemName: "xmark").font(.body.weight(.medium))
-                            .frame(width: 48, height: 48)
+                    if !isWorkspaceDetail {
+                        Button { close(direction: 1) } label: {
+                            Image(systemName: "xmark").font(.body.weight(.medium))
+                                .frame(width: 48, height: 48)
+                        }
+                        .foregroundStyle(CatfolioTheme.primaryText)
+                        .modifier(SecurityPaperCloseGlass())
+                        .accessibilityLabel(L10n.text("关闭"))
+                        .accessibilityIdentifier("daily-move-close")
                     }
-                    .foregroundStyle(CatfolioTheme.primaryText)
-                    .modifier(SecurityPaperCloseGlass())
-                    .accessibilityLabel(L10n.text("关闭"))
-                    .accessibilityIdentifier("daily-move-close")
                     sourceFooter
                 }
                 .padding(.horizontal, 44).padding(.bottom, 12)

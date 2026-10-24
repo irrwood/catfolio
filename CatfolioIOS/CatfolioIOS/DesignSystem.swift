@@ -85,6 +85,7 @@ extension View {
 
     func appModalSurface() -> some View {
         modifier(AppModalSurfaceModifier()).environment(\.isAppModal, true)
+            .environment(\.pageNavigationPresentation, .sheet)
     }
 
     func appSheet<Sheet: View>(isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil,

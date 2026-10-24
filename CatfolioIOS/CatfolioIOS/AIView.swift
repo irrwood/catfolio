@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AIView: View {
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
     @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -71,12 +72,12 @@ struct AIView: View {
 
     var body: some View {
         Group {
-            if usesRootTabHeader {
+            if usesRootTabHeader || isWorkspaceDetail {
                 embeddedConversation
-                    .navigationTitle(showsSidebar ? L10n.text("对话") : "")
-                    .navigationBarTitleDisplayMode(.inline)
+                    .navigationTitle(showsSidebar ? L10n.text("对话") : (isWorkspaceDetail ? L10n.text("AI 助手") : ""))
+                    .navigationBarTitleDisplayMode(isWorkspaceDetail && usesRootTabHeader && !showsSidebar ? .large : .inline)
                     .toolbarVisibility(.visible, for: .navigationBar)
-                    .toolbarBackground(.hidden, for: .navigationBar)
+                    .toolbarBackground(isWorkspaceDetail ? .automatic : .hidden, for: .navigationBar)
                     .modifier(AIConversationTopEdge())
                     .toolbar {
                         ToolbarItem(placement: .topBarLeading) {
@@ -100,7 +101,11 @@ struct AIView: View {
                             // returning to this tab on iOS 27.
                             .id(showsSidebar)
                         }
-                        ToolbarItem(placement: .topBarTrailing) {
+                        // Catalyst can retain the disabled image-only AppKit
+                        // item created during restoration. Give the ready
+                        // action its own item so it becomes a real button.
+                        ToolbarItem(id: isRestoringHistory ? "ai.new.loading" : "ai.new.ready",
+                                    placement: .topBarTrailing) {
                             Button {
                                 startNewConversation()
                                 dismissSidebar()

@@ -14,6 +14,7 @@ struct PortfolioView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
     @Environment(\.macDetailColumn) private var macDetailColumn
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     @State private var selectedHolding: Holding?
@@ -76,11 +77,6 @@ struct PortfolioView: View {
                                 // one page of white cards, with no sheet over a
                                 // hero.
                                 VStack(spacing: 10) {
-                                    RootTabTitle(title: L10n.text("概览"))
-                                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                                        .padding(.horizontal, 4)
-                                        .accessibilityAddTraits(.isHeader)
-
                                     // The heatmap fills the chart card's height.
                                     MacDashboardRow(matchesFirst: true) {
                                         CostMarketCard(
@@ -112,15 +108,7 @@ struct PortfolioView: View {
                                         todayCard.macOverviewCard()
                                         MacPerformanceSection()
                                     }
-
-                                    PortfolioDetailsCard(
-                                        holdings: model.holdings,
-                                        onSelect: { holding in
-                                            openHolding(holding, from: holdingsRowZoom)
-                                        },
-                                        zoomNamespace: holdingsRowZoom
-                                    )
-                                    .macOverviewCard()
+                                    todayHomeCards
 
                                     // One short row and a list: full width, one
                                     // above the other, rather than a pair of
@@ -148,20 +136,27 @@ struct PortfolioView: View {
                                 PortfolioContentSheet(scrollState: homeScrollState) {
                                     VStack(spacing: 0) {
                                         todayCard
+                                        if isWorkspaceDetail {
+                                            todayHomeCards
+                                                .padding(.horizontal, CatfolioStyle.pageHorizontalInset)
+                                                .padding(.vertical, 20)
+                                        }
 
-                                        PortfolioDetailsCard(
-                                            holdings: model.holdings,
-                                            onSelect: { holding in
-                                                openHolding(holding, from: holdingsRowZoom)
-                                            },
-                                            zoomNamespace: holdingsRowZoom,
-                                            floatsFilter: true
-                                        )
-                                        .id("portfolio-details")
-                                        .onGeometryChange(for: CGFloat.self) { geometry in
-                                            geometry.frame(in: .named("portfolio-home-content")).minY
-                                        } action: { _, top in
-                                            homeScrollState.holdingsMoved(to: top)
+                                        if !isWorkspaceDetail {
+                                            PortfolioDetailsCard(
+                                                holdings: model.holdings,
+                                                onSelect: { holding in
+                                                    openHolding(holding, from: holdingsRowZoom)
+                                                },
+                                                zoomNamespace: holdingsRowZoom,
+                                                floatsFilter: true
+                                            )
+                                            .id("portfolio-details")
+                                            .onGeometryChange(for: CGFloat.self) { geometry in
+                                                geometry.frame(in: .named("portfolio-home-content")).minY
+                                            } action: { _, top in
+                                                homeScrollState.holdingsMoved(to: top)
+                                            }
                                         }
                                     }
                                 }
@@ -245,7 +240,7 @@ struct PortfolioView: View {
                         #if DEBUG
                         // Pushes the Today page and pops it again, slowed, for
                         // recording how the tab bar leaves and comes back.
-                        if arguments.contains("--demo-today-push"), !Self.didRunTodayPushDemo {
+                        if !isWorkspaceDetail, arguments.contains("--demo-today-push"), !Self.didRunTodayPushDemo {
                             Self.didRunTodayPushDemo = true
                             let window = UIApplication.shared.connectedScenes
                                 .compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
@@ -277,20 +272,22 @@ struct PortfolioView: View {
                         .securityDetailFullScreen()
                 }
                 .navigationDestination(isPresented: $showsTodayDetail) {
-                    TodayDetailView(
-                        holdings: model.holdings,
-                        dailyChanges: model.holdingDayReturns,
-                        benchmarkChange: model.benchmarkDailyChange,
-                        sessionDate: model.latestSessionDate,
-                        isLoading: model.isHoldingDailyChangesLoading || model.isPortfolioLoading || model.isPortfolioChartLoading
-                    )
+                    if !isWorkspaceDetail {
+                        TodayDetailView(
+                            holdings: model.holdings,
+                            dailyChanges: model.holdingDayReturns,
+                            benchmarkChange: model.benchmarkDailyChange,
+                            sessionDate: model.latestSessionDate,
+                            isLoading: model.isHoldingDailyChangesLoading || model.isPortfolioLoading || model.isPortfolioChartLoading
+                        )
+                    }
                 }
             }
             // No bar over the hero. Once the holdings header has scrolled
             // away, the system bar takes its title and sort button, and
             // brings the system's own edge under them.
-            .toolbarVisibility(floatingHeader == nil ? .hidden : .visible, for: .navigationBar)
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbarVisibility(floatingHeader == nil && !isWorkspaceDetail ? .hidden : .visible, for: .navigationBar)
+            .navigationBarTitleDisplayMode(isWorkspaceDetail ? .large : .inline)
             .modifier(PortfolioTopScrollEdge(hasFloatingHeader: floatingHeader != nil))
             .toolbar {
                 if let floatingHeader {
@@ -312,6 +309,18 @@ struct PortfolioView: View {
         .accessibilityIdentifier("page.portfolio")
     }
 
+    private var todayHomeCards: some View {
+        TodayDetailView(
+            holdings: model.holdings,
+            dailyChanges: model.holdingDayReturns,
+            benchmarkChange: model.benchmarkDailyChange,
+            sessionDate: model.latestSessionDate,
+            isLoading: model.isHoldingDailyChangesLoading || model.isPortfolioLoading || model.isPortfolioChartLoading,
+            presentation: .home
+        )
+        .id("today-home-cards")
+    }
+
     private var todayCard: some View {
         TodayContributionCard(
             holdings: model.holdings,
@@ -320,7 +329,7 @@ struct PortfolioView: View {
             sessionDate: model.latestSessionDate,
             isLoading: model.isHoldingDailyChangesLoading || model.isPortfolioLoading || model.isPortfolioChartLoading,
             isRefreshingBehindCache: model.isHomeRefreshingBehindCache,
-            onOpenDetail: { showsTodayDetail = true },
+            onOpenDetail: isWorkspaceDetail ? nil : { showsTodayDetail = true },
             onTitleBottomPositionChange: { titleBottomY in
                 homeScrollState.titleMoved(to: titleBottomY)
             },

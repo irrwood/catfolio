@@ -482,11 +482,11 @@ struct LocalAIClient {
         return (try await AIWebSearch.openRouterSearch(question), true)
     }
 
-    private func portfolioContext(document: LocalPortfolioDocument) throws -> String {
+    func portfolioContext(document: LocalPortfolioDocument) throws -> String {
         let presentation = try LocalPortfolioEngine.presentation(for: document)
         if document.isPublicDisclosure {
             let rows = presentation.2.map { holding in
-                "\(holding.ticker): 市值 \(holding.displayedMarketValue)，持股 \(DisplayFormat.shares(holding.shares))，模拟成本 \(DisplayFormat.money(holding.shares * holding.averageCost))，浮动盈亏 \(DisplayFormat.money(holding.unrealized))"
+                "\(holding.ticker): 市值 \(holding.displayedMarketValue)，持股 \(DisplayFormat.shares(holding.shares))，模拟成本 \(DisplayFormat.money(holding.shares * holding.averageCost))，浮动盈亏 \(DisplayFormat.money(holding.unrealized, signed: true))"
             }.joined(separator: "\n")
             return "模拟账户：\(document.accounts.map(\.name).joined(separator: ", "))。账本根据历史披露重建；13F 在申报日收盘价调整股数，佩洛西按披露上限及对应日期收盘价计算。以下成本与盈亏来自模拟交易和行情，可以用于分析该模拟组合，但不是人物真实账户收益。不包含未确定合约的期权及未匹配证券。\n\(rows)"
         }

@@ -1,6 +1,10 @@
 import SwiftUI
 import UIKit
 
+extension EnvironmentValues {
+    @Entry var isSidebarHoldingRow = false
+}
+
 struct HoldingPerformanceValues {
     let amount: Double
     let percent: Double
@@ -25,6 +29,7 @@ extension Holding {
 }
 
 struct HoldingRow: View {
+    @Environment(\.isSidebarHoldingRow) private var isSidebarHoldingRow
     @Environment(\.locale) private var appLocale
     @Environment(\.securityDetailZoomOrigin) private var zoomOrigin
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -37,6 +42,10 @@ struct HoldingRow: View {
     let showsPerformancePercent: Bool
     let week52: Holding52WeekPrices?
     let volume: HoldingVolumePrices?
+
+    // Match SidebarSecuritySearchRow's primary text while keeping phone rows
+    // at their existing body size. Both use the shared Dynamic Type scale.
+    private var titleScale: TypeScale { isSidebarHoldingRow ? .callout : .body }
 
     init(item: PortfolioHoldingListItem, performancePeriod: HoldingPerformancePeriod, showsWeight: Bool = true, showsTicker: Bool = true, showsShares: Bool = true,
          showsPerformanceAmount: Bool = true, showsPerformancePercent: Bool = true,
@@ -95,7 +104,7 @@ struct HoldingRow: View {
                     HStack(spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(alignment: .center, spacing: 8) {
-                                SecurityDisplayName(name: item.name, scale: .body, weight: .semibold,
+                                SecurityDisplayName(name: item.name, scale: titleScale, weight: .semibold,
                                                     showsClassMarkers: false)
                                     .layoutPriority(1)
                                 Spacer(minLength: 4)
@@ -138,14 +147,15 @@ struct HoldingRow: View {
                 logo
                 if case let .holding(holding, _) = item {
                     VStack(alignment: .leading, spacing: 5) {
-                        HoldingIdentity(holding: holding, compact: false, showsTicker: showsTicker, showsShares: showsShares)
+                        HoldingIdentity(holding: holding, compact: false, showsTicker: showsTicker, showsShares: showsShares,
+                                        nameScale: titleScale)
                         if showsWeight {
                             Text(L10n.text("\(weightText) · 组合占比"))
                                 .appNumber(.caption, weight: .medium).foregroundStyle(.secondary)
                         }
                     }
                 } else {
-                    SecurityDisplayName(name: item.name, scale: .body, weight: .semibold, singleLine: false)
+                    SecurityDisplayName(name: item.name, scale: titleScale, weight: .semibold, singleLine: false)
                 }
             }
             if let volume {
@@ -412,10 +422,11 @@ struct HoldingIdentity: View {
     let compact: Bool
     var showsTicker = true
     var showsShares = true
+    var nameScale: TypeScale = .body
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            SecurityDisplayName(name: holding.shortName, scale: .body, weight: .medium,
+            SecurityDisplayName(name: holding.shortName, scale: nameScale, weight: .medium,
                                 singleLine: compact, showsClassMarkers: false)
 
             HStack(spacing: 2) {

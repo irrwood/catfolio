@@ -54,16 +54,13 @@ struct HistoryDividendCard: View {
 
     private var selectionMenu: some View {
         Menu {
-            Button(L10n.text("全部")) {
-                selectedTicker = nil
-            }
-            ForEach(breakdown.rows) { row in
-                Button {
-                    selectedTicker = row.id
-                } label: {
-                    Label(selectionDescription(row), systemImage: row.id == selectedRow?.id ? "checkmark" : "circle")
+            Picker(L10n.text("股息来源占比"), selection: $selectedTicker) {
+                Text(L10n.text("全部")).tag(String?.none)
+                ForEach(breakdown.rows) { row in
+                    Text(selectionDescription(row)).tag(Optional(row.id))
                 }
             }
+            .pickerStyle(.inline)
         } label: {
             HistoryRingSelectionLabel(
                 title: selectedRow.map {

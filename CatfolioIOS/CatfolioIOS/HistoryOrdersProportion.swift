@@ -16,12 +16,13 @@ struct HistoryOrdersProportion: View {
     var body: some View {
         VStack(spacing: SettingsTemplate.sectionSpacing) {
             Menu {
-                Button(L10n.text("全部")) { selectedTicker = nil }
-                ForEach(breakdown.rows) { row in
-                    Button { selectedTicker = row.id } label: {
-                        Label(description(row), systemImage: row.id == selectedRow?.id ? "checkmark" : "circle")
+                Picker(L10n.text("已实现盈亏占比"), selection: $selectedTicker) {
+                    Text(L10n.text("全部")).tag(String?.none)
+                    ForEach(breakdown.rows) { row in
+                        Text(description(row)).tag(Optional(row.id))
                     }
                 }
+                .pickerStyle(.inline)
             } label: {
                 HistoryRingSelectionLabel(
                     title: selectedRow.map(displayName) ?? L10n.text("比例"),

@@ -23,6 +23,7 @@ struct AccountNotice: Identifiable {
 }
 
 struct AccountDetailView: View {
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
     @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -173,12 +174,14 @@ struct AccountDetailView: View {
         .navigationTitle(account.localizedDisplayName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .principal) {
+            if !isWorkspaceDetail {
+              ToolbarItem(placement: .principal) {
                 AccountDetailNavigationTitle(account: account)
                     .frame(width: titleWidth)
                     .opacity(showsCompactTitle ? 1 : 0)
                     .accessibilityHidden(!showsCompactTitle)
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: showsCompactTitle)
+              }
             }
         }
         // A sheet rather than a text-field alert: the alert insets its title

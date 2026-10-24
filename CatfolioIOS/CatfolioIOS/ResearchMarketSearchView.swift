@@ -374,7 +374,6 @@ struct ResearchSearchBackdrop: UIViewRepresentable {
 
 /// Results sit over the still-mounted dashboard, below the system search bar.
 struct ResearchMarketSearchView: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
     let holdings: [Holding]
@@ -388,26 +387,57 @@ struct ResearchMarketSearchView: View {
     /// Pushes the results below the field. Only the content moves: the
     /// backdrop keeps touching the top edge so it blurs under the bar too.
     var contentTopInset: CGFloat = 0
-    @State private var searchResults: [MarketSecurityResult] = []
-    /// The query `searchResults` answer, so a stale list is not mistaken
-    /// for an empty one while the next search runs.
-    @State private var searchedQuery = ""
-    /// Whether the directory has more matches than `searchResults` shows.
-    @State private var hasMoreSearchResults = false
-    /// A query the reader asked to see more of, and how many rows it shows.
-    /// Any other query starts from one page, so a keystroke never builds
-    /// more rows than a screen holds.
-    @State private var expandedSearch: ExpandedSearch?
-    private struct ExpandedSearch: Equatable { let query: String; let limit: Int }
-    private static let searchPageSize = 15
-    private static let searchPageStep = 25
-    private var searchLimit: Int {
-        expandedSearch.flatMap { $0.query == searchText ? $0.limit : nil } ?? Self.searchPageSize
-    }
+    var isSidebar = false
+    @State var searchModel = SecuritySearchModel()
 
-    private var searchText: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var request: SecuritySearchModel.Request {
+        searchModel.request(query: query, holdings: holdings)
+    }
+    private var searchText: String { request.query }
+    private var displayedResults: [MarketSecurityResult] { searchModel.results(for: request) }
 
     var body: some View {
+        Group {
+            if isSidebar { sidebarResults }
+            else { overlayResults }
+        }
+        .task(id: request) { await searchModel.search(request) }
+        .task(id: searchModel.quoteRequest(for: request)) {
+            await searchModel.loadQuotes(searchModel.quoteRequest(for: request))
+        }
+    }
+
+    private var sidebarResults: some View {
+        Section {
+            ForEach(displayedResults) { result in
+                NavigationLink(value: WorkspaceSelection.security(result)) {
+                    let entry = WatchlistEntry(holding: result.resolvedHolding(in: holdings))
+                    SidebarSecuritySearchRow(result: result, entry: entry,
+                        quote: searchModel.quote(for: result, holdings: holdings),
+                        isHeld: heldHolding(result.ticker) != nil)
+                }
+                .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                .listRowSeparator(.visible)
+                .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+                .alignmentGuide(.listRowSeparatorTrailing) { $0.width }
+                .accessibilityIdentifier("workspace.search.\(result.ticker)")
+            }
+            if searchModel.searchedQuery != searchText {
+                ProgressView().frame(maxWidth: .infinity)
+            } else if displayedResults.isEmpty {
+                Text(L10n.text("没有找到匹配的证券"))
+                    .foregroundStyle(.secondary)
+            }
+            if searchModel.searchedQuery == searchText && searchModel.hasMore {
+                Button(L10n.text("显示更多")) {
+                    searchModel.loadMore(for: searchText)
+                }
+                .accessibilityIdentifier("workspace.search.more")
+            }
+        }
+    }
+
+    private var overlayResults: some View {
         Group {
             if searchText.isEmpty {
                 Color.clear
@@ -415,7 +445,7 @@ struct ResearchMarketSearchView: View {
                     .onTapGesture(perform: onDismiss)
             } else {
                 SettingsPage(bottomInset: 20, pageBackground: .clear) {
-                    if searchedQuery == searchText {
+                    if searchModel.searchedQuery == searchText {
                         searchResultsSection
                     } else {
                         ProgressView()
@@ -439,44 +469,51 @@ struct ResearchMarketSearchView: View {
         }
         .accessibilityAddTraits(.isModal)
         .accessibilityAction(.escape, onDismiss)
-        .task(id: "\(searchLimit)|\(searchText)") { await searchMarket() }
     }
 
     private var searchResultsSection: some View {
-        Group {
-            SettingsSection(L10n.text("证券")) {
-                if searchResults.isEmpty {
-                    SettingsRowContainer {
-                        Text(L10n.text("没有找到匹配的证券"))
+        LazyVStack(spacing: 0) {
+            if displayedResults.isEmpty {
+                Text(L10n.text("没有找到匹配的证券"))
+                    .appText(.subheading)
+                    .foregroundStyle(SettingsTemplate.secondaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 20)
+                    .padding(.horizontal, SettingsTemplate.pageInset)
+            } else {
+                ForEach(displayedResults) { result in
+                    Button { onSelect(result) } label: {
+                        searchRow(result)
+                            .padding(.vertical, SettingsTemplate.rowVerticalPadding)
+                            .padding(.horizontal, SettingsTemplate.pageInset)
+                            .frame(maxWidth: .infinity, minHeight: SettingsTemplate.rowMinHeight,
+                                   alignment: .leading)
+                            .contentShape(Rectangle())
+                            .researchLayoutFrame("phone-search.button.\(result.id)")
+                    }
+                    .buttonStyle(SettingsRowButtonStyle())
+                    .accessibilityIdentifier("research.search.\(result.ticker)")
+                    ContentPanelSeparator()
+                        .padding(.horizontal, SettingsTemplate.pageInset)
+                }
+                if searchModel.hasMore {
+                    Button { searchModel.loadMore(for: searchText) } label: {
+                        Text(L10n.text("显示更多"))
                             .appText(.subheading)
                             .foregroundStyle(SettingsTemplate.secondaryText)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, SettingsTemplate.rowVerticalPadding)
+                            .padding(.horizontal, SettingsTemplate.pageInset)
+                            .contentShape(Rectangle())
                     }
-                } else {
-                    ForEach(searchResults) { result in
-                        Button { onSelect(result) } label: {
-                            SettingsRowContainer { searchRow(result) }
-                        }
-                        .buttonStyle(SettingsRowButtonStyle())
-                        .accessibilityIdentifier("research.search.\(result.ticker)")
-                    }
-                    if hasMoreSearchResults {
-                        Button {
-                            expandedSearch = ExpandedSearch(query: searchText,
-                                                            limit: searchLimit + Self.searchPageStep)
-                        } label: {
-                            SettingsRowContainer {
-                                Text(L10n.text("显示更多"))
-                                    .appText(.subheading)
-                                    .foregroundStyle(SettingsTemplate.secondaryText)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                        }
-                        .buttonStyle(SettingsRowButtonStyle())
-                        .accessibilityIdentifier("research.search.more")
-                    }
+                    .buttonStyle(SettingsRowButtonStyle())
+                    .accessibilityIdentifier("research.search.more")
                 }
             }
         }
+        // The page supplies an inset; put it inside each button so its
+        // pressed background and hit area span the full viewport.
+        .padding(.horizontal, -SettingsTemplate.pageInset)
     }
 
     private func heldHolding(_ ticker: String) -> Holding? {
@@ -484,86 +521,10 @@ struct ResearchMarketSearchView: View {
     }
 
     private func searchRow(_ result: MarketSecurityResult) -> some View {
-        let held = heldHolding(result.ticker)
-        return HStack(spacing: SettingsTemplate.iconSpacing) {
-            AssetLogo(ticker: result.ticker, logoSymbol: held?.logoSymbol ?? result.ticker, size: SettingsTemplate.iconSize)
-            VStack(alignment: .leading, spacing: SettingsTemplate.subtitleSpacing) {
-                HStack(spacing: 6) {
-                    Text(result.ticker)
-                        .appText(.subheading)
-                        .lineLimit(1)
-                    if held != nil {
-                        Text(L10n.text("已持有"))
-                            .appText(.caption, weight: .semibold)
-                            .foregroundStyle(SettingsTemplate.secondaryText)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1)
-                            .background(Capsule().fill(.primary.opacity(0.07)))
-                    }
-                }
-                Text(held?.shortName ?? CompanyNameCatalog.displayName(ticker: result.ticker, fallback: result.name))
-                    .appText(.label)
-                    .foregroundStyle(SettingsTemplate.secondaryText)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
-                if dynamicTypeSize.isAccessibilitySize {
-                    Text(result.venue)
-                        .appText(.label)
-                        .foregroundStyle(SettingsTemplate.secondaryText)
-                }
-            }
-            Spacer(minLength: 8)
-            if !dynamicTypeSize.isAccessibilitySize {
-                Text(result.venue)
-                    .appText(.label)
-                    .foregroundStyle(SettingsTemplate.secondaryText)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-            }
-            SettingsChevron()
-        }
-        .contentShape(Rectangle())
-    }
-
-    /// Off the main thread: the directory holds some twenty thousand
-    /// securities, and its first use decodes it.
-    @MainActor private func searchMarket() async {
-        let text = searchText
-        guard !text.isEmpty else {
-            searchResults = []
-            searchedQuery = ""
-            hasMoreSearchResults = false
-            expandedSearch = nil
-            return
-        }
-        let limit = searchLimit
-        try? await Task.sleep(for: .milliseconds(120))
-        guard !Task.isCancelled else { return }
-        let worker = Task.detached(priority: .userInitiated) { () -> [MarketSecurityResult] in
-            guard let catalog = try? CompanyReferenceCatalog.bundled.get() else { return [] }
-            // One past the page says whether "more" has anything to show.
-            return MarketSecurityResult.search(text, in: catalog, limit: limit + 1,
-                                               shouldCancel: { Task.isCancelled })
-        }
-        var results = await withTaskCancellationHandler {
-            await worker.value
-        } onCancel: {
-            worker.cancel()
-        }
-        guard !Task.isCancelled, text == searchText, limit == searchLimit else { return }
-        searchResults = Array(results.prefix(limit))
-        hasMoreSearchResults = results.count > limit
-        searchedQuery = text
-        if ChinaMarketDataClient.shouldSearch(text),
-           let mainland = try? await AKShareMarketDataClient().search(text) {
-            let existing = Set(mainland.map(\.ticker))
-            results = mainland + results.filter { !existing.contains($0.ticker) }
-        }
-        guard !Task.isCancelled, text == searchText, limit == searchLimit else { return }
-        let applying = CompanyReferenceCatalog.searchSignposter.beginInterval("search.apply")
-        searchResults = Array(results.prefix(limit))
-        hasMoreSearchResults = results.count > limit
-        searchedQuery = text
-        CompanyReferenceCatalog.searchSignposter.endInterval("search.apply", applying)
+        PhoneSecuritySearchRow(result: result,
+            entry: SecuritySearchModel.entry(for: result, holdings: holdings),
+            quote: searchModel.quote(for: result, holdings: holdings),
+            isHeld: heldHolding(result.ticker) != nil)
     }
 
 }

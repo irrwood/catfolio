@@ -88,7 +88,16 @@ ETF 穿透所需的静态持仓快照位于 `CatfolioIOS/Resources/ETF/`，由 i
 
 运行 `python3 scripts/export_ios_public_investors.py` 更新离线 Core 历史资源，默认读取 T7 的 `current.json`（可传 `--pointer`）。导出只消费当前发布的归并视图和 `derived.activityIds`，保留源文件 SHA256。当前资源发布为 `d2bffff934734d16`，截至 2026-09-07；后续行情由 App 获取。尚未配置 Core 披露自动更新或对外分发。
 
-`PublicInvestorCatalogTests` 包含确定性账本用例和联网验收 `testLiveInvestorAccountTodayHistoryAndPerformance`。离线运行时可通过 Xcode 的 `-skip-testing:CatfolioIOSTests/PublicInvestorCatalogTests/testLiveInvestorAccountTodayHistoryAndPerformance` 跳过联网验收。
+`PublicInvestorCatalogTests` 包含确定性账本用例和联网验收 `testLiveInvestorAccountTodayHistoryAndPerformance`。联网验收默认通过 `XCTSkip` 跳过，在修改模拟账户偏好或发起请求之前检查开关；Logic / All 日常运行不需要手动排除它。需要联网验收时，在仓库根目录执行：
+
+```sh
+TEST_RUNNER_CATFOLIO_TEST_PUBLIC_INVESTOR_LIVE=1 xcodebuild test \
+  -project CatfolioIOS/CatfolioIOS.xcodeproj -scheme CatfolioIOS \
+  -testPlan Logic -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -only-testing:CatfolioIOSTests/PublicInvestorCatalogTests/testLiveInvestorAccountTodayHistoryAndPerformance
+```
+
+从 Xcode 启动时，在测试环境变量中设置 `CATFOLIO_TEST_PUBLIC_INVESTOR_LIVE=1`；测试结束后移除开关，恢复默认跳过。
 
 ## 界面语言
 

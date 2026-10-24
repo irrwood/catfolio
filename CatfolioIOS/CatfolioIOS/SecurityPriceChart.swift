@@ -5,6 +5,7 @@ import Observation
 /// Owns the fast-changing chart selection so dragging never invalidates the
 /// volume profile, 52-week range, financials and analyst sections below it.
 struct HoldingDetailPriceSection: View {
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
     @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model: AppModel?
     let holding: Holding
@@ -121,41 +122,38 @@ struct HoldingDetailPriceSection: View {
                 HoldingDetailAccountSelector.shells
             }
 
-            HStack(spacing: 12) {
-                Button {
-                    guard let movement,
-                          let request = SecurityPaperRequest(context: movement, sourceFrame: explanationAnchor.frame) else { return }
-                    // Ask at the tap, before the cover is even inserted, so the
-                    // whole entrance and flip run while the note is researched.
-                    // The paper's own `start` then joins this request.
-                    SecurityDailyMoveStore.shared.start(movement)
-                    SecurityDailyMovePresentation.withoutSystemTransition { explanation = request }
-                } label: {
-                    HoldingHeaderActionLabel(title: movement?.noteTitle ?? L10n.text("今天有什么动静？"),
-                        asset: "HoldingWhyMove")
-                        // There from the first frame; its dated title fades in.
-                        .animation(.easeOut(duration: 0.25), value: movement?.noteTitle)
+            if !isWorkspaceDetail {
+                HStack(spacing: 12) {
+                    explanationButton
+                        .modifier(HoldingHeaderButtonStyle())
+                        .researchLayoutFrame("holding-detail.ai-action")
+                    if let model {
+                        WatchlistToggleButton(holding: holding, store: model.watchlist,
+                                              observation: priceHistory?.latestMarketObservation)
+                    }
                 }
-                .modifier(HoldingHeaderButtonStyle())
-                .disabled(movement == nil)
-                .background(SecurityPaperSourceReader(anchor: explanationAnchor))
-                .accessibilityIdentifier("holding-detail-why-move")
-                .researchLayoutFrame("holding-detail.ai-action")
-                .accessibilityHint(movement?.intervalText ?? L10n.text("等待带日期的价格走势"))
-                if let model {
-                    WatchlistToggleButton(holding: holding, store: model.watchlist,
-                                          observation: priceHistory?.latestMarketObservation)
-                }
-                // Refreshing is a tap on the price above, not a button here.
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
             if let refreshError {
                 Text(L10n.message(refreshError)).font(.caption).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .trailing).padding(.horizontal, 20)
             }
         }
-        .appFullScreenCover(item: $explanation) { request in
+        .toolbar {
+            if isWorkspaceDetail {
+                ToolbarItem(id: "holding-detail-why-move", placement: .topBarTrailing) {
+                    explanationButton.labelStyle(.iconOnly)
+                }
+                ToolbarItem(id: "holding-detail-watchlist", placement: .topBarTrailing) {
+                    if let model {
+                        WatchlistToggleButton(holding: holding, store: model.watchlist,
+                            observation: priceHistory?.latestMarketObservation, usesToolbarStyle: true)
+                    }
+                }
+            }
+        }
+        .securityPaper(item: $explanation) { request in
             SecurityDailyMovePaper(context: request.context, logoSymbol: holding.logoSymbol, sourceFrame: request.sourceFrame)
         }
         .onChange(of: selectedAccountKeys) { _, _ in
@@ -171,6 +169,48 @@ struct HoldingDetailPriceSection: View {
         .onChange(of: appLocale.identifier) { _, _ in
             updateTradeReadoutReservations()
         }
+    }
+
+    private var explanationButton: some View {
+        let movement = movement
+        return Button {
+            guard let movement else { return }
+            let request: SecurityPaperRequest
+            if isWorkspaceDetail {
+                // AppKit owns native toolbar buttons; they have no UIView
+                // source rectangle for the phone's flying-paper animation.
+                request = SecurityPaperRequest(context: movement)
+            } else {
+                guard let anchored = SecurityPaperRequest(context: movement, sourceFrame: explanationAnchor.frame) else { return }
+                request = anchored
+            }
+            // Ask at the tap, before the cover is even inserted, so the
+            // whole entrance and flip run while the note is researched.
+            // The paper's own `start` then joins this request.
+            SecurityDailyMoveStore.shared.start(movement)
+            if isWorkspaceDetail {
+                explanation = request
+            } else {
+                SecurityDailyMovePresentation.withoutSystemTransition { explanation = request }
+            }
+        } label: {
+            if isWorkspaceDetail {
+                Label {
+                    Text(movement?.noteTitle ?? L10n.text("今天有什么动静？"))
+                } icon: {
+                    Image("HoldingWhyMove").renderingMode(.template)
+                }
+            } else {
+                HoldingHeaderActionLabel(title: movement?.noteTitle ?? L10n.text("今天有什么动静？"),
+                    asset: "HoldingWhyMove")
+                    // There from the first frame; its dated title fades in.
+                    .animation(.easeOut(duration: 0.25), value: movement?.noteTitle)
+            }
+        }
+        .disabled(movement == nil)
+        .background(SecurityPaperSourceReader(anchor: explanationAnchor))
+        .accessibilityIdentifier("holding-detail-why-move")
+        .accessibilityHint(movement?.intervalText ?? L10n.text("等待带日期的价格走势"))
     }
 
     private func updateTradeReadoutReservations() {

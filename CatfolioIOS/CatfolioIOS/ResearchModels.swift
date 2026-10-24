@@ -66,7 +66,7 @@ struct ResearchMarketSnapshot: Identifiable {
 
 /// One security from the offline directory, ready to open in the detail
 /// sheet whether or not anything is held.
-struct MarketSecurityResult: Identifiable, Equatable, Sendable {
+struct MarketSecurityResult: Identifiable, Hashable, Sendable {
     let ticker: String
     let name: String
     let market: String
@@ -80,7 +80,7 @@ struct MarketSecurityResult: Identifiable, Equatable, Sendable {
     /// whose own exchange names run too long for a row.
     var venue: String {
         let place = market == "US" ? exchange ?? market : market
-        return isFund ? "ETF · \(place)" : place
+        return isFund ? (place.isEmpty ? "ETF" : "ETF · \(place)") : place
     }
 
     static func search(
@@ -100,6 +100,57 @@ struct MarketSecurityResult: Identifiable, Equatable, Sendable {
                 isFund: HoldingSecurityKind.classify(instrumentType: entry.instrumentType, names: [entry.name ?? ""]) == .fund
             )
         }
+    }
+
+    /// Keep the directory's relevance order, including its alias ranking.
+    /// Holdings enrich selection and fill missing symbols; ownership is never
+    /// a ranking signal. Broker-only matches enter at their matching tier.
+    static func includingHoldings(_ results: [Self], holdings: [Holding], query: String) -> [Self] {
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return [] }
+        var seen = Set<String>()
+        var merged = results.filter { seen.insert($0.ticker.uppercased()).inserted }
+        let additions = holdings.filter {
+            !seen.contains($0.ticker.uppercased())
+                && ($0.ticker.localizedStandardContains(text)
+                    || $0.shortName.localizedStandardContains(text)
+                    || $0.displayName.localizedStandardContains(text))
+        }.map { holding in
+            Self(ticker: holding.ticker, name: holding.displayName, market: "",
+                 exchange: nil, currency: holding.quoteCurrency, sector: holding.sector,
+                 isFund: HoldingSecurityKind.classify(holding) == .fund)
+        }.sorted {
+            let lhs = $0.directMatchRank(text) ?? 3, rhs = $1.directMatchRank(text) ?? 3
+            if lhs != rhs { return lhs < rhs }
+            if $0.ticker.count != $1.ticker.count { return $0.ticker.count < $1.ticker.count }
+            return $0.ticker < $1.ticker
+        }
+        for addition in additions where seen.insert(addition.ticker.uppercased()).inserted {
+            let rank = addition.directMatchRank(text) ?? 3
+            // An alias may match even though the displayed name/code does
+            // not. Preserve that catalog result's priority rather than
+            // trying to re-score it from its display text.
+            let index = merged.firstIndex { ($0.directMatchRank(text) ?? 0) > rank } ?? merged.endIndex
+            merged.insert(addition, at: index)
+        }
+        return merged
+    }
+
+    private func directMatchRank(_ query: String) -> Int? {
+        func fold(_ value: String) -> String {
+            value.folding(options: [.caseInsensitive, .diacriticInsensitive],
+                          locale: Locale(identifier: "en_US_POSIX"))
+        }
+        let text = fold(query), symbol = fold(ticker), company = fold(name)
+        if symbol == text { return 0 }
+        if symbol.hasPrefix(text) { return 1 }
+        if company.hasPrefix(text) { return 2 }
+        if company.contains(text) || symbol.contains(text) { return 3 }
+        return nil
+    }
+
+    func resolvedHolding(in holdings: [Holding]) -> Holding {
+        holdings.first { $0.ticker.caseInsensitiveCompare(ticker) == .orderedSame } ?? holding
     }
 
     /// No shares and no cost, the same shape as an ETF look-through

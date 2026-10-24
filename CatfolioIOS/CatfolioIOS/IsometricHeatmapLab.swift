@@ -37,7 +37,7 @@ struct IsometricHeatmapLabView: View {
             guard let image = renderer.uiImage else { return }
             withAnimation(.easeOut(duration: 0.6)) { texture = Image(uiImage: image) }
         }
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .adaptiveNavigationBackground(visibility: .hidden)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityElement(children: .ignore)

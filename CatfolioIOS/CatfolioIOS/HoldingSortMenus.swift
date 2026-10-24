@@ -75,18 +75,12 @@ struct HeatmapPerformancePeriodMenu: View {
 
     var body: some View {
         Menu {
-            Section(L10n.text("收益时间")) {
+            Picker(L10n.text("收益时间"), selection: $period) {
                 ForEach(HoldingPerformancePeriod.allCases) { option in
-                    Button {
-                        period = option
-                    } label: {
-                        Label(
-                            option.title,
-                            systemImage: period == option ? "checkmark" : option.systemImage
-                        )
-                    }
+                    Text(option.title).tag(option)
                 }
             }
+            .pickerStyle(.inline)
 
             Divider()
 
@@ -122,6 +116,7 @@ struct HoldingSortMenu: View {
     @Binding var ascending: Bool
     @Binding var performancePeriod: HoldingPerformancePeriod
     var iconOnly = false
+    var isSidebar = false
 
     var body: some View {
         menu
@@ -134,34 +129,21 @@ struct HoldingSortMenu: View {
 
     private var menu: some View {
         Menu {
-            Section(L10n.text("收益时间")) {
+            Picker(L10n.text("收益时间"), selection: $performancePeriod) {
                 ForEach(HoldingPerformancePeriod.allCases) { period in
-                    Button {
-                        performancePeriod = period
-                    } label: {
-                        Label(
-                            period.title,
-                            systemImage: performancePeriod == period ? "checkmark" : period.systemImage
-                        )
-                    }
+                    Text(period.title).tag(period)
                 }
             }
+            .pickerStyle(.inline)
 
             Divider()
 
-            Section(L10n.text("排序方式")) {
+            Picker(L10n.text("排序方式"), selection: $field) {
                 ForEach(fields) { option in
-                    Button {
-                        field = option
-                    } label: {
-                        if field == option {
-                            Label(option.title, systemImage: "checkmark")
-                        } else {
-                            Text(option.title)
-                        }
-                    }
+                    Text(option.title).tag(option)
                 }
             }
+            .pickerStyle(.inline)
 
             Divider()
 
@@ -175,8 +157,8 @@ struct HoldingSortMenu: View {
             }
         } label: {
             Group {
-                if iconOnly {
-                    PortfolioFilterLabel()
+                if iconOnly || isSidebar {
+                    PortfolioFilterLabel(iconSize: isSidebar ? 20 : 24)
                 } else {
                     HStack(spacing: 3) {
                         Text(field.compactTitle)
@@ -192,12 +174,15 @@ struct HoldingSortMenu: View {
 
 struct PortfolioFilterLabel: View {
     @Environment(\.portfolioFilterFloats) private var inBar
+    var iconSize: CGFloat = 24
 
     var body: some View {
         Image("AssistantMenu")
             .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
             .foregroundStyle(CatfolioTheme.primaryText)
-            .frame(width: 24, height: 24)
+            .frame(width: iconSize, height: iconSize)
             // The floating glass wrapper supplies its own 44-point target.
             .frame(width: inBar ? nil : 44, height: inBar ? nil : 44)
             .modifier(PortfolioHeaderMaterialControl())

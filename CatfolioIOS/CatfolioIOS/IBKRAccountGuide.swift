@@ -73,14 +73,30 @@ struct IBKRAccountGuide: View {
 /// Reopening help leaves the connection draft and its preview in the parent view.
 struct IBKRGuideHelpView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var step = 0
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
+    @State private var step: Int
+    @State private var showsNextStep = false
     @State private var didCopyBrief = false
+    private var onFinish: (() -> Void)?
+
+    init(initialStep: Int = 0, onFinish: (() -> Void)? = nil) {
+        _step = State(initialValue: initialStep)
+        self.onFinish = onFinish
+    }
+
+    private func finish() {
+        if let onFinish { onFinish() } else { dismiss() }
+    }
+
+    private func next() {
+        if step >= 2 { finish() }
+        else if isWorkspaceDetail { showsNextStep = true }
+        else { step += 1 }
+    }
 
     var body: some View {
         OnboardingPage(scrollReset: step, isAccountPreparation: true) {
-            IBKRAccountGuide(step: step) {
-                if step < 2 { step += 1 } else { dismiss() }
-            } skip: { dismiss() }
+            IBKRAccountGuide(step: step, next: next, skip: finish)
             if step == 1 {
                 Button(didCopyBrief ? L10n.text("已复制，去 IBKR 粘贴给它的助手") : L10n.text("复制配置提示词")) {
                     UIPasteboard.general.string = IBKRFlexQueryBrief.prompt
@@ -90,14 +106,16 @@ struct IBKRGuideHelpView: View {
                 .frame(minHeight: 44)
             }
         } actions: {
-            IBKRAccountGuide(step: step) {
-                if step < 2 { step += 1 } else { dismiss() }
-            } skip: { dismiss() }.actions
+            IBKRAccountGuide(step: step, next: next, skip: finish).actions
         }
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(step > 0)
+        .navigationBarBackButtonHidden(!isWorkspaceDetail && step > 0)
+        .navigationDestination(isPresented: $showsNextStep) {
+            AnyView(IBKRGuideHelpView(initialStep: step + 1, onFinish: onFinish ?? { dismiss() }))
+                .workspaceNavigationChrome()
+        }
         .toolbar {
-            if step > 0 {
+            if step > 0 && !isWorkspaceDetail {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { step -= 1 } label: {
                         Label(L10n.text("上一步"), systemImage: "chevron.left")

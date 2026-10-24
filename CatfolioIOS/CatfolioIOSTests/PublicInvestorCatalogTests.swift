@@ -280,6 +280,10 @@ final class PublicInvestorCatalogTests: XCTestCase {
 
     @MainActor
     func testLiveInvestorAccountTodayHistoryAndPerformance() async throws {
+        try XCTSkipUnless(
+            ProcessInfo.processInfo.environment["CATFOLIO_TEST_PUBLIC_INVESTOR_LIVE"] == "1",
+            "Live investor acceptance is opt-in: set TEST_RUNNER_CATFOLIO_TEST_PUBLIC_INVESTOR_LIVE=1"
+        )
         let defaults = UserDefaults.standard
         let oldMode = defaults.object(forKey: PublicInvestorPreferences.enabledKey)
         let oldSelection = defaults.object(forKey: PublicInvestorPreferences.selectionKey)

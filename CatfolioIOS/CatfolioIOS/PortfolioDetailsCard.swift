@@ -14,6 +14,8 @@ struct PortfolioDetailsCard: View {
     /// rather than inside a card.
     let hero: HeatmapHeroState?
     let floatsFilter: Bool
+    let isSidebar: Bool
+    let searchQuery: String
 
     init(
         holdings: [Holding],
@@ -21,7 +23,9 @@ struct PortfolioDetailsCard: View {
         showsHeatmap: Bool = false,
         zoomNamespace: Namespace.ID? = nil,
         hero: HeatmapHeroState? = nil,
-        floatsFilter: Bool = false
+        floatsFilter: Bool = false,
+        isSidebar: Bool = false,
+        searchQuery: String = ""
     ) {
         self.holdings = holdings
         self.onSelect = onSelect
@@ -29,6 +33,8 @@ struct PortfolioDetailsCard: View {
         self.zoomNamespace = zoomNamespace
         self.hero = hero
         self.floatsFilter = floatsFilter
+        self.isSidebar = isSidebar
+        self.searchQuery = searchQuery
     }
     @AppStorage("portfolio.holdings.mergeETF") private var mergesETF = false
     @AppStorage("portfolio.holdings.shows52Week") private var shows52Week = false
@@ -72,7 +78,9 @@ struct PortfolioDetailsCard: View {
 
     var body: some View {
         Group {
-            if showsHeatmap, let hero {
+            if isSidebar {
+                sidebarSection
+            } else if showsHeatmap, let hero {
                 PerformanceHeatmapHero(
                     state: hero,
                     renderKey: heatmapRenderKey,
@@ -202,17 +210,11 @@ struct PortfolioDetailsCard: View {
     /// once the header has scrolled away, floating at the top of the page.
     private var titleMenu: some View {
         Menu {
-            Button {
-                mergesETF = false
-            } label: {
-                Label(L10n.text("持仓明细"), systemImage: !showsMergedHoldings ? "checkmark" : "list.bullet")
+            Picker(L10n.text("持仓列表"), selection: Binding(get: { showsMergedHoldings }, set: { mergesETF = $0 })) {
+                Text(L10n.text("持仓明细")).tag(false)
+                Text(L10n.text("ETF 穿透")).tag(true)
             }
-            // One look-through list: what was "合并穿透" and "ETF 穿透".
-            Button {
-                mergesETF = true
-            } label: {
-                Label(L10n.text("ETF 穿透"), systemImage: showsMergedHoldings ? "checkmark" : "square.3.layers.3d")
-            }
+            .pickerStyle(.inline)
             Divider()
             Toggle(L10n.text("显示股数"), isOn: $showsShares)
                 .accessibilityIdentifier("portfolio-list-show-shares")
@@ -306,7 +308,8 @@ struct PortfolioDetailsCard: View {
                 fields: sortFields,
                 ascending: $holdingSortAscending,
                 performancePeriod: $holdingPerformancePeriod,
-                iconOnly: true
+                iconOnly: true,
+                isSidebar: isSidebar
             )
         } else {
             HeatmapPerformancePeriodMenu(period: $heatmapPerformancePeriod,
@@ -342,6 +345,7 @@ struct PortfolioDetailsCard: View {
     /// Rows in the list on screen; nil until an ETF breakdown has loaded.
     private var tableCount: Int? {
         guard !showsHeatmap else { return nil }
+        if !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return listItems.count }
         guard showsMergedHoldings else { return holdings.count }
         guard let exposures = listExposures, !exposures.isEmpty else { return nil }
         return exposures.count
@@ -372,8 +376,10 @@ struct PortfolioDetailsCard: View {
     }
 
     private var listItems: [PortfolioHoldingListItem] {
-        PortfolioHoldingListItem.sorted(unsortedListItems, by: holdingSortField, ascending: holdingSortAscending,
-            week52Ranges: week52SortRanges, volumeRanges: volumeSortRanges)
+        PortfolioHoldingListItem.filtered(
+            PortfolioHoldingListItem.sorted(unsortedListItems, by: holdingSortField, ascending: holdingSortAscending,
+                week52Ranges: week52SortRanges, volumeRanges: volumeSortRanges),
+            query: searchQuery)
     }
 
     private var volumeSortLoadKey: String {
@@ -393,7 +399,7 @@ struct PortfolioDetailsCard: View {
     }
 
     @ViewBuilder
-    private var holdingsTable: some View {
+    private var holdingsStatus: some View {
         if showsMergedHoldings {
             if let etfError, failedETFHoldingsKey == etfHoldingsKey {
                 Text(L10n.message(etfError)).appText(.caption).foregroundStyle(.secondary)
@@ -404,6 +410,42 @@ struct PortfolioDetailsCard: View {
                 }
             }
         }
+    }
+
+    private var sidebarSection: some View {
+        Section {
+            holdingsStatus
+            ForEach(listItems) { item in
+                NavigationLink(value: WorkspaceSelection.holding(WorkspaceHoldingDestination(item: item))) {
+                    holdingRow(item)
+                }
+                .accessibilityIdentifier("sidebar.holding.\(item.id)")
+            }
+            if listItems.isEmpty {
+                if model.isPortfolioLoading {
+                    ProgressView().frame(maxWidth: .infinity)
+                } else if !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    ContentUnavailableView.search(text: searchQuery)
+                } else {
+                    Text(L10n.text("暂无持仓数据")).foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            headerRow
+                .textCase(nil)
+                .padding(.vertical, 8)
+                // Catalyst reserves 16pt after a section header but only 8pt
+                // after a row, and ignores listRowInsets on this header.
+                // Reclaim that extra space without moving its leading edge.
+                .padding(.trailing, MacPlatform.isMac ? -8 : 0)
+        }
+        .environment(\.isSidebarHoldingRow, true)
+        .accessibilityIdentifier("workspace.holdings")
+    }
+
+    @ViewBuilder
+    private var holdingsTable: some View {
+        holdingsStatus
         // Both modes keep the same row, zoom source and open action.
         // Until the current exposure data is ready, these are the direct holdings.
         LazyVStack(spacing: 4) {
@@ -413,26 +455,31 @@ struct PortfolioDetailsCard: View {
                     if let detail { onSelect(detail) }
                     else if case let .exposure(row, _, _, _) = item { selectedMergedRow = row }
                 } label: {
-                    if showsVolume {
-                        HoldingVolumeRow(item: item, performancePeriod: holdingPerformancePeriod,
-                            showsWeight: showsWeight, showsTicker: showsTicker, showsShares: showsShares,
-                            showsPerformanceAmount: showsPerformanceAmount, showsPerformancePercent: showsPerformancePercent,
-                            suppliedRange: holdingSortField == .volumeArea ? volumeSortRanges[item.ticker.uppercased()] : nil,
-                            loadsRange: holdingSortField != .volumeArea)
-                    } else if shows52Week {
-                        Holding52WeekRow(item: item, performancePeriod: holdingPerformancePeriod,
-                            showsWeight: showsWeight, showsTicker: showsTicker, showsShares: showsShares,
-                            showsPerformanceAmount: showsPerformanceAmount, showsPerformancePercent: showsPerformancePercent,
-                            suppliedRange: holdingSortField == .week52Position ? week52SortRanges[item.ticker.uppercased()] : nil,
-                            loadsRange: holdingSortField != .week52Position)
-                    } else {
-                        HoldingRow(item: item, performancePeriod: holdingPerformancePeriod, showsWeight: showsWeight, showsTicker: showsTicker, showsShares: showsShares,
-                            showsPerformanceAmount: showsPerformanceAmount, showsPerformancePercent: showsPerformancePercent)
-                    }
+                    holdingRow(item)
                 }
                 .buttonStyle(HoldingPressButtonStyle())
                 .holdingZoomSource(item.ticker, in: detail == nil ? nil : zoomNamespace)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func holdingRow(_ item: PortfolioHoldingListItem) -> some View {
+        if showsVolume {
+            HoldingVolumeRow(item: item, performancePeriod: holdingPerformancePeriod,
+                showsWeight: showsWeight, showsTicker: showsTicker, showsShares: showsShares,
+                showsPerformanceAmount: showsPerformanceAmount, showsPerformancePercent: showsPerformancePercent,
+                suppliedRange: holdingSortField == .volumeArea ? volumeSortRanges[item.ticker.uppercased()] : nil,
+                loadsRange: holdingSortField != .volumeArea)
+        } else if shows52Week {
+            Holding52WeekRow(item: item, performancePeriod: holdingPerformancePeriod,
+                showsWeight: showsWeight, showsTicker: showsTicker, showsShares: showsShares,
+                showsPerformanceAmount: showsPerformanceAmount, showsPerformancePercent: showsPerformancePercent,
+                suppliedRange: holdingSortField == .week52Position ? week52SortRanges[item.ticker.uppercased()] : nil,
+                loadsRange: holdingSortField != .week52Position)
+        } else {
+            HoldingRow(item: item, performancePeriod: holdingPerformancePeriod, showsWeight: showsWeight, showsTicker: showsTicker, showsShares: showsShares,
+                showsPerformanceAmount: showsPerformanceAmount, showsPerformancePercent: showsPerformancePercent)
         }
     }
 

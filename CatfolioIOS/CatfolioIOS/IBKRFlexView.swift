@@ -177,6 +177,11 @@ struct IBKRFlexView: View {
                 showsSyncConfirmation = true
             }
         } else {
+            Button(isWorking ? L10n.text("正在读取") : L10n.text("现在就读取持仓")) {
+                startPreview()
+            }
+            .appText(.callout, weight: .medium)
+            .disabled(isWorking || !hasCompleteCredentials)
             OnboardingPrimaryButton(
                 title: context.isCreating ? L10n.text("保存并创建账户") : L10n.text("保存凭证"),
                 isDisabled: !hasCompleteCredentials || !hasValidNickname,
@@ -184,11 +189,6 @@ struct IBKRFlexView: View {
             ) {
                 Task { await saveAndClose() }
             }
-            Button(isWorking ? L10n.text("正在读取") : L10n.text("现在就读取持仓")) {
-                startPreview()
-            }
-            .appText(.callout, weight: .medium)
-            .disabled(isWorking || !hasCompleteCredentials)
         }
     }
 

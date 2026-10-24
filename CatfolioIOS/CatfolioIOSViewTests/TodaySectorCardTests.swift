@@ -4,6 +4,24 @@ import XCTest
 
 @MainActor
 final class TodaySectorCardTests: XCTestCase {
+    func testAmountsOnlyKeepCentsBelowOneDisplayedCurrencyUnit() throws {
+        let defaults = UserDefaults.standard
+        let previous = defaults.object(forKey: DisplayCurrency.preferenceKey)
+        defer { defaults.set(previous, forKey: DisplayCurrency.preferenceKey) }
+        defaults.set("USD", forKey: DisplayCurrency.preferenceKey)
+        for (amount, expected) in [(12.34, "+$12"), (12.75, "+$13"), (-12.34, "-$12"),
+                                   (1, "+$1"), (-1, "-$1"), (0, "+$0"),
+                                   (0.01, "+$0.01"), (-0.01, "-$0.01"), (0.5, "+$0.50"),
+                                   (0.99, "+$0.99")] {
+            XCTAssertEqual(TodaySectorRow.amountText(amount), expected)
+        }
+        defaults.set("JPY", forKey: DisplayCurrency.preferenceKey)
+        let rate = try XCTUnwrap(LocalPortfolioEngine.usdRate(for: "JPY"))
+        XCTAssertTrue(TodaySectorRow.amountText(12.34 * rate).hasSuffix("12"),
+                      "Choose precision after display-currency conversion, even when the USD amount is below one")
+        XCTAssertTrue(TodaySectorRow.amountText(0.01 * rate).hasSuffix("0.01"))
+    }
+
     func testSectorIconTonesStayOpaqueAndReadableInBothAppearances() {
         let sectors: [PortfolioSector?] = PortfolioSector.allCases.map { $0 } + [nil]
         for scheme in [ColorScheme.light, .dark] {
@@ -50,47 +68,78 @@ final class TodaySectorCardTests: XCTestCase {
         }
     }
 
-    func testRenderedGroupCentersItsOccupiedRangeAndKeepsOneProportionalScale() throws {
-        let scenarios: [[Double]] = [[-100, -50], [100, 50], [-100, 10], [-10, 100],
-                                     [-100, 100, 0], [0, 0], []]
-        for amounts in scenarios {
-            let maximum = amounts.map { abs($0) }.max() ?? 0
-            let zero = TodaySectorBar.centeredZeroFraction(for: amounts)
-            var occupied: [Int] = []
-            for amount in amounts {
-                let columns = try renderedColumns(amount: amount, maximum: maximum, zeroFraction: zero)
-                occupied.append(contentsOf: columns)
-                XCTAssertEqual(Double(columns.count), maximum > 0 ? abs(amount) / maximum * 100 : 0, accuracy: 2,
-                               "Centering translates bars without changing their relative lengths")
-                if amount != 0 {
-                    let edge: Int
-                    if amount < 0 {
-                        edge = try XCTUnwrap(columns.last) + 1
-                    } else {
-                        edge = try XCTUnwrap(columns.first)
-                    }
-                    XCTAssertEqual(Double(edge), Double(zero * 200), accuracy: 1,
-                                   "Every bar must still meet the same zero axis")
+    func testEveryTrackKeepsACenteredZeroMarkerAndSubtleBackground() throws {
+        for scheme in [ColorScheme.light, .dark] {
+            for amount in [-100.0, -25, 0, 25, 100] {
+                let pixels = try renderedPixels(amount: amount, maximum: 100, scheme: scheme)
+                func brightness(_ x: Int, _ y: Int) -> Double {
+                    let index = (y * 200 + x) * 4
+                    return pixels[index..<index + 3].map(Double.init).reduce(0, +) / 3
                 }
-            }
-            if maximum > 0 {
-                let left = try XCTUnwrap(occupied.min())
-                let right = try XCTUnwrap(occupied.max()) + 1
-                XCTAssertEqual(Double(left + right) / 2, 100, accuracy: 1,
-                               "The whole occupied range must center in its column: \(amounts)")
-                XCTAssertGreaterThanOrEqual(left, 0)
-                XCTAssertLessThanOrEqual(right, 200)
-            } else {
-                XCTAssertTrue(occupied.isEmpty)
-                XCTAssertEqual(zero, 0.5)
+                // The zero tick stays inside the track's height in every row.
+                let background = brightness(20, 7)
+                let marker = brightness(100, 12)
+                XCTAssertGreaterThan(abs(marker - background), 100)
+                for y in [0, 7, 16, 23] {
+                    XCTAssertEqual(brightness(100, y), background, accuracy: 1,
+                                   "The marker must not extend above or below the eight-point track")
+                }
+                let emptySide = amount <= 0 ? 180 : 20
+                let track = brightness(emptySide, 12)
+                XCTAssertGreaterThan(abs(track - background), 2, "Even zero values retain a visible track")
+                XCTAssertLessThan(abs(track - background), 35, "The neutral track must stay very subtle")
+                if scheme == .light {
+                    XCTAssertLessThan(marker, background, "The light appearance uses a black zero tick")
+                } else {
+                    XCTAssertGreaterThan(marker, background, "The dark appearance keeps the zero tick readable")
+                }
             }
         }
     }
 
-    private func renderedColumns(amount: Double, maximum: Double, zeroFraction: CGFloat = 0.5) throws -> [Int] {
+    func testGradientIntensifiesAwayFromZeroOnTheSharedScale() throws {
+        for scheme in [ColorScheme.light, .dark] {
+            for sign in [-1.0, 1.0] {
+                let full = try renderedPixels(amount: sign * 100, maximum: 100, scheme: scheme)
+                let short = try renderedPixels(amount: sign * 25, maximum: 100, scheme: scheme)
+                func channel(_ pixels: [UInt8], x: Int, _ component: Int) -> Int {
+                    Int(pixels[(12 * 200 + x) * 4 + component])
+                }
+                let near = sign > 0 ? 110 : 89
+                let far = sign > 0 ? 190 : 9
+                XCTAssertGreaterThan(channel(full, x: far, 2) - channel(full, x: near, 2), 60,
+                                     "Blue increases towards teal for gains and violet for losses")
+                for component in 0..<3 {
+                    XCTAssertEqual(channel(full, x: near, component), channel(short, x: near, component),
+                                   accuracy: 2, "Equal magnitudes must have equal colours on short and long bars")
+                }
+                if sign > 0 {
+                    XCTAssertGreaterThan(channel(full, x: far, 1), channel(full, x: far, 0) + 60)
+                    XCTAssertEqual(channel(full, x: far, 1), channel(full, x: far, 2), accuracy: 30)
+                } else {
+                    XCTAssertGreaterThan(channel(full, x: far, 0), channel(full, x: far, 1) + 60)
+                    XCTAssertGreaterThan(channel(full, x: far, 2), channel(full, x: far, 1) + 60)
+                }
+            }
+        }
+    }
+
+    private func renderedColumns(amount: Double, maximum: Double) throws -> [Int] {
+        let pixels = try renderedPixels(amount: amount, maximum: maximum)
+        return (0..<200).filter { x in
+            let index = (Int(TodaySectorBar.height / 2) * 200 + x) * 4
+            let channels = pixels[index..<index + 3].map(Int.init)
+            return channels.max()! - channels.min()! > 40
+        }
+    }
+
+    private func renderedPixels(amount: Double, maximum: Double, scheme: ColorScheme = .light) throws -> [UInt8] {
         let renderer = ImageRenderer(content:
-            TodaySectorBar(amount: amount, largestMagnitude: maximum, tint: .green, zeroFraction: zeroFraction)
-                .frame(width: 200, height: TodaySectorBar.height).background(.white))
+            TodaySectorBar(amount: amount, largestMagnitude: maximum,
+                           tint: amount < 0 ? CatfolioTheme.danger : CatfolioTheme.positive)
+                .frame(width: 200, height: TodaySectorBar.height)
+                .background(SettingsTemplate.card)
+                .environment(\.colorScheme, scheme))
         renderer.scale = 1
         let bitmap = try XCTUnwrap(renderer.cgImage)
         var pixels = [UInt8](repeating: 0, count: 200 * Int(TodaySectorBar.height) * 4)
@@ -98,10 +147,7 @@ final class TodaySectorCardTests: XCTestCase {
             bitsPerComponent: 8, bytesPerRow: 800, space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
         context.draw(bitmap, in: CGRect(x: 0, y: 0, width: 200, height: TodaySectorBar.height))
-        return (0..<200).filter { x in
-            let index = (Int(TodaySectorBar.height / 2) * 200 + x) * 4
-            return Int(pixels[index + 1]) - Int(pixels[index]) > 30
-        }
+        return pixels
     }
 
     func testSectorCardFitsLanguagesSchemesAndLargeText() async throws {

@@ -134,8 +134,8 @@ struct ManagementDeliveryCard: View {
                 subtitle: L10n.text("过去的承诺，后来的结果"), isLoading: store.busy)
         }
         .buttonStyle(PanelPressButtonStyle())
-        .appSheet(isPresented: $expanded) {
-            NavigationStack {
+        .workspacePage(isPresented: $expanded) {
+            DetailPageNavigation {
                 ScrollView {
                     sheetContent
                         .padding(20)
@@ -144,7 +144,7 @@ struct ManagementDeliveryCard: View {
                 .navigationTitle(L10n.text("管理层兑现情况"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { HoldingDetailCloseToolbar { expanded = false } }
-                .appSheet(item: $selectedSource) { document in ManagementDeliverySourceView(document: document) }
+                .workspacePage(item: $selectedSource) { document in ManagementDeliverySourceView(document: document) }
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
@@ -300,7 +300,7 @@ private struct ManagementDeliverySourceView: View {
     let document: ManagementDocument
     @Environment(\.dismiss) private var dismiss
     var body: some View {
-        NavigationStack {
+        DetailPageNavigation {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     Text(document.title).font(.headline)

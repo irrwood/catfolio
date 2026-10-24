@@ -188,6 +188,7 @@ enum IndustrySentimentCache {
 }
 
 struct IndustrySentimentView: View {
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var inheritedColorScheme
@@ -237,7 +238,7 @@ struct IndustrySentimentView: View {
         // The shared dial selects its preserved silver/white artwork by day
         // and its original dark artwork at night.
         .toolbarColorScheme(inheritedColorScheme, for: .navigationBar)
-        .navigationTitle(mechanicalDial ? "" : L10n.text("行业情绪"))
+        .navigationTitle(mechanicalDial && !isWorkspaceDetail ? "" : L10n.text("行业情绪"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

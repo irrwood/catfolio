@@ -3,22 +3,6 @@ import Charts
 import CryptoKit
 import Observation
 
-/// The pushed attention page keeps its original system filter.
-private struct ResearchSystemSearch: ViewModifier {
-    let showsAttention: Bool
-    @Binding var query: String
-    @Binding var isPresented: Bool
-    let holdings: [Holding]
-    let onSelect: (MarketSecurityResult) -> Void
-    func body(content: Content) -> some View {
-        if showsAttention { content.searchable(text: $query, prompt: L10n.text("搜索持仓")) }
-        else {
-            content.modifier(ResearchMarketSearch(holdings: holdings, onSelect: onSelect,
-                                                  isPresented: $isPresented))
-        }
-    }
-}
-
 struct ResearchView: View {
     var showsAttention = false
     var titleDisplayMode: NavigationBarItem.TitleDisplayMode = .large
@@ -82,11 +66,12 @@ struct ResearchView: View {
             Task { try? await ResearchAnalysisCache.shared.save(current, scope: scope) }
         } : nil)
         .tracksRootTabBarScroll()
-        .navigationTitle(showsAttention ? L10n.text("今天值得关注") : ResearchMarketSearch.navigationTitle)
-        .navigationBarTitleDisplayMode(showsAttention ? titleDisplayMode : .large)
+        .pageNavigationTitle(showsAttention ? L10n.text("今天值得关注") : ResearchMarketSearch.navigationTitle,
+                             preferredDisplayMode: showsAttention ? titleDisplayMode : .large,
+                             role: showsAttention ? .detail : .root)
         .toolbarVisibility(.visible, for: .navigationBar)
         // The pushed attention page keeps its own filter and rule controls.
-        .modifier(ResearchSystemSearch(showsAttention: showsAttention, query: $query,
+        .modifier(PageMarketSearch(filtersHoldings: showsAttention, query: $query,
                                        isPresented: $isSearchPresented,
                                        holdings: model.holdings, onSelect: open))
         .toolbar {
@@ -192,8 +177,8 @@ struct ResearchView: View {
     }
 
     private var researchPage: some View {
-        SettingsPage(pageBackground: .clear) {
-            ResearchSearchSlot()
+        SettingsPage(navigationRole: .root, pageBackground: .clear) {
+            PageMarketSearchSlot()
             // The indicators sit right under the search, without a header.
             VStack(alignment: .leading, spacing: SettingsTemplate.sectionSpacing) {
                 LazyVGrid(
@@ -343,15 +328,11 @@ struct ResearchView: View {
         return change >= 0 ? CatfolioTheme.positive : CatfolioTheme.danger
     }
 
-    private func heldHolding(_ ticker: String) -> Holding? {
-        model.holdings.first { $0.ticker.caseInsensitiveCompare(ticker) == .orderedSame }
-    }
-
     /// A held security opens with its position; anything else opens bare.
     private func open(_ result: MarketSecurityResult) {
         // The keyboard would otherwise stay up over the sheet and cover half
         // the page. The query stays, so closing the sheet returns to the list.
-        let holding = heldHolding(result.ticker) ?? result.holding
+        let holding = result.resolvedHolding(in: model.holdings)
         // Read the cached chart while the sheet is still opening.
         HoldingDetailContentView.prefetch(holding, model: model)
         selectedSecurity = holding

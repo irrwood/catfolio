@@ -80,6 +80,14 @@ enum PortfolioHoldingListItem: Identifiable {
         }
     }
 
+    /// Search the already prepared rows so both direct holdings and ETF
+    /// exposure keep their amounts, ordering and real detail positions.
+    static func filtered(_ items: [Self], query: String) -> [Self] {
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return items }
+        return items.filter { $0.ticker.localizedStandardContains(query) || $0.name.localizedStandardContains(query) }
+    }
+
     static func sorted(_ items: [Self], by field: HoldingSortField, ascending: Bool,
                        week52Ranges: [String: Holding52WeekRange] = [:],
                        volumeRanges: [String: HoldingVolumeRange] = [:]) -> [Self] {

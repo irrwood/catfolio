@@ -78,8 +78,7 @@ struct DCACalculatorView: View {
     .background(SettingsTemplate.pageBackground)
     .navigationTitle(L10n.text("定投计算器"))
     .navigationBarTitleDisplayMode(.inline)
-    .toolbarBackground(SettingsTemplate.pageBackground, for: .navigationBar)
-    .toolbarBackground(.visible, for: .navigationBar)
+    .adaptiveNavigationBackground(SettingsTemplate.pageBackground)
     .toolbarColorScheme(colorScheme, for: .navigationBar)
     .scrollDismissesKeyboard(.interactively)
     .appSheet(isPresented: $showsAmount) { amountSheet }

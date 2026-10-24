@@ -122,7 +122,7 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        SettingsPage(title: L10n.text("账户"), pageBackground: .clear) {
+        SettingsPage(title: L10n.text("账户"), navigationRole: .root, pageBackground: .clear) {
             // Portfolio mode, account activity and scope stay here; app preferences have one entry.
             if !model.accounts.isEmpty {
                 SettingsHistoryOverview()

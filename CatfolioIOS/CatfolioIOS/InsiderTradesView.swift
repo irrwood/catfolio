@@ -17,7 +17,7 @@ struct HoldingInsiderTradesCard: View {
         }
         .buttonStyle(PanelPressButtonStyle())
         .accessibilityIdentifier("holding-insider-trades")
-        .appSheet(isPresented: $showsTrades) {
+        .workspacePage(isPresented: $showsTrades) {
             // A plain sheet sliding up, like the other research cards'.
             InsiderTradesSheet(symbol: holding.ticker)
                 .presentationDetents([.large])
@@ -35,7 +35,7 @@ struct InsiderTradesSheet: View {
     @State private var showsAll = false
 
     var body: some View {
-        NavigationStack {
+        DetailPageNavigation {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     if let snapshot {

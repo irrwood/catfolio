@@ -68,6 +68,10 @@ enum MacPlatform {
     /// window and menu-bar commands.
     static let isMac = ProcessInfo.processInfo.isMacCatalystApp
 
+    @MainActor static var usesWorkspace: Bool {
+        isMac || UIDevice.current.userInterfaceIdiom == .pad
+    }
+
     /// Wide enough for the sidebar and Overview's two phone-width columns.
     static let minimumWindowSize = CGSize(width: 1000, height: 640)
 
@@ -77,197 +81,26 @@ enum MacPlatform {
         for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
             scene.sizeRestrictions?.minimumSize = minimumWindowSize
             #if targetEnvironment(macCatalyst)
-            scene.titlebar?.titleVisibility = .hidden
+            scene.titlebar?.titleVisibility = .visible
             scene.titlebar?.toolbarStyle = .unified
             #endif
         }
     }
 }
 
-/// On the Mac the root tabs become a sidebar; iOS keeps its tab bar.
-struct MacSidebarTabStyle: ViewModifier {
-    func body(content: Content) -> some View {
-        if MacPlatform.isMac {
-            content.tabViewStyle(.sidebarAdaptable)
-        } else {
-            content
-        }
-    }
-}
-
-/// How wide a sidebar page grows on the Mac; the column beside it, where
-/// its subpages open, takes the rest of the window.
-enum MacPageWidth {
-    /// A single column of phone-width cards.
-    static let standard: CGFloat = 960
-    /// The Overview's rows of two cards need more room.
-    static let overview: CGFloat = 1320
-}
-
 extension EnvironmentValues {
-    /// Keeps a Mac split page's columns; see `MacSplitPage`.
-    @Entry var macSplitWidths: MacSplitWidths?
-    /// The home chart sits on a white card rather than the blue page, so its
-    /// market line cannot be white.
+    /// The home chart sits on a white card rather than the blue page.
     @Entry var portfolioChartOnCard = false
 }
 
-/// Shows a page in the right-hand column of the Mac's split pages: the
-/// column every subpage, a security's page included, opens in.
+/// Existing security presenters push onto the workspace's detail stack.
 struct MacDetailColumn {
     let open: (AnyView) -> Void
     let close: () -> Void
 }
 
 extension EnvironmentValues {
-    /// Set inside a Mac split page; nil on iOS.
     @Entry var macDetailColumn: MacDetailColumn?
-}
-
-/// A sidebar page on the Mac: the page on the left, and on the right a
-/// column for what it opens. Links on the page open in that column, and
-/// links there go on within it.
-enum MacSplitColumns {
-    static let minimumPageWidth: CGFloat = 420
-    static let minimumDetailWidth: CGFloat = 360
-    /// The share of the split the subpage column keeps, so a security's page
-    /// opened beside the page still has room to read.
-    static let detailShare: CGFloat = 0.4
-
-    /// The page's width in a split this wide: as wide as it grows, after the
-    /// subpage column has its share, and never below its own minimum.
-    static func pageWidth(available: CGFloat, maximum: CGFloat) -> CGFloat {
-        let detail = max(minimumDetailWidth, (available * detailShare).rounded())
-        let page = min(maximum, available - detail)
-        return max(min(minimumPageWidth, maximum), page).rounded()
-    }
-}
-
-/// A sidebar page on the Mac keeps its own width and the column beside it,
-/// where subpages open, takes the rest. On the Mac the split is a divider a
-/// person can drag, and a preferred width only seeds where it starts: left
-/// alone it settled at about half the window, whatever SwiftUI or a
-/// preferred width asked for. The page's width is pinned instead (the same
-/// minimum and maximum), worked out again whenever the window changes.
-/// Set straight on the split view, outside SwiftUI's update, so restoring it
-/// cannot start another update; values it already has are left alone.
-@MainActor
-final class MacSplitWidths {
-    weak var split: UISplitViewController? {
-        didSet { if split !== oldValue { observeResizing() } }
-    }
-    let pageWidth: CGFloat
-
-    init(pageWidth: CGFloat) {
-        self.pageWidth = pageWidth
-    }
-
-    /// SwiftUI reports a new window size before UIKit has resized the split
-    /// view, so the width it read then was the old one. A view riding along
-    /// inside the split hears each real change of its width instead.
-    private func observeResizing() {
-        guard let split else { return }
-        guard !split.view.subviews.contains(where: { $0 is SplitResizeObserver }) else { return }
-        let observer = SplitResizeObserver(frame: split.view.bounds)
-        observer.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        observer.isUserInteractionEnabled = false
-        observer.onResize = { [weak self] in self?.apply() }
-        split.view.insertSubview(observer, at: 0)
-    }
-
-    func apply() {
-        guard let split else { return }
-        let available = split.view.bounds.width
-        guard available > 0 else { return }
-        let page = MacSplitColumns.pageWidth(available: available, maximum: pageWidth)
-        if split.preferredSplitBehavior != .tile { split.preferredSplitBehavior = .tile }
-        if split.preferredDisplayMode != .oneBesideSecondary { split.preferredDisplayMode = .oneBesideSecondary }
-        // Widen the range before narrowing it, so the two never cross.
-        if page > split.maximumPrimaryColumnWidth {
-            split.maximumPrimaryColumnWidth = page
-            split.minimumPrimaryColumnWidth = page
-        } else {
-            if split.minimumPrimaryColumnWidth != page { split.minimumPrimaryColumnWidth = page }
-            if split.maximumPrimaryColumnWidth != page { split.maximumPrimaryColumnWidth = page }
-        }
-        if split.preferredPrimaryColumnWidth != page { split.preferredPrimaryColumnWidth = page }
-        if #available(iOS 26.0, macCatalyst 26.0, *) {
-            if split.minimumSecondaryColumnWidth != MacSplitColumns.minimumDetailWidth {
-                split.minimumSecondaryColumnWidth = MacSplitColumns.minimumDetailWidth
-            }
-            let secondary = available - page
-            if split.preferredSecondaryColumnWidth != secondary { split.preferredSecondaryColumnWidth = secondary }
-        }
-        // A changed width does not move the divider until the split lays out.
-        if abs(split.primaryColumnWidth - page) > 0.5 {
-            split.view.setNeedsLayout()
-            split.view.layoutIfNeeded()
-        }
-    }
-}
-
-/// Calls back once the split view it sits in has really changed width.
-private final class SplitResizeObserver: UIView {
-    var onResize: (() -> Void)?
-    private var lastWidth: CGFloat = 0
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        guard abs(bounds.width - lastWidth) > 0.5 else { return }
-        lastWidth = bounds.width
-        // After this layout pass, not inside it.
-        DispatchQueue.main.async { [weak self] in self?.onResize?() }
-    }
-}
-
-struct MacSplitPage<Content: View>: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let pageWidth: CGFloat
-    let content: Content
-    @State private var page: OpenedPage?
-    @State private var widths: MacSplitWidths
-
-    init(pageWidth: CGFloat, @ViewBuilder content: () -> Content) {
-        self.pageWidth = pageWidth
-        self.content = content()
-        _widths = State(initialValue: MacSplitWidths(pageWidth: pageWidth))
-    }
-
-    private struct OpenedPage {
-        let id = UUID()
-        let view: AnyView
-    }
-
-    var body: some View {
-        NavigationSplitView(columnVisibility: .constant(.all)) {
-            content
-                .navigationDestination(isPresented: Binding(
-                    get: { page != nil },
-                    set: { if !$0 { page = nil } }
-                )) {
-                    if let page { page.view.id(page.id) }
-                }
-                .environment(\.macDetailColumn, MacDetailColumn(
-                    open: { page = OpenedPage(view: $0) },
-                    close: { page = nil }
-                ))
-                .environment(\.macSplitWidths, widths)
-                // A page opening beside it, a plain link included, or a
-                // resized window can squeeze this column: keep it.
-                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { _ in widths.apply() }
-                .navigationSplitViewColumnWidth(min: MacSplitColumns.minimumPageWidth, ideal: pageWidth, max: pageWidth)
-                .toolbar(removing: .sidebarToggle)
-        } detail: {
-            // Empty until the page opens something.
-            PortfolioHomePageBackdrop(colorScheme: colorScheme, isPaused: true)
-                .ignoresSafeArea()
-        }
-        .navigationSplitViewStyle(.balanced)
-        // The sidebar takes the accent for its selection; the pages keep the
-        // ink they have on the phone.
-        .tint(.primary)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { _ in widths.apply() }
-    }
 }
 
 /// Tracks the Mac pointer over its content; never hovered on iOS, so touch

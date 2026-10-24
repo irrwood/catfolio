@@ -15,6 +15,29 @@ final class PortfolioHoldingListTests: XCTestCase {
             fundMarketValues: ["VUAG.L": 50])
     }
 
+    func testSearchMatchesNamesAndTickersWithoutChangingOrderOrAmounts() throws {
+        let items = PortfolioHoldingListItem.make(holdings: [
+            holding("AAPL", name: "Apple Inc.", value: 200),
+            holding("MSFT", name: "Microsoft", value: 300),
+            holding("0700.HK", name: "腾讯控股", value: 100)
+        ], period: .holdingPeriod, dailyChanges: [:])
+        XCTAssertEqual(PortfolioHoldingListItem.filtered(items, query: "  aapl ").map(\.id), ["AAPL"])
+        XCTAssertEqual(PortfolioHoldingListItem.filtered(items, query: "Micro").map(\.id), ["MSFT"])
+        XCTAssertEqual(PortfolioHoldingListItem.filtered(items, query: "腾讯").map(\.id), ["0700.HK"])
+        XCTAssertTrue(PortfolioHoldingListItem.filtered(items, query: "missing ticker").isEmpty)
+        XCTAssertEqual(PortfolioHoldingListItem.filtered(items, query: "  ").map(\.id), items.map(\.id))
+        XCTAssertEqual(PortfolioHoldingListItem.filtered(items, query: "aapl").first?.marketValue, 200)
+    }
+
+    func testSearchIncludesUnheldConstituentsAndETFRemainder() {
+        let rows = [exposure("MSFT", name: "Microsoft"), exposure("ETF 其他", name: "Other")]
+        let items = PortfolioHoldingListItem.make(holdings: [holding("VUAG.L")], exposures: rows,
+                                                  period: .holdingPeriod, dailyChanges: [:])
+        XCTAssertEqual(PortfolioHoldingListItem.filtered(items, query: "msft").map(\.id), ["MSFT"])
+        XCTAssertEqual(PortfolioHoldingListItem.filtered(items, query: "ETF").map(\.id), ["ETF 其他"])
+        XCTAssertNil(PortfolioHoldingListItem.filtered(items, query: "ETF").first?.detailHolding)
+    }
+
     func testDirectWeightsFollowSelectedAccountsInsteadOfProfitOrShareCount() throws {
         let positions = [("AAA", 50.0, "A"), ("BBB", 150.0, "A"), ("CCC", 800.0, "B")].map {
             LocalPositionRecord(ticker: $0.0, name: $0.0, shares: 1, averageCost: 10,

@@ -59,6 +59,31 @@ enum CatfolioPalette {
         }
     }
 
+    /// Muted glyphs on pale, opaque circles. Dark mode uses its own gentle
+    /// contrast rather than swapping the light-mode foreground and background.
+    enum SectorIcon {
+        static func colors(for sector: PortfolioSector?, scheme: ColorScheme)
+            -> (foreground: Color, background: Color) {
+            let tones: (ink: UInt32, fill: UInt32, nightInk: UInt32, nightFill: UInt32) = switch sector {
+            case .technology:        (0x70679B, 0xF0EEF6, 0xB7AFD5, 0x302D3E)
+            case .healthcare:        (0x54877E, 0xEBF3F0, 0x9FC8BD, 0x263B35)
+            case .financials:        (0x5C7B98, 0xEDF2F7, 0xAAC3DA, 0x2A3542)
+            case .consumerCyclical:  (0xA27654, 0xF7F0E9, 0xD7B392, 0x403328)
+            case .consumerDefensive: (0x7C8555, 0xF1F3E9, 0xBDC69A, 0x343A28)
+            case .industrials:       (0x6D7D88, 0xEFF2F4, 0xB0BEC8, 0x2E363C)
+            case .energy:            (0x9B8048, 0xF6F2E8, 0xD5C08F, 0x3D3627)
+            case .materials:         (0x668572, 0xEDF3EE, 0xA9C8B2, 0x2D3A30)
+            case .realEstate:        (0x947567, 0xF5EFEB, 0xCCB3A6, 0x3D322D)
+            case .utilities:         (0x637EA7, 0xEDF1F8, 0xADC2E1, 0x2C3546)
+            case .communication:     (0x538591, 0xEAF3F5, 0x9DC8D2, 0x293B40)
+            case nil:                (0x7C8087, 0xF0F1F3, 0xB9BDC4, 0x33363B)
+            }
+            return scheme == .dark
+                ? (color(tones.nightInk), color(tones.nightFill))
+                : (color(tones.ink), color(tones.fill))
+        }
+    }
+
     /// Existing chart swatches, shared without rounding their RGB components
     /// to nearby hex colours or changing their categorical assignments.
     enum ChartSeries {
@@ -247,6 +272,9 @@ enum CatfolioPalette {
     /// Figma Today-card negative series and its ambient dark-mode light source.
     static let contributionRed = color(0xD5312C)
     static let contributionRedGlow = color(0xE2433C)
+    /// Far ends of the Today sector scale: gains cool to teal, losses to violet.
+    static let sectorGainTip = color(0x20BFC2)
+    static let sectorLossTip = color(0xA946BD)
 
     /// Compact calendar card and date tile, Figma 610:14785.
     static let calendarMonth = dynamic(light: 0xD93835, dark: 0xFF736D)
@@ -346,25 +374,10 @@ enum CatfolioPalette {
 /// Semantic application colors. Views should depend on these roles instead of
 /// palette swatches so changing one token updates every related screen.
 enum CatfolioTheme {
-    /// Two opaque tones from the sector chart's colour families. Reverse the
-    /// tones at night so small glyphs remain distinct on their solid circles.
+    /// Quiet sector identities, separate from the gain/loss colours of the bars.
     static func sectorIconColors(for sector: PortfolioSector?, scheme: ColorScheme)
         -> (foreground: Color, background: Color) {
-        let tones: (ink: Color, fill: Color) = switch sector {
-        case .technology: (CatfolioPalette.violet900, CatfolioPalette.violet50)
-        case .healthcare: (CatfolioPalette.yellow900, CatfolioPalette.yellow50)
-        case .financials: (CatfolioPalette.green900, CatfolioPalette.green50)
-        case .consumerCyclical: (CatfolioPalette.sky900, CatfolioPalette.blue50)
-        case .consumerDefensive: (CatfolioPalette.coral900, CatfolioPalette.coral50)
-        case .industrials: (CatfolioPalette.rose900, CatfolioPalette.rose50)
-        case .energy: (CatfolioPalette.magenta900, CatfolioPalette.magenta50)
-        case .materials: (CatfolioPalette.teal900, CatfolioPalette.teal50)
-        case .realEstate: (CatfolioPalette.magenta700, CatfolioPalette.magenta50)
-        case .utilities: (CatfolioPalette.blue900, CatfolioPalette.blue50)
-        case .communication: (CatfolioPalette.sky900, CatfolioPalette.sky50)
-        case nil: (CatfolioPalette.neutral700, CatfolioPalette.neutral200)
-        }
-        return scheme == .dark ? (tones.fill, tones.ink) : (tones.ink, tones.fill)
+        CatfolioPalette.SectorIcon.colors(for: sector, scheme: scheme)
     }
 
     /// White glass suggestions over the assistant's shared home backdrop.
@@ -432,6 +445,8 @@ enum CatfolioTheme {
     })
     static let positive = CatfolioPalette.green500
     static let danger = CatfolioPalette.rose500
+    static let sectorGainTip = CatfolioPalette.sectorGainTip
+    static let sectorLossTip = CatfolioPalette.sectorLossTip
     static let warning = CatfolioPalette.orange500
 
     static let trading212 = accent

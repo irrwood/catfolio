@@ -246,7 +246,7 @@ struct HoldingContributionChart: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(ReturnsSourceChartStyle.incomeBackground.ignoresSafeArea())
         .foregroundStyle(.white)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .adaptiveNavigationBackground(visibility: .hidden)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 IncludesSoldMenu(isOn: $includesSold)

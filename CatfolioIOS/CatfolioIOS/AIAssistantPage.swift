@@ -162,9 +162,11 @@ struct AIConversationCardClip: Shape {
 /// Use the home's soft scroll edge so content dissolves under the toolbar
 /// without an additional opaque white/black wash.
 struct AIConversationTopEdge: ViewModifier {
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
     @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
+        if isWorkspaceDetail { content }
+        else if #available(iOS 26.0, *) {
             content.modifier(PortfolioTopScrollEdge(hasFloatingHeader: true))
         } else {
             content.overlay { AIConversationTopFade() }

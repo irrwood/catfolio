@@ -4,6 +4,8 @@ import SwiftUI
 /// The footer has its own layout space; scrolling fields stop above the action,
 /// including while the keyboard reduces the available height.
 struct OnboardingPage<Content: View, Actions: View>: View {
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
+    @State private var workspaceTitle = ""
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.hasSharedOnboardingBackground) private var sharedBackground
     @Environment(\.usesPaywallOnboardingStyle) private var paywallStyle
@@ -45,12 +47,13 @@ struct OnboardingPage<Content: View, Actions: View>: View {
         }
         .foregroundStyle(paywallStyle ? .white : CatfolioTheme.primaryText)
         .tint(paywallStyle ? .white : (accountTheme?.controlTint ?? CatfolioTheme.primaryText))
-        .navigationTitle("")
+        .navigationTitle(isWorkspaceDetail ? workspaceTitle : "")
+        .onPreferenceChange(WorkspacePageTitleKey.self) { workspaceTitle = $0 }
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .adaptiveNavigationBackground(visibility: .hidden)
         .toolbarColorScheme(paywallStyle ? .dark : nil, for: .navigationBar)
         .toolbar {
-            if let progress, isFirstLaunchGuide || accountTheme != nil {
+            if let progress, !isWorkspaceDetail && (isFirstLaunchGuide || accountTheme != nil) {
                 ToolbarItem(placement: .principal) {
                     OnboardingStepIndicator(progress: progress, isCompact: true)
                         .environment(\.colorScheme, paywallStyle ? .dark : colorScheme)
@@ -77,7 +80,7 @@ struct OnboardingPage<Content: View, Actions: View>: View {
             .id(scrollReset)
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .top, spacing: 0) {
-                if let progress, !isFirstLaunchGuide && accountTheme == nil {
+                if let progress, isWorkspaceDetail || (!isFirstLaunchGuide && accountTheme == nil) {
                     OnboardingStepIndicator(progress: progress)
                         .frame(maxWidth: 560)
                         .frame(maxWidth: .infinity)
@@ -142,11 +145,14 @@ struct OnboardingHeader: View {
     var eyebrow: String? = nil
 
     var body: some View {
-        if isFirstLaunchGuide && paywallStyle {
-            FirstLaunchIntroHeader(title: title, subtitle: subtitle)
-        } else {
-            standardHeader
+        Group {
+            if isFirstLaunchGuide && paywallStyle {
+                FirstLaunchIntroHeader(title: title, subtitle: subtitle)
+            } else {
+                standardHeader
+            }
         }
+        .preference(key: WorkspacePageTitleKey.self, value: title)
     }
 
     private var standardHeader: some View {
@@ -229,13 +235,25 @@ private struct OnboardingSecondaryButtonStyle: ButtonStyle {
 
 struct OnboardingPrimaryButton: View {
     @Environment(\.accountFlowTheme) private var accountTheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let title: String
     var isDisabled = false
     var isBusy = false
     var usesGlass = false
+    var labelColor: Color? = nil
     let action: () -> Void
 
     var body: some View {
+        if accountTheme != nil {
+            AccountFlowSharedElement(id: "primary-action", animatesContentChanges: true) {
+                styledButton
+            }
+        } else {
+            styledButton
+        }
+    }
+
+    private var styledButton: some View {
         Group {
             if #available(iOS 26.0, *), usesGlass || accountTheme != nil {
                 button
@@ -244,7 +262,7 @@ struct OnboardingPrimaryButton: View {
                     .controlSize(.large)
                     .buttonBorderShape(.capsule)
                     .tint(accountTheme?.accent ?? CatfolioTheme.accent)
-                    .foregroundStyle(accountTheme?.onAccent ?? .white)
+                    .foregroundStyle(labelColor ?? accountTheme?.onAccent ?? .white)
             } else {
                 button.buttonStyle(OnboardingPrimaryButtonStyle(isBusy: isBusy))
             }
@@ -257,8 +275,10 @@ struct OnboardingPrimaryButton: View {
             HStack(spacing: 10) {
                 if isBusy { ProgressView().tint(accountTheme?.onAccent ?? Color(uiColor: .systemBackground)) }
                 Text(title)
+                    .contentTransition(reduceMotion ? .identity : .interpolate)
             }
             .frame(maxWidth: usesGlass || accountTheme != nil ? .infinity : nil)
+            .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: title)
         }
     }
 }

@@ -60,6 +60,7 @@ struct AccountConnectionHeader: View {
         // The page supplies the remaining 16pt before the input card.
         .padding(.bottom, 14)
         .accessibilityIdentifier("account-connection-header")
+        .preference(key: WorkspacePageTitleKey.self, value: title)
     }
 }
 
@@ -86,30 +87,13 @@ struct AccountPreparationList<Content: View>: View {
 }
 
 struct AccountPreparationNextButton: View {
-    @Environment(\.accountFlowTheme) private var theme
     var labelColor: Color? = nil
     let action: () -> Void
 
     var body: some View {
-        Group {
-            if #available(iOS 26.0, *) {
-                button.buttonStyle(.glassProminent)
-            } else {
-                button.buttonStyle(.borderedProminent)
-            }
-        }
-        .controlSize(.large)
-        .buttonBorderShape(.capsule)
-        .tint(theme?.accent ?? CatfolioTheme.accent)
-        .foregroundStyle(labelColor ?? theme?.onAccent ?? .white)
-        .accessibilityIdentifier("account-guide-next")
-    }
-
-    private var button: some View {
-        Button(action: action) {
-            Text(L10n.text("下一步")).appText(.subheading, weight: .medium)
-                .frame(maxWidth: .infinity)
-        }
+        OnboardingPrimaryButton(title: L10n.text("下一步"), usesGlass: true,
+                                labelColor: labelColor, action: action)
+            .accessibilityIdentifier("account-guide-next")
     }
 }
 

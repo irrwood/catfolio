@@ -12,6 +12,7 @@ private struct HistorySummaryMetric: Identifiable {
 }
 
 struct HistoryView: View {
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
     @Environment(\.locale) private var appLocale
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
@@ -115,12 +116,11 @@ struct HistoryView: View {
         .toolbarVisibility(.visible, for: .navigationBar)
         // The bar and the category row are one solid surface: white by day,
         // black at night (`systemBackground`, as the category bar uses).
-        .toolbarBackground(Color(uiColor: .systemBackground), for: .navigationBar)
-        .toolbarBackgroundVisibility(.visible, for: .navigationBar)
+        .adaptiveNavigationBackground(Color(uiColor: .systemBackground))
         .toolbarVisibility(.hidden, for: .bottomBar)
         .accessibilityIdentifier("page.history")
         .toolbar {
-            ToolbarItem(placement: .principal) {
+            ToolbarItem(placement: isWorkspaceDetail ? .topBarTrailing : .principal) {
                 accountFilter
                     .disabled(isLoading)
                     .tint(.primary)
@@ -530,18 +530,13 @@ struct HistoryView: View {
                 ForEach(TaxYearBasis.allCases) { Text($0.title).tag($0.rawValue) }
             }
             Divider()
-            Button {
-                selectedTaxYear = nil
-            } label: {
-                Label(L10n.text("全部年份"), systemImage: selectedTaxYear == nil ? "checkmark" : "infinity")
-            }
-            ForEach(historyYears, id: \.self) { year in
-                Button {
-                    selectedTaxYear = year
-                } label: {
-                    Label(year, systemImage: selectedTaxYear == year ? "checkmark" : "calendar")
+            Picker(L10n.text("统计范围"), selection: $selectedTaxYear) {
+                Text(L10n.text("全部年份")).tag(String?.none)
+                ForEach(historyYears, id: \.self) { year in
+                    Text(year).tag(Optional(year))
                 }
             }
+            .pickerStyle(.inline)
         } label: {
             if let selectedTaxYear {
                 Label(selectedTaxYear, systemImage: "calendar")
@@ -585,23 +580,15 @@ struct HistoryView: View {
 
     private var accountFilter: some View {
         Menu {
-            Button {
-                selectedAccountIDs = nil
-            } label: {
-                Label(L10n.text("All Accounts"), systemImage: isAllAccountsSelected ? "checkmark" : "person.2")
-            }
+            Toggle(L10n.text("All Accounts"), isOn: Binding(
+                get: { isAllAccountsSelected }, set: { _ in selectedAccountIDs = nil }))
 
             Divider()
 
             ForEach(ledger.accounts) { account in
-                Button {
-                    toggleAccount(account.id)
-                } label: {
-                    Label(
-                        "\(accountNickname(account)) · \(account.brokerName)",
-                        systemImage: effectiveAccountIDs.contains(account.id) ? "checkmark" : "circle"
-                    )
-                }
+                Toggle("\(accountNickname(account)) · \(account.brokerName)", isOn: Binding(
+                    get: { effectiveAccountIDs.contains(account.id) },
+                    set: { _ in toggleAccount(account.id) }))
             }
         } label: {
             HStack(spacing: 5) {

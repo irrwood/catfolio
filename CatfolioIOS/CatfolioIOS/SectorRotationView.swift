@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SectorRotationView: View {
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("sectorRotation.endpoint") private var endpoint = ""
     @State private var sectorPerformance = SectorPerformanceStore()
@@ -44,14 +45,14 @@ struct SectorRotationView: View {
                             .monospacedDigit()
                         Spacer(minLength: 8)
                         Menu {
-                            ForEach(snapshot.sectors) { sector in
-                                Button("\(sector.displayName) · \(sector.symbol) · \(sector.displayQuadrant)") {
-                                    selectedSymbol = sector.symbol
+                            Picker(L10n.text("全部板块"), selection: $selectedSymbol) {
+                                Text(L10n.text("全部板块")).tag(String?.none)
+                                ForEach(snapshot.sectors) { sector in
+                                    Text("\(sector.displayName) · \(sector.symbol) · \(sector.displayQuadrant)")
+                                        .tag(Optional(sector.symbol))
                                 }
                             }
-                            if selectedSymbol != nil {
-                                Button(L10n.text("取消选择")) { selectedSymbol = nil }
-                            }
+                            .pickerStyle(.inline)
                         } label: {
                             Text(L10n.text("全部板块"))
                         }
@@ -79,10 +80,9 @@ struct SectorRotationView: View {
         // night. The bar stays opaque, as designed; it no longer forces light.
         .background(Color(uiColor: .systemBackground))
         .foregroundStyle(.primary)
-        .navigationTitle("")
+        .navigationTitle(isWorkspaceDetail ? L10n.text("板块轮动") : "")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color(uiColor: .systemBackground), for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .adaptiveNavigationBackground(Color(uiColor: .systemBackground))
         .tint(.primary)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

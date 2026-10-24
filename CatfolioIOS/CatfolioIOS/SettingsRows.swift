@@ -268,9 +268,8 @@ struct SettingsButtonRow: View {
     }
 }
 
-/// A switch. The control is the system's, so it is 64×28 with the 38×24 pill
-/// knob and `#34C759` on — which is what the drawing is, because the drawing
-/// is Apple's own toggle component.
+/// Explicitly use the native capsule switch on every platform; the Mac's
+/// automatic toggle style otherwise renders a checkbox.
 struct SettingsToggleRow: View {
     let icon: SettingsIconSource?
     let title: String
@@ -289,6 +288,7 @@ struct SettingsToggleRow: View {
             Toggle(isOn: $isOn) {
                 SettingsRowLabel(icon: icon, title: title, subtitle: subtitle)
             }
+            .toggleStyle(.switch)
             .tint(SettingsTemplate.toggleOn)
         }
     }

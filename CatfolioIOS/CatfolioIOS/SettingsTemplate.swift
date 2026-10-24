@@ -368,6 +368,7 @@ struct SettingsPage<Content: View>: View {
     /// Large for a tab's own page; Settings and the pages inside it use the
     /// system's small inline bar.
     var titleDisplayMode: NavigationBarItem.TitleDisplayMode = .large
+    var navigationRole: PageNavigationRole = .detail
     @ViewBuilder let content: Content
 
     init(
@@ -376,6 +377,7 @@ struct SettingsPage<Content: View>: View {
         bottomInset: CGFloat = SettingsTemplate.rootTabBottomInset,
         topInset: CGFloat = 0,
         titleDisplayMode: NavigationBarItem.TitleDisplayMode = .large,
+        navigationRole: PageNavigationRole = .detail,
         pageBackground: Color = SettingsTemplate.pageBackground,
         @ViewBuilder content: () -> Content
     ) {
@@ -384,6 +386,7 @@ struct SettingsPage<Content: View>: View {
         self.bottomInset = bottomInset
         self.topInset = topInset
         self.titleDisplayMode = titleDisplayMode
+        self.navigationRole = navigationRole
         self.pageBackground = pageBackground
         self.content = content()
     }
@@ -413,7 +416,7 @@ struct SettingsPage<Content: View>: View {
         // Every settings page has a bar over it — the tab's large title or a
         // pushed page's — so the page container carries the soft edge once.
         .softTopScrollEdge()
-        .settingsNavigationTitle(title, displayMode: titleDisplayMode)
+        .pageNavigationTitle(title, preferredDisplayMode: titleDisplayMode, role: navigationRole)
     }
 }
 

@@ -1186,6 +1186,10 @@ final class SecurityPaperEntranceTests: XCTestCase {
         XCTAssertNotEqual(first.id, second.id)
         XCTAssertEqual(first.sourceFrame.midY, 422)
         XCTAssertEqual(second.sourceFrame.midY, 222)
+        let toolbar = SecurityPaperRequest(context: context)
+        XCTAssertTrue(toolbar.sourceFrame.isEmpty)
+        XCTAssertEqual(toolbar.context.ticker, context.ticker)
+        XCTAssertNotEqual(toolbar.id, first.id)
     }
 }
 

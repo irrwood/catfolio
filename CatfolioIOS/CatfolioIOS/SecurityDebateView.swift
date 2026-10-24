@@ -335,7 +335,7 @@ struct SecurityDebateCardContent: View {
             isLoading: progress.isWorking
         ) {
             pageContent
-                .appSheet(item: $opened) { question in
+                .workspacePage(item: $opened) { question in
                     if let debate = shown {
                         SecurityDebateQuestionSheet(question: question, debate: debate)
                     }
@@ -444,7 +444,7 @@ struct SecurityDebateQuestionSheet: View {
     let debate: SecurityDebate
 
     var body: some View {
-        NavigationStack {
+        DetailPageNavigation {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     Text(question.question)

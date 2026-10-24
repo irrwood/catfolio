@@ -375,8 +375,12 @@ final class AccountConnectionLayoutTests: XCTestCase {
                     $0.accessibilityIdentifier == "account-shared.\(provider.rawValue).logos"
                 })
                 let logoOrigin = logo.convert(CGPoint.zero, to: fixture.window)
-                XCTAssertEqual(shared.subviews.count, provider == .ibkr ? 1 : (provider == .trading212 ? 2 : 3),
-                    "Only unchanged logos, titles and subtitles should stay still")
+                XCTAssertEqual(shared.subviews.count, provider == .ibkr ? 2 : (provider == .trading212 ? 3 : 4),
+                    "The primary button and unchanged header pieces stay still")
+                let action = try XCTUnwrap(shared.subviews.first {
+                    $0.accessibilityIdentifier == "account-shared.primary-action"
+                }, "Preparation and credentials share one stationary primary action")
+                let actionOrigin = presentationOrigin(action, in: fixture.window)
                 XCTAssertTrue(shared.elements.allSatisfy { $0.0.alpha == 0 }, "Moving copies must be hidden")
                 try await Task.sleep(for: .milliseconds(60))
                 XCTAssertEqual(canvas.subviews.filter { $0 is UIImageView }.count, 1,
@@ -385,6 +389,8 @@ final class AccountConnectionLayoutTests: XCTestCase {
                                   "The foreground still slides left while the background stays still")
                 XCTAssertEqual(logo.convert(CGPoint.zero, to: fixture.window).x, logoOrigin.x, accuracy: 0.5)
                 XCTAssertEqual(logo.convert(CGPoint.zero, to: fixture.window).y, logoOrigin.y, accuracy: 0.5)
+                XCTAssertEqual(presentationOrigin(action, in: fixture.window).x, actionOrigin.x, accuracy: 0.5)
+                XCTAssertEqual(presentationOrigin(action, in: fixture.window).y, actionOrigin.y, accuracy: 0.5)
                 let movingImage = UIGraphicsImageRenderer(bounds: fixture.window.bounds).image { _ in
                     fixture.window.drawHierarchy(in: fixture.window.bounds, afterScreenUpdates: false)
                 }

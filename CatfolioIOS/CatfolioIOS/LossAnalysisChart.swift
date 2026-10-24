@@ -164,7 +164,7 @@ struct LossAnalysisChart: View {
         .environment(\.colorScheme, .dark)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .tint(.white)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .adaptiveNavigationBackground(visibility: .hidden)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 IncludesSoldMenu(isOn: $includesSold)

@@ -297,8 +297,8 @@ struct AnalystConsensusView: View {
                     )
                 }.buttonStyle(PanelPressButtonStyle())
                 .accessibilityIdentifier("analyst-history-entry")
-                .appSheet(isPresented: $showsHistory) {
-                    NavigationStack { AnalystHistoryView(symbol: symbol) }
+                .workspacePage(isPresented: $showsHistory) {
+                    DetailPageNavigation { AnalystHistoryView(symbol: symbol) }
                         .presentationDetents([.large])
                         .presentationDragIndicator(.visible)
                 }

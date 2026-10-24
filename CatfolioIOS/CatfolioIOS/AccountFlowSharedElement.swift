@@ -6,6 +6,7 @@ import UIKit
 struct AccountFlowSharedElement<Content: View>: UIViewControllerRepresentable {
     @Environment(\.self) private var environment
     let id: String
+    var animatesContentChanges = false
     @ViewBuilder let content: Content
 
     func makeUIViewController(context: Context) -> AccountFlowSharedElementController {
@@ -18,6 +19,7 @@ struct AccountFlowSharedElement<Content: View>: UIViewControllerRepresentable {
 
     func updateUIViewController(_ controller: AccountFlowSharedElementController, context: Context) {
         controller.elementID = id
+        controller.animatesContentChanges = animatesContentChanges
         controller.reduceMotion = environment.accessibilityReduceMotion
         controller.rootView = AnyView(content.environment(\.self, environment))
         controller.view.invalidateIntrinsicContentSize()
@@ -33,6 +35,7 @@ struct AccountFlowSharedElement<Content: View>: UIViewControllerRepresentable {
 final class AccountFlowSharedElementController: UIHostingController<AnyView> {
     var elementID = ""
     var reduceMotion = false
+    var animatesContentChanges = false
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
@@ -69,6 +72,7 @@ final class AccountFlowSharedElementController: UIHostingController<AnyView> {
                 }
             }
             contentOverlay?.animateContent()
+            (contentOverlay?.shared ?? overlay)?.animateContentChanges()
         }, completion: { _ in
             contentOverlay?.restore()
             contentOverlay?.removeFromSuperview()
@@ -80,6 +84,7 @@ final class AccountFlowSharedElementController: UIHostingController<AnyView> {
 
 final class AccountFlowSharedOverlay: UIView {
     private(set) var elements: [(UIView, CGFloat)] = []
+    private var changingContent: [(UIView & UIContentView, AnyView)] = []
 
     init(from: UIViewController, to: UIViewController, container: UIView) {
         super.init(frame: container.bounds)
@@ -96,8 +101,20 @@ final class AccountFlowSharedOverlay: UIView {
             guard start.width > 0, start.height > 0,
                   abs(start.minX - end.minX) < 1, abs(start.minY - end.minY) < 1,
                   abs(start.width - end.width) < 1, abs(start.height - end.height) < 1,
-                  from.view.bounds.contains(start), to.view.bounds.contains(end),
-                  let snapshot = source.view.snapshotView(afterScreenUpdates: false) else { continue }
+                  from.view.bounds.contains(start), to.view.bounds.contains(end) else { continue }
+            let snapshot: UIView
+            if source.animatesContentChanges && destination.animatesContentChanges {
+                // Keep one live native button in place. Its stable SwiftUI
+                // identity lets Text use contentTransition when the title changes.
+                let host = UIHostingConfiguration { source.rootView }
+                    .margins(.all, 0).makeContentView()
+                host.backgroundColor = .clear
+                snapshot = host
+                changingContent.append((host, destination.rootView))
+            } else {
+                guard let captured = source.view.snapshotView(afterScreenUpdates: false) else { continue }
+                snapshot = captured
+            }
             var frame = from.view.convert(start, to: container)
             // UIKit has already applied the native slide's destination x to
             // its model layer; use the untransformed page coordinates instead.
@@ -105,6 +122,7 @@ final class AccountFlowSharedOverlay: UIView {
             snapshot.frame = frame
             snapshot.accessibilityIdentifier = "account-shared.\(source.elementID)"
             addSubview(snapshot)
+            snapshot.layoutIfNeeded()
             for view in [source.view!, destination.view!] {
                 elements.append((view, view.alpha))
             }
@@ -112,6 +130,14 @@ final class AccountFlowSharedOverlay: UIView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func animateContentChanges() {
+        for (host, destination) in changingContent {
+            withAnimation(.smooth(duration: 0.25)) {
+                host.configuration = UIHostingConfiguration { destination }.margins(.all, 0)
+            }
+        }
+    }
 
     func hideOriginals() {
         // Snapshot capture may flush a render transaction. Never hide the live
@@ -125,6 +151,10 @@ final class AccountFlowSharedOverlay: UIView {
             for (view, alpha) in elements { view.alpha = alpha }
         }
         elements.removeAll()
+        for (host, _) in changingContent {
+            host.removeFromSuperview()
+        }
+        changingContent.removeAll()
     }
 
     private static func elements(in controller: UIViewController) -> [AccountFlowSharedElementController] {

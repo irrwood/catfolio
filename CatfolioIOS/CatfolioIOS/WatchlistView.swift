@@ -4,19 +4,31 @@ struct WatchlistToggleButton: View {
     let holding: Holding
     let store: WatchlistStore
     var observation: SecurityMarketObservation?
+    var usesToolbarStyle = false
     @AppStorage(ChartInteractionStyle.hapticsPreferenceKey) private var hapticsEnabled = true
 
     var body: some View {
+        if usesToolbarStyle {
+            button
+        } else {
+            button.modifier(HoldingHeaderButtonStyle())
+        }
+    }
+
+    private var button: some View {
         let isSaved = store.contains(holding)
-        Button {
+        return Button {
             store.toggle(holding, observation: observation)
         } label: {
-            Image(isSaved ? "WatchlistStarFilled" : "WatchlistStar")
-                .renderingMode(.template)
-                .frame(width: 52, height: 52)
+            Label {
+                Text(L10n.text(isSaved ? "移出观察列表" : "加入观察列表"))
+            } icon: {
+                Image(isSaved ? "WatchlistStarFilled" : "WatchlistStar").renderingMode(.template)
+            }
+                .labelStyle(.iconOnly)
+                .frame(width: usesToolbarStyle ? nil : 52, height: usesToolbarStyle ? nil : 52)
                 .contentShape(Circle())
         }
-        .modifier(HoldingHeaderButtonStyle())
         .accessibilityIdentifier("holding-detail-watchlist")
         .accessibilityLabel(L10n.text(isSaved ? "移出观察列表" : "加入观察列表"))
         .accessibilityValue(L10n.text(isSaved ? "已收藏" : "未收藏"))
@@ -41,6 +53,7 @@ struct WatchlistEntryCard: View {
 }
 
 struct WatchlistView: View {
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(ChinaMarketSource.preferenceKey) private var chinaSource = ChinaMarketSource.automatic.rawValue
@@ -87,7 +100,7 @@ struct WatchlistView: View {
         }
         .background(SecurityDetailPresentation.ground.ignoresSafeArea())
         .navigationTitle("Watchlist")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(isWorkspaceDetail ? .inline : .large)
         .softTopScrollEdge()
         .refreshable { await store.refresh(forceRefresh: true) }
         .task(id: refreshIdentity) {

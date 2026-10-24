@@ -11,7 +11,7 @@ struct HoldingAmountSourcesCard: View {
         }
         .buttonStyle(PanelPressButtonStyle())
         .accessibilityIdentifier("holding-amount-sources-entry")
-        .appSheet(isPresented: $showsSources) {
+        .workspacePage(isPresented: $showsSources) {
             HoldingAmountSourcesPage(ticker: ticker)
         }
     }
@@ -37,7 +37,7 @@ struct HoldingAmountSourcesPage: View {
     }
 
     var body: some View {
-        NavigationStack {
+        DetailPageNavigation {
             Group {
                 if let row {
                     HoldingAmountSourcesList(row: row)

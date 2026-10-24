@@ -3,6 +3,7 @@ import UIKit
 
 /// App-wide preferences and maintenance, opened from the Account page.
 struct AppSettingsView: View {
+    var isWorkspaceRoot = false
     @Environment(\.locale) private var appLocale
     @Environment(\.openURL) private var openURL
     @Environment(AppModel.self) private var model
@@ -20,8 +21,9 @@ struct AppSettingsView: View {
     @State private var reconciliation: LedgerReconciliation.Report?
 
     var body: some View {
-        SettingsPage(title: L10n.text("设置"), topInset: SettingsTemplate.sectionSpacing,
-                     titleDisplayMode: .inline) {
+        SettingsPage(title: L10n.text("设置"), topInset: isWorkspaceRoot ? 0 : SettingsTemplate.sectionSpacing,
+                     titleDisplayMode: .inline,
+                     navigationRole: isWorkspaceRoot ? .root : .detail) {
             SettingsSection(L10n.text("行情与 AI")) {
                 SettingsNavigationRow(icon: .symbol("key"), title: L10n.text("服务商")) {
                     LocalServicesSettingsView()

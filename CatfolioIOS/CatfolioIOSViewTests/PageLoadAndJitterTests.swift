@@ -147,7 +147,18 @@ final class PageLoadAndJitterTests: XCTestCase {
     }
 
     @MainActor
-    private func verifyTodayLayout(width: CGFloat, typeSize: DynamicTypeSize, scheme: ColorScheme) async throws {
+    func testTodayCardsUseHomeScrollAndTitleOnWideWorkspace() async throws {
+        try await verifyTodayLayout(width: 1100, typeSize: .large, scheme: .light, presentation: .home)
+    }
+
+    @MainActor
+    func testTodayCardsFitNarrowWorkspaceWithAccessibilityText() async throws {
+        try await verifyTodayLayout(width: 600, typeSize: .accessibility3, scheme: .dark, presentation: .home)
+    }
+
+    @MainActor
+    private func verifyTodayLayout(width: CGFloat, typeSize: DynamicTypeSize, scheme: ColorScheme,
+                                   presentation: TodayDetailView.Presentation = .page) async throws {
         let previousLanguage = UserDefaults.standard.string(forKey: AppLanguage.preferenceKey)
         UserDefaults.standard.set("en", forKey: AppLanguage.preferenceKey)
         defer { UserDefaults.standard.set(previousLanguage, forKey: AppLanguage.preferenceKey) }
@@ -164,14 +175,23 @@ final class PageLoadAndJitterTests: XCTestCase {
                 fxPnl: nil, fxPnlPercent: nil, fxPnlStatus: nil, fxPnlSource: nil
             )
         }
+        // A simulator test host can arrive before its scene becomes active.
+        for _ in 0..<80 {
+            if UIApplication.shared.connectedScenes.contains(where: { $0.activationState == .foregroundActive }) { break }
+            try await Task.sleep(for: .milliseconds(25))
+        }
         let scene = try connectedWindowScene()
         let previousWindow = scene.windows.first(where: \.isKeyWindow)
+        let cards = TodayDetailView(holdings: holdings, dailyChanges: [:], benchmarkChange: 0.5,
+            briefStore: TodayBriefStore(generate: { request, _ in
+                .init(text: request.context.seed, sources: [])
+            }), presentation: presentation)
         let host = UIHostingController(rootView:
             NavigationStack {
-                TodayDetailView(holdings: holdings, dailyChanges: [:], benchmarkChange: 0.5,
-                    briefStore: TodayBriefStore(generate: { request, _ in
-                        .init(text: request.context.seed, sources: [])
-                    }))
+                if presentation == .home {
+                    ScrollView { cards.padding(20) }.navigationTitle("Home")
+                        .navigationBarTitleDisplayMode(.inline)
+                } else { cards }
             }
             .environment(\.dynamicTypeSize, typeSize)
             .environment(\.colorScheme, scheme)
@@ -189,6 +209,11 @@ final class PageLoadAndJitterTests: XCTestCase {
         host.view.layoutIfNeeded()
         let scroll = try XCTUnwrap(descendants(host.view, of: UIScrollView.self)
             .first { $0.contentSize.height > $0.bounds.height })
+        if presentation == .home {
+            XCTAssertEqual(descendants(host.view, of: UIScrollView.self).count, 1,
+                           "Home cards must share the page scroll view")
+            XCTAssertEqual(firstController(of: UINavigationController.self, in: host)?.topViewController?.navigationItem.title, "Home")
+        }
         let initialHeight = scroll.contentSize.height
         XCTAssertGreaterThan(initialHeight, scroll.bounds.height)
         XCTAssertLessThanOrEqual(scroll.contentSize.width, scroll.bounds.width + 1)
@@ -217,6 +242,12 @@ final class PageLoadAndJitterTests: XCTestCase {
         attachment.name = "Today-\(Int(width))-\(typeSize)-\(scheme)"
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    @MainActor
+    private func firstController<T: UIViewController>(of type: T.Type, in root: UIViewController) -> T? {
+        if let match = root as? T { return match }
+        return root.children.compactMap { firstController(of: type, in: $0) }.first
     }
 
     @MainActor

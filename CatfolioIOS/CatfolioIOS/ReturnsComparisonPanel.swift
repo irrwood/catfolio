@@ -1,4 +1,13 @@
 import SwiftUI
+import UIKit
+
+/// This page alone uses native phone navigation; workspace presentation keeps
+/// its existing toolbar and legacy non-phone presentations keep their chrome.
+enum ReturnsComparisonNavigation {
+    static var usesSystemBarOnPhone: Bool {
+        UIDevice.current.userInterfaceIdiom == .phone && !MacPlatform.isMac
+    }
+}
 
 struct ComparisonZeroPositionKey: PreferenceKey {
     static var defaultValue: CGFloat? = nil
@@ -8,6 +17,7 @@ struct ComparisonZeroPositionKey: PreferenceKey {
 }
 
 struct ReturnsComparisonPanel: View {
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
     @Environment(\.locale) private var appLocale
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
@@ -46,7 +56,7 @@ struct ReturnsComparisonPanel: View {
     @State private var zeroPosition: CGFloat = 230
     @State private var disclosure = ReturnsChartDisclosure()
 
-    var body: some View {
+    private var chartContent: some View {
         Group {
             if let comparison = model.comparison {
                 ReturnsChart(
@@ -73,9 +83,31 @@ struct ReturnsComparisonPanel: View {
                 )
             }
         }
-        // The bar stays above the chart; only the handle moves the chart.
-        .comparisonTopBar { header }
-        .background { ComparisonSwipeBackSupport().frame(width: 0, height: 0) }
+    }
+
+    var body: some View {
+        Group {
+            if ReturnsComparisonNavigation.usesSystemBarOnPhone || isWorkspaceDetail {
+                chartContent.toolbar {
+                    ToolbarItemGroup(placement: .topBarTrailing) {
+                        Button(L10n.text("添加对比"), systemImage: "magnifyingglass") {
+                            showsBenchmarkPicker = true
+                        }
+                        .accessibilityIdentifier("comparison.add-benchmark")
+                        Picker(L10n.text("收益图表口径"), selection: $chartMode) {
+                            ForEach(ReturnsChartMode.displayOrder, id: \.self) { mode in
+                                Text(mode == .cashFlowMatched ? "Mirror" : mode.displayTitle).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .accessibilityIdentifier("comparison.mode.native")
+                    }
+                }
+            } else {
+                chartContent.comparisonTopBar { header }
+                    .background { ComparisonSwipeBackSupport().frame(width: 0, height: 0) }
+            }
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .foregroundStyle(.white)
         .coordinateSpace(name: "comparison-page")

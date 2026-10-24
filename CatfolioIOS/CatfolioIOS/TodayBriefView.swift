@@ -52,8 +52,8 @@ struct TodayBriefView: View {
         .padding(.vertical, 8)
         .accessibilityIdentifier("today.brief")
         .task(id: context.briefKey) { store.start(context) }
-        .sheet(item: $selectedTopic) { topic in
-            NavigationStack {
+        .workspacePage(item: $selectedTopic) { topic in
+            DetailPageNavigation {
                 TodayBriefArticleView(context: context, target: topic.id, store: store)
             }
             .presentationDragIndicator(.visible)
@@ -77,6 +77,7 @@ struct TodayBriefArticleView: View {
     let target: String
     var store: TodayBriefStore = .shared
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isWorkspaceDetail) private var isWorkspaceDetail
 
     var body: some View {
         let article = store.entry(for: context).details[target]
@@ -115,8 +116,10 @@ struct TodayBriefArticleView: View {
         .navigationTitle(context.title(for: target))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button(L10n.text("完成"), systemImage: "checkmark") { dismiss() }
+            if !isWorkspaceDetail {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.text("完成"), systemImage: "checkmark") { dismiss() }
+                }
             }
         }
         .accessibilityIdentifier("today.brief.article")

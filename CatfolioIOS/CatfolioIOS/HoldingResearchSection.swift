@@ -144,8 +144,8 @@ struct HoldingFinancialCard: View {
         }
         .buttonStyle(PanelPressButtonStyle())
         .accessibilityHint("Open reported company financials")
-        .appSheet(isPresented: $showsFinancials, onDismiss: { onAvailability(availability) }) {
-            NavigationStack {
+        .workspacePage(isPresented: $showsFinancials, onDismiss: { onAvailability(availability) }) {
+            DetailPageNavigation {
                 CompanyFinancialsView(holding: holding, onAvailability: { availability = $0 })
             }
             // Keep report scrolling separate from interactive zoom dismissal,
