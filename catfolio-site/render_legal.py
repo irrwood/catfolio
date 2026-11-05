@@ -14,6 +14,14 @@ def render_page(name, locale, title, lead, content):
     html = f'''<!doctype html>
 <html lang="{locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{title} — Catfolio</title><meta name="description" content="{escape(lead, quote=True)}">
+<meta property="og:image" content="https://catfolio.app/assets/social-preview-v2.jpg">
+<meta property="og:image:alt" content="Catfolio, a multi-broker portfolio tracker. App preview on Mac, iPad, and iPhone.">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:type" content="image/jpeg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://catfolio.app/assets/social-preview-v2.jpg">
+<meta name="twitter:image:alt" content="Catfolio, a multi-broker portfolio tracker. App preview on Mac, iPad, and iPhone.">
 <link rel="icon" href="/assets/cat.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/legal.css">
 <link rel="alternate" hreflang="en" href="/{name}"><link rel="alternate" hreflang="zh-CN" href="/{name}-zh"></head><body>
 <a class="skip" href="#main">{'跳转到内容' if zh else 'Skip to content'}</a>

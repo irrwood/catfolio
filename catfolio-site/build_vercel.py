@@ -33,7 +33,7 @@ def build():
         (DIST / target).write_text(html)
     for name in ('style.css', 'app.js', 'legal.css', 'support.html', 'support-zh.html', 'privacy.html', 'privacy-zh.html'):
         shutil.copy(ROOT / name, DIST / name)
-    for name in ('cat.svg', 'nunito.ttf'):
+    for name in ('cat.svg', 'nunito.ttf', 'social-preview-v2.jpg'):
         shutil.copy(ROOT / 'assets' / name, DIST / 'assets' / name)
     shutil.copytree(ROOT / 'assets' / 'refresh', DIST / 'assets' / 'refresh')
     for language in ('zh-latest', 'en-latest'):
